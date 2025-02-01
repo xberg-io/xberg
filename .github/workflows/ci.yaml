@@ -56,6 +56,9 @@ jobs:
         with:
           python-version-file: "pyproject.toml"
 
+      - name: Install System Dependencies
+        run: sudo apt-get install -y tesseract-ocr pandoc
+
       - name: Install Dependencies
         run: uv sync --all-extras --dev
 
