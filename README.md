@@ -1,90 +1,104 @@
 # Kreuzberg
 
-Kreuzberg is a library for simplified text extraction from PDF files. It's meant to offer simple, hassle free text
-extraction.
+Kreuzberg is a modern Python library for text extraction from documents, designed for simplicity and efficiency. It provides a unified async interface for extracting text from a wide range of file formats including PDFs, images, office documents, and more.
 
-Why?
+## Why Kreuzberg?
 
-I am building, like many do now, a RAG focused service (checkout https://grantflow.ai). I have text extraction needs.
-There are quite a lot of commercial options out there, and several open-source + paid options.
-But I wanted something simple, which does not require expansive round-trips to an external API.
-Furthermore, I wanted something that is easy to run locally and isn't very heavy / requires a GPU.
+- **Simple and Hassle-Free**: Clean API that just works, without complex configuration
+- **Local Processing**: No external API calls or cloud dependencies required
+- **Resource Efficient**: Lightweight processing without GPU requirements
+- **Format Support**: Comprehensive support for documents, images, and text formats
+- **Modern Python**: Built with async/await, type hints, and current best practices
 
-Hence, this library.
+Kreuzberg was created to solve text extraction needs in RAG (Retrieval Augmented Generation) applications, but it's suitable for any text extraction use case. Unlike many commercial solutions that require API calls or complex setups, Kreuzberg focuses on local processing with minimal dependencies.
 
 ## Features
 
-- Extract text from PDFs, images, office documents and more (see supported formats below)
-- Use modern Python with async (via `anyio`) and proper type hints
-- Extensive error handling for easy debugging
+- **Universal Text Extraction**: Extract text from PDFs (both searchable and scanned), images, office documents, and more
+- **Smart Processing**: Automatic OCR for scanned documents, encoding detection for text files
+- **Modern Python Design**:
+  - Async-first API using `anyio`
+  - Comprehensive type hints for better IDE support
+  - Detailed error handling with context information
+- **Production Ready**:
+  - Robust error handling
+  - Detailed debugging information
+  - Memory efficient processing
 
 ## Installation
 
-1. Begin by installing the python package:
+### 1. Install the Python Package
 
-   ```shell
+```shell
+pip install kreuzberg
+```
 
-   pip install kreuzberg
+### 2. Install System Dependencies
 
-   ```
+Kreuzberg requires two open-source tools:
 
-2. Install the system dependencies:
+- [Pandoc](https://pandoc.org/installing.html) - For document format conversion
 
-- [pandoc](https://pandoc.org/installing.html) (non-pdf text extraction, GPL v2.0 licensed but used via CLI only)
-- [tesseract-ocr](https://tesseract-ocr.github.io/) (for image/PDF OCR, Apache License)
+  - GPL v2.0 licensed (used via CLI only)
+  - Handles office documents and markup formats
 
-## Dependencies and Philosophy
+- [Tesseract OCR](https://tesseract-ocr.github.io/) - For image and PDF OCR
+  - Apache License
+  - Required for scanned documents and images
 
-This library is built to be minimalist and simple. It also aims to utilize OSS tools for the job. Its fundamentally a
-high order async abstraction on top of other tools, think of it like the library you would bake in your code base, but
-polished and well maintained.
+## Architecture
 
-### Dependencies
+Kreuzberg is designed as a high-level async abstraction over established open-source tools. It integrates:
 
-- PDFs are processed using pdfium2 for searchable PDFs + Tesseract OCR for scanned documents
-- Images are processed using Tesseract OCR
-- Office documents and other formats are processed using Pandoc
-- PPTX files are converted using python-pptx
-- HTML files are converted using html-to-markdown
-- Plain text files are read directly with appropriate encoding detection
+- **PDF Processing**:
+  - `pdfium2` for searchable PDFs
+  - Tesseract OCR for scanned content
+- **Document Conversion**:
+  - Pandoc for office documents and markup
+  - `python-pptx` for PowerPoint files
+  - `html-to-markdown` for HTML content
+- **Text Processing**:
+  - Smart encoding detection
+  - Markdown and plain text handling
 
-### Roadmap
+### Supported Formats
 
-V1:
+#### Document Formats
 
-- [x] - html file text extraction
-- [ ] - better PDF table extraction
-- [ ] - TBD
-
-V2:
-
-- [ ] - extra install groups (to make dependencies optional)
-- [ ] - metadata extraction (possible breaking change)
-- [ ] - TBD
-
-### Feature Requests
-
-Feel free to open a discussion in GitHub or an issue if you have any feature requests
-
-### Contribution
-
-Is welcome! Read guidelines below.
-
-## Supported File Types
-
-Kreuzberg supports a wide range of file formats:
-
-### Document Formats
-
-- PDF (`.pdf`) - both searchable and scanned documents
-- Word Documents (`.docx`, `.doc`)
-- Power Point Presentations (`.pptx`)
+- PDF (`.pdf`, both searchable and scanned documents)
+- Microsoft Word (`.docx`, `.doc`)
+- PowerPoint presentations (`.pptx`)
 - OpenDocument Text (`.odt`)
 - Rich Text Format (`.rtf`)
+- EPUB (`.epub`)
+- DocBook XML (`.dbk`, `.xml`)
+- FictionBook (`.fb2`)
+- LaTeX (`.tex`, `.latex`)
+- Typst (`.typ`)
 
-### Image Formats
+#### Markup and Text Formats
 
-- JPEG, JPG (`.jpg`, `.jpeg`, `.pjpeg`)
+- HTML (`.html`, `.htm`)
+- Plain text (`.txt`) and Markdown (`.md`, `.markdown`)
+- reStructuredText (`.rst`)
+- Org-mode (`.org`)
+- DokuWiki (`.txt`)
+- Pod (`.pod`)
+- Man pages (`.1`, `.2`, etc.)
+
+#### Data and Research Formats
+
+- CSV (`.csv`) and TSV (`.tsv`) files
+- Jupyter Notebooks (`.ipynb`)
+- BibTeX (`.bib`) and BibLaTeX (`.bib`)
+- CSL-JSON (`.json`)
+- EndNote XML (`.xml`)
+- RIS (`.ris`)
+- JATS XML (`.xml`)
+
+#### Image Formats
+
+- JPEG (`.jpg`, `.jpeg`, `.pjpeg`)
 - PNG (`.png`)
 - TIFF (`.tiff`, `.tif`)
 - BMP (`.bmp`)
@@ -96,160 +110,159 @@ Kreuzberg supports a wide range of file formats:
 - Portable Graymap (`.pgm`)
 - Portable Pixmap (`.ppm`)
 
-#### Text and Markup Formats
-
-- HTML (`.html`, `.htm`)
-- Plain Text (`.txt`)
-- Markdown (`.md`)
-- reStructuredText (`.rst`)
-- LaTeX (`.tex`)
-
-#### Data Formats
-
-- Comma-Separated Values (`.csv`)
-- Tab-Separated Values (`.tsv`)
-
 ## Usage
 
-Kreuzberg exports two async functions:
+Kreuzberg provides a simple, async-first API for text extraction. The library exports two main functions:
 
-- Extract text from a file (string path or `pathlib.Path`) using `extract_file()`
-- Extract text from a byte-string using `extract_bytes()`
+- `extract_file()`: Extract text from a file (accepts string path or `pathlib.Path`)
+- `extract_bytes()`: Extract text from bytes (accepts a byte string)
 
-### Extract from File
+### Quick Start
 
 ```python
 from pathlib import Path
+from kreuzberg import extract_file, extract_bytes
+
+# Basic file extraction
+async def extract_document():
+    # Extract from a PDF file
+    pdf_result = await extract_file("document.pdf")
+    print(f"PDF text: {pdf_result.content}")
+
+    # Extract from an image
+    img_result = await extract_file("scan.png")
+    print(f"Image text: {img_result.content}")
+
+    # Extract from Word document
+    docx_result = await extract_file(Path("document.docx"))
+    print(f"Word text: {docx_result.content}")
+```
+
+### Processing Uploaded Files
+
+```python
+from kreuzberg import extract_bytes
+
+async def process_upload(file_content: bytes, mime_type: str):
+    """Process uploaded file content with known MIME type."""
+    result = await extract_bytes(file_content, mime_type=mime_type)
+    return result.content
+
+# Example usage with different file types
+async def handle_uploads():
+    # Process PDF upload
+    pdf_result = await extract_bytes(pdf_bytes, mime_type="application/pdf")
+
+    # Process image upload
+    img_result = await extract_bytes(image_bytes, mime_type="image/jpeg")
+
+    # Process Word document upload
+    docx_result = await extract_bytes(docx_bytes,
+        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+```
+
+### Advanced Features
+
+#### PDF Processing Options
+
+```python
 from kreuzberg import extract_file
 
+async def process_pdf():
+    # Force OCR for PDFs with embedded images or scanned content
+    result = await extract_file("document.pdf", force_ocr=True)
 
-# Extract text from a PDF file
-async def extract_pdf():
-    result = await extract_file("document.pdf")
-    print(f"Extracted text: {result.content}")
-    print(f"Output mime type: {result.mime_type}")
-
-
-# Extract text from an image
-async def extract_image():
-    result = await extract_file("scan.png")
-    print(f"Extracted text: {result.content}")
-
-
-# or use Path
-
-async def extract_pdf():
-    result = await extract_file(Path("document.pdf"))
-    print(f"Extracted text: {result.content}")
-    print(f"Output mime type: {result.mime_type}")
+    # Process a scanned PDF (automatically uses OCR)
+    scanned = await extract_file("scanned.pdf")
 ```
 
-### Extract from Bytes
+#### ExtractionResult Object
+
+All extraction functions return an `ExtractionResult` containing:
+
+- `content`: The extracted text (str)
+- `mime_type`: Output format ("text/plain" or "text/markdown" for Pandoc conversions)
 
 ```python
-from kreuzberg import extract_bytes
+from kreuzberg import ExtractionResult
 
+async def process_document(path: str) -> tuple[str, str]:
+    # Access as a named tuple
+    result: ExtractionResult = await extract_file(path)
+    print(f"Content: {result.content}")
+    print(f"Format: {result.mime_type}")
 
-# Extract text from PDF bytes
-async def process_uploaded_pdf(pdf_content: bytes):
-    result = await extract_bytes(pdf_content, mime_type="application/pdf")
-    return result.content
-
-
-# Extract text from image bytes
-async def process_uploaded_image(image_content: bytes):
-    result = await extract_bytes(image_content, mime_type="image/jpeg")
-    return result.content
-```
-
-### Forcing OCR
-
-When extracting a PDF file or bytes, you might want to force OCR - for example, if the PDF includes images that have text that should be extracted etc.
-You can do this by passing `force_ocr=True`:
-
-```python
-from kreuzberg import extract_bytes
-
-
-# Extract text from PDF bytes and force OCR
-async def process_uploaded_pdf(pdf_content: bytes):
-    result = await extract_bytes(pdf_content, mime_type="application/pdf", force_ocr=True)
-    return result.content
+    # Or unpack as a tuple
+    content, mime_type = await extract_file(path)
+    return content, mime_type
 ```
 
 ### Error Handling
 
-Kreuzberg raises two exception types:
-
-#### ValidationError
-
-Raised when there are issues with input validation:
-
-- Unsupported mime types
-- Undetectable mime types
-- Path doesn't point at an exist file
-
-#### ParsingError
-
-Raised when there are issues during the text extraction process:
-
-- PDF parsing failures
-- OCR errors
-- Pandoc conversion errors
+Kreuzberg provides detailed error handling with two main exception types:
 
 ```python
 from kreuzberg import extract_file
 from kreuzberg.exceptions import ValidationError, ParsingError
 
-
-async def safe_extract():
+async def safe_extract(path: str) -> str:
     try:
-        result = await extract_file("document.doc")
+        result = await extract_file(path)
         return result.content
+
     except ValidationError as e:
-        print(f"Validation error: {e.message}")
-        print(f"Context: {e.context}")
+        # Handles input validation issues:
+        # - Unsupported file types
+        # - Missing files
+        # - Invalid MIME types
+        print(f"Invalid input: {e.message}")
+        print(f"Details: {e.context}")
+
     except ParsingError as e:
-        print(f"Parsing error: {e.message}")
-        print(f"Context: {e.context}")  # Contains detailed error information
-```
+        # Handles processing errors:
+        # - PDF parsing failures
+        # - OCR errors
+        # - Format conversion issues
+        print(f"Processing failed: {e.message}")
+        print(f"Details: {e.context}")
 
-Both error types include helpful context information for debugging:
+    return ""
 
-```python
+# Example error contexts
 try:
-    result = await extract_file("scanned.pdf")
+    result = await extract_file("document.xyz")
+except ValidationError as e:
+    # e.context might contain:
+    # {
+    #    "file_path": "document.xyz",
+    #    "error": "Unsupported file type",
+    #    "supported_types": ["pdf", "docx", ...]
+    # }
+
+try:
+    result = await extract_file("scan.pdf")
 except ParsingError as e:
-# e.context might contain:
-# {
-#    "file_path": "scanned.pdf",
-#    "error": "Tesseract OCR failed: Unable to process image"
-# }
+    # e.context might contain:
+    # {
+    #    "file_path": "scan.pdf",
+    #    "error": "OCR processing failed",
+    #    "details": "Tesseract error: Unable to process image"
+    # }
 ```
 
-### ExtractionResult
+## Roadmap
 
-All extraction functions return an ExtractionResult named tuple containing:
+V1:
 
-- `content`: The extracted text as a string
-- `mime_type`: The mime type of the output (either "text/plain" or, if pandoc is used- "text/markdown")
+- [x] - html file text extraction
+- [ ] - better PDF table extraction
+- [ ] - batch APIs
+- [ ] - sync APIs
 
-```python
-from kreuzberg import ExtractionResult
+V2:
 
-
-async def process_document(path: str) -> str:
-    result: ExtractionResult = await extract_file(path)
-    return result.content
-
-
-# or access the result as tuple
-
-async def process_document(path: str) -> str:
-    content, mime_type = await extract_file(path)
-    # do something with mime_type
-    return content
-```
+- [ ] - metadata extraction (breaking change)
+- [ ] - TBD
 
 ## Contribution
 

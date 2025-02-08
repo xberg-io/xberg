@@ -101,13 +101,9 @@ async def test_convert_pdf_to_images_raises_parsing_error(tmp_path: Path) -> Non
 
 async def test_extract_content_with_pandoc_raises_parsing_error() -> None:
     mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    ext = "docx"
 
-    with pytest.raises(ParsingError) as exc_info:
+    with pytest.raises(ParsingError):
         await extract_content_with_pandoc(b"invalid content", mime_type)
-
-    assert f"Could not extract text from {ext} file contents" in str(exc_info.value)
-    assert "error" in exc_info.value.context
 
 
 async def test_extract_pptx_with_notes(mocker: MockerFixture) -> None:

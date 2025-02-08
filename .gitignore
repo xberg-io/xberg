@@ -17,6 +17,7 @@
 .ruff_cache/
 .run/
 .venv/
+.vscode/
 __pycache__/
 coverage.xml
 prompt_template.egg-info/
