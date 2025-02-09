@@ -64,28 +64,26 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           choco install -y tesseract pandoc
+          RefreshEnv.cmd
           $env:PATH = "C:\Program Files\Tesseract-OCR;C:\Program Files\Pandoc;" + $env:PATH
+          echo "PATH after updates:"
           Write-Output $env:PATH
+          tesseract --version
+          pandoc --version
 
       - name: Install System Dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y tesseract-ocr pandoc
+        run: |
+          sudo apt-get install -y tesseract-ocr pandoc
+          tesseract --version
+          pandoc --version
 
       - name: Install System Dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install tesseract pandoc
-
-      - name: Verify Installed Dependencies (Windows)
-        if: runner.os == 'Windows'
         run: |
-          tesseract.exe --version
-          pandoc.exe --version
-
-      - name: Verify Installed Dependencies (Linux & macOS)
-        if: runner.os != 'Windows'
-        run: |
+          brew install tesseract pandoc
           tesseract --version
           pandoc --version
 
       - name: Run Tests
-        run: uv run pytest tests
+        run: uv run pytest tests -vv

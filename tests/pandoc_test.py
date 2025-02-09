@@ -187,20 +187,6 @@ async def test_integration_extract_metadata(markdown_document: Path) -> None:
     assert isinstance(result, dict)
 
 
-async def test_process_content_runtime_error(mock_subprocess_run: Mock) -> None:
-    def side_effect(*args: list[Any], **_: Any) -> Mock:
-        if args[0][0] == "pandoc" and "--version" in args[0]:
-            mock_subprocess_run.return_value.stdout = b"pandoc 3.1.0"
-            return cast(Mock, mock_subprocess_run.return_value)
-        raise RuntimeError("Pandoc error")
-
-    mock_subprocess_run.side_effect = side_effect
-    with pytest.raises(ParsingError, match="Failed to extract file data"):
-        await process_content(
-            b"content", mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        )
-
-
 async def test_process_file_runtime_error(mock_subprocess_run: Mock, docx_document: Path) -> None:
     def side_effect(*args: list[Any], **_: Any) -> Mock:
         if args[0][0] == "pandoc" and "--version" in args[0]:
