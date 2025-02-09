@@ -38,13 +38,11 @@ jobs:
 
       - name: Execute Pre-Commit
         run: uv run pre-commit run --show-diff-on-failure --color=always --all-files
-
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,23 +52,40 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Set up Python
+      - name: Install Python
         uses: actions/setup-python@v5
         with:
           python-version-file: "pyproject.toml"
 
-      - name: Install System Dependencies
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y tesseract-ocr pandoc
-      - name: Install System Dependencies
-        if: runner.os == 'Windows'
-        run: choco install -y tesseract pandoc
-      - name: Install System Dependencies
-        if: runner.os == 'macOS'
-        run: brew install tesseract pandoc
-
       - name: Install Dependencies
         run: uv sync --all-extras --dev
 
-      - name: Test
+      - name: Install System Dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install -y tesseract pandoc
+          $env:PATH = "C:\Program Files\Tesseract-OCR;C:\Program Files\Pandoc;" + $env:PATH
+          Write-Output $env:PATH
+
+      - name: Install System Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y tesseract-ocr pandoc
+
+      - name: Install System Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tesseract pandoc
+
+      - name: Verify Installed Dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          tesseract.exe --version
+          pandoc.exe --version
+
+      - name: Verify Installed Dependencies (Linux & macOS)
+        if: runner.os != 'Windows'
+        run: |
+          tesseract --version
+          pandoc --version
+
+      - name: Run Tests
         run: uv run pytest tests
