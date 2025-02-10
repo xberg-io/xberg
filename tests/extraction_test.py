@@ -19,7 +19,6 @@ from kreuzberg.extraction import extract_bytes, extract_file
 @pytest.mark.parametrize("pdf_document", list((Path(__file__).parent / "source").glob("*.pdf")))
 async def test_extract_bytes_pdf(pdf_document: Path) -> None:
     content = pdf_document.read_bytes()
-    print(content)
     result = await extract_bytes(content, PDF_MIME_TYPE)
     assert result.mime_type == PLAIN_TEXT_MIME_TYPE
     assert isinstance(result.content, str)

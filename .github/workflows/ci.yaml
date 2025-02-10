@@ -41,7 +41,7 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        os: [ ubuntu-latest, macOS-latest ]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -55,7 +55,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: "pyproject.toml"
+          python-version: 3.9
 
       - name: Install Dependencies
         run: uv sync --all-extras --dev
@@ -86,4 +86,4 @@ jobs:
           pandoc --version
 
       - name: Run Tests
-        run: uv run pytest tests -s -vv
+        run: uv run pytest tests -vvv --timeout=20

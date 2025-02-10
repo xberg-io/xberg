@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+
+os.environ["OMP_THREAD_LIMIT"] = "1"
 
 
 @pytest.fixture(scope="session")
