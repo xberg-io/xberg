@@ -26,18 +26,40 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def mock_subprocess_run(mocker: MockerFixture) -> Mock:
-    mock: Mock = mocker.patch("subprocess.run")
-    mock.return_value.stdout = b"tesseract 5.0.0"
-    mock.return_value.returncode = 0
+    def run_sync(*args: list[Any], **kwargs: dict[str, Any]) -> Mock:
+        result = Mock()
+        result.stdout = b"tesseract 5.0.0"
+        result.returncode = 0
+        result.stderr = b""
 
-    def side_effect(*args: list[Any], **kwargs: dict[str, Any]) -> Mock:
-        if args[0][0] == "tesseract" and "--version" in args[0]:
-            return cast(Mock, mock.return_value)
-        output_file = args[0][2].replace(".txt", "")
-        Path(f"{output_file}.txt").write_text("Sample OCR text")
-        return cast(Mock, mock.return_value)
+        if isinstance(args[0], list) and "--version" in args[0]:
+            return result
 
-    mock.side_effect = side_effect
+        # Handle error test cases
+        if "test_process_file_error" in str(kwargs.get("cwd")):
+            result.returncode = 1
+            result.stderr = b"Error processing file"
+            raise RuntimeError("Error processing file")
+
+        if "test_process_file_runtime_error" in str(kwargs.get("cwd")):
+            raise RuntimeError("Command failed")
+
+        # Normal case
+        if isinstance(args[0], list) and len(args[0]) >= 3:
+            output_file = args[0][2]
+            if "test_process_image_with_tesseract_invalid_input" in str(kwargs.get("cwd")):
+                result.returncode = 1
+                result.stderr = b"Error processing file"
+                raise RuntimeError("Error processing file")
+            Path(f"{output_file}.txt").write_text("Sample OCR text")
+            result.returncode = 0
+            return result
+
+        return result
+
+    # Mock both subprocess.run and anyio.to_process.run_sync
+    mock = mocker.patch("subprocess.run", side_effect=run_sync)
+    mocker.patch("anyio.to_process.run_sync", side_effect=lambda func, *args, **kwargs: func(*args, **kwargs))
     return mock
 
 

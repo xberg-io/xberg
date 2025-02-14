@@ -30,22 +30,43 @@ SAMPLE_PANDOC_JSON = {
 
 @pytest.fixture
 def mock_subprocess_run(mocker: MockerFixture) -> Mock:
-    mock = mocker.patch("subprocess.run")
-    mock.return_value.stdout = b"pandoc 3.1.0"
-    mock.return_value.returncode = 0
-    mock.return_value.stderr = b""
+    def run_sync(*args: list[Any], **kwargs: Any) -> Mock:
+        result = Mock()
+        result.stdout = b"pandoc 3.1.0"
+        result.returncode = 0
+        result.stderr = b""
 
-    def side_effect(*args: list[Any], **_: Any) -> Mock:
-        if args[0][0] == "pandoc" and "--version" in args[0]:
-            return cast(Mock, mock.return_value)
+        if isinstance(args[0], list) and "--version" in args[0]:
+            return result
 
+        # Handle error test cases
+        if "test_process_file_error" in str(kwargs.get("cwd")):
+            result.returncode = 1
+            result.stderr = b"Error processing file"
+            raise RuntimeError("Error processing file")
+
+        # Handle empty result test case
+        if "test_process_content_empty_result" in str(kwargs.get("cwd")):
+            result.returncode = 1
+            result.stderr = b"Empty content"
+            raise RuntimeError("Empty content")
+
+        # Handle metadata error test case
+        if "test_extract_metadata_error" in str(kwargs.get("cwd")):
+            result.returncode = 1
+            result.stderr = b"Invalid metadata"
+            raise RuntimeError("Invalid metadata")
+
+        # Normal case
         output_file = next((arg for arg in args[0] if arg.endswith((".md", ".json"))), "")
         if output_file:
             content = json.dumps(SAMPLE_PANDOC_JSON) if output_file.endswith(".json") else "Sample processed content"
             Path(output_file).write_text(content)
-        return cast(Mock, mock.return_value)
+        return result
 
-    mock.side_effect = side_effect
+    # Mock both subprocess.run and anyio.to_process.run_sync
+    mock = mocker.patch("subprocess.run", side_effect=run_sync)
+    mocker.patch("anyio.to_process.run_sync", side_effect=lambda func, *args, **kwargs: func(*args, **kwargs))
     return mock
 
 
@@ -116,9 +137,15 @@ async def test_process_file_with_extra_args(mock_subprocess_run: Mock, docx_docu
 
 
 async def test_process_file_error(mock_subprocess_run: Mock, docx_document: Path) -> None:
-    mock_subprocess_run.return_value.returncode = 1
-    mock_subprocess_run.return_value.stderr = b"Error processing file"
+    def side_effect(*args: list[Any], **_: Any) -> Mock:
+        if args[0][0] == "pandoc" and "--version" in args[0]:
+            mock_subprocess_run.return_value.stdout = b"pandoc 3.1.0"
+            return cast(Mock, mock_subprocess_run.return_value)
+        mock_subprocess_run.return_value.returncode = 1
+        mock_subprocess_run.return_value.stderr = b"Error processing file"
+        raise RuntimeError("Error processing file")
 
+    mock_subprocess_run.side_effect = side_effect
     with pytest.raises(ParsingError, match="Failed to extract file data"):
         await process_file_with_pandoc(
             docx_document, mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -145,9 +172,15 @@ async def test_process_content_with_extra_args(mock_subprocess_run: Mock) -> Non
 
 
 async def test_extract_metadata_error(mock_subprocess_run: Mock, docx_document: Path) -> None:
-    mock_subprocess_run.return_value.returncode = 1
-    mock_subprocess_run.return_value.stderr = b"Error extracting metadata"
+    def side_effect(*args: list[Any], **_: Any) -> Mock:
+        if args[0][0] == "pandoc" and "--version" in args[0]:
+            mock_subprocess_run.return_value.stdout = b"pandoc 3.1.0"
+            return cast(Mock, mock_subprocess_run.return_value)
+        mock_subprocess_run.return_value.returncode = 1
+        mock_subprocess_run.return_value.stderr = b"Error extracting metadata"
+        raise RuntimeError("Error extracting metadata")
 
+    mock_subprocess_run.side_effect = side_effect
     with pytest.raises(ParsingError, match="Failed to extract file data"):
         await _handle_extract_metadata(
             docx_document, mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -212,7 +245,9 @@ async def test_process_content_empty_result(mock_subprocess_run: Mock) -> None:
                 Path(output_file).write_text('{"pandoc-api-version":[1,22,2,1],"meta":{},"blocks":[]}')
             else:
                 Path(output_file).write_text("")
-        return cast(Mock, mock_subprocess_run.return_value)
+            mock_subprocess_run.return_value.returncode = 0
+            return cast(Mock, mock_subprocess_run.return_value)
+        raise RuntimeError("Empty content")
 
     mock_subprocess_run.side_effect = side_effect
     result = await process_content_with_pandoc(
