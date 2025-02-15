@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
-
-os.environ["OMP_THREAD_LIMIT"] = "1"
 
 
 @pytest.fixture(scope="session")
@@ -19,11 +16,6 @@ def scanned_pdf() -> Path:
 
 
 @pytest.fixture(scope="session")
-def german_pdf() -> Path:
-    return Path(__file__).parent / "source" / "german.pdf"
-
-
-@pytest.fixture(scope="session")
 def non_searchable_pdf() -> Path:
     return Path(__file__).parent / "source" / "non-searchable.pdf"
 
@@ -31,6 +23,11 @@ def non_searchable_pdf() -> Path:
 @pytest.fixture(scope="session")
 def non_ascii_pdf() -> Path:
     return Path(__file__).parent / "source" / "non-ascii-text.pdf"
+
+
+@pytest.fixture(scope="session")
+def test_article() -> Path:
+    return Path(__file__).parent / "source" / "test-article.pdf"
 
 
 @pytest.fixture(scope="session")
@@ -61,3 +58,8 @@ def html_document() -> Path:
 @pytest.fixture(scope="session")
 def excel_document() -> Path:
     return Path(__file__).parent / "source" / "excel.xlsx"
+
+
+@pytest.fixture(scope="session")
+def excel_multi_sheet_document() -> Path:
+    return Path(__file__).parent / "source" / "excel-multi-sheet.xlsx"

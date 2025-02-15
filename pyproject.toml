@@ -1,6 +1,6 @@
 [project]
 name = "kreuzberg"
-version = "1.7.0"
+version = "2.0.0"
 description = "A text extraction library supporting PDFs, images, office documents and more"
 readme = "README.md"
 keywords = [
@@ -38,11 +38,12 @@ classifiers = [
 dependencies = [
   "anyio>=4.8.0",
   "charset-normalizer>=3.4.1",
+  "exceptiongroup>=1.2.2; python_version<'3.11'",
   "html-to-markdown>=1.2.0",
   "pypdfium2>=4.30.1",
+  "python-calamine>=0.3.1",
   "python-pptx>=1.0.2",
-  "typing-extensions>=4.12.2",
-  "xlsx2csv>=0.8.4",
+  "typing-extensions>=4.12.2; python_version<'3.11'",
 ]
 urls.homepage = "https://github.com/Goldziher/kreuzberg"
 
@@ -55,7 +56,6 @@ dev = [
   "pytest-asyncio>=0.25.3",
   "pytest-cov>=6.0.0",
   "pytest-mock>=3.14.0",
-  "pytest-timeout>=2.3.1",
   "python-dotenv>=1.0.1",
   "ruff>=0.9.6",
 ]
@@ -75,32 +75,26 @@ format.docstring-code-line-length = 120
 format.docstring-code-format = true
 lint.select = [ "ALL" ]
 lint.ignore = [
-  "ANN401",   # Dynamically typed ANY
-  "ASYNC110", # Use Event instead of sleep in async loop
-  "C901",     # Cognitive Complexity
-  "COM812",   # Conflicts with formatter
-  "D100",     # Missing docstring in public module
-  "D104",     # Missing docstring in public package
-  "D107",     # Missing docstring in __init__
-  "D205",     # 1 blank line required between summary line and description
-  "E501",     # Line too long, handled by ruff format
-  "EM",       # Exception messages,
-  "FBT",      # Boolean-typed positional argument in function definition
-  "FIX",      # We allow todo and fixme comments
-  "ISC001",   # Conflicts with formatter
-  "PD011",    # Creates false positives
-  "PGH003",   # Required specific mypy ignores
-  "PLR0911",  # Pylint too many return statements
-  "PLR0912",  # Pylint too many branches
-  "PLR2004",  # Magic variables, we allow them
-  "S104",     # Disallows using '0.0.0.0' as a host
-  "TD",       # We allow todo and fixme comments
-  "TRY",      # Try except block, rules are too strict
+  "ANN401", # Dynamically typed ANY for kwargs
+  "COM812", # Conflicts with formatter
+  "D100",   # Missing docstring in public module
+  "D104",   # Missing docstring in public package
+  "D107",   # Missing docstring in __init__
+  "D205",   # 1 blank line required between summary line and description
+  "E501",   # Line too long, handled by ruff format
+  "EM",     # Exception messages,
+  "FBT",    # Boolean-typed positional argument in function definition
+  "FIX",    # We allow todo and fixme comments
+  "ISC001", # Conflicts with formatter
+  "TD",     # We allow todo and fixme comments
+  "TRY",    # Try except block, rules are too strict
 ]
 lint.per-file-ignores."tests/**/*.*" = [
   "ARG001",
   "D",
   "N815",
+  "PGH003",
+  "PLR2004",
   "PT006",
   "PT007",
   "PT013",
@@ -108,7 +102,12 @@ lint.per-file-ignores."tests/**/*.*" = [
   "S",
 ]
 lint.isort.known-first-party = [ "kreuzberg", "tests" ]
+lint.mccabe.max-complexity = 15
 lint.pydocstyle.convention = "google"
+
+lint.pylint.max-args = 10
+lint.pylint.max-branches = 15
+lint.pylint.max-returns = 10
 
 [tool.pyproject-fmt]
 keep_full_version = true
@@ -117,6 +116,9 @@ max_supported_python = "3.13"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+filterwarnings = [
+  "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
+]
 
 [tool.coverage.run]
 omit = [ "tests/*", "scripts/*" ]
@@ -125,7 +127,7 @@ source = [ "kreuzberg" ]
 
 [tool.coverage.report]
 exclude_lines = [ 'if TYPE_CHECKING:', "except ImportError:" ]
-fail_under = 90
+fail_under = 100
 
 [tool.mypy]
 packages = [ "kreuzberg", "tests" ]

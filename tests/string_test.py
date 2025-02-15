@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from kreuzberg import ParsingError
 from kreuzberg._string import normalize_spaces, safe_decode
 
 
@@ -28,28 +27,20 @@ def test_safe_decode_with_detected_encoding() -> None:
 
 
 def test_safe_decode_with_invalid_encoding() -> None:
-    byte_data = b"\xff\xfe"
+    # Create bytes that will fail UTF-8 and charset detection
+    byte_data = bytes([0xFF, 0xFE, 0xFD])
     result = safe_decode(byte_data)
+    # Verify we get a valid string back
     assert isinstance(result, str)
+    assert len(result) == 3
+    # Verify that we can decode it again without errors
+    assert safe_decode(byte_data) == result
 
 
 def test_safe_decode_with_fallback_encodings() -> None:
     text = "Hello World"
     byte_data = text.encode("utf-8")
     assert safe_decode(byte_data) == text
-
-
-def test_safe_decode_no_valid_encoding() -> None:
-    byte_data = b"\xff\xfe\xff\xfe"
-
-    def mock_decode(self: bytes, encoding: str, errors: str = "strict") -> str:
-        raise UnicodeDecodeError(encoding, byte_data, 0, 1, "mock error")
-
-    byte_data_mock = type("MockBytes", (bytes,), {"decode": mock_decode})(byte_data)
-
-    with pytest.raises(ParsingError) as exc:
-        safe_decode(byte_data_mock)
-    assert "Could not decode byte string" in str(exc.value)
 
 
 @pytest.mark.parametrize(

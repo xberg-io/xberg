@@ -8,6 +8,7 @@
 *.user
 .DS_store
 .coverage
+.coverage*
 .dist/
 .env
 .idea/

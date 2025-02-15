@@ -16,7 +16,7 @@ def uv(subcommand: str, packages: list[str], group: str | None) -> None:
     if group:
         extra_arguments.extend(["--group", group])
 
-    subprocess.check_call(["uv", subcommand, *packages, "--no-sync", *extra_arguments])  # noqa: S603, S607
+    subprocess.check_call(["uv", subcommand, *packages, "--no-sync", *extra_arguments])  # noqa: S607, S603
 
 
 def get_pyproject_config() -> dict[str, Any]:
@@ -47,7 +47,7 @@ def do_upgrade() -> None:
         uv("remove", to_remove, group=group)
         uv("add", to_add, group=group)
 
-    subprocess.check_call(["uv", "sync"])  # noqa: S603, S607
+    subprocess.check_call(["uv", "sync"])  # noqa: S607, S603
 
 
 if __name__ == "__main__":
