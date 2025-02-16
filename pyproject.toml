@@ -52,13 +52,11 @@ dev = [
   "covdefaults>=2.3.0",
   "mypy>=1.15.0",
   "pre-commit>=4.1.0",
-  "psutil>=7.0.0",
   "pytest>=8.3.4",
   "pytest-cov>=6.0.0",
   "pytest-mock>=3.14.0",
   "pytest-timeout>=2.3.1",
   "pytest-xdist>=3.6.1",
-  "python-dotenv>=1.0.1",
   "ruff>=0.9.6",
   "trio>=0.29.0",
 ]
@@ -89,7 +87,6 @@ lint.ignore = [
   "FBT",    # Boolean-typed positional argument in function definition
   "FIX",    # We allow todo and fixme comments
   "ISC001", # Conflicts with formatter
-  "T201",
   "TD",     # We allow todo and fixme comments
   "TRY",    # Try except block, rules are too strict
 ]
