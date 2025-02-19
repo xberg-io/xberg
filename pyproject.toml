@@ -56,7 +56,6 @@ dev = [
   "pytest-cov>=6.0.0",
   "pytest-mock>=3.14.0",
   "pytest-timeout>=2.3.1",
-  "pytest-xdist>=3.6.1",
   "ruff>=0.9.6",
   "trio>=0.29.0",
 ]

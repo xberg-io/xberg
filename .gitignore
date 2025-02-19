@@ -23,3 +23,5 @@ __pycache__/
 coverage.xml
 prompt_template.egg-info/
 requirements.txt
+Dockerfile
+docker-compose.yaml
