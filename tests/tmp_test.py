@@ -3,12 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import pytest
+
 from kreuzberg._tmp import create_temp_file
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
 
+@pytest.mark.anyio
 async def test_create_temp_file() -> None:
     # Test creating an empty temp file
     temp_file_path, cleanup = await create_temp_file(".txt")
@@ -19,6 +22,7 @@ async def test_create_temp_file() -> None:
     assert not temp_file_path.exists()
 
 
+@pytest.mark.anyio
 async def test_create_temp_file_with_content() -> None:
     content = b"test content"
     temp_file_path, cleanup = await create_temp_file(".txt", content)
@@ -31,6 +35,7 @@ async def test_create_temp_file_with_content() -> None:
     assert not temp_file_path.exists()
 
 
+@pytest.mark.anyio
 async def test_create_temp_file_cleanup_error(mocker: MockerFixture) -> None:
     # Test that errors during file cleanup are properly suppressed
     temp_file_path, cleanup = await create_temp_file(".txt")

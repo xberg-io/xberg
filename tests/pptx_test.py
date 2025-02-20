@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from kreuzberg._pptx import extract_pptx_file_content
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
 
+@pytest.mark.anyio
 async def test_extract_pptx_with_notes(mocker: MockerFixture) -> None:
     """Test extracting text from a PowerPoint file with notes."""
     mock_presentation = mocker.MagicMock()

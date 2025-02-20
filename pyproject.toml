@@ -53,11 +53,11 @@ dev = [
   "mypy>=1.15.0",
   "pre-commit>=4.1.0",
   "pytest>=8.3.4",
-  "pytest-asyncio>=0.25.3",
   "pytest-cov>=6.0.0",
   "pytest-mock>=3.14.0",
-  "python-dotenv>=1.0.1",
+  "pytest-timeout>=2.3.1",
   "ruff>=0.9.6",
+  "trio>=0.29.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -100,6 +100,7 @@ lint.per-file-ignores."tests/**/*.*" = [
   "PT013",
   "RUF012",
   "S",
+  "SLF001",
 ]
 lint.isort.known-first-party = [ "kreuzberg", "tests" ]
 lint.mccabe.max-complexity = 15
@@ -114,8 +115,6 @@ keep_full_version = true
 max_supported_python = "3.13"
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "session"
 filterwarnings = [
   "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
 ]

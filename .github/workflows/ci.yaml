@@ -26,20 +26,9 @@ jobs:
         with:
           python-version-file: "pyproject.toml"
 
-      - name: Cache Python Dependencies
-        id: python-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/uv
-            .venv
-          key: python-dependencies-${{ runner.os }}-${{ hashFiles('uv.lock') }}
-          restore-keys: |
-            python-dependencies-${{ runner.os }}-
-
       - name: Install Dependencies
         if: steps.python-cache.outputs.cache-hit != 'true'
-        run: uv sync --all-extras --dev
+        run: uv sync
 
       - name: Load Cached Pre-Commit Dependencies
         id: cached-pre-commit-dependencies
@@ -55,7 +44,9 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, macOS-latest, windows-latest ]
+        python: [ "3.9", "3.10", "3.11", "3.12", "3.13" ]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,7 +59,7 @@ jobs:
       - name: Install Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: ${{ matrix.python }}
 
       - name: Cache Python Dependencies
         id: python-cache
@@ -95,7 +86,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: tecolicom/actions-use-homebrew-tools@v1
         with:
-          tools: 'tesseract pandoc'
+          tools: 'tesseract tesseract-lang pandoc'
           key: 'homebrew-tools-${{ runner.os }}'
           cache: yes
           verbose: false
@@ -104,7 +95,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: tesseract-ocr pandoc
+          packages: tesseract-ocr tesseract-ocr-deu pandoc
           version: 1.0
 
       - name: Install System Dependencies (Windows)
@@ -118,4 +109,4 @@ jobs:
           pandoc --version
 
       - name: Run Tests
-        run: uv run pytest tests -v
+        run: uv run pytest

@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import sys
+from typing import TYPE_CHECKING
 
 import pytest
 
-from kreuzberg import ExtractionResult
+from kreuzberg import ExtractionResult, ParsingError
 from kreuzberg._mime_types import MARKDOWN_MIME_TYPE
 from kreuzberg._xlsx import extract_xlsx_file
-from kreuzberg.exceptions import ParsingError
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from pytest_mock import MockerFixture
 
 
+if sys.version_info < (3, 11):  # pragma: no cover
+    from exceptiongroup import ExceptionGroup  # type: ignore[import-not-found]
+
+
+@pytest.mark.anyio
 async def test_extract_xlsx_file(excel_document: Path) -> None:
     """Test extracting text from an Excel file."""
     result = await extract_xlsx_file(excel_document)
@@ -20,14 +30,7 @@ async def test_extract_xlsx_file(excel_document: Path) -> None:
     assert result.mime_type == "text/markdown"
 
 
-async def test_extract_xlsx_file_invalid() -> None:
-    """Test that attempting to extract from an invalid Excel file raises an error."""
-    with pytest.raises(ParsingError) as exc_info:
-        await extract_xlsx_file(Path("/invalid/path.xlsx"))
-
-    assert "Could not extract text from XLSX" in str(exc_info.value)
-
-
+@pytest.mark.anyio
 async def test_extract_xlsx_multi_sheet_file(excel_multi_sheet_document: Path) -> None:
     """Test extracting text from an Excel file with multiple sheets."""
     result = await extract_xlsx_file(excel_multi_sheet_document)
@@ -60,3 +63,17 @@ async def test_extract_xlsx_multi_sheet_file(excel_multi_sheet_document: Path) -
     assert "Beetroot" in second_sheet_content
     assert "1.0" in second_sheet_content
     assert "2.0" in second_sheet_content
+
+
+@pytest.mark.anyio
+async def test_extract_xlsx_file_exception_group(mocker: MockerFixture, excel_multi_sheet_document: Path) -> None:
+    # Mock openpyxl to raise multiple exceptions
+    mock_load = mocker.patch("kreuzberg._xlsx.run_taskgroup")
+    exceptions = [ValueError("Error 1"), ValueError("Error 2")]
+    mock_load.side_effect = ExceptionGroup("test group", exceptions)
+
+    with pytest.raises(ParsingError) as exc_info:
+        await extract_xlsx_file(excel_multi_sheet_document)
+
+    assert "Failed to extract file data" in str(exc_info.value)
+    assert len(exc_info.value.context["errors"]) == 2

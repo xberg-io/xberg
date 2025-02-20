@@ -20,6 +20,12 @@ def test_safe_decode(byte_data: bytes, encoding: str | None, expected: str) -> N
     assert safe_decode(byte_data, encoding) == expected
 
 
+def test_safe_decode_with_invalid_encoding_value() -> None:
+    test_bytes = b"Hello World"
+    result = safe_decode(test_bytes, encoding="invalid-encoding")
+    assert result == "Hello World"
+
+
 def test_safe_decode_with_detected_encoding() -> None:
     text = "Hello 世界"
     byte_data = text.encode("utf-8")

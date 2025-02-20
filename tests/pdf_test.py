@@ -17,6 +17,7 @@ from kreuzberg._pdf import (
 from kreuzberg.exceptions import ParsingError
 
 
+@pytest.mark.anyio
 async def test_extract_pdf_searchable_text(searchable_pdf: Path) -> None:
     """Test extracting text from a searchable PDF."""
     result = await _extract_pdf_searchable_text(searchable_pdf)
@@ -24,6 +25,7 @@ async def test_extract_pdf_searchable_text(searchable_pdf: Path) -> None:
     assert result.strip()
 
 
+@pytest.mark.anyio
 async def test_extract_pdf_text_with_ocr(scanned_pdf: Path) -> None:
     """Test extracting text from a scanned PDF using OCR."""
     result = await _extract_pdf_text_with_ocr(scanned_pdf, max_processes=1)
@@ -31,6 +33,7 @@ async def test_extract_pdf_text_with_ocr(scanned_pdf: Path) -> None:
     assert result.content.strip()
 
 
+@pytest.mark.anyio
 async def test_extract_pdf_file(searchable_pdf: Path) -> None:
     """Test extracting text from a PDF file."""
     result = await extract_pdf_file(searchable_pdf, force_ocr=False, max_processes=1)
@@ -39,6 +42,7 @@ async def test_extract_pdf_file(searchable_pdf: Path) -> None:
     assert result.mime_type == "text/plain"
 
 
+@pytest.mark.anyio
 async def test_extract_pdf_file_non_searchable(non_searchable_pdf: Path) -> None:
     """Test extracting text from a non-searchable PDF file."""
     result = await extract_pdf_file(non_searchable_pdf, force_ocr=False, max_processes=1)
@@ -47,12 +51,14 @@ async def test_extract_pdf_file_non_searchable(non_searchable_pdf: Path) -> None
     assert result.mime_type == "text/plain"
 
 
+@pytest.mark.anyio
 async def test_extract_pdf_file_invalid() -> None:
     """Test that attempting to extract from an invalid PDF raises an error."""
     with pytest.raises(FileNotFoundError):
         await extract_pdf_file(Path("/invalid/path.pdf"), force_ocr=False, max_processes=1)
 
 
+@pytest.mark.anyio
 async def test_convert_pdf_to_images_raises_parsing_error(tmp_path: Path) -> None:
     """Test that attempting to convert an invalid PDF to images raises a ParsingError."""
     pdf_path = tmp_path / "invalid.pdf"
@@ -65,6 +71,7 @@ async def test_convert_pdf_to_images_raises_parsing_error(tmp_path: Path) -> Non
     assert str(pdf_path) in str(exc_info.value.context["file_path"])
 
 
+@pytest.mark.anyio
 async def test_extract_pdf_searchable_text_raises_parsing_error(tmp_path: Path) -> None:
     """Test that attempting to extract text from an invalid PDF raises a ParsingError."""
     pdf_path = tmp_path / "invalid.pdf"
