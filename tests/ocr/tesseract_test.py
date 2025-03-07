@@ -8,7 +8,7 @@ import pytest
 from PIL import Image
 
 from kreuzberg import ExtractionResult
-from kreuzberg._tesseract import (
+from kreuzberg._ocr._tesseract import (
     PSMMode,
     batch_process_images,
     process_file,
@@ -64,7 +64,7 @@ def mock_run_process(mocker: MockerFixture) -> Mock:
 
         return result
 
-    return mocker.patch("kreuzberg._tesseract.run_process", side_effect=run_sync)
+    return mocker.patch("kreuzberg._ocr._tesseract.run_process", side_effect=run_sync)
 
 
 @pytest.fixture
@@ -76,7 +76,7 @@ def mock_run_process_invalid(mocker: MockerFixture) -> Mock:
         result.stderr = b""
         return result
 
-    return mocker.patch("kreuzberg._tesseract.run_process", side_effect=run_sync)
+    return mocker.patch("kreuzberg._ocr._tesseract.run_process", side_effect=run_sync)
 
 
 @pytest.fixture
@@ -84,7 +84,7 @@ def mock_run_process_error(mocker: MockerFixture) -> Mock:
     def run_sync(command: list[str], **kwargs: Any) -> Mock:
         raise FileNotFoundError
 
-    return mocker.patch("kreuzberg._tesseract.run_process", side_effect=run_sync)
+    return mocker.patch("kreuzberg._ocr._tesseract.run_process", side_effect=run_sync)
 
 
 @pytest.mark.anyio
@@ -95,7 +95,7 @@ async def test_validate_tesseract_version(mock_run_process: Mock) -> None:
 
 @pytest.fixture(autouse=True)
 def reset_version_ref(mocker: MockerFixture) -> None:
-    mocker.patch("kreuzberg._tesseract.version_ref", {"checked": False})
+    mocker.patch("kreuzberg._ocr._tesseract.version_ref", {"checked": False})
 
 
 @pytest.mark.anyio
@@ -298,7 +298,7 @@ async def test_process_file_linux(mocker: MockerFixture) -> None:
     # Mock sys.platform to simulate Linux
     mocker.patch("sys.platform", "linux")
 
-    mock_run = mocker.patch("kreuzberg._tesseract.run_process")
+    mock_run = mocker.patch("kreuzberg._ocr._tesseract.run_process")
     mock_run.return_value.returncode = 0
     mock_run.return_value.stdout = b"test output"
 

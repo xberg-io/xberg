@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from kreuzberg._tmp import create_temp_file
+from kreuzberg._utils._tmp import create_temp_file
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
@@ -45,7 +45,7 @@ async def test_create_temp_file_cleanup_error(mocker: MockerFixture) -> None:
     mock_path = mocker.Mock()
     mock_path.unlink = mocker.Mock(side_effect=PermissionError("Mock permission error"))
 
-    mocker.patch("kreuzberg._tmp.AsyncPath", return_value=mock_path)
+    mocker.patch("kreuzberg._utils._tmp.AsyncPath", return_value=mock_path)
     # This should not raise an error even though the unlink fails
     temp_file_path2, cleanup2 = await create_temp_file(".txt")
     await cleanup2()  # This should not raise an error

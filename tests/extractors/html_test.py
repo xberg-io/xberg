@@ -6,26 +6,32 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from kreuzberg._html import extract_html_string
+from kreuzberg._extractors._html import HTMLExtractor
+from kreuzberg.extraction import DEFAULT_CONFIG
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
+@pytest.fixture
+def extractor() -> HTMLExtractor:
+    return HTMLExtractor(mime_type="text/html", config=DEFAULT_CONFIG)
+
+
 @pytest.mark.anyio
-async def test_extract_html_string(html_document: Path) -> None:
+async def test_extract_html_string(html_document: Path, extractor: HTMLExtractor) -> None:
     """Test extracting text from an HTML string."""
-    result = await extract_html_string(html_document)
+    result = await extractor.extract_path_async(html_document)
     assert isinstance(result.content, str)
     assert result.content.strip()
     assert result.mime_type == "text/markdown"
 
 
 @pytest.mark.anyio
-async def test_extract_html_string_bytes() -> None:
+async def test_extract_html_string_bytes(extractor: HTMLExtractor) -> None:
     """Test extracting text from HTML bytes."""
     html_content = b"<html><body><h1>Test</h1><p>This is a test.</p></body></html>"
-    result = await extract_html_string(html_content)
+    result = await extractor.extract_bytes_async(html_content)
     assert isinstance(result.content, str)
     assert result.content.strip()
     assert result.mime_type == "text/markdown"

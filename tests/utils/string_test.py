@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from kreuzberg._string import normalize_spaces, safe_decode
+from kreuzberg._utils._string import normalize_spaces, safe_decode
 
 
 @pytest.mark.parametrize(

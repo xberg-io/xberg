@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from kreuzberg._extractors._base import ExtractionConfig
 from kreuzberg._mime_types import (
     DOCX_MIME_TYPE,
     EXCEL_MIME_TYPE,
@@ -47,7 +48,8 @@ async def test_extract_bytes_pdf(scanned_pdf: Path) -> None:
 )
 async def test_extract_bytes_force_ocr_pdf(non_ascii_pdf: Path) -> None:
     content = non_ascii_pdf.read_bytes()
-    result = await extract_bytes(content, PDF_MIME_TYPE, force_ocr=True, language="deu")
+    config = ExtractionConfig(force_ocr=True, language="deu")
+    result = await extract_bytes(content, PDF_MIME_TYPE, config=config)
     assert_extraction_result(result, mime_type=PLAIN_TEXT_MIME_TYPE)
     assert "Spatenstich für neue Hackschnitzelheizung Nachhaltige Wärmeversorgung" in result.content
 
@@ -167,9 +169,13 @@ async def test_extract_file_html(html_document: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_extract_file_invalid_mime() -> None:
+async def test_extract_file_invalid_mime(tmp_path: Path) -> None:
+    # Create a valid path but use an invalid mime type
+    test_file = tmp_path / "valid-file.txt"
+    test_file.write_text("test content")
+
     with pytest.raises(ValidationError, match="Unsupported mime type"):
-        await extract_file("/invalid/path.txt", "application/unknown")
+        await extract_file(test_file, "application/unknown")
 
 
 @pytest.mark.anyio
@@ -217,9 +223,13 @@ def test_extract_bytes_sync_invalid_mime() -> None:
         extract_bytes_sync(b"some content", "application/unknown")
 
 
-def test_extract_file_sync_invalid_mime() -> None:
+def test_extract_file_sync_invalid_mime(tmp_path: Path) -> None:
+    # Create a valid path but use an invalid mime type
+    test_file = tmp_path / "valid-file.txt"
+    test_file.write_text("test content")
+
     with pytest.raises(ValidationError, match="Unsupported mime type"):
-        extract_file_sync("/invalid/path.txt", "application/unknown")
+        extract_file_sync(test_file, "application/unknown")
 
 
 def test_extract_file_sync_not_exists() -> None:
@@ -245,7 +255,8 @@ def assert_extraction_result(result: ExtractionResult, *, mime_type: str) -> Non
 
 @pytest.mark.anyio
 async def test_batch_extract_pdf_files(scanned_pdf: Path, test_article: Path) -> None:
-    results = await batch_extract_file([scanned_pdf, test_article], force_ocr=True)
+    config = ExtractionConfig(force_ocr=True)
+    results = await batch_extract_file([scanned_pdf, test_article], config=config)
     assert len(results) == 2
     for result in results:
         assert_extraction_result(result, mime_type=PLAIN_TEXT_MIME_TYPE)
@@ -276,10 +287,13 @@ async def test_batch_extract_file_empty() -> None:
 
 
 @pytest.mark.anyio
-async def test_batch_extract_file_invalid() -> None:
-    """Test batch extraction with an invalid file."""
+async def test_batch_extract_file_invalid(tmp_path: Path) -> None:
+    """Test batch extraction with a file that exists but has an invalid extension."""
+    invalid_file = tmp_path / "invalid-file.xyz"
+    invalid_file.write_text("Invalid file content")
+
     with pytest.raises(ExceptionGroup) as exc_info:
-        await batch_extract_file([Path("/invalid/file.xyz")])
+        await batch_extract_file([invalid_file])
     assert isinstance(exc_info.value.exceptions[0], ValidationError)
     assert "Unsupported mime type" in str(
         exc_info.value.exceptions[0]
