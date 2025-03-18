@@ -109,4 +109,4 @@ jobs:
           pandoc --version
 
       - name: Run Tests
-        run: uv run pytest
+        run: uv run pytest -s -vvv
