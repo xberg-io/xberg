@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from PIL.Image import Image
 
 from kreuzberg import ExtractionResult
 from kreuzberg._extractors._pdf import PDFExtractor
@@ -221,8 +222,4 @@ async def test_extract_tables_from_pdf(pdf_with_table: Path) -> None:
         assert isinstance(table["text"], str)
         assert "df" in table
         assert isinstance(table["df"], pd.DataFrame)
-
-        if "cropped_image" in table:
-            from PIL.Image import Image
-
-            assert isinstance(table["cropped_image"], Image)
+        assert isinstance(table["cropped_image"], Image)
