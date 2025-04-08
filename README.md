@@ -86,7 +86,7 @@ For comprehensive documentation, visit our [GitHub Pages](https://goldziher.gith
 
 Kreuzberg supports a wide range of document formats:
 
-- **Documents**: PDF, DOCX, DOC, RTF, TXT, EPUB, etc.
+- **Documents**: PDF, DOCX, RTF, TXT, EPUB, etc.
 - **Images**: JPG, PNG, TIFF, BMP, GIF, etc.
 - **Spreadsheets**: XLSX, XLS, CSV, etc.
 - **Presentations**: PPTX, PPT, etc.
@@ -108,11 +108,11 @@ This library is open to contribution. Feel free to open issues or submit PRs. It
 
 ### Local Development
 
-1. Clone the repo
-1. Install the system dependencies
-1. Install the full dependencies with `uv sync`
-1. Install the pre-commit hooks with: `pre-commit install && pre-commit install --hook-type commit-msg`
-1. Make your changes and submit a PR
+- Clone the repo
+- Install the system dependencies
+- Install the full dependencies with `uv sync`
+- Install the pre-commit hooks with: `pre-commit install && pre-commit install --hook-type commit-msg`
+- Make your changes and submit a PR
 
 ## License
 
