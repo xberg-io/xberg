@@ -52,10 +52,10 @@ optional-dependencies.all = [
   # easyocr
   "easyocr>=1.7.2",
   # gmft
-  "gmft>=0.4.1",
+  "gmft>=0.4.2",
   # paddle
-  "paddleocr>=3.0.2",
-  "paddlepaddle>=3.0.0",
+  "paddleocr>=3.1.0",
+  "paddlepaddle>=3.1.0",
   # chunking
   "semantic-text-splitter>=0.27.0",
   "setuptools>=80.9.0",
@@ -67,11 +67,11 @@ optional-dependencies.easyocr = [
   "easyocr>=1.7.2",
 ]
 optional-dependencies.gmft = [
-  "gmft>=0.4.1",
+  "gmft>=0.4.2",
 ]
 optional-dependencies.paddleocr = [
-  "paddleocr>=3.0.2",
-  "paddlepaddle>=3.0.0",
+  "paddleocr>=3.1.0",
+  "paddlepaddle>=3.1.0",
   "setuptools>=80.9.0",
 ]
 urls.homepage = "https://github.com/Goldziher/kreuzberg"
@@ -85,7 +85,7 @@ dev = [
   "pytest-cov>=6.2.1",
   "pytest-mock>=3.14.0",
   "pytest-timeout>=2.4.0",
-  "ruff>=0.12.0",
+  "ruff>=0.12.1",
   "trio>=0.30.0",
   "uv-bump",
 ]
