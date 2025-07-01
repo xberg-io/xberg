@@ -30,3 +30,4 @@ requirements.txt
 Dockerfile
 docker-compose.yaml
 benchmark_results.json
+.kreuzberg/

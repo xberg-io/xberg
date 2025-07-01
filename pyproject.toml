@@ -42,6 +42,7 @@ dependencies = [
   "charset-normalizer>=3.4.2",
   "exceptiongroup>=1.2.2; python_version<'3.11'",
   "html-to-markdown>=1.4.0",
+  "msgspec>=0.18.0",
   "playa-pdf>=0.6.1",                                 # pinned due to breaking changes in 0.5.0
   "psutil>=7.0.0",
   "pypdfium2==4.30.0",                                # pinned due to bug in 4.30.1, until v5 is stable
