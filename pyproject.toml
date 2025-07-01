@@ -201,7 +201,7 @@ module = [ "rich.*", "typer.*", "matplotlib.*", "memory_profiler.*", "py_spy.*" 
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "benchmarks.src.kreuzberg_benchmarks.cli"
+module = "benchmarks.src.kreuzberg_benchmarks.*"
 disable_error_code = [ "misc" ]
 
 [tool.uv.sources]
