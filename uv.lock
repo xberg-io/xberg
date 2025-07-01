@@ -1754,6 +1754,7 @@ dependencies = [
     { name = "charset-normalizer" },
     { name = "exceptiongroup", marker = "python_full_version < '3.11'" },
     { name = "html-to-markdown" },
+    { name = "kreuzberg-benchmarks" },
     { name = "playa-pdf" },
     { name = "psutil" },
     { name = "pypdfium2" },
@@ -1817,6 +1818,7 @@ requires-dist = [
     { name = "gmft", marker = "extra == 'all'", specifier = ">=0.4.2" },
     { name = "gmft", marker = "extra == 'gmft'", specifier = ">=0.4.2" },
     { name = "html-to-markdown", specifier = ">=1.4.0" },
+    { name = "kreuzberg-benchmarks", virtual = "benchmarks" },
     { name = "paddleocr", marker = "extra == 'all'", specifier = ">=3.1.0" },
     { name = "paddleocr", marker = "extra == 'paddleocr'", specifier = ">=3.1.0" },
     { name = "paddlepaddle", marker = "extra == 'all'", specifier = ">=3.1.0" },
@@ -1871,25 +1873,17 @@ dependencies = [
     { name = "typer" },
 ]
 
-[package.optional-dependencies]
-dev = [
-    { name = "uv-bump" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "kreuzberg", virtual = "." },
-    { name = "kreuzberg-benchmarks", marker = "extra == 'benchmarks'", virtual = "benchmarks" },
-    { name = "matplotlib", specifier = ">=3.7" },
-    { name = "memory-profiler", specifier = ">=0.61" },
-    { name = "pandas", specifier = ">=2" },
-    { name = "psutil", specifier = ">=5.9" },
+    { name = "matplotlib", specifier = ">=3.7.0" },
+    { name = "memory-profiler", specifier = ">=0.61.0" },
+    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "psutil", specifier = ">=5.9.0" },
     { name = "py-spy", specifier = ">=0.3.14" },
-    { name = "rich", specifier = ">=13" },
-    { name = "typer", specifier = ">=0.9" },
-    { name = "uv-bump", marker = "extra == 'dev'", git = "https://github.com/Goldziher/uv-bump" },
+    { name = "rich", specifier = ">=13.0.0" },
+    { name = "typer", specifier = ">=0.9.0" },
 ]
-provides-extras = ["dev", "benchmarks"]
 
 [[package]]
 name = "langchain"
@@ -1937,7 +1931,7 @@ wheels = [
 
 [[package]]
 name = "langchain-core"
-version = "0.3.67"
+version = "0.3.66"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jsonpatch" },
@@ -1948,9 +1942,9 @@ dependencies = [
     { name = "tenacity" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c2/40/875af0194024d0006874f061958fa417d3500bbfdc9a57e1bd1c2f4e6ed2/langchain_core-0.3.67.tar.gz", hash = "sha256:2c14aa44a0e78e014e96d7f2f8916ac109d0a0ba87ed67ee25bf7296bed7e7ba", size = 561952, upload-time = "2025-06-30T17:09:35.142Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f0/63/470aa84393bad5d51749417af58522a691174f8b2d05843f5633d473faa0/langchain_core-0.3.66.tar.gz", hash = "sha256:350c92e792ec1401f4b740d759b95f297710a50de29e1be9fbfff8676ef62117", size = 560102, upload-time = "2025-06-20T22:08:19.532Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/2b/a0d283089c6d08c12d47dca39a55029ff714e939ec04f4560420426ab613/langchain_core-0.3.67-py3-none-any.whl", hash = "sha256:b699f1f24b24fa2747c05e2daa280aa64478a51e01a4e82c7f8e20b6167dfa99", size = 440237, upload-time = "2025-06-30T17:09:33.323Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/c3/8080431fd7567a340d3a42e36c0bb3970a8d00d5e27bf3ca2103b3b55996/langchain_core-0.3.66-py3-none-any.whl", hash = "sha256:65cd6c3659afa4f91de7aa681397a0c53ff9282425c281e53646dd7faf16099e", size = 438874, upload-time = "2025-06-20T22:08:17.52Z" },
 ]
 
 [[package]]

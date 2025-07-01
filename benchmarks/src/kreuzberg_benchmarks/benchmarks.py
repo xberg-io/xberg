@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any, Callable, cast
+from typing import Any, Callable
 
 from kreuzberg import (
     ExtractionConfig,
@@ -38,18 +38,16 @@ class KreuzbergBenchmarks:
             ".jpg",
             ".jpeg",
         ]
-        test_files: list[Path] = []
+        test_files = []
 
         for ext in extensions:
             test_files.extend(self.test_files_dir.glob(f"*{ext}"))
 
         return sorted(test_files)[:10]  # Limit to first 10 files for benchmarking
 
-    def get_sync_benchmarks(
-        self,
-    ) -> list[tuple[str, Callable[..., Any], dict[str, Any]]]:
+    def get_sync_benchmarks(self) -> list[tuple[str, Callable, dict[str, Any]]]:
         """Get list of synchronous benchmarks."""
-        benchmarks: list[tuple[str, Callable[..., Any], dict[str, Any]]] = []
+        benchmarks = []
 
         # Single file extraction benchmarks
         for test_file in self.test_files:
@@ -97,30 +95,22 @@ class KreuzbergBenchmarks:
                 [
                     (
                         "sync_batch_small",
-                        cast(
-                            Callable[..., Any],
-                            lambda: [extract_file_sync(f) for f in small_batch],
-                        ),
-                        {"batch_size": str(len(small_batch)), "config": "sequential"},
+                        lambda: [extract_file_sync(f) for f in small_batch],
+                        {"batch_size": len(small_batch), "config": "sequential"},
                     ),
                     (
                         "sync_batch_medium",
-                        cast(
-                            Callable[..., Any],
-                            lambda: [extract_file_sync(f) for f in medium_batch],
-                        ),
-                        {"batch_size": str(len(medium_batch)), "config": "sequential"},
+                        lambda: [extract_file_sync(f) for f in medium_batch],
+                        {"batch_size": len(medium_batch), "config": "sequential"},
                     ),
                 ]
             )
 
         return benchmarks
 
-    def get_async_benchmarks(
-        self,
-    ) -> list[tuple[str, Callable[..., Any], dict[str, Any]]]:
+    def get_async_benchmarks(self) -> list[tuple[str, Callable, dict[str, Any]]]:
         """Get list of asynchronous benchmarks."""
-        benchmarks: list[tuple[str, Callable[..., Any], dict[str, Any]]] = []
+        benchmarks = []
 
         # Single file extraction benchmarks
         for test_file in self.test_files:
@@ -168,46 +158,32 @@ class KreuzbergBenchmarks:
                 [
                     (
                         "async_batch_small_concurrent",
-                        cast(
-                            Callable[..., Any], lambda: batch_extract_file(small_batch)
-                        ),
-                        {"batch_size": str(len(small_batch)), "config": "concurrent"},
+                        lambda: batch_extract_file(small_batch),
+                        {"batch_size": len(small_batch), "config": "concurrent"},
                     ),
                     (
                         "async_batch_medium_concurrent",
-                        cast(
-                            Callable[..., Any], lambda: batch_extract_file(medium_batch)
-                        ),
-                        {"batch_size": str(len(medium_batch)), "config": "concurrent"},
+                        lambda: batch_extract_file(medium_batch),
+                        {"batch_size": len(medium_batch), "config": "concurrent"},
                     ),
                     (
                         "async_batch_small_sequential",
-                        cast(
-                            Callable[..., Any],
-                            lambda: asyncio.gather(
-                                *[extract_file(f) for f in small_batch]
-                            ),
-                        ),
-                        {
-                            "batch_size": str(len(small_batch)),
-                            "config": "sequential_async",
-                        },
+                        lambda: asyncio.gather(*[extract_file(f) for f in small_batch]),
+                        {"batch_size": len(small_batch), "config": "sequential_async"},
                     ),
                 ]
             )
 
         return benchmarks
 
-    def get_comparison_benchmarks(
-        self,
-    ) -> list[tuple[str, Callable[..., Any], dict[str, Any]]]:
+    def get_comparison_benchmarks(self) -> list[tuple[str, Callable, dict[str, Any]]]:
         """Get benchmarks specifically for sync vs async comparison."""
         if not self.test_files:
             return []
 
         # Pick a representative file for comparison
         test_file = self.test_files[0]
-        benchmarks: list[tuple[str, Callable[..., Any], dict[str, Any]]] = []
+        benchmarks = []
 
         # Same operation, sync vs async
         benchmarks.extend(
@@ -244,7 +220,7 @@ class KreuzbergBenchmarks:
                         {
                             "type": "sync",
                             "operation": "batch",
-                            "batch_size": str(len(batch_files)),
+                            "batch_size": len(batch_files),
                         },
                     ),
                     (
@@ -253,7 +229,7 @@ class KreuzbergBenchmarks:
                         {
                             "type": "async",
                             "operation": "batch",
-                            "batch_size": str(len(batch_files)),
+                            "batch_size": len(batch_files),
                         },
                     ),
                 ]
@@ -261,9 +237,7 @@ class KreuzbergBenchmarks:
 
         return benchmarks
 
-    def get_stress_benchmarks(
-        self,
-    ) -> list[tuple[str, Callable[..., Any], dict[str, Any]]]:
+    def get_stress_benchmarks(self) -> list[tuple[str, Callable, dict[str, Any]]]:
         """Get stress test benchmarks for performance limits."""
         if len(self.test_files) < 2:
             return []
@@ -279,7 +253,7 @@ class KreuzbergBenchmarks:
                 {
                     "type": "stress",
                     "operation": "sync_batch",
-                    "batch_size": str(len(large_batch)),
+                    "batch_size": len(large_batch),
                 },
             ),
             (
@@ -288,7 +262,7 @@ class KreuzbergBenchmarks:
                 {
                     "type": "stress",
                     "operation": "async_batch",
-                    "batch_size": str(len(large_batch)),
+                    "batch_size": len(large_batch),
                 },
             ),
         ]

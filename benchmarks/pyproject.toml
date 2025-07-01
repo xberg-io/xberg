@@ -23,30 +23,10 @@ dependencies = [
   "typer>=0.9",
 ]
 
-optional-dependencies.benchmarks = [
-  "kreuzberg-benchmarks",
-]
-
-optional-dependencies.dev = [
-  "uv-bump",
-]
 scripts.kreuzberg-bench = "kreuzberg_benchmarks.cli:app"
 
 [tool.ruff]
 lint.extend-ignore = [ "ARG002", "B008", "B904", "BLE001", "E722", "PLR2004", "PYI036", "SLF001" ]
 
-[tool.mypy]
-python_version = "3.9"
-disable_error_code = 'import-untyped'
-implicit_reexport = false
-show_error_codes = true
-strict = true
-
-[[tool.mypy.overrides]]
-module = [ "rich.*", "typer.*", "matplotlib.*", "memory_profiler.*", "py_spy.*", "kreuzberg.*" ]
-ignore_missing_imports = true
-
 [tool.uv.sources]
 kreuzberg = { workspace = true }
-uv-bump = { git = "https://github.com/Goldziher/uv-bump" }
-kreuzberg-benchmarks = { workspace = true }

@@ -1,0 +1,130 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [main, feat/smart-multiprocessing]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run benchmarks daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for comparison
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
+
+      - name: Install dependencies
+        run: |
+          uv sync --all-extras
+          cd benchmarks && uv sync
+
+      - name: Create test files for benchmarking
+        run: |
+          mkdir -p test_files
+          # Create minimal test files since we don't have actual test files in CI
+          echo "# Test Markdown" > test_files/test.md
+          echo "<html><body><h1>Test HTML</h1></body></html>" > test_files/test.html
+          echo "Test plain text" > test_files/test.txt
+
+      - name: Run benchmarks
+        run: |
+          cd benchmarks
+          kreuzberg-bench run \
+            --test-files-dir ../test_files \
+            --output-dir ./results \
+            --suite-name "ci_benchmark_py${{ matrix.python-version }}"
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-py${{ matrix.python-version }}
+          path: benchmarks/results/
+          retention-days: 30
+
+      - name: Download baseline results (for PR comparison)
+        if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@v4
+        with:
+          name: baseline-benchmark-results-py${{ matrix.python-version }}
+          path: baseline-results/
+        continue-on-error: true
+
+      - name: Compare with baseline
+        if: github.event_name == 'pull_request'
+        run: |
+          cd benchmarks
+          if [ -f "../baseline-results/latest.json" ]; then
+            kreuzberg-bench compare \
+              ../baseline-results/latest.json \
+              results/latest.json \
+              --output comparison.json
+
+            echo "## Performance Comparison (Python ${{ matrix.python-version }})" >> $GITHUB_STEP_SUMMARY
+            echo "Baseline vs Current PR performance comparison:" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat comparison.json >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No baseline results found for comparison" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Store as baseline (for main branch)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-benchmark-results-py${{ matrix.python-version }}
+          path: benchmarks/results/latest.json
+          retention-days: 90
+
+  benchmark-summary:
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: always()
+
+    steps:
+      - name: Download all benchmark results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: benchmark-results-*
+          merge-multiple: true
+          path: all-results/
+
+      - name: Create benchmark summary
+        run: |
+          echo "# Benchmark Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Version | Status | Results |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+
+          for file in all-results/latest.json; do
+            if [ -f "$file" ]; then
+              python_version=$(echo "$file" | grep -o 'py[0-9]\+\.[0-9]\+' || echo "unknown")
+              echo "| $python_version | ✅ Success | [Results]($file) |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Benchmark artifacts are available for download and analysis." >> $GITHUB_STEP_SUMMARY
