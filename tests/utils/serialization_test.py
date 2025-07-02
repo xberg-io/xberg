@@ -54,7 +54,6 @@ def test_encode_hook_exception() -> None:
 
     assert result == {"message": "Test error message", "type": "ValueError"}
 
-    # Custom exception
     custom_exc = SampleError("Custom error")
     result = encode_hook(custom_exc)
 
@@ -69,7 +68,7 @@ def test_encode_hook_dataclass() -> None:
     assert result == {
         "name": "test",
         "value": 42,
-        "color": "red",  # Enum converted to value
+        "color": "red",
     }
 
 
@@ -82,64 +81,58 @@ def test_encode_hook_dataclass_type() -> None:
 def test_encode_hook_dict_methods() -> None:
     """Test encoding objects with dict methods."""
 
-    # to_dict
     class MockClass:
-        def to_dict(self):
+        def to_dict(self) -> dict[str, str]:
             return {"key": "value"}
 
     obj = MockClass()
     assert encode_hook(obj) == {"key": "value"}
 
-    # as_dict
     class MockClass2:
-        def as_dict(self):
+        def as_dict(self) -> dict[str, str]:
             return {"key2": "value2"}
 
-    obj = MockClass2()
-    assert encode_hook(obj) == {"key2": "value2"}
+    obj2: MockClass = MockClass2()  # type: ignore[assignment]
+    assert encode_hook(obj2) == {"key2": "value2"}
 
-    # dict method
     class MockClass3:
-        def dict(self):
+        def dict(self) -> dict[str, str]:
             return {"key3": "value3"}
 
-    obj = MockClass3()
-    assert encode_hook(obj) == {"key3": "value3"}
+    obj3: MockClass = MockClass3()  # type: ignore[assignment]
+    assert encode_hook(obj3) == {"key3": "value3"}
 
-    # model_dump (Pydantic v2)
     class MockClass4:
-        def model_dump(self):
+        def model_dump(self) -> dict[str, str]:
             return {"key4": "value4"}
 
-    obj = MockClass4()
-    assert encode_hook(obj) == {"key4": "value4"}
+    obj4: MockClass = MockClass4()  # type: ignore[assignment]
+    assert encode_hook(obj4) == {"key4": "value4"}
 
 
 def test_encode_hook_list_methods() -> None:
     """Test encoding objects with list methods."""
 
-    # to_list
     class MockClass1:
-        def to_list(self):
+        def to_list(self) -> list[int]:
             return [1, 2, 3]
 
     obj = MockClass1()
     assert encode_hook(obj) == [1, 2, 3]
 
-    # tolist (numpy style)
     class MockClass2:
-        def tolist(self):
+        def tolist(self) -> list[int]:
             return [4, 5, 6]
 
-    obj = MockClass2()
-    assert encode_hook(obj) == [4, 5, 6]
+    obj2: MockClass1 = MockClass2()  # type: ignore[assignment]
+    assert encode_hook(obj2) == [4, 5, 6]
 
 
 def test_encode_hook_pil_image() -> None:
     """Test encoding PIL images returns None."""
 
     class MockImage:
-        def save(self, *args, **kwargs) -> None:
+        def save(self, *args: object, **kwargs: object) -> None:
             pass
 
         format = "PNG"
@@ -152,7 +145,7 @@ def test_encode_hook_to_dict() -> None:
     """Test encoding objects with to_dict method."""
 
     class MockDataFrame:
-        def to_dict(self):
+        def to_dict(self) -> dict[str, list[int]]:
             return {"col1": [1, 2], "col2": [3, 4]}
 
     mock_df = MockDataFrame()
@@ -174,19 +167,16 @@ def test_encode_hook_unsupported() -> None:
 
 def test_serialize_simple() -> None:
     """Test serializing simple types."""
-    # String
+
     result = serialize("hello")
     assert isinstance(result, bytes)
 
-    # Number
     result = serialize(42)
     assert isinstance(result, bytes)
 
-    # List
     result = serialize([1, 2, 3])
     assert isinstance(result, bytes)
 
-    # Dict
     result = serialize({"key": "value"})
     assert isinstance(result, bytes)
 
@@ -196,7 +186,6 @@ def test_serialize_with_kwargs() -> None:
     base = {"key1": "value1"}
     result = serialize(base, key2="value2", key3=123)
 
-    # Deserialize to verify
     from msgspec import msgpack
 
     decoded = msgpack.decode(result)
@@ -211,7 +200,6 @@ def test_serialize_complex_object() -> None:
 
     assert isinstance(result, bytes)
 
-    # Verify it can be decoded
     from msgspec import msgpack
 
     decoded = msgpack.decode(result)
@@ -223,7 +211,6 @@ def test_serialize_complex_object() -> None:
 def test_serialize_error() -> None:
     """Test serialization error handling."""
 
-    # Create an object that can't be serialized
     class BadObject:
         def __init__(self) -> None:
             self.circular = self
@@ -236,20 +223,18 @@ def test_serialize_error() -> None:
 
 def test_deserialize_simple() -> None:
     """Test deserializing simple types."""
-    # String
+
     data = serialize("hello")
-    result = deserialize(data, str)
+    result: str = deserialize(data, str)
     assert result == "hello"
 
-    # Number
     data = serialize(42)
-    result = deserialize(data, int)
-    assert result == 42
+    result_int: int = deserialize(data, int)
+    assert result_int == 42
 
-    # List
     data = serialize([1, 2, 3])
-    result = deserialize(data, list[int])
-    assert result == [1, 2, 3]
+    result_list: list[int] = deserialize(data, list[int])
+    assert result_list == [1, 2, 3]
 
 
 def test_deserialize_dict() -> None:
@@ -280,7 +265,6 @@ def test_roundtrip_complex() -> None:
         "count": 42,
     }
 
-    # Serialize and deserialize
     serialized = serialize(original)
     result = deserialize(serialized, dict[str, Any])
 
@@ -292,7 +276,6 @@ def test_serialize_none_values() -> None:
     data = {"key": None, "value": 123}
     result = serialize(data)
 
-    # Verify it can be decoded
     from msgspec import msgpack
 
     decoded = msgpack.decode(result)
@@ -304,15 +287,14 @@ def test_serialize_none_values() -> None:
 def test_encode_hook_method_priority() -> None:
     """Test method priority in encode_hook."""
 
-    # Create a non-callable object with multiple methods
     class MultiMethodObject:
-        def to_dict(self):
+        def to_dict(self) -> dict[str, str]:
             return {"from": "to_dict"}
 
-        def as_dict(self):
+        def as_dict(self) -> dict[str, str]:
             return {"from": "as_dict"}
 
-        def dict(self):
+        def dict(self) -> dict[str, str]:
             return {"from": "dict"}
 
     obj = MultiMethodObject()
@@ -338,7 +320,7 @@ def test_serialize_bytes_input() -> None:
     result = serialize(data)
 
     assert isinstance(result, bytes)
-    # Verify it can be decoded back
+
     from msgspec import msgpack
 
     decoded = msgpack.decode(result)
@@ -350,6 +332,5 @@ def test_deserialize_with_bytes_input() -> None:
     original = {"test": "data"}
     serialized = serialize(original)
 
-    # Should work with bytes
     result = deserialize(serialized, dict[str, str])
     assert result == original

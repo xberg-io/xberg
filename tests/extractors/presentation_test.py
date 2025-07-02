@@ -8,6 +8,8 @@ from kreuzberg._extractors._presentation import PresentationExtractor
 from kreuzberg.extraction import DEFAULT_CONFIG
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from pytest_mock import MockerFixture
 
 
@@ -41,10 +43,9 @@ async def test_extract_pptx_with_notes(mocker: MockerFixture, extractor: Present
 
 
 @pytest.mark.anyio
-async def test_extract_path_async(mocker: MockerFixture, extractor: PresentationExtractor, tmp_path) -> None:
+async def test_extract_path_async(mocker: MockerFixture, extractor: PresentationExtractor, tmp_path: Path) -> None:
     """Test async path extraction - covers lines 69-70."""
 
-    # Create a mock presentation
     mock_presentation = mocker.MagicMock()
     mock_presentation.slides = []
     mock_presentation.core_properties = mocker.MagicMock()
@@ -52,7 +53,6 @@ async def test_extract_path_async(mocker: MockerFixture, extractor: Presentation
 
     mocker.patch("pptx.Presentation", return_value=mock_presentation)
 
-    # Create a test file
     test_file = tmp_path / "test.pptx"
     test_file.write_bytes(b"mock pptx content")
 
@@ -75,7 +75,7 @@ def test_extract_bytes_sync(mocker: MockerFixture, extractor: PresentationExtrac
     assert result.mime_type == "text/markdown"
 
 
-def test_extract_path_sync(mocker: MockerFixture, extractor: PresentationExtractor, tmp_path) -> None:
+def test_extract_path_sync(mocker: MockerFixture, extractor: PresentationExtractor, tmp_path: Path) -> None:
     """Test sync path extraction - covers lines 94-95."""
 
     mock_presentation = mocker.MagicMock()
@@ -85,7 +85,6 @@ def test_extract_path_sync(mocker: MockerFixture, extractor: PresentationExtract
 
     mocker.patch("pptx.Presentation", return_value=mock_presentation)
 
-    # Create a test file
     test_file = tmp_path / "test.pptx"
     test_file.write_bytes(b"mock pptx content")
 
@@ -101,7 +100,6 @@ def test_extract_pptx_with_slide_title(mocker: MockerFixture, extractor: Present
     mock_title_shape = mocker.MagicMock()
     mock_shapes = mocker.MagicMock()
 
-    # Set up slide with title
     mock_shapes.title = mock_title_shape
     mock_slide.shapes = mock_shapes
     mock_slide.has_notes_slide = False
@@ -109,7 +107,6 @@ def test_extract_pptx_with_slide_title(mocker: MockerFixture, extractor: Present
     mock_presentation.core_properties = mocker.MagicMock()
     mock_presentation.core_properties.author = None
 
-    # Mock the shapes iteration
     mock_shapes.__iter__ = mocker.Mock(return_value=iter([mock_title_shape]))
     mock_title_shape.shape_type = mocker.MagicMock()
     mock_title_shape.has_text_frame = True
@@ -129,7 +126,6 @@ def test_extract_pptx_with_shapes_no_shape_type(mocker: MockerFixture, extractor
     mock_slide = mocker.MagicMock()
     mock_shape_no_type = mocker.MagicMock()
 
-    # Remove shape_type attribute to trigger the continue
     del mock_shape_no_type.shape_type
 
     mock_slide.shapes = [mock_shape_no_type]
@@ -153,11 +149,9 @@ def test_extract_pptx_with_picture_shape(mocker: MockerFixture, extractor: Prese
     mock_slide = mocker.MagicMock()
     mock_picture_shape = mocker.MagicMock()
 
-    # Set up picture shape
     mock_picture_shape.shape_type = MSO_SHAPE_TYPE.PICTURE
     mock_picture_shape.name = "test_image"
 
-    # Mock the alt text extraction
     mock_element = mocker.MagicMock()
     mock_nvXxPr = mocker.MagicMock()
     mock_cNvPr = mocker.MagicMock()
@@ -188,10 +182,8 @@ def test_extract_pptx_with_table_shape(mocker: MockerFixture, extractor: Present
     mock_slide = mocker.MagicMock()
     mock_table_shape = mocker.MagicMock()
 
-    # Set up table shape
     mock_table_shape.shape_type = MSO_SHAPE_TYPE.TABLE
 
-    # Create mock table with rows and cells
     mock_table = mocker.MagicMock()
     mock_row1 = mocker.MagicMock()
     mock_row2 = mocker.MagicMock()
@@ -232,8 +224,7 @@ def test_extract_pptx_with_text_frame_shape(mocker: MockerFixture, extractor: Pr
     mock_slide = mocker.MagicMock()
     mock_text_shape = mocker.MagicMock()
 
-    # Set up text frame shape
-    mock_text_shape.shape_type = mocker.MagicMock()  # Not a specific type
+    mock_text_shape.shape_type = mocker.MagicMock()
     mock_text_shape.has_text_frame = True
     mock_text_shape.text = "  Some text content"
 
@@ -256,7 +247,6 @@ def test_extract_presentation_metadata(mocker: MockerFixture, extractor: Present
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
 
-    # Set up core properties
     mock_core_properties = mocker.MagicMock()
     mock_core_properties.author = "Test Author"
     mock_core_properties.title = "Test Title"
@@ -275,7 +265,6 @@ def test_extract_presentation_metadata(mocker: MockerFixture, extractor: Present
 
     mock_presentation.core_properties = mock_core_properties
 
-    # Set up fonts in text frames
     mock_shape = mocker.MagicMock()
     mock_text_frame = mocker.MagicMock()
     mock_paragraph = mocker.MagicMock()
@@ -294,7 +283,7 @@ def test_extract_presentation_metadata(mocker: MockerFixture, extractor: Present
 
     result = extractor.extract_bytes_sync(b"mock pptx content")
 
-    assert result.metadata["authors"] == "Test Author"
+    assert result.metadata["authors"] == "Test Author"  # type: ignore[comparison-overlap]
     assert result.metadata["title"] == "Test Title"
     assert result.metadata["subject"] == "Test Subject"
     assert result.metadata["languages"] == ["en-US"]
@@ -308,7 +297,6 @@ def test_extract_presentation_metadata_no_text_frame(mocker: MockerFixture, extr
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
 
-    # Set up core properties
     mock_core_properties = mocker.MagicMock()
     mock_core_properties.author = None
     mock_core_properties.title = None
@@ -316,9 +304,8 @@ def test_extract_presentation_metadata_no_text_frame(mocker: MockerFixture, extr
     mock_core_properties.category = None
     mock_presentation.core_properties = mock_core_properties
 
-    # Set up shape without text_frame
     mock_shape = mocker.MagicMock()
-    del mock_shape.text_frame  # Remove text_frame attribute
+    del mock_shape.text_frame
 
     mock_slide.shapes = [mock_shape]
     mock_presentation.slides = [mock_slide]
@@ -327,7 +314,6 @@ def test_extract_presentation_metadata_no_text_frame(mocker: MockerFixture, extr
 
     result = extractor.extract_bytes_sync(b"mock pptx content")
 
-    # Should not have fonts in metadata
     assert "fonts" not in result.metadata
     assert result.mime_type == "text/markdown"
 
@@ -338,9 +324,8 @@ def test_extract_pptx_shape_without_text_frame(mocker: MockerFixture, extractor:
     mock_slide = mocker.MagicMock()
     mock_shape = mocker.MagicMock()
 
-    # Set up shape without text_frame
-    mock_shape.shape_type = mocker.MagicMock()  # Not a specific type
-    mock_shape.has_text_frame = False  # Shape doesn't have text frame
+    mock_shape.shape_type = mocker.MagicMock()
+    mock_shape.has_text_frame = False
 
     mock_slide.shapes = [mock_shape]
     mock_slide.has_notes_slide = False
@@ -362,20 +347,17 @@ def test_extract_presentation_metadata_run_without_font(
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
 
-    # Set up core properties
     mock_core_properties = mocker.MagicMock()
     mock_core_properties.author = None
     mock_core_properties.language = None
     mock_core_properties.category = None
     mock_presentation.core_properties = mock_core_properties
 
-    # Set up text frame with run that doesn't have font
     mock_shape = mocker.MagicMock()
     mock_text_frame = mocker.MagicMock()
     mock_paragraph = mocker.MagicMock()
     mock_run_no_font = mocker.MagicMock()
 
-    # Remove font attribute to test the hasattr check
     del mock_run_no_font.font
 
     mock_paragraph.runs = [mock_run_no_font]
@@ -389,7 +371,6 @@ def test_extract_presentation_metadata_run_without_font(
 
     result = extractor.extract_bytes_sync(b"mock pptx content")
 
-    # Should not have fonts in metadata since run doesn't have font
     assert "fonts" not in result.metadata
     assert result.mime_type == "text/markdown"
 
@@ -401,20 +382,18 @@ def test_extract_presentation_metadata_font_without_name(
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
 
-    # Set up core properties
     mock_core_properties = mocker.MagicMock()
     mock_core_properties.author = None
     mock_core_properties.language = None
     mock_core_properties.category = None
     mock_presentation.core_properties = mock_core_properties
 
-    # Set up text frame with font that doesn't have name
     mock_shape = mocker.MagicMock()
     mock_text_frame = mocker.MagicMock()
     mock_paragraph = mocker.MagicMock()
     mock_run = mocker.MagicMock()
     mock_font = mocker.MagicMock()
-    mock_font.name = None  # Font without name
+    mock_font.name = None
     mock_run.font = mock_font
     mock_paragraph.runs = [mock_run]
     mock_text_frame.paragraphs = [mock_paragraph]
@@ -427,6 +406,5 @@ def test_extract_presentation_metadata_font_without_name(
 
     result = extractor.extract_bytes_sync(b"mock pptx content")
 
-    # Should not have fonts in metadata since font name is None
     assert "fonts" not in result.metadata
     assert result.mime_type == "text/markdown"

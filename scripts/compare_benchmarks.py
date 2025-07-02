@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Compare benchmark results for performance regression detection."""
 
 from __future__ import annotations
@@ -44,11 +43,9 @@ def compare_benchmarks(baseline: dict[str, Any], current: dict[str, Any], thresh
 
         baseline_bench = baseline_benchmarks[name]
 
-        # Skip failed benchmarks
         if not current_bench.get("success", True) or not baseline_bench.get("success", True):
             continue
 
-        # Compare duration
         baseline_duration = baseline_bench["duration"]
         current_duration = current_bench["duration"]
 
@@ -56,13 +53,12 @@ def compare_benchmarks(baseline: dict[str, Any], current: dict[str, Any], thresh
             change_ratio = (current_duration - baseline_duration) / baseline_duration
             change_percent = change_ratio * 100
 
-            improvement_threshold = -0.05  # 5% improvement threshold
+            improvement_threshold = -0.05
             if change_ratio > threshold:
                 regressions.append((name, change_percent, baseline_duration, current_duration))
             elif change_ratio < improvement_threshold:
                 improvements.append((name, abs(change_percent), baseline_duration, current_duration))
 
-    # Print summary
     print(f"Found {len(improvements)} improvements and {len(regressions)} regressions")  # noqa: T201
 
     if improvements:

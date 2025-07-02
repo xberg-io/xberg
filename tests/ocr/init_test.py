@@ -30,7 +30,7 @@ def test_get_ocr_backend_caching() -> None:
     """Test that backends are cached."""
     backend1 = get_ocr_backend("easyocr")
     backend2 = get_ocr_backend("easyocr")
-    assert backend1 is backend2  # Same instance due to lru_cache
+    assert backend1 is backend2
 
     backend3 = get_ocr_backend("paddleocr")
     backend4 = get_ocr_backend("paddleocr")

@@ -75,7 +75,7 @@ repos:
             --check-return-types=False,
             --arg-type-hints-in-docstring=False,
           ]
-        exclude: ^benchmarks/|^kreuzberg/_multiprocessing/|^run_benchmarks\.py
+        exclude: ^benchmarks/|^kreuzberg/_|^tests/|^scripts/|^run_benchmarks\.py
   - repo: local
     hooks:
       - id: mypy

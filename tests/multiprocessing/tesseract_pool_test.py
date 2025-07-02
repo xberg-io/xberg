@@ -44,10 +44,8 @@ def test_image_path(tmp_path: Path) -> Path:
 def test_process_image_with_tesseract_success(test_image_path: Path, tesseract_config: dict[str, Any]) -> None:
     """Test successful image processing with tesseract."""
     with patch("subprocess.run") as mock_run:
-        # Mock successful tesseract execution
         mock_run.return_value = Mock(returncode=0)
 
-        # Mock file read
         with patch("pathlib.Path.read_text", return_value="Test OCR output"):
             result = _process_image_with_tesseract(str(test_image_path), tesseract_config)
 
@@ -60,7 +58,6 @@ def test_process_image_with_tesseract_success(test_image_path: Path, tesseract_c
 def test_process_image_with_tesseract_error(test_image_path: Path, tesseract_config: dict[str, Any]) -> None:
     """Test image processing with tesseract error."""
     with patch("subprocess.run") as mock_run:
-        # Mock tesseract failure
         mock_run.return_value = Mock(returncode=1, stderr="Tesseract error")
 
         result = _process_image_with_tesseract(str(test_image_path), tesseract_config)
@@ -97,9 +94,8 @@ def test_process_image_with_tesseract_custom_params(test_image_path: Path) -> No
         with patch("pathlib.Path.read_text", return_value="French text"):
             _process_image_with_tesseract(str(test_image_path), config)
 
-            # Verify command was built correctly
             args = mock_run.call_args[0][0]
-            assert args[0] == "tesseract"  # Default tesseract command
+            assert args[0] == "tesseract"
             assert "-l" in args
             assert "fra" in args
             assert "--psm" in args
@@ -110,7 +106,7 @@ def test_process_image_with_tesseract_custom_params(test_image_path: Path) -> No
 
 def test_process_image_bytes_with_tesseract(tesseract_config: dict[str, Any]) -> None:
     """Test image bytes processing."""
-    # Create test image bytes
+
     img = Image.new("RGB", (100, 100), color="white")
     img_bytes = io.BytesIO()
     img.save(img_bytes, format="PNG")
@@ -139,7 +135,7 @@ class TestTesseractProcessPool:
         pool = TesseractProcessPool()
         assert pool.config is not None
         assert pool.process_manager is not None
-        # Check that config was set to a default TesseractConfig
+
         assert isinstance(pool.config, TesseractConfig)
 
     def test_init_custom_processes(self) -> None:
@@ -149,13 +145,13 @@ class TestTesseractProcessPool:
 
     def test_init_custom_config(self) -> None:
         """Test TesseractPool initialization with custom config."""
-        config = TesseractConfig(language="fra", psm=6)
+        config = TesseractConfig(language="fra", psm=6)  # type: ignore[arg-type]
         pool = TesseractProcessPool(config=config)
         assert pool.config == config
 
     def test_config_to_dict(self) -> None:
         """Test _config_to_dict method - covers lines 309 and others."""
-        config = TesseractConfig(language="fra", psm=6)
+        config = TesseractConfig(language="fra", psm=6)  # type: ignore[arg-type]
         pool = TesseractProcessPool(config=config)
 
         config_dict = pool._config_to_dict()
@@ -163,8 +159,7 @@ class TestTesseractProcessPool:
         assert config_dict["language"] == "fra"
         assert config_dict["psm"] == 6
 
-        # Test with override config
-        override_config = TesseractConfig(language="eng", psm=3)
+        override_config = TesseractConfig(language="eng", psm=3)  # type: ignore[arg-type]
         override_dict = pool._config_to_dict(override_config)
         assert override_dict["language"] == "eng"
         assert override_dict["psm"] == 3
@@ -194,7 +189,6 @@ class TestTesseractProcessPool:
         """Test async image processing."""
         pool = TesseractProcessPool(max_processes=2)
 
-        # Mock the sync processing result
         mock_result = {
             "success": True,
             "text": "Async OCR result",
@@ -213,7 +207,6 @@ class TestTesseractProcessPool:
         """Test async image processing with error."""
         pool = TesseractProcessPool(max_processes=2)
 
-        # Mock error result
         mock_result = {
             "success": False,
             "text": "",
@@ -232,13 +225,11 @@ class TestTesseractProcessPool:
         """Test async image bytes processing."""
         pool = TesseractProcessPool(max_processes=2)
 
-        # Create test image bytes
         img = Image.new("RGB", (100, 100), color="white")
         img_bytes_io = io.BytesIO()
         img.save(img_bytes_io, format="PNG")
         image_bytes = img_bytes_io.getvalue()
 
-        # Mock the sync processing result
         mock_result = {
             "success": True,
             "text": "Bytes OCR result",
@@ -255,7 +246,7 @@ class TestTesseractProcessPool:
     @pytest.mark.anyio
     async def test_process_batch_images(self, tmp_path: Path) -> None:
         """Test batch image processing."""
-        # Create test images
+
         images = []
         for i in range(3):
             img_path = tmp_path / f"test_{i}.png"
@@ -265,7 +256,6 @@ class TestTesseractProcessPool:
 
         pool = TesseractProcessPool(max_processes=2)
 
-        # Mock results
         mock_results = [
             {
                 "success": True,
@@ -277,7 +267,7 @@ class TestTesseractProcessPool:
         ]
 
         with patch.object(pool.process_manager, "submit_batch", return_value=mock_results):
-            results = await pool.process_batch_images(images)
+            results = await pool.process_batch_images(images)  # type: ignore[arg-type]
 
             assert len(results) == 3
             for i, result in enumerate(results):
@@ -286,7 +276,7 @@ class TestTesseractProcessPool:
     @pytest.mark.anyio
     async def test_process_batch_bytes(self) -> None:
         """Test batch byte processing."""
-        # Create test image bytes
+
         image_bytes_list = []
         for _ in range(3):
             img = Image.new("RGB", (50, 50), color="white")
@@ -296,7 +286,6 @@ class TestTesseractProcessPool:
 
         pool = TesseractProcessPool(max_processes=2)
 
-        # Mock results
         mock_results = [
             {
                 "success": True,
@@ -339,7 +328,6 @@ class TestTesseractProcessPool:
         async with pool as p:
             assert p is pool
 
-        # Test shutdown was called
         with patch.object(pool, "shutdown") as mock_shutdown:
             async with pool:
                 pass

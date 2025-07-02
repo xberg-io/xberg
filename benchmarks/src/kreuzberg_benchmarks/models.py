@@ -140,6 +140,6 @@ class FlameGraphConfig:
     enabled: bool = True
     duration_seconds: float = 10.0
     rate_hz: int = 100
-    output_format: str = "svg"  # svg, html, speedscope
+    output_format: str = "svg"
     include_idle: bool = False
     subprocesses: bool = True

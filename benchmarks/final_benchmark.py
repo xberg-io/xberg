@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Final comprehensive benchmark comparing all improvements."""
 
 import asyncio
@@ -16,7 +15,7 @@ from kreuzberg._utils._cache import (
 )
 
 
-async def run_final_benchmark():
+async def run_final_benchmark() -> dict[str, object] | None:  # type: ignore[syntax]
     """Run comprehensive benchmark of all caching improvements."""
     test_files_dir = Path("tests/test_source_files")
     pdf_files = list(test_files_dir.glob("*.pdf"))
@@ -26,12 +25,10 @@ async def run_final_benchmark():
 
     single_file = pdf_files[0]
 
-    # Configuration that uses all cache layers
     full_config = ExtractionConfig(
         force_ocr=True, ocr_backend="tesseract", extract_tables=True, chunk_content=True
     )
 
-    # Baseline: Cold extraction (no cache)
     clear_all_caches()
 
     start_time = time.time()
@@ -44,8 +41,6 @@ async def run_final_benchmark():
         baseline_duration = time.time() - start_time
         baseline_success = False
         result_baseline = None
-
-    # Test: Multi-layer cache (msgspec)
 
     start_time = time.time()
     try:
@@ -68,8 +63,6 @@ async def run_final_benchmark():
         total_speedup = 1
         content_match = False
 
-    # Multiple runs for stability test
-
     run_times = []
     for _i in range(10):
         start_time = time.time()
@@ -87,8 +80,6 @@ async def run_final_benchmark():
         max(valid_times)
         (sum((t - avg_time) ** 2 for t in valid_times) / len(valid_times)) ** 0.5
 
-    # Cache layer analysis
-
     caches = {
         "MIME": get_mime_cache(),
         "OCR": get_ocr_cache(),
@@ -100,40 +91,29 @@ async def run_final_benchmark():
     total_items = 0
 
     for cache in caches.values():
-        stats = cache.get_stats()
+        stats = cache.get_stats()  # type: ignore[attr-defined]
         total_size += stats["total_cache_size_mb"]
         total_items += stats["cached_results"]
 
         stats["cached_results"] / max(stats["total_cache_size_mb"], 0.001)
 
-    # Performance breakdown estimate
-
     if baseline_success and cached_success:
         baseline_duration - cached_duration
 
-        # Estimated component contributions (based on typical extraction patterns)
         components = {
-            "MIME Detection": 0.001,  # Very fast
-            "OCR Processing": baseline_duration * 0.7,  # ~70% of time
-            "Table Extraction": baseline_duration * 0.25,  # ~25% of time
-            "Document Processing": baseline_duration * 0.05,  # ~5% of time
+            "MIME Detection": 0.001,
+            "OCR Processing": baseline_duration * 0.7,
+            "Table Extraction": baseline_duration * 0.25,
+            "Document Processing": baseline_duration * 0.05,
         }
 
         for time_est in components.values():
             (time_est / baseline_duration) * 100
 
-    # Storage efficiency
-
     cache_root = Path(".kreuzberg")
     if cache_root.exists():
         len(list(cache_root.rglob("*.msgpack")))
         sum(f.stat().st_size for f in cache_root.rglob("*") if f.is_file())
-
-    # Final summary
-
-    # Overall performance indicators
-
-    # Technology stack summary
 
     return {
         "baseline_duration": baseline_duration,
@@ -153,14 +133,13 @@ if __name__ == "__main__":
     try:
         results = asyncio.run(run_final_benchmark())
 
-        # Save comprehensive results
-        final_results_file = Path("final_benchmark_results.json")
-        with final_results_file.open("w") as f:
-            json.dump(results, f, indent=2, default=str)
+        if results is not None:
+            final_results_file = Path("final_benchmark_results.json")
+            with final_results_file.open("w") as f:
+                json.dump(results, f, indent=2, default=str)
 
-        # Show key metrics
-        if results["baseline_success"] and results["cached_success"]:
-            pass
+            if results["baseline_success"] and results["cached_success"]:
+                pass
 
     except Exception:
         import traceback

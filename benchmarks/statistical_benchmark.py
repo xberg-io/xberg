@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Statistical benchmark comparing JSON vs msgpack with proper error analysis."""
 
 import asyncio
@@ -29,7 +28,6 @@ async def run_statistical_benchmark() -> dict[str, Any]:
     print("Trials: Cold=5, Warm=50")
     print("=" * 60)
 
-    # Phase 1: Cold start measurements (5 trials)
     print("\n🔥 COLD START MEASUREMENTS")
     cold_times = []
 
@@ -44,7 +42,6 @@ async def run_statistical_benchmark() -> dict[str, Any]:
         cold_times.append(duration)
         print(f"{duration:.3f}s")
 
-    # Phase 2: Warm cache measurements (50 trials)
     print("\n⚡ WARM CACHE MEASUREMENTS")
     warm_times = []
 
@@ -62,7 +59,6 @@ async def run_statistical_benchmark() -> dict[str, Any]:
             avg_batch = statistics.mean(warm_times[trial - 9 : trial + 1])
             print(f"avg {avg_batch * 1000:.3f}ms")
 
-    # Statistical analysis
     cold_mean = statistics.mean(cold_times)
     cold_stdev = statistics.stdev(cold_times) if len(cold_times) > 1 else 0
     cold_median = statistics.median(cold_times)
@@ -71,16 +67,14 @@ async def run_statistical_benchmark() -> dict[str, Any]:
     warm_stdev = statistics.stdev(warm_times) if len(warm_times) > 1 else 0
     warm_median = statistics.median(warm_times)
 
-    # Remove outliers (beyond 2 standard deviations)
     warm_filtered = [t for t in warm_times if abs(t - warm_mean) <= 2 * warm_stdev]
 
     warm_clean_mean = statistics.mean(warm_filtered)
     warm_clean_stdev = statistics.stdev(warm_filtered) if len(warm_filtered) > 1 else 0
 
     speedup_mean = cold_mean / warm_clean_mean
-    speedup_conservative = cold_median / max(warm_times)  # Conservative estimate
+    speedup_conservative = cold_median / max(warm_times)
 
-    # Confidence intervals (95% assuming t-distribution)
     import math
 
     def confidence_interval(
@@ -93,7 +87,6 @@ async def run_statistical_benchmark() -> dict[str, Any]:
         stdev_val = statistics.stdev(data)
         n = len(data)
 
-        # t-value for 95% confidence (approximation for large n)
         t_value = 2.0 if n < 30 else 1.96
 
         margin = t_value * stdev_val / math.sqrt(n)
@@ -128,7 +121,6 @@ async def run_statistical_benchmark() -> dict[str, Any]:
         f"  Coefficient of variation: {(warm_clean_stdev / warm_clean_mean) * 100:.1f}%"
     )
 
-    # Data validation
     content_match = result.content == cached_result.content
 
     print("\n✅ VALIDATION:")
@@ -137,7 +129,6 @@ async def run_statistical_benchmark() -> dict[str, Any]:
         f"  Cache consistency: {'✅ STABLE' if warm_clean_stdev / warm_clean_mean < 0.1 else '⚠️ VARIABLE'}"
     )
 
-    # Cache analysis
     from kreuzberg._utils._cache import (
         get_ocr_cache,
         get_table_cache,
@@ -157,7 +148,7 @@ async def run_statistical_benchmark() -> dict[str, Any]:
 
     print("\n💾 CACHE ANALYSIS:")
     for name, cache in caches.items():
-        stats = cache.get_stats()
+        stats = cache.get_stats()  # type: ignore[attr-defined]
         total_size += stats["total_cache_size_mb"]
         total_items += stats["cached_results"]
 
@@ -203,7 +194,6 @@ if __name__ == "__main__":
     try:
         results = asyncio.run(run_statistical_benchmark())
 
-        # Save results
         import json
 
         results_file = Path("statistical_benchmark_results.json")
@@ -212,7 +202,6 @@ if __name__ == "__main__":
 
         print(f"\n💾 Results saved to {results_file}")
 
-        # Summary
         print("\n🎯 SUMMARY:")
         print(
             f"  Speedup: {results['speedup_mean']:,.0f}x (±{results['coefficient_of_variation']:.1f}%)"

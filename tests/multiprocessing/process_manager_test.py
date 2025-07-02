@@ -50,29 +50,29 @@ class TestProcessPoolManager:
     def test_init_default_memory_limit(self) -> None:
         """Test initialization with default memory limit (75% of available)."""
         with patch("psutil.virtual_memory") as mock_memory:
-            mock_memory.return_value.available = 8 * 1024**3  # 8GB available
+            mock_memory.return_value.available = 8 * 1024**3
             manager = ProcessPoolManager()
-            expected_bytes = int(8 * 1024**3 * 0.75)  # 75% of 8GB
+            expected_bytes = int(8 * 1024**3 * 0.75)
             assert manager.memory_limit_bytes == expected_bytes
 
     def test_get_optimal_workers_memory_constrained(self) -> None:
         """Test optimal workers calculation when memory is the constraint."""
         manager = ProcessPoolManager(max_processes=8, memory_limit_gb=1.0)
-        # 1GB limit, 500MB per task = 2 workers max
+
         workers = manager.get_optimal_workers(task_memory_mb=500)
         assert workers == 2
 
     def test_get_optimal_workers_cpu_constrained(self) -> None:
         """Test optimal workers calculation when CPU is the constraint."""
         manager = ProcessPoolManager(max_processes=2, memory_limit_gb=10.0)
-        # 10GB limit, 100MB per task = plenty of memory, CPU is constraint
+
         workers = manager.get_optimal_workers(task_memory_mb=100)
         assert workers == 2
 
     def test_get_optimal_workers_minimum_one(self) -> None:
         """Test optimal workers returns at least 1."""
-        manager = ProcessPoolManager(max_processes=1, memory_limit_gb=0.001)  # Very small limit
-        workers = manager.get_optimal_workers(task_memory_mb=1000)  # Large task
+        manager = ProcessPoolManager(max_processes=1, memory_limit_gb=0.001)
+        workers = manager.get_optimal_workers(task_memory_mb=1000)
         assert workers == 1
 
     def test_ensure_executor_creation(self) -> None:
@@ -99,7 +99,6 @@ class TestProcessPoolManager:
             mock_executor._max_workers = 2
             mock_executor.shutdown = Mock()
 
-            # This should recreate the executor since workers changed
             new_executor = manager._ensure_executor(max_workers=4)
 
             mock_executor.shutdown.assert_called_once_with(wait=False)
@@ -113,14 +112,13 @@ class TestProcessPoolManager:
         result = await manager.submit_task(simple_function, 5)
 
         assert result == 10
-        assert manager._active_tasks == 0  # Should be reset after completion
+        assert manager._active_tasks == 0
 
     @pytest.mark.anyio
     async def test_submit_task_with_memory_constraint(self) -> None:
         """Test task submission with memory constraint."""
         manager = ProcessPoolManager(max_processes=8, memory_limit_gb=1.0)
 
-        # Large memory task should limit workers
         result = await manager.submit_task(simple_function, 3, task_memory_mb=500)
 
         assert result == 6
@@ -131,7 +129,6 @@ class TestProcessPoolManager:
         """Test that active tasks are tracked during execution."""
         manager = ProcessPoolManager(max_processes=2)
 
-        # Use a function that can be pickled (lambda can't be pickled for multiprocessing)
         result = await manager.submit_task(simple_function, 21)
 
         assert result == 42
@@ -177,7 +174,7 @@ class TestProcessPoolManager:
         results = await manager.submit_batch(
             simple_function,
             arg_batches,
-            task_memory_mb=500,  # Should limit to 2 workers
+            task_memory_mb=500,
         )
 
         assert results == [2, 4]
@@ -218,7 +215,6 @@ class TestProcessPoolManager:
         """Test shutdown when no executor exists."""
         manager = ProcessPoolManager(max_processes=2)
 
-        # Should not raise any errors
         manager.shutdown()
         assert manager._executor is None
 

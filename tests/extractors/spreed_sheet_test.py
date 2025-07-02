@@ -262,7 +262,6 @@ def test_extract_path_sync_parsing_error_wrapping(
     with pytest.raises(ParsingError) as exc_info:
         extractor.extract_path_sync(excel_document)
 
-    # Sync version wraps all exceptions including ParsingError
     assert "Failed to extract file data" in str(exc_info.value)
     assert "Original sync parsing error" in str(exc_info.value.context["error"])
 
@@ -271,18 +270,14 @@ def test_extract_path_sync_parsing_error_wrapping(
 async def test_extract_bytes_async_exception_cleanup(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
     """Test extract_bytes_async properly cleans up temp file on exception."""
 
-    # Mock the temp file creation to return a real path
     mock_path = "/tmp/test_excel.xlsx"
     mock_unlink = mocker.AsyncMock()
 
-    # Mock create_temp_file to return our test path and unlink function
     mocker.patch("kreuzberg._extractors._spread_sheet.create_temp_file", return_value=(mock_path, mock_unlink))
 
-    # Mock AsyncPath.write_bytes to work
     mock_write_bytes = mocker.AsyncMock()
     mocker.patch("kreuzberg._extractors._spread_sheet.AsyncPath.write_bytes", mock_write_bytes)
 
-    # Mock extract_path_async to raise an exception
     mock_error = ValueError("Test extraction error")
     mocker.patch.object(extractor, "extract_path_async", side_effect=mock_error)
 
@@ -291,10 +286,8 @@ async def test_extract_bytes_async_exception_cleanup(extractor: SpreadSheetExtra
     with pytest.raises(ValueError, match="Test extraction error"):
         await extractor.extract_bytes_async(test_content)
 
-    # Verify temp file was written
     mock_write_bytes.assert_called_once_with(test_content)
 
-    # Verify cleanup was called even on exception
     mock_unlink.assert_called_once()
 
 
@@ -303,22 +296,19 @@ def test_convert_sheet_to_text_sync_empty_rows(extractor: SpreadSheetExtractor, 
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_sheet = mocker.Mock()
 
-    # Test with rows that have missing cells to trigger line 180 (row.append(""))
     mock_sheet.to_python.return_value = [
-        ["Header1", "Header2", "Header3"],  # Full header row
-        ["Value1"],  # Short row - will trigger line 180 padding
-        ["Value2", "Value3"],  # Another short row
+        ["Header1", "Header2", "Header3"],
+        ["Value1"],
+        ["Value2", "Value3"],
     ]
     mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
     result = extractor._convert_sheet_to_text_sync(mock_workbook, "test_sheet")
 
-    # Verify the result includes the header
     assert "## test_sheet" in result
     assert "Header1 | Header2 | Header3" in result
 
-    # Verify short rows were padded with empty strings
-    assert "Value1 | |" in result  # Should have empty cells padded
+    assert "Value1 | |" in result
     assert "Value2 | Value3" in result
 
 
@@ -327,11 +317,9 @@ def test_convert_sheet_to_text_sync_no_rows(extractor: SpreadSheetExtractor, moc
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_sheet = mocker.Mock()
 
-    # Test with no rows to trigger the else branch (line 171->185)
     mock_sheet.to_python.return_value = []
     mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
     result = extractor._convert_sheet_to_text_sync(mock_workbook, "empty_sheet")
 
-    # Should only contain the sheet header since there are no rows
     assert result == "## empty_sheet\n\n"

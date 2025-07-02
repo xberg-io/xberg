@@ -176,28 +176,24 @@ def test_validate_mime_type_no_file_path() -> None:
         validate_mime_type(file_path=None)
 
 
-def test_validate_mime_type_file_stat_error(tmp_path) -> None:
+def test_validate_mime_type_file_stat_error(tmp_path: Path) -> None:
     """Test validation when file stat fails - covers lines 183-184."""
     from unittest.mock import patch
 
-    # Create a real file
     test_file = tmp_path / "test.txt"
     test_file.write_text("test content")
 
-    # Mock Path.stat to raise OSError
     with patch("pathlib.Path.stat", side_effect=OSError("Permission denied")):
-        # Should still work despite stat error
         result = validate_mime_type(file_path=str(test_file), check_file_exists=False)
         assert result == PLAIN_TEXT_MIME_TYPE
 
 
-def test_validate_mime_type_uncached_fallback(tmp_path) -> None:
+def test_validate_mime_type_uncached_fallback(tmp_path: Path) -> None:
     """Test fallback to uncached detection - covers line 208."""
     from kreuzberg._mime_types import _detect_mime_type_uncached
 
     test_file = tmp_path / "test.txt"
     test_file.write_text("test content")
 
-    # Test the uncached function directly
     result = _detect_mime_type_uncached(str(test_file), check_file_exists=True)
     assert result == PLAIN_TEXT_MIME_TYPE

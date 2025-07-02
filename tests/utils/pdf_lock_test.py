@@ -23,7 +23,6 @@ def test_get_file_key_string_path() -> None:
     path = "/tmp/test.pdf"
     key = _get_file_key(path)
 
-    # Should return MD5 hash of resolved path
     resolved_path = str(Path(path).resolve())
     expected_hash = hashlib.md5(resolved_path.encode()).hexdigest()
     assert key == expected_hash
@@ -34,7 +33,6 @@ def test_get_file_key_path_object() -> None:
     path = Path("/tmp/test.pdf")
     key = _get_file_key(path)
 
-    # Should return MD5 hash of resolved path
     resolved_path = str(path.resolve())
     expected_hash = hashlib.md5(resolved_path.encode()).hexdigest()
     assert key == expected_hash
@@ -66,7 +64,6 @@ def test_get_file_lock_reuses_existing_lock() -> None:
     lock1 = _get_file_lock(path)
     lock2 = _get_file_lock(path)
 
-    # Should be the same lock object
     assert lock1 is lock2
 
 
@@ -78,13 +75,12 @@ def test_get_file_lock_different_files() -> None:
     lock1 = _get_file_lock(path1)
     lock2 = _get_file_lock(path2)
 
-    # Should be different lock objects
     assert lock1 is not lock2
 
 
 def test_pypdfium_lock_context_manager() -> None:
     """Test pypdfium_lock context manager."""
-    # Track execution order
+
     execution_order = []
 
     def thread_func(thread_id: int) -> None:
@@ -93,14 +89,12 @@ def test_pypdfium_lock_context_manager() -> None:
             time.sleep(0.01)  # Small delay to ensure sequential execution  # ~keep
             execution_order.append(f"end_{thread_id}")
 
-    # Start multiple threads
     threads = []
     for i in range(3):
         thread = threading.Thread(target=thread_func, args=(i,))
         threads.append(thread)
         thread.start()
 
-    # Wait for all threads to complete
     for thread in threads:
         thread.join()
 
@@ -108,7 +102,6 @@ def test_pypdfium_lock_context_manager() -> None:
     # Each thread should complete before the next starts  # ~keep
     assert len(execution_order) == 6
 
-    # Find pairs and verify they're sequential
     for i in range(0, len(execution_order), 2):
         start = execution_order[i]
         end = execution_order[i + 1]
@@ -117,7 +110,7 @@ def test_pypdfium_lock_context_manager() -> None:
         assert end == f"end_{thread_id}"
 
 
-def test_pypdfium_file_lock_context_manager(tmp_path) -> None:
+def test_pypdfium_file_lock_context_manager(tmp_path: Path) -> None:
     """Test pypdfium_file_lock context manager."""
     test_file = tmp_path / "test.pdf"
     test_file.write_bytes(b"fake pdf content")
@@ -130,14 +123,12 @@ def test_pypdfium_file_lock_context_manager(tmp_path) -> None:
             time.sleep(0.01)
             execution_order.append(f"end_{thread_id}")
 
-    # Start multiple threads using the same file
     threads = []
     for i in range(2):
         thread = threading.Thread(target=thread_func, args=(i,))
         threads.append(thread)
         thread.start()
 
-    # Wait for completion
     for thread in threads:
         thread.join()
 
@@ -145,7 +136,7 @@ def test_pypdfium_file_lock_context_manager(tmp_path) -> None:
     assert len(execution_order) == 4
 
 
-def test_pypdfium_file_lock_different_files(tmp_path) -> None:
+def test_pypdfium_file_lock_different_files(tmp_path: Path) -> None:
     """Test pypdfium_file_lock allows concurrent access to different files."""
     file1 = tmp_path / "file1.pdf"
     file2 = tmp_path / "file2.pdf"
@@ -157,11 +148,10 @@ def test_pypdfium_file_lock_different_files(tmp_path) -> None:
     def thread_func(file_path: Path, thread_id: str) -> None:
         start_time = time.time()
         with pypdfium_file_lock(file_path):
-            time.sleep(0.05)  # Longer delay
+            time.sleep(0.05)
         end_time = time.time()
         execution_times[thread_id] = (start_time, end_time)
 
-    # Start threads for different files
     thread1 = threading.Thread(target=thread_func, args=(file1, "thread1"))
     thread2 = threading.Thread(target=thread_func, args=(file2, "thread2"))
 
@@ -171,7 +161,6 @@ def test_pypdfium_file_lock_different_files(tmp_path) -> None:
     thread1.join()
     thread2.join()
 
-    # Both threads should have run (we have execution times for both)
     assert "thread1" in execution_times
     assert "thread2" in execution_times
 
@@ -187,12 +176,11 @@ def test_with_pypdfium_lock_decorator() -> None:
         execution_order.append(f"end_{thread_id}")
         return f"result_{thread_id}"
 
-    def thread_func(thread_id: int, results: list) -> None:
+    def thread_func(thread_id: int, results: list[str]) -> None:
         result = test_function(thread_id)
         results.append(result)
 
-    # Test with multiple threads
-    results = []
+    results: list[str] = []
     threads = []
     for i in range(2):
         thread = threading.Thread(target=thread_func, args=(i, results))
@@ -202,12 +190,10 @@ def test_with_pypdfium_lock_decorator() -> None:
     for thread in threads:
         thread.join()
 
-    # Should have results from both threads
     assert len(results) == 2
     assert "result_0" in results
     assert "result_1" in results
 
-    # Execution should be sequential
     assert len(execution_order) == 4
 
 
@@ -237,18 +223,11 @@ def test_file_lock_cache_cleanup() -> None:
     """Test that file lock cache can be cleaned up by GC."""
     from kreuzberg._utils._pdf_lock import _FILE_LOCKS_CACHE
 
-    # Get initial cache size
     initial_size = len(_FILE_LOCKS_CACHE)
 
-    # Create a lock and let it go out of scope
     path = "/tmp/temp_file_for_gc_test.pdf"
     lock = _get_file_lock(path)
 
-    # Cache should now have one more entry
     assert len(_FILE_LOCKS_CACHE) == initial_size + 1
 
-    # Delete reference to lock
     del lock
-
-    # Note: WeakValueDictionary cleanup is not deterministic
-    # This test mainly ensures the cache exists and can store values

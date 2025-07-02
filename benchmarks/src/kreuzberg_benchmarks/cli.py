@@ -59,7 +59,6 @@ def run(
     console.print("[bold blue]Kreuzberg Performance Benchmarks[/bold blue]")
     console.print(f"Suite: {suite_name}")
 
-    # Initialize benchmarks
     benchmarks = KreuzbergBenchmarks(test_files_dir)
 
     if not benchmarks.test_files:
@@ -70,20 +69,16 @@ def run(
 
     console.print(f"Found {len(benchmarks.test_files)} test files")
 
-    # Configure flame graphs
     flame_config = FlameGraphConfig(enabled=include_flame) if include_flame else None
 
-    # Initialize runner
     runner = BenchmarkRunner(console=console, flame_config=flame_config)
 
-    # Determine which benchmarks to run
     sync_benchmarks = []
     async_benchmarks = []
 
     if comparison_only:
-        # Run only direct comparison benchmarks
         comparison_benchmarks = benchmarks.get_comparison_benchmarks()
-        # Split into sync and async
+
         sync_benchmarks = [
             (name, func, meta)
             for name, func, meta in comparison_benchmarks
@@ -113,24 +108,20 @@ def run(
         f"Running {len(sync_benchmarks)} sync + {len(async_benchmarks)} async benchmarks"
     )
 
-    # Run benchmark suite
     try:
         suite = runner.run_benchmark_suite(
             suite_name=suite_name,
-            benchmarks=sync_benchmarks,
-            async_benchmarks=async_benchmarks if async_benchmarks else None,
+            benchmarks=sync_benchmarks,  # type: ignore[arg-type]
+            async_benchmarks=async_benchmarks if async_benchmarks else None,  # type: ignore[arg-type]
         )
 
-        # Print results
         runner.print_summary(suite)
 
-        # Save results
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         output_file = output_dir / f"{suite_name}_{timestamp}.json"
         runner.save_results(suite, output_file)
 
-        # Save a latest.json for easy access
         latest_file = output_dir / "latest.json"
         runner.save_results(suite, latest_file)
 
@@ -165,19 +156,16 @@ def compare(
         console.print(f"[red]Error loading files:[/red] {e}")
         raise typer.Exit(1)
 
-    # Basic comparison logic
     console.print("Comparing:")
     console.print(f"  {result1.name}: {data1['name']} ({data1['timestamp']})")
     console.print(f"  {result2.name}: {data2['name']} ({data2['timestamp']})")
 
-    # Success rate comparison
     rate1 = data1["summary"]["success_rate_percent"]
     rate2 = data2["summary"]["success_rate_percent"]
     console.print(
         f"\nSuccess Rate: {rate1:.1f}% vs {rate2:.1f}% ({rate2 - rate1:+.1f}%)"
     )
 
-    # Duration comparison
     duration1 = data1["summary"]["total_duration_seconds"]
     duration2 = data2["summary"]["total_duration_seconds"]
     console.print(
@@ -216,7 +204,6 @@ def analyze(
 
     console.print(f"Analyzing: {data['name']} ({data['timestamp']})")
 
-    # Extract successful results
     successful_results = [
         r for r in data["results"] if r["success"] and r["performance"]
     ]
@@ -225,7 +212,6 @@ def analyze(
         console.print("[red]No successful results to analyze[/red]")
         return
 
-    # Performance analysis
     durations = [r["performance"]["duration_seconds"] for r in successful_results]
     memory_peaks = [r["performance"]["memory_peak_mb"] for r in successful_results]
 
@@ -236,7 +222,6 @@ def analyze(
         f"  Memory range: {min(memory_peaks):.1f}MB - {max(memory_peaks):.1f}MB"
     )
 
-    # Categorize by sync/async
     sync_results = [r for r in successful_results if "sync" in r["name"]]
     async_results = [r for r in successful_results if "async" in r["name"]]
 

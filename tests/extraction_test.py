@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -31,9 +31,6 @@ from tests.conftest import pdfs_with_tables
 
 if TYPE_CHECKING:
     from kreuzberg._types import ExtractionResult
-
-if sys.version_info < (3, 11):  # pragma: no cover
-    pass  # type: ignore[import-not-found]
 
 
 @pytest.mark.anyio
@@ -289,19 +286,17 @@ async def test_batch_extract_file_invalid(tmp_path: Path) -> None:
     invalid_file = tmp_path / "invalid-file.xyz"
     invalid_file.write_text("Invalid file content")
 
-    # New behavior: errors are returned as error results instead of raising exceptions
     results = await batch_extract_file([invalid_file])
     assert len(results) == 1
     result = results[0]
 
-    # Check that the result indicates an error
     assert result.metadata.get("error") is True
-    error_context = result.metadata.get("error_context", {})
-    error_info = error_context.get("error", {})
-    assert "ValidationError" in error_info.get("type", "")
-    assert "Unsupported mime type" in error_info.get(
-        "message", ""
-    ) or "Could not determine the mime type of the file" in error_info.get("message", "")
+    error_context = cast("dict[str, object]", result.metadata.get("error_context", {}))
+    error_info = cast("dict[str, object]", error_context.get("error", {}))
+    assert "ValidationError" in str(error_info.get("type", ""))
+    assert "Unsupported mime type" in str(
+        error_info.get("message", "")
+    ) or "Could not determine the mime type of the file" in str(error_info.get("message", ""))
 
 
 @pytest.mark.anyio
@@ -333,17 +328,15 @@ async def test_batch_extract_bytes_empty() -> None:
 
 @pytest.mark.anyio
 async def test_batch_extract_bytes_invalid() -> None:
-    # New behavior: errors are returned as error results instead of raising exceptions
     results = await batch_extract_bytes([(b"content", "application/invalid")])
     assert len(results) == 1
     result = results[0]
 
-    # Check that the result indicates an error
     assert result.metadata.get("error") is True
-    error_context = result.metadata.get("error_context", {})
-    error_info = error_context.get("error", {})
-    assert "ValidationError" in error_info.get("type", "")
-    assert "Unsupported mime type" in error_info.get("message", "")
+    error_context = cast("dict[str, object]", result.metadata.get("error_context", {}))
+    error_info = cast("dict[str, object]", error_context.get("error", {}))
+    assert "ValidationError" in str(error_info.get("type", ""))
+    assert "Unsupported mime type" in str(error_info.get("message", ""))
 
 
 def test_batch_extract_file_sync_mixed(test_article: Path) -> None:

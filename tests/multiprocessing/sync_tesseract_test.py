@@ -52,16 +52,14 @@ def test_image_paths(tmp_path: Path) -> list[Path]:
 @pytest.fixture
 def tesseract_config() -> TesseractConfig:
     """Create a test Tesseract configuration."""
-    return TesseractConfig(language="eng", psm=3)
+    return TesseractConfig(language="eng", psm=3)  # type: ignore[arg-type]
 
 
 def test_process_image_sync_pure_success(test_image_path: Path, tesseract_config: TesseractConfig) -> None:
     """Test successful synchronous image processing."""
     with patch("subprocess.run") as mock_run:
-        # Mock successful tesseract execution
         mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
 
-        # Mock file read
         with patch("pathlib.Path.read_text", return_value="Test OCR output"):
             result = process_image_sync_pure(test_image_path, tesseract_config)
 
@@ -73,7 +71,6 @@ def test_process_image_sync_pure_success(test_image_path: Path, tesseract_config
 def test_process_image_sync_pure_error(test_image_path: Path, tesseract_config: TesseractConfig) -> None:
     """Test synchronous image processing with error."""
     with patch("subprocess.run") as mock_run:
-        # Mock tesseract failure
         mock_run.return_value = Mock(returncode=1, stderr="Tesseract error")
 
         with pytest.raises(OCRError) as exc_info:
@@ -86,8 +83,8 @@ def test_process_image_sync_pure_with_options(test_image_path: Path) -> None:
     """Test synchronous image processing with custom options."""
     config = TesseractConfig(
         language="fra",
-        psm=6,
-        oem=1,
+        psm=6,  # type: ignore[arg-type]
+        oem=1,  # type: ignore[call-arg]
         tessedit_enable_dict_correction=True,
         tessedit_use_primary_params_model=False,
     )
@@ -98,7 +95,6 @@ def test_process_image_sync_pure_with_options(test_image_path: Path) -> None:
         with patch("pathlib.Path.read_text", return_value="French text"):
             process_image_sync_pure(test_image_path, config)
 
-            # Verify command was built correctly
             args = mock_run.call_args[0][0]
             assert "-l" in args
             assert "fra" in args
@@ -106,7 +102,7 @@ def test_process_image_sync_pure_with_options(test_image_path: Path) -> None:
             assert "6" in args
             assert "--oem" in args
             assert "1" in args
-            # Check boolean config options
+
             assert "-c" in args
             assert "tessedit_enable_dict_correction=1" in args
             assert "tessedit_use_primary_params_model=0" in args
@@ -119,37 +115,32 @@ def test_process_image_sync_pure_cleanup(test_image_path: Path, tesseract_config
 
         temp_files = []
 
-        # Track file unlink calls
-
         def mock_unlink(self: Any) -> None:
             temp_files.append(str(self))
-            # Don't actually unlink in test
 
         with patch.object(Path, "unlink", mock_unlink), patch("pathlib.Path.read_text", return_value="Text"):
             process_image_sync_pure(test_image_path, tesseract_config)
 
-        # Should have cleaned up the .txt file
         assert any(".txt" in f for f in temp_files)
 
 
 def test_process_image_bytes_sync_pure(test_image: Image.Image, tesseract_config: TesseractConfig) -> None:
     """Test processing image bytes."""
-    # Convert image to bytes
+
     img_bytes = io.BytesIO()
     test_image.save(img_bytes, format="PNG")
-    img_bytes = img_bytes.getvalue()
+    img_bytes_value = img_bytes.getvalue()
 
     with patch("kreuzberg._multiprocessing.sync_tesseract.process_image_sync_pure") as mock_process:
         mock_process.return_value = ExtractionResult(
             content="Bytes OCR output", mime_type="text/plain", metadata={}, chunks=[]
         )
 
-        result = process_image_bytes_sync_pure(img_bytes, tesseract_config)
+        result = process_image_bytes_sync_pure(img_bytes_value, tesseract_config)
 
         assert result.content == "Bytes OCR output"
         mock_process.assert_called_once()
 
-        # Verify temporary file was created with PNG extension
         call_args = mock_process.call_args[0]
         assert str(call_args[0]).endswith(".png")
 
@@ -163,7 +154,7 @@ def test_process_batch_images_sync_pure(test_image_paths: list[Path], tesseract_
         ]
         mock_process.side_effect = mock_results
 
-        results = process_batch_images_sync_pure(test_image_paths, tesseract_config)
+        results = process_batch_images_sync_pure(test_image_paths, tesseract_config)  # type: ignore[arg-type]
 
         assert len(results) == 3
         for i, result in enumerate(results):
@@ -180,7 +171,6 @@ def test_process_batch_images_threaded(test_image_paths: list[Path], tesseract_c
             for i in range(3)
         ]
 
-        # Return results based on which path is passed
         def side_effect(path: Path, config: TesseractConfig) -> ExtractionResult:
             for i, test_path in enumerate(test_image_paths):
                 if str(path) == str(test_path):
@@ -189,10 +179,10 @@ def test_process_batch_images_threaded(test_image_paths: list[Path], tesseract_c
 
         mock_process.side_effect = side_effect
 
-        results = process_batch_images_threaded(test_image_paths, tesseract_config, max_workers=2)
+        results = process_batch_images_threaded(test_image_paths, tesseract_config, max_workers=2)  # type: ignore[arg-type]
 
         assert len(results) == 3
-        # Results should be in same order as input
+
         for i, result in enumerate(results):
             assert result.content == f"Image {i} text"
 
@@ -208,7 +198,7 @@ def test_process_batch_images_threaded_error_handling(
         return ExtractionResult(content="Success", mime_type="text/plain", metadata={}, chunks=[])
 
     with patch("kreuzberg._multiprocessing.sync_tesseract.process_image_sync_pure", side_effect=side_effect):
-        results = process_batch_images_threaded(test_image_paths, tesseract_config)
+        results = process_batch_images_threaded(test_image_paths, tesseract_config)  # type: ignore[arg-type]
 
         assert len(results) == 3
         assert results[0].content == "Success"
@@ -229,7 +219,6 @@ def test_process_batch_images_process_pool(test_image_paths: list[Path], tessera
             for i in range(3)
         ]
 
-        # Return results based on path
         def side_effect(path: str, config_dict: dict[str, Any]) -> dict[str, Any]:
             for i, test_path in enumerate(test_image_paths):
                 if str(path) == str(test_path):
@@ -238,7 +227,7 @@ def test_process_batch_images_process_pool(test_image_paths: list[Path], tessera
 
         mock_process.side_effect = side_effect
 
-        results = process_batch_images_process_pool(test_image_paths, tesseract_config, max_workers=2)
+        results = process_batch_images_process_pool(test_image_paths, tesseract_config, max_workers=2)  # type: ignore[arg-type]
 
         assert len(results) == 3
         for i, result in enumerate(results):
@@ -256,7 +245,7 @@ def test_process_batch_images_process_pool_error_handling(
         return {"success": True, "text": "Success", "mime_type": "text/plain", "metadata": {}}
 
     with patch("kreuzberg._multiprocessing.tesseract_pool._process_image_with_tesseract", side_effect=side_effect):
-        results = process_batch_images_process_pool(test_image_paths, tesseract_config)
+        results = process_batch_images_process_pool(test_image_paths, tesseract_config)  # type: ignore[arg-type]
 
         assert len(results) == 3
         assert results[0].content == "Success"
@@ -275,7 +264,7 @@ def test_process_batch_images_process_pool_exception_handling(
         return {"success": True, "text": "Success", "mime_type": "text/plain", "metadata": {}}
 
     with patch("kreuzberg._multiprocessing.tesseract_pool._process_image_with_tesseract", side_effect=side_effect):
-        results = process_batch_images_process_pool(test_image_paths, tesseract_config)
+        results = process_batch_images_process_pool(test_image_paths, tesseract_config)  # type: ignore[arg-type]
 
         assert len(results) == 3
         assert results[0].content == "Success"
@@ -288,7 +277,6 @@ def test_process_image_sync_pure_unicode(test_image_path: Path, tesseract_config
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = Mock(returncode=0)
 
-        # Unicode text with various characters
         unicode_text = "Hello 世界! Привет мир! مرحبا بالعالم"
         with patch("pathlib.Path.read_text", return_value=unicode_text):
             result = process_image_sync_pure(test_image_path, tesseract_config)
@@ -314,14 +302,13 @@ def test_process_image_sync_pure_default_config(test_image_path: Path) -> None:
         mock_run.return_value = Mock(returncode=0)
 
         with patch("pathlib.Path.read_text", return_value="Default config output"):
-            result = process_image_sync_pure(test_image_path)  # No config provided
+            result = process_image_sync_pure(test_image_path)
 
             assert result.content == "Default config output"
 
-            # Verify default values were used
             args = mock_run.call_args[0][0]
             assert "-l" in args
-            assert "eng" in args  # Default language
+            assert "eng" in args
 
 
 def test_config_dict_conversion_in_process_pool() -> None:
@@ -331,10 +318,8 @@ def test_config_dict_conversion_in_process_pool() -> None:
     class TestEnum(Enum):
         VALUE = 3
 
-    # Create a config with enum values
     config = TesseractConfig()
 
-    # Simulate the conversion that happens in process_batch_images_process_pool
     config_dict = {}
     for field_name in config.__dataclass_fields__:
         value = getattr(config, field_name)
@@ -343,6 +328,5 @@ def test_config_dict_conversion_in_process_pool() -> None:
         else:
             config_dict[field_name] = value
 
-    # psm should be converted from enum to int
     assert isinstance(config_dict["psm"], int)
-    assert config_dict["psm"] == 3  # Default PSM value
+    assert config_dict["psm"] == 3

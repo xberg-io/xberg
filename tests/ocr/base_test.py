@@ -15,14 +15,14 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-class TestOCRBackend(OCRBackend[dict]):
+class TestOCRBackend(OCRBackend[dict[str, object]]):
     """Test implementation of OCRBackend."""
 
-    async def process_image(self, image: Image.Image, **kwargs: dict) -> ExtractionResult:
+    async def process_image(self, image: Image.Image, **kwargs: dict[str, object]) -> ExtractionResult:
         """Test implementation of process_image."""
         return ExtractionResult(content="Test OCR result", mime_type="text/plain", metadata={}, chunks=[])
 
-    async def process_file(self, path: Path, **kwargs: dict) -> ExtractionResult:
+    async def process_file(self, path: Path, **kwargs: dict[str, object]) -> ExtractionResult:
         """Test implementation of process_file."""
         return ExtractionResult(content="Test file OCR result", mime_type="text/plain", metadata={}, chunks=[])
 
@@ -32,7 +32,6 @@ def test_ocr_backend_hash() -> None:
     backend1 = TestOCRBackend()
     backend2 = TestOCRBackend()
 
-    # Both instances should have the same hash since they're the same type
     assert hash(backend1) == hash(backend2)
     assert hash(backend1) == hash("TestOCRBackend")
 
@@ -40,17 +39,16 @@ def test_ocr_backend_hash() -> None:
 def test_ocr_backend_different_types_different_hash() -> None:
     """Test that different OCR backend types have different hashes."""
 
-    class AnotherTestBackend(OCRBackend[dict]):
-        async def process_image(self, image: Image.Image, **kwargs: dict) -> ExtractionResult:
+    class AnotherTestBackend(OCRBackend[dict[str, object]]):
+        async def process_image(self, image: Image.Image, **kwargs: dict[str, object]) -> ExtractionResult:
             return ExtractionResult(content="", mime_type="text/plain", metadata={}, chunks=[])
 
-        async def process_file(self, path: Path, **kwargs: dict) -> ExtractionResult:
+        async def process_file(self, path: Path, **kwargs: dict[str, object]) -> ExtractionResult:
             return ExtractionResult(content="", mime_type="text/plain", metadata={}, chunks=[])
 
     backend1 = TestOCRBackend()
     backend2 = AnotherTestBackend()
 
-    # Different backend types should have different hashes
     assert hash(backend1) != hash(backend2)
 
 

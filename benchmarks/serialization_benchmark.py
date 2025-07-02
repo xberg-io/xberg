@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Direct serialization performance comparison: JSON vs msgpack."""
 
 import time
@@ -8,15 +7,14 @@ from pathlib import Path
 from kreuzberg._types import ExtractionResult
 
 
-def benchmark_serialization() -> dict:
+def benchmark_serialization() -> dict[str, object]:
     """Benchmark serialization performance with statistical rigor."""
 
-    # Create realistic test data
-    large_content = "This is a realistic OCR result content. " * 500  # ~20KB
+    large_content = "This is a realistic OCR result content. " * 500
     test_result = ExtractionResult(
         content=large_content,
         mime_type="text/plain",
-        metadata={
+        metadata={  # type: ignore[typeddict-unknown-key]
             "file_path": "/some/long/path/to/document.pdf",
             "ocr_backend": "tesseract",
             "ocr_config": {"language": "eng", "psm": 3},
@@ -24,7 +22,7 @@ def benchmark_serialization() -> dict:
             "confidence_scores": [0.95, 0.87, 0.92, 0.88, 0.94],
             "page_count": 10,
         },
-        chunks=["chunk1", "chunk2", "chunk3"] * 20,  # Some chunks
+        chunks=["chunk1", "chunk2", "chunk3"] * 20,
     )
 
     cache_data = {
@@ -38,18 +36,15 @@ def benchmark_serialization() -> dict:
     print("Trials: 1000 each operation")
     print("=" * 60)
 
-    # Test msgpack (current implementation)
     print("\n📦 MSGPACK PERFORMANCE")
     from msgspec.msgpack import encode as msgpack_encode, decode as msgpack_decode
 
-    # Serialize timing
     msgpack_serialize_times = []
     for _ in range(1000):
         start = time.perf_counter()
         msgpack_data = msgpack_encode(cache_data)
         msgpack_serialize_times.append(time.perf_counter() - start)
 
-    # Deserialize timing
     msgpack_deserialize_times = []
     for _ in range(1000):
         start = time.perf_counter()
@@ -58,18 +53,15 @@ def benchmark_serialization() -> dict:
 
     msgpack_size = len(msgpack_data)
 
-    # Test JSON for comparison
     print("\n📄 JSON PERFORMANCE")
     from msgspec.json import encode as json_encode, decode as json_decode
 
-    # Serialize timing
     json_serialize_times = []
     for _ in range(1000):
         start = time.perf_counter()
         json_data = json_encode(cache_data)
         json_serialize_times.append(time.perf_counter() - start)
 
-    # Deserialize timing
     json_deserialize_times = []
     for _ in range(1000):
         start = time.perf_counter()
@@ -78,8 +70,7 @@ def benchmark_serialization() -> dict:
 
     json_size = len(json_data)
 
-    # Statistical analysis
-    def analyze_times(times: list[float], name: str) -> dict:
+    def analyze_times(times: list[float], name: str) -> dict[str, object]:
         mean_val = statistics.mean(times)
         stdev_val = statistics.stdev(times) if len(times) > 1 else 0
         median_val = statistics.median(times)
@@ -110,11 +101,20 @@ def benchmark_serialization() -> dict:
     json_serialize = analyze_times(json_serialize_times, "JSON Serialize")
     json_deserialize = analyze_times(json_deserialize_times, "JSON Deserialize")
 
-    # Calculate speedups
-    serialize_speedup = json_serialize["mean"] / msgpack_serialize["mean"]
-    deserialize_speedup = json_deserialize["mean"] / msgpack_deserialize["mean"]
-    total_speedup = (json_serialize["mean"] + json_deserialize["mean"]) / (
-        msgpack_serialize["mean"] + msgpack_deserialize["mean"]
+    # Type casting for arithmetic operations
+    json_ser_mean = json_serialize["mean"]
+    json_deser_mean = json_deserialize["mean"]
+    msgpack_ser_mean = msgpack_serialize["mean"]
+    msgpack_deser_mean = msgpack_deserialize["mean"]
+    assert isinstance(json_ser_mean, (int, float))
+    assert isinstance(json_deser_mean, (int, float))
+    assert isinstance(msgpack_ser_mean, (int, float))
+    assert isinstance(msgpack_deser_mean, (int, float))
+
+    serialize_speedup = json_ser_mean / msgpack_ser_mean
+    deserialize_speedup = json_deser_mean / msgpack_deser_mean
+    total_speedup = (json_ser_mean + json_deser_mean) / (
+        msgpack_ser_mean + msgpack_deser_mean
     )
 
     size_ratio = json_size / msgpack_size
@@ -152,7 +152,6 @@ if __name__ == "__main__":
     try:
         results = benchmark_serialization()
 
-        # Save results
         import json
 
         results_file = Path("serialization_benchmark_results.json")

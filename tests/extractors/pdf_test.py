@@ -6,6 +6,7 @@ from typing import NoReturn
 import pandas as pd
 import pytest
 from PIL.Image import Image
+from pytest import MonkeyPatch
 
 from kreuzberg import ExtractionResult
 from kreuzberg._extractors._pdf import PDFExtractor
@@ -202,13 +203,12 @@ async def test_extract_tables_from_pdf(pdf_with_table: Path) -> None:
         assert "text" in table
         assert isinstance(table["text"], str)
         assert "df" in table
-        # DataFrame can be either pandas DataFrame (fresh) or dict (cached)
+
         assert isinstance(table["df"], (pd.DataFrame, dict))
-        # Image can be PIL Image (fresh) or None (cached, as images are skipped in serialization)
+
         assert isinstance(table["cropped_image"], (Image, type(None)))
 
 
-# Tests for sync methods
 def test_extract_pdf_bytes_sync(extractor: PDFExtractor, test_article: Path) -> None:
     """Test sync PDF extraction from bytes."""
     pdf_bytes = test_article.read_bytes()
@@ -229,7 +229,7 @@ def test_extract_pdf_path_sync(extractor: PDFExtractor, searchable_pdf: Path) ->
     assert isinstance(result, ExtractionResult)
     assert result.content.strip()
     assert result.mime_type == "text/plain"
-    assert result.metadata == {}  # Metadata not set in sync path extraction
+    assert result.metadata == {}
 
 
 def test_extract_pdf_path_sync_with_tables(searchable_pdf: Path) -> None:
@@ -256,9 +256,6 @@ def test_extract_pdf_path_sync_force_ocr_tesseract(searchable_pdf: Path) -> None
     assert result.mime_type == "text/plain"
 
 
-# Test removed - sync OCR with non-tesseract backend causes other errors first
-
-
 def test_extract_pdf_searchable_text_sync_error(extractor: PDFExtractor, tmp_path: Path) -> None:
     """Test sync searchable text extraction with invalid PDF raises ParsingError."""
     pdf_path = tmp_path / "invalid.pdf"
@@ -277,7 +274,6 @@ def test_extract_pdf_with_ocr_sync_error(extractor: PDFExtractor, tmp_path: Path
         extractor._extract_pdf_with_ocr_sync(pdf_path)
 
 
-# Tests for edge cases and error conditions
 @pytest.mark.anyio
 async def test_extract_pdf_no_ocr_backend_fallback(non_searchable_pdf: Path) -> None:
     """Test PDF extraction falls back to empty result when no OCR backend available."""
@@ -293,36 +289,30 @@ async def test_extract_pdf_no_ocr_backend_fallback(non_searchable_pdf: Path) -> 
 
 @pytest.mark.anyio
 async def test_extract_pdf_searchable_text_partial_failure(
-    extractor: PDFExtractor, tmp_path: Path, monkeypatch
+    extractor: PDFExtractor, tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """Test searchable text extraction with partial page failures."""
-    # Create a mock that simulates page extraction errors
 
     def mock_page_get_textpage() -> NoReturn:
         raise Exception("Page extraction failed")
 
-    # We'll test this by creating a scenario where some pages fail
-    # This is hard to test without a real PDF with corrupt pages, so we'll skip for now
-
 
 def test_validate_short_text_with_many_corrupted_chars(extractor: PDFExtractor) -> None:
     """Test validation of short text with many corrupted characters."""
-    # Short text with 3+ corrupted chars should fail
-    corrupted_text = "hi\x00\x01\x02"  # 3 corrupted chars
+
+    corrupted_text = "hi\x00\x01\x02"
     assert not extractor._validate_extracted_text(corrupted_text)
 
-    # Short text with exactly 2 corrupted chars should pass
-    semi_corrupted = "hi\x00\x01"  # 2 corrupted chars
+    semi_corrupted = "hi\x00\x01"
     assert extractor._validate_extracted_text(semi_corrupted)
 
 
 def test_validate_text_unicode_replacement_chars(extractor: PDFExtractor) -> None:
     """Test validation with Unicode replacement characters."""
-    # Text with many replacement chars should fail
+
     text_with_replacements = "Hello " + ("\ufffd" * 20) + " World"
     assert not extractor._validate_extracted_text(text_with_replacements)
 
-    # Text with few replacement chars should pass
     text_with_few_replacements = "Hello \ufffd World"
     assert extractor._validate_extracted_text(text_with_few_replacements)
 
@@ -331,14 +321,12 @@ def test_validate_text_mixed_corruption(extractor: PDFExtractor) -> None:
     """Test validation with mixed corruption types."""
     base_text = "A" * 1000
 
-    # Mix of null bytes and replacement chars - need more for 5% threshold
-    mixed_corruption = "\x00\x01\x02\ufffd\ufffd" * 15  # 75 corrupted chars
+    mixed_corruption = "\x00\x01\x02\ufffd\ufffd" * 15
     text = base_text + mixed_corruption
 
     # Should fail due to high corruption ratio (75/1075 = ~7%)  # ~keep
     assert not extractor._validate_extracted_text(text)
 
-    # With higher threshold should pass
     assert extractor._validate_extracted_text(text, corruption_threshold=0.08)
 
 
@@ -355,23 +343,18 @@ async def test_extract_pdf_force_ocr_when_valid_text_exists(searchable_pdf: Path
     assert result.mime_type == "text/plain"
 
 
-# Lines 191, 198 are sleep/retry logic that's hard to test reliably
-
-
-# Line 351 sync OCR with custom config - skipping due to psm attribute issues
-
-
 @pytest.mark.anyio
-async def test_extract_pdf_searchable_text_page_errors(extractor: PDFExtractor, tmp_path: Path, monkeypatch) -> None:
+async def test_extract_pdf_searchable_text_page_errors(
+    extractor: PDFExtractor, tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
     """Test partial page failure handling - covers lines 255-257, 264, 267."""
     import pypdfium2
 
-    # Create a mock PDF document that fails on some pages
     class MockPage:
-        def __init__(self, should_fail=False) -> None:
+        def __init__(self, should_fail: bool = False) -> None:
             self.should_fail = should_fail
 
-        def get_textpage(self):
+        def get_textpage(self) -> object:
             if self.should_fail:
                 raise Exception("Page extraction failed")
             return MockTextPage()
@@ -383,28 +366,20 @@ async def test_extract_pdf_searchable_text_page_errors(extractor: PDFExtractor, 
     class MockDocument:
         def __init__(self) -> None:
             self.pages = [
-                MockPage(should_fail=False),  # Page 1 succeeds
-                MockPage(should_fail=True),  # Page 2 fails
-                MockPage(should_fail=False),  # Page 3 succeeds
+                MockPage(should_fail=False),
+                MockPage(should_fail=True),
+                MockPage(should_fail=False),
             ]
 
-        def __iter__(self):
+        def __iter__(self) -> object:
             return iter(self.pages)
 
         def close(self) -> None:
             pass
 
-    # Create a valid PDF file
     tmp_path / "test.pdf"
 
-    # Copy a known good PDF for the test
-    # We can't easily create a real PDF, so this test verifies the logic by mocking
-
-    def mock_pdf_document(*args, **kwargs):
+    def mock_pdf_document(*args: object, **kwargs: object) -> MockDocument:
         return MockDocument()
 
-    # Test that partial failures return text with error placeholders
     monkeypatch.setattr(pypdfium2, "PdfDocument", mock_pdf_document)
-
-    # This would test the partial failure path, but we need a real PDF file
-    # The logic is covered by the mocking but hard to test end-to-end

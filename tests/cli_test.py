@@ -22,7 +22,7 @@ from kreuzberg.exceptions import ValidationError
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture
 
-# Only test CLI if dependencies are available
+
 try:
     from kreuzberg.cli import cli
 
@@ -95,13 +95,11 @@ psm = 3
             "easyocr": {"languages": ["en", "de"]},
         }
 
-        # Test tesseract config
         tesseract_config = parse_ocr_backend_config(config_dict, "tesseract")
         assert isinstance(tesseract_config, TesseractConfig)
         assert tesseract_config.language == "eng"
         assert tesseract_config.psm.value == 3
 
-        # Test non-existent backend
         assert parse_ocr_backend_config(config_dict, "paddleocr") is None
 
     def test_build_extraction_config(self) -> None:
@@ -113,19 +111,19 @@ psm = 3
             "tesseract": {"language": "eng"},
         }
         cli_args = {
-            "chunk_content": True,  # Override file config
+            "chunk_content": True,
             "ocr_backend": "tesseract",
-            "tesseract_config": {"psm": 6},  # Additional config
+            "tesseract_config": {"psm": 6},
         }
 
         config = build_extraction_config(file_config, cli_args)
-        assert config.force_ocr is True  # From file
-        assert config.chunk_content is True  # Overridden by CLI
-        assert config.max_chars == 5000  # From file
+        assert config.force_ocr is True
+        assert config.chunk_content is True
+        assert config.max_chars == 5000
         assert config.ocr_backend == "tesseract"
         assert isinstance(config.ocr_config, TesseractConfig)
-        assert config.ocr_config.language == "eng"  # From file
-        assert config.ocr_config.psm.value == 6  # From CLI
+        assert config.ocr_config.language == "eng"
+        assert config.ocr_config.psm.value == 6
 
     def test_build_extraction_config_ocr_none(self) -> None:
         """Test building config with OCR disabled."""
@@ -153,11 +151,10 @@ class TestCli:
 
     def test_extract_file(self, tmp_path: Path, mocker: MockerFixture) -> None:
         """Test extracting from a file."""
-        # Create test file
+
         test_file = tmp_path / "test.pdf"
         test_file.write_bytes(b"dummy content")
 
-        # Mock extraction function
         mock_result = Mock()
         mock_result.content = "Extracted text content"
         mock_result.mime_type = "application/pdf"
@@ -244,7 +241,6 @@ class TestCli:
 
         assert result.exit_code == 0
 
-        # Check that config was built correctly
         extract_mock.assert_called_once()
         config = extract_mock.call_args[1]["config"]
         assert config.force_ocr is True
@@ -252,7 +248,6 @@ class TestCli:
         assert config.extract_tables is True
         assert config.ocr_backend == "easyocr"
 
-        # Check JSON output
         output_data = json.loads(result.output)
         assert output_data["content"] == "Content"
         assert output_data["metadata"] == {"test": "value"}

@@ -44,10 +44,10 @@ async def test_extract_tables_with_default_config(tiny_pdf_with_tables: Path) ->
             assert "text" in table
             assert isinstance(table["text"], str)
             assert "df" in table
-            # DataFrame can be either pandas DataFrame (fresh) or dict (cached)
+
             assert isinstance(table["df"], (pd.DataFrame, dict))
             assert "cropped_image" in table
-            # Image can be PIL Image (fresh) or None (cached, as images are skipped in serialization)
+
             assert isinstance(table["cropped_image"], (Image.Image, type(None)))
     except MissingDependencyError:
         pytest.skip("GMFT dependency not installed")
@@ -272,11 +272,9 @@ def test_extract_tables_sync_os_error(tmp_path: Path) -> None:
     """Test sync extraction with OS error when reading file stats - covers lines 259-264."""
     from kreuzberg._gmft import extract_tables_sync
 
-    # Create a file path that will cause OSError
     fake_file = tmp_path / "nonexistent.pdf"
 
     with patch.dict("sys.modules", {"gmft": None, "gmft.auto": None}), pytest.raises(MissingDependencyError):
-        # This will hit the OSError path first (lines 259-264) then the missing dependency error
         extract_tables_sync(fake_file)
 
 
@@ -286,26 +284,22 @@ async def test_extract_tables_cache_processing_coordination(tmp_path: Path) -> N
     from kreuzberg._gmft import extract_tables
     from kreuzberg._utils._cache import get_table_cache
 
-    # Create a fake PDF file
     fake_pdf = tmp_path / "test.pdf"
     fake_pdf.write_bytes(b"fake pdf content")
 
-    # Mock the cache to simulate another thread processing
     cache = get_table_cache()
 
-    # Mark as processing to trigger the coordination path
     cache.mark_processing(
         file_info=str(sorted({"path": str(fake_pdf.resolve()), "size": 17, "mtime": fake_pdf.stat().st_mtime}.items())),
         extractor="gmft",
         config=str(sorted(GMFTConfig().__dict__.items())),
     )
 
-    # This should trigger the waiting logic, but we'll complete it quickly
     import threading
     import time
 
     def complete_processing() -> None:
-        time.sleep(0.1)  # Small delay
+        time.sleep(0.1)
         cache.mark_complete(
             file_info=str(
                 sorted({"path": str(fake_pdf.resolve()), "size": 17, "mtime": fake_pdf.stat().st_mtime}.items())
@@ -313,7 +307,7 @@ async def test_extract_tables_cache_processing_coordination(tmp_path: Path) -> N
             extractor="gmft",
             config=str(sorted(GMFTConfig().__dict__.items())),
         )
-        # Add a result to cache
+
         cache.set(
             [],
             file_info=str(
@@ -323,19 +317,15 @@ async def test_extract_tables_cache_processing_coordination(tmp_path: Path) -> N
             config=str(sorted(GMFTConfig().__dict__.items())),
         )
 
-    # Start background thread to complete processing
     thread = threading.Thread(target=complete_processing)
     thread.start()
 
-    # This should wait for the other thread and then get cached result
     with patch.dict("sys.modules", {"gmft": None, "gmft.auto": None}):
-        # Without the patch, it would try to import gmft, but cache coordination should return first
         try:
             result = await extract_tables(fake_pdf)
-            # Should get empty list from cache
+
             assert result == []
         except MissingDependencyError:
-            # If coordination doesn't work properly, we'll hit missing dependency
             pass
 
     thread.join()
@@ -347,11 +337,9 @@ async def test_extract_tables_cache_hit(tmp_path: Path) -> None:
     from kreuzberg._gmft import extract_tables
     from kreuzberg._utils._cache import get_table_cache
 
-    # Create a fake PDF file
     fake_pdf = tmp_path / "cached_test.pdf"
     fake_pdf.write_bytes(b"fake pdf content for cache test")
 
-    # Pre-populate cache with a result
     cache = get_table_cache()
     cached_tables = [{"page_number": 1, "text": "cached table", "df": {"col": [1, 2]}, "cropped_image": None}]
 
@@ -372,7 +360,6 @@ async def test_extract_tables_cache_hit(tmp_path: Path) -> None:
 
     await cache.aset(cached_tables, **cache_kwargs)
 
-    # Now extract_tables should return cached result
     result = await extract_tables(fake_pdf)
 
     assert result == cached_tables

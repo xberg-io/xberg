@@ -31,13 +31,12 @@ def test_pool_size() -> None:
 
 def test_init_process_pool() -> None:
     """Test process pool initialization."""
-    shutdown_process_pool()  # Ensure clean state
+    shutdown_process_pool()
 
     pool = _init_process_pool()
     assert isinstance(pool, ProcessPoolExecutor)
-    assert pool._max_workers == _POOL_SIZE
+    assert pool._max_workers == _POOL_SIZE  # type: ignore[attr-defined]
 
-    # Test that subsequent calls return the same pool
     same_pool = _init_process_pool()
     assert same_pool is pool
 
@@ -46,12 +45,11 @@ def test_init_process_pool() -> None:
 
 def test_process_pool_context_manager() -> None:
     """Test process pool context manager."""
-    shutdown_process_pool()  # Ensure clean state
+    shutdown_process_pool()
 
     with process_pool() as pool:
         assert isinstance(pool, ProcessPoolExecutor)
 
-    # Test pool is still alive after context exit
     with process_pool() as pool2:
         assert isinstance(pool2, ProcessPoolExecutor)
 
@@ -60,14 +58,12 @@ def test_process_pool_context_manager() -> None:
 
 def test_process_pool_error_recovery() -> None:
     """Test process pool recovery after error."""
-    shutdown_process_pool()  # Ensure clean state
+    shutdown_process_pool()
 
-    # Mock an exception during pool usage
     with patch("kreuzberg._utils._process_pool.ProcessPoolExecutor") as mock_pool_class:
         mock_pool = Mock(spec=ProcessPoolExecutor)
         mock_pool_class.return_value = mock_pool
 
-        # First yield raises exception, second yield succeeds
         yields = [Exception("Pool error"), mock_pool]
 
         def side_effect() -> Any:
@@ -81,16 +77,16 @@ def test_process_pool_error_recovery() -> None:
         with patch("kreuzberg._utils._process_pool._init_process_pool", side_effect=side_effect):
             try:
                 with process_pool():
-                    pass  # Should handle exception and retry
+                    pass
             except Exception:
-                pass  # Expected
+                pass
 
     shutdown_process_pool()
 
 
 def test_submit_to_process_pool() -> None:
     """Test submitting work to process pool."""
-    shutdown_process_pool()  # Ensure clean state
+    shutdown_process_pool()
 
     def simple_func(x: int, y: int) -> int:
         return x + y
@@ -98,7 +94,6 @@ def test_submit_to_process_pool() -> None:
     result = submit_to_process_pool(simple_func, 5, 10)
     assert result == 15
 
-    # Test with kwargs
     result = submit_to_process_pool(simple_func, x=3, y=7)
     assert result == 10
 
@@ -107,20 +102,17 @@ def test_submit_to_process_pool() -> None:
 
 def test_shutdown_process_pool() -> None:
     """Test process pool shutdown."""
-    # Initialize pool
+
     _init_process_pool()
 
-    # Import to access the global variable
     import kreuzberg._utils._process_pool as pool_module
 
     assert pool_module._PROCESS_POOL is not None
 
-    # Shutdown
     shutdown_process_pool()
     assert pool_module._PROCESS_POOL is None
 
-    # Test shutdown when already None
-    shutdown_process_pool()  # Should not raise
+    shutdown_process_pool()
 
 
 def test_extract_pdf_text_worker(searchable_pdf: Path) -> None:
@@ -146,7 +138,6 @@ def test_extract_pdf_text_worker_error() -> None:
 def test_extract_pdf_text_worker_with_mock() -> None:
     """Test PDF text extraction worker with mocked pypdfium2."""
     with patch("pypdfium2.PdfDocument") as mock_pdf_class:
-        # Setup mock
         mock_pdf = Mock()
         mock_page = Mock()
         mock_text_page = Mock()
@@ -160,7 +151,6 @@ def test_extract_pdf_text_worker_with_mock() -> None:
 
         assert result == ("test.pdf", "Test text")
 
-        # Verify cleanup
         mock_text_page.close.assert_called_once()
         mock_page.close.assert_called_once()
         mock_pdf.close.assert_called_once()
@@ -176,7 +166,6 @@ def test_extract_pdf_images_worker(searchable_pdf: Path) -> None:
     assert isinstance(images, list)
     assert len(images) > 0
 
-    # Verify first image is valid PNG
     import io
 
     img = Image.open(io.BytesIO(images[0]))
@@ -194,7 +183,6 @@ def test_extract_pdf_images_worker_error() -> None:
 def test_extract_pdf_images_worker_with_mock() -> None:
     """Test PDF image extraction worker with mocked pypdfium2."""
     with patch("pypdfium2.PdfDocument") as mock_pdf_class:
-        # Setup mock
         mock_pdf = Mock()
         mock_page = Mock()
         mock_bitmap = Mock()
@@ -205,7 +193,6 @@ def test_extract_pdf_images_worker_with_mock() -> None:
         mock_page.render.return_value = mock_bitmap
         mock_bitmap.to_pil.return_value = mock_pil_image
 
-        # Mock save to capture bytes
         saved_bytes = b"fake png data"
 
         def mock_save(buffer: Any, fmt: Any = None) -> None:
@@ -219,10 +206,8 @@ def test_extract_pdf_images_worker_with_mock() -> None:
         assert len(result[1]) == 1
         assert result[1][0] == saved_bytes
 
-        # Verify scale was used
         mock_page.render.assert_called_once_with(scale=3.0)
 
-        # Verify cleanup
         mock_bitmap.close.assert_called_once()
         mock_page.close.assert_called_once()
         mock_pdf.close.assert_called_once()
@@ -230,12 +215,11 @@ def test_extract_pdf_images_worker_with_mock() -> None:
 
 def test_process_pool_concurrent_usage() -> None:
     """Test concurrent usage of process pool."""
-    shutdown_process_pool()  # Ensure clean state
+    shutdown_process_pool()
 
     def compute(n: int) -> int:
         return n * n
 
-    # Submit multiple tasks
     results = []
     for i in range(5):
         result = submit_to_process_pool(compute, i)

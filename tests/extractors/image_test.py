@@ -182,13 +182,11 @@ def test_extract_path_sync_with_tesseract_config() -> None:
     image_path = Path("test.png")
 
     with patch("kreuzberg._multiprocessing.sync_tesseract.process_batch_images_sync_pure") as mock_process:
-        # The extractor should use the provided TesseractConfig
         expected_result = ExtractionResult(content="extracted text", chunks=[], mime_type="text/plain", metadata={})
         mock_process.return_value = [expected_result]
 
         result = extractor.extract_path_sync(image_path)
 
-        # Verify it was called with the specific TesseractConfig
         mock_process.assert_called_once_with([str(image_path)], tesseract_config)
         assert result == expected_result
 
@@ -201,7 +199,6 @@ def test_extract_path_sync_no_ocr_config() -> None:
     image_path = Path("test.png")
 
     with patch("kreuzberg._multiprocessing.sync_tesseract.process_batch_images_sync_pure") as mock_process:
-        # The extractor should create a default TesseractConfig when ocr_config is None
         expected_result = ExtractionResult(content="extracted text", chunks=[], mime_type="text/plain", metadata={})
         mock_process.return_value = [expected_result]
 
@@ -219,7 +216,6 @@ def test_extract_path_sync_empty_results() -> None:
     image_path = Path("test.png")
 
     with patch("kreuzberg._multiprocessing.sync_tesseract.process_batch_images_sync_pure") as mock_process:
-        # Return empty results to trigger fallback
         mock_process.return_value = []
 
         result = extractor.extract_path_sync(image_path)

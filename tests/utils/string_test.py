@@ -21,7 +21,7 @@ def test_safe_decode_with_empty_bytes() -> None:
 
 def test_safe_decode_with_specified_encoding() -> None:
     """Test safe_decode with specified encoding."""
-    # Test with latin-1 encoded bytes
+
     latin_bytes = "café".encode("latin-1")
     result = safe_decode(latin_bytes, encoding="latin-1")
     assert result == "café"
@@ -30,15 +30,14 @@ def test_safe_decode_with_specified_encoding() -> None:
 def test_safe_decode_with_invalid_encoding() -> None:
     """Test safe_decode with invalid encoding name."""
     result = safe_decode(b"Hello", encoding="invalid-encoding")
-    assert result == "Hello"  # Should fall back to detected/utf-8
+    assert result == "Hello"
 
 
 def test_safe_decode_fallback_to_latin1() -> None:
     """Test safe_decode fallback to latin-1 when all other encodings fail."""
-    # Create bytes that will fail UTF-8 and other common encodings
+
     problematic_bytes = b"\xff\xfe\x00\x01\x02"
 
-    # Mock detect to return None/empty to force fallback
     with patch("kreuzberg._utils._string.detect") as mock_detect:
         mock_detect.return_value = {"encoding": None}
 

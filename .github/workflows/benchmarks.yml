@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Run benchmarks daily at 2 AM UTC
+
     - cron: '0 2 * * *'
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch full history for comparison
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4

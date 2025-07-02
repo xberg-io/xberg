@@ -84,7 +84,6 @@ def tiny_pdf_with_tables() -> Path:
 pdfs_with_tables = sorted((test_source_files_folder / "pdfs_with_tables").glob("*.pdf"))
 
 
-# Cache management fixtures
 @pytest.fixture
 def clear_cache() -> Generator[None, None, None]:
     """Fixture to clear all caches before each test that requests it."""
@@ -92,7 +91,7 @@ def clear_cache() -> Generator[None, None, None]:
 
     clear_all_caches()
     yield
-    # Optionally clear again after test
+
     clear_all_caches()
 
 

@@ -49,7 +49,7 @@ def test_create_error_context_with_file(test_file: Path) -> None:
     assert context["file"]["path"] == str(test_file)
     assert context["file"]["name"] == "test.txt"
     assert context["file"]["exists"] is True
-    assert context["file"]["size"] == 12  # "test content"
+    assert context["file"]["size"] == 12
 
 
 def test_create_error_context_with_nonexistent_file() -> None:
@@ -103,7 +103,6 @@ def test_create_error_context_with_resource_error() -> None:
             error=e,
         )
 
-    # Should include system info for memory error
     assert "system" in context
     assert "memory_available_mb" in context["system"]
     assert "memory_percent" in context["system"]
@@ -123,7 +122,6 @@ def test_create_error_context_system_info_error() -> None:
                 error=e,
             )
 
-        # Should not have system info but should not fail
         assert "system" not in context
         assert "error" in context
 
@@ -141,7 +139,7 @@ def test_create_error_context_with_path_string() -> None:
 
 def test_is_transient_error() -> None:
     """Test transient error detection."""
-    # Transient errors
+
     assert is_transient_error(OSError("Resource temporarily unavailable"))
     assert is_transient_error(PermissionError("Access denied"))
     assert is_transient_error(TimeoutError("Operation timed out"))
@@ -152,7 +150,6 @@ def test_is_transient_error() -> None:
     assert is_transient_error(FileExistsError("File is locked"))
     assert is_transient_error(OSError("File in use"))
 
-    # Non-transient errors
     assert not is_transient_error(ValueError("Invalid value"))
     assert not is_transient_error(TypeError("Wrong type"))
     assert not is_transient_error(KeyError("Missing key"))
@@ -161,7 +158,7 @@ def test_is_transient_error() -> None:
 
 def test_is_resource_error() -> None:
     """Test resource error detection."""
-    # Resource errors
+
     assert is_resource_error(MemoryError("Out of memory"))
     assert is_resource_error(OSError("Cannot allocate memory"))
     assert is_resource_error(OSError("Too many open files"))
@@ -171,7 +168,6 @@ def test_is_resource_error() -> None:
     assert is_resource_error(OSError("File descriptor limit"))
     assert is_resource_error(RuntimeError("CPU usage too high"))
 
-    # Non-resource errors
     assert not is_resource_error(ValueError("Invalid value"))
     assert not is_resource_error(TypeError("Wrong type"))
     assert not is_resource_error(FileNotFoundError("File not found"))
@@ -180,31 +176,27 @@ def test_is_resource_error() -> None:
 
 def test_should_retry() -> None:
     """Test retry logic."""
-    # Should retry transient errors on first attempts
+
     error = TimeoutError("Request timed out")
     assert should_retry(error, attempt=1, max_attempts=3)
     assert should_retry(error, attempt=2, max_attempts=3)
     assert not should_retry(error, attempt=3, max_attempts=3)
 
-    # Should not retry validation errors
     val_error = ValidationError("Invalid input")
     assert not should_retry(val_error, attempt=1)
 
-    # Should not retry non-transient errors
-    error = ValueError("Bad value")
-    assert not should_retry(error, attempt=1)
+    val_error2 = ValueError("Bad value")
+    assert not should_retry(val_error2, attempt=1)
 
 
 def test_should_retry_max_attempts() -> None:
     """Test retry logic respects max attempts."""
     error = TimeoutError("Timeout")
 
-    # With default max_attempts=3
     assert should_retry(error, attempt=1)
     assert should_retry(error, attempt=2)
     assert not should_retry(error, attempt=3)
 
-    # With custom max_attempts
     assert should_retry(error, attempt=4, max_attempts=5)
     assert not should_retry(error, attempt=5, max_attempts=5)
 

@@ -73,16 +73,14 @@ class PerformanceProfiler:
         """Background monitoring of CPU and memory usage."""
         while self.monitoring_active:
             try:
-                # Sample memory usage in MB
                 memory_info = self.process.memory_info()
                 memory_mb = memory_info.rss / (1024 * 1024)
                 self.memory_samples.append(memory_mb)
 
-                # Sample CPU usage
                 cpu_percent = self.process.cpu_percent()
                 self.cpu_samples.append(cpu_percent)
 
-                time.sleep(0.01)  # 100Hz sampling
+                time.sleep(0.01)
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 break
 
@@ -111,7 +109,6 @@ class FlameGraphProfiler:
             result = func()
             return result, None
 
-        # Create temporary script to run the function
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             temp_script = Path(f.name)
             f.write(f"""
@@ -123,7 +120,6 @@ sys.path.insert(0, '{Path.cwd()}')
 """)
 
         try:
-            # Start py-spy profiling
             flame_output = output_path / f"{name}_flame.{self.config.output_format}"
 
             cmd = [
@@ -146,15 +142,12 @@ sys.path.insert(0, '{Path.cwd()}')
 
             cmd.extend(["--", "python", str(temp_script)])
 
-            # Run profiling
             process = subprocess.Popen(
                 cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
             )
 
-            # Also run the function normally to get the result
             result = func()
 
-            # Wait for profiling to complete
             stdout, stderr = process.communicate()
 
             if process.returncode == 0 and flame_output.exists():
@@ -162,12 +155,11 @@ sys.path.insert(0, '{Path.cwd()}')
             return result, None
 
         finally:
-            # Clean up temp script
             temp_script.unlink(missing_ok=True)
 
     def _generate_function_call_code(self, func: Callable[[], T]) -> str:
         """Generate Python code to call the function."""
-        # This is a simplified approach - in practice, you'd need more
+
         # sophisticated serialization for complex functions  # ~keep
         return f"""
 # Placeholder for function execution

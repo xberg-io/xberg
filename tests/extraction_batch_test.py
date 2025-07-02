@@ -72,7 +72,7 @@ async def test_batch_extract_file_with_error() -> None:
             return ExtractionResult(content="OK1", mime_type="text/plain", metadata={}, chunks=[])
         if file_path == Path("file2"):
             raise RuntimeError("Extract failed")
-        # file3
+
         return ExtractionResult(content="OK3", mime_type="text/plain", metadata={}, chunks=[])
 
     with patch("kreuzberg.extraction.extract_file", side_effect=mock_extract_file):
@@ -132,7 +132,7 @@ def test_batch_extract_file_sync_multiple(test_files: list[Path]) -> None:
 
 def test_batch_extract_file_sync_with_error(tmp_path: Path) -> None:
     """Test sync batch extraction with file error."""
-    # Create valid and invalid files
+
     valid_file = tmp_path / "valid.txt"
     valid_file.write_text("Valid content")
 
@@ -158,7 +158,7 @@ def test_batch_extract_file_sync_with_config(test_files: list[Path]) -> None:
         results = batch_extract_file_sync(test_files, config=config)
 
         assert len(results) == 3
-        # Verify config was passed
+
         for call in mock_extract.call_args_list:
             assert call[1]["config"] == config
 
@@ -187,7 +187,6 @@ def test_batch_extract_bytes_sync_multiple(test_bytes: list[tuple[bytes, str]]) 
 def test_batch_extract_bytes_sync_with_error() -> None:
     """Test sync batch byte extraction with error."""
     with patch("kreuzberg.extraction.extract_bytes_sync") as mock_extract:
-        # First succeeds, second fails
         mock_extract.side_effect = [
             ExtractionResult(content="OK", mime_type="text/plain", metadata={}, chunks=[]),
             RuntimeError("Extract failed"),
@@ -208,7 +207,6 @@ def test_batch_extract_file_sync_parallel_processing(test_files: list[Path]) -> 
         mock_executor = Mock()
         mock_executor_class.return_value.__enter__.return_value = mock_executor
 
-        # Mock futures
         mock_futures = []
         for i, _file in enumerate(test_files):
             future = Mock()
@@ -224,7 +222,7 @@ def test_batch_extract_file_sync_parallel_processing(test_files: list[Path]) -> 
             results = batch_extract_file_sync(test_files)
 
         assert len(results) == 3
-        # Verify ThreadPoolExecutor was used
+
         mock_executor_class.assert_called_once()
         assert mock_executor.submit.call_count == 3
 
@@ -235,7 +233,6 @@ def test_batch_extract_bytes_sync_parallel_processing(test_bytes: list[tuple[byt
         mock_executor = Mock()
         mock_executor_class.return_value.__enter__.return_value = mock_executor
 
-        # Mock futures
         mock_futures = []
         for i, (_content, _mime) in enumerate(test_bytes):
             future = Mock()
@@ -251,7 +248,7 @@ def test_batch_extract_bytes_sync_parallel_processing(test_bytes: list[tuple[byt
             results = batch_extract_bytes_sync(test_bytes)
 
         assert len(results) == 3
-        # Verify ThreadPoolExecutor was used
+
         mock_executor_class.assert_called_once()
         assert mock_executor.submit.call_count == 3
 
@@ -262,11 +259,10 @@ async def test_batch_extract_file_preserves_order() -> None:
     file_paths = [Path(f"file{i}") for i in range(5)]
 
     with patch("kreuzberg.extraction.extract_file") as mock_extract:
-        # Create results with different delays to test ordering
+
         async def extract_with_delay(file_path: Path, config: Any = None, mime_type: Any = None) -> ExtractionResult:
             import anyio
 
-            # Reverse delay to test ordering is preserved
             delay = 0.1 * (5 - int(file_path.name[-1]))
             await anyio.sleep(delay)
             return ExtractionResult(

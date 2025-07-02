@@ -49,13 +49,11 @@ class BenchmarkRunner:
             profiler.start_monitoring()
             start_time = time.perf_counter()
 
-            # Execute the benchmark function
             func()
 
             end_time = time.perf_counter()
             performance_metrics = profiler.stop_monitoring()
 
-            # Update duration with more precise timing
             performance_metrics.duration_seconds = end_time - start_time
 
             return BenchmarkResult(
@@ -66,7 +64,6 @@ class BenchmarkRunner:
             )
 
         except Exception as e:
-            # Stop profiling and create failed result
             try:
                 performance_metrics = profiler.stop_monitoring()
                 performance_metrics.exception_info = str(e)
@@ -104,7 +101,6 @@ class BenchmarkRunner:
             profiler.start_monitoring()
             start_time = time.perf_counter()
 
-            # Execute the async benchmark function
             if asyncio.iscoroutinefunction(func):
                 await func()
             else:
@@ -113,7 +109,6 @@ class BenchmarkRunner:
             end_time = time.perf_counter()
             performance_metrics = profiler.stop_monitoring()
 
-            # Update duration with more precise timing
             performance_metrics.duration_seconds = end_time - start_time
 
             return BenchmarkResult(
@@ -124,7 +119,6 @@ class BenchmarkRunner:
             )
 
         except Exception as e:
-            # Stop profiling and create failed result
             try:
                 performance_metrics = profiler.stop_monitoring()
                 performance_metrics.exception_info = str(e)
@@ -172,24 +166,21 @@ class BenchmarkRunner:
         ) as progress:
             task = progress.add_task(f"Running {suite_name}", total=total_benchmarks)
 
-            # Run synchronous benchmarks
             for name, func, metadata in benchmarks:
                 progress.update(task, description=f"Running sync: {name}")
                 result = self.run_sync_benchmark(name, func, metadata)
                 results.append(result)
                 progress.advance(task)
 
-                # Log result
                 status = "✓" if result.success else "✗"
                 duration = (
                     result.performance.duration_seconds if result.performance else 0
                 )
                 self.console.print(f"  {status} {name}: {duration:.3f}s")
 
-            # Run asynchronous benchmarks
             if async_benchmarks:
 
-                async def run_async_suite():
+                async def run_async_suite() -> list[BenchmarkResult]:
                     async_results = []
                     for name, func, metadata in async_benchmarks:
                         progress.update(task, description=f"Running async: {name}")
@@ -197,7 +188,6 @@ class BenchmarkRunner:
                         async_results.append(result)
                         progress.advance(task)
 
-                        # Log result
                         status = "✓" if result.success else "✗"
                         duration = (
                             result.performance.duration_seconds
@@ -253,21 +243,28 @@ class BenchmarkRunner:
 
         self.console.print(table)
 
-        # Print summary statistics
         successful = suite.successful_results
         if successful:
-            total_time = sum(r.performance.duration_seconds for r in successful)
-            avg_time = total_time / len(successful)
-            max_memory = max(r.performance.memory_peak_mb for r in successful)
-
-            self.console.print("\n[bold]Summary:[/bold]")
-            self.console.print(f"  Success Rate: {suite.success_rate:.1f}%")
-            self.console.print(f"  Total Time: {total_time:.3f}s")
-            self.console.print(f"  Average Time: {avg_time:.3f}s")
-            self.console.print(f"  Peak Memory: {max_memory:.1f}MB")
-            self.console.print(
-                f"  System: {suite.system_info.machine} ({suite.system_info.cpu_count} cores)"
+            total_time = sum(
+                r.performance.duration_seconds for r in successful if r.performance
             )
+            successful_with_perf = [r for r in successful if r.performance]
+            if successful_with_perf:
+                avg_time = total_time / len(successful_with_perf)
+                max_memory = max(
+                    r.performance.memory_peak_mb
+                    for r in successful_with_perf
+                    if r.performance
+                )
+
+                self.console.print("\n[bold]Summary:[/bold]")
+                self.console.print(f"  Success Rate: {suite.success_rate:.1f}%")
+                self.console.print(f"  Total Time: {total_time:.3f}s")
+                self.console.print(f"  Average Time: {avg_time:.3f}s")
+                self.console.print(f"  Peak Memory: {max_memory:.1f}MB")
+                self.console.print(
+                    f"  System: {suite.system_info.machine} ({suite.system_info.cpu_count} cores)"
+                )
 
     def save_results(self, suite: BenchmarkSuite, output_path: Path) -> None:
         """Save benchmark results to JSON file."""

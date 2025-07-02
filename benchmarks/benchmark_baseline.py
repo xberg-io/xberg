@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Baseline performance benchmark before implementing multi-layer caching."""
 
 import asyncio
@@ -9,7 +8,7 @@ from kreuzberg import ExtractionConfig, batch_extract_file, extract_file_sync
 from kreuzberg._utils._document_cache import clear_document_cache, get_document_cache
 
 
-async def run_baseline_benchmark():
+async def run_baseline_benchmark() -> dict[str, object] | None:  # type: ignore[syntax]
     """Run comprehensive baseline benchmark."""
     test_files_dir = Path("tests/test_source_files")
     test_files = list(test_files_dir.glob("*.pdf"))
@@ -17,13 +16,11 @@ async def run_baseline_benchmark():
     if not test_files:
         return None
 
-    # Select test files
     single_file = test_files[0]
     mixed_files = test_files[:3] if len(test_files) >= 3 else [single_file] * 3
 
     results = {}
 
-    # Test 1: Single file extraction (cold)
     clear_document_cache()
 
     start_time = time.time()
@@ -35,8 +32,6 @@ async def run_baseline_benchmark():
         "content_length": len(result.content),
         "success": not result.metadata.get("error"),
     }
-
-    # Test 2: Single file extraction (cached)
 
     start_time = time.time()
     extract_file_sync(single_file)
@@ -50,7 +45,6 @@ async def run_baseline_benchmark():
         "cache_hit": cached_duration < 0.1,
     }
 
-    # Test 3: Same file batch (10 copies)
     clear_document_cache()
 
     same_files = [single_file] * 10
@@ -68,7 +62,6 @@ async def run_baseline_benchmark():
         "throughput": len(same_files) / same_duration,
     }
 
-    # Test 4: Mixed files batch
     clear_document_cache()
 
     start_time = time.time()
@@ -87,11 +80,10 @@ async def run_baseline_benchmark():
         "throughput": len(mixed_files) / mixed_duration,
     }
 
-    # Test 5: OCR-heavy workload
     clear_document_cache()
 
     ocr_config = ExtractionConfig(force_ocr=True, ocr_backend="tesseract")
-    ocr_files = [single_file] * 3  # Smaller batch for OCR
+    ocr_files = [single_file] * 3
 
     start_time = time.time()
     ocr_results = await batch_extract_file(ocr_files, ocr_config)
@@ -107,23 +99,17 @@ async def run_baseline_benchmark():
         "throughput": len(ocr_files) / ocr_duration,
     }
 
-    # Cache statistics
     cache = get_document_cache()
     cache_stats = cache.get_stats()
 
     results["cache_stats"] = cache_stats
 
-    # Summary
-
-    # Performance indicators
-
-    return results
+    return results  # type: ignore[return-value]
 
 
 if __name__ == "__main__":
     baseline_results = asyncio.run(run_baseline_benchmark())
 
-    # Save baseline for comparison
     import json
 
     baseline_file = Path("baseline_results.json")

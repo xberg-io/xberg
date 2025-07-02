@@ -57,7 +57,7 @@ def test_extraction_config_validation_incompatible_paddleocr_config() -> None:
 
 def test_get_config_dict_with_custom_config() -> None:
     """Test get_config_dict with custom OCR config - covers lines 181-183."""
-    tesseract_config = TesseractConfig(language="fra", psm=6)
+    tesseract_config = TesseractConfig(language="fra", psm=6)  # type: ignore[arg-type]
     config = ExtractionConfig(ocr_backend="tesseract", ocr_config=tesseract_config)
 
     config_dict = config.get_config_dict()
@@ -96,7 +96,7 @@ def test_get_config_dict_default_paddleocr() -> None:
     config_dict = config.get_config_dict()
 
     assert isinstance(config_dict, dict)
-    assert "det_algorithm" in config_dict  # PaddleOCR uses different field names
+    assert "det_algorithm" in config_dict
     assert "use_gpu" in config_dict
 
 
@@ -111,25 +111,22 @@ def test_get_config_dict_no_backend() -> None:
 
 def test_extraction_config_valid_combinations() -> None:
     """Test valid OCR backend and config combinations."""
-    # Valid tesseract combination
+
     tesseract_config = TesseractConfig()
     config1 = ExtractionConfig(ocr_backend="tesseract", ocr_config=tesseract_config)
     assert config1.ocr_backend == "tesseract"
     assert config1.ocr_config == tesseract_config
 
-    # Valid easyocr combination
     easyocr_config = EasyOCRConfig()
     config2 = ExtractionConfig(ocr_backend="easyocr", ocr_config=easyocr_config)
     assert config2.ocr_backend == "easyocr"
     assert config2.ocr_config == easyocr_config
 
-    # Valid paddleocr combination
     paddleocr_config = PaddleOCRConfig()
     config3 = ExtractionConfig(ocr_backend="paddleocr", ocr_config=paddleocr_config)
     assert config3.ocr_backend == "paddleocr"
     assert config3.ocr_config == paddleocr_config
 
-    # No OCR at all
     config4 = ExtractionConfig(ocr_backend=None, ocr_config=None)
     assert config4.ocr_backend is None
     assert config4.ocr_config is None

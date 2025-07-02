@@ -394,7 +394,7 @@ def test_resolve_device_config_deprecated_use_gpu_true() -> None:
     """Test deprecated use_gpu=True parameter - covers lines 388-395."""
     with pytest.warns(DeprecationWarning, match="The 'use_gpu' parameter is deprecated"):
         device_info = EasyOCRBackend._resolve_device_config(use_gpu=True, device="auto")
-        # With use_gpu=True and device="auto", should result in an accelerated device or CPU
+
         assert device_info.device_type in ["cpu", "cuda", "mps"]
 
 
@@ -402,7 +402,7 @@ def test_resolve_device_config_deprecated_use_gpu_conflicts() -> None:
     """Test deprecated use_gpu with conflicting device parameter - covers line 397."""
     with pytest.warns(DeprecationWarning, match="Both 'use_gpu' and 'device' parameters specified"):
         device_info = EasyOCRBackend._resolve_device_config(use_gpu=True, device="cpu")
-        # Should use the device parameter value, not use_gpu
+
         assert device_info.device_type == "cpu"
 
 
@@ -411,7 +411,6 @@ def test_resolve_device_config_validation_error_fallback() -> None:
     with patch(
         "kreuzberg._utils._device.validate_device_request", side_effect=ValidationError("Device validation failed")
     ):
-        # This should catch the ValidationError and fallback to CPU for use_gpu=False
         device_info = EasyOCRBackend._resolve_device_config(use_gpu=False, device="cpu")
         assert device_info.device_type == "cpu"
         assert device_info.name == "CPU"
@@ -419,54 +418,45 @@ def test_resolve_device_config_validation_error_fallback() -> None:
 
 def test_resolve_device_config_validation_error_reraise_other_cases() -> None:
     """Test ValidationError is re-raised for non-fallback cases - covers line 416 (raise)."""
-    # Should re-raise ValidationError when NOT using the deprecated fallback case
-    # The fallback only applies when use_gpu=False AND device="cpu"
-    # Use use_gpu=True to avoid the fallback, and disable fallback_to_cpu
+
     with pytest.raises(ValidationError, match="Requested device.*not available"):
         EasyOCRBackend._resolve_device_config(use_gpu=True, device="cuda", fallback_to_cpu=False)
 
 
 def test_resolve_device_config_validation_error_reraise() -> None:
     """Test ValidationError is re-raised when not using deprecated fallback."""
-    # Should re-raise ValidationError when not using the deprecated fallback case
+
     with pytest.raises(ValidationError, match="Requested device 'invalid' is not available"):
         EasyOCRBackend._resolve_device_config(use_gpu=True, device="invalid", fallback_to_cpu=False)
 
 
 def test_process_results_edge_cases() -> None:
     """Test text processing edge cases - covers lines 279, 295."""
-    # Test case where current_line needs to append (line 279)
-    # Mock OCR results that will create multiple items on same line
+
     mock_results = [
         ([[10, 10], [50, 10], [50, 30], [10, 30]], "Hello", 0.9),
-        ([[60, 12], [100, 12], [100, 32], [60, 32]], "World", 0.8),  # Same line (similar y)
-        ([[10, 50], [80, 50], [80, 70], [10, 70]], "", 0.7),  # Empty text (line 295)
+        ([[60, 12], [100, 12], [100, 32], [60, 32]], "World", 0.8),
+        ([[10, 50], [80, 50], [80, 70], [10, 70]], "", 0.7),
     ]
 
-    # Create a dummy image for the static method
     test_image = Image.new("RGB", (100, 100), color="white")
 
     result = EasyOCRBackend._process_easyocr_result(mock_results, test_image)
 
-    # Should handle both text concatenation and empty text filtering
     assert "Hello World" in result.content
-    # Empty text should be skipped due to line 295 check
 
 
 @pytest.mark.anyio
 async def test_init_easyocr_already_initialized() -> None:
     """Test early return when reader already exists - covers line 337."""
-    # Set reader to simulate it's already initialized
+
     original_reader = EasyOCRBackend._reader
     EasyOCRBackend._reader = Mock()
 
     try:
-        # This should hit line 337 and return early without trying to import easyocr
         await EasyOCRBackend._init_easyocr(language="en")
 
-        # Reader should remain the mock (not re-initialized)
         assert EasyOCRBackend._reader is not None
         assert isinstance(EasyOCRBackend._reader, Mock)
     finally:
-        # Restore original state
         EasyOCRBackend._reader = original_reader

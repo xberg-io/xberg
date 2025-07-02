@@ -22,7 +22,7 @@ def sync_function(x: int, y: int = 10) -> int:
 
 async def async_function(x: int, y: int = 10) -> int:
     """Test asynchronous function."""
-    await anyio.sleep(0.01)  # Small delay to make it actually async
+    await anyio.sleep(0.01)
     return x + y
 
 
@@ -34,16 +34,16 @@ def test_run_maybe_async_with_sync_function() -> None:
 
 def test_run_maybe_async_with_async_function() -> None:
     """Test run_maybe_async with an asynchronous function."""
-    result = run_maybe_async(async_function, 5, y=15)
+    result: int = run_maybe_async(async_function, 5, y=15)  # type: ignore[arg-type]
     assert result == 20
 
 
 def test_run_maybe_async_with_args_and_kwargs() -> None:
     """Test run_maybe_async with both positional and keyword arguments."""
-    result = run_maybe_async(sync_function, 7, y=3)
+    result: int = run_maybe_async(sync_function, 7, y=3)
     assert result == 10
 
-    result = run_maybe_async(async_function, 7, y=3)
+    result = run_maybe_async(async_function, 7, y=3)  # type: ignore[arg-type]
     assert result == 10
 
 
@@ -56,7 +56,7 @@ def test_run_sync_only_with_sync_function() -> None:
 def test_run_sync_only_with_async_function_raises_error() -> None:
     """Test run_sync_only raises error with asynchronous function."""
     with pytest.raises(RuntimeError, match="Cannot run async function async_function in sync-only context"):
-        run_sync_only(async_function, 5, y=15)
+        run_sync_only(async_function, 5, y=15)  # type: ignore[arg-type]
 
 
 def test_run_sync_only_error_message() -> None:
@@ -66,7 +66,7 @@ def test_run_sync_only_error_message() -> None:
         pass
 
     with pytest.raises(RuntimeError) as exc_info:
-        run_sync_only(custom_async_function)
+        run_sync_only(custom_async_function)  # type: ignore[arg-type]
 
     assert "custom_async_function" in str(exc_info.value)
     assert "sync-only context" in str(exc_info.value)
@@ -82,7 +82,7 @@ def test_run_maybe_async_with_no_args() -> None:
         return "async_result"
 
     assert run_maybe_async(no_arg_sync) == "sync_result"
-    assert run_maybe_async(no_arg_async) == "async_result"
+    assert run_maybe_async(no_arg_async) == "async_result"  # type: ignore[arg-type]
 
 
 def test_run_sync_only_with_no_args() -> None:
@@ -107,7 +107,7 @@ def test_run_maybe_async_with_exception() -> None:
         run_maybe_async(sync_error)
 
     with pytest.raises(ValueError, match="Async error"):
-        run_maybe_async(async_error)
+        run_maybe_async(async_error)  # type: ignore[arg-type]
 
 
 def test_run_sync_only_with_exception() -> None:
@@ -129,16 +129,15 @@ def test_run_maybe_async_return_types() -> None:
     async def return_dict() -> dict[str, int]:
         return {"a": 1, "b": 2}
 
-    result1 = run_maybe_async(return_list)
+    result1: list[int] = run_maybe_async(return_list)
     assert result1 == [1, 2, 3]
     assert isinstance(result1, list)
 
-    result2 = run_maybe_async(return_dict)
+    result2: dict[str, int] = run_maybe_async(return_dict)
     assert result2 == {"a": 1, "b": 2}
     assert isinstance(result2, dict)
 
 
-# Async tests for run_sync function
 @pytest.mark.anyio
 async def test_async_run_sync_with_sync_function() -> None:
     """Test async run_sync with a synchronous function."""
@@ -185,7 +184,7 @@ async def test_run_maybe_sync_with_sync_function() -> None:
 @pytest.mark.anyio
 async def test_run_maybe_sync_with_async_function() -> None:
     """Test run_maybe_sync with asynchronous function."""
-    result = await run_maybe_sync(async_function, 5, y=15)
+    result: int = await run_maybe_sync(async_function, 5, y=15)
     assert result == 20
 
 
@@ -203,7 +202,7 @@ async def test_run_maybe_sync_with_exception() -> None:
         await run_maybe_sync(sync_error)
 
     with pytest.raises(ValueError, match="Maybe async error"):
-        await run_maybe_sync(async_error)
+        await run_maybe_sync(async_error)  # type: ignore[arg-type]
 
 
 @pytest.mark.anyio
@@ -271,7 +270,7 @@ async def test_run_taskgroup_batched_single_batch() -> None:
         return value * 2
 
     tasks = [make_task(i) for i in range(3)]
-    results = await run_taskgroup_batched(*tasks, batch_size=5)  # Larger than task count
+    results = await run_taskgroup_batched(*tasks, batch_size=5)
     assert results == [0, 2, 4]
 
 

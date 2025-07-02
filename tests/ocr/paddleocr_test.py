@@ -111,9 +111,9 @@ def mock_find_spec_missing(mocker: MockerFixture) -> Mock:
 @pytest.fixture
 def mock_image() -> Mock:
     img = Mock(spec=Image.Image)
-    # Ensure size is a proper tuple, not a Mock object
+
     img.configure_mock(size=(100, 100), width=100, height=100)
-    # Make convert() return self
+
     img.convert.return_value = img
 
     array_interface = {
@@ -189,7 +189,6 @@ async def test_init_paddle_ocr_with_gpu_package(
 
     mocker.patch("kreuzberg._ocr._paddleocr.find_spec", side_effect=lambda x: True if x == "paddlepaddle_gpu" else None)
 
-    # Mock validate_device_request to return CUDA device when GPU package is available
     from kreuzberg._utils._device import DeviceInfo
 
     mock_device_info = DeviceInfo(device_type="cuda", device_id=0, name="NVIDIA GPU")
@@ -680,12 +679,10 @@ async def test_process_image_grayscale_conversion() -> None:
 
     backend = PaddleBackend()
 
-    # Create a grayscale image
     grayscale_image = Image.new("L", (100, 100), color=128)
 
-    # Mock the init and ocr call
     with patch.object(backend, "_init_paddle_ocr"):
-        backend._paddle_ocr = Mock()
+        backend._paddle_ocr = Mock()  # type: ignore[misc]
         backend._paddle_ocr.ocr.return_value = [[]]
 
         with patch("kreuzberg._ocr._paddleocr.run_sync") as mock_run_sync:
@@ -693,12 +690,11 @@ async def test_process_image_grayscale_conversion() -> None:
 
             await backend.process_image(grayscale_image)
 
-            # Verify run_sync was called with converted RGB image
             mock_run_sync.assert_called_once()
-            np_array_arg = mock_run_sync.call_args[0][1]  # Second argument should be the numpy array
-            # The image should have been converted to RGB (3 channels)
+            np_array_arg = mock_run_sync.call_args[0][1]
+
             assert len(np_array_arg.shape) == 3
-            assert np_array_arg.shape[2] == 3  # RGB has 3 channels
+            assert np_array_arg.shape[2] == 3
 
 
 @pytest.mark.anyio
@@ -706,16 +702,12 @@ async def test_process_paddle_result_current_line_handling() -> None:
     """Test current line handling in result processing - covers lines 198-201."""
     from PIL import Image
 
-    # Create test image
     test_image = Image.new("RGB", (200, 100), color="white")
 
-    # Mock OCR results with multiple boxes that should be grouped into lines
     mock_results = [
-        [  # Single page result
-            # First line (y=10-30)
+        [
             [[[10, 10], [50, 10], [50, 30], [10, 30]], ("Hello", 0.9)],
             [[[60, 12], [100, 12], [100, 32], [60, 32]], ("World", 0.8)],
-            # Second line (y=50-70)
             [[[10, 50], [80, 50], [80, 70], [10, 70]], ("Second", 0.7)],
             [[[90, 52], [150, 52], [150, 72], [90, 72]], ("Line", 0.6)],
         ]
@@ -723,7 +715,6 @@ async def test_process_paddle_result_current_line_handling() -> None:
 
     result = PaddleBackend._process_paddle_result(mock_results, test_image)
 
-    # Should have processed both lines with proper grouping
     assert "Hello World" in result.content
     assert "Second Line" in result.content
 
@@ -732,18 +723,15 @@ def test_process_paddle_result_image_size_fallback() -> None:
     """Test image size fallback for mocked images - covers line 218."""
     from unittest.mock import Mock
 
-    # Create a mock image without width/height attributes but with size
     mock_image = Mock()
     del mock_image.width
     del mock_image.height
     mock_image.size = (300, 200)
 
-    # Mock result with some text
     mock_results = [[[[[10, 10], [50, 10], [50, 30], [10, 30]], ("Test", 0.9)]]]
 
     result = PaddleBackend._process_paddle_result(mock_results, mock_image)
 
-    # Should use size tuple as fallback
     assert result.metadata["width"] == 300
     assert result.metadata["height"] == 200
 
@@ -753,20 +741,17 @@ async def test_init_paddle_ocr_gpu_memory_conversion() -> None:
     """Test GPU memory limit conversion - covers line 284."""
     from unittest.mock import Mock, patch
 
-    # Reset the paddle_ocr instance
     PaddleBackend._paddle_ocr = None
 
     mock_paddle_ocr_class = Mock()
     mock_paddle_ocr_instance = Mock()
     mock_paddle_ocr_class.return_value = mock_paddle_ocr_instance
 
-    # Mock device info for CUDA
     mock_device_info = Mock()
     mock_device_info.device_type = "cuda"
 
-    # Mock run_sync to actually call the function so we can inspect the call
-    async def mock_run_sync_func(func, *args, **kwargs):
-        return func(*args, **kwargs)
+    async def mock_run_sync_func(func: object, *args: object, **kwargs: object) -> object:
+        return func(*args, **kwargs)  # type: ignore[operator]
 
     with (
         patch("kreuzberg._ocr._paddleocr.find_spec", return_value=True),
@@ -777,7 +762,6 @@ async def test_init_paddle_ocr_gpu_memory_conversion() -> None:
     ):
         await PaddleBackend._init_paddle_ocr(language="en", gpu_memory_limit=2.5)
 
-        # Verify that gpu_mem was set to converted value (2.5 GB * 1024 = 2560 MB)
         mock_paddle_ocr_class.assert_called_once()
         expected_call_kwargs = mock_paddle_ocr_class.call_args[1]
         assert expected_call_kwargs["gpu_mem"] == 2560
@@ -789,7 +773,6 @@ async def test_resolve_device_config_deprecated_use_gpu_warnings() -> None:
     import warnings
     from unittest.mock import patch
 
-    # Test case 1: use_gpu=True with device="auto" (lines 312-319)
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
 
@@ -798,12 +781,10 @@ async def test_resolve_device_config_deprecated_use_gpu_warnings() -> None:
 
             PaddleBackend._resolve_device_config(use_gpu=True, device="auto")
 
-            # Should have issued deprecation warning
             assert len(w) == 1
             assert issubclass(w[0].category, DeprecationWarning)
             assert "'use_gpu' parameter is deprecated" in str(w[0].message)
 
-    # Test case 2: use_gpu=True with device="cpu" (line 321)
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
 
@@ -812,7 +793,6 @@ async def test_resolve_device_config_deprecated_use_gpu_warnings() -> None:
 
             PaddleBackend._resolve_device_config(use_gpu=True, device="cpu")
 
-            # Should have issued both warnings
             assert len(w) == 1
             assert issubclass(w[0].category, DeprecationWarning)
             assert "Both 'use_gpu' and 'device' parameters specified" in str(w[0].message)
@@ -832,7 +812,6 @@ async def test_resolve_device_config_mps_warning() -> None:
 
             PaddleBackend._resolve_device_config(device="mps")
 
-            # Should have issued MPS warning and fallback to CPU
             assert len(w) == 1
             assert issubclass(w[0].category, UserWarning)
             assert "PaddlePaddle does not support MPS" in str(w[0].message)
@@ -846,7 +825,6 @@ async def test_resolve_device_config_validation_error_fallback() -> None:
     with patch("kreuzberg._utils._device.validate_device_request") as mock_validate:
         mock_validate.side_effect = ValidationError("Device validation failed")
 
-        # Should fallback to CPU device for deprecated use_gpu=False case
         result = PaddleBackend._resolve_device_config(use_gpu=False, device="cpu")
 
         assert result.device_type == "cpu"

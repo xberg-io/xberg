@@ -6,6 +6,7 @@ import os
 import tempfile
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -20,9 +21,12 @@ from kreuzberg._utils._cache import (
     get_table_cache,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
 
 @pytest.fixture
-def temp_cache_dir() -> Path:
+def temp_cache_dir() -> Generator[Path, None, None]:
     """Create a temporary cache directory."""
     with tempfile.TemporaryDirectory() as temp_dir:
         yield Path(temp_dir)
@@ -101,7 +105,6 @@ def test_is_cache_valid_old_file(cache: KreuzbergCache[ExtractionResult]) -> Non
     cache_path = cache.cache_dir / "old.msgpack"
     cache_path.write_text("test content")
 
-    # Mock the file to appear old
     old_time = time.time() - (cache.max_age_days + 1) * 24 * 3600
     os.utime(cache_path, (old_time, old_time))
 
@@ -158,10 +161,9 @@ def test_deserialize_result_regular_object(cache: KreuzbergCache[str]) -> None:
 
 def test_get_hit(cache: KreuzbergCache[str]) -> None:
     """Test synchronous cache hit."""
-    # First, put something in cache
+
     cache.set("test_value", key1="value1", key2="value2")
 
-    # Now get it back
     result = cache.get(key1="value1", key2="value2")
     assert result == "test_value"
 
@@ -176,12 +178,10 @@ def test_set(cache: KreuzbergCache[str]) -> None:
     """Test synchronous cache set."""
     cache.set("test_value", key1="value1", key2="value2")
 
-    # Verify file was created
     cache_key = cache._get_cache_key(key1="value1", key2="value2")
     cache_path = cache._get_cache_path(cache_key)
     assert cache_path.exists()
 
-    # Verify we can retrieve it
     result = cache.get(key1="value1", key2="value2")
     assert result == "test_value"
 
@@ -189,10 +189,9 @@ def test_set(cache: KreuzbergCache[str]) -> None:
 @pytest.mark.anyio
 async def test_aget_hit(cache: KreuzbergCache[str]) -> None:
     """Test asynchronous cache hit."""
-    # First, put something in cache
+
     await cache.aset("test_value", key1="value1", key2="value2")
 
-    # Now get it back
     result = await cache.aget(key1="value1", key2="value2")
     assert result == "test_value"
 
@@ -209,81 +208,68 @@ async def test_aset(cache: KreuzbergCache[str]) -> None:
     """Test asynchronous cache set."""
     await cache.aset("test_value", key1="value1", key2="value2")
 
-    # Verify file was created
     cache_key = cache._get_cache_key(key1="value1", key2="value2")
     cache_path = cache._get_cache_path(cache_key)
     assert cache_path.exists()
 
-    # Verify we can retrieve it
     result = await cache.aget(key1="value1", key2="value2")
     assert result == "test_value"
 
 
 def test_clear(cache: KreuzbergCache[str]) -> None:
     """Test cache clearing."""
-    # Put multiple items in cache
+
     cache.set("value1", key="test1")
     cache.set("value2", key="test2")
 
-    # Verify they exist
     assert cache.get(key="test1") == "value1"
     assert cache.get(key="test2") == "value2"
 
-    # Clear cache
     cache.clear()
 
-    # Verify they're gone
     assert cache.get(key="test1") is None
     assert cache.get(key="test2") is None
 
 
 def test_cleanup_cache(cache: KreuzbergCache[str]) -> None:
     """Test cleanup of expired entries."""
-    # Create an expired file manually
+
     cache_path = cache.cache_dir / "expired.msgpack"
     cache_path.write_text("expired content")
 
-    # Make it old
     old_time = time.time() - (cache.max_age_days + 1) * 24 * 3600
     os.utime(cache_path, (old_time, old_time))
 
-    # Create a fresh file
     cache.set("fresh_value", key="fresh")
 
-    # Run cleanup
     cache._cleanup_cache()
 
-    # Expired file should be gone, fresh file should remain
     assert not cache_path.exists()
     assert cache.get(key="fresh") == "fresh_value"
 
 
 def test_cleanup_cache_size_limit(cache: KreuzbergCache[str]) -> None:
     """Test cleanup respects size limits."""
-    # Create multiple files that exceed size limit
+
     for i in range(20):
         cache.set(f"value_{i}" * 1000, key=f"test_{i}")
 
-    # Run cleanup
     cache._cleanup_cache()
 
-    # Some files should be removed to respect size limit
-    # (Exact count depends on file sizes, but should be fewer than 20)
     remaining_files = list(cache.cache_dir.glob("*.msgpack"))
     assert len(remaining_files) < 20
 
 
 def test_cleanup_cache_exception_handling(cache: KreuzbergCache[str]) -> None:
     """Test cleanup handles exceptions gracefully."""
-    # Mock glob to raise an exception
+
     with patch("pathlib.Path.glob", side_effect=OSError("Permission denied")):
-        # Should not raise exception
         cache._cleanup_cache()
 
 
 def test_get_serialization_error(cache: KreuzbergCache[str]) -> None:
     """Test get handles serialization errors gracefully."""
-    # Create a corrupted cache file
+
     cache_key = cache._get_cache_key(key="test")
     cache_path = cache._get_cache_path(cache_key)
     cache_path.write_bytes(b"corrupted msgpack data")
@@ -291,31 +277,27 @@ def test_get_serialization_error(cache: KreuzbergCache[str]) -> None:
     result = cache.get(key="test")
     assert result is None
 
-    # Corrupted file should be removed
     assert not cache_path.exists()
 
 
 def test_set_serialization_error(cache: KreuzbergCache[str]) -> None:
     """Test set handles serialization errors gracefully."""
-    # Create an object that can't be serialized
+
     unserializable = lambda x: x  # noqa: E731
 
     with patch("kreuzberg._utils._cache.serialize", side_effect=Exception("Serialize error")):
-        # Should not raise exception
         cache.set(unserializable, key="test")  # type: ignore
 
 
 def test_is_processing(cache: KreuzbergCache[str]) -> None:
     """Test processing state tracking."""
-    # Initially not processing
+
     assert not cache.is_processing(key="test")
 
-    # Mark as processing
     event = cache.mark_processing(key="test")
     assert cache.is_processing(key="test")
     assert not event.is_set()
 
-    # Mark as complete
     cache.mark_complete(key="test")
     assert not cache.is_processing(key="test")
     assert event.is_set()
@@ -326,19 +308,18 @@ def test_mark_processing_duplicate(cache: KreuzbergCache[str]) -> None:
     event1 = cache.mark_processing(key="test")
     event2 = cache.mark_processing(key="test")
 
-    # Should return the same event
     assert event1 is event2
 
 
 def test_mark_complete_nonexistent(cache: KreuzbergCache[str]) -> None:
     """Test marking non-existent key as complete."""
-    # Should not raise exception
+
     cache.mark_complete(key="nonexistent")
 
 
 def test_get_stats(cache: KreuzbergCache[str]) -> None:
     """Test cache statistics."""
-    # Add some items to cache
+
     cache.set("value1", key="test1")
     cache.set("value2", key="test2")
 
@@ -365,14 +346,12 @@ def test_get_stats_os_error(cache: KreuzbergCache[str]) -> None:
         assert stats["avg_result_size_kb"] == 0.0
 
 
-# Global cache function tests
 def test_get_ocr_cache() -> None:
     """Test OCR cache factory function."""
     cache = get_ocr_cache()
     assert isinstance(cache, KreuzbergCache)
     assert cache.cache_type == "ocr"
 
-    # Should return same instance on subsequent calls
     cache2 = get_ocr_cache()
     assert cache is cache2
 
@@ -418,26 +397,22 @@ def test_get_mime_cache() -> None:
 
 def test_clear_all_caches() -> None:
     """Test clearing all global caches."""
-    # Populate some caches
+
     get_ocr_cache().set(
         ExtractionResult(content="test", mime_type="text/plain", metadata={}, chunks=[], tables=[]), key="test"
     )
     get_mime_cache().set("application/pdf", key="test")
 
-    # Clear all
     clear_all_caches()
 
-    # Should be empty
     assert get_ocr_cache().get(key="test") is None
     assert get_mime_cache().get(key="test") is None
 
 
 def test_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) -> None:
     """Test periodic cleanup trigger during set operations."""
-    # Mock cleanup to track calls
+
     with patch.object(cache, "_cleanup_cache") as mock_cleanup:
-        # Set items with hash that should trigger cleanup (hash % 100 == 0)
-        # We need to find a cache key that hashes to a multiple of 100
         for i in range(200):
             cache_key = cache._get_cache_key(test_key=f"test_{i}")
             if hash(cache_key) % 100 == 0:
@@ -445,7 +420,6 @@ def test_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) -> None:
                 mock_cleanup.assert_called()
                 break
         else:
-            # Fallback - manually trigger by mocking hash
             with patch("builtins.hash", return_value=0):
                 cache.set("value", test_key="trigger")
                 mock_cleanup.assert_called()
@@ -454,9 +428,8 @@ def test_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) -> None:
 @pytest.mark.anyio
 async def test_async_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) -> None:
     """Test periodic cleanup trigger during async set operations."""
-    # Mock cleanup to track calls
+
     with patch.object(cache, "_cleanup_cache") as mock_cleanup:
-        # Find or force a key that triggers cleanup
         for i in range(200):
             cache_key = cache._get_cache_key(test_key=f"test_{i}")
             if hash(cache_key) % 100 == 0:
@@ -464,7 +437,6 @@ async def test_async_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) 
                 mock_cleanup.assert_called()
                 break
         else:
-            # Fallback - manually trigger by mocking hash
             with patch("builtins.hash", return_value=0):
                 await cache.aset("value", test_key="trigger")
                 mock_cleanup.assert_called()
@@ -473,7 +445,7 @@ async def test_async_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) 
 @pytest.mark.anyio
 async def test_aget_serialization_error(cache: KreuzbergCache[str]) -> None:
     """Test async get handles serialization errors gracefully."""
-    # Create a corrupted cache file
+
     cache_key = cache._get_cache_key(key="test")
     cache_path = cache._get_cache_path(cache_key)
     cache_path.write_bytes(b"corrupted msgpack data")
@@ -485,9 +457,8 @@ async def test_aget_serialization_error(cache: KreuzbergCache[str]) -> None:
 @pytest.mark.anyio
 async def test_aset_serialization_error(cache: KreuzbergCache[str]) -> None:
     """Test async set handles serialization errors gracefully."""
-    # Create an object that can't be serialized
+
     unserializable = lambda x: x  # noqa: E731
 
     with patch("kreuzberg._utils._cache.serialize", side_effect=Exception("Serialize error")):
-        # Should not raise exception
         await cache.aset(unserializable, key="test")  # type: ignore

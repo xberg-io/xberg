@@ -139,6 +139,7 @@ lint.ignore = [
   "PLC0415", # Import should be at top-level (we use conditional imports)
   "PLW0603", # Using global statement is discouraged
   "S110",    # try-except-pass detected
+  "S603",    # subprocess-without-shell-equals-true
   "TD",      # We allow todo and fixme comments
   "TRY",     # Try except block, rules are too strict
 ]

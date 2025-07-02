@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-# Only test CLI if dependencies are available
 try:
     import click  # noqa: F401
     import rich  # noqa: F401
@@ -26,7 +25,7 @@ class TestCliIntegration:
 
     def test_cli_extract_html_file(self, tmp_path: Path) -> None:
         """Test extracting from an HTML file via CLI."""
-        # Create test HTML file
+
         html_file = tmp_path / "test.html"
         html_file.write_text("""
         <html>
@@ -39,7 +38,6 @@ class TestCliIntegration:
         </html>
         """)
 
-        # Run CLI command
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "extract", str(html_file)],
             check=False,
@@ -55,7 +53,7 @@ class TestCliIntegration:
 
     def test_cli_extract_to_file(self, tmp_path: Path) -> None:
         """Test extracting to an output file."""
-        # Create test markdown file
+
         md_file = tmp_path / "test.md"
         md_file.write_text("""
         # Test Markdown
@@ -69,7 +67,6 @@ class TestCliIntegration:
 
         output_file = tmp_path / "output.txt"
 
-        # Run CLI command with output file
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "extract", str(md_file), "-o", str(output_file)],
             check=False,
@@ -83,16 +80,15 @@ class TestCliIntegration:
 
         content = output_file.read_text()
         assert "Test Markdown" in content
-        assert "**test** markdown file" in content  # The markdown is preserved as-is
+        assert "**test** markdown file" in content
         assert "Item 1" in content
 
     def test_cli_extract_json_output_with_metadata(self, tmp_path: Path) -> None:
         """Test JSON output format with metadata."""
-        # Create test text file
+
         txt_file = tmp_path / "test.txt"
         txt_file.write_text("This is a simple text file for testing JSON output.")
 
-        # Run CLI command with JSON output and metadata
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "extract", str(txt_file), "--output-format", "json", "--show-metadata"],
             check=False,
@@ -103,7 +99,6 @@ class TestCliIntegration:
 
         assert result.returncode == 0
 
-        # Parse JSON output
         output_data = json.loads(result.stdout)
         assert "content" in output_data
         assert "mime_type" in output_data
@@ -114,7 +109,6 @@ class TestCliIntegration:
         """Test extracting from stdin."""
         test_content = "<html><body><h1>Stdin Test</h1><p>Content from stdin</p></body></html>"
 
-        # Run CLI command with stdin input
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "extract"],
             check=False,
@@ -130,11 +124,10 @@ class TestCliIntegration:
 
     def test_cli_with_config_file(self, tmp_path: Path) -> None:
         """Test CLI with configuration file."""
-        # Create test document
+
         html_file = tmp_path / "test.html"
         html_file.write_text("<html><body><p>Test content for config</p></body></html>")
 
-        # Create config file
         config_file = tmp_path / "pyproject.toml"
         config_file.write_text("""
 [tool.kreuzberg]
@@ -148,7 +141,6 @@ language = "eng"
 psm = 6
 """)
 
-        # Run CLI with config file
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "extract", str(html_file), "--config", str(config_file), "--verbose"],
             check=False,
@@ -159,11 +151,10 @@ psm = 6
 
         assert result.returncode == 0
         assert "Test content" in result.stdout
-        # Config was loaded successfully (no need to check specific message)
 
     def test_cli_config_command(self, tmp_path: Path) -> None:
         """Test the config command."""
-        # Create config file
+
         config_file = tmp_path / "config.toml"
         config_file.write_text("""
 [tool.kreuzberg]
@@ -176,7 +167,6 @@ language = "eng+deu"
 psm = 3
 """)
 
-        # Run config command
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "config", "--config", str(config_file)],
             check=False,
@@ -186,18 +176,18 @@ psm = 3
         )
 
         assert result.returncode == 0
-        # Config command outputs to stderr (Rich console)
+
         output_text = result.stderr
         assert "force_ocr" in output_text
         assert "true" in output_text
         assert "eng+deu" in output_text
-        assert "config.toml" in output_text  # Just check filename, not full path
+        assert "config.toml" in output_text
 
     def test_cli_config_command_no_file(self) -> None:
         """Test config command when no config file exists."""
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "config"], check=False, capture_output=True, text=True, cwd=Path("/tmp")
-        )  # Use /tmp to avoid finding project config
+        )
 
         assert result.returncode == 0
         assert "No configuration file found" in result.stderr
@@ -205,11 +195,10 @@ psm = 3
 
     def test_cli_tesseract_options(self, tmp_path: Path) -> None:
         """Test CLI with Tesseract-specific options."""
-        # Create test text file (doesn't need OCR but tests config)
+
         txt_file = tmp_path / "test.txt"
         txt_file.write_text("Simple text content for tesseract options test.")
 
-        # Run with tesseract options
         result = subprocess.run(
             [
                 sys.executable,
@@ -235,11 +224,10 @@ psm = 3
 
     def test_cli_force_ocr_option(self, tmp_path: Path) -> None:
         """Test CLI with force OCR option."""
-        # Create test text file
+
         txt_file = tmp_path / "test.txt"
         txt_file.write_text("Text content that should be processed with OCR.")
 
-        # Run with force OCR
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "extract", str(txt_file), "--force-ocr", "--ocr-backend", "tesseract"],
             check=False,
@@ -253,12 +241,11 @@ psm = 3
 
     def test_cli_chunking_options(self, tmp_path: Path) -> None:
         """Test CLI with chunking options."""
-        # Create a longer text file
+
         txt_file = tmp_path / "long_text.txt"
-        long_text = "This is a test. " * 200  # Create text longer than default chunk size
+        long_text = "This is a test. " * 200
         txt_file.write_text(long_text)
 
-        # Run with chunking enabled (set overlap smaller than max-chars)
         result = subprocess.run(
             [
                 sys.executable,
@@ -282,25 +269,22 @@ psm = 3
 
         assert result.returncode == 0
 
-        # Parse JSON to check if chunks are created
         output_data = json.loads(result.stdout)
-        # Note: chunks might be None if the text is not actually chunked by the backend
+
         assert "content" in output_data
 
     def test_cli_auto_config_detection(self, tmp_path: Path) -> None:
         """Test automatic config file detection."""
-        # Create test file
+
         txt_file = tmp_path / "test.txt"
         txt_file.write_text("Content for auto config test.")
 
-        # Create pyproject.toml in the same directory
         config_file = tmp_path / "pyproject.toml"
         config_file.write_text("""
 [tool.kreuzberg]
 max_chars = 1500
 """)
 
-        # Run from the directory with pyproject.toml
         result = subprocess.run(
             [sys.executable, "-m", "kreuzberg", "extract", str(txt_file), "--verbose"],
             check=False,
@@ -384,7 +368,7 @@ max_chars = 1500
 
     def test_cli_with_real_pdf(self, tmp_path: Path) -> None:
         """Test CLI with a real PDF file if available."""
-        # Check if we have a PDF test file
+
         pdf_files = list(Path("tests/test_source_files").glob("*.pdf"))
         if not pdf_files:
             pytest.skip("No PDF test files available")
@@ -401,20 +385,18 @@ max_chars = 1500
             cwd=Path.cwd(),
         )
 
-        # If the process was terminated by signal, skip the test
         if result.returncode < 0:
             pytest.skip(f"PDF extraction terminated by signal {-result.returncode}")
 
         assert result.returncode == 0
         assert output_file.exists()
 
-        # Check that we got some content
         content = output_file.read_text()
         assert len(content.strip()) > 0
 
     def test_cli_extract_tables_option(self, tmp_path: Path) -> None:
         """Test CLI with extract tables option."""
-        # Create simple HTML with table
+
         html_file = tmp_path / "table_test.html"
         html_file.write_text("""
         <html>
@@ -429,7 +411,6 @@ max_chars = 1500
         </html>
         """)
 
-        # Run with table extraction (note: might not extract tables from HTML)
         result = subprocess.run(
             [
                 sys.executable,
@@ -455,11 +436,10 @@ max_chars = 1500
 
     def test_cli_configuration_precedence(self, tmp_path: Path) -> None:
         """Test that CLI args override config file settings."""
-        # Create test file
+
         txt_file = tmp_path / "test.txt"
         txt_file.write_text("Test content for precedence check.")
 
-        # Create config file with chunk_content = false
         config_file = tmp_path / "test_config.toml"
         config_file.write_text("""
 [tool.kreuzberg]
@@ -467,7 +447,6 @@ chunk_content = false
 max_chars = 1000
 """)
 
-        # Run CLI with --chunk-content flag (should override config)
         result = subprocess.run(
             [
                 sys.executable,
@@ -489,7 +468,6 @@ max_chars = 1000
 
         assert result.returncode == 0
 
-        # Verify the content was processed (even though we can't easily verify chunking)
         output_data = json.loads(result.stdout)
         assert "precedence check" in output_data["content"]
 
@@ -498,7 +476,6 @@ max_chars = 1000
         txt_file = tmp_path / "test.txt"
         txt_file.write_text("Test content")
 
-        # Create invalid TOML file
         bad_config = tmp_path / "bad_config.toml"
         bad_config.write_text("invalid toml content [[[")
 
@@ -526,7 +503,7 @@ max_chars = 1000
             cwd=Path.cwd(),
         )
 
-        assert result.returncode == 2  # Click parameter validation error
+        assert result.returncode == 2
         assert "does not exist" in result.stderr
 
     def test_cli_ocr_backend_none(self, tmp_path: Path) -> None:
