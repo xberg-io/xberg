@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import anyio
 import pandas as pd
 import pytest
 from PIL import Image
@@ -13,6 +13,9 @@ from kreuzberg import ExtractionConfig, GMFTConfig
 from kreuzberg._gmft import extract_tables
 from kreuzberg.exceptions import MissingDependencyError
 from kreuzberg.extraction import extract_file
+
+if TYPE_CHECKING:
+    import anyio
 
 
 @pytest.fixture
@@ -296,6 +299,8 @@ def test_extract_tables_sync_os_error(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_extract_tables_cache_processing_coordination(tiny_pdf_with_tables: Path) -> None:
     """Test cache processing coordination - covers lines 160-168."""
+    import anyio
+
     from kreuzberg._gmft import extract_tables
     from kreuzberg._utils._cache import get_table_cache
 
@@ -319,11 +324,8 @@ async def test_extract_tables_cache_processing_coordination(tiny_pdf_with_tables
         config=config_str,
     )
 
-    import threading
-    import time
-
-    def complete_processing() -> None:
-        time.sleep(0.1)
+    async def complete_processing(event: anyio.Event) -> None:
+        await anyio.sleep(0.1)
         cache.mark_complete(
             file_info=file_info,
             extractor="gmft",
@@ -336,18 +338,20 @@ async def test_extract_tables_cache_processing_coordination(tiny_pdf_with_tables
             extractor="gmft",
             config=config_str,
         )
+        event.set()
 
-    thread = threading.Thread(target=complete_processing)
-    thread.start()
+    async with anyio.create_task_group() as nursery:
+        completion_event = anyio.Event()
+        nursery.start_soon(complete_processing, completion_event)
 
-    # Since we're using isolated process, we need to wait for the cache to be set
-    # The thread will set an empty list in the cache after 0.1 seconds
-    await anyio.sleep(0.2)
+        # Since we're using isolated process, we need to wait for the cache to be set
+        # The thread will set an empty list in the cache after 0.1 seconds
+        await anyio.sleep(0.2)
 
-    result = await extract_tables(tiny_pdf_with_tables)
-    assert result == []
+        result = await extract_tables(tiny_pdf_with_tables)
+        assert result == []
 
-    thread.join()
+        await completion_event.wait()
 
 
 @pytest.mark.anyio
