@@ -58,6 +58,8 @@ optional-dependencies.all = [
   "easyocr>=1.7.2",
   # gmft
   "gmft>=0.4.2",
+  # api
+  "litestar[standard,structlog,opentelemetry]>=2.1.6",
   # paddle
   "paddleocr>=3.1.0",
   "paddlepaddle>=3.1.0",
@@ -67,7 +69,7 @@ optional-dependencies.all = [
   "setuptools>=80.9.0",
   "tomli>=2.0.0; python_version<'3.11'",
 ]
-optional-dependencies.api = [ "litestar[standard,structlog,opentelemetry]", "structlog" ]
+optional-dependencies.api = [ "litestar[standard,structlog,opentelemetry]>=2.1.6" ]
 
 optional-dependencies.chunking = [ "semantic-text-splitter>=0.27.0" ]
 optional-dependencies.cli = [

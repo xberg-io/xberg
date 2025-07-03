@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - main
+      - feat/docker-image-64  # Temporary for testing
     tags:
       - 'v*.*.*'
 
@@ -22,6 +23,9 @@ jobs:
           - name: core
             extras: ""
             tag_suffix: "" # The base image tag
+          - name: api
+            extras: ""  # API is included by default in Docker
+            tag_suffix: "-api"
           - name: tesseract
             extras: "tesseract"
             tag_suffix: "-tesseract"
@@ -52,14 +56,14 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: goldziher/kreuzberg
+          images: naamanhirschfeld/kreuzberg
           tags: |
             type=schedule
             type=ref,event=branch,suffix=${{ matrix.tag_suffix }}
             type=semver,pattern={{version}},suffix=${{ matrix.tag_suffix }}
             type=semver,pattern={{major}}.{{minor}},suffix=${{ matrix.tag_suffix }}
-            # Add a 'latest' tag only for the 'tesseract' build on the main branch
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.name == 'tesseract' }}
+            # Add a 'latest' tag only for the 'api' build on the main branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.name == 'api' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5

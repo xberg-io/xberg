@@ -6,6 +6,7 @@
 *.py[cod]
 *.suo
 *.user
+*temp/
 .coverage
 .coverage*
 .cursorrules
@@ -17,6 +18,7 @@
 .mypy_cache/
 .pytest_cache/
 .python-version
+.ropeproject
 .ruff_cache/
 .run/
 .venv/
@@ -27,9 +29,6 @@ benchmark_results.json
 CLAUDE.md
 coverage.xml
 docker-compose.yaml
-Dockerfile
 GEMINI.md
 prompt_template.egg-info/
 requirements.txt
-*temp/
-grantflow-tmp/
