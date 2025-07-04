@@ -1,0 +1,35 @@
+{
+  "single_file_cold": {
+    "duration": 35.42044496536255,
+    "content_length": 85130,
+    "success": true
+  },
+  "single_file_cached": {
+    "duration": 4.00543212890625e-5,
+    "speedup": 884310.2023809524,
+    "cache_hit": true
+  },
+  "same_file_batch": {
+    "duration": 7.886343002319336,
+    "avg_per_file": 0.7886343002319336,
+    "success_rate": 100.0,
+    "throughput": 1.268014845037687
+  },
+  "mixed_files_batch": {
+    "duration": 7.919103145599365,
+    "avg_per_file": 2.6397010485331216,
+    "success_rate": 100.0,
+    "throughput": 0.37883077727900233
+  },
+  "ocr_workload": {
+    "duration": 7.842300891876221,
+    "avg_per_file": 2.6141002972920737,
+    "success_rate": 100.0,
+    "throughput": 0.3825407927292967
+  },
+  "cache_stats": {
+    "cached_documents": 1,
+    "processing_documents": 0,
+    "total_cache_size_mb": 0.08193302154541016
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "cold_duration": 18.320523023605347,
+  "warm_duration": 8.416175842285156e-5,
+  "partial_duration": 2.7467100620269775,
+  "total_speedup": 217682.27478753543,
+  "content_match": true,
+  "tables_match": true,
+  "total_cache_size_mb": 0.18355941772460938,
+  "total_cached_items": 38,
+  "cache_stats": {
+    "OCR": {
+      "cache_type": "ocr",
+      "cached_results": 36,
+      "processing_results": 0,
+      "total_cache_size_mb": 0.1687326431274414,
+      "avg_result_size_kb": 4.799506293402778,
+      "cache_dir": "/Users/naamanhirschfeld/workspace/kreuzberg/.kreuzberg/ocr",
+      "max_cache_size_mb": 500.0,
+      "max_age_days": 30
+    },
+    "Documents": {
+      "cache_type": "documents",
+      "cached_results": 0,
+      "processing_results": 0,
+      "total_cache_size_mb": 0.0,
+      "avg_result_size_kb": 0,
+      "cache_dir": "/Users/naamanhirschfeld/workspace/kreuzberg/.kreuzberg/documents",
+      "max_cache_size_mb": 1000.0,
+      "max_age_days": 7
+    },
+    "Tables": {
+      "cache_type": "tables",
+      "cached_results": 1,
+      "processing_results": 0,
+      "total_cache_size_mb": 0.014754295349121094,
+      "avg_result_size_kb": 15.1083984375,
+      "cache_dir": "/Users/naamanhirschfeld/workspace/kreuzberg/.kreuzberg/tables",
+      "max_cache_size_mb": 200.0,
+      "max_age_days": 30
+    },
+    "MIME": {
+      "cache_type": "mime",
+      "cached_results": 1,
+      "processing_results": 0,
+      "total_cache_size_mb": 7.2479248046875e-5,
+      "avg_result_size_kb": 0.07421875,
+      "cache_dir": "/Users/naamanhirschfeld/workspace/kreuzberg/.kreuzberg/mime",
+      "max_cache_size_mb": 50.0,
+      "max_age_days": 60
+    }
+  },
+  "cold_success": true,
+  "warm_success": true,
+  "partial_success": true
+}

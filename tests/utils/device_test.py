@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import sys
+from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock, patch
 
 import pytest
+
+if TYPE_CHECKING:
+    from pytest_mock import MockerFixture
 
 from kreuzberg._utils._device import (
     DeviceInfo,
@@ -60,9 +65,9 @@ def test_detect_devices_with_cuda(mock_get_cuda: Mock, mock_mps: Mock, mock_cuda
     ]
 
     devices = detect_available_devices()
-    assert len(devices) == 2  # GPU + CPU
-    assert devices[0].device_type == "cuda"  # GPU first
-    assert devices[1].device_type == "cpu"  # CPU second
+    assert len(devices) == 2
+    assert devices[0].device_type == "cuda"
+    assert devices[1].device_type == "cpu"
 
 
 @patch("kreuzberg._utils._device._is_cuda_available", return_value=False)
@@ -72,9 +77,9 @@ def test_detect_devices_with_mps(mock_get_mps: Mock, mock_mps: Mock, mock_cuda: 
     mock_get_mps.return_value = DeviceInfo(device_type="mps", name="Apple Silicon GPU (MPS)")
 
     devices = detect_available_devices()
-    assert len(devices) == 2  # GPU + CPU
-    assert devices[0].device_type == "mps"  # GPU first
-    assert devices[1].device_type == "cpu"  # CPU second
+    assert len(devices) == 2
+    assert devices[0].device_type == "mps"
+    assert devices[1].device_type == "cpu"
 
 
 @patch("kreuzberg._utils._device.detect_available_devices")
@@ -139,7 +144,7 @@ def test_validate_device_unavailable_no_fallback(mock_detect: Mock) -> None:
 @patch("kreuzberg._utils._device.get_device_memory_info")
 def test_validate_device_memory_limit_exceeded(mock_memory: Mock, mock_detect: Mock) -> None:
     mock_detect.return_value = [DeviceInfo(device_type="cuda", device_id=0, name="NVIDIA RTX 3080", memory_total=8.0)]
-    mock_memory.return_value = (8.0, 6.0)  # total, available
+    mock_memory.return_value = (8.0, 6.0)
 
     with pytest.raises(ValidationError, match="Requested memory limit.*exceeds device capacity"):
         validate_device_request("cuda", "EasyOCR", memory_limit=10.0)
@@ -149,7 +154,7 @@ def test_validate_device_memory_limit_exceeded(mock_memory: Mock, mock_detect: M
 @patch("kreuzberg._utils._device.get_device_memory_info")
 def test_validate_device_memory_limit_warns_low_available(mock_memory: Mock, mock_detect: Mock) -> None:
     mock_detect.return_value = [DeviceInfo(device_type="cuda", device_id=0, name="NVIDIA RTX 3080", memory_total=8.0)]
-    mock_memory.return_value = (8.0, 2.0)  # total, available
+    mock_memory.return_value = (8.0, 2.0)
 
     with pytest.warns(UserWarning, match="Requested memory limit.*exceeds available memory"):
         device = validate_device_request("cuda", "EasyOCR", memory_limit=4.0)
@@ -170,17 +175,22 @@ def test_is_cuda_available_false() -> None:
         assert _is_cuda_available() is False
 
 
-def test_is_cuda_available_no_torch() -> None:
-    # Test the actual implementation when torch is not available
-    try:
-        import torch  # noqa: F401
+def test_is_cuda_available_no_torch(mocker: MockerFixture) -> None:
+    original_import = __builtins__["__import__"]  # type: ignore[index]
 
-        # If torch is available, skip this test
-        pytest.skip("PyTorch is available, cannot test ImportError case")
-    except ImportError:
-        from kreuzberg._utils._device import _is_cuda_available
+    def mock_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "torch":
+            raise ImportError("No module named 'torch'")
+        return original_import(name, *args, **kwargs)
 
-        assert _is_cuda_available() is False
+    mocker.patch("builtins.__import__", side_effect=mock_import)
+
+    if "torch" in sys.modules:
+        mocker.patch.dict("sys.modules", {"torch": None})
+
+    from kreuzberg._utils._device import _is_cuda_available
+
+    assert _is_cuda_available() is False
 
 
 def test_get_cuda_devices() -> None:
@@ -216,17 +226,22 @@ def test_is_mps_available_false() -> None:
         assert _is_mps_available() is False
 
 
-def test_is_mps_available_no_torch() -> None:
-    # Test the actual implementation when torch is not available
-    try:
-        import torch  # noqa: F401
+def test_is_mps_available_no_torch(mocker: MockerFixture) -> None:
+    original_import = __builtins__["__import__"]  # type: ignore[index]
 
-        # If torch is available, skip this test
-        pytest.skip("PyTorch is available, cannot test ImportError case")
-    except ImportError:
-        from kreuzberg._utils._device import _is_mps_available
+    def mock_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "torch":
+            raise ImportError("No module named 'torch'")
+        return original_import(name, *args, **kwargs)
 
-        assert _is_mps_available() is False
+    mocker.patch("builtins.__import__", side_effect=mock_import)
+
+    if "torch" in sys.modules:
+        mocker.patch.dict("sys.modules", {"torch": None})
+
+    from kreuzberg._utils._device import _is_mps_available
+
+    assert _is_mps_available() is False
 
 
 def test_get_mps_device() -> None:
@@ -301,34 +316,34 @@ def test_get_recommended_batch_size_gpu_unknown_memory(mock_memory: Mock) -> Non
 
 @patch("kreuzberg._utils._device.get_device_memory_info")
 def test_get_recommended_batch_size_gpu_with_memory(mock_memory: Mock) -> None:
-    mock_memory.return_value = (8.0, 6.0)  # 6GB available
+    mock_memory.return_value = (8.0, 6.0)
     device = DeviceInfo(device_type="cuda", device_id=0, name="NVIDIA RTX 3080")
 
     batch_size = get_recommended_batch_size(device, input_size_mb=100.0)
-    # 6GB * 0.5 * 1024MB = 3072MB usable, 3072 / (100 * 4) = ~7, capped at 32
+
     assert batch_size >= 1
     assert batch_size <= 32
 
 
 def test_cleanup_device_memory_cuda() -> None:
     device = DeviceInfo(device_type="cuda", device_id=0, name="NVIDIA RTX 3080")
-    # Test that it doesn't raise exceptions - actual torch integration would be tested separately
+
     cleanup_device_memory(device)
 
 
 def test_cleanup_device_memory_mps() -> None:
     device = DeviceInfo(device_type="mps", name="Apple Silicon GPU")
-    # Test that it doesn't raise exceptions - actual torch integration would be tested separately
+
     cleanup_device_memory(device)
 
 
 def test_cleanup_device_memory_cpu() -> None:
     device = DeviceInfo(device_type="cpu", name="CPU")
-    # Should not raise any exceptions
+
     cleanup_device_memory(device)
 
 
 def test_cleanup_device_memory_no_torch() -> None:
     device = DeviceInfo(device_type="cuda", device_id=0, name="NVIDIA RTX 3080")
-    # Should not raise any exceptions even if torch is not available
+
     cleanup_device_memory(device)

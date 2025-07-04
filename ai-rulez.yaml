@@ -1,0 +1,219 @@
+metadata:
+  name: "Kreuzberg"
+  version: "3.4.0"
+  description: "A text extraction library supporting PDFs, images, office documents and more"
+
+outputs:
+  - file: "CLAUDE.md"
+    template: |
+      # CLAUDE.md
+
+      This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+      ## Project Overview
+
+      {{ .Description }}
+
+      {{ range .Rules }}
+      ## {{ .Name }}
+      {{ .Content }}
+      {{ end }}
+
+      {{ range .Sections }}
+      ## {{ .Title }}
+      {{ .Content }}
+      {{ end }}
+  - file: "GEMINI.md"
+    template: |
+      # GEMINI.md
+
+      This file provides guidance to Gemini when working with code in this repository.
+
+      ## Project Overview
+
+      {{ .Description }}
+
+      {{ range .Rules }}
+      ## {{ .Name }}
+      {{ .Content }}
+      {{ end }}
+
+      {{ range .Sections }}
+      ## {{ .Title }}
+      {{ .Content }}
+      {{ end }}
+  - file: ".cursorrules"
+    template: |
+      # Kreuzberg
+      A text extraction library supporting PDFs, images, office documents and more
+
+      {{ range .Rules }}
+      ## {{ .Name }}
+      {{ .Content }}
+      {{ end }}
+
+      {{ range .Sections }}
+      ## {{ .Title }}
+      {{ .Content }}
+      {{ end }}
+  - file: ".windsurfrules"
+    template: |
+      # Kreuzberg
+      A text extraction library supporting PDFs, images, office documents and more
+
+      {{ range .Rules }}
+      ## {{ .Name }}
+      {{ .Content }}
+      {{ end }}
+
+      {{ range .Sections }}
+      ## {{ .Title }}
+      {{ .Content }}
+      {{ end }}
+
+rules:
+  - name: "Development Commands"
+    priority: 10
+    content: |
+      ### Dependencies
+      - Install dependencies: `uv sync`
+      - Install with all optional dependencies: `uv sync --all-extras`
+
+      ### Testing
+      - Run all tests: `pytest`
+      - Run specific test file: `pytest tests/extraction_test.py`
+      - Run with coverage: `pytest --cov`
+      - Coverage must be at least 95%
+
+      ### Code Quality
+      - Format code: `ruff format`
+      - Lint code: `ruff check`
+      - Fix linting issues: `ruff check --fix`
+      - Type check: `mypy`
+
+      ### Pre-commit
+      - Install hooks: `pre-commit install && pre-commit install --hook-type commit-msg`
+      - Run manually: `pre-commit run --all-files`
+
+      ### Documentation
+      - Build docs: `uv run mkdocs build --clean --strict`
+      - Serve docs locally: `uv run mkdocs serve`
+      - Install doc dependencies: `uv sync --group doc`
+
+  - name: "Architecture"
+    priority: 9
+    content: |
+      ### Core Extraction Flow
+      1. **Entry Point**: `extraction.py` provides main functions (`extract_file`, `extract_bytes`, etc.)
+      2. **Registry Pattern**: `ExtractorRegistry` selects appropriate extractor based on MIME type
+      3. **Extractor Interface**: All extractors inherit from `BaseExtractor` in `_extractors/_base.py`
+      4. **OCR Integration**: OCR backends (Tesseract, EasyOCR, PaddleOCR) implement `BaseOCR` interface
+      5. **Configuration**: `ExtractionConfig` dataclass controls all extraction behavior
+
+      ### Key Components
+      - **Extractors**: Specialized classes for each file type (PDF, image, HTML, etc.)
+      - **OCR Backends**: Pluggable OCR engines with separate configuration classes
+      - **GMFT Integration**: Table extraction using GMFT library for PDFs
+      - **Chunking**: Text splitting functionality in `_chunker.py`
+      - **Async/Sync**: Primary async implementation with sync wrappers in `_utils/_sync.py`
+      - **API Server**: REST API using Litestar framework in `_api/main.py`
+      - **CLI**: Command-line interface for batch processing and automation
+
+      ### Adding New Features
+      - New extractors: Inherit from `BaseExtractor` and register with `ExtractorRegistry`
+      - New OCR backends: Implement `BaseOCR` interface
+      - Configuration options: Extend `ExtractionConfig` or create backend-specific configs
+      - Hooks: Use `pre_validate_hook` and `post_extraction_hook` for custom processing
+
+  - name: "Error Handling"
+    priority: 8
+    content: |
+      - **Exception-based**: All errors are raised as exceptions, no tuple returns
+      - **Base class**: All exceptions inherit from `KreuzbergError`
+      - **Context**: Exceptions include a `context` parameter with debugging information
+      - **Common exceptions**:
+        - `ValidationError`: Configuration or input validation failures
+        - `ParsingError`: Document parsing failures
+        - `OCRError`: OCR processing failures
+        - `MissingDependencyError`: Missing optional dependencies
+
+  - name: "Testing Patterns"
+    priority: 7
+    content: |
+      - Test files in `tests/test_source_files/` for various formats
+      - Mock OCR responses for predictable testing
+      - Both sync and async test variants
+      - Comprehensive error case coverage
+
+  - name: "Important Instructions"
+    priority: 10
+    content: |
+      - Do what has been asked; nothing more, nothing less
+      - NEVER create files unless they're absolutely necessary for achieving your goal
+      - ALWAYS prefer editing an existing file to creating a new one
+      - NEVER proactively create documentation files (*.md) or README files
+      - Only create documentation files if explicitly requested by the User
+      - All builtin imports should be at the top level (except for cyclical or optional dependencies)
+      - When committing, always use the format specified in the CLAUDE.md
+
+  - name: "CI/CD and Deployment"
+    priority: 6
+    content: |
+      ### GitHub Actions Workflows
+      - **Release**: Automated PyPI publishing via GitHub releases
+      - **Docker**: Multi-platform Docker builds (linux/amd64, linux/arm64)
+      - **Documentation**: Auto-deploy to GitHub Pages on docs changes
+
+      ### Docker Variants
+      - **Core** (`goldziher/kreuzberg:v3.4.0`): API + Tesseract OCR
+      - **EasyOCR** (`goldziher/kreuzberg:v3.4.0-easyocr`): Core + EasyOCR
+      - **PaddleOCR** (`goldziher/kreuzberg:v3.4.0-paddle`): Core + PaddleOCR
+      - **GMFT** (`goldziher/kreuzberg:v3.4.0-gmft`): Core + table extraction
+      - **All** (`goldziher/kreuzberg:v3.4.0-all`): All features included
+
+      ### Manual Triggers
+      - Docker builds: `gh workflow run "Publish Docker Images"`
+      - Documentation: Auto-deploys on docs/ changes
+
+      ### Common Issues
+      - **Docker version detection**: Use `git tag --sort=-version:refname | head -n1` not `git describe`
+      - **Docs dependencies**: Use `uv sync --group doc` for proper mkdocs-material[imaging] support
+      - **Docker Hub README**: May fail due to permissions, use `continue-on-error: true`
+
+  - name: "Package Management"
+    priority: 6
+    content: |
+      ### Optional Dependencies Structure
+      ```toml
+      [project.optional-dependencies]
+      api = ["litestar[standard,structlog,opentelemetry]>=2.1.6"]
+      cli = ["click>=8.2.1", "rich>=14.0.0", "tomli>=2.0.0; python_version<'3.11'"]
+      chunking = ["semantic-text-splitter>=0.27.0"]
+      easyocr = ["easyocr>=1.7.2"]
+      gmft = ["gmft>=0.4.2"]
+      paddleocr = ["paddleocr>=3.1.0", "paddlepaddle>=3.1.0", "setuptools>=80.9.0"]
+      all = ["kreuzberg[api,chunking,cli,easyocr,gmft,paddleocr]"]
+      ```
+
+      ### Installation Patterns
+      - Basic: `pip install kreuzberg`
+      - With features: `pip install "kreuzberg[api,cli]"`
+      - All features: `pip install "kreuzberg[all]"`
+      - Development: `uv sync --all-extras`
+
+      ### Dependencies
+      - **Core**: pypdfium2, playa-pdf, python-pptx, etc.
+      - **System**: tesseract-ocr, pandoc (via package manager)
+      - **Development**: Uses dependency groups in pyproject.toml
+
+sections:
+  - title: "Planned Features"
+    content: |
+      ### Structured Extraction (Issue #55)
+      - **Goal**: Enable extraction of structured data from documents using vision models
+      - **Implementation**:
+        - Extend `ExtractionConfig` with structured extraction fields
+        - Support `msgspec.Struct` and Pydantic `BaseModel` as output types
+        - Use LiteLLM for vision model integration
+        - Implement retry logic with error feedback
+      - **Configuration**: Currently programmatic only (no `kreuzberg.toml`)

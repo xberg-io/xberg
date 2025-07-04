@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -31,9 +31,6 @@ from tests.conftest import pdfs_with_tables
 
 if TYPE_CHECKING:
     from kreuzberg._types import ExtractionResult
-
-if sys.version_info < (3, 11):  # pragma: no cover
-    from exceptiongroup import ExceptionGroup  # type: ignore[import-not-found]
 
 
 @pytest.mark.anyio
@@ -261,7 +258,7 @@ async def test_batch_extract_file_mixed(test_article: Path) -> None:
 
     results = await batch_extract_file(test_files)
     assert len(results) == len(test_files)
-    for path, result in zip(test_files, results):
+    for path, result in zip(test_files, results, strict=False):
         if path.suffix in [".docx", ".xlsx"]:
             assert_extraction_result(result, mime_type=MARKDOWN_MIME_TYPE)
         else:
@@ -289,12 +286,17 @@ async def test_batch_extract_file_invalid(tmp_path: Path) -> None:
     invalid_file = tmp_path / "invalid-file.xyz"
     invalid_file.write_text("Invalid file content")
 
-    with pytest.raises(ExceptionGroup) as exc_info:
-        await batch_extract_file([invalid_file])
-    assert isinstance(exc_info.value.exceptions[0], ValidationError)
+    results = await batch_extract_file([invalid_file])
+    assert len(results) == 1
+    result = results[0]
+
+    assert result.metadata.get("error") is True
+    error_context = cast("dict[str, object]", result.metadata.get("error_context", {}))
+    error_info = cast("dict[str, object]", error_context.get("error", {}))
+    assert "ValidationError" in str(error_info.get("type", ""))
     assert "Unsupported mime type" in str(
-        exc_info.value.exceptions[0]
-    ) or "Could not determine the mime type of the file" in str(exc_info.value.exceptions[0])
+        error_info.get("message", "")
+    ) or "Could not determine the mime type of the file" in str(error_info.get("message", ""))
 
 
 @pytest.mark.anyio
@@ -326,10 +328,15 @@ async def test_batch_extract_bytes_empty() -> None:
 
 @pytest.mark.anyio
 async def test_batch_extract_bytes_invalid() -> None:
-    with pytest.raises(ExceptionGroup) as exc_info:
-        await batch_extract_bytes([(b"content", "application/invalid")])
-    assert isinstance(exc_info.value.exceptions[0], ValidationError)
-    assert "Unsupported mime type" in str(exc_info.value.exceptions[0])
+    results = await batch_extract_bytes([(b"content", "application/invalid")])
+    assert len(results) == 1
+    result = results[0]
+
+    assert result.metadata.get("error") is True
+    error_context = cast("dict[str, object]", result.metadata.get("error_context", {}))
+    error_info = cast("dict[str, object]", error_context.get("error", {}))
+    assert "ValidationError" in str(error_info.get("type", ""))
+    assert "Unsupported mime type" in str(error_info.get("message", ""))
 
 
 def test_batch_extract_file_sync_mixed(test_article: Path) -> None:
@@ -339,7 +346,7 @@ def test_batch_extract_file_sync_mixed(test_article: Path) -> None:
 
     results = batch_extract_file_sync(test_files)
     assert len(results) == len(test_files)
-    for path, result in zip(test_files, results):
+    for path, result in zip(test_files, results, strict=False):
         if path.suffix in [".docx", ".xlsx"]:
             assert_extraction_result(result, mime_type=MARKDOWN_MIME_TYPE)
         else:

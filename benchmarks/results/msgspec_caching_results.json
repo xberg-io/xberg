@@ -1,0 +1,10 @@
+{
+  "cold_duration": 41.608339071273804,
+  "warm_duration": 3.695487976074219e-5,
+  "speedup": 1125922.729032258,
+  "avg_warm_duration": 2.70843505859375e-5,
+  "cache_files": 38,
+  "cache_size_kb": 187.806640625,
+  "cold_success": true,
+  "warm_success": true
+}

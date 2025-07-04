@@ -1,0 +1,17 @@
+{
+  "cold_ocr_duration": 9.110050201416016,
+  "cached_ocr_duration": 3.409385681152344e-5,
+  "ocr_speedup": 267205.034965035,
+  "content_matches": true,
+  "batch_duration": 0.0003261566162109375,
+  "ocr_cache_stats": {
+    "cache_type": "ocr",
+    "cached_results": 0,
+    "processing_results": 0,
+    "total_cache_size_mb": 0.0,
+    "avg_result_size_kb": 0,
+    "cache_dir": "/Users/naamanhirschfeld/workspace/kreuzberg/.kreuzberg/ocr",
+    "max_cache_size_mb": 500.0,
+    "max_age_days": 30
+  }
+}

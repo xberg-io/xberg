@@ -1,0 +1,12 @@
+{
+  "baseline_duration": 17.738351106643677,
+  "cached_duration": 4.887580871582031e-5,
+  "total_speedup": 362927.00975609757,
+  "avg_cached_time": 3.3688545227050784e-5,
+  "cache_size_mb": 0.1780242919921875,
+  "cache_items": 38,
+  "reliability_rate": 1.0,
+  "content_accuracy": true,
+  "baseline_success": true,
+  "cached_success": true
+}

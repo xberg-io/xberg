@@ -1,0 +1,17 @@
+{
+  "cold_extraction_duration": 6.435822248458862,
+  "cached_extraction_duration": 0.0009200572967529297,
+  "table_speedup": 6995.023322104172,
+  "tables_match": true,
+  "sync_duration": 0.0004849433898925781,
+  "table_cache_stats": {
+    "cache_type": "tables",
+    "cached_results": 2,
+    "processing_results": 0,
+    "total_cache_size_mb": 0.03076648712158203,
+    "avg_result_size_kb": 15.75244140625,
+    "cache_dir": "/Users/naamanhirschfeld/workspace/kreuzberg/.kreuzberg/tables",
+    "max_cache_size_mb": 200.0,
+    "max_age_days": 30
+  }
+}

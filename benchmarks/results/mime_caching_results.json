@@ -1,0 +1,18 @@
+{
+  "cold_total_duration": 0.0010747909545898438,
+  "cached_total_duration": 0.0002779960632324219,
+  "total_speedup": 3.8662092624356776,
+  "consistency_rate": 100.0,
+  "cache_hit_rate": 100.0,
+  "avg_speedup": 3.875880281690141,
+  "mime_cache_stats": {
+    "cache_type": "mime",
+    "cached_results": 5,
+    "processing_results": 0,
+    "total_cache_size_mb": 0.0003509521484375,
+    "avg_result_size_kb": 0.071875,
+    "cache_dir": "/Users/naamanhirschfeld/workspace/kreuzberg/.kreuzberg/mime",
+    "max_cache_size_mb": 50.0,
+    "max_age_days": 60
+  }
+}

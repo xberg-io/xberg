@@ -4,6 +4,7 @@ This section covers advanced features and usage patterns for Kreuzberg.
 
 ## Topics
 
+- [Performance Guide](performance.md) - Sync vs async performance analysis and optimization
 - [Error Handling](error-handling.md) - Detailed strategies for handling extraction errors
 - [Custom Hooks](custom-hooks.md) - Creating custom validation and post-processing hooks
 - [Custom Extractors](custom-extractors.md) - Adding and removing custom extractors
