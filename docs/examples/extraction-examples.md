@@ -79,6 +79,47 @@ async def extract_with_different_backends():
     print(f"No OCR result: {result.content[:100]}...")
 ```
 
+## Language Detection
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, LanguageDetectionConfig
+
+async def detect_document_language():
+    # Simple automatic language detection
+    result = await extract_file("document.pdf", config=ExtractionConfig(auto_detect_language=True))
+
+    # Access detected languages
+    if result.detected_languages:
+        print(f"Detected languages: {', '.join(result.detected_languages)}")
+        # Example output: "Detected languages: en, de, fr"
+
+async def detect_multilingual_document():
+    # Advanced multilingual detection with custom configuration
+    lang_config = LanguageDetectionConfig(
+        multilingual=True,  # Detect multiple languages in mixed text
+        top_k=5,  # Return top 5 languages
+        low_memory=False,  # Use high accuracy mode
+    )
+
+    result = await extract_file(
+        "multilingual_document.pdf", config=ExtractionConfig(auto_detect_language=True, language_detection_config=lang_config)
+    )
+
+    if result.detected_languages:
+        print(f"Detected languages: {result.detected_languages}")
+
+        # Use detected languages for OCR
+        from kreuzberg import TesseractConfig
+
+        # Create language string for Tesseract (e.g., "eng+deu+fra")
+        tesseract_langs = "+".join(result.detected_languages[:3])
+
+        result_with_ocr = await extract_file(
+            "multilingual_document.pdf",
+            config=ExtractionConfig(force_ocr=True, ocr_config=TesseractConfig(language=tesseract_langs)),
+        )
+```
+
 ## Table Extraction
 
 ```python

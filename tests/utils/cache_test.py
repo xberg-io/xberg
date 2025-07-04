@@ -254,7 +254,6 @@ def test_cleanup_cache_size_limit(cache: KreuzbergCache[str]) -> None:
     for i in range(20):
         cache.set(f"value_{i}" * 1000, key=f"test_{i}")
 
-    # Get initial count
     initial_files = list(cache.cache_dir.glob("*.msgpack"))
     initial_count = len(initial_files)
 
@@ -263,8 +262,6 @@ def test_cleanup_cache_size_limit(cache: KreuzbergCache[str]) -> None:
     remaining_files = list(cache.cache_dir.glob("*.msgpack"))
     remaining_count = len(remaining_files)
 
-    # Cleanup should either remove some files or respect size limits
-    # Allow for the case where cleanup doesn't trigger if within limits
     assert remaining_count <= initial_count
     assert remaining_count <= 20
 

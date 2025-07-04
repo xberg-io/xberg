@@ -234,8 +234,6 @@ def test_extract_path_sync_non_tesseract_backend() -> None:
 
     image_path = Path("test.png")
 
-    # This should now work but will fail because test.png doesn't exist
-    # So we expect an OCRError related to file not found
     with pytest.raises(OCRError) as excinfo:
         extractor.extract_path_sync(image_path)
 
@@ -249,8 +247,6 @@ def test_extract_path_sync_paddleocr_backend() -> None:
 
     image_path = Path("test.png")
 
-    # This should now work but will fail because test.png doesn't exist
-    # So we expect an OCRError related to file not found
     with pytest.raises(OCRError) as excinfo:
         extractor.extract_path_sync(image_path)
 

@@ -136,7 +136,6 @@ def test_create_error_context_with_path_string() -> None:
         file_path=test_path,
     )
 
-    # Normalize path separators for cross-platform compatibility
     expected_path = os.path.normpath(test_path)
     assert context["file"]["path"] == expected_path
     assert context["file"]["name"] == "file.txt"

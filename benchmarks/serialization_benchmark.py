@@ -101,7 +101,6 @@ def benchmark_serialization() -> dict[str, object]:
     json_serialize = analyze_times(json_serialize_times, "JSON Serialize")
     json_deserialize = analyze_times(json_deserialize_times, "JSON Deserialize")
 
-    # Type casting for arithmetic operations
     json_ser_mean = json_serialize["mean"]
     json_deser_mean = json_deserialize["mean"]
     msgpack_ser_mean = msgpack_serialize["mean"]

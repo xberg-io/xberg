@@ -289,7 +289,6 @@ def test_extract_tables_sync_os_error(tmp_path: Path) -> None:
 
     from kreuzberg._gmft import extract_tables_sync
 
-    # Use a real but non-existent file
     fake_file = tmp_path / "nonexistent.pdf"
 
     with patch.dict("sys.modules", {"gmft": None, "gmft.auto": None}), pytest.raises(MissingDependencyError):
@@ -344,8 +343,6 @@ async def test_extract_tables_cache_processing_coordination(tiny_pdf_with_tables
         completion_event = anyio.Event()
         nursery.start_soon(complete_processing, completion_event)
 
-        # Since we're using isolated process, we need to wait for the cache to be set
-        # The thread will set an empty list in the cache after 0.1 seconds
         await anyio.sleep(0.2)
 
         result = await extract_tables(tiny_pdf_with_tables)

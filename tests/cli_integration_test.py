@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +19,9 @@ except ImportError:
     CLI_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(not CLI_AVAILABLE, reason="CLI dependencies not installed")
+
+# Check if running in CI environment
+IS_CI = os.environ.get("CI", "false").lower() == "true"
 
 
 class TestCliIntegration:
@@ -337,7 +341,7 @@ max_chars = 1500
 
         assert result.returncode == 0
         assert "kreuzberg, version" in result.stdout
-        # Version should contain a number pattern like "3.x.x"
+
         import re
 
         assert re.search(r"\d+\.\d+\.\d+", result.stdout), f"No version pattern found in: {result.stdout}"
@@ -369,6 +373,7 @@ max_chars = 1500
         assert "--chunk-content" in result.stdout
         assert "--extract-tables" in result.stdout
 
+    @pytest.mark.xfail(IS_CI, reason="OCR tests may fail in CI due to Tesseract issues")
     def test_cli_with_real_pdf(self, tmp_path: Path) -> None:
         """Test CLI with a real PDF file if available."""
 

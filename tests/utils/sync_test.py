@@ -14,8 +14,6 @@ from kreuzberg._utils._sync import (
     run_taskgroup_batched,
 )
 
-# Handle exception groups in tests below
-
 
 def sync_function(x: int, y: int = 10) -> int:
     """Test synchronous function."""
@@ -239,19 +237,14 @@ async def test_run_taskgroup_with_exception() -> None:
         await anyio.sleep(0.01)
         raise ValueError("Task failed")
 
-    # anyio raises ExceptionGroup in Python 3.11+, but we'll catch BaseException
-    # to handle both the old behavior and the new ExceptionGroup behavior
     with pytest.raises(BaseException) as exc_info:  # noqa: PT011
         await run_taskgroup(good_task(), bad_task())
 
-    # Check if it's an ExceptionGroup (Python 3.11+) or direct ValueError
     if hasattr(exc_info.value, "exceptions"):
-        # It's an ExceptionGroup
         assert len(exc_info.value.exceptions) == 1
         assert isinstance(exc_info.value.exceptions[0], ValueError)
         assert str(exc_info.value.exceptions[0]) == "Task failed"
     else:
-        # It's a direct ValueError
         assert isinstance(exc_info.value, ValueError)
         assert str(exc_info.value) == "Task failed"
 

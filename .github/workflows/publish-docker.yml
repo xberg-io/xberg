@@ -1,4 +1,3 @@
-# .github/workflows/publish-docker.yml
 
 name: Publish Docker Images
 
@@ -24,7 +23,7 @@ jobs:
         include:
           - name: core
             extras: ""
-            tag_suffix: "" # The base image tag (includes API + tesseract)
+            tag_suffix: ""
           - name: easyocr
             extras: "easyocr"
             tag_suffix: "-easyocr"

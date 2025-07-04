@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-# Module-level functions for process pool tests (must be picklable)
 def _simple_add(x: int, y: int) -> int:
     """Simple addition function for testing."""
     return x + y
@@ -160,7 +159,6 @@ def test_extract_pdf_text_worker_with_mock() -> None:
         mock_page = Mock()
         mock_text_page = Mock()
 
-        # Configure the mock to be iterable
         mock_pdf.__iter__ = Mock(return_value=iter([mock_page]))
         mock_pdf_class.return_value = mock_pdf
         mock_page.get_textpage.return_value = mock_text_page
@@ -207,7 +205,6 @@ def test_extract_pdf_images_worker_with_mock() -> None:
         mock_bitmap = Mock()
         mock_pil_image = Mock(spec=Image.Image)
 
-        # Configure the mock to be iterable
         mock_pdf.__iter__ = Mock(return_value=iter([mock_page]))
         mock_pdf_class.return_value = mock_pdf
         mock_page.render.return_value = mock_bitmap

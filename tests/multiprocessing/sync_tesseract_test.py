@@ -64,10 +64,9 @@ class _MockSubprocessResult:
         self.stderr = stderr
 
 
-# Module-level functions for process pool tests (must be picklable)
 def _mock_process_image_success(path: str, config_dict: dict[str, Any]) -> dict[str, Any]:
     """Mock successful image processing for process pool tests."""
-    # Extract index from path to return appropriate result
+
     for i in range(3):
         if f"test_image_{i}" in path:
             return {
@@ -361,7 +360,7 @@ def test_config_dict_conversion_in_process_pool() -> None:
             config_dict[field_name] = value
 
     assert isinstance(config_dict["psm"], int)
-    # The psm value should be either the enum value (3) or direct int (3)
+
     expected_psm: Any = 3
     expected_psm = config.psm.value if hasattr(config.psm, "value") else config.psm
     assert config_dict["psm"] == expected_psm

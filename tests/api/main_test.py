@@ -54,7 +54,7 @@ async def test_extract_from_multiple_files(
     data = response.json()
     assert len(data) == 2
     assert "Sample PDF" in data[0]["content"]
-    assert data[1]["content"]  # Scanned PDF should have extracted content
+    assert data[1]["content"]
 
 
 @pytest.mark.anyio
@@ -69,7 +69,7 @@ async def test_extract_from_file_extraction_error(test_client: AsyncTestClient[A
 
     assert response.status_code == 500
     error_response = response.json()
-    # Litestar returns standard error format
+
     assert "detail" in error_response
     assert error_response["status_code"] == 500
 
@@ -82,8 +82,6 @@ async def test_extract_from_unsupported_file(test_client: AsyncTestClient[Any], 
     with test_file.open("rb") as f:
         response = await test_client.post("/extract", files=[("data", (test_file.name, f.read()))])
 
-    # The API currently doesn't validate mime types before extraction
-    # It will attempt to extract and may succeed or fail
     assert response.status_code in [201, 400, 422]
     if response.status_code != 201:
         error_response = response.json()
@@ -233,7 +231,6 @@ async def test_extract_mixed_file_types(
 
 @pytest.mark.anyio
 async def test_extract_empty_file_list(test_client: AsyncTestClient[Any]) -> None:
-    # Empty file list causes an internal server error
     response = await test_client.post("/extract", files=[])
     assert response.status_code == 500
 

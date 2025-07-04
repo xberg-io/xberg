@@ -102,6 +102,14 @@ Table extraction is an optional feature that allows Kreuzberg to extract tables 
 pip install "kreuzberg[gmft]"
 ```
 
+### Language Detection
+
+Language detection is an optional feature that automatically detects the language of extracted text. It uses the [fast-langdetect](https://github.com/LlmKira/fast-langdetect) package. To install Kreuzberg with language detection support, you can use:
+
+```shell
+pip install "kreuzberg[langdetect]"
+```
+
 ### All Optional Dependencies
 
 To install Kreuzberg with all optional dependencies, you can use the `all` extra group:
@@ -113,5 +121,5 @@ pip install "kreuzberg[all]"
 This is equivalent to:
 
 ```shell
-pip install "kreuzberg[chunking,easyocr,gmft,paddleocr]"
+pip install "kreuzberg[chunking,easyocr,gmft,langdetect,paddleocr]"
 ```

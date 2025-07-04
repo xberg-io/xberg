@@ -9,6 +9,7 @@ All extraction functions accept an optional `config` parameter of type `Extracti
 - Control OCR behavior with `force_ocr` and `ocr_backend`
 - Provide engine-specific OCR configuration via `ocr_config`
 - Enable table extraction with `extract_tables` and configure it via `gmft_config`
+- Enable automatic language detection with `auto_detect_language`
 - Add validation and post-processing hooks
 - Configure custom extractors
 
@@ -98,6 +99,58 @@ Note that table extraction requires the `gmft` dependency. You can install it wi
 
 ```shell
 pip install "kreuzberg[gmft]"
+```
+
+### Language Detection
+
+Kreuzberg can automatically detect the language of extracted text using fast-langdetect:
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, LanguageDetectionConfig
+
+# Simple automatic language detection
+result = await extract_file("multilingual_document.pdf", config=ExtractionConfig(auto_detect_language=True))
+
+# Access detected languages (lowercase ISO 639-1 codes)
+if result.detected_languages:
+    print(f"Detected languages: {', '.join(result.detected_languages)}")
+    # Example output: "Detected languages: en, de, fr"
+
+# Advanced configuration with multilingual detection
+lang_config = LanguageDetectionConfig(
+    multilingual=True,  # Enable mixed-language detection
+    top_k=5,  # Return top 5 languages
+    low_memory=False,  # Use high accuracy mode
+    cache_dir="/tmp/lang_models",  # Custom model cache directory
+)
+
+result = await extract_file(
+    "multilingual_document.pdf", config=ExtractionConfig(auto_detect_language=True, language_detection_config=lang_config)
+)
+
+# Use detected languages for OCR
+if result.detected_languages:
+    # Re-extract with OCR using the primary detected language
+    from kreuzberg import TesseractConfig
+
+    result_with_ocr = await extract_file(
+        "multilingual_document.pdf",
+        config=ExtractionConfig(force_ocr=True, ocr_config=TesseractConfig(language=result.detected_languages[0])),
+    )
+```
+
+#### Language Detection Configuration Options
+
+- `low_memory` (default: `True`): Use smaller model (~200MB) vs larger, more accurate model
+- `multilingual` (default: `False`): Enable detection of multiple languages in mixed text
+- `top_k` (default: `3`): Maximum number of languages to return
+- `cache_dir`: Custom directory for language model storage
+- `allow_fallback` (default: `True`): Fall back to small model if large model fails
+
+The feature requires the `langdetect` dependency:
+
+```shell
+pip install "kreuzberg[langdetect]"
 ```
 
 ### Batch Processing

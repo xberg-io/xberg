@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation site with comprehensive examples and API reference
 - Improved configuration for all OCR backends
 - Added hooks system for validation and post-processing
+- Language detection feature with `auto_detect_language` configuration option
+- New optional dependency group `langdetect` for automatic language detection
 
 ### Changed
 
