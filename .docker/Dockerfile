@@ -18,4 +18,4 @@ RUN uv sync --extra api${EXTRAS:+ --extra ${EXTRAS}} --no-editable --no-dev --co
 
 RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
 USER appuser
-CMD ["litestar", "--app", "kreuzberg._api.main:app", "run", "--host", "0.0.0.0"]
+CMD ["/app/.venv/bin/litestar", "--app", "kreuzberg._api.main:app", "run", "--host", "0.0.0.0"]
