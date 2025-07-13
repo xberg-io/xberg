@@ -158,7 +158,7 @@ def test_extraction_result_to_dict() -> None:
     # Verify structure
     assert result_dict["content"] == "John Doe in New York"
     assert result_dict["mime_type"] == "text/plain"
-    assert result_dict["metadata"] == {"title": "Test Document", "author": "Test Author"}
+    assert result_dict["metadata"] == {"title": "Test Document", "authors": ["Test Author"]}
     assert result_dict["tables"] == []
     assert result_dict["chunks"] == ["chunk1", "chunk2"]
     assert len(result_dict["entities"]) == 2

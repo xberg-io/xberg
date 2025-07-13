@@ -11,7 +11,7 @@ from typing import Any
 import psutil
 
 
-@dataclass
+@dataclass(slots=True)
 class SystemInfo:
     """System information for benchmark context."""
 
@@ -42,7 +42,7 @@ class SystemInfo:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class PerformanceMetrics:
     """Performance metrics for a single benchmark run."""
 
@@ -55,7 +55,7 @@ class PerformanceMetrics:
     exception_info: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class MetadataQualityMetrics:
     """Metadata quality metrics for extraction result."""
 
@@ -71,7 +71,7 @@ class MetadataQualityMetrics:
     extraction_backend: str | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class ExtractionQualityMetrics:
     """Quality metrics for extraction result."""
 
@@ -86,7 +86,7 @@ class ExtractionQualityMetrics:
     metadata_quality: MetadataQualityMetrics | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class BenchmarkResult:
     """Complete result of a single benchmark."""
 
@@ -98,7 +98,7 @@ class BenchmarkResult:
     extraction_quality: ExtractionQualityMetrics | None = None
 
 
-@dataclass
+@dataclass(slots=True)
 class BenchmarkSuite:
     """Complete benchmark suite results."""
 
@@ -193,7 +193,7 @@ class BenchmarkSuite:
         }
 
 
-@dataclass
+@dataclass(slots=True)
 class FlameGraphConfig:
     """Configuration for flame graph generation."""
 
