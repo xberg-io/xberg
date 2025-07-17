@@ -28,13 +28,18 @@ jobs:
           python-version-file: "pyproject.toml"
 
       - name: Install Dependencies
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "Windows" ]] && [[ -d ".venv" ]]; then
-            echo "Removing existing .venv directory on Windows"
-            rm -rf .venv
-          fi
-          uv sync --all-packages --all-extras --dev
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            if [[ "${{ runner.os }}" == "Windows" ]] && [[ -d ".venv" ]]; then
+              echo "Removing existing .venv directory on Windows"
+              rm -rf .venv
+            fi
+            uv sync --all-packages --all-extras --dev
+          shell: bash
 
       - name: Load Cached Pre-Commit Dependencies
         id: cached-pre-commit-dependencies
@@ -80,13 +85,18 @@ jobs:
             python-dependencies-${{ matrix.os }}-${{ matrix.python }}-
 
       - name: Install Dependencies
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "Windows" ]] && [[ -d ".venv" ]]; then
-            echo "Removing existing .venv directory on Windows"
-            rm -rf .venv
-          fi
-          uv sync --all-packages --all-extras --dev
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            if [[ "${{ runner.os }}" == "Windows" ]] && [[ -d ".venv" ]]; then
+              echo "Removing existing .venv directory on Windows"
+              rm -rf .venv
+            fi
+            uv sync --all-packages --all-extras --dev
+          shell: bash
 
       - name: Cache Test Artifacts
         uses: actions/cache@v4
@@ -96,29 +106,45 @@ jobs:
 
       - name: Cache and Install Homebrew (macOS)
         if: runner.os == 'macOS'
-        uses: tecolicom/actions-use-homebrew-tools@v1
+        uses: nick-fields/retry@v3
         with:
-          tools: 'tesseract tesseract-lang pandoc'
-          key: 'homebrew-tools-${{ runner.os }}'
-          cache: yes
-          verbose: false
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            # Using the underlying homebrew commands instead of the action
+            brew update || true
+            brew install tesseract tesseract-lang pandoc || brew upgrade tesseract tesseract-lang pandoc || true
+            brew list tesseract tesseract-lang pandoc
+          shell: bash
 
       - name: Cache and Install APT Packages (Linux)
         if: runner.os == 'Linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        uses: nick-fields/retry@v3
         with:
-          packages: tesseract-ocr tesseract-ocr-deu pandoc
-          version: 1.0
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y tesseract-ocr tesseract-ocr-deu pandoc
+          shell: bash
 
       - name: Install System Dependencies (Windows)
         if: runner.os == 'Windows'
-        run: |
-          choco install -y tesseract pandoc
-          Write-Output "C:\Program Files\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          Write-Output "C:\Program Files\Pandoc" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          $env:PATH = "C:\Program Files\Tesseract-OCR;C:\Program Files\Pandoc;" + $env:PATH
-          tesseract --version
-          pandoc --version
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            choco install -y tesseract pandoc --no-progress
+            Write-Output "C:\Program Files\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            Write-Output "C:\Program Files\Pandoc" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            $env:PATH = "C:\Program Files\Tesseract-OCR;C:\Program Files\Pandoc;" + $env:PATH
+            tesseract --version
+            pandoc --version
+          shell: pwsh
 
       - name: Clean Coverage Data
         run: |
@@ -155,8 +181,14 @@ jobs:
           path: .
 
       - name: Install DeepSource CLI
-        run: |
-          curl https://deepsource.io/cli | sh
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 3
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: |
+            curl -fsSL https://deepsource.io/cli | sh
+          shell: bash
 
       - name: Upload Coverage to DeepSource
         env:
