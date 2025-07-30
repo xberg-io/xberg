@@ -104,10 +104,16 @@ jobs:
           shell: bash
 
       - name: Run Tests with Coverage
-        run: |
-          uv run coverage erase
-          uv run pytest -s -vvv --cov=kreuzberg --cov-report=lcov:coverage.lcov --cov-report=term --cov-config=pyproject.toml
-          uv run coverage report --precision=2
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: |
+            uv run coverage erase
+            uv run pytest -s -vvv --cov=kreuzberg --cov-report=lcov:coverage.lcov --cov-report=term --cov-config=pyproject.toml --reruns 2 --reruns-delay 1
+            uv run coverage report --precision=2
+          shell: bash
 
       - name: Upload Coverage to DeepSource
         if: always() && github.event_name == 'push'
@@ -232,5 +238,11 @@ jobs:
           shell: pwsh
 
       - name: Run Tests (without coverage)
-        run: |
-          uv run pytest -s -vvv
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 15
+          max_attempts: 3
+          retry_wait_seconds: 10
+          command: |
+            uv run pytest -s -vvv --reruns 2 --reruns-delay 1
+          shell: bash

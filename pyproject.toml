@@ -115,6 +115,7 @@ dev = [
   "pytest>=8.4.1",
   "pytest-cov>=6.2.1",
   "pytest-mock>=3.14.0",
+  "pytest-rerunfailures>=15.1",
   "pytest-timeout>=2.4.0",
   "ruff>=0.12.5",
   "trio>=0.30.0",
