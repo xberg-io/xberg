@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
     from pytest_mock import MockerFixture
 
+    from kreuzberg._types import Metadata
+
 
 @pytest.fixture
 def extractor() -> SpreadSheetExtractor:
@@ -323,3 +325,337 @@ def test_convert_sheet_to_text_sync_no_rows(extractor: SpreadSheetExtractor, moc
     result = extractor._convert_sheet_to_text_sync(mock_workbook, "empty_sheet")
 
     assert result == "## empty_sheet\n\n"
+
+
+def test_extract_spreadsheet_metadata_comprehensive(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test comprehensive metadata extraction from spreadsheet."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Summary"]
+
+    # Mock workbook metadata
+    mock_metadata = mocker.Mock()
+    mock_metadata.title = "Test Spreadsheet"
+    mock_metadata.author = "Test Author"
+    mock_metadata.subject = "Test Subject"
+    mock_metadata.comments = "Test Comments"
+    mock_metadata.keywords = "keyword1, keyword2; keyword3"
+    mock_metadata.category = "Test Category"
+    mock_metadata.company = "Test Company"
+    mock_metadata.manager = "Test Manager"
+
+    # Mock dates
+    from datetime import datetime, timezone
+
+    mock_metadata.created = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    mock_metadata.modified = datetime(2023, 2, 1, 14, 30, 0, tzinfo=timezone.utc)
+
+    mock_workbook.metadata = mock_metadata
+
+    # Mock sheet data for complexity analysis
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [
+        ["Header1", "Header2", "Formula"],
+        ["Value1", "Value2", "=A1+B1"],
+        ["Value3", "Value4", "=SUM(A:A)"],
+    ]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    result = extractor._extract_spreadsheet_metadata(mock_workbook)
+
+    assert result["title"] == "Test Spreadsheet"
+    assert result["authors"] == ["Test Author"]
+    assert result["subject"] == "Test Subject"
+    assert result["comments"] == "Test Comments"
+    assert result["keywords"] == ["keyword1", "keyword2", "keyword3"]
+    assert result["categories"] == ["Test Category"]
+    assert result["organization"] == "Test Company"
+    assert result["modified_by"] == "Test Manager"
+    assert result["created_at"] == "2023-01-01T12:00:00"
+    assert result["modified_at"] == "2023-02-01T14:30:00"
+    assert result["description"] == "Spreadsheet with 3 sheets: Sheet1, Sheet2, Summary"
+    assert "includes formulas" in result["summary"]
+
+
+def test_extract_spreadsheet_metadata_no_metadata(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test metadata extraction when workbook has no metadata."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_workbook.sheet_names = ["Sheet1"]
+    mock_workbook.metadata = None
+
+    # Mock sheet data
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [["Data1", "Data2"]]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    result = extractor._extract_spreadsheet_metadata(mock_workbook)
+
+    assert result["description"] == "Spreadsheet with 1 sheet: Sheet1"
+    assert "summary" in result
+
+
+def test_extract_spreadsheet_metadata_many_sheets(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test metadata extraction with many sheets (should not list all names)."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6", "Sheet7"]
+    mock_workbook.metadata = None
+
+    # Mock sheet data
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [["Data"]]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    result = extractor._extract_spreadsheet_metadata(mock_workbook)
+
+    assert result["description"] == "Spreadsheet with 7 sheets"
+    assert "Sheet1" not in result["description"]
+
+
+def test_extract_document_properties_minimal(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test document properties extraction with minimal data."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_metadata = mocker.Mock()
+    mock_metadata.title = "Simple Title"
+
+    # Explicitly set other properties to None so they aren't extracted
+    mock_metadata.author = None
+    mock_metadata.subject = None
+    mock_metadata.comments = None
+    mock_metadata.keywords = None
+    mock_metadata.category = None
+    mock_metadata.company = None
+    mock_metadata.manager = None
+    mock_metadata.created = None
+    mock_metadata.modified = None
+
+    mock_workbook.metadata = mock_metadata
+
+    metadata: Metadata = {}
+    extractor._extract_document_properties(mock_workbook, metadata)
+
+    assert metadata["title"] == "Simple Title"
+    assert len(metadata) == 1
+
+
+def test_extract_date_properties_string_dates(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test date properties extraction with string dates."""
+    mock_props = mocker.Mock()
+    mock_props.created = "2023-01-01"
+    mock_props.modified = "2023-02-01"
+
+    metadata: Metadata = {}
+    extractor._extract_date_properties(mock_props, metadata)
+
+    assert metadata["created_at"] == "2023-01-01"
+    assert metadata["modified_at"] == "2023-02-01"
+
+
+def test_analyze_content_complexity_no_formulas(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test content complexity analysis without formulas."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_workbook.sheet_names = ["Data"]
+
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [
+        ["Header1", "Header2"],
+        ["Data1", "Data2"],
+        ["Data3", "Data4"],
+    ]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    metadata: Metadata = {}
+    extractor._analyze_content_complexity(mock_workbook, metadata)
+
+    assert "Contains" in metadata["summary"]
+    assert "formulas" not in metadata["summary"]
+
+
+def test_analyze_content_complexity_empty_sheets(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test content complexity analysis with empty sheets."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_workbook.sheet_names = ["Empty"]
+
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [[None, None], ["", ""]]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    metadata: Metadata = {}
+    extractor._analyze_content_complexity(mock_workbook, metadata)
+
+    # Should not add summary if no meaningful content
+    assert "summary" not in metadata
+
+
+def test_enhance_sheet_with_table_data_pandas_available(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test enhanced sheet processing when pandas is available."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [["Name", "Age", "City"], ["Alice", 25, "New York"], ["Bob", 30, "Chicago"]]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    # Mock pandas DataFrame
+    mock_df = mocker.Mock()
+    mock_df.empty = False
+    mock_df.dropna.return_value = mock_df
+
+    # Mock enhance_table_markdown - it's imported within the method
+    mock_enhance = mocker.patch("kreuzberg._utils._table.enhance_table_markdown")
+    mock_enhance.return_value = "Enhanced table markdown"
+
+    with mocker.patch("pandas.DataFrame", return_value=mock_df):
+        result = extractor._enhance_sheet_with_table_data(mock_workbook, "TestSheet")
+
+    assert result == "## TestSheet\n\nEnhanced table markdown"
+
+
+def test_enhance_sheet_with_table_data_empty_sheet(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test enhanced sheet processing with empty sheet."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = []
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    result = extractor._enhance_sheet_with_table_data(mock_workbook, "EmptySheet")
+
+    assert result == "## EmptySheet\n\n*Empty sheet*"
+
+
+def test_enhance_sheet_with_table_data_no_data_after_cleanup(
+    extractor: SpreadSheetExtractor, mocker: MockerFixture
+) -> None:
+    """Test enhanced sheet processing when DataFrame becomes empty after cleanup."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [[None, None], [None, None]]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    # Mock empty DataFrame after cleanup
+    mock_df = mocker.Mock()
+    mock_df.empty = True
+    mock_df.dropna.return_value = mock_df
+
+    with mocker.patch("pandas.DataFrame", return_value=mock_df):
+        result = extractor._enhance_sheet_with_table_data(mock_workbook, "CleanedSheet")
+
+    assert result == "## CleanedSheet\n\n*No data*"
+
+
+def test_enhance_sheet_with_table_data_pandas_error_fallback(
+    extractor: SpreadSheetExtractor, mocker: MockerFixture
+) -> None:
+    """Test enhanced sheet processing falls back when pandas/enhancement fails."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [["Header"], ["Data"]]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    # Mock pandas import error
+    with mocker.patch("pandas.DataFrame", side_effect=ImportError("pandas not available")):
+        # Mock the fallback method
+        mocker.patch.object(extractor, "_convert_sheet_to_text_sync", return_value="Fallback content")
+
+        result = extractor._enhance_sheet_with_table_data(mock_workbook, "FallbackSheet")
+
+    assert result == "Fallback content"
+
+
+def test_extract_document_properties_no_hasattr(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test document properties extraction when workbook lacks hasattr for metadata."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    # Mock workbook without metadata attribute
+    del mock_workbook.metadata
+
+    metadata: Metadata = {}
+    extractor._extract_document_properties(mock_workbook, metadata)
+
+    assert len(metadata) == 0
+
+
+def test_extract_document_properties_exception_handling(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test document properties extraction handles exceptions gracefully."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_metadata = mocker.Mock()
+
+    # Mock property access that raises exception
+    mock_metadata.title = mocker.PropertyMock(side_effect=Exception("Property access error"))
+    mock_workbook.metadata = mock_metadata
+
+    metadata: Metadata = {}
+    extractor._extract_document_properties(mock_workbook, metadata)
+
+    # Should handle exception gracefully and not crash
+    assert isinstance(metadata, dict)
+
+
+def test_extract_date_properties_invalid_dates(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test date properties extraction with invalid date objects."""
+    mock_props = mocker.Mock()
+    mock_props.created = mocker.Mock()
+    mock_props.created.isoformat = mocker.Mock(side_effect=Exception("Invalid date"))
+    mock_props.modified = None  # Missing modified date
+
+    metadata: Metadata = {}
+    extractor._extract_date_properties(mock_props, metadata)
+
+    # Should handle exceptions gracefully
+    assert "created_at" not in metadata
+    assert "modified_at" not in metadata
+
+
+def test_add_structure_info_no_sheet_names(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test structure info addition when workbook has no sheet_names."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    # Mock workbook without sheet_names
+    del mock_workbook.sheet_names
+
+    metadata: Metadata = {}
+    extractor._add_structure_info(mock_workbook, metadata)
+
+    assert "description" not in metadata
+
+
+def test_add_structure_info_empty_sheet_names(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test structure info addition when workbook has empty sheet_names."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_workbook.sheet_names = []
+
+    metadata: Metadata = {}
+    extractor._add_structure_info(mock_workbook, metadata)
+
+    assert "description" not in metadata
+
+
+def test_analyze_content_complexity_exception_handling(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test content complexity analysis handles exceptions gracefully."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_workbook.sheet_names = ["ErrorSheet"]
+
+    # Mock sheet that raises exception
+    mock_workbook.get_sheet_by_name.side_effect = Exception("Sheet access error")
+
+    metadata: Metadata = {}
+    extractor._analyze_content_complexity(mock_workbook, metadata)
+
+    # Should handle exception gracefully
+    assert isinstance(metadata, dict)
+
+
+def test_analyze_content_complexity_with_empty_rows(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
+    """Test content complexity analysis with mixed empty and non-empty rows."""
+    mock_workbook = mocker.Mock(spec=CalamineWorkbook)
+    mock_workbook.sheet_names = ["MixedSheet"]
+
+    mock_sheet = mocker.Mock()
+    mock_sheet.to_python.return_value = [
+        [],  # Empty row
+        ["Header1", "Header2"],
+        [None, None],  # Row with None values
+        ["", ""],  # Row with empty strings
+        ["Data1", "Data2"],
+    ]
+    mock_workbook.get_sheet_by_name.return_value = mock_sheet
+
+    metadata: Metadata = {}
+    extractor._analyze_content_complexity(mock_workbook, metadata)
+
+    assert "summary" in metadata
+    assert "Contains" in metadata["summary"]
