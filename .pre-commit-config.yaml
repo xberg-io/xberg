@@ -5,11 +5,13 @@ repos:
       - id: commitlint
         stages: [commit-msg]
         additional_dependencies: ["@commitlint/config-conventional"]
-  - repo: https://github.com/Goldziher/ai-rulez
-    rev: v1.4.3
-    hooks:
-      - id: ai-rulez-validate
-      - id: ai-rulez-generate
+  # Temporarily disabled - ai-rulez Go build failing in CI
+  # TODO: Re-enable once ai-rulez v1.4.4+ Python migration is stable
+  # - repo: https://github.com/Goldziher/ai-rulez
+  #   rev: v1.4.3
+  #   hooks:
+  #     - id: ai-rulez-validate
+  #     - id: ai-rulez-generate
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:

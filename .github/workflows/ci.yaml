@@ -27,11 +27,6 @@ jobs:
         with:
           python-version-file: "pyproject.toml"
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 'stable'
-
       - name: Install Dependencies
         uses: nick-fields/retry@v3
         with:
