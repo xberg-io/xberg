@@ -215,7 +215,7 @@ All images include:
 Additional dependencies by variant:
 
 - **easyocr**: EasyOCR deep learning models
-- **paddle**: PaddleOCR and PaddlePaddle
+- **paddle**: PaddleOCR and PaddlePaddle (includes OpenGL libraries for OpenCV support)
 - **gmft**: GMFT for table extraction
 - **all**: All optional dependencies
 

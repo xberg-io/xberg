@@ -7,12 +7,14 @@ on:
     types: [published]
 
 jobs:
-  build-and-push:
+  build-and-test:
     runs-on: ubuntu-latest
     if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'release' }}
     permissions:
       contents: read
       packages: write
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
 
     strategy:
       max-parallel: 2
@@ -64,19 +66,60 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Using version: $VERSION"
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: '0.5.x'
+          enable-cache: true
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Build Docker image for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./.docker/Dockerfile
+          platforms: linux/amd64
+          load: true
+          build-args: |
+            EXTRAS=${{ matrix.extras }}
+          tags: kreuzberg:${{ matrix.name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install test dependencies
+        run: |
+          uv sync
+
+      - name: Run Docker E2E tests
+        run: |
+          # Test the specific image variant
+          uv run python tests/e2e/test_docker_images.py --image kreuzberg:${{ matrix.name }}
+        continue-on-error: false
+
       - name: Log in to Docker Hub
+        if: success()
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
+        if: success()
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -87,7 +130,8 @@ jobs:
             # Latest tag for each variant (e.g., latest-easyocr)
             type=raw,value=latest${{ matrix.tag_suffix }}
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image to Docker Hub
+        if: success()
         uses: docker/build-push-action@v6
         with:
           context: .

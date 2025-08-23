@@ -201,6 +201,11 @@ lint.per-file-ignores."tests/**/*.*" = [
   "SIM117",  # Combine with statements
   "SLF001",
 ]
+lint.per-file-ignores."tests/e2e/*_test.py" = [
+  "ANN",    # Disable type annotations in E2E tests
+  "PTH123", # Allow open() in E2E tests
+  "T201",   # print statements are needed for test output
+]
 lint.isort.known-first-party = [ "kreuzberg", "tests" ]
 lint.mccabe.max-complexity = 15
 lint.pydocstyle.convention = "google"
@@ -265,6 +270,10 @@ disable_error_code = 'import-untyped'
 implicit_reexport = false
 show_error_codes = true
 strict = true
+
+[[tool.mypy.overrides]]
+module = "tests.e2e.*"
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = [

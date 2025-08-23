@@ -82,6 +82,31 @@ pip install "kreuzberg[easyocr]"
 
 #### PaddleOCR
 
+PaddleOCR requires additional system dependencies for OpenCV support:
+
+##### System Dependencies
+
+###### Ubuntu/Debian
+
+```shell
+# Install OpenGL libraries required by OpenCV
+sudo apt-get install libgl1 libglib2.0-0
+```
+
+###### macOS
+
+```shell
+# OpenGL support is typically included with macOS
+# If you encounter issues, install:
+brew install glfw
+```
+
+###### Windows
+
+OpenGL libraries are typically included with graphics drivers on Windows.
+
+##### Python Package
+
 ```shell
 pip install "kreuzberg[paddleocr]"
 ```
