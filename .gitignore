@@ -12,6 +12,7 @@
 .coverage*
 coverage.lcov
 htmlcov/
+.claude/
 .cursorrules
 .dist/
 .DS_store

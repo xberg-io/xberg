@@ -95,6 +95,10 @@ result = await extract_file(
 
 - Requires the `paddleocr` optional dependency
 - Install with: `pip install "kreuzberg[paddleocr]"`
+- **System Dependencies:** PaddleOCR uses OpenCV which requires OpenGL libraries:
+    - **Ubuntu/Debian:** `sudo apt-get install libgl1 libglib2.0-0`
+    - **macOS:** OpenGL is typically included; if needed: `brew install glfw`
+    - **Windows:** OpenGL libraries are typically included with graphics drivers
 
 **GPU Support:**
 
@@ -195,6 +199,7 @@ Here are some guidelines for choosing the appropriate OCR backend:
 - Slower first-run due to model downloads
 - More resource-intensive
 - Model files are downloaded on first use, causing initial delay
+- Requires OpenGL system libraries (libgl1 on Linux) for OpenCV support
 
 ### No OCR (Setting ocr_backend=None)
 

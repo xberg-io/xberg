@@ -5,7 +5,7 @@ requires = [ "hatchling" ]
 
 [project]
 name = "kreuzberg"
-version = "3.11.2"
+version = "3.11.3"
 description = "Document intelligence framework for Python - Extract text, metadata, and structured data from diverse file formats"
 readme = "README.md"
 keywords = [
@@ -90,15 +90,15 @@ optional-dependencies.cli = [
 optional-dependencies.crypto = [ "playa-pdf[crypto]>=0.7.0" ]
 optional-dependencies.document-classification = [
   "deep-translator>=1.11.4",
-  "pandas>=2.3.1",
+  "pandas>=2.3.2",
 ]
 optional-dependencies.easyocr = [ "easyocr>=1.7.2" ]
 optional-dependencies.entity-extraction = [ "keybert>=0.9.0", "spacy>=3.8.7" ]
 optional-dependencies.gmft = [ "gmft>=0.4.2" ]
 optional-dependencies.langdetect = [ "fast-langdetect>=0.3.2" ]
 optional-dependencies.paddleocr = [
-  "paddleocr>=3.1.1",
-  "paddlepaddle>=3.1.0",
+  "paddleocr>=3.2.0",
+  "paddlepaddle>=3.1.1",
   "setuptools>=80.9.0",
 ]
 urls.documentation = "https://kreuzberg.dev"
@@ -201,6 +201,11 @@ lint.per-file-ignores."tests/**/*.*" = [
   "SIM117",  # Combine with statements
   "SLF001",
 ]
+lint.per-file-ignores."tests/e2e/*_test.py" = [
+  "ANN",    # Disable type annotations in E2E tests
+  "PTH123", # Allow open() in E2E tests
+  "T201",   # print statements are needed for test output
+]
 lint.isort.known-first-party = [ "kreuzberg", "tests" ]
 lint.mccabe.max-complexity = 15
 lint.pydocstyle.convention = "google"
@@ -265,6 +270,10 @@ disable_error_code = 'import-untyped'
 implicit_reexport = false
 show_error_codes = true
 strict = true
+
+[[tool.mypy.overrides]]
+module = "tests.e2e.*"
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = [

@@ -1,0 +1,14 @@
+{
+  "core": {
+    "exists": false
+  },
+  "easyocr": {
+    "exists": false
+  },
+  "paddle": {
+    "exists": false
+  },
+  "gmft": {
+    "exists": false
+  }
+}
