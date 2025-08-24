@@ -33,6 +33,9 @@ DOCKER_IMAGES = {
     "gmft": "kreuzberg:gmft",
 }
 
+# Images that are optional (may not be built due to space constraints)
+OPTIONAL_IMAGES = {"paddle", "gmft"}
+
 # Security configuration
 SECURITY_CONFIG = {
     "max_container_runtime": 300,  # 5 minutes max
