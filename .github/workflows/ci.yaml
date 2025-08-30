@@ -51,7 +51,6 @@ jobs:
       - name: Execute Pre-Commit
         run: uv run pre-commit run --show-diff-on-failure --color=always --all-files
 
-  # Coverage job runs first, only on Python 3.13 Ubuntu
   coverage:
     needs: validate
     runs-on: ubuntu-latest
@@ -135,7 +134,6 @@ jobs:
             .coverage
           retention-days: 7
 
-  # Full test matrix runs only after coverage succeeds
   test:
     needs: coverage
     runs-on: ${{ matrix.os }}
@@ -144,10 +142,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python: ["3.10", "3.11", "3.12", "3.13"]
-        exclude:
-          # Skip Python 3.13 on macOS for now due to compatibility issues
-          - os: macos-latest
-            python: "3.13"
     timeout-minutes: 30
     steps:
       - name: Checkout

@@ -28,7 +28,8 @@ choco install -y tesseract
 
 **Language Support:**
 
-- For languages other than English, install additional language packs:
+- Kreuzberg Docker images include 12 common business languages: English, Spanish, French, German, Italian, Portuguese, Chinese (Simplified & Traditional), Japanese, Arabic, Russian, Hindi
+- For additional languages, install language packs:
     - Ubuntu: `sudo apt-get install tesseract-ocr-deu` (for German)
     - macOS: `brew install tesseract-lang`
 
@@ -46,95 +47,7 @@ result = await extract_file(
 )
 ```
 
-### 2. EasyOCR
-
-[EasyOCR](https://github.com/JaidedAI/EasyOCR) is a Python library that uses deep learning models for OCR. It supports over 80 languages and can be more accurate for certain scripts.
-
-**Installation Requirements:**
-
-- Requires the `easyocr` optional dependency
-- Install with: `pip install "kreuzberg[easyocr]"`
-
-**GPU Support:**
-
-!!! warning "Experimental Feature"
-
-    GPU support is not considered an official feature and might be subject to change or removal in future versions.
-
-- EasyOCR can use GPU acceleration when PyTorch with CUDA is available
-- To enable GPU, set `use_gpu=True` in the configuration
-- Kreuzberg will automatically check if CUDA is available via PyTorch
-
-**Language Support:**
-
-- Uses different language codes than Tesseract
-- Examples: `en` (English), `de` (German), `zh` (Chinese), etc.
-- See the [EasyOCR documentation](https://github.com/JaidedAI/EasyOCR#supported-languages) for the full list
-
-**Configuration:**
-
-```python
-from kreuzberg import extract_file, ExtractionConfig, EasyOCRConfig
-
-result = await extract_file(
-    "document.jpg",
-    config=ExtractionConfig(
-        ocr_backend="easyocr",
-        ocr_config=EasyOCRConfig(
-            language_list=["en", "de"], use_gpu=True  # English and German  # Enable GPU acceleration if available (experimental)
-        ),
-    ),
-)
-```
-
-### 3. PaddleOCR
-
-[PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) is an OCR toolkit developed by Baidu. It's particularly strong for Chinese and other Asian languages.
-
-**Installation Requirements:**
-
-- Requires the `paddleocr` optional dependency
-- Install with: `pip install "kreuzberg[paddleocr]"`
-- **System Dependencies:** PaddleOCR uses OpenCV which requires OpenGL libraries:
-    - **Ubuntu/Debian:** `sudo apt-get install libgl1 libglib2.0-0`
-    - **macOS:** OpenGL is typically included; if needed: `brew install glfw`
-    - **Windows:** OpenGL libraries are typically included with graphics drivers
-
-**GPU Support:**
-
-!!! warning "Experimental Feature"
-
-    GPU support is not considered an official feature and might be subject to change or removal in future versions.
-
-- PaddleOCR can utilize GPU acceleration if the paddlepaddle-gpu package is installed
-- Kreuzberg automatically detects if paddlepaddle-gpu is available
-- To explicitly enable GPU, set `use_gpu=True` in the configuration
-- For GPU usage, install: `pip install paddlepaddle-gpu` instead of the standard paddlepaddle package
-
-**Language Support:**
-
-- Limited language support compared to other backends
-- Supported languages: `ch` (Chinese), `en` (English), `french`, `german`, `japan`, `korean`
-
-**Configuration:**
-
-```python
-from kreuzberg import extract_file, ExtractionConfig, PaddleOCRConfig
-
-result = await extract_file(
-    "chinese_document.jpg",
-    config=ExtractionConfig(
-        ocr_backend="paddleocr",
-        ocr_config=PaddleOCRConfig(
-            language="ch",  # Chinese
-            use_gpu=True,  # Enable GPU acceleration if paddlepaddle-gpu is available (experimental)
-            gpu_mem=4000,  # Set GPU memory limit in MB (experimental)
-        ),
-    ),
-)
-```
-
-### 4. No OCR
+### 2. No OCR
 
 You can also disable OCR completely, which is useful for documents that already contain searchable text.
 
@@ -160,46 +73,13 @@ Here are some guidelines for choosing the appropriate OCR backend:
 - Lower memory usage
 - Good for general-purpose OCR across many languages
 - Good balance of accuracy and performance
+- Supports 12 common business languages out of the box
 
 **Considerations:**
 
 - Requires system-level installation
-- May have lower accuracy for some languages or complex layouts
-- More configuration may be needed for optimal results
-
-### EasyOCR
-
-**Advantages:**
-
-- Good accuracy across multiple languages
-- No system dependencies required (pure Python)
-- Simple configuration
-- Better for complex scripts and languages like Arabic, Thai, or Hindi
-- Can be more accurate for handwritten text
-
-**Considerations:**
-
-- Larger memory footprint (requires PyTorch)
-- Slower first-run due to model downloads
-- Heavier resource usage
-- Model files are downloaded on first use, causing initial delay
-
-### PaddleOCR
-
-**Advantages:**
-
-- Excellent accuracy, especially for Asian languages
-- No system dependencies required
-- Modern deep learning architecture
-- Fast processing once models are loaded
-
-**Considerations:**
-
-- Largest memory footprint of the three options (requires PaddlePaddle)
-- Slower first-run due to model downloads
-- More resource-intensive
-- Model files are downloaded on first use, causing initial delay
-- Requires OpenGL system libraries (libgl1 on Linux) for OpenCV support
+- May have lower accuracy for some complex layouts compared to deep learning approaches
+- More configuration may be needed for optimal results with specialized documents
 
 ### No OCR (Setting ocr_backend=None)
 
@@ -217,22 +97,19 @@ Here are some guidelines for choosing the appropriate OCR backend:
 
 ## Installation Summary
 
-To install Kreuzberg with different OCR backends:
+To install Kreuzberg:
 
 ```bash
-# Basic installation (Tesseract requires separate system installation)
+# Basic installation (includes Tesseract OCR support)
 pip install kreuzberg
-
-# With EasyOCR support
-pip install "kreuzberg[easyocr]"
-
-# With PaddleOCR support
-pip install "kreuzberg[paddleocr]"
 
 # With chunking support
 pip install "kreuzberg[chunking]"
 
-# With all optional dependencies (OCR backends and chunking)
+# With language detection
+pip install "kreuzberg[langdetect]"
+
+# With all optional dependencies
 pip install "kreuzberg[all]"
 ```
 

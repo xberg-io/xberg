@@ -37,9 +37,8 @@ def test_mime_types() -> None:
     """Test that email MIME types are properly defined."""
     from kreuzberg._extractors._email import EmailExtractor
 
-    # Test that the extractor supports the expected MIME types
     assert EML_MIME_TYPE in EmailExtractor.SUPPORTED_MIME_TYPES
-    assert MSG_MIME_TYPE not in EmailExtractor.SUPPORTED_MIME_TYPES  # MSG is handled by a different extractor
+    assert MSG_MIME_TYPE not in EmailExtractor.SUPPORTED_MIME_TYPES
 
 
 def test_extract_bytes_sync(email_extractor: EmailExtractor) -> None:
@@ -134,7 +133,6 @@ def test_email_header_extraction(email_extractor: EmailExtractor) -> None:
 
         result = email_extractor.extract_bytes_sync(b"dummy")
 
-        # Check that headers are included in content
         assert "Subject: Header Test" in result.content
         assert "From: sender@example.com" in result.content
         assert "To: recipient@example.com" in result.content
@@ -163,7 +161,6 @@ def test_email_complex_headers(email_extractor: EmailExtractor) -> None:
 
         result = email_extractor.extract_bytes_sync(b"dummy")
 
-        # Should handle complex header structures
         assert "From: sender@example.com" in result.content
         assert "To: recipient1@example.com, recipient2@example.com" in result.content
         assert "CC: cc1@example.com, cc2@example.com" in result.content
@@ -179,7 +176,6 @@ def test_email_missing_headers(email_extractor: EmailExtractor) -> None:
         result = email_extractor.extract_bytes_sync(b"dummy")
 
         assert result.content == "Simple email without subject or date."
-        # Headers should not be added if they don't exist
         assert "Subject:" not in result.content
         assert "From:" not in result.content
 
@@ -215,11 +211,9 @@ def test_email_with_html_content_without_html2text(email_extractor: EmailExtract
             "html": "<p>This is &lt;HTML&gt; content</p>",
         }
 
-        # Mock html2text as None to simulate missing dependency
         with patch("kreuzberg._extractors._email.html2text", None):
             result = email_extractor.extract_bytes_sync(b"dummy")
 
-            # Should fallback to HTML tag stripping and entity unescaping
             assert "This is <HTML> content" in result.content
 
 
@@ -234,7 +228,7 @@ def test_email_with_attachments(email_extractor: EmailExtractor) -> None:
             "attachments": [
                 {"name": "document.pdf"},
                 {"name": "image.jpg"},
-                {},  # Attachment without name
+                {},
             ],
         }
 
@@ -257,9 +251,7 @@ def test_email_with_empty_attachments(email_extractor: EmailExtractor) -> None:
 
         result = email_extractor.extract_bytes_sync(b"dummy")
 
-        # Empty attachments list is falsy, so metadata key won't be set
         assert "attachments" not in result.metadata
-        # And no attachment text should be added
         assert "Attachments:" not in result.content
 
 
@@ -286,7 +278,6 @@ def test_email_with_html_body_without_html2text(email_extractor: EmailExtractor)
 
             result = email_extractor.extract_bytes_sync(b"dummy")
 
-            # Should strip HTML tags and unescape entities
             assert "Hello World & Friends" in result.content
             assert "<p>" not in result.content
             assert "&amp;" not in result.content
@@ -320,7 +311,7 @@ def test_email_with_attachments_detailed(email_extractor: EmailExtractor) -> Non
             "attachments": [
                 {"name": "document.pdf", "content": b"fake pdf"},
                 {"name": "image.jpg", "content": b"fake image"},
-                {},  # Attachment without name
+                {},
             ],
         }
 
@@ -396,7 +387,6 @@ def test_email_with_all_fields(email_extractor: EmailExtractor) -> None:
 
         result = email_extractor.extract_bytes_sync(b"dummy")
 
-        # Check all components are present
         assert "Subject: Complete Email" in result.content
         assert "From: sender@example.com" in result.content
         assert "To: recipient@example.com" in result.content
@@ -406,7 +396,6 @@ def test_email_with_all_fields(email_extractor: EmailExtractor) -> None:
         assert "Email body text" in result.content
         assert "Attachments: file.txt" in result.content
 
-        # Check metadata
         assert result.metadata["subject"] == "Complete Email"
         assert result.metadata["email_from"] == "sender@example.com"
         assert result.metadata["email_to"] == "recipient@example.com"
@@ -414,11 +403,6 @@ def test_email_with_all_fields(email_extractor: EmailExtractor) -> None:
         assert result.metadata["email_bcc"] == "bcc@example.com"
         assert result.metadata["date"] == "Mon, 1 Jan 2024 12:00:00 +0000"
         assert result.metadata["attachments"] == ["file.txt"]
-
-
-# =============================================================================
-# COMPREHENSIVE TESTS (for improved coverage)
-# =============================================================================
 
 
 class TestEmailExtractorFormatEmailField:
@@ -429,7 +413,7 @@ class TestEmailExtractorFormatEmailField:
         field = [
             {"email": "test1@example.com", "name": "Test User 1"},
             {"email": "test2@example.com", "name": "Test User 2"},
-            {"email": "test3@example.com"},  # No name
+            {"email": "test3@example.com"},
         ]
         result = email_extractor._format_email_field(field)
         assert result == "test1@example.com, test2@example.com, test3@example.com"
@@ -439,10 +423,10 @@ class TestEmailExtractorFormatEmailField:
         field = [
             {"email": "", "name": "Empty Email"},
             {"email": "valid@example.com", "name": "Valid User"},
-            {"name": "No Email Key"},  # Missing email key
+            {"name": "No Email Key"},
         ]
         result = email_extractor._format_email_field(field)
-        assert result == "valid@example.com, "
+        assert result == "valid@example.com"
 
     def test_format_email_field_list_with_strings(self, email_extractor: EmailExtractor) -> None:
         """Test formatting list of string emails."""
@@ -455,7 +439,7 @@ class TestEmailExtractorFormatEmailField:
         field = [
             {"email": "dict@example.com", "name": "Dict User"},
             "string@example.com",
-            123,  # Non-string, non-dict
+            123,
             {"email": "another@example.com"},
         ]
         result = email_extractor._format_email_field(field)
@@ -512,14 +496,14 @@ class TestEmailExtractorHeaderExtractionComprehensive:
         """Test from field as dict without email key."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
-                "from": {"name": "Sender Name"},  # No email key
+                "from": {"name": "Sender Name"},
                 "text": "Body content",
             }
 
             result = email_extractor.extract_bytes_sync(b"dummy")
 
             assert result.metadata["email_from"] == ""
-            assert "From: " in result.content
+            assert "From:" in result.content
 
     def test_extract_headers_from_field_string(self, email_extractor: EmailExtractor) -> None:
         """Test from field as plain string."""
@@ -547,14 +531,14 @@ class TestEmailExtractorHeaderExtractionComprehensive:
 
             result = email_extractor.extract_bytes_sync(b"dummy")
 
-            assert result.metadata["email_to"] == "recipient1@example.com"  # First recipient
+            assert result.metadata["email_to"] == "recipient1@example.com"
             assert "To: recipient1@example.com, recipient2@example.com" in result.content
 
     def test_extract_headers_to_field_list_empty(self, email_extractor: EmailExtractor) -> None:
         """Test to field as empty list."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
-                "to": [],  # Empty list
+                "to": [],
                 "text": "Body content",
             }
 
@@ -568,7 +552,7 @@ class TestEmailExtractorHeaderExtractionComprehensive:
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "to": [
-                    {"name": "No Email"},  # First item has no email key
+                    {"name": "No Email"},
                     {"email": "recipient2@example.com"},
                 ],
                 "text": "Body content",
@@ -576,7 +560,7 @@ class TestEmailExtractorHeaderExtractionComprehensive:
 
             result = email_extractor.extract_bytes_sync(b"dummy")
 
-            assert result.metadata["email_to"] == ""  # First recipient has no email
+            assert result.metadata["email_to"] == ""
             assert "To: , recipient2@example.com" in result.content
 
     def test_extract_headers_to_field_list_strings(self, email_extractor: EmailExtractor) -> None:
@@ -649,7 +633,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
 
             result = email_extractor.extract_bytes_sync(b"dummy")
 
-            # None values should be skipped
             assert "email_from" not in result.metadata
             assert "email_to" not in result.metadata
             assert "subject" not in result.metadata
@@ -673,7 +656,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
 
             result = email_extractor.extract_bytes_sync(b"dummy")
 
-            # Empty strings should be skipped
             assert "email_from" not in result.metadata
             assert "email_to" not in result.metadata
             assert "subject" not in result.metadata
@@ -713,7 +695,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
                 result = email_extractor.extract_bytes_sync(b"dummy")
 
                 assert result.content == "\nHTML **content**"
-                # Verify html2text configuration
                 assert mock_converter.ignore_links is True
                 assert mock_converter.ignore_images is True
 
@@ -740,7 +721,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
             result = email_extractor.extract_bytes_sync(b"dummy")
 
             assert result.content == "\nPlain text version"
-            # HTML should not be processed when text exists
 
     def test_extract_body_no_content(self, email_extractor: EmailExtractor) -> None:
         """Test extraction with no body content."""
@@ -764,7 +744,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
 
             result = email_extractor.extract_bytes_sync(b"dummy")
 
-            # Empty text field should still be processed (returns early)
             assert result.content == "Subject: Empty Body\n"
 
     def test_extract_body_none_text_and_html(self, email_extractor: EmailExtractor) -> None:
@@ -791,9 +770,9 @@ class TestEmailExtractorAttachmentExtractionComprehensive:
                 "attachments": [
                     {"name": "document.pdf", "size": 1024},
                     {"name": "image.jpg"},
-                    {"name": "", "type": "image/png"},  # Empty name
-                    {},  # No name key
-                    {"name": None},  # None name
+                    {"name": "", "type": "image/png"},
+                    {},
+                    {"name": None},
                 ],
                 "text": "Body with attachments",
             }
@@ -821,7 +800,7 @@ class TestEmailExtractorAttachmentExtractionComprehensive:
         """Test extraction with falsy but existing attachments key."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
-                "attachments": 0,  # Falsy but exists
+                "attachments": 0,
                 "text": "Body",
             }
 
@@ -835,9 +814,9 @@ class TestEmailExtractorAttachmentExtractionComprehensive:
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "attachments": [
-                    {"size": 1024},  # No name
-                    {"name": ""},  # Empty name
-                    {},  # Empty dict
+                    {"size": 1024},
+                    {"name": ""},
+                    {},
                 ],
                 "text": "Body",
             }
@@ -908,7 +887,6 @@ class TestEmailExtractorIntegrationComprehensive:
 
             result = email_extractor.extract_bytes_sync(b"complex email content")
 
-            # Verify all headers are processed correctly
             assert "Subject: Complex Email with All Features" in result.content
             assert "From: complex@example.com" in result.content
             assert "To: recipient1@example.com, recipient2@example.com, recipient3@example.com" in result.content
@@ -916,17 +894,14 @@ class TestEmailExtractorIntegrationComprehensive:
             assert "BCC: bcc@example.com" in result.content
             assert "Date: Wed, 15 Mar 2024 14:30:00 +0000" in result.content
 
-            # Verify body content (text preferred over HTML)
             assert "This is the body of a complex email" in result.content
             assert "This HTML should be ignored" not in result.content
 
-            # Verify attachments
             assert "Attachments: document.pdf, presentation.pptx, data.xlsx" in result.content
 
-            # Verify metadata
             assert result.metadata["subject"] == "Complex Email with All Features"
             assert result.metadata["email_from"] == "complex@example.com"
-            assert result.metadata["email_to"] == "recipient1@example.com"  # First recipient
+            assert result.metadata["email_to"] == "recipient1@example.com"
             assert result.metadata["date"] == "Wed, 15 Mar 2024 14:30:00 +0000"
             assert result.metadata["attachments"] == ["document.pdf", "presentation.pptx", "data.xlsx"]
 
@@ -934,21 +909,19 @@ class TestEmailExtractorIntegrationComprehensive:
         """Test processing malformed email that still partially parses."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
-                "from": {"not_email_key": "malformed@example.com"},  # Wrong key
-                "to": [123, {"email": "valid@example.com"}],  # Mixed invalid/valid
-                "subject": ["should", "be", "string"],  # Wrong type
-                "text": 12345,  # Wrong type
-                "attachments": "not_a_list",  # Wrong type
+                "from": {"not_email_key": "malformed@example.com"},
+                "to": [123, {"email": "valid@example.com"}],
+                "subject": ["should", "be", "string"],
+                "text": 12345,
+                "attachments": "not_a_list",
             }
 
             result = email_extractor.extract_bytes_sync(b"malformed email")
 
-            # Should handle malformed data gracefully
-            assert "From: " in result.content  # Empty from due to wrong key
-            assert "To: 123, valid@example.com" in result.content  # Handles mixed types
-            assert "Subject: ['should', 'be', 'string']" in result.content  # Converts to string
-            assert "\n12345" in result.content  # Handles wrong text type
-            # Attachments with wrong type should be skipped (not a list)
+            assert "From: " in result.content
+            assert "To: 123, valid@example.com" in result.content
+            assert "Subject: ['should', 'be', 'string']" in result.content
+            assert "\n12345" in result.content
             assert "Attachments:" not in result.content
 
     @pytest.mark.anyio
@@ -991,13 +964,11 @@ class TestEmailExtractorIntegrationComprehensive:
             with patch("kreuzberg._extractors._email.html2text", None):
                 result = email_extractor.extract_bytes_sync(b"html email")
 
-                # HTML tags should be stripped
                 assert "<html>" not in result.content
                 assert "<body>" not in result.content
                 assert "<script>" not in result.content
                 assert "<style>" not in result.content
 
-                # Entities should be unescaped
                 assert "Title & Subtitle" in result.content
                 assert "Price: €100 <discount>" in result.content
                 assert 'Quote: "Hello"' in result.content

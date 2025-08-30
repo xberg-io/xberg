@@ -1,28 +1,17 @@
 services:
   kreuzberg:
-    # Choose your image variant:
-    # - goldziher/kreuzberg:latest (core, 270MB)
-    # - goldziher/kreuzberg:latest-paddle (+ PaddleOCR, 878MB)
-    # - goldziher/kreuzberg:latest-easyocr (+ EasyOCR, 8.7GB)
-    # - goldziher/kreuzberg:latest-gmft (+ table extraction, 8.6GB)
-    # - goldziher/kreuzberg:latest-all (all features, 9.6GB - testing only!)
     image: goldziher/kreuzberg:latest
 
     ports:
       - "8000:8000"
 
     volumes:
-      # Mount your configuration file (optional)
       - "./kreuzberg.toml:/app/kreuzberg.toml:ro"
-      # Persist cache across restarts (recommended)
       - "kreuzberg-cache:/app/.kreuzberg"
 
     environment:
       - PYTHONUNBUFFERED=1
       - KREUZBERG_CACHE_DIR=/app/.kreuzberg
-      # Optional: Cache size limits
-      # - KREUZBERG_OCR_CACHE_SIZE_MB=500
-      # - KREUZBERG_DOCUMENT_CACHE_SIZE_MB=1000
 
     restart: unless-stopped
 

@@ -13,7 +13,8 @@ from kreuzberg._utils._process_pool import (
     _POOL_SIZE,
     _extract_pdf_images_worker,
     _extract_pdf_text_worker,
-    _init_process_pool,
+    _get_process_pool,
+    _process_pool_ref,
     process_pool,
     shutdown_process_pool,
     submit_to_process_pool,
@@ -53,11 +54,11 @@ def test_init_process_pool() -> None:
     """Test process pool initialization."""
     shutdown_process_pool()
 
-    pool = _init_process_pool()
+    pool = _get_process_pool()
     assert isinstance(pool, ProcessPoolExecutor)
     assert pool._max_workers == _POOL_SIZE  # type: ignore[attr-defined]
 
-    same_pool = _init_process_pool()
+    same_pool = _get_process_pool()
     assert same_pool is pool
 
     shutdown_process_pool()
@@ -94,7 +95,7 @@ def test_process_pool_error_recovery() -> None:
                 return result
             return None
 
-        with patch("kreuzberg._utils._process_pool._init_process_pool", side_effect=side_effect):
+        with patch("kreuzberg._utils._process_pool._get_process_pool", side_effect=side_effect):
             try:
                 with process_pool():
                     pass
@@ -120,15 +121,17 @@ def test_submit_to_process_pool() -> None:
 def test_shutdown_process_pool() -> None:
     """Test process pool shutdown."""
 
-    _init_process_pool()
+    _get_process_pool()
 
-    import kreuzberg._utils._process_pool as pool_module
-
-    assert pool_module._PROCESS_POOL is not None
+    # Check that the ref has an initialized pool
+    assert _process_pool_ref.is_initialized()
 
     shutdown_process_pool()
-    assert pool_module._PROCESS_POOL is None
 
+    # After shutdown, the ref should be cleared
+    assert not _process_pool_ref.is_initialized()
+
+    # Shutdown again should be safe
     shutdown_process_pool()
 
 

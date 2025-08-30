@@ -61,8 +61,8 @@ class MetadataQualityMetrics:
 
     metadata_count: int
     metadata_fields: list[str]
-    metadata_completeness: float  # Percentage of expected fields present
-    metadata_richness: float  # Diversity score (0-1)
+    metadata_completeness: float
+    metadata_richness: float
     has_title: bool
     has_author: bool
     has_created_date: bool

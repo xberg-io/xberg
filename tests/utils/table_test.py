@@ -88,7 +88,6 @@ def test_export_table_to_csv_empty_table(empty_table_data: dict[str, Any]) -> No
     """Test CSV export with empty table."""
     result = export_table_to_csv(cast("TableData", empty_table_data))
 
-    # Empty DataFrame should produce empty string
     assert result == ""
 
 
@@ -122,13 +121,10 @@ def test_enhance_table_markdown_basic(sample_table_data: dict[str, Any]) -> None
 
     lines = result.split("\n")
 
-    # Check header
     assert lines[0] == "| Name | Age | Score | Active |"
 
-    # Check separator with alignment
     assert lines[1] == "| --- | ---: | ---: | --- |"
 
-    # Check data rows
     assert lines[2] == "| Alice | 25 | 95.50 | True |"
     assert lines[3] == "| Bob | 30 | 87.00 | False |"
 
@@ -139,10 +135,8 @@ def test_enhance_table_markdown_numeric_alignment(numeric_table_data: dict[str, 
 
     lines = result.split("\n")
 
-    # All columns should be right-aligned (numeric)
     assert lines[1] == "| ---: | ---: | ---: |"
 
-    # Check proper number formatting
     assert lines[2] == "| 1000.50 | 150 | 15.00 |"
 
 
@@ -150,7 +144,6 @@ def test_enhance_table_markdown_empty_table(empty_table_data: dict[str, Any]) ->
     """Test markdown enhancement with empty table."""
     result = enhance_table_markdown(cast("TableData", empty_table_data))
 
-    # Should return the text field
     assert result == "Empty table"
 
 
@@ -176,10 +169,9 @@ def test_enhance_table_markdown_with_nulls(table_with_nulls: dict[str, Any]) -> 
 
     lines = result.split("\n")
 
-    # Null values should become empty strings
     assert lines[2] == "| A | 10 | X |"
-    assert lines[3] == "| B |  | Y |"  # null value becomes empty
-    assert lines[4] == "|  | 30 | Z |"  # null value becomes empty
+    assert lines[3] == "| B |  | Y |"
+    assert lines[4] == "|  | 30 | Z |"
 
 
 def test_enhance_table_markdown_with_pipes() -> None:
@@ -189,7 +181,6 @@ def test_enhance_table_markdown_with_pipes() -> None:
 
     result = enhance_table_markdown(cast("TableData", table_data))
 
-    # Pipes should be escaped
     assert "Hello\\|World" in result
     assert "Test\\|Data" in result
 
@@ -233,11 +224,11 @@ def test_generate_table_summary_multiple_tables(
     result = generate_table_summary(tables)
 
     assert result["table_count"] == 3
-    assert result["total_rows"] == 6  # 3 + 3 + 0
-    assert result["total_columns"] == 7  # 4 + 3 + 0
-    assert result["pages_with_tables"] == 3  # pages 1, 2, 3
-    assert result["avg_rows_per_table"] == 2.0  # 6/3
-    assert result["avg_columns_per_table"] == pytest.approx(2.33, rel=1e-2)  # 7/3
+    assert result["total_rows"] == 6
+    assert result["total_columns"] == 7
+    assert result["pages_with_tables"] == 3
+    assert result["avg_rows_per_table"] == 2.0
+    assert result["avg_columns_per_table"] == pytest.approx(2.33, rel=1e-2)
     assert result["tables_by_page"] == {1: 1, 2: 1, 3: 1}
 
 
@@ -271,10 +262,10 @@ def test_extract_table_structure_info_basic(sample_table_data: dict[str, Any]) -
     assert result["has_headers"] is True
     assert result["row_count"] == 3
     assert result["column_count"] == 4
-    assert result["numeric_columns"] == 2  # Age and Score
-    assert result["text_columns"] == 2  # Name and Active
+    assert result["numeric_columns"] == 2
+    assert result["text_columns"] == 2
     assert result["empty_cells"] == 0
-    assert result["data_density"] == 1.0  # No empty cells
+    assert result["data_density"] == 1.0
 
 
 def test_extract_table_structure_info_empty(empty_table_data: dict[str, Any]) -> None:
@@ -314,8 +305,8 @@ def test_extract_table_structure_info_with_nulls(table_with_nulls: dict[str, Any
 
     assert result["row_count"] == 4
     assert result["column_count"] == 3
-    assert result["empty_cells"] == 3  # 3 null values
-    assert result["data_density"] == 0.75  # 9/12 cells have data
+    assert result["empty_cells"] == 3
+    assert result["data_density"] == 0.75
 
 
 def test_is_numeric_column_detection(mixed_type_table: dict[str, Any]) -> None:
@@ -324,48 +315,39 @@ def test_is_numeric_column_detection(mixed_type_table: dict[str, Any]) -> None:
 
     df = mixed_type_table["df"]
 
-    # Test direct function access
-    # ID column contains "001", "002", "003" which are actually numeric strings
-    assert _is_numeric_column(df["ID"])  # Numeric ID strings
-    assert _is_numeric_column(df["Amount"])  # Currency strings
-    assert _is_numeric_column(df["Percentage"])  # Percentage strings
-    assert not _is_numeric_column(df["Text"])  # Pure text
+    assert _is_numeric_column(df["ID"])
+    assert _is_numeric_column(df["Amount"])
+    assert _is_numeric_column(df["Percentage"])
+    assert not _is_numeric_column(df["Text"])
 
 
 def test_is_numeric_column_edge_cases() -> None:
     """Test numeric column detection edge cases."""
     from kreuzberg._utils._table import _is_numeric_column
 
-    # Empty series
     empty_series = pd.Series([], dtype=object)
     assert not _is_numeric_column(empty_series)
 
-    # All null series
     null_series = pd.Series([None, None, None])
     assert not _is_numeric_column(null_series)
 
-    # Already numeric dtype
     int_series = pd.Series([1, 2, 3], dtype="int64")
     assert _is_numeric_column(int_series)
 
-    # Float dtype
     float_series = pd.Series([1.1, 2.2, 3.3], dtype="float64")
     assert _is_numeric_column(float_series)
 
-    # Mixed with mostly numeric
     mixed_series = pd.Series(["1", "2", "3", "not_a_number"])
-    assert _is_numeric_column(mixed_series)  # 75% numeric > 70% threshold
+    assert _is_numeric_column(mixed_series)
 
-    # Mixed with mostly non-numeric
     mostly_text = pd.Series(["a", "b", "c", "1"])
-    assert not _is_numeric_column(mostly_text)  # 25% numeric < 70% threshold
+    assert not _is_numeric_column(mostly_text)
 
 
 def test_is_numeric_column_large_series() -> None:
     """Test numeric column detection with large series (sampling)."""
     from kreuzberg._utils._table import _is_numeric_column
 
-    # Create large series with mostly numeric values
     large_series = pd.Series([str(i) for i in range(2000)] + ["text"] * 100)
     assert _is_numeric_column(large_series)
 
@@ -374,15 +356,12 @@ def test_is_numeric_column_special_formats() -> None:
     """Test numeric column detection with special number formats."""
     from kreuzberg._utils._table import _is_numeric_column
 
-    # Currency and formatted numbers
     currency_series = pd.Series(["$1,234.56", "$2,500.00", "$999.99"])
     assert _is_numeric_column(currency_series)
 
-    # Percentages
     percent_series = pd.Series(["15%", "20.5%", "8%"])
     assert _is_numeric_column(percent_series)
 
-    # Scientific notation
     scientific_series = pd.Series(["1.23e10", "4.56E-5", "7.89e+3"])
     assert _is_numeric_column(scientific_series)
 
@@ -391,23 +370,19 @@ def test_is_numeric_column_error_handling() -> None:
     """Test numeric column detection error handling."""
     from kreuzberg._utils._table import _is_numeric_column
 
-    # Test with problematic data that might cause exceptions
     problematic_series = pd.Series([float("inf"), float("-inf"), float("nan"), "1", "2"])
 
-    # Should not raise exception and should handle gracefully
     result = _is_numeric_column(problematic_series)
     assert isinstance(result, bool)
 
 
 def test_table_formatting_edge_cases() -> None:
     """Test edge cases in table formatting."""
-    # Table with integer floats
     df = pd.DataFrame({"Whole Numbers": [1.0, 2.0, 3.0], "Decimals": [1.23, 4.56, 7.89]})
     table_data = {"df": df}
 
     result = enhance_table_markdown(cast("TableData", table_data))
 
-    # Integer floats should be formatted as integers
     assert "| 1 | 1.23 |" in result
     assert "| 2 | 4.56 |" in result
     assert "| 3 | 7.89 |" in result

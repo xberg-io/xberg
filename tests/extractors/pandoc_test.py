@@ -474,7 +474,6 @@ class TestPandocExtractorCore:
         """Test that MIME type mappings are properly defined."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
-        # Check specific mappings exist
         assert (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             in extractor.MIMETYPE_TO_PANDOC_TYPE_MAPPING
@@ -482,7 +481,6 @@ class TestPandocExtractorCore:
         assert "text/x-markdown" in extractor.MIMETYPE_TO_PANDOC_TYPE_MAPPING
         assert "application/epub+zip" in extractor.MIMETYPE_TO_PANDOC_TYPE_MAPPING
 
-        # Check file extension mappings
         assert (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             in extractor.MIMETYPE_TO_FILE_EXTENSION_MAPPING
@@ -505,7 +503,7 @@ class TestPandocExtractorCore:
             )
             == "docx"
         )
-        assert extractor._get_pandoc_type_from_mime_type("text/markdown") == "markdown"  # Special case
+        assert extractor._get_pandoc_type_from_mime_type("text/markdown") == "markdown"
 
     def test_get_pandoc_type_from_mime_type_invalid(self, test_config: ExtractionConfig) -> None:
         """Test getting Pandoc type from invalid MIME type."""
@@ -521,7 +519,7 @@ class TestPandocExtractorCore:
         assert PandocExtractor._get_pandoc_key("author") == "authors"
         assert PandocExtractor._get_pandoc_key("contributors") == "authors"
         assert PandocExtractor._get_pandoc_key("institute") == "organization"
-        assert PandocExtractor._get_pandoc_key("title") == "title"  # Direct mapping
+        assert PandocExtractor._get_pandoc_key("title") == "title"
         assert PandocExtractor._get_pandoc_key("unknown_key") is None
 
     @pytest.mark.anyio
@@ -535,12 +533,10 @@ class TestPandocExtractorCore:
             patch("kreuzberg._extractors._pandoc.create_temp_file") as mock_temp_file,
             patch.object(extractor, "extract_path_async") as mock_extract_path,
         ):
-            # Mock temp file creation
             mock_unlink = AsyncMock()
             temp_path = "/tmp/test.md"
             mock_temp_file.return_value = (temp_path, mock_unlink)
 
-            # Mock file writing
             mock_path = AsyncMock()
             mock_path.write_bytes = AsyncMock()
 
@@ -567,12 +563,10 @@ class TestPandocExtractorCore:
             patch.object(extractor, "extract_path_sync") as mock_extract_path,
             patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            # Mock temp file creation
             mock_fd = 3
             temp_path = "/tmp/test.md"
             mock_mkstemp.return_value = (mock_fd, temp_path)
 
-            # Mock file writing
             mock_file = Mock()
             mock_fdopen.return_value.__enter__.return_value = mock_file
 
@@ -601,13 +595,9 @@ class TestPandocExtractorCore:
         ):
             mock_error = Exception("Test error")
 
-            # Create a mock ExceptionGroup for testing
-            # Create ExceptionGroup for testing
             if ExceptionGroup is not None:
-                # Python 3.11+ has built-in ExceptionGroup
                 mock_taskgroup.side_effect = ExceptionGroup("Multiple errors", [mock_error])
             else:
-                # Fallback - this test will be skipped on older Python
                 pytest.skip("ExceptionGroup not available")
 
             with pytest.raises(ParsingError, match="Failed to process file"):
@@ -657,7 +647,6 @@ class TestPandocVersionValidationExtended:
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = True
 
-        # Should not call pandoc
         with patch("kreuzberg._extractors._pandoc.run_process") as mock_run:
             await extractor._validate_pandoc_version()
             mock_run.assert_not_called()
@@ -667,7 +656,6 @@ class TestPandocVersionValidationExtended:
         """Test version validation with different output formats."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
-        # Test different version string formats
         version_strings = [
             b"pandoc version 3.1.2",
             b"pandoc (version 3.1.2)",
@@ -776,8 +764,8 @@ class TestPandocMetadataExtractionExtended:
             "citations": [
                 {"citationId": "cite1"},
                 {"citationId": "cite2"},
-                {"invalid": "entry"},  # Missing citationId
-                "string_entry",  # Not a dict
+                {"invalid": "entry"},
+                "string_entry",
             ]
         }
 
@@ -798,10 +786,10 @@ class TestPandocMetadataExtractionExtended:
 
         result = extractor._extract_metadata(raw_meta)
         assert result["title"] == "Test Title"
-        assert result["summary"] == "Test Abstract"  # Mapped from abstract
-        assert result["created_at"] == "2023-01-01"  # Mapped from date
-        assert result["authors"] == ["Test Author"]  # Wrapped in list
-        assert result["organization"] == "Test Organization"  # Mapped from institute
+        assert result["summary"] == "Test Abstract"
+        assert result["created_at"] == "2023-01-01"
+        assert result["authors"] == ["Test Author"]
+        assert result["organization"] == "Test Organization"
         assert "unknown_field" not in result
 
     def test_extract_metadata_with_valid_field(self, test_config: ExtractionConfig) -> None:
@@ -810,7 +798,6 @@ class TestPandocMetadataExtractionExtended:
         raw_meta = {"valid": {"t": "MetaString", "c": "true"}}
 
         result = extractor._extract_metadata(raw_meta)
-        # Note: 'valid' is not in Metadata TypedDict and is not handled
         assert "valid" not in result
 
     def test_extract_metadata_with_blocks_citations(self, test_config: ExtractionConfig) -> None:
@@ -967,16 +954,12 @@ class TestPandocMetaValueExtractionExtended:
         """Test extracting from invalid node types."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
-        # Not a dict
         assert extractor._extract_meta_value("string") is None
 
-        # Missing type field
         assert extractor._extract_meta_value({"c": "content"}) is None
 
-        # Missing content field
         assert extractor._extract_meta_value({"t": "MetaString"}) is None
 
-        # Empty content is still returned
         assert extractor._extract_meta_value({"t": "MetaString", "c": ""}) == ""
 
 
@@ -1002,17 +985,14 @@ class TestPandocFileExtractionExtended:
             patch("json.loads", return_value=mock_json_data),
             patch.object(extractor, "_extract_metadata", return_value={"title": "Test Title"}) as mock_extract,
         ):
-            # Mock temp file
             mock_unlink = AsyncMock()
             temp_path = "/tmp/metadata.json"
             mock_temp_file.return_value = (temp_path, mock_unlink)
 
-            # Mock pandoc process
             mock_result = Mock()
             mock_result.returncode = 0
             mock_run_process.return_value = mock_result
 
-            # Mock file reading
             mock_path = AsyncMock()
             mock_path.read_text.return_value = json.dumps(mock_json_data)
 
@@ -1035,12 +1015,10 @@ class TestPandocFileExtractionExtended:
             patch("kreuzberg._extractors._pandoc.create_temp_file") as mock_temp_file,
             patch("kreuzberg._extractors._pandoc.run_process") as mock_run_process,
         ):
-            # Mock temp file
             mock_unlink = AsyncMock()
             temp_path = "/tmp/metadata.json"
             mock_temp_file.return_value = (temp_path, mock_unlink)
 
-            # Mock pandoc process failure
             mock_result = Mock()
             mock_result.returncode = 1
             mock_result.stderr = b"Error message"
@@ -1062,17 +1040,14 @@ class TestPandocFileExtractionExtended:
             patch("kreuzberg._extractors._pandoc.create_temp_file") as mock_temp_file,
             patch("kreuzberg._extractors._pandoc.run_process") as mock_run_process,
         ):
-            # Mock temp file
             mock_unlink = AsyncMock()
             temp_path = "/tmp/output.md"
             mock_temp_file.return_value = (temp_path, mock_unlink)
 
-            # Mock pandoc process
             mock_result = Mock()
             mock_result.returncode = 0
             mock_run_process.return_value = mock_result
 
-            # Mock file reading
             mock_path = AsyncMock()
             mock_path.read_text.return_value = "# Test Content\n\nThis is test content."
 
@@ -1104,17 +1079,14 @@ class TestPandocFileExtractionExtended:
             patch("pathlib.Path.open") as mock_open,
             patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            # Mock temp file
             mock_fd = 3
             temp_path = "/tmp/metadata.json"
             mock_mkstemp.return_value = (mock_fd, temp_path)
 
-            # Mock subprocess
             mock_result = Mock()
             mock_result.returncode = 0
             mock_run.return_value = mock_result
 
-            # Mock file reading
             mock_file = Mock()
             mock_file.read.return_value = json.dumps(mock_json_data)
             mock_open.return_value.__enter__.return_value = mock_file
@@ -1140,17 +1112,14 @@ class TestPandocFileExtractionExtended:
             patch("pathlib.Path.open") as mock_open,
             patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            # Mock temp file
             mock_fd = 3
             temp_path = "/tmp/output.md"
             mock_mkstemp.return_value = (mock_fd, temp_path)
 
-            # Mock subprocess
             mock_result = Mock()
             mock_result.returncode = 0
             mock_run.return_value = mock_result
 
-            # Mock file reading
             mock_file = Mock()
             mock_file.read.return_value = "# Test Content\n\nThis is test content."
             mock_open.return_value.__enter__.return_value = mock_file
@@ -1265,7 +1234,6 @@ class TestPandocExtractorSubclassesExtended:
 
         for subclass in subclasses:
             assert issubclass(subclass, PandocExtractor)
-            # Test that they can be instantiated
             instance = subclass("text/x-markdown", test_config)
             assert isinstance(instance, PandocExtractor)
 
@@ -1277,7 +1245,6 @@ class TestPandocExtractorBase:
         """Test that MIME type mappings are properly defined."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
-        # Check specific mappings exist
         assert (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             in extractor.MIMETYPE_TO_PANDOC_TYPE_MAPPING
@@ -1285,7 +1252,6 @@ class TestPandocExtractorBase:
         assert "text/x-markdown" in extractor.MIMETYPE_TO_PANDOC_TYPE_MAPPING
         assert "application/epub+zip" in extractor.MIMETYPE_TO_PANDOC_TYPE_MAPPING
 
-        # Check file extension mappings
         assert (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             in extractor.MIMETYPE_TO_FILE_EXTENSION_MAPPING
@@ -1304,7 +1270,7 @@ class TestPandocExtractorBase:
         assert PandocExtractor._get_pandoc_key("author") == "authors"
         assert PandocExtractor._get_pandoc_key("contributors") == "authors"
         assert PandocExtractor._get_pandoc_key("institute") == "organization"
-        assert PandocExtractor._get_pandoc_key("title") == "title"  # Direct mapping
+        assert PandocExtractor._get_pandoc_key("title") == "title"
         assert PandocExtractor._get_pandoc_key("unknown_key") is None
 
     def test_extract_path_sync_success(self, test_config: ExtractionConfig) -> None:
@@ -1354,13 +1320,9 @@ class TestPandocExtractorBase:
         ):
             mock_error = Exception("Test error")
 
-            # Create a mock ExceptionGroup for testing
-            # Create ExceptionGroup for testing
             if ExceptionGroup is not None:
-                # Python 3.11+ has built-in ExceptionGroup
                 mock_taskgroup.side_effect = ExceptionGroup("Multiple errors", [mock_error])
             else:
-                # Fallback - this test will be skipped on older Python
                 pytest.skip("ExceptionGroup not available")
 
             with pytest.raises(ParsingError, match="Failed to process file"):
@@ -1377,8 +1339,8 @@ class TestPandocMetadataExtraction:
             "citations": [
                 {"citationId": "cite1"},
                 {"citationId": "cite2"},
-                {"invalid": "entry"},  # Missing citationId
-                "string_entry",  # Not a dict
+                {"invalid": "entry"},
+                "string_entry",
             ]
         }
 
@@ -1399,10 +1361,10 @@ class TestPandocMetadataExtraction:
 
         result = extractor._extract_metadata(raw_meta)
         assert result["title"] == "Test Title"
-        assert result["summary"] == "Test Abstract"  # Mapped from abstract
-        assert result["created_at"] == "2023-01-01"  # Mapped from date
-        assert result["authors"] == ["Test Author"]  # Wrapped in list
-        assert result["organization"] == "Test Organization"  # Mapped from institute
+        assert result["summary"] == "Test Abstract"
+        assert result["created_at"] == "2023-01-01"
+        assert result["authors"] == ["Test Author"]
+        assert result["organization"] == "Test Organization"
         assert "unknown_field" not in result
 
     def test_extract_metadata_with_blocks_citations(self, test_config: ExtractionConfig) -> None:
@@ -1532,14 +1494,8 @@ class TestPandocExtractorSubclasses:
 
         for subclass in subclasses:
             assert issubclass(subclass, PandocExtractor)
-            # Test that they can be instantiated
             instance = subclass("text/x-markdown", test_config)
             assert isinstance(instance, PandocExtractor)
-
-
-# =============================================================================
-# COMPREHENSIVE TESTS (merged from pandoc_comprehensive_test.py)
-# =============================================================================
 
 
 class TestPandocExtractorSyncMethods:
@@ -1558,17 +1514,14 @@ class TestPandocExtractorSyncMethods:
             patch("pathlib.Path.open") as mock_open,
             patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            # Mock temp file
             mock_fd = 3
             temp_path = "/tmp/metadata.json"
             mock_mkstemp.return_value = (mock_fd, temp_path)
 
-            # Mock subprocess success
             mock_result = Mock()
             mock_result.returncode = 0
             mock_run.return_value = mock_result
 
-            # Mock file reading with invalid JSON
             mock_file = Mock()
             mock_file.read.return_value = "invalid json"
             mock_open.return_value.__enter__.return_value = mock_file
@@ -1591,7 +1544,6 @@ class TestPandocExtractorSyncMethods:
             patch("subprocess.run", side_effect=OSError("Subprocess error")),
             patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            # Mock temp file
             mock_fd = 3
             temp_path = "/tmp/metadata.json"
             mock_mkstemp.return_value = (mock_fd, temp_path)
@@ -1614,7 +1566,6 @@ class TestPandocExtractorSyncMethods:
             patch("subprocess.run", side_effect=OSError("File error")),
             patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            # Mock temp file
             mock_fd = 3
             temp_path = "/tmp/output.md"
             mock_mkstemp.return_value = (mock_fd, temp_path)
@@ -1637,12 +1588,10 @@ class TestPandocExtractorSyncMethods:
             patch("subprocess.run") as mock_run,
             patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            # Mock temp file
             mock_fd = 3
             temp_path = "/tmp/output.md"
             mock_mkstemp.return_value = (mock_fd, temp_path)
 
-            # Mock subprocess failure
             mock_result = Mock()
             mock_result.returncode = 1
             mock_result.stderr = "Pandoc error"
@@ -1669,17 +1618,14 @@ class TestPandocExtractorAsyncErrorsComprehensive:
             patch("kreuzberg._extractors._pandoc.create_temp_file") as mock_temp_file,
             patch("kreuzberg._extractors._pandoc.run_process") as mock_run_process,
         ):
-            # Mock temp file
             mock_unlink = AsyncMock()
             temp_path = "/tmp/metadata.json"
             mock_temp_file.return_value = (temp_path, mock_unlink)
 
-            # Mock pandoc process success
             mock_result = Mock()
             mock_result.returncode = 0
             mock_run_process.return_value = mock_result
 
-            # Mock file reading with invalid JSON
             mock_path = AsyncMock()
             mock_path.read_text.return_value = "invalid json"
 
@@ -1700,7 +1646,6 @@ class TestPandocExtractorAsyncErrorsComprehensive:
             patch("kreuzberg._extractors._pandoc.create_temp_file") as mock_temp_file,
             patch("kreuzberg._extractors._pandoc.run_process", side_effect=OSError("Async OS error")),
         ):
-            # Mock temp file
             mock_unlink = AsyncMock()
             temp_path = "/tmp/metadata.json"
             mock_temp_file.return_value = (temp_path, mock_unlink)
@@ -1721,7 +1666,6 @@ class TestPandocExtractorAsyncErrorsComprehensive:
             patch("kreuzberg._extractors._pandoc.create_temp_file") as mock_temp_file,
             patch("kreuzberg._extractors._pandoc.run_process", side_effect=OSError("File OS error")),
         ):
-            # Mock temp file
             mock_unlink = AsyncMock()
             temp_path = "/tmp/output.md"
             mock_temp_file.return_value = (temp_path, mock_unlink)
@@ -1741,8 +1685,8 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         node = {
             "t": "MetaBlocks",
             "c": [
-                {"t": "Header", "c": [1, [], []]},  # Not a Para block
-                {"t": "CodeBlock", "c": ["", "code"]},  # Not a Para block
+                {"t": "Header", "c": [1, [], []]},
+                {"t": "CodeBlock", "c": ["", "code"]},
             ],
         }
 
@@ -1755,8 +1699,8 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         node = {
             "t": "MetaBlocks",
             "c": [
-                {"t": "Para", "c": []},  # Empty Para
-                {"t": "Para", "c": None},  # Invalid content
+                {"t": "Para", "c": []},
+                {"t": "Para", "c": None},
             ],
         }
 
@@ -1767,12 +1711,10 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         """Test extracting meta value with empty content."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
-        # Test empty list
         node = {"t": "MetaList", "c": []}
         result = extractor._extract_meta_value(node)
         assert result is None
 
-        # Test None content
         node_none: dict[str, Any] = {"t": "MetaString", "c": None}
         result = extractor._extract_meta_value(node_none)
         assert result is None
@@ -1783,9 +1725,9 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         node = {
             "t": "MetaList",
             "c": [
-                "string_item",  # Not a dict
+                "string_item",
                 {"t": "MetaString", "c": "valid_item"},
-                123,  # Not a dict
+                123,
             ],
         }
 
@@ -1796,12 +1738,10 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         """Test extracting inline text with empty content."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
-        # Test Emph with empty content
         node = {"t": "Emph", "c": []}
         result = extractor._extract_inline_text(node)
         assert result is None
 
-        # Test Strong with None content
         node_strong: dict[str, Any] = {"t": "Strong", "c": None}
         result = extractor._extract_inline_text(node_strong)
         assert result is None
@@ -1810,13 +1750,13 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         """Test extracting inlines that result in empty strings."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         nodes: list[dict[str, Any]] = [
-            {"t": "Unknown", "c": "content"},  # Returns None
-            {"t": "Str", "c": ""},  # Returns empty string
-            {"t": "Space", "c": None},  # Returns space
+            {"t": "Unknown", "c": "content"},
+            {"t": "Str", "c": ""},
+            {"t": "Space", "c": None},
         ]
 
         result = extractor._extract_inlines(nodes)
-        assert result == " "  # Only the space remains after stripping
+        assert result == " "
 
     def test_extract_metadata_contributors_field(self, test_config: ExtractionConfig) -> None:
         """Test metadata extraction with contributors field."""
@@ -1826,7 +1766,7 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         }
 
         result = extractor._extract_metadata(raw_meta)
-        assert result["authors"] == ["Contributor Name"]  # Mapped to authors and wrapped in list
+        assert result["authors"] == ["Contributor Name"]
 
     def test_extract_metadata_languages_field(self, test_config: ExtractionConfig) -> None:
         """Test metadata extraction with languages field (direct mapping)."""
@@ -1836,13 +1776,13 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         }
 
         result = extractor._extract_metadata(raw_meta)
-        assert result["languages"] == ["en"]  # Wrapped in list
+        assert result["languages"] == ["en"]
 
     def test_extract_metadata_invalid_citations_structure(self, test_config: ExtractionConfig) -> None:
         """Test metadata extraction with invalid citations structure."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
-            "citations": "not_a_list",  # Invalid structure
+            "citations": "not_a_list",
         }
 
         result = extractor._extract_metadata(raw_meta)
@@ -1853,9 +1793,9 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "blocks": [
-                {"t": "Cite", "c": []},  # Empty content
-                {"t": "Cite", "c": [["not_a_dict"], []]},  # Invalid citation structure
-                {"t": "Cite"},  # Missing content field
+                {"t": "Cite", "c": []},
+                {"t": "Cite", "c": [["not_a_dict"], []]},
+                {"t": "Cite"},
             ]
         }
 
@@ -1932,25 +1872,21 @@ class TestPandocExtractorMIMETypeHandlingComprehensive:
         """Test prefix matching for MIME types."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
-        # Should match by prefix
         result = extractor._get_pandoc_type_from_mime_type("text/x-markdown; charset=utf-8")
         assert result == "markdown"
 
     def test_get_pandoc_key_all_mappings(self) -> None:
         """Test all key mappings comprehensively."""
-        # Test all mapped keys
         assert PandocExtractor._get_pandoc_key("abstract") == "summary"
         assert PandocExtractor._get_pandoc_key("date") == "created_at"
         assert PandocExtractor._get_pandoc_key("author") == "authors"
         assert PandocExtractor._get_pandoc_key("contributors") == "authors"
         assert PandocExtractor._get_pandoc_key("institute") == "organization"
 
-        # Test direct mappings (keys that exist in Metadata)
         assert PandocExtractor._get_pandoc_key("title") == "title"
         assert PandocExtractor._get_pandoc_key("subject") == "subject"
         assert PandocExtractor._get_pandoc_key("keywords") == "keywords"
 
-        # Test unmapped keys
         assert PandocExtractor._get_pandoc_key("unknown_field") is None
         assert PandocExtractor._get_pandoc_key("random_key") is None
 
@@ -2091,7 +2027,6 @@ class TestPandocConstantsAndTypesComprehensive:
         pandoc_types = extractor.MIMETYPE_TO_PANDOC_TYPE_MAPPING
         extensions = extractor.MIMETYPE_TO_FILE_EXTENSION_MAPPING
 
-        # Every MIME type in pandoc mapping should have a file extension
         for mime_type in pandoc_types:
             assert mime_type in extensions, f"Missing file extension for MIME type: {mime_type}"
 
@@ -2107,17 +2042,14 @@ class TestPandocConstantsAndTypesComprehensive:
             patch.object(extractor, "extract_path_sync", side_effect=Exception("Test error")),
             patch("pathlib.Path.unlink") as mock_unlink,
         ):
-            # Mock temp file creation
             mock_fd = 3
             temp_path = "/tmp/test.md"
             mock_mkstemp.return_value = (mock_fd, temp_path)
 
-            # Mock file writing
             mock_file = Mock()
             mock_fdopen.return_value.__enter__.return_value = mock_file
 
             with pytest.raises(Exception, match="Test error"):
                 extractor.extract_bytes_sync(content)
 
-            # Ensure cleanup happened
             mock_unlink.assert_called_once()

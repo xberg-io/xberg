@@ -410,11 +410,6 @@ def test_extract_presentation_metadata_font_without_name(
     assert result.mime_type == "text/markdown"
 
 
-# =============================================================================
-# COMPREHENSIVE TESTS (for improved coverage)
-# =============================================================================
-
-
 class TestPresentationExtractorComprehensiveScenarios:
     """Test comprehensive scenarios for presentation extraction."""
 
@@ -431,7 +426,6 @@ class TestPresentationExtractorComprehensiveScenarios:
         mock_picture_shape.shape_type = MSO_SHAPE_TYPE.PICTURE
         mock_picture_shape.name = "test_image_no_alt"
 
-        # Mock element structure that raises AttributeError for alt text
         mock_element = mocker.MagicMock()
         mock_element._nvXxPr.side_effect = AttributeError("No _nvXxPr attribute")
         mock_picture_shape._element = mock_element
@@ -446,7 +440,6 @@ class TestPresentationExtractorComprehensiveScenarios:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should use shape.name when alt text is not available
         assert "![test_image_no_alt](test_image_no_alt.jpg)" in result.content
         assert result.mime_type == "text/markdown"
 
@@ -460,9 +453,8 @@ class TestPresentationExtractorComprehensiveScenarios:
 
         mock_placeholder_shape.shape_type = MSO_SHAPE_TYPE.PLACEHOLDER
         mock_placeholder_shape.name = "placeholder_image"
-        mock_placeholder_shape.image = mocker.MagicMock()  # Has image attribute
+        mock_placeholder_shape.image = mocker.MagicMock()
 
-        # Mock alt text extraction
         mock_element = mocker.MagicMock()
         mock_nvXxPr = mocker.MagicMock()
         mock_cNvPr = mocker.MagicMock()
@@ -492,7 +484,6 @@ class TestPresentationExtractorComprehensiveScenarios:
         mock_text_shape = mocker.MagicMock()
         mock_shapes = mocker.MagicMock()
 
-        # Set up shapes with title and non-title text
         mock_shapes.title = mock_title_shape
         mock_slide.shapes = mock_shapes
         mock_slide.has_notes_slide = False
@@ -500,7 +491,6 @@ class TestPresentationExtractorComprehensiveScenarios:
         mock_presentation.core_properties = mocker.MagicMock()
         mock_presentation.core_properties.author = None
 
-        # Configure both shapes
         mock_title_shape.shape_type = mocker.MagicMock()
         mock_title_shape.has_text_frame = True
         mock_title_shape.text = "  Title Text"
@@ -509,14 +499,12 @@ class TestPresentationExtractorComprehensiveScenarios:
         mock_text_shape.has_text_frame = True
         mock_text_shape.text = "Regular content text"
 
-        # Mock iteration over shapes
         mock_shapes.__iter__ = mocker.Mock(return_value=iter([mock_title_shape, mock_text_shape]))
 
         mocker.patch("pptx.Presentation", return_value=mock_presentation)
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Title should be formatted as header, regular text as plain text
         assert "# Title Text" in result.content
         assert "Regular content text" in result.content
         assert result.mime_type == "text/markdown"
@@ -530,7 +518,7 @@ class TestPresentationExtractorComprehensiveScenarios:
         mock_presentation.slides = [mock_slide]
         mock_slide.has_notes_slide = True
         mock_slide.notes_slide = mock_notes_slide
-        mock_notes_slide.notes_text_frame = None  # Notes frame is None
+        mock_notes_slide.notes_text_frame = None
         mock_slide.shapes = []
 
         mock_presentation.core_properties = mocker.MagicMock()
@@ -540,7 +528,6 @@ class TestPresentationExtractorComprehensiveScenarios:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should have notes section but no content
         assert "### Notes:" in result.content
         assert result.mime_type == "text/markdown"
 
@@ -552,9 +539,8 @@ class TestPresentationExtractorComprehensiveScenarios:
         mock_slide = mocker.MagicMock()
         mock_text_shape = mocker.MagicMock()
 
-        # Mock shapes without title attribute
         mock_shapes = mocker.MagicMock()
-        del mock_shapes.title  # Remove title attribute
+        del mock_shapes.title
         mock_slide.shapes = mock_shapes
         mock_slide.has_notes_slide = False
         mock_presentation.slides = [mock_slide]
@@ -581,18 +567,15 @@ class TestPresentationExtractorComprehensiveScenarios:
         """Test extraction with multiple slides - covers slide numbering and content accumulation."""
         mock_presentation = mocker.MagicMock()
 
-        # Create multiple slides
         mock_slide1 = mocker.MagicMock()
         mock_slide2 = mocker.MagicMock()
         mock_slide3 = mocker.MagicMock()
 
         mock_presentation.slides = [mock_slide1, mock_slide2, mock_slide3]
 
-        # Configure slide 1
         mock_slide1.shapes = []
         mock_slide1.has_notes_slide = False
 
-        # Configure slide 2 with content
         mock_text_shape = mocker.MagicMock()
         mock_text_shape.shape_type = mocker.MagicMock()
         mock_text_shape.has_text_frame = True
@@ -600,7 +583,6 @@ class TestPresentationExtractorComprehensiveScenarios:
         mock_slide2.shapes = [mock_text_shape]
         mock_slide2.has_notes_slide = False
 
-        # Configure slide 3 with notes
         mock_slide3.shapes = []
         mock_slide3.has_notes_slide = True
         mock_notes_slide = mocker.MagicMock()
@@ -616,7 +598,6 @@ class TestPresentationExtractorComprehensiveScenarios:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should contain slide numbers as comments
         assert "<!-- Slide number: 1 -->" in result.content
         assert "<!-- Slide number: 2 -->" in result.content
         assert "<!-- Slide number: 3 -->" in result.content
@@ -638,7 +619,6 @@ class TestPresentationExtractorMetadataComprehensive:
         mock_presentation = mocker.MagicMock()
         mock_slide = mocker.MagicMock()
 
-        # Mock all core properties
         mock_core_properties = mocker.MagicMock()
         mock_core_properties.author = "Full Author"
         mock_core_properties.comments = "Full Comments"
@@ -656,7 +636,6 @@ class TestPresentationExtractorMetadataComprehensive:
 
         mock_presentation.core_properties = mock_core_properties
 
-        # Mock font extraction
         mock_shape = mocker.MagicMock()
         mock_text_frame = mocker.MagicMock()
         mock_paragraph = mocker.MagicMock()
@@ -669,7 +648,7 @@ class TestPresentationExtractorMetadataComprehensive:
         mock_shape.text_frame = mock_text_frame
 
         mock_slide.shapes = [mock_shape]
-        mock_slide.has_notes_slide = True  # Slide with notes
+        mock_slide.has_notes_slide = True
         mock_presentation.slides = [mock_slide]
 
         mocker.patch("pptx.Presentation", return_value=mock_presentation)
@@ -692,7 +671,6 @@ class TestPresentationExtractorMetadataComprehensive:
         assert metadata["categories"] == ["Educational"]
         assert metadata["fonts"] == ["Calibri"]
 
-        # Check structure info
         assert metadata["description"] == "Presentation with 1 slide, 1 with notes"
         assert "PowerPoint presentation with 1 slide" in metadata["summary"]
         assert "1 slide has notes" in metadata["summary"]
@@ -703,7 +681,7 @@ class TestPresentationExtractorMetadataComprehensive:
     ) -> None:
         """Test metadata extraction with presentation that has no slides."""
         mock_presentation = mocker.MagicMock()
-        mock_presentation.slides = []  # No slides
+        mock_presentation.slides = []
         mock_presentation.core_properties = mocker.MagicMock()
         mock_presentation.core_properties.author = None
 
@@ -711,7 +689,6 @@ class TestPresentationExtractorMetadataComprehensive:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should not add structure info for empty presentation
         assert "description" not in result.metadata
         assert "summary" not in result.metadata
         assert result.mime_type == "text/markdown"
@@ -729,7 +706,6 @@ class TestPresentationExtractorMetadataComprehensive:
         mock_core_properties.category = None
         mock_presentation.core_properties = mock_core_properties
 
-        # Create shapes with different fonts
         mock_shape1 = mocker.MagicMock()
         mock_text_frame1 = mocker.MagicMock()
         mock_paragraph1 = mocker.MagicMock()
@@ -750,7 +726,7 @@ class TestPresentationExtractorMetadataComprehensive:
         mock_run2a.font = mock_font2a
         mock_run2b = mocker.MagicMock()
         mock_font2b = mocker.MagicMock()
-        mock_font2b.name = "Arial"  # Duplicate font (should be deduplicated)
+        mock_font2b.name = "Arial"
         mock_run2b.font = mock_font2b
         mock_paragraph2.runs = [mock_run2a, mock_run2b]
         mock_text_frame2.paragraphs = [mock_paragraph2]
@@ -763,7 +739,6 @@ class TestPresentationExtractorMetadataComprehensive:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should have unique fonts sorted
         assert set(result.metadata["fonts"]) == {"Arial", "Calibri"}
         assert len(result.metadata["fonts"]) == 2
         assert "uses 2 fonts" in result.metadata["summary"]
@@ -774,7 +749,6 @@ class TestPresentationExtractorMetadataComprehensive:
         """Test metadata structure info with singular vs plural forms."""
         mock_presentation = mocker.MagicMock()
 
-        # Create 3 slides, 2 with notes
         mock_slide1 = mocker.MagicMock()
         mock_slide1.shapes = []
         mock_slide1.has_notes_slide = True
@@ -795,7 +769,6 @@ class TestPresentationExtractorMetadataComprehensive:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should use plural for slides, and correctly count notes
         assert result.metadata["description"] == "Presentation with 3 slides, 2 with notes"
         assert "PowerPoint presentation with 3 slides" in result.metadata["summary"]
         assert "2 slides have notes" in result.metadata["summary"]
@@ -812,24 +785,22 @@ class TestPresentationExtractorMetadataComprehensive:
 
         mock_core_properties = mocker.MagicMock()
         mock_core_properties.author = None
-        mock_core_properties.comments = "Existing summary content"  # This should become summary
+        mock_core_properties.comments = "Existing summary content"
         mock_presentation.core_properties = mock_core_properties
 
         mocker.patch("pptx.Presentation", return_value=mock_presentation)
 
-        # Create a custom metadata dict with existing summary
         original_extract_method = extractor._extract_presentation_metadata
 
         def mock_extract_with_existing_summary(presentation: Any) -> Any:
             metadata = original_extract_method(presentation)
-            metadata["summary"] = "Pre-existing summary"  # Simulate existing summary
+            metadata["summary"] = "Pre-existing summary"
             return metadata
 
         mocker.patch.object(extractor, "_extract_presentation_metadata", side_effect=mock_extract_with_existing_summary)
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should preserve the pre-existing summary
         assert result.metadata["summary"] == "Pre-existing summary"
 
 
@@ -852,7 +823,6 @@ class TestPresentationExtractorTableProcessingEdgeCases:
         mock_row1 = mocker.MagicMock()
         mock_row2 = mocker.MagicMock()
 
-        # Cells with content that needs HTML escaping
         mock_cell1 = mocker.MagicMock()
         mock_cell1.text = "Header <with> special & chars"
         mock_cell2 = mocker.MagicMock()
@@ -877,7 +847,6 @@ class TestPresentationExtractorTableProcessingEdgeCases:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Content should be HTML escaped
         assert "&lt;with&gt;" in result.content
         assert "&amp;" in result.content
         assert "&quot;with&quot;" in result.content
@@ -901,15 +870,14 @@ class TestPresentationExtractorTableProcessingEdgeCases:
         mock_row1 = mocker.MagicMock()
         mock_row2 = mocker.MagicMock()
 
-        # Mix of empty and filled cells
         mock_cell1 = mocker.MagicMock()
-        mock_cell1.text = ""  # Empty cell
+        mock_cell1.text = ""
         mock_cell2 = mocker.MagicMock()
         mock_cell2.text = "Header2"
         mock_cell3 = mocker.MagicMock()
         mock_cell3.text = "Data1"
         mock_cell4 = mocker.MagicMock()
-        mock_cell4.text = ""  # Empty cell
+        mock_cell4.text = ""
 
         mock_row1.cells = [mock_cell1, mock_cell2]
         mock_row2.cells = [mock_cell3, mock_cell4]
@@ -926,7 +894,6 @@ class TestPresentationExtractorTableProcessingEdgeCases:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should handle empty cells properly
         assert "<th></th>" in result.content
         assert "<th>Header2</th>" in result.content
         assert "<td>Data1</td>" in result.content
@@ -948,9 +915,8 @@ class TestPresentationExtractorImageProcessingEdgeCases:
         mock_picture_shape = mocker.MagicMock()
 
         mock_picture_shape.shape_type = MSO_SHAPE_TYPE.PICTURE
-        mock_picture_shape.name = "test-image_with@special#chars!"  # Contains non-word characters
+        mock_picture_shape.name = "test-image_with@special#chars!"
 
-        # Mock alt text extraction
         mock_element = mocker.MagicMock()
         mock_nvXxPr = mocker.MagicMock()
         mock_cNvPr = mocker.MagicMock()
@@ -969,7 +935,6 @@ class TestPresentationExtractorImageProcessingEdgeCases:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Non-word characters should be removed from filename
         assert "![Image with special chars](testimagewithspecialchars.jpg)" in result.content
         assert result.mime_type == "text/markdown"
 
@@ -985,7 +950,6 @@ class TestPresentationExtractorImageProcessingEdgeCases:
 
         mock_placeholder_shape.shape_type = MSO_SHAPE_TYPE.PLACEHOLDER
         mock_placeholder_shape.name = "text_placeholder"
-        # Placeholder does NOT have image attribute
         mock_placeholder_shape.has_text_frame = True
         mock_placeholder_shape.text = "Placeholder text content"
 
@@ -999,7 +963,6 @@ class TestPresentationExtractorImageProcessingEdgeCases:
 
         result = extractor.extract_bytes_sync(b"mock pptx content")
 
-        # Should be processed as text, not image
         assert "Placeholder text content" in result.content
-        assert "![" not in result.content  # No image markdown
+        assert "![" not in result.content
         assert result.mime_type == "text/markdown"

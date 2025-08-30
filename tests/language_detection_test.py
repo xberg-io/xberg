@@ -34,7 +34,6 @@ def test_language_detection_config_custom_values() -> None:
 
 def test_detect_languages_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test detect_languages with missing fast-langdetect dependency."""
-    # Mock the module import to simulate missing dependency
     import kreuzberg._language_detection as ld
 
     monkeypatch.setattr(ld, "HAS_FAST_LANGDETECT", False)
@@ -65,7 +64,7 @@ def test_detect_languages_empty_input(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test detect_languages with empty input."""
 
     def mock_detect(text: str, low_memory: bool = True) -> dict[str, str | float] | None:
-        return None  # Empty input returns None
+        return None
 
     import kreuzberg._language_detection as ld
 
@@ -109,7 +108,7 @@ def test_detect_languages_exception_handling(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(ld, "detect_multilingual", mock_detect_error)
 
     result = detect_languages("text", LanguageDetectionConfig())
-    assert result is None  # Should return None on exception
+    assert result is None
 
 
 def test_detect_languages_with_none_config(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -124,7 +123,7 @@ def test_detect_languages_with_none_config(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(ld, "detect", mock_detect)
     monkeypatch.setattr(ld, "detect_multilingual", mock_detect)
 
-    result = detect_languages("Hallo Welt")  # No config passed
+    result = detect_languages("Hallo Welt")
     assert result == ["de"]
 
 
@@ -152,7 +151,6 @@ def test_create_fast_langdetect_config_with_cache_dir(monkeypatch: pytest.Monkey
     config = LanguageDetectionConfig(cache_dir="/tmp/test", allow_fallback=False)
     _create_fast_langdetect_config(config)
 
-    # Verify the mock was called with correct arguments
     mock_config_class.assert_called_once_with(allow_fallback=False, cache_dir="/tmp/test")
 
 
@@ -168,5 +166,4 @@ def test_create_fast_langdetect_config_without_cache_dir(monkeypatch: pytest.Mon
     config = LanguageDetectionConfig(cache_dir=None, allow_fallback=True)
     _create_fast_langdetect_config(config)
 
-    # Verify the mock was called with correct arguments (no cache_dir)
     mock_config_class.assert_called_once_with(allow_fallback=True)

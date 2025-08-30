@@ -28,11 +28,24 @@ ENV PYTHONUNBUFFERED=1
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Install runtime dependencies
+# Languages included: English (default), Spanish, French, German, Italian, Portuguese,
+# Chinese (simplified & traditional), Japanese, Arabic, Russian, Hindi ~keep
 RUN apt-get update && apt-get install -y --no-install-recommends \
     pandoc \
     tesseract-ocr \
     tesseract-ocr-eng \
     tesseract-ocr-osd \
+    tesseract-ocr-spa \
+    tesseract-ocr-fra \
+    tesseract-ocr-deu \
+    tesseract-ocr-ita \
+    tesseract-ocr-por \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-chi-tra \
+    tesseract-ocr-jpn \
+    tesseract-ocr-ara \
+    tesseract-ocr-rus \
+    tesseract-ocr-hin \
     libglib2.0-0 \
     libsm6 \
     libxext6 \

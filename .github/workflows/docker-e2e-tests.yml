@@ -11,11 +11,8 @@ jobs:
     strategy:
       matrix:
         image:
-          - { name: "core", extras: "" }
-          - { name: "easyocr", extras: "easyocr" }
-          - { name: "paddle", extras: "paddleocr" }
-          - { name: "gmft", extras: "gmft" }
-          - { name: "all", extras: "all" }
+          - { name: "base", extras: "cli" }
+          - { name: "core", extras: "cli,chunking,crypto,document-classification,langdetect,additional-extensions" }
       fail-fast: false
 
     steps:
@@ -93,9 +90,7 @@ jobs:
           docker build -f .docker/Dockerfile \
             --build-arg EXTRAS="${{ matrix.image.extras }}" \
             -t kreuzberg:${{ matrix.image.name }} \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            --load \
+            --no-cache \
             .
 
           echo "Built image:"
@@ -105,7 +100,7 @@ jobs:
         run: |
           mkdir -p tests/e2e/logs
           echo "Running E2E tests for ${{ matrix.image.name }}..."
-          python3 tests/e2e/docker_images_test.py --image ${{ matrix.image.name }}
+          python3 tests/e2e/docker_e2e_test.py --image ${{ matrix.image.name }}
 
       - name: Generate test report - ${{ matrix.image.name }}
         if: always()

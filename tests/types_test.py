@@ -136,28 +136,24 @@ def test_extraction_config_valid_combinations() -> None:
 
 def test_extraction_result_to_dict() -> None:
     """Test ExtractionResult.to_dict() method with all fields."""
-    # Create test entities
     entities = [
         Entity(type="PERSON", text="John Doe", start=0, end=8),
         Entity(type="LOCATION", text="New York", start=10, end=18),
     ]
 
-    # Create extraction result with all fields
     result = ExtractionResult(
         content="John Doe in New York",
         mime_type="text/plain",
         metadata={"title": "Test Document", "authors": ["Test Author"]},
-        tables=[],  # Empty list for simplicity
+        tables=[],
         chunks=["chunk1", "chunk2"],
         entities=entities,
         keywords=[("test", 0.9), ("document", 0.8)],
         detected_languages=["en", "es"],
     )
 
-    # Convert to dict
     result_dict = result.to_dict()
 
-    # Verify structure
     assert result_dict["content"] == "John Doe in New York"
     assert result_dict["mime_type"] == "text/plain"
     assert result_dict["metadata"] == {"title": "Test Document", "authors": ["Test Author"]}
@@ -172,17 +168,14 @@ def test_extraction_result_to_dict() -> None:
 
 def test_extraction_result_to_dict_minimal() -> None:
     """Test ExtractionResult.to_dict() with minimal fields."""
-    # Create extraction result with only required fields
     result = ExtractionResult(
         content="Simple content",
         mime_type="text/plain",
         metadata={},
     )
 
-    # Convert to dict
     result_dict = result.to_dict()
 
-    # Verify structure - optional fields should not be present
     assert result_dict["content"] == "Simple content"
     assert result_dict["mime_type"] == "text/plain"
     assert result_dict["metadata"] == {}
@@ -195,17 +188,14 @@ def test_extraction_result_to_dict_minimal() -> None:
 
 def test_extraction_result_to_dict_with_include_none() -> None:
     """Test ExtractionResult.to_dict() with include_none=True."""
-    # Create extraction result with only required fields
     result = ExtractionResult(
         content="Simple content",
         mime_type="text/plain",
         metadata={},
     )
 
-    # Convert to dict with include_none=True
     result_dict = result.to_dict(include_none=True)
 
-    # Verify all fields are present, even if None
     assert result_dict["content"] == "Simple content"
     assert result_dict["mime_type"] == "text/plain"
     assert result_dict["metadata"] == {}
@@ -218,8 +208,6 @@ def test_extraction_result_to_dict_with_include_none() -> None:
 
 def test_extraction_result_export_tables_to_csv() -> None:
     """Test ExtractionResult.export_tables_to_csv() method."""
-    # For this test, we'll mock the table export functionality
-    # since it requires pandas DataFrames which may not be available
 
     mock_table1 = Mock()
     mock_table2 = Mock()
@@ -231,19 +219,15 @@ def test_extraction_result_export_tables_to_csv() -> None:
         tables=[mock_table1, mock_table2],
     )
 
-    # Mock the export_table_to_csv function
     with patch("kreuzberg._types.export_table_to_csv") as mock_export:
         mock_export.side_effect = ["csv1", "csv2"]
 
-        # Export tables to CSV
         csv_list = result.export_tables_to_csv()
 
-        # Verify we get 2 CSV strings
         assert len(csv_list) == 2
         assert csv_list[0] == "csv1"
         assert csv_list[1] == "csv2"
 
-        # Verify export_table_to_csv was called with each table
         assert mock_export.call_count == 2
         mock_export.assert_any_call(mock_table1)
         mock_export.assert_any_call(mock_table2)
@@ -258,10 +242,8 @@ def test_extraction_result_export_tables_to_csv_empty() -> None:
         tables=[],
     )
 
-    # Export tables to CSV
     csv_list = result.export_tables_to_csv()
 
-    # Should return empty list
     assert csv_list == []
 
 
@@ -278,19 +260,15 @@ def test_extraction_result_export_tables_to_tsv() -> None:
         tables=[mock_table1, mock_table2],
     )
 
-    # Mock the export_table_to_tsv function
     with patch("kreuzberg._types.export_table_to_tsv") as mock_export:
         mock_export.side_effect = ["tsv1", "tsv2"]
 
-        # Export tables to TSV
         tsv_list = result.export_tables_to_tsv()
 
-        # Verify we get 2 TSV strings
         assert len(tsv_list) == 2
         assert tsv_list[0] == "tsv1"
         assert tsv_list[1] == "tsv2"
 
-        # Verify export_table_to_tsv was called with each table
         assert mock_export.call_count == 2
         mock_export.assert_any_call(mock_table1)
         mock_export.assert_any_call(mock_table2)
@@ -305,10 +283,8 @@ def test_extraction_result_export_tables_to_tsv_empty() -> None:
         tables=[],
     )
 
-    # Export tables to TSV
     tsv_list = result.export_tables_to_tsv()
 
-    # Should return empty list
     assert tsv_list == []
 
 
@@ -325,30 +301,24 @@ def test_extraction_result_get_table_summaries() -> None:
         tables=[mock_table1, mock_table2],
     )
 
-    # Mock the extract_table_structure_info function
     with patch("kreuzberg._types.extract_table_structure_info") as mock_extract:
         mock_extract.side_effect = [
             {"rows": 3, "columns": 2, "headers": ["Header1", "Header2"]},
             {"rows": 4, "columns": 3, "headers": ["Name", "Age", "City"]},
         ]
 
-        # Get table summaries
         summaries = result.get_table_summaries()
 
-        # Verify we get 2 summaries
         assert len(summaries) == 2
 
-        # Verify first table summary
         assert summaries[0]["rows"] == 3
         assert summaries[0]["columns"] == 2
         assert summaries[0]["headers"] == ["Header1", "Header2"]
 
-        # Verify second table summary
         assert summaries[1]["rows"] == 4
         assert summaries[1]["columns"] == 3
         assert summaries[1]["headers"] == ["Name", "Age", "City"]
 
-        # Verify extract_table_structure_info was called with each table
         assert mock_extract.call_count == 2
         mock_extract.assert_any_call(mock_table1)
         mock_extract.assert_any_call(mock_table2)
@@ -363,17 +333,14 @@ def test_extraction_result_get_table_summaries_empty() -> None:
         tables=[],
     )
 
-    # Get table summaries
     summaries = result.get_table_summaries()
 
-    # Should return empty list
     assert summaries == []
 
 
 def test_normalize_metadata() -> None:
     """Test normalize_metadata function."""
 
-    # Test with valid metadata
     metadata = {
         "title": "Test Document",
         "authors": ["Alice", "Bob"],
@@ -384,14 +351,12 @@ def test_normalize_metadata() -> None:
 
     normalized = normalize_metadata(metadata)
 
-    # Verify only valid keys are included
     assert "title" in normalized
     assert "authors" in normalized
     assert "date" in normalized
     assert "subject" in normalized
     assert "invalid_key" not in normalized
 
-    # Verify values are preserved
     assert normalized["title"] == "Test Document"
     assert normalized["authors"] == ["Alice", "Bob"]
     assert normalized["date"] == "2024-01-01"
@@ -410,7 +375,6 @@ def test_normalize_metadata_with_none_values() -> None:
 
     normalized = normalize_metadata(metadata)
 
-    # Verify None values are filtered out
     assert "title" in normalized
     assert "authors" not in normalized
     assert "date" not in normalized
@@ -420,11 +384,9 @@ def test_normalize_metadata_with_none_values() -> None:
 def test_normalize_metadata_empty() -> None:
     """Test normalize_metadata with empty dict."""
 
-    # Test with empty dict
     normalized = normalize_metadata({})
     assert normalized == {}
 
-    # Test with None
     normalized = normalize_metadata(None)
     assert normalized == {}
 
@@ -435,6 +397,5 @@ def test_extraction_config_post_init_custom_entity_patterns() -> None:
 
     config = ExtractionConfig(custom_entity_patterns=patterns)
 
-    # Verify it's a frozenset
     assert isinstance(config.custom_entity_patterns, frozenset)
     assert ("CUSTOM_TYPE", r"\d{3}-\d{3}-\d{4}") in config.custom_entity_patterns

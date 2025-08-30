@@ -3,7 +3,6 @@ metadata:
   version: "3.5.0"
   description: "A text extraction library supporting PDFs, images, office documents and more"
 
-# Define reusable target groups for AI assistants
 targets:
   claude-files:
     - "CLAUDE.md"
@@ -89,7 +88,6 @@ outputs:
       {{ .Content }}
       {{ end }}
 
-  # Generate individual agent files for Claude
   - path: ".claude/agents/"
     type: "agent"
     naming_scheme: "{priority:02d}-{name}.md"
@@ -107,7 +105,6 @@ outputs:
       ## System Prompt
       {{ .SystemPrompt }}
 
-# Define specialized AI agents for Claude
 agents:
   - name: "python-engineer"
     description: "Expert Python developer for implementing features and fixing bugs"

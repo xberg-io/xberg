@@ -201,7 +201,6 @@ async def test_extract_pdf_with_tables(pdfs_with_tables_list: list[Path]) -> Non
 @pytest.mark.anyio
 async def test_extract_bytes_with_explicit_mime() -> None:
     """Test that extract_bytes works correctly with explicit mime type."""
-    # Plain text should work with explicit mime type
     content = b"Plain text content"
     result = await extract_bytes(content, PLAIN_TEXT_MIME_TYPE)
     assert result.content == "Plain text content"
@@ -254,7 +253,6 @@ def test_extract_file_sync_not_exists() -> None:
 @pytest.mark.anyio
 async def test_batch_extract_with_different_configs() -> None:
     """Test that batch operations use the same config for all files."""
-    # Set max_overlap to be less than max_chars to avoid validation error
     config = ExtractionConfig(chunk_content=True, max_chars=20, max_overlap=5)
 
     contents = [
@@ -264,7 +262,6 @@ async def test_batch_extract_with_different_configs() -> None:
 
     results = await batch_extract_bytes(contents, config=config)
     assert len(results) == 2
-    # Both should have chunks due to the config
     assert len(results[0].chunks) > 0
     assert len(results[1].chunks) > 0
 
@@ -278,12 +275,10 @@ async def test_extract_with_quality_processing() -> None:
     result = await extract_bytes(content, PLAIN_TEXT_MIME_TYPE, config=config)
 
     assert result.content == "Test content for quality processing"
-    # Quality score should be added if processing was done
     if "quality_score" in result.metadata:
         assert isinstance(result.metadata["quality_score"], (int, float))
 
 
-# Tests for progress callback functionality
 @pytest.mark.anyio
 async def test_extract_file_with_progress_callback() -> None:
     """Test extraction with progress callback."""
@@ -299,8 +294,6 @@ async def test_extract_file_with_progress_callback() -> None:
         temp_path = f.name
 
     try:
-        # Note: progress_callback is not yet implemented in the extraction functions
-        # This test is a placeholder for when it's added
         result = await extract_file(temp_path)
         assert result.content == "Test content for progress"
     finally:
@@ -338,12 +331,10 @@ def test_batch_extract_bytes_sync_mixed(searchable_pdf: Path, docx_document: Pat
 
 def test_batch_extract_file_sync_with_errors(tmp_path: Path, searchable_pdf: Path) -> None:
     """Test batch file extraction with some files causing errors."""
-    # Create a valid file and a non-existent file
     valid_file = tmp_path / "valid.pdf"
     valid_file.write_bytes(searchable_pdf.read_bytes())
     non_existent = tmp_path / "non_existent.pdf"
 
-    # Create a file that will cause an error
     bad_file = tmp_path / "bad.unknown"
     bad_file.write_text("unknown format")
 
@@ -352,13 +343,10 @@ def test_batch_extract_file_sync_with_errors(tmp_path: Path, searchable_pdf: Pat
     results = batch_extract_file_sync(file_paths)
 
     assert len(results) == 3
-    # First file should succeed
     assert len(results[0].content) > 0
     assert results[0].mime_type == PLAIN_TEXT_MIME_TYPE
-    # Second file should have error
     assert "Error:" in results[1].content
     assert results[1].metadata.get("error") is True
-    # Third file should have error
     assert "Error:" in results[2].content
     assert results[2].metadata.get("error") is True
 
@@ -369,29 +357,20 @@ def test_batch_extract_bytes_sync_with_errors(searchable_pdf: Path) -> None:
 
     contents = [
         (pdf_content, PDF_MIME_TYPE),
-        (b"invalid content", "application/unknown"),  # This will cause an error
+        (b"invalid content", "application/unknown"),
         (b"test text", PLAIN_TEXT_MIME_TYPE),
     ]
 
     results = batch_extract_bytes_sync(contents)
 
     assert len(results) == 3
-    # First should succeed
     assert len(results[0].content) > 0
     assert results[0].mime_type == PLAIN_TEXT_MIME_TYPE
-    # Second should have error
     assert "Error:" in results[1].content
     assert results[1].metadata.get("error") is True
-    # Third should succeed
     assert results[2].content == "test text"
 
 
-# =============================================================================
-# COMPREHENSIVE TESTS (merged from extraction_comprehensive_test.py)
-# =============================================================================
-
-
-# Test _handle_chunk_content
 def test_handle_chunk_content_basic() -> None:
     """Test basic chunking functionality."""
     content = "This is a test content that should be chunked. " * 10
@@ -418,7 +397,6 @@ def test_handle_chunk_content_markdown(mocker: MockerFixture) -> None:
     content = "# Header\\n\\nParagraph 1\\n\\n## Subheader\\n\\nParagraph 2" * 5
     config = ExtractionConfig(chunk_content=True, max_chars=100)
 
-    # Mock the chunker to avoid missing dependency
     mock_chunker = mocker.Mock()
     mock_chunker.chunks.return_value = ["chunk1", "chunk2"]
     mocker.patch("kreuzberg.extraction.get_chunker", return_value=mock_chunker)
@@ -430,7 +408,6 @@ def test_handle_chunk_content_markdown(mocker: MockerFixture) -> None:
     assert chunks == ["chunk1", "chunk2"]
 
 
-# Test validation and post-processing
 def test_validate_and_post_process_helper_with_entities(mocker: MockerFixture) -> None:
     """Test post-processing with entity extraction."""
     mock_extract_entities = mocker.patch(
@@ -533,7 +510,6 @@ def test_validate_and_post_process_helper_with_document_type(mocker: MockerFixtu
 
 def test_validate_and_post_process_helper_all_features(mocker: MockerFixture) -> None:
     """Test post-processing with all features enabled."""
-    # Mock all extraction functions
     mocker.patch("kreuzberg.extraction.extract_entities", return_value=[])
     mocker.patch("kreuzberg.extraction.extract_keywords", return_value=[])
     mocker.patch("kreuzberg.extraction.detect_languages", return_value=["en"])
@@ -562,7 +538,6 @@ def test_validate_and_post_process_sync(mocker: MockerFixture) -> None:
     result = ExtractionResult(content="Test content", mime_type="text/plain", metadata={})
     ExtractionConfig()
 
-    # Mock validators
     mock_validator = Mock()
     config_with_validators = ExtractionConfig(validators=[mock_validator])
 
@@ -576,7 +551,6 @@ def test_validate_and_post_process_sync_with_hooks(mocker: MockerFixture) -> Non
     """Test sync post-processing with hooks."""
     result = ExtractionResult(content="Original content", mime_type="text/plain", metadata={})
 
-    # Create a post-processing hook that modifies content
     def hook(r: ExtractionResult) -> ExtractionResult:
         r.content = "Modified content"
         return r
@@ -593,11 +567,9 @@ async def test_validate_and_post_process_async(mocker: MockerFixture) -> None:
     """Test async validation and post-processing."""
     result = ExtractionResult(content="Test content", mime_type="text/plain", metadata={})
 
-    # Mock async validator
     async_validator = AsyncMock()
     config = ExtractionConfig(validators=[async_validator])
 
-    # Import the async function
     from kreuzberg.extraction import _validate_and_post_process_async
 
     processed = await _validate_and_post_process_async(result, config)
@@ -611,7 +583,6 @@ async def test_validate_and_post_process_async_with_hooks(mocker: MockerFixture)
     """Test async post-processing with async hooks."""
     result = ExtractionResult(content="Original content", mime_type="text/plain", metadata={})
 
-    # Create an async post-processing hook
     async def async_hook(r: ExtractionResult) -> ExtractionResult:
         r.content = "Async modified content"
         return r
@@ -625,16 +596,14 @@ async def test_validate_and_post_process_async_with_hooks(mocker: MockerFixture)
     assert processed.content == "Async modified content"
 
 
-# Test extraction with caching
 @pytest.mark.anyio
 async def test_extract_file_with_caching(tmp_path: Path, mocker: MockerFixture) -> None:
     """Test file extraction with document caching."""
     test_file = tmp_path / "test.txt"
     test_file.write_text("Cached content")
 
-    # Mock the document cache
     mock_cache = Mock()
-    mock_cache.get.return_value = None  # First call - not cached
+    mock_cache.get.return_value = None
     mock_cache.mark_processing = Mock()
     mock_cache.mark_complete = Mock()
     mock_cache.set = Mock()
@@ -656,7 +625,6 @@ async def test_extract_file_cache_hit(tmp_path: Path, mocker: MockerFixture) -> 
 
     cached_result = ExtractionResult(content="Cached content", mime_type="text/plain", metadata={})
 
-    # Mock cache to return cached result
     mock_cache = Mock()
     mock_cache.get.return_value = cached_result
 
@@ -665,7 +633,7 @@ async def test_extract_file_cache_hit(tmp_path: Path, mocker: MockerFixture) -> 
     result = await extract_file(str(test_file))
 
     assert result.content == "Cached content"
-    mock_cache.set.assert_not_called()  # Should not set cache on hit
+    mock_cache.set.assert_not_called()
 
 
 @pytest.mark.anyio
@@ -676,17 +644,12 @@ async def test_extract_file_cache_processing_wait(tmp_path: Path, mocker: Mocker
     test_file = tmp_path / "test.txt"
     test_file.write_text("Test content")
 
-    # Create an event that's already set (simulating another process completed)
     event = threading.Event()
     event.set()
 
-    # Mock cache
     mock_cache = Mock()
-    # First get returns None
-    # After marking processing, returns event
-    # After waiting, returns cached result
     mock_cache.get.side_effect = [
-        None,  # Initial check
+        None,
         ExtractionResult(content="Cached by other process", mime_type="text/plain", metadata={}),
     ]
     mock_cache.mark_processing.return_value = event
@@ -699,7 +662,6 @@ async def test_extract_file_cache_processing_wait(tmp_path: Path, mocker: Mocker
     assert mock_cache.get.call_count == 2
 
 
-# Test batch operations with mixed results
 @pytest.mark.anyio
 async def test_batch_extract_file_partial_failure(tmp_path: Path) -> None:
     """Test batch extraction with some files failing."""
@@ -707,13 +669,11 @@ async def test_batch_extract_file_partial_failure(tmp_path: Path) -> None:
     good_file.write_text("Good content")
 
     bad_file = tmp_path / "bad.txt"
-    # Don't create this file
 
     results = await batch_extract_file([str(good_file), str(bad_file)])
 
     assert len(results) == 2
     assert results[0].content == "Good content"
-    # Error results are returned as ExtractionResult with error metadata, not exceptions
     assert results[1].metadata.get("error") is True
     assert "Error:" in results[1].content
 
@@ -729,7 +689,6 @@ def test_batch_extract_file_sync_partial_failure(tmp_path: Path) -> None:
 
     assert len(results) == 2
     assert results[0].content == "Good content"
-    # Error results are returned as ExtractionResult with error metadata, not exceptions
     assert results[1].metadata.get("error") is True
     assert "Error:" in results[1].content
 
@@ -737,7 +696,6 @@ def test_batch_extract_file_sync_partial_failure(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_batch_extract_bytes_with_configs() -> None:
     """Test batch byte extraction with per-item configs."""
-    # batch_extract_bytes expects (bytes, mime_type) tuples, not with config
     contents = [
         (b"Content 1", "text/plain"),
         (b"Content 2", "text/plain"),
@@ -754,7 +712,6 @@ async def test_batch_extract_bytes_with_configs() -> None:
 
 def test_batch_extract_bytes_sync_with_configs() -> None:
     """Test sync batch byte extraction with configs."""
-    # batch_extract_bytes_sync expects (bytes, mime_type) tuples, not with config
     contents = [
         (b"Sync content 1", "text/plain"),
         (b"Sync content 2", "text/markdown"),
@@ -767,7 +724,6 @@ def test_batch_extract_bytes_sync_with_configs() -> None:
     assert results[1].mime_type == "text/markdown"
 
 
-# Test error handling
 @pytest.mark.anyio
 async def test_extract_bytes_invalid_mime_type() -> None:
     """Test extraction with invalid MIME type."""
@@ -787,12 +743,10 @@ async def test_extract_file_with_progress_callback_error(tmp_path: Path, mocker:
     test_file = tmp_path / "test.txt"
     test_file.write_text("Test content")
 
-    # Test normal extraction without progress callback
     result = await extract_file(str(test_file))
     assert result.content == "Test content"
 
 
-# Test with custom patterns for entity extraction
 def test_validate_and_post_process_with_custom_patterns(mocker: MockerFixture) -> None:
     """Test entity extraction with custom patterns."""
     custom_patterns = frozenset([("CUSTOM", r"TEST-\\d+")])
@@ -812,7 +766,6 @@ def test_validate_and_post_process_with_custom_patterns(mocker: MockerFixture) -
     mock_extract_entities.assert_called_once_with(result.content, custom_patterns=custom_patterns)
 
 
-# Test extraction with all post-processing disabled
 @pytest.mark.anyio
 async def test_extract_minimal_processing() -> None:
     """Test extraction with minimal processing."""

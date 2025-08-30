@@ -1,125 +1,57 @@
 # Docker
 
-Kreuzberg provides official Docker images for easy deployment and containerized usage.
+Kreuzberg provides optimized Docker images for easy deployment and containerized usage.
 
-## Image Variants
+## Available Images
 
 Docker images are available on [Docker Hub](https://hub.docker.com/r/goldziher/kreuzberg).
 
-### Which Image Should I Use?
-
-- **For basic text extraction**: Use `latest` (258MB)
-- **For better OCR with reasonable size**: Use `latest-paddle` (837MB)
-- **For complex documents with tables**: Use `latest-gmft` (8GB)
-- **For multi-language OCR**: Use `latest-easyocr` (8GB)
-- **For testing/evaluation only**: Use `latest-all` (9GB)
-
-### Image Sizes Overview
-
-| Image            | Compressed Size | Uncompressed | What's Included                 |
-| ---------------- | --------------- | ------------ | ------------------------------- |
-| `latest`         | 258MB           | 1.2GB        | Core + Tesseract OCR            |
-| `latest-paddle`  | 837MB           | ~3GB         | Core + PaddleOCR models         |
-| `latest-gmft`    | 8.0GB           | ~15GB        | Core + Table Transformer models |
-| `latest-easyocr` | 8.2GB           | ~15GB        | Core + EasyOCR language models  |
-| `latest-all`     | 9.0GB           | ~18GB        | Everything (testing only)       |
-
-> **Note**: Large images (GMFT, EasyOCR) include PyTorch (~2-3GB) plus pre-trained deep learning models. Both GMFT and EasyOCR require PyTorch, which is why they're similar in size. The "all" image shares PyTorch between them, so it's only ~1GB larger than individual images, not double.
-
-### Core Image
+### Base Image (`latest`)
 
 - **Image**: `goldziher/kreuzberg:latest`
-- **Size**: 258MB compressed (1.2GB when pulled)
-- **Includes**: Base library + API server + Tesseract OCR
-- **Use Case**: Basic text extraction, simple OCR tasks
-- **Limitations**: No chunking, language detection, entity extraction, or alternative OCR backends
+- **Size**: ~550MB compressed
+- **Includes**:
+    - ✅ REST API server
+    - ✅ CLI tools
+    - ✅ Tesseract OCR with 12 business languages
+    - ✅ Core document extraction for all supported formats
 
-### OCR Backend Variants
+**Use Cases:**
 
-- **PaddleOCR**: `goldziher/kreuzberg:latest-paddle`
+- Basic document processing workflows
+- Simple REST API deployments
+- CLI-based batch processing
+- Microservices requiring text extraction
+- Cost-conscious deployments where advanced features aren't needed
 
-    - **Size**: 837MB compressed
-    - Lightweight deep learning OCR
-    - Good balance between size and accuracy
-    - Supports multiple languages with smaller models
+**Languages Supported:** English, Spanish, French, German, Italian, Portuguese, Chinese (Simplified & Traditional), Japanese, Arabic, Russian, Hindi
 
-- **EasyOCR**: `goldziher/kreuzberg:latest-easyocr`
+### Core Image (`core`)
 
-    - **Size**: 8.2GB compressed
-    - Includes models for 80+ languages
-    - Better accuracy for complex layouts and handwriting
-    - Size is due to comprehensive language model collection
-
-### Table Extraction
-
-- **GMFT**: `goldziher/kreuzberg:latest-gmft`
-    - **Size**: 8.0GB compressed
-    - Advanced table detection and extraction from PDFs
-    - Uses Microsoft's Table Transformer models
-    - Large size due to transformer-based deep learning models
-
-### All-in-One (Testing Only)
-
-- **Image**: `goldziher/kreuzberg:latest-all`
-- **Size**: 9.0GB compressed
-- **⚠️ WARNING**: For testing only, NOT for production use
-- **Includes ALL features**:
-    - ✅ API server with OpenTelemetry instrumentation
+- **Image**: `goldziher/kreuzberg-core:latest`
+- **Size**: ~700MB compressed
+- **Includes**: Everything from base plus:
     - ✅ Text chunking (semantic-text-splitter)
-    - ✅ CLI with rich output
-    - ✅ PDF encryption/decryption support
-    - ✅ Document classification (deep-translator, pandas)
-    - ✅ Language detection (fast-langdetect)
-    - ✅ Entity extraction (KeyBERT, spaCy)
-    - ✅ Table extraction (GMFT with Table Transformer)
-    - ✅ ALL OCR backends (Tesseract, EasyOCR, PaddleOCR)
-    - ✅ Email parsing support (mailparse)
-- **Why not production?**:
-    - Unnecessarily large for most use cases
-    - Includes redundant models (both EasyOCR and PaddleOCR)
-    - Slower container startup time
-    - Higher memory footprint (~4GB+ RAM needed)
+    - ✅ Encrypted PDF support (crypto)
+    - ✅ Document classification
+    - ✅ Language detection
+    - ✅ Email parsing (.eml, .msg files)
+    - ✅ Additional format extensions
 
-## Important: OCR Backend Selection
+**Use Cases:**
 
-**ALL images include Tesseract OCR** as the base OCR engine. The specialized images (easyocr, paddle, all) ADD additional OCR backends but don't remove Tesseract. This means:
-
-- ✅ You can use Tesseract in ANY image
-- ✅ You can switch between backends at runtime
-- ✅ The paddle image has both Tesseract AND PaddleOCR
-- ✅ The easyocr image has both Tesseract AND EasyOCR
-- ✅ The all image has ALL three backends
-
-### Selecting OCR Backend
-
-Use configuration file or environment variables:
-
-```bash
-# Use Tesseract (default, works in all images)
-docker run -p 8000:8000 goldziher/kreuzberg:latest-paddle
-
-# Use PaddleOCR in the paddle image
-docker run -p 8000:8000 \
-  -e KREUZBERG_OCR_BACKEND=paddleocr \
-  goldziher/kreuzberg:latest-paddle
-
-# Use EasyOCR in the easyocr image
-docker run -p 8000:8000 \
-  -e KREUZBERG_OCR_BACKEND=easyocr \
-  goldziher/kreuzberg:latest-easyocr
-
-# Disable OCR entirely
-docker run -p 8000:8000 \
-  -e KREUZBERG_OCR_BACKEND=none \
-  goldziher/kreuzberg:latest
-```
+- RAG (Retrieval-Augmented Generation) applications
+- Document intelligence workflows
+- Multi-language document processing
+- Enterprise document management systems
+- Advanced content analysis pipelines
 
 ## Quick Start
 
 ### Basic Usage
 
 ```bash
-# Pull and run the core image
+# Pull and run the base image
 docker pull goldziher/kreuzberg:latest
 docker run -p 8000:8000 goldziher/kreuzberg:latest
 
@@ -128,207 +60,118 @@ curl -X POST http://localhost:8000/extract \
   -F "data=@document.pdf"
 ```
 
-### With Cache Volume
+### Core Image with Advanced Features
+
+```bash
+# Run core image with all features
+docker run -p 8000:8000 goldziher/kreuzberg-core:latest
+
+# Extract with chunking for RAG
+curl -X POST http://localhost:8000/extract \
+  -F "data=@document.pdf" \
+  -F "chunk_content=true" \
+  -F "max_chars=1000"
+
+# Extract with language detection
+curl -X POST http://localhost:8000/extract \
+  -F "data=@document.pdf" \
+  -F "auto_detect_language=true"
+
+# Extract from encrypted PDF
+curl -X POST http://localhost:8000/extract \
+  -F "data=@encrypted.pdf" \
+  -F "password=secretpassword"
+```
+
+### With Persistent Cache
 
 ```bash
 # Create cache directory
 mkdir -p kreuzberg-cache
 
-# Run with persistent cache
+# Run with persistent cache (recommended for production)
 docker run -p 8000:8000 \
   -v "$(pwd)/kreuzberg-cache:/app/.kreuzberg" \
-  goldziher/kreuzberg:latest
+  goldziher/kreuzberg-core:latest
 ```
 
-### Using the All Image
+## Custom Docker Images
 
-The `all` image is perfect for testing different features without rebuilding:
+For production deployments, you can create custom images tailored to your specific needs.
+
+### Example: Lightweight Custom Image
+
+This example adds only language detection to the base image:
+
+```dockerfile
+FROM goldziher/kreuzberg:latest
+
+USER root
+
+# Add language detection capability
+RUN pip install --upgrade "kreuzberg[langdetect]"
+
+USER appuser
+
+# Set default configuration
+ENV KREUZBERG_AUTO_DETECT_LANGUAGE=true
+```
+
+Build and test:
 
 ```bash
-# Test with different OCR backends
-docker run -d --name kreuzberg-all \
-  -p 8000:8000 \
-  -v "$(pwd)/cache:/app/.kreuzberg" \
-  goldziher/kreuzberg:latest-all
+# Build the custom image
+docker build -t kreuzberg-custom .
 
-# Test Tesseract (default)
-curl -X POST http://localhost:8000/extract \
-  -F "data=@document.pdf" \
-  -F "ocr_backend=tesseract"
+# Test the functionality
+docker run -d --name test-kreuzberg -p 8000:8000 kreuzberg-custom
 
-# Test PaddleOCR
+# Verify language detection works
 curl -X POST http://localhost:8000/extract \
-  -F "data=@document.pdf" \
-  -F "ocr_backend=paddleocr"
-
-# Test EasyOCR
-curl -X POST http://localhost:8000/extract \
-  -F "data=@document.pdf" \
-  -F "ocr_backend=easyocr"
-
-# Test with chunking and language detection
-curl -X POST http://localhost:8000/extract \
-  -F "data=@document.pdf" \
-  -F "chunk_content=true" \
+  -F "data=@sample.pdf" \
   -F "auto_detect_language=true"
 
-# Test table extraction
-curl -X POST http://localhost:8000/extract \
-  -F "data=@document.pdf" \
-  -F "extract_tables=true"
+# Cleanup
+docker stop test-kreuzberg && docker rm test-kreuzberg
 ```
 
-### Backend Comparison Example
+### Example: RAG-Optimized Image
 
-```bash
-# Create test script to compare backends
-cat > compare_backends.sh << 'EOF'
-#!/bin/bash
-FILE="$1"
-for backend in tesseract paddleocr easyocr; do
-  echo "Testing $backend..."
-  time curl -s -X POST http://localhost:8000/extract \
-    -F "data=@$FILE" \
-    -F "ocr_backend=$backend" \
-    -o "result_$backend.json"
-done
-EOF
-
-chmod +x compare_backends.sh
-./compare_backends.sh sample.pdf
-```
-
-## Customizing Docker Images
-
-For production, create a custom image with only the features you need:
-
-### Example 1: Core + Chunking Support
+This example creates an image optimized for RAG applications:
 
 ```dockerfile
 FROM goldziher/kreuzberg:latest
 
 USER root
 
-# Install only chunking dependency
-RUN uv pip install --python /app/.venv/bin/python semantic-text-splitter
+# Install chunking and language detection
+RUN pip install --upgrade "kreuzberg[chunking,langdetect]"
 
 USER appuser
+
+# RAG-optimized defaults
+ENV KREUZBERG_CHUNK_CONTENT=true
+ENV KREUZBERG_MAX_CHARS=1000
+ENV KREUZBERG_MAX_OVERLAP=100
+ENV KREUZBERG_AUTO_DETECT_LANGUAGE=true
 ```
 
-Build and run:
+### Example: Multi-Format Processing Image
 
-```bash
-# Build the image
-docker build -t kreuzberg-chunking .
-
-# Run with external configuration
-docker run -p 8000:8000 \
-  -v "$(pwd)/kreuzberg.toml:/app/kreuzberg.toml:ro" \
-  -v "$(pwd)/cache:/app/.kreuzberg" \
-  kreuzberg-chunking
-```
-
-### Example 2: Core + Language Detection + Chunking
+This example adds crypto support for encrypted PDFs and email parsing:
 
 ```dockerfile
 FROM goldziher/kreuzberg:latest
 
 USER root
 
-# Install specific features
-RUN uv pip install --python /app/.venv/bin/python \
-    semantic-text-splitter \
-    fast-langdetect
-
-USER appuser
-```
-
-Create configuration file `kreuzberg.toml`:
-
-```toml
-chunk_content = true
-auto_detect_language = true
-max_chars = 2000
-max_overlap = 100
-```
-
-Run with:
-
-```bash
-docker run -p 8000:8000 \
-  -v "$(pwd)/kreuzberg.toml:/app/kreuzberg.toml:ro" \
-  -v "$(pwd)/cache:/app/.kreuzberg" \
-  kreuzberg-multilang
-```
-
-### Example 3: Core + PaddleOCR (Custom Build)
-
-```dockerfile
-FROM goldziher/kreuzberg:latest
-
-USER root
-
-# Install PaddleOCR dependencies
-RUN uv pip install --python /app/.venv/bin/python \
-    paddleocr \
-    paddlepaddle
-
-USER appuser
-```
-
-Run with PaddleOCR backend:
-
-```bash
-docker run -p 8000:8000 \
-  -e KREUZBERG_OCR_BACKEND=paddleocr \
-  -v "$(pwd)/cache:/app/.kreuzberg" \
-  kreuzberg-paddle
-```
-
-### Example 4: Optimized Production Build
-
-```dockerfile
-FROM goldziher/kreuzberg:latest
-
-USER root
-
-# Install only the features you need
-RUN uv pip install --python /app/.venv/bin/python \
-    semantic-text-splitter \
-    fast-langdetect && \
-    # Clean up cache to reduce image size
-    rm -rf /root/.cache/uv
+# Add crypto and email support
+RUN pip install --upgrade "kreuzberg[crypto]"
 
 USER appuser
 
-# Set production environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-```
-
-Deploy with Docker Compose:
-
-```yaml
-services:
-  kreuzberg:
-    build: .
-    ports:
-      - "8000:8000"
-    volumes:
-      - "./config/kreuzberg.toml:/app/kreuzberg.toml:ro"
-      - "kreuzberg-cache:/app/.kreuzberg"
-    environment:
-      - PYTHONUNBUFFERED=1
-      - KREUZBERG_CACHE_DIR=/app/.kreuzberg
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-volumes:
-  kreuzberg-cache:
+# Enable crypto support
+ENV KREUZBERG_CRYPTO_SUPPORT=true
 ```
 
 ## Docker Compose
@@ -336,18 +179,20 @@ volumes:
 ### Production Setup
 
 ```yaml
+version: '3.8'
+
 services:
   kreuzberg:
-    image: goldziher/kreuzberg:latest  # Or your custom image
+    image: goldziher/kreuzberg-core:latest
     ports:
       - "8000:8000"
     volumes:
-      - "./kreuzberg-cache:/app/.kreuzberg"  # Persistent cache
-      - "./kreuzberg.toml:/app/kreuzberg.toml:ro"  # Configuration
+      - kreuzberg-cache:/app/.kreuzberg
+      - ./config/kreuzberg.toml:/app/kreuzberg.toml:ro
     environment:
       - PYTHONUNBUFFERED=1
       - KREUZBERG_CACHE_DIR=/app/.kreuzberg
-      # Cache configuration
+      # Cache limits (adjust based on your needs)
       - KREUZBERG_OCR_CACHE_SIZE_MB=500
       - KREUZBERG_DOCUMENT_CACHE_SIZE_MB=1000
     restart: unless-stopped
@@ -356,6 +201,40 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+
+volumes:
+  kreuzberg-cache:
+```
+
+### Development Setup
+
+```yaml
+version: '3.8'
+
+services:
+  kreuzberg-dev:
+    image: goldziher/kreuzberg-core:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./test-files:/app/test-files:ro
+      - ./cache:/app/.kreuzberg
+    environment:
+      - PYTHONUNBUFFERED=1
+      - KREUZBERG_LOG_LEVEL=DEBUG
+    command: >
+      litestar --app kreuzberg._api.main:app run
+      --host 0.0.0.0
+      --port 8000
+      --reload
 ```
 
 ## Configuration
@@ -365,22 +244,31 @@ services:
 Create `kreuzberg.toml`:
 
 ```toml
+# Basic settings
 force_ocr = false
-chunk_content = true  # Requires semantic-text-splitter
-extract_tables = false  # Requires gmft
 ocr_backend = "tesseract"
 
+# Chunking (requires core image or custom build)
+chunk_content = true
+max_chars = 1000
+max_overlap = 100
+
+# Language detection (requires core image or custom build)
+auto_detect_language = true
+
+# OCR configuration
 [tesseract]
-language = "eng"
-psm = 6
+language = "eng+spa+fra"  # English, Spanish, French
+psm = 6  # Uniform block of text
 ```
 
 Mount the configuration:
 
 ```bash
 docker run -p 8000:8000 \
-  -v "$(pwd)/kreuzberg.toml:/app/kreuzberg.toml" \
-  goldziher/kreuzberg:latest
+  -v "$(pwd)/kreuzberg.toml:/app/kreuzberg.toml:ro" \
+  -v "$(pwd)/cache:/app/.kreuzberg" \
+  goldziher/kreuzberg-core:latest
 ```
 
 ### Environment Variables
@@ -392,6 +280,13 @@ docker run -p 8000:8000 \
 - `KREUZBERG_DOCUMENT_CACHE_SIZE_MB`: Document cache size limit (default: `1000`)
 
 **Runtime Configuration:**
+
+- `KREUZBERG_CHUNK_CONTENT`: Enable text chunking (`true`/`false`)
+- `KREUZBERG_AUTO_DETECT_LANGUAGE`: Enable language detection (`true`/`false`)
+- `KREUZBERG_MAX_CHARS`: Maximum characters per chunk (default: `1000`)
+- `KREUZBERG_OCR_BACKEND`: OCR backend to use (`tesseract` or `none`)
+
+**System Variables:**
 
 - `PYTHONUNBUFFERED=1`: Ensures proper logging output
 - `PYTHONDONTWRITEBYTECODE=1`: Prevents .pyc file creation
@@ -405,6 +300,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kreuzberg-api
+  labels:
+    app: kreuzberg-api
 spec:
   replicas: 3
   selector:
@@ -417,7 +314,7 @@ spec:
     spec:
       containers:
       - name: kreuzberg
-        image: your-registry/kreuzberg-custom:latest
+        image: goldziher/kreuzberg-core:latest
         ports:
         - containerPort: 8000
         volumeMounts:
@@ -426,26 +323,35 @@ spec:
         - name: config
           mountPath: /app/kreuzberg.toml
           subPath: kreuzberg.toml
+          readOnly: true
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        - name: KREUZBERG_CACHE_DIR
+          value: "/app/.kreuzberg"
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 30
+          periodSeconds: 30
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
+          periodSeconds: 10
         resources:
           requests:
-            memory: "512Mi"
+            memory: "1Gi"
             cpu: "500m"
           limits:
             memory: "2Gi"
             cpu: "2000m"
       volumes:
       - name: cache
-        emptyDir: {}
+        emptyDir:
+          sizeLimit: 5Gi
       - name: config
         configMap:
           name: kreuzberg-config
@@ -456,94 +362,187 @@ metadata:
   name: kreuzberg-config
 data:
   kreuzberg.toml: |
-    chunk_content = false
+    chunk_content = true
+    auto_detect_language = true
+    max_chars = 1000
     ocr_backend = "tesseract"
+
     [tesseract]
-    language = "eng"
+    language = "eng+spa+fra+deu"
+    psm = 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kreuzberg-service
+spec:
+  selector:
+    app: kreuzberg-api
+  ports:
+  - port: 80
+    targetPort: 8000
+  type: ClusterIP
 ```
 
-### With nginx Reverse Proxy
+### With Nginx Reverse Proxy
 
 ```nginx
+upstream kreuzberg {
+    server localhost:8000;
+    # Add more servers for load balancing
+    # server localhost:8001;
+    # server localhost:8002;
+}
+
 server {
     listen 80;
     server_name api.example.com;
 
     location / {
-        proxy_pass http://localhost:8000;
+        proxy_pass http://kreuzberg;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
         # File upload settings
         client_max_body_size 100M;
         proxy_read_timeout 300s;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 300s;
     }
 
     location /health {
-        proxy_pass http://localhost:8000/health;
+        proxy_pass http://kreuzberg/health;
         access_log off;
     }
+
+    # Optional: Basic rate limiting
+    location /extract {
+        limit_req zone=api burst=10 nodelay;
+        proxy_pass http://kreuzberg/extract;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+
+# Rate limiting configuration (add to http block)
+http {
+    limit_req_zone $binary_remote_addr zone=api:10m rate=60r/m;
 }
 ```
 
 ## Resource Requirements
 
-| Variant     | CPU      | Memory | Storage |
-| ----------- | -------- | ------ | ------- |
-| Core        | 1+ cores | 512MB+ | 1GB     |
-| + Chunking  | 1+ cores | 1GB+   | 1GB     |
-| + PaddleOCR | 2+ cores | 2GB+   | 2GB     |
-| + EasyOCR   | 2+ cores | 4GB+   | 10GB    |
-| + GMFT      | 2+ cores | 4GB+   | 10GB    |
+| Configuration           | CPU      | Memory | Storage | Use Case                   |
+| ----------------------- | -------- | ------ | ------- | -------------------------- |
+| Base (basic extraction) | 1+ cores | 512MB+ | 1GB     | Simple document processing |
+| Base (with cache)       | 1+ cores | 1GB+   | 2GB     | Moderate throughput        |
+| Core (full features)    | 2+ cores | 1.5GB+ | 3GB     | Advanced processing        |
+| Core (high throughput)  | 4+ cores | 3GB+   | 5GB     | Enterprise workloads       |
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Permission Denied on Cache Directory
+#### Container Fails to Start
 
 ```bash
-# Fix: Ensure proper ownership
+# Check logs for startup errors
+docker logs <container-name>
+
+# Common causes:
+# - Insufficient memory allocation
+# - Port already in use
+# - Invalid configuration file
+```
+
+#### Permission Issues with Cache Directory
+
+```bash
+# Fix cache directory permissions
 docker run --rm -v "$(pwd)/cache:/app/.kreuzberg" --user root \
   goldziher/kreuzberg:latest \
   chown -R 999:999 /app/.kreuzberg
 ```
 
-#### Missing Dependencies Error
+#### Out of Memory Errors
 
 ```bash
-# Solution: Use appropriate image variant or build custom image
-# For chunking: Install semantic-text-splitter
-# For language detection: Install fast-langdetect
+# Solution 1: Increase Docker memory limits
+docker run -p 8000:8000 -m 2g goldziher/kreuzberg-core:latest
+
+# Solution 2: Reduce cache sizes
+docker run -p 8000:8000 \
+  -e KREUZBERG_OCR_CACHE_SIZE_MB=200 \
+  -e KREUZBERG_DOCUMENT_CACHE_SIZE_MB=300 \
+  goldziher/kreuzberg-core:latest
 ```
 
-#### Out of Memory
+#### Feature Not Available Errors
 
-- Increase Docker memory allocation
-- Use a smaller OCR engine (Tesseract instead of EasyOCR)
-- Disable unnecessary features
+```bash
+# Error: "chunking requires semantic-text-splitter"
+# Solution: Use core image or build custom image with required dependency
+
+# Error: "language detection requires fast-langdetect"
+# Solution: Use core image or add the dependency to custom build
+```
 
 ### Debugging
 
 ```bash
-# Check logs
-docker logs <container-id>
-
-# Shell access
+# Interactive shell access
 docker exec -it <container-id> /bin/bash
 
-# Test extraction
+# Test extraction directly
 docker exec <container-id> python3 -c "
 from kreuzberg import extract_file_sync
-result = extract_file_sync('/path/to/file.pdf')
-print(result.content[:100])
+result = extract_file_sync('/app/test-files/sample.pdf')
+print(f'Extracted {len(result.content)} characters')
+print(result.content[:200])
 "
+
+# Check available features
+docker exec <container-id> python3 -c "
+import kreuzberg
+print(f'Kreuzberg version: {kreuzberg.__version__}')
+
+# Test imports to see what's available
+try:
+    import semantic_text_splitter
+    print('✅ Chunking available')
+except ImportError:
+    print('❌ Chunking not available')
+
+try:
+    import fast_langdetect
+    print('✅ Language detection available')
+except ImportError:
+    print('❌ Language detection not available')
+"
+```
+
+### Performance Monitoring
+
+```bash
+# Monitor resource usage
+docker stats <container-name>
+
+# View API metrics
+curl http://localhost:8000/metrics  # If OpenTelemetry is enabled
+
+# Health check endpoint
+curl http://localhost:8000/health
 ```
 
 ## Security Considerations
 
-- Runs as non-root user (`appuser`) by default
+- Runs as non-root user (`appuser:999`) by default
 - No external API calls or cloud dependencies
-- Process files locally within the container
-- Use read-only mounts where possible (`:ro`)
-- Consider adding authentication for production use
+- All processing happens locally within the container
+- Use read-only mounts for configuration files (`:ro`)
+- Consider adding authentication middleware for production deployments
+- Regular security updates through base image rebuilds
+- Isolate containers using Docker networks
+- Use secrets management for sensitive configuration

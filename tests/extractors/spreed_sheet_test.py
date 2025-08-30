@@ -332,7 +332,6 @@ def test_extract_spreadsheet_metadata_comprehensive(extractor: SpreadSheetExtrac
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Summary"]
 
-    # Mock workbook metadata
     mock_metadata = mocker.Mock()
     mock_metadata.title = "Test Spreadsheet"
     mock_metadata.author = "Test Author"
@@ -343,7 +342,6 @@ def test_extract_spreadsheet_metadata_comprehensive(extractor: SpreadSheetExtrac
     mock_metadata.company = "Test Company"
     mock_metadata.manager = "Test Manager"
 
-    # Mock dates
     from datetime import datetime, timezone
 
     mock_metadata.created = datetime(2023, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
@@ -351,7 +349,6 @@ def test_extract_spreadsheet_metadata_comprehensive(extractor: SpreadSheetExtrac
 
     mock_workbook.metadata = mock_metadata
 
-    # Mock sheet data for complexity analysis
     mock_sheet = mocker.Mock()
     mock_sheet.to_python.return_value = [
         ["Header1", "Header2", "Formula"],
@@ -382,7 +379,6 @@ def test_extract_spreadsheet_metadata_no_metadata(extractor: SpreadSheetExtracto
     mock_workbook.sheet_names = ["Sheet1"]
     mock_workbook.metadata = None
 
-    # Mock sheet data
     mock_sheet = mocker.Mock()
     mock_sheet.to_python.return_value = [["Data1", "Data2"]]
     mock_workbook.get_sheet_by_name.return_value = mock_sheet
@@ -399,7 +395,6 @@ def test_extract_spreadsheet_metadata_many_sheets(extractor: SpreadSheetExtracto
     mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6", "Sheet7"]
     mock_workbook.metadata = None
 
-    # Mock sheet data
     mock_sheet = mocker.Mock()
     mock_sheet.to_python.return_value = [["Data"]]
     mock_workbook.get_sheet_by_name.return_value = mock_sheet
@@ -416,7 +411,6 @@ def test_extract_document_properties_minimal(extractor: SpreadSheetExtractor, mo
     mock_metadata = mocker.Mock()
     mock_metadata.title = "Simple Title"
 
-    # Explicitly set other properties to None so they aren't extracted
     mock_metadata.author = None
     mock_metadata.subject = None
     mock_metadata.comments = None
@@ -481,7 +475,6 @@ def test_analyze_content_complexity_empty_sheets(extractor: SpreadSheetExtractor
     metadata: Metadata = {}
     extractor._analyze_content_complexity(mock_workbook, metadata)
 
-    # Should not add summary if no meaningful content
     assert "summary" not in metadata
 
 
@@ -492,12 +485,10 @@ def test_enhance_sheet_with_table_data_pandas_available(extractor: SpreadSheetEx
     mock_sheet.to_python.return_value = [["Name", "Age", "City"], ["Alice", 25, "New York"], ["Bob", 30, "Chicago"]]
     mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-    # Mock pandas DataFrame
     mock_df = mocker.Mock()
     mock_df.empty = False
     mock_df.dropna.return_value = mock_df
 
-    # Mock enhance_table_markdown - it's imported within the method
     mock_enhance = mocker.patch("kreuzberg._utils._table.enhance_table_markdown")
     mock_enhance.return_value = "Enhanced table markdown"
 
@@ -528,7 +519,6 @@ def test_enhance_sheet_with_table_data_no_data_after_cleanup(
     mock_sheet.to_python.return_value = [[None, None], [None, None]]
     mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-    # Mock empty DataFrame after cleanup
     mock_df = mocker.Mock()
     mock_df.empty = True
     mock_df.dropna.return_value = mock_df
@@ -548,9 +538,7 @@ def test_enhance_sheet_with_table_data_pandas_error_fallback(
     mock_sheet.to_python.return_value = [["Header"], ["Data"]]
     mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-    # Mock pandas import error
     with mocker.patch("pandas.DataFrame", side_effect=ImportError("pandas not available")):
-        # Mock the fallback method
         mocker.patch.object(extractor, "_convert_sheet_to_text_sync", return_value="Fallback content")
 
         result = extractor._enhance_sheet_with_table_data(mock_workbook, "FallbackSheet")
@@ -561,7 +549,6 @@ def test_enhance_sheet_with_table_data_pandas_error_fallback(
 def test_extract_document_properties_no_hasattr(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
     """Test document properties extraction when workbook lacks hasattr for metadata."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
-    # Mock workbook without metadata attribute
     del mock_workbook.metadata
 
     metadata: Metadata = {}
@@ -575,14 +562,12 @@ def test_extract_document_properties_exception_handling(extractor: SpreadSheetEx
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_metadata = mocker.Mock()
 
-    # Mock property access that raises exception
     mock_metadata.title = mocker.PropertyMock(side_effect=Exception("Property access error"))
     mock_workbook.metadata = mock_metadata
 
     metadata: Metadata = {}
     extractor._extract_document_properties(mock_workbook, metadata)
 
-    # Should handle exception gracefully and not crash
     assert isinstance(metadata, dict)
 
 
@@ -591,12 +576,11 @@ def test_extract_date_properties_invalid_dates(extractor: SpreadSheetExtractor, 
     mock_props = mocker.Mock()
     mock_props.created = mocker.Mock()
     mock_props.created.isoformat = mocker.Mock(side_effect=Exception("Invalid date"))
-    mock_props.modified = None  # Missing modified date
+    mock_props.modified = None
 
     metadata: Metadata = {}
     extractor._extract_date_properties(mock_props, metadata)
 
-    # Should handle exceptions gracefully
     assert "created_at" not in metadata
     assert "modified_at" not in metadata
 
@@ -604,7 +588,6 @@ def test_extract_date_properties_invalid_dates(extractor: SpreadSheetExtractor, 
 def test_add_structure_info_no_sheet_names(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
     """Test structure info addition when workbook has no sheet_names."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
-    # Mock workbook without sheet_names
     del mock_workbook.sheet_names
 
     metadata: Metadata = {}
@@ -629,13 +612,11 @@ def test_analyze_content_complexity_exception_handling(extractor: SpreadSheetExt
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["ErrorSheet"]
 
-    # Mock sheet that raises exception
     mock_workbook.get_sheet_by_name.side_effect = Exception("Sheet access error")
 
     metadata: Metadata = {}
     extractor._analyze_content_complexity(mock_workbook, metadata)
 
-    # Should handle exception gracefully
     assert isinstance(metadata, dict)
 
 
@@ -646,10 +627,10 @@ def test_analyze_content_complexity_with_empty_rows(extractor: SpreadSheetExtrac
 
     mock_sheet = mocker.Mock()
     mock_sheet.to_python.return_value = [
-        [],  # Empty row
+        [],
         ["Header1", "Header2"],
-        [None, None],  # Row with None values
-        ["", ""],  # Row with empty strings
+        [None, None],
+        ["", ""],
         ["Data1", "Data2"],
     ]
     mock_workbook.get_sheet_by_name.return_value = mock_sheet
@@ -661,44 +642,33 @@ def test_analyze_content_complexity_with_empty_rows(extractor: SpreadSheetExtrac
     assert "Contains" in metadata["summary"]
 
 
-# =============================================================================
-# COMPREHENSIVE TESTS (for improved coverage)
-# =============================================================================
-
-
 class TestSpreadSheetExtractorComprehensiveCellConversion:
     """Test cell conversion edge cases for comprehensive coverage."""
 
     def test_convert_cell_to_str_complex_numeric_types(self, extractor: SpreadSheetExtractor) -> None:
         """Test cell conversion with complex numeric types."""
-        # Test complex number
         complex_num = complex(3, 4)
         result = extractor._convert_cell_to_str(complex_num)
         assert result == "(3+4j)"
 
-        # Test very large int
         large_int = 10**20
         result = extractor._convert_cell_to_str(large_int)
         assert result == "100000000000000000000"
 
-        # Test float with precision
         precise_float = 3.141592653589793
         result = extractor._convert_cell_to_str(precise_float)
         assert result == "3.141592653589793"
 
     def test_convert_cell_to_str_edge_case_objects(self, extractor: SpreadSheetExtractor) -> None:
         """Test cell conversion with edge case objects."""
-        # Test list
         test_list = [1, 2, 3]
         result = extractor._convert_cell_to_str(test_list)
         assert result == "[1, 2, 3]"
 
-        # Test dict
         test_dict = {"key": "value"}
         result = extractor._convert_cell_to_str(test_dict)
         assert result == "{'key': 'value'}"
 
-        # Test custom object
         class CustomObject:
             def __str__(self) -> str:
                 return "custom_object"
@@ -711,22 +681,18 @@ class TestSpreadSheetExtractorComprehensiveCellConversion:
         """Test cell conversion with various datetime objects."""
         from datetime import datetime, time, timedelta, timezone
 
-        # Test datetime with microseconds
         dt_with_microseconds = datetime(2023, 1, 1, 12, 30, 45, 123456, tzinfo=timezone.utc)
         result = extractor._convert_cell_to_str(dt_with_microseconds)
         assert result == "2023-01-01T12:30:45.123456+00:00"
 
-        # Test time with microseconds
         time_with_microseconds = time(12, 30, 45, 123456)
         result = extractor._convert_cell_to_str(time_with_microseconds)
         assert result == "12:30:45.123456"
 
-        # Test negative timedelta
         negative_delta = timedelta(days=-1, seconds=-3600)
         result = extractor._convert_cell_to_str(negative_delta)
         assert result == "-90000.0 seconds"
 
-        # Test zero timedelta
         zero_delta = timedelta(0)
         result = extractor._convert_cell_to_str(zero_delta)
         assert result == "0.0 seconds"
@@ -739,24 +705,20 @@ class TestSpreadSheetExtractorSyncExtensiveErrorHandling:
         """Test extract_bytes_sync handles file write errors properly."""
         test_content = b"fake excel data"
 
-        # Mock tempfile.mkstemp to return a valid fd
         mock_fd = 5
         mock_temp_path = "/tmp/test.xlsx"
         mocker.patch("tempfile.mkstemp", return_value=(mock_fd, mock_temp_path))
 
-        # Mock os.fdopen to raise an exception during write
         mock_fdopen = mocker.patch("os.fdopen")
         mock_file = mocker.Mock()
         mock_file.write.side_effect = OSError("Write error")
         mock_fdopen.return_value.__enter__.return_value = mock_file
 
-        # Mock Path.unlink for cleanup
         mock_unlink = mocker.patch("pathlib.Path.unlink")
 
         with pytest.raises(OSError, match="Write error"):
             extractor.extract_bytes_sync(test_content)
 
-        # Ensure cleanup is attempted
         mock_unlink.assert_called_once()
 
     def test_extract_bytes_sync_cleanup_error_suppressed(
@@ -765,7 +727,6 @@ class TestSpreadSheetExtractorSyncExtensiveErrorHandling:
         """Test extract_bytes_sync suppresses cleanup errors."""
         test_content = b"fake excel data"
 
-        # Mock successful file operations
         mock_fd = 5
         mock_temp_path = "/tmp/test.xlsx"
         mocker.patch("tempfile.mkstemp", return_value=(mock_fd, mock_temp_path))
@@ -774,14 +735,11 @@ class TestSpreadSheetExtractorSyncExtensiveErrorHandling:
         mock_file = mocker.Mock()
         mock_fdopen.return_value.__enter__.return_value = mock_file
 
-        # Mock extract_path_sync to return a valid result
         mock_result = ExtractionResult(content="test", mime_type=MARKDOWN_MIME_TYPE, metadata={})
         mocker.patch.object(extractor, "extract_path_sync", return_value=mock_result)
 
-        # Mock Path.unlink to raise OSError (should be suppressed)
         mock_unlink = mocker.patch("pathlib.Path.unlink", side_effect=OSError("Cleanup error"))
 
-        # Should succeed despite cleanup error
         result = extractor.extract_bytes_sync(test_content)
         assert result == mock_result
         mock_unlink.assert_called_once()
@@ -798,7 +756,6 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
 
-        # Data with special characters that need CSV escaping
         mock_sheet.to_python.return_value = [
             ["Header1", "Header,with,commas", 'Header"with"quotes'],
             ["Value1", "Value,with,commas", 'Value"with"quotes'],
@@ -806,7 +763,6 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
         ]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-        # Mock temp file operations
         temp_path = "/tmp/test.csv"
         mock_unlink = mocker.AsyncMock()
         mocker.patch("kreuzberg._extractors._spread_sheet.create_temp_file", return_value=(temp_path, mock_unlink))
@@ -816,7 +772,6 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
 
         result = await extractor._convert_sheet_to_text(mock_workbook, "test_sheet")
 
-        # Verify it handles special characters properly
         assert "## test_sheet" in result
         assert "Header1" in result
         assert "Value1" in result
@@ -830,16 +785,14 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
 
-        # Rows with very different lengths
         mock_sheet.to_python.return_value = [
-            ["A", "B", "C", "D", "E"],  # 5 columns
-            ["1"],  # 1 column
-            ["2", "3"],  # 2 columns
-            ["4", "5", "6", "7", "8", "9", "10"],  # 7 columns (longer than header)
+            ["A", "B", "C", "D", "E"],
+            ["1"],
+            ["2", "3"],
+            ["4", "5", "6", "7", "8", "9", "10"],
         ]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-        # Mock temp file operations
         temp_path = "/tmp/test.csv"
         mock_unlink = mocker.AsyncMock()
         mocker.patch("kreuzberg._extractors._spread_sheet.create_temp_file", return_value=(temp_path, mock_unlink))
@@ -847,12 +800,10 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
 
         result = await extractor._convert_sheet_to_text(mock_workbook, "uneven_sheet")
 
-        # Should pad shorter rows with empty cells
         assert "## uneven_sheet" in result
         assert "A | B | C | D | E" in result
-        assert "1 | | | |" in result  # Padded with empty cells
-        assert "2 | 3 | | |" in result  # Padded with empty cells
-        # Longer row should be truncated to header length in final markdown
+        assert "1 | | | |" in result
+        assert "2 | 3 | | |" in result
         mock_unlink.assert_called_once()
 
     @pytest.mark.anyio
@@ -863,7 +814,6 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
 
-        # Sheet with all None values
         mock_sheet.to_python.return_value = [
             [None, None, None],
             [None, None, None],
@@ -871,7 +821,6 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
         ]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-        # Mock temp file operations
         temp_path = "/tmp/test.csv"
         mock_unlink = mocker.AsyncMock()
         mocker.patch("kreuzberg._extractors._spread_sheet.create_temp_file", return_value=(temp_path, mock_unlink))
@@ -879,9 +828,8 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
 
         result = await extractor._convert_sheet_to_text(mock_workbook, "none_sheet")
 
-        # Should handle None values as empty strings
         assert "## none_sheet" in result
-        assert " | | " in result  # Empty cells
+        assert " | | " in result
         mock_unlink.assert_called_once()
 
 
@@ -895,10 +843,8 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_metadata = mocker.Mock()
 
-        # Only some properties available
         mock_metadata.title = "Partial Title"
         mock_metadata.author = "Partial Author"
-        # Missing other properties
         for attr in ["subject", "comments", "keywords", "category", "company", "manager", "created", "modified"]:
             setattr(mock_metadata, attr, None)
 
@@ -909,7 +855,7 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
 
         assert metadata["title"] == "Partial Title"
         assert metadata["authors"] == ["Partial Author"]
-        assert len(metadata) == 2  # Only title and authors
+        assert len(metadata) == 2
 
     def test_extract_document_properties_empty_strings(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
@@ -918,12 +864,11 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_metadata = mocker.Mock()
 
-        # Properties with empty strings (should be ignored)
         mock_metadata.title = ""
         mock_metadata.author = ""
         mock_metadata.subject = ""
         mock_metadata.keywords = ""
-        mock_metadata.comments = "Valid comment"  # Only this should be extracted
+        mock_metadata.comments = "Valid comment"
 
         mock_workbook.metadata = mock_metadata
 
@@ -931,7 +876,7 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
         extractor._extract_document_properties(mock_workbook, metadata)
 
         assert metadata["comments"] == "Valid comment"
-        assert len(metadata) == 1  # Only comments
+        assert len(metadata) == 1
 
     def test_extract_document_properties_complex_keywords(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
@@ -940,7 +885,6 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_metadata = mocker.Mock()
 
-        # Complex keyword string with mixed separators and whitespace
         mock_metadata.keywords = "  keyword1,  keyword2;keyword3  ,, ; keyword4;  ,keyword5  "
         mock_workbook.metadata = mock_metadata
 
@@ -957,14 +901,12 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_metadata = mocker.Mock()
 
-        # Keywords that result in empty list after processing
         mock_metadata.keywords = "  ,, ; ;;  , ,  "
         mock_workbook.metadata = mock_metadata
 
         metadata: Metadata = {}
         extractor._extract_document_properties(mock_workbook, metadata)
 
-        # Should not add keywords if list is empty
         assert "keywords" not in metadata
 
     def test_extract_date_properties_non_datetime_objects(
@@ -973,12 +915,10 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
         """Test date property extraction with non-datetime objects that have isoformat."""
         mock_props = mocker.Mock()
 
-        # Create mock object with isoformat method
         mock_date_like = mocker.Mock()
         mock_date_like.isoformat.return_value = "2023-12-25T10:30:00"
         mock_props.created = mock_date_like
 
-        # Object without isoformat method
         mock_props.modified = "string_date"
 
         metadata: Metadata = {}
@@ -1000,14 +940,13 @@ class TestSpreadSheetExtractorStructureInfoEdgeCases:
         extractor._add_structure_info(mock_workbook, metadata)
 
         assert metadata["description"] == "Spreadsheet with 1 sheet: OnlySheet"
-        assert "sheets" not in metadata["description"]  # Should use singular "sheet"
+        assert "sheets" not in metadata["description"]
 
     def test_add_structure_info_exactly_max_sheets(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
         """Test structure info with exactly the maximum number of sheets to list."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
-        # Exactly 5 sheets (the max_sheet_names_to_list limit)
         mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5"]
 
         metadata: Metadata = {}
@@ -1021,13 +960,11 @@ class TestSpreadSheetExtractorStructureInfoEdgeCases:
     ) -> None:
         """Test structure info with one more than maximum sheets to list."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
-        # 6 sheets (one more than max_sheet_names_to_list limit of 5)
         mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6"]
 
         metadata: Metadata = {}
         extractor._add_structure_info(mock_workbook, metadata)
 
-        # Should not list sheet names when over the limit
         assert metadata["description"] == "Spreadsheet with 6 sheets"
         assert "Sheet1" not in metadata["description"]
 
@@ -1045,7 +982,7 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = [
             ["Header", "Not Formula", "Formula"],
-            ["Data", "=not a formula at start", "=SUM(A:A)"],  # Only third cell is actual formula
+            ["Data", "=not a formula at start", "=SUM(A:A)"],
             ["More", "Text with = sign", "=IF(A1>0,1,0)"],
             ["Values", "String=value", "=VLOOKUP(A1,B:C,2,FALSE)"],
         ]
@@ -1066,16 +1003,15 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
 
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = [
-            [None, "", "   "],  # No meaningful data
-            ["", None, "  \t  "],  # Only whitespace
-            [None, None, None],  # All None
+            [None, "", "   "],
+            ["", None, "  \t  "],
+            [None, None, None],
         ]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
         metadata: Metadata = {}
         extractor._analyze_content_complexity(mock_workbook, metadata)
 
-        # Should not create summary when no meaningful cells
         assert "summary" not in metadata
 
     def test_analyze_content_complexity_row_processing_limits(
@@ -1085,8 +1021,7 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["LargeSheet"]
 
-        # Create sheet with more than max_rows_to_check (50) rows
-        large_data = [["Header"]] + [[f"Row{i}"] for i in range(100)]  # 101 rows total
+        large_data = [["Header"]] + [[f"Row{i}"] for i in range(100)]
 
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = large_data
@@ -1095,7 +1030,6 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
         metadata: Metadata = {}
         extractor._analyze_content_complexity(mock_workbook, metadata)
 
-        # Should process only limited rows (check that it doesn't crash on large datasets)
         assert "summary" in metadata
         assert "Contains" in metadata["summary"]
 
@@ -1104,7 +1038,6 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
     ) -> None:
         """Test complexity analysis respects sheet processing limits."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
-        # More than max_sheets_to_check (3) sheets
         mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5"]
 
         mock_sheet = mocker.Mock()
@@ -1114,7 +1047,6 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
         metadata: Metadata = {}
         extractor._analyze_content_complexity(mock_workbook, metadata)
 
-        # Should process only first 3 sheets but still work
         assert "summary" in metadata
         assert "Contains" in metadata["summary"]
 
@@ -1129,11 +1061,9 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
         mock_sheet.to_python.return_value = [["Header"], ["Data"]]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-        # Pre-existing summary
         metadata: Metadata = {"summary": "Existing summary"}
         extractor._analyze_content_complexity(mock_workbook, metadata)
 
-        # Should preserve existing summary
         assert metadata["summary"] == "Existing summary"
 
 
@@ -1147,35 +1077,30 @@ class TestSpreadSheetExtractorEnhancedTableProcessingExtensive:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = [
-            ["Name", "Age", None, "City"],  # Header with None
+            ["Name", "Age", None, "City"],
             ["Alice", 25, None, "New York"],
-            [None, None, None, None],  # Empty row (should be dropped)
+            [None, None, None, None],
             ["Bob", 30, None, "Chicago"],
-            [None, None, None, None],  # Another empty row
+            [None, None, None, None],
         ]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-        # Mock pandas DataFrame with realistic behavior
         mock_df_initial = mocker.Mock()
         mock_df_after_dropna = mocker.Mock()
         mock_df_after_dropna.empty = False
 
-        # Chain the dropna calls
         mock_df_initial.dropna.return_value = mock_df_after_dropna
         mock_df_after_dropna.dropna.return_value = mock_df_after_dropna
 
-        # Mock enhance_table_markdown
         mock_enhance = mocker.patch("kreuzberg._utils._table.enhance_table_markdown")
         mock_enhance.return_value = "Enhanced table with cleaned data"
 
-        # Mock PIL Image creation
         mocker.patch("PIL.Image.new")
 
         with mocker.patch("pandas.DataFrame", return_value=mock_df_initial):
             result = extractor._enhance_sheet_with_table_data(mock_workbook, "CleanedSheet")
 
         assert result == "## CleanedSheet\n\nEnhanced table with cleaned data"
-        # Verify dropna was called twice (rows and columns)
         assert mock_df_initial.dropna.call_count == 1
         assert mock_df_after_dropna.dropna.call_count == 1
 
@@ -1188,9 +1113,7 @@ class TestSpreadSheetExtractorEnhancedTableProcessingExtensive:
         mock_sheet.to_python.return_value = [["Header"], ["Data"]]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-        # Mock ValueError during enhancement
         with mocker.patch("pandas.DataFrame", side_effect=ValueError("DataFrame creation error")):
-            # Mock the fallback method
             mocker.patch.object(extractor, "_convert_sheet_to_text_sync", return_value="Fallback after ValueError")
 
             result = extractor._enhance_sheet_with_table_data(mock_workbook, "ErrorSheet")
@@ -1206,12 +1129,10 @@ class TestSpreadSheetExtractorEnhancedTableProcessingExtensive:
         mock_sheet.to_python.return_value = [["Header"], ["Data"]]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
-        # Mock AttributeError during enhancement (e.g., missing pandas method)
         mock_df = mocker.Mock()
         mock_df.dropna.side_effect = AttributeError("dropna method not found")
 
         with mocker.patch("pandas.DataFrame", return_value=mock_df):
-            # Mock the fallback method
             mocker.patch.object(extractor, "_convert_sheet_to_text_sync", return_value="Fallback after AttributeError")
 
             result = extractor._enhance_sheet_with_table_data(mock_workbook, "AttributeErrorSheet")
@@ -1225,13 +1146,12 @@ class TestSpreadSheetExtractorEnhancedTableProcessingExtensive:
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = [
-            [],  # Empty row
-            [None, None, None],  # Row with only None
-            ["", "", ""],  # Row with only empty strings
+            [],
+            [None, None, None],
+            ["", "", ""],
         ]
         mock_workbook.get_sheet_by_name.return_value = mock_sheet
 
         result = extractor._enhance_sheet_with_table_data(mock_workbook, "OnlyEmptyRows")
 
-        # Should detect as empty sheet since no meaningful data
         assert result == "## OnlyEmptyRows\n\n*Empty sheet*"

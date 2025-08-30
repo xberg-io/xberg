@@ -44,20 +44,16 @@ class BenchmarkRunner:
     ) -> ExtractionQualityMetrics | None:
         """Analyze extraction result to compute quality metrics."""
         try:
-            # Check if it's an ExtractionResult
             if not hasattr(result, "content") or not hasattr(result, "metadata"):
                 return None
 
-            # Compute text metrics
             text_length = len(result.content) if result.content else 0
             word_count = len(result.content.split()) if result.content else 0
             line_count = result.content.count("\n") + 1 if result.content else 0
 
-            # Check for tables
             has_tables = bool(result.tables) if hasattr(result, "tables") else False
             table_count = len(result.tables) if has_tables else 0
 
-            # Check for OCR (heuristic based on metadata or image files)
             has_ocr = False
             if result.metadata:
                 ocr_keywords = ["ocr", "tesseract", "easyocr", "paddleocr"]
@@ -65,18 +61,15 @@ class BenchmarkRunner:
                     key in str(result.metadata).lower() for key in ocr_keywords
                 )
 
-            # Get detected languages
             detected_languages = []
             if hasattr(result, "detected_languages") and result.detected_languages:
                 detected_languages = list(result.detected_languages)
 
-            # Analyze metadata quality
             metadata_quality = None
             if result.metadata:
                 metadata_fields = list(result.metadata.keys())
                 metadata_count = len(metadata_fields)
 
-                # Check for common metadata fields
                 has_title = any(
                     k.lower() in ["title", "dc:title"] for k in metadata_fields
                 )
@@ -89,7 +82,6 @@ class BenchmarkRunner:
                 )
                 has_modified_date = any("modif" in k.lower() for k in metadata_fields)
 
-                # Count custom fields (non-standard)
                 standard_fields = {
                     "title",
                     "author",
@@ -110,7 +102,6 @@ class BenchmarkRunner:
                     1 for f in metadata_fields if f.lower() not in standard_fields
                 )
 
-                # Calculate completeness (out of expected fields)
                 expected_fields = {"title", "author", "created", "modified"}
                 present_expected = sum(
                     1
@@ -119,15 +110,13 @@ class BenchmarkRunner:
                 )
                 metadata_completeness = (present_expected / len(expected_fields)) * 100
 
-                # Calculate richness (diversity score)
-                metadata_richness = min(metadata_count / 10.0, 1.0)  # Normalize to 0-1
+                metadata_richness = min(metadata_count / 10.0, 1.0)
 
-                # Get backend if available
                 extraction_backend = result.metadata.get("extraction_backend")
 
                 metadata_quality = MetadataQualityMetrics(
                     metadata_count=metadata_count,
-                    metadata_fields=metadata_fields[:50],  # Limit to 50 fields
+                    metadata_fields=metadata_fields[:50],
                     metadata_completeness=metadata_completeness,
                     metadata_richness=metadata_richness,
                     has_title=has_title,
@@ -173,7 +162,6 @@ class BenchmarkRunner:
 
             performance_metrics.duration_seconds = end_time - start_time
 
-            # Analyze extraction quality if this is an extraction benchmark
             extraction_quality = self._analyze_extraction_result(result)
 
             return BenchmarkResult(
@@ -232,7 +220,6 @@ class BenchmarkRunner:
 
             performance_metrics.duration_seconds = end_time - start_time
 
-            # Analyze extraction quality if this is an extraction benchmark
             extraction_quality = self._analyze_extraction_result(result)
 
             return BenchmarkResult(

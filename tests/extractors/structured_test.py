@@ -153,7 +153,6 @@ enabled = true
 
         toml_content = b'title = "No Tomllib Test"'
 
-        # Mock tomllib as None to simulate missing dependency
         with patch.object(sys.modules[extractor.__module__], "tomllib", None):
             result = extractor.extract_bytes_sync(toml_content)
 
@@ -172,7 +171,6 @@ enabled = true
 
         yaml_content = b"title: No PyYAML Test"
 
-        # Mock yaml as None to simulate missing dependency
         with patch.object(sys.modules[extractor.__module__], "yaml", None):
             result = extractor.extract_bytes_sync(yaml_content)
 
@@ -252,7 +250,6 @@ enabled = true
         assert "Overview content" in result.content
         assert "Test Author" in result.content
 
-        # Check that metadata was extracted properly
         assert result.metadata["title"] == "Complex Document"
 
     def test_extract_nested_lists(self) -> None:

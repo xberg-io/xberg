@@ -207,7 +207,6 @@ def test_extract_bytes_temp_file_cleanup_on_error() -> None:
                     with pytest.raises(Exception, match="Processing failed"):
                         extractor.extract_bytes_sync(b"image data")
 
-                    # Verify temp file was still cleaned up
                     mock_unlink.assert_called_once()
 
 
@@ -226,7 +225,6 @@ def test_extract_bytes_with_different_mime_types() -> None:
     """Test extract_bytes_sync with different image MIME types."""
     config = ExtractionConfig(ocr_backend="tesseract")
 
-    # Test different MIME types
     mime_types = ["image/png", "image/jpeg", "image/tiff", "image/webp"]
 
     for mime_type in mime_types:
@@ -295,11 +293,8 @@ def test_extract_bytes_sync_temp_file_creation() -> None:
                     result = extractor.extract_bytes_sync(b"fake image data")
 
                     assert result.content == "extracted text"
-                    # Verify temp file was created with correct suffix
                     mock_mkstemp.assert_called_once_with(suffix=".png")
-                    # Verify file was written
                     mock_file.write.assert_called_once_with(b"fake image data")
-                    # Verify file was cleaned up
                     mock_unlink.assert_called_once()
 
 
@@ -321,7 +316,6 @@ async def test_extract_bytes_async_delegation() -> None:
 
         assert result.content == "async extracted text"
         mock_async.assert_called_once()
-        # Verify it was called with a Path object
         assert isinstance(mock_async.call_args[0][0], Path)
 
 
@@ -409,7 +403,6 @@ def test_extract_path_sync_with_easyocr_config(mock_ocr_backend: MagicMock) -> N
     assert result == expected_result
 
 
-# Integration Tests - These test with real images and OCR
 @pytest.mark.anyio
 async def test_extract_real_image_integration() -> None:
     """Integration test with real image and OCR."""
@@ -424,7 +417,7 @@ async def test_extract_real_image_integration() -> None:
 
     assert isinstance(result, ExtractionResult)
     assert result.mime_type == "text/plain"
-    assert len(result.content) > 0  # Should extract some text
+    assert len(result.content) > 0
 
 
 def test_extract_real_image_sync_integration() -> None:
@@ -440,12 +433,7 @@ def test_extract_real_image_sync_integration() -> None:
 
     assert isinstance(result, ExtractionResult)
     assert result.mime_type == "text/plain"
-    assert len(result.content) > 0  # Should extract some text
-
-
-# =============================================================================
-# COMPREHENSIVE TESTS (for improved coverage)
-# =============================================================================
+    assert len(result.content) > 0
 
 
 class TestImageExtractorComprehensiveMimeTypes:
@@ -454,7 +442,6 @@ class TestImageExtractorComprehensiveMimeTypes:
     @pytest.mark.parametrize(
         "mime_type,expected_extension",
         [
-            # Test all mappings in IMAGE_MIME_TYPE_EXT_MAP
             ("image/bmp", "bmp"),
             ("image/x-bmp", "bmp"),
             ("image/x-ms-bmp", "bmp"),
@@ -488,26 +475,20 @@ class TestImageExtractorComprehensiveMimeTypes:
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
-        # Test that a partial match finds the first matching key
-        # Since the dict iteration order is preserved in Python 3.7+,
-        # "image" should match "image/bmp" first
         extension = extractor._get_extension_from_mime_type("image")
         assert extension == "bmp"
 
-        # Test other partial matches
         extension = extractor._get_extension_from_mime_type("image/x")
-        assert extension in ["bmp", "tiff", "pnm", "pbm", "pgm", "ppm"]  # Any x- prefix type
+        assert extension in ["bmp", "tiff", "pnm", "pbm", "pgm", "ppm"]
 
-        # Test exact prefix match
         extension = extractor._get_extension_from_mime_type("image/x-portable")
-        assert extension in ["pnm", "pbm", "pgm", "ppm"]  # Any portable type
+        assert extension in ["pnm", "pbm", "pgm", "ppm"]
 
     def test_mime_type_case_sensitivity(self) -> None:
         """Test that MIME type matching is case-sensitive."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
-        # These should fail as the mapping is case-sensitive
         with pytest.raises(ValidationError, match="unsupported mimetype"):
             extractor._get_extension_from_mime_type("IMAGE/PNG")
 
@@ -528,7 +509,6 @@ class TestImageExtractorSyncPathExtractionComprehensive:
 
     def test_extract_path_sync_with_default_tesseract_config(self, mock_ocr_backend: MagicMock) -> None:
         """Test sync path extraction when ocr_config is None (uses default)."""
-        # Use None config to trigger default creation
         config = ExtractionConfig(ocr_backend="tesseract", ocr_config=None)
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -537,15 +517,12 @@ class TestImageExtractorSyncPathExtractionComprehensive:
 
         result = extractor.extract_path_sync(Path("test.png"))
 
-        # Should create default TesseractConfig
         mock_ocr_backend.process_file_sync.assert_called_once()
-        # Quality processing adds metadata
         assert result.content == expected_result.content
         assert result.mime_type == expected_result.mime_type
 
     def test_extract_path_sync_with_default_paddleocr_config(self, mock_ocr_backend: MagicMock) -> None:
         """Test sync path extraction when ocr_config is None (uses default)."""
-        # Use None config to trigger default creation
         config = ExtractionConfig(ocr_backend="paddleocr", ocr_config=None)
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -554,15 +531,12 @@ class TestImageExtractorSyncPathExtractionComprehensive:
 
         result = extractor.extract_path_sync(Path("test.png"))
 
-        # Should create default PaddleOCRConfig
         mock_ocr_backend.process_file_sync.assert_called_once()
-        # Quality processing adds metadata
         assert result.content == expected_result.content
         assert result.mime_type == expected_result.mime_type
 
     def test_extract_path_sync_with_default_easyocr_config(self, mock_ocr_backend: MagicMock) -> None:
         """Test sync path extraction when ocr_config is None (uses default)."""
-        # Use None config to trigger default creation
         config = ExtractionConfig(ocr_backend="easyocr", ocr_config=None)
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -571,9 +545,7 @@ class TestImageExtractorSyncPathExtractionComprehensive:
 
         result = extractor.extract_path_sync(Path("test.png"))
 
-        # Should create default EasyOCRConfig
         mock_ocr_backend.process_file_sync.assert_called_once()
-        # Quality processing adds metadata
         assert result.content == expected_result.content
         assert result.mime_type == expected_result.mime_type
 
@@ -581,7 +553,6 @@ class TestImageExtractorSyncPathExtractionComprehensive:
         """Test sync path extraction with custom OCR configurations."""
         from kreuzberg._ocr._tesseract import PSMMode, TesseractConfig
 
-        # Test with custom Tesseract config
         tesseract_config = TesseractConfig(
             language="deu+fra",
             psm=PSMMode.SINGLE_COLUMN,
@@ -598,7 +569,6 @@ class TestImageExtractorSyncPathExtractionComprehensive:
         result = extractor.extract_path_sync(Path("test.png"))
         assert result.content == "German text"
 
-        # Verify the config was passed correctly
         call_args = mock_ocr_backend.process_file_sync.call_args[1]
         assert call_args["language"] == "deu+fra"
         assert call_args["psm"] == PSMMode.SINGLE_COLUMN
@@ -621,14 +591,12 @@ class TestImageExtractorTempFileHandlingComprehensive:
             mock_mkstemp.return_value = (mock_fd, mock_temp_path)
 
             with patch("os.fdopen") as mock_fdopen:
-                # Simulate fdopen failure
                 mock_fdopen.side_effect = OSError("Cannot open file descriptor")
 
                 with patch("pathlib.Path.unlink") as mock_unlink:
                     with pytest.raises(OSError, match="Cannot open file descriptor"):
                         extractor.extract_bytes_sync(b"image data")
 
-                    # Verify cleanup still attempted
                     mock_unlink.assert_called_once()
 
     def test_extract_bytes_sync_unlink_error_suppressed(self) -> None:
@@ -650,10 +618,8 @@ class TestImageExtractorTempFileHandlingComprehensive:
                     mock_extract.return_value = expected_result
 
                     with patch("pathlib.Path.unlink") as mock_unlink:
-                        # Unlink fails but should be suppressed
                         mock_unlink.side_effect = OSError("Cannot unlink")
 
-                        # Should not raise
                         result = extractor.extract_bytes_sync(b"image data")
                         assert result == expected_result
 
@@ -675,13 +641,11 @@ class TestImageExtractorTempFileHandlingComprehensive:
                 mock_async_path.return_value = mock_async_path_instance
 
                 with patch.object(extractor, "extract_path_async") as mock_extract:
-                    # Simulate extraction failure
                     mock_extract.side_effect = Exception("OCR failed")
 
                     with pytest.raises(Exception, match="OCR failed"):
                         await extractor.extract_bytes_async(b"image data")
 
-                    # Verify cleanup was called
                     mock_unlink.assert_called_once()
 
 
@@ -693,7 +657,6 @@ class TestImageExtractorEdgeCases:
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
-        # Verify it includes all mapped types
         for mime_type in extractor.IMAGE_MIME_TYPE_EXT_MAP:
             assert mime_type in extractor.SUPPORTED_MIME_TYPES
 
@@ -701,7 +664,6 @@ class TestImageExtractorEdgeCases:
         """Test extract_bytes_sync with all supported MIME types."""
         config = ExtractionConfig(ocr_backend="tesseract")
 
-        # Mock the extraction to avoid actual OCR
         for mime_type in ImageExtractor.IMAGE_MIME_TYPE_EXT_MAP:
             extractor = ImageExtractor(mime_type=mime_type, config=config)
 
@@ -713,7 +675,6 @@ class TestImageExtractorEdgeCases:
 
                 result = extractor.extract_bytes_sync(b"fake image data")
                 assert result.content == f"Extracted from {mime_type}"
-                # Metadata is mocked, so we can't check specific keys
 
     def test_mime_type_validation_context(self) -> None:
         """Test that ValidationError includes proper context."""
@@ -723,7 +684,6 @@ class TestImageExtractorEdgeCases:
         with pytest.raises(ValidationError) as exc_info:
             extractor._get_extension_from_mime_type("video/mp4")
 
-        # Check error message and context
         assert "unsupported mimetype" in str(exc_info.value)
         assert exc_info.value.context == {"mime_type": "video/mp4"}
 
@@ -732,7 +692,6 @@ class TestImageExtractorEdgeCases:
         config = ExtractionConfig(ocr_backend="tesseract", enable_quality_processing=True)
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
-        # Create a result that would be modified by quality processing
         raw_result = ExtractionResult(
             content="Low quality text with ████ artifacts", mime_type="text/plain", metadata={}
         )
@@ -740,8 +699,7 @@ class TestImageExtractorEdgeCases:
 
         result = extractor.extract_path_sync(Path("test.png"))
 
-        # Quality processing should be applied
-        assert result != raw_result  # Result should be modified
+        assert result != raw_result
 
     @pytest.mark.anyio
     async def test_async_path_delegation_preserves_config(self, mock_ocr_backend: MagicMock) -> None:
@@ -757,7 +715,6 @@ class TestImageExtractorEdgeCases:
 
         await extractor.extract_path_async(Path("japanese.png"))
 
-        # Verify all OCR config was passed
         mock_ocr_backend.process_file.assert_called_once()
         call_kwargs = mock_ocr_backend.process_file.call_args[1]
         assert "language" in call_kwargs

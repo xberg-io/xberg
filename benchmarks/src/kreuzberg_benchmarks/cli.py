@@ -24,7 +24,6 @@ def _generate_quality_report(data: dict[str, Any], console: Console) -> None:
     console.print("\n[bold]METADATA QUALITY REPORT[/bold]")
     console.print("=" * 80)
 
-    # Collect results with extraction quality
     quality_results = [
         r
         for r in data["results"]
@@ -36,7 +35,6 @@ def _generate_quality_report(data: dict[str, Any], console: Console) -> None:
         console.print("[yellow]No extraction quality data available[/yellow]")
         return
 
-    # Group by backend
     backend_stats: dict[str, dict[str, Any]] = {}
     for result in quality_results:
         metadata = result.get("metadata", {})
@@ -58,7 +56,6 @@ def _generate_quality_report(data: dict[str, Any], console: Console) -> None:
         backend_stats[backend]["total_metadata_fields"] += quality["metadata_count"]
         backend_stats[backend]["unique_fields"].update(quality["metadata_fields"])
 
-    # Calculate averages
     for backend, stats in backend_stats.items():
         results = stats["results"]
         if results:
@@ -70,7 +67,6 @@ def _generate_quality_report(data: dict[str, Any], console: Console) -> None:
             )
             stats["avg_metadata_count"] = stats["total_metadata_fields"] / len(results)
 
-    # Create summary table
     table = Table(title="Backend Metadata Quality Comparison")
     table.add_column("Backend", style="bold")
     table.add_column("Files Tested", justify="right")
@@ -92,7 +88,6 @@ def _generate_quality_report(data: dict[str, Any], console: Console) -> None:
 
     console.print(table)
 
-    # File type breakdown
     console.print("\n[bold]Metadata Quality by File Type and Backend:[/bold]")
 
     file_type_stats: dict[str, dict[str, list[Any]]] = {}
@@ -127,7 +122,6 @@ def _generate_quality_report(data: dict[str, Any], console: Console) -> None:
                 f"{has_title:.0f}% with title, {has_author:.0f}% with author"
             )
 
-    # Top metadata fields
     console.print("\n[bold]Most Common Metadata Fields:[/bold]")
     all_fields: dict[str, set[str]] = {}
     for backend, stats in backend_stats.items():
@@ -136,7 +130,6 @@ def _generate_quality_report(data: dict[str, Any], console: Console) -> None:
                 all_fields[field] = set()
             all_fields[field].add(backend)
 
-    # Sort by number of backends that have the field
     sorted_fields = sorted(all_fields.items(), key=lambda x: len(x[1]), reverse=True)[
         :20
     ]
@@ -208,7 +201,6 @@ def run(
     async_benchmarks: list[tuple[str, Any, dict[str, Any]]] = []
 
     if backend_comparison:
-        # Backend comparison mode
         backend_benchmarks = benchmarks.get_backend_benchmarks()
         sync_benchmarks = backend_benchmarks
         async_benchmarks = []

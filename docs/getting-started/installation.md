@@ -64,52 +64,15 @@ choco install -y tesseract
 
 !!! note "Language Support"
 
-    Tesseract includes English language support by default. If you need to process documents in other languages, you must install the appropriate language data files:
+    Tesseract includes English language support by default. Kreuzberg Docker images come pre-configured with 12 common business languages: English, Spanish, French, German, Italian, Portuguese, Chinese (Simplified & Traditional), Japanese, Arabic, Russian, and Hindi.
+
+    For local installations requiring additional languages, you must install the appropriate language data files:
 
     - **Ubuntu/Debian**: `sudo apt-get install tesseract-ocr-deu` (for German)
     - **macOS**: `brew install tesseract-lang`
     - **Windows**: See the [Tesseract documentation](https://tesseract-ocr.github.io/tessdoc/Installation.html#windows)
 
     For more details on language installation and configuration, refer to the [Tesseract documentation](https://tesseract-ocr.github.io/tessdoc/Installation.html).
-
-#### EasyOCR
-
-EasyOCR is a Python-based OCR backend with wide language support and strong performance.
-
-```shell
-pip install "kreuzberg[easyocr]"
-```
-
-#### PaddleOCR
-
-PaddleOCR requires additional system dependencies for OpenCV support:
-
-##### System Dependencies
-
-###### Ubuntu/Debian
-
-```shell
-# Install OpenGL libraries required by OpenCV
-sudo apt-get install libgl1 libglib2.0-0
-```
-
-###### macOS
-
-```shell
-# OpenGL support is typically included with macOS
-# If you encounter issues, install:
-brew install glfw
-```
-
-###### Windows
-
-OpenGL libraries are typically included with graphics drivers on Windows.
-
-##### Python Package
-
-```shell
-pip install "kreuzberg[paddleocr]"
-```
 
 ### Chunking
 
@@ -119,14 +82,6 @@ Chunking is an optional feature - useful for RAG applications among others. Kreu
 pip install "kreuzberg[chunking]"
 ```
 
-### Table Extraction
-
-Table extraction is an optional feature that allows Kreuzberg to extract tables from PDFs. It uses the [GMFT](https://github.com/conjuncts/gmft) package. To install Kreuzberg with table extraction support, you can use:
-
-```shell
-pip install "kreuzberg[gmft]"
-```
-
 ### Language Detection
 
 Language detection is an optional feature that automatically detects the language of extracted text. It uses the [fast-langdetect](https://github.com/LlmKira/fast-langdetect) package. To install Kreuzberg with language detection support, you can use:
@@ -134,30 +89,6 @@ Language detection is an optional feature that automatically detects the languag
 ```shell
 pip install "kreuzberg[langdetect]"
 ```
-
-### Entity and Keyword Extraction
-
-Entity and keyword extraction are optional features that extract named entities and keywords from documents. Entity extraction uses [spaCy](https://spacy.io/) for multilingual named entity recognition, while keyword extraction uses [KeyBERT](https://github.com/MaartenGr/KeyBERT) for semantic keyword extraction:
-
-```shell
-pip install "kreuzberg[entity-extraction]"
-```
-
-After installation, you'll need to download the spaCy language models you plan to use:
-
-```shell
-# Download English model (most common)
-python -m spacy download en_core_web_sm
-
-# Download other language models as needed
-python -m spacy download de_core_news_sm  # German
-python -m spacy download fr_core_news_sm  # French
-python -m spacy download es_core_news_sm  # Spanish
-```
-
-!!! note "Language Model Requirements"
-
-    spaCy language models are large (50-500MB each) and are downloaded separately. Only download the models for languages you actually need to process. See the [spaCy models documentation](https://spacy.io/models) for a complete list of available models.
 
 ### Document Classification
 
@@ -180,5 +111,5 @@ pip install "kreuzberg[all]"
 This is equivalent to:
 
 ```shell
-pip install "kreuzberg[chunking,document-classification,easyocr,entity-extraction,gmft,langdetect,paddleocr]"
+pip install "kreuzberg[chunking,document-classification,langdetect,crypto,additional-extensions,cli,api]"
 ```

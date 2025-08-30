@@ -14,6 +14,10 @@ import pytest
 from kreuzberg._types import ExtractionResult
 from kreuzberg._utils._cache import (
     KreuzbergCache,
+    _document_cache_ref,
+    _mime_cache_ref,
+    _ocr_cache_ref,
+    _table_cache_ref,
     clear_all_caches,
     get_document_cache,
     get_mime_cache,
@@ -354,6 +358,9 @@ def test_get_stats_os_error(cache: KreuzbergCache[str]) -> None:
 
 def test_get_ocr_cache() -> None:
     """Test OCR cache factory function."""
+    # Clear any existing cache
+    _ocr_cache_ref.clear()
+
     cache = get_ocr_cache()
     assert isinstance(cache, KreuzbergCache)
     assert cache.cache_type == "ocr"
@@ -364,16 +371,16 @@ def test_get_ocr_cache() -> None:
 
 def test_get_ocr_cache_with_env_vars() -> None:
     """Test OCR cache with environment variables."""
-    with (
-        patch.dict(
-            os.environ,
-            {
-                "KREUZBERG_CACHE_DIR": "/tmp/test_cache",
-                "KREUZBERG_OCR_CACHE_SIZE_MB": "100",
-                "KREUZBERG_OCR_CACHE_AGE_DAYS": "7",
-            },
-        ),
-        patch("kreuzberg._utils._cache._ocr_cache", None),
+    # Clear any existing cache
+    _ocr_cache_ref.clear()
+
+    with patch.dict(
+        os.environ,
+        {
+            "KREUZBERG_CACHE_DIR": "/tmp/test_cache",
+            "KREUZBERG_OCR_CACHE_SIZE_MB": "100",
+            "KREUZBERG_OCR_CACHE_AGE_DAYS": "7",
+        },
     ):
         cache = get_ocr_cache()
         assert cache.max_cache_size_mb == 100.0
@@ -382,6 +389,7 @@ def test_get_ocr_cache_with_env_vars() -> None:
 
 def test_get_document_cache() -> None:
     """Test document cache factory function."""
+    _document_cache_ref.clear()
     cache = get_document_cache()
     assert isinstance(cache, KreuzbergCache)
     assert cache.cache_type == "documents"
@@ -389,6 +397,7 @@ def test_get_document_cache() -> None:
 
 def test_get_table_cache() -> None:
     """Test table cache factory function."""
+    _table_cache_ref.clear()
     cache = get_table_cache()
     assert isinstance(cache, KreuzbergCache)
     assert cache.cache_type == "tables"
@@ -396,6 +405,7 @@ def test_get_table_cache() -> None:
 
 def test_get_mime_cache() -> None:
     """Test MIME cache factory function."""
+    _mime_cache_ref.clear()
     cache = get_mime_cache()
     assert isinstance(cache, KreuzbergCache)
     assert cache.cache_type == "mime"
@@ -403,6 +413,11 @@ def test_get_mime_cache() -> None:
 
 def test_clear_all_caches() -> None:
     """Test clearing all global caches."""
+    # Clear refs first to start fresh
+    _ocr_cache_ref.clear()
+    _document_cache_ref.clear()
+    _table_cache_ref.clear()
+    _mime_cache_ref.clear()
 
     get_ocr_cache().set(
         ExtractionResult(content="test", mime_type="text/plain", metadata={}, chunks=[], tables=[]), key="test"
@@ -411,8 +426,11 @@ def test_clear_all_caches() -> None:
 
     clear_all_caches()
 
-    assert get_ocr_cache().get(key="test") is None
-    assert get_mime_cache().get(key="test") is None
+    # After clearing, the refs should be empty
+    assert not _ocr_cache_ref.is_initialized()
+    assert not _document_cache_ref.is_initialized()
+    assert not _table_cache_ref.is_initialized()
+    assert not _mime_cache_ref.is_initialized()
 
 
 def test_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) -> None:

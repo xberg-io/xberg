@@ -397,21 +397,16 @@ async def test_extract_tables_cache_hit(tiny_pdf_with_tables: Path) -> None:
     assert result[0]["text"] == "cached table"
 
 
-# =============================================================================
-# COMPREHENSIVE TESTS (for improved coverage)
-# =============================================================================
-
-
 class TestGMFTConfigComprehensive:
     """Test comprehensive GMFTConfig scenarios."""
 
     def test_gmft_config_cell_required_confidence_edge_cases(self) -> None:
         """Test GMFTConfig with edge case confidence values."""
         custom_confidence = {
-            0: 0.0,  # Minimum confidence
-            1: 1.0,  # Maximum confidence
-            2: 0.001,  # Very low confidence
-            3: 0.999,  # Very high confidence
+            0: 0.0,
+            1: 1.0,
+            2: 0.001,
+            3: 0.999,
             4: 0.5,
             5: 0.5,
             6: 99,
@@ -431,11 +426,11 @@ class TestGMFTConfigComprehensive:
     def test_gmft_config_extreme_threshold_values(self) -> None:
         """Test GMFTConfig with extreme threshold values."""
         config = GMFTConfig(
-            total_overlap_reject_threshold=1.0,  # 100% overlap
-            total_overlap_warn_threshold=0.0,  # 0% overlap warning
-            nms_warn_threshold=1,  # Warn after 1 removal
-            iob_reject_threshold=0.0,  # 0% IOB threshold
-            iob_warn_threshold=1.0,  # 100% IOB warning
+            total_overlap_reject_threshold=1.0,
+            total_overlap_warn_threshold=0.0,
+            nms_warn_threshold=1,
+            iob_reject_threshold=0.0,
+            iob_warn_threshold=1.0,
         )
 
         assert config.total_overlap_reject_threshold == 1.0
@@ -447,11 +442,11 @@ class TestGMFTConfigComprehensive:
     def test_gmft_config_large_table_extreme_values(self) -> None:
         """Test GMFTConfig with extreme large table configuration."""
         config = GMFTConfig(
-            large_table_if_n_rows_removed=0,  # Minimum rows for large table
-            large_table_threshold=0,  # Force large table assumption always
-            large_table_row_overlap_threshold=0.0,  # No overlap threshold
-            large_table_maximum_rows=10000,  # Very large maximum
-            force_large_table_assumption=False,  # Explicitly disable
+            large_table_if_n_rows_removed=0,
+            large_table_threshold=0,
+            large_table_row_overlap_threshold=0.0,
+            large_table_maximum_rows=10000,
+            force_large_table_assumption=False,
         )
 
         assert config.large_table_if_n_rows_removed == 0
@@ -523,28 +518,22 @@ class TestGMFTCacheProcessingEdgeCases:
     @pytest.mark.anyio
     async def test_extract_tables_file_stat_error_handling(self, tmp_path: Path) -> None:
         """Test extract_tables handles file stat errors gracefully."""
-        # Create a path that doesn't exist
         nonexistent_file = tmp_path / "nonexistent.pdf"
 
         try:
             result = await extract_tables(nonexistent_file)
-            # Should handle the error and use default file info
             assert isinstance(result, list)
         except (MissingDependencyError, ParsingError):
-            # Either dependency missing or file doesn't exist - both acceptable
             pass
 
     def test_extract_tables_sync_file_stat_error_handling(self, tmp_path: Path) -> None:
         """Test sync extract_tables handles file stat errors gracefully."""
-        # Create a path that doesn't exist
         nonexistent_file = tmp_path / "nonexistent.pdf"
 
         try:
             result = extract_tables_sync(nonexistent_file)
-            # Should handle the error and use default file info
             assert isinstance(result, list)
         except (MissingDependencyError, ParsingError):
-            # Either dependency missing or file doesn't exist - both acceptable
             pass
 
     @pytest.mark.anyio
@@ -573,27 +562,20 @@ class TestGMFTCacheProcessingEdgeCases:
             "config": config_str,
         }
 
-        # Mark as processing but never complete it
         cache.mark_processing(**cache_kwargs)
 
-        # This should timeout waiting for the processing to complete
         try:
             with patch("anyio.to_thread.run_sync") as mock_to_thread:
-                # Mock the event.wait to simulate timeout or failure
                 mock_event = MagicMock()
                 mock_event.wait = MagicMock()
-                mock_to_thread.return_value = None  # Simulate wait completing
+                mock_to_thread.return_value = None
 
-                # Mock the cache methods
                 with patch.object(cache, "mark_processing", return_value=mock_event):
                     result = await extract_tables(tiny_pdf_with_tables)
-                    # Should eventually proceed with extraction
                     assert isinstance(result, list)
         except (MissingDependencyError, ParsingError, TimeoutError):
-            # Various errors are acceptable in this edge case test
             pass
         finally:
-            # Clean up the processing marker
             cache.mark_complete(**cache_kwargs)
 
 
@@ -609,11 +591,10 @@ class TestGMFTInlineExtractionEdgeCases:
         with patch("kreuzberg._gmft.run_sync") as mock_run_sync:
             mock_doc = MagicMock()
             mock_doc.close.side_effect = Exception("Close error")
-            mock_run_sync.side_effect = [mock_doc, [], None]  # doc, cropped_tables, close
+            mock_run_sync.side_effect = [mock_doc, [], None]
 
             try:
                 result = await extract_tables(tiny_pdf_with_tables, use_isolated_process=False)
-                # Should handle close error gracefully
                 assert isinstance(result, list)
             except (MissingDependencyError, ImportError):
                 pytest.skip("GMFT dependency not available for inline testing")
@@ -628,7 +609,6 @@ class TestGMFTInlineExtractionEdgeCases:
 
             with patch.object(PyPDFium2Document, "close", side_effect=Exception("Close error")):
                 result = extract_tables_sync(tiny_pdf_with_tables, use_isolated_process=False)
-                # Should handle close error gracefully
                 assert isinstance(result, list)
         except (ImportError, MissingDependencyError):
             pytest.skip("GMFT dependency not available for inline testing")
@@ -645,12 +625,11 @@ class TestGMFTInlineExtractionEdgeCases:
             mock_page = MagicMock()
             mock_doc.__iter__.return_value = [mock_page]
 
-            # No cropped tables extracted
-            mock_run_sync.side_effect = [mock_doc, [], None]  # doc, empty cropped_tables, close
+            mock_run_sync.side_effect = [mock_doc, [], None]
 
             try:
                 result = await extract_tables(tiny_pdf_with_tables, use_isolated_process=False)
-                assert result == []  # Should return empty list
+                assert result == []
             except (MissingDependencyError, ImportError):
                 pytest.skip("GMFT dependency not available for inline testing")
 
@@ -664,7 +643,7 @@ class TestGMFTInlineExtractionEdgeCases:
 
             with patch.object(AutoTableDetector, "extract", return_value=[]):
                 result = extract_tables_sync(tiny_pdf_with_tables, use_isolated_process=False)
-                assert result == []  # Should return empty list
+                assert result == []
         except (ImportError, MissingDependencyError):
             pytest.skip("GMFT dependency not available for inline testing")
 
@@ -696,7 +675,6 @@ class TestGMFTWithoutTables:
 
     def test_extract_tables_pdf_without_tables_sync(self) -> None:
         """Test that extract_tables_sync handles PDFs without tables gracefully (sync)."""
-        # Using searchable.pdf which is a simple text PDF without tables
         pdf_path = Path("tests/test_source_files/searchable.pdf")
 
         try:
@@ -803,11 +781,9 @@ class TestGMFTConfigSerialization:
             semantic_spanning_cells=True,
         )
 
-        # Serialize to builtins (for multiprocessing)
         serialized = msgspec.to_builtins(original_config)
         assert isinstance(serialized, dict)
 
-        # Recreate config from serialized data
         recreated_config = GMFTConfig(**serialized)
 
         assert recreated_config.verbosity == original_config.verbosity
@@ -832,7 +808,6 @@ class TestGMFTConfigSerialization:
 
         config = GMFTConfig(cell_required_confidence=complex_confidence)  # type: ignore[arg-type]
 
-        # Serialize and deserialize
         serialized = msgspec.to_builtins(config)
         recreated_config = GMFTConfig(**serialized)
 

@@ -92,26 +92,21 @@ def test_extract_tables_in_process_success(sample_pdf: Path, mock_gmft_modules: 
     config_dict = asdict(config).copy()
     result_queue: Any = mp.Queue()
 
-    # Create mock dataframe
     import pandas as pd
 
     mock_df = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
 
-    # Mock page
     mock_page = MagicMock()
     mock_page.page_number = 1
 
-    # Mock cropped table
     mock_cropped_table = MagicMock()
     mock_cropped_table.page = mock_page
     mock_image = Image.new("RGB", (100, 100), color="white")
     mock_cropped_table.image.return_value = mock_image
 
-    # Mock formatted table
     mock_formatted_table = MagicMock()
     mock_formatted_table.df.return_value = mock_df
 
-    # Set up complete mock chain with all necessary attributes
     mock_doc = MagicMock()
     mock_doc.__iter__.return_value = [mock_page]
     mock_doc.close = MagicMock()
@@ -122,7 +117,6 @@ def test_extract_tables_in_process_success(sample_pdf: Path, mock_gmft_modules: 
     mock_formatter = MagicMock()
     mock_formatter.extract.return_value = mock_formatted_table
 
-    # Patch the imports at their original locations where they are imported from inside the function
     with (
         patch("gmft.auto.AutoTableDetector", return_value=mock_detector),
         patch("gmft.auto.AutoTableFormatter", return_value=mock_formatter),
@@ -130,10 +124,8 @@ def test_extract_tables_in_process_success(sample_pdf: Path, mock_gmft_modules: 
         patch("gmft.detectors.tatr.TATRDetectorConfig"),
         patch("gmft.formatters.tatr.TATRFormatConfig"),
     ):
-        # Run extraction
         _extract_tables_in_process(str(sample_pdf), config_dict, result_queue)
 
-        # Check result
         success, result = result_queue.get(timeout=1)
         assert success is True
         assert len(result) == 1
@@ -149,7 +141,6 @@ def test_extract_tables_in_process_exception(sample_pdf: Path) -> None:
     config_dict = asdict(config).copy()
     result_queue: Any = mp.Queue()
 
-    # Mock import error
     with patch("gmft.auto.AutoTableDetector", side_effect=ImportError("GMFT not installed")):
         _extract_tables_in_process(str(sample_pdf), config_dict, result_queue)
 
@@ -164,7 +155,6 @@ def test_extract_tables_isolated_timeout(sample_pdf: Path) -> None:
     """Test timeout handling in extract_tables_isolated."""
     config = GMFTConfig()
 
-    # Mock process that never puts result
     with patch("multiprocessing.get_context") as mock_get_context:
         mock_ctx = MagicMock()
         mock_get_context.return_value = mock_ctx
@@ -180,7 +170,6 @@ def test_extract_tables_isolated_timeout(sample_pdf: Path) -> None:
         with pytest.raises(ParsingError, match="timed out"):
             extract_tables_isolated(str(sample_pdf), config, timeout=0.1)
 
-        # Verify process cleanup
         mock_process.terminate.assert_called_once()
         mock_process.join.assert_called()
 
@@ -198,7 +187,6 @@ def test_extract_tables_isolated_segfault(sample_pdf: Path) -> None:
         mock_ctx.Queue.return_value = mock_queue
 
         mock_process = MagicMock()
-        # First True for initial check, False for death detection, False for cleanup check
         mock_process.is_alive.side_effect = [True, False, False]
         mock_process.exitcode = -signal.SIGSEGV
         mock_ctx.Process.return_value = mock_process
@@ -222,8 +210,8 @@ def test_extract_tables_isolated_unexpected_death(sample_pdf: Path) -> None:
         mock_ctx.Queue.return_value = mock_queue
 
         mock_process = MagicMock()
-        mock_process.is_alive.side_effect = [True, False, False]  # Dies after first check + cleanup
-        mock_process.exitcode = -9  # SIGKILL
+        mock_process.is_alive.side_effect = [True, False, False]
+        mock_process.exitcode = -9
         mock_ctx.Process.return_value = mock_process
 
         with pytest.raises(ParsingError, match="died unexpectedly with exit code -9"):
@@ -259,11 +247,9 @@ def test_extract_tables_isolated_success(sample_pdf: Path) -> None:
         mock_ctx = MagicMock()
         mock_get_context.return_value = mock_ctx
 
-        # Create mock result
         import pandas as pd
 
         df = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
-        # Create a real PNG image
 
         img = Image.new("RGB", (100, 100), color="white")
         img_buffer = io.BytesIO()
@@ -308,14 +294,12 @@ def test_extract_tables_isolated_process_cleanup_timeout(sample_pdf: Path) -> No
         mock_ctx.Queue.return_value = mock_queue
 
         mock_process = MagicMock()
-        # Process stays alive even after terminate
         mock_process.is_alive.side_effect = [True, True, True, True]
         mock_ctx.Process.return_value = mock_process
 
         with contextlib.suppress(ParsingError):
             extract_tables_isolated(str(sample_pdf), config, timeout=0.1)
 
-        # Should have called kill after terminate failed
         mock_process.terminate.assert_called_once()
         mock_process.kill.assert_called_once()
         assert mock_process.join.call_count == 2
@@ -330,11 +314,9 @@ async def test_extract_tables_isolated_async_success(sample_pdf: Path) -> None:
         mock_ctx = MagicMock()
         mock_get_context.return_value = mock_ctx
 
-        # Create mock result
         import pandas as pd
 
         df = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
-        # Create a real PNG image
 
         img = Image.new("RGB", (100, 100), color="white")
         img_buffer = io.BytesIO()
@@ -400,7 +382,6 @@ async def test_extract_tables_isolated_async_segfault(sample_pdf: Path) -> None:
         mock_ctx.Queue.return_value = mock_queue
 
         mock_process = MagicMock()
-        # Add enough values for both async checks and cleanup
         mock_process.is_alive.side_effect = [True, False, False, False]
         mock_process.exitcode = -signal.SIGSEGV
         mock_ctx.Process.return_value = mock_process
@@ -423,9 +404,8 @@ async def test_extract_tables_isolated_async_unexpected_death(sample_pdf: Path) 
         mock_ctx.Queue.return_value = mock_queue
 
         mock_process = MagicMock()
-        # Add enough values for both async checks and cleanup
         mock_process.is_alive.side_effect = [True, False, False, False]
-        mock_process.exitcode = -15  # SIGTERM
+        mock_process.exitcode = -15
         mock_ctx.Process.return_value = mock_process
 
         with pytest.raises(ParsingError, match="died unexpectedly with exit code -15"):
@@ -468,21 +448,18 @@ async def test_extract_tables_isolated_async_process_cleanup(sample_pdf: Path) -
         mock_ctx.Queue.return_value = mock_queue
 
         mock_process = MagicMock()
-        # Process stays alive even after terminate
         mock_process.is_alive.side_effect = [True, True, True, True]
         mock_ctx.Process.return_value = mock_process
 
         with contextlib.suppress(ParsingError):
             await extract_tables_isolated_async(str(sample_pdf), config, timeout=0.1)
 
-        # Should have called kill after terminate failed
         mock_process.terminate.assert_called_once()
         mock_process.kill.assert_called_once()
 
 
 def test_signal_handling() -> None:
     """Test signal handling in process."""
-    # Test that SIGINT is ignored
     with patch("signal.signal") as mock_signal:
         config = GMFTConfig()
         config_dict = asdict(config).copy()

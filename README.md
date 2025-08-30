@@ -18,8 +18,7 @@
 - **Text Extraction**: High-fidelity text extraction preserving document structure and formatting
 - **Metadata Extraction**: Comprehensive metadata including author, creation date, language, and document properties
 - **Format Support**: 18 document types including PDF, Microsoft Office, images, HTML, and structured data formats
-- **OCR Integration**: Multiple OCR engines (Tesseract, EasyOCR, PaddleOCR) with automatic fallback
-- **Table Detection**: Structured table extraction with cell-level precision via GMFT integration
+- **OCR Integration**: Tesseract OCR with multilingual support for 12 common business languages
 - **Document Classification**: Automatic document type detection (contracts, forms, invoices, receipts, reports)
 
 ### Technical Architecture
@@ -47,8 +46,8 @@ Kreuzberg leverages established open source technologies:
 # Extract text from any file to text format
 uvx kreuzberg extract document.pdf > output.txt
 
-# With all features (OCR, table extraction, etc.)
-uvx --from "kreuzberg[all]" kreuzberg extract invoice.pdf --ocr-backend tesseract --output-format text
+# With all features (chunking, language detection, etc.)
+uvx kreuzberg extract invoice.pdf --ocr-backend tesseract --output-format text
 
 # Extract with rich metadata
 uvx kreuzberg extract report.pdf --show-metadata --output-format json
@@ -88,9 +87,14 @@ print(f"Keywords: {result.metadata.keywords}")
 
 ### Docker
 
+Two optimized images available:
+
 ```bash
-# Run the REST API
+# Base image (API + CLI + multilingual OCR)
 docker run -p 8000:8000 goldziher/kreuzberg
+
+# Core image (+ chunking + crypto + document classification + language detection)
+docker run -p 8000:8000 goldziher/kreuzberg-core:latest
 
 # Extract via API
 curl -X POST -F "file=@document.pdf" http://localhost:8000/extract
@@ -105,7 +109,7 @@ curl -X POST -F "file=@document.pdf" http://localhost:8000/extract
 **Add to Claude Desktop with one command:**
 
 ```bash
-claude mcp add kreuzberg uvx -- --from "kreuzberg[all]" kreuzberg-mcp
+claude mcp add kreuzberg uvx kreuzberg-mcp
 ```
 
 **Or configure manually in `claude_desktop_config.json`:**
@@ -115,7 +119,7 @@ claude mcp add kreuzberg uvx -- --from "kreuzberg[all]" kreuzberg-mcp
   "mcpServers": {
     "kreuzberg": {
       "command": "uvx",
-      "args": ["--from", "kreuzberg[all]", "kreuzberg-mcp"]
+      "args": ["kreuzberg-mcp"]
     }
   }
 }
@@ -124,8 +128,8 @@ claude mcp add kreuzberg uvx -- --from "kreuzberg[all]" kreuzberg-mcp
 **MCP capabilities:**
 
 - Extract text from PDFs, images, Office docs, and more
-- Full OCR support with multiple engines
-- Table extraction and metadata parsing
+- Multilingual OCR support with Tesseract
+- Metadata parsing and language detection
 
 📖 **[MCP Documentation](https://kreuzberg.dev/user-guide/mcp-server/)**
 

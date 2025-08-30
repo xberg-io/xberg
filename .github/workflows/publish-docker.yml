@@ -2,15 +2,28 @@ name: Publish Docker Images
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (leave empty to use latest git tag)'
+        required: false
+        type: string
+      build_base:
+        description: 'Build base image'
+        required: true
+        type: boolean
+        default: true
+      build_core:
+        description: 'Build core image'
+        required: true
+        type: boolean
+        default: true
   release:
     types: [published]
 
 jobs:
-  # Run E2E tests first
   test-images:
     uses: ./.github/workflows/docker-e2e-tests.yml
 
-  # Build and publish images after tests pass
   build-and-publish:
     needs: test-images
     runs-on: ubuntu-latest
@@ -22,29 +35,25 @@ jobs:
       version: ${{ steps.get_version.outputs.VERSION }}
 
     strategy:
-      max-parallel: 1  # Build one at a time to save disk space
+      max-parallel: 1  # Build one at a time to save disk space ~keep
       matrix:
         include:
+          - name: base
+            extras: "cli"
+            image_name: "goldziher/kreuzberg"
+            should_build: ${{ github.event_name == 'release' || inputs.build_base == true }}
           - name: core
-            extras: ""
-            tag_suffix: ""
-          - name: easyocr
-            extras: "easyocr"
-            tag_suffix: "-easyocr"
-          - name: paddle
-            extras: "paddleocr"
-            tag_suffix: "-paddle"
-          - name: gmft
-            extras: "gmft"
-            tag_suffix: "-gmft"
-          - name: all
-            extras: "all"
-            tag_suffix: "-all"
+            extras: "cli,chunking,crypto,document-classification,langdetect,additional-extensions"
+            image_name: "goldziher/kreuzberg-core"
+            should_build: ${{ github.event_name == 'release' || inputs.build_core == true }}
 
     steps:
       - name: Free up disk space
         run: |
-          # Remove unnecessary system packages to free ~14GB
+          echo "Initial disk space:"
+          df -h /
+
+          # Remove unnecessary large directories (saves ~30GB) ~keep
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
           sudo rm -rf /opt/ghc
@@ -52,15 +61,23 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           sudo rm -rf /usr/local/lib/node_modules
           sudo rm -rf /opt/microsoft
-          # Clean Docker completely
-          sudo docker system prune -af --volumes
-          sudo docker builder prune -af
-          # Clear package caches
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache
+
+          # Clean apt
           sudo apt-get clean
           sudo rm -rf /var/lib/apt/lists/*
-          # Show available space
-          echo "Available disk space:"
-          df -h / | tail -1
+
+          # Remove swap to free up space
+          sudo swapoff -a
+          sudo rm -f /swapfile
+
+          # Clean Docker completely
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+
+          echo "Available disk space after cleanup:"
+          df -h /
 
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -72,6 +89,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
           else
             git fetch --tags
             VERSION=$(git tag --sort=-version:refname | head -n1)
@@ -92,15 +111,17 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata (tags, labels) for Docker
+        if: ${{ matrix.should_build }}
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: goldziher/kreuzberg
+          images: ${{ matrix.image_name }}
           tags: |
-            type=raw,value=${{ steps.get_version.outputs.VERSION }}${{ matrix.tag_suffix }}
-            type=raw,value=latest${{ matrix.tag_suffix }}
+            type=raw,value=${{ steps.get_version.outputs.VERSION }}
+            type=raw,value=latest
 
       - name: Build and push Docker image to Docker Hub
+        if: ${{ matrix.should_build }}
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -111,24 +132,32 @@ jobs:
             EXTRAS=${{ matrix.extras }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          no-cache: true
 
       - name: Clean up after build
         if: always()
         run: |
-          # Clean up Docker images and build cache after each build
-          sudo docker system prune -af --volumes
-          sudo docker builder prune -af
-          echo "Available disk space after cleanup:"
-          df -h / | tail -1
+          # Remove all Docker images and containers
+          docker stop $(docker ps -aq) || true
+          docker rm $(docker ps -aq) || true
+          docker rmi $(docker images -q) || true
+
+          # Clean all Docker data
+          docker system prune -af --volumes || true
+          docker builder prune -af || true
+
+          # Clear buildkit cache
+          docker buildx prune -af || true
+
+          echo "Disk space after cleanup:"
+          df -h /
 
       - name: Update Docker Hub README
+        if: ${{ matrix.should_build }}
         uses: peter-evans/dockerhub-description@v4
-        if: matrix.name == 'core'
         continue-on-error: true
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: goldziher/kreuzberg
+          repository: ${{ matrix.image_name }}
           readme-filepath: ./.docker/README.md

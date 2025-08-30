@@ -11,15 +11,13 @@ vars:
   LOG_DIR: "{{.TEST_DIR}}/logs"
 
 tasks:
-  # Main task for Docker E2E testing
   docker:e2e:
     desc: "Build Docker images and run E2E tests"
     deps:
       - docker:build
     cmds:
-      - uv run python {{.TEST_DIR}}/docker_images_test.py
+      - uv run python {{.TEST_DIR}}/docker_e2e_test.py
 
-  # Docker build tasks
   docker:build:
     desc: "Build all Docker images for testing"
     deps:
@@ -66,13 +64,11 @@ tasks:
       - kreuzberg/**/*.py
       - pyproject.toml
 
-  # Test runner variants
   docker:test:
     desc: "Run Docker E2E tests (images must be built)"
     cmds:
-      - uv run python {{.TEST_DIR}}/docker_images_test.py
+      - uv run python {{.TEST_DIR}}/docker_e2e_test.py
 
-  # Utility tasks
   docker:clean:
     desc: "Clean up Docker test images and containers"
     cmds:
@@ -86,16 +82,18 @@ tasks:
       - docker ps -a --filter "name=kreuzberg-test" --format "table {{.Names}}\t{{.Status}}"
       - for container in $(docker ps -a --filter "name=kreuzberg-test" --format "{{.Names}}"); do echo "=== $container ==="; docker logs --tail 50 "$container" 2>&1 || true; done
 
-  # Development tasks
-  install:
+  setup:
     desc: "Install dependencies with uv"
     cmds:
-      - uv sync
+      - uv sync --all-extras --all-packages
 
-  install:all:
-    desc: "Install all optional dependencies with uv"
+  update:
+    desc: "Update the dependencies"
     cmds:
-      - uv sync --all-extras
+      - uv run uv-bump
+      - cd benchmarks && uv run uv-bump && cd -
+      - uv sync --all-extras --all-packages --upgrade
+      - pre-commit autoupdate
 
   test:
     desc: "Run tests with pytest"
@@ -127,7 +125,6 @@ tasks:
     cmds:
       - uv run mypy
 
-  # Documentation tasks
   docs:build:
     desc: "Build documentation"
     cmds:
@@ -138,7 +135,6 @@ tasks:
     cmds:
       - uv run mkdocs serve
 
-  # CI/CD tasks
   ci:
     desc: "Run full CI pipeline locally"
     deps:
@@ -153,7 +149,6 @@ tasks:
       - docker:build
       - docker:test
 
-  # Default task
   default:
     desc: "Show available tasks"
     cmds:

@@ -6,7 +6,7 @@ repos:
         stages: [commit-msg]
         additional_dependencies: ["@commitlint/config-conventional"]
   - repo: https://github.com/Goldziher/ai-rulez
-    rev: v1.6.0
+    rev: v1.6.1
     hooks:
       - id: ai-rulez-validate
       - id: ai-rulez-generate
@@ -53,7 +53,7 @@ repos:
     hooks:
       - id: pyproject-fmt
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.12.10
+    rev: v0.12.11
     hooks:
       - id: ruff
         args: ["--fix", "--unsafe-fixes"]
