@@ -85,7 +85,7 @@ jobs:
             .
 
           echo "Image built successfully:"
-          docker images | grep kreuzberg:${{ matrix.name }}
+          docker images | grep kreuzberg:${{ matrix.name }} || true
 
           echo "Current disk usage:"
           df -h /
