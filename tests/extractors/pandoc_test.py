@@ -468,10 +468,7 @@ async def test_extract_bytes_async_error(
 
 
 class TestPandocExtractorCore:
-    """Test PandocExtractor class core functionality."""
-
     def test_supported_mime_types_mapping(self, test_config: ExtractionConfig) -> None:
-        """Test that MIME type mappings are properly defined."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         assert (
@@ -493,7 +490,6 @@ class TestPandocExtractorCore:
         )
 
     def test_get_pandoc_type_from_mime_type_valid(self, test_config: ExtractionConfig) -> None:
-        """Test getting Pandoc type from valid MIME types."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         assert extractor._get_pandoc_type_from_mime_type("text/x-markdown") == "markdown"
@@ -506,14 +502,12 @@ class TestPandocExtractorCore:
         assert extractor._get_pandoc_type_from_mime_type("text/markdown") == "markdown"
 
     def test_get_pandoc_type_from_mime_type_invalid(self, test_config: ExtractionConfig) -> None:
-        """Test getting Pandoc type from invalid MIME type."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         with pytest.raises(ValidationError, match="Unsupported mime type"):
             extractor._get_pandoc_type_from_mime_type("application/unknown")
 
     def test_get_pandoc_key_mappings(self) -> None:
-        """Test metadata key mapping functionality."""
         assert PandocExtractor._get_pandoc_key("abstract") == "summary"
         assert PandocExtractor._get_pandoc_key("date") == "created_at"
         assert PandocExtractor._get_pandoc_key("author") == "authors"
@@ -524,7 +518,6 @@ class TestPandocExtractorCore:
 
     @pytest.mark.anyio
     async def test_extract_bytes_async_complete(self, test_config: ExtractionConfig) -> None:
-        """Test async bytes extraction with complete flow."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         content = b"# Test Markdown\n\nThis is a test."
 
@@ -552,7 +545,6 @@ class TestPandocExtractorCore:
                 mock_unlink.assert_called_once()
 
     def test_extract_bytes_sync_complete(self, test_config: ExtractionConfig) -> None:
-        """Test sync bytes extraction with complete flow."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         content = b"# Test Markdown\n\nThis is a test."
 
@@ -584,7 +576,6 @@ class TestPandocExtractorCore:
 
     @pytest.mark.anyio
     async def test_extract_path_async_with_exception_group(self, test_config: ExtractionConfig) -> None:
-        """Test failed async path extraction with exception group."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -604,7 +595,6 @@ class TestPandocExtractorCore:
                 await extractor.extract_path_async(test_path)
 
     def test_extract_path_sync_complete(self, test_config: ExtractionConfig) -> None:
-        """Test successful sync path extraction with complete flow."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -625,7 +615,6 @@ class TestPandocExtractorCore:
             mock_content.assert_called_once_with(test_path)
 
     def test_extract_path_sync_with_exception(self, test_config: ExtractionConfig) -> None:
-        """Test failed sync path extraction."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -639,11 +628,8 @@ class TestPandocExtractorCore:
 
 
 class TestPandocVersionValidationExtended:
-    """Extended tests for Pandoc version validation."""
-
     @pytest.mark.anyio
     async def test_validate_pandoc_version_already_checked(self, test_config: ExtractionConfig) -> None:
-        """Test that validation is skipped if already checked."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = True
 
@@ -653,7 +639,6 @@ class TestPandocVersionValidationExtended:
 
     @pytest.mark.anyio
     async def test_validate_pandoc_version_alternative_formats(self, test_config: ExtractionConfig) -> None:
-        """Test version validation with different output formats."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         version_strings = [
@@ -675,7 +660,6 @@ class TestPandocVersionValidationExtended:
 
     @pytest.mark.anyio
     async def test_validate_pandoc_version_token_parsing(self, test_config: ExtractionConfig) -> None:
-        """Test version validation using token parsing fallback."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = False
 
@@ -688,7 +672,6 @@ class TestPandocVersionValidationExtended:
 
     @pytest.mark.anyio
     async def test_validate_pandoc_version_old_version(self, test_config: ExtractionConfig) -> None:
-        """Test validation failure with old version."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = False
 
@@ -701,7 +684,6 @@ class TestPandocVersionValidationExtended:
 
     @pytest.mark.anyio
     async def test_validate_pandoc_version_no_version_found(self, test_config: ExtractionConfig) -> None:
-        """Test validation failure when no version is found."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = False
 
@@ -713,7 +695,6 @@ class TestPandocVersionValidationExtended:
                 await extractor._validate_pandoc_version()
 
     def test_validate_pandoc_version_sync_success(self, test_config: ExtractionConfig) -> None:
-        """Test successful sync version validation."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = False
 
@@ -726,7 +707,6 @@ class TestPandocVersionValidationExtended:
             assert extractor._checked_version is True
 
     def test_validate_pandoc_version_sync_failure(self, test_config: ExtractionConfig) -> None:
-        """Test sync version validation failure."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = False
 
@@ -739,7 +719,6 @@ class TestPandocVersionValidationExtended:
                 extractor._validate_pandoc_version_sync()
 
     def test_validate_pandoc_version_sync_subprocess_error(self, test_config: ExtractionConfig) -> None:
-        """Test sync version validation with subprocess error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = False
 
@@ -749,16 +728,12 @@ class TestPandocVersionValidationExtended:
 
 
 class TestPandocMetadataExtractionExtended:
-    """Extended tests for metadata extraction functionality."""
-
     def test_extract_metadata_empty(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with empty input."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         result = extractor._extract_metadata({})
         assert result == {}
 
     def test_extract_metadata_with_citations(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with citations."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "citations": [
@@ -773,7 +748,6 @@ class TestPandocMetadataExtractionExtended:
         assert result["citations"] == ["cite1", "cite2"]
 
     def test_extract_metadata_with_standard_fields(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with standard fields."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "title": {"t": "MetaString", "c": "Test Title"},
@@ -793,7 +767,6 @@ class TestPandocMetadataExtractionExtended:
         assert "unknown_field" not in result
 
     def test_extract_metadata_with_valid_field(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with special 'valid' field."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {"valid": {"t": "MetaString", "c": "true"}}
 
@@ -801,7 +774,6 @@ class TestPandocMetadataExtractionExtended:
         assert "valid" not in result
 
     def test_extract_metadata_with_blocks_citations(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with citations from blocks."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "blocks": [
@@ -814,7 +786,6 @@ class TestPandocMetadataExtractionExtended:
         assert result["citations"] == ["block_cite1", "block_cite2"]
 
     def test_extract_metadata_merge_citations(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction merging citations from different sources."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "citations": [{"citationId": "cite1"}],
@@ -826,10 +797,7 @@ class TestPandocMetadataExtractionExtended:
 
 
 class TestPandocInlineTextExtractionExtended:
-    """Extended tests for inline text extraction functionality."""
-
     def test_extract_inline_text_str(self, test_config: ExtractionConfig) -> None:
-        """Test extracting text from Str node."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {"t": "Str", "c": "Hello"}
 
@@ -837,7 +805,6 @@ class TestPandocInlineTextExtractionExtended:
         assert result == "Hello"
 
     def test_extract_inline_text_space(self, test_config: ExtractionConfig) -> None:
-        """Test extracting text from Space node."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {"t": "Space", "c": None}
 
@@ -845,7 +812,6 @@ class TestPandocInlineTextExtractionExtended:
         assert result == " "
 
     def test_extract_inline_text_emph(self, test_config: ExtractionConfig) -> None:
-        """Test extracting text from Emph node."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {"t": "Emph", "c": [{"t": "Str", "c": "emphasized"}]}
 
@@ -853,7 +819,6 @@ class TestPandocInlineTextExtractionExtended:
         assert result == "emphasized"
 
     def test_extract_inline_text_strong(self, test_config: ExtractionConfig) -> None:
-        """Test extracting text from Strong node."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {"t": "Strong", "c": [{"t": "Str", "c": "strong"}]}
 
@@ -861,7 +826,6 @@ class TestPandocInlineTextExtractionExtended:
         assert result == "strong"
 
     def test_extract_inline_text_unknown(self, test_config: ExtractionConfig) -> None:
-        """Test extracting text from unknown node type."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {"t": "Unknown", "c": "content"}
 
@@ -869,7 +833,6 @@ class TestPandocInlineTextExtractionExtended:
         assert result is None
 
     def test_extract_inlines_multiple(self, test_config: ExtractionConfig) -> None:
-        """Test extracting text from multiple inline nodes."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         nodes: list[dict[str, Any]] = [
             {"t": "Str", "c": "Hello"},
@@ -881,7 +844,6 @@ class TestPandocInlineTextExtractionExtended:
         assert result == "Hello world"
 
     def test_extract_inlines_empty(self, test_config: ExtractionConfig) -> None:
-        """Test extracting text from empty nodes list."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         nodes: list[dict[str, Any]] = []
 
@@ -890,10 +852,7 @@ class TestPandocInlineTextExtractionExtended:
 
 
 class TestPandocMetaValueExtractionExtended:
-    """Extended tests for meta value extraction functionality."""
-
     def test_extract_meta_value_meta_string(self, test_config: ExtractionConfig) -> None:
-        """Test extracting MetaString value."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {"t": "MetaString", "c": "test value"}
 
@@ -901,7 +860,6 @@ class TestPandocMetaValueExtractionExtended:
         assert result == "test value"
 
     def test_extract_meta_value_meta_inlines(self, test_config: ExtractionConfig) -> None:
-        """Test extracting MetaInlines value."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {
             "t": "MetaInlines",
@@ -912,7 +870,6 @@ class TestPandocMetaValueExtractionExtended:
         assert result == "inline text"
 
     def test_extract_meta_value_meta_list(self, test_config: ExtractionConfig) -> None:
-        """Test extracting MetaList value."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {"t": "MetaList", "c": [{"t": "MetaString", "c": "item1"}, {"t": "MetaString", "c": "item2"}]}
 
@@ -920,7 +877,6 @@ class TestPandocMetaValueExtractionExtended:
         assert result == ["item1", "item2"]
 
     def test_extract_meta_value_meta_list_nested(self, test_config: ExtractionConfig) -> None:
-        """Test extracting MetaList with nested lists."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {
             "t": "MetaList",
@@ -931,7 +887,6 @@ class TestPandocMetaValueExtractionExtended:
         assert result == ["nested1", "item2"]
 
     def test_extract_meta_value_meta_blocks(self, test_config: ExtractionConfig) -> None:
-        """Test extracting MetaBlocks value."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {
             "t": "MetaBlocks",
@@ -951,7 +906,6 @@ class TestPandocMetaValueExtractionExtended:
         assert result == "First paragraph Second paragraph"
 
     def test_extract_meta_value_invalid_node(self, test_config: ExtractionConfig) -> None:
-        """Test extracting from invalid node types."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         assert extractor._extract_meta_value("string") is None
@@ -964,11 +918,8 @@ class TestPandocMetaValueExtractionExtended:
 
 
 class TestPandocFileExtractionExtended:
-    """Extended tests for file and metadata extraction."""
-
     @pytest.mark.anyio
     async def test_handle_extract_metadata_success(self, test_config: ExtractionConfig) -> None:
-        """Test successful metadata extraction."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_file = Path("/test/file.md")
 
@@ -1006,7 +957,6 @@ class TestPandocFileExtractionExtended:
 
     @pytest.mark.anyio
     async def test_handle_extract_metadata_pandoc_error(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with Pandoc error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_file = Path("/test/file.md")
 
@@ -1031,7 +981,6 @@ class TestPandocFileExtractionExtended:
 
     @pytest.mark.anyio
     async def test_handle_extract_file_success(self, test_config: ExtractionConfig) -> None:
-        """Test successful file content extraction."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_file = Path("/test/file.md")
 
@@ -1059,7 +1008,6 @@ class TestPandocFileExtractionExtended:
                 mock_unlink.assert_called_once()
 
     def test_extract_metadata_sync_success(self, test_config: ExtractionConfig) -> None:
-        """Test successful sync metadata extraction."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1100,7 +1048,6 @@ class TestPandocFileExtractionExtended:
             mock_unlink.assert_called_once()
 
     def test_extract_file_sync_success(self, test_config: ExtractionConfig) -> None:
-        """Test successful sync file extraction."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1133,10 +1080,7 @@ class TestPandocFileExtractionExtended:
 
 
 class TestPandocExtractorSubclassesExtended:
-    """Extended tests for PandocExtractor subclasses."""
-
     def test_markdown_extractor_mime_types(self) -> None:
-        """Test MarkdownExtractor supported MIME types."""
         expected_types = {
             "text/x-markdown",
             "text/x-commonmark",
@@ -1148,7 +1092,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == MarkdownExtractor.SUPPORTED_MIME_TYPES
 
     def test_office_document_extractor_mime_types(self) -> None:
-        """Test OfficeDocumentExtractor supported MIME types."""
         expected_types = {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/vnd.oasis.opendocument.text",
@@ -1156,7 +1099,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == OfficeDocumentExtractor.SUPPORTED_MIME_TYPES
 
     def test_ebook_extractor_mime_types(self) -> None:
-        """Test EbookExtractor supported MIME types."""
         expected_types = {
             "application/epub+zip",
             "application/x-fictionbook+xml",
@@ -1164,7 +1106,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == EbookExtractor.SUPPORTED_MIME_TYPES
 
     def test_structured_text_extractor_mime_types(self) -> None:
-        """Test StructuredTextExtractor supported MIME types."""
         expected_types = {
             "text/x-rst",
             "text/x-org",
@@ -1174,7 +1115,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == StructuredTextExtractor.SUPPORTED_MIME_TYPES
 
     def test_latex_extractor_mime_types(self) -> None:
-        """Test LaTeXExtractor supported MIME types."""
         expected_types = {
             "application/x-latex",
             "application/x-typst",
@@ -1182,7 +1122,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == LaTeXExtractor.SUPPORTED_MIME_TYPES
 
     def test_bibliography_extractor_mime_types(self) -> None:
-        """Test BibliographyExtractor supported MIME types."""
         expected_types = {
             "application/x-bibtex",
             "application/x-biblatex",
@@ -1193,7 +1132,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == BibliographyExtractor.SUPPORTED_MIME_TYPES
 
     def test_xml_based_extractor_mime_types(self) -> None:
-        """Test XMLBasedExtractor supported MIME types."""
         expected_types = {
             "application/docbook+xml",
             "application/x-jats+xml",
@@ -1202,7 +1140,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == XMLBasedExtractor.SUPPORTED_MIME_TYPES
 
     def test_tabular_data_extractor_mime_types(self) -> None:
-        """Test TabularDataExtractor supported MIME types."""
         expected_types = {
             "text/csv",
             "text/tab-separated-values",
@@ -1210,7 +1147,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == TabularDataExtractor.SUPPORTED_MIME_TYPES
 
     def test_misc_format_extractor_mime_types(self) -> None:
-        """Test MiscFormatExtractor supported MIME types."""
         expected_types = {
             "application/rtf",
             "text/troff",
@@ -1219,7 +1155,6 @@ class TestPandocExtractorSubclassesExtended:
         assert expected_types == MiscFormatExtractor.SUPPORTED_MIME_TYPES
 
     def test_subclass_inheritance(self, test_config: ExtractionConfig) -> None:
-        """Test that all subclasses properly inherit from PandocExtractor."""
         subclasses = [
             MarkdownExtractor,
             OfficeDocumentExtractor,
@@ -1239,10 +1174,7 @@ class TestPandocExtractorSubclassesExtended:
 
 
 class TestPandocExtractorBase:
-    """Test PandocExtractor base class functionality."""
-
     def test_supported_mime_types_mapping(self, test_config: ExtractionConfig) -> None:
-        """Test that MIME type mappings are properly defined."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         assert (
@@ -1264,7 +1196,6 @@ class TestPandocExtractorBase:
         )
 
     def test_get_pandoc_key_mappings(self) -> None:
-        """Test metadata key mapping functionality."""
         assert PandocExtractor._get_pandoc_key("abstract") == "summary"
         assert PandocExtractor._get_pandoc_key("date") == "created_at"
         assert PandocExtractor._get_pandoc_key("author") == "authors"
@@ -1274,7 +1205,6 @@ class TestPandocExtractorBase:
         assert PandocExtractor._get_pandoc_key("unknown_key") is None
 
     def test_extract_path_sync_success(self, test_config: ExtractionConfig) -> None:
-        """Test successful sync path extraction."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1295,7 +1225,6 @@ class TestPandocExtractorBase:
             mock_content.assert_called_once_with(test_path)
 
     def test_extract_path_sync_failure(self, test_config: ExtractionConfig) -> None:
-        """Test failed sync path extraction."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1309,7 +1238,6 @@ class TestPandocExtractorBase:
 
     @pytest.mark.anyio
     async def test_extract_path_async_failure_with_exception_group(self, test_config: ExtractionConfig) -> None:
-        """Test failed async path extraction with ExceptionGroup."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1330,10 +1258,7 @@ class TestPandocExtractorBase:
 
 
 class TestPandocMetadataExtraction:
-    """Test metadata extraction functionality."""
-
     def test_extract_metadata_with_citations(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with citations."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "citations": [
@@ -1348,7 +1273,6 @@ class TestPandocMetadataExtraction:
         assert result["citations"] == ["cite1", "cite2"]
 
     def test_extract_metadata_with_standard_fields(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with standard fields."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "title": {"t": "MetaString", "c": "Test Title"},
@@ -1368,7 +1292,6 @@ class TestPandocMetadataExtraction:
         assert "unknown_field" not in result
 
     def test_extract_metadata_with_blocks_citations(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with citations from blocks."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "blocks": [
@@ -1381,7 +1304,6 @@ class TestPandocMetadataExtraction:
         assert result["citations"] == ["block_cite1", "block_cite2"]
 
     def test_extract_metadata_merge_citations(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction merging citations from different sources."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "citations": [{"citationId": "cite1"}],
@@ -1393,10 +1315,7 @@ class TestPandocMetadataExtraction:
 
 
 class TestPandocExtractorSubclasses:
-    """Test PandocExtractor subclasses."""
-
     def test_markdown_extractor_mime_types(self) -> None:
-        """Test MarkdownExtractor supported MIME types."""
         expected_types = {
             "text/x-markdown",
             "text/x-commonmark",
@@ -1408,7 +1327,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == MarkdownExtractor.SUPPORTED_MIME_TYPES
 
     def test_office_document_extractor_mime_types(self) -> None:
-        """Test OfficeDocumentExtractor supported MIME types."""
         expected_types = {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/vnd.oasis.opendocument.text",
@@ -1416,7 +1334,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == OfficeDocumentExtractor.SUPPORTED_MIME_TYPES
 
     def test_ebook_extractor_mime_types(self) -> None:
-        """Test EbookExtractor supported MIME types."""
         expected_types = {
             "application/epub+zip",
             "application/x-fictionbook+xml",
@@ -1424,7 +1341,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == EbookExtractor.SUPPORTED_MIME_TYPES
 
     def test_structured_text_extractor_mime_types(self) -> None:
-        """Test StructuredTextExtractor supported MIME types."""
         expected_types = {
             "text/x-rst",
             "text/x-org",
@@ -1434,7 +1350,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == StructuredTextExtractor.SUPPORTED_MIME_TYPES
 
     def test_latex_extractor_mime_types(self) -> None:
-        """Test LaTeXExtractor supported MIME types."""
         expected_types = {
             "application/x-latex",
             "application/x-typst",
@@ -1442,7 +1357,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == LaTeXExtractor.SUPPORTED_MIME_TYPES
 
     def test_bibliography_extractor_mime_types(self) -> None:
-        """Test BibliographyExtractor supported MIME types."""
         expected_types = {
             "application/x-bibtex",
             "application/x-biblatex",
@@ -1453,7 +1367,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == BibliographyExtractor.SUPPORTED_MIME_TYPES
 
     def test_xml_based_extractor_mime_types(self) -> None:
-        """Test XMLBasedExtractor supported MIME types."""
         expected_types = {
             "application/docbook+xml",
             "application/x-jats+xml",
@@ -1462,7 +1375,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == XMLBasedExtractor.SUPPORTED_MIME_TYPES
 
     def test_tabular_data_extractor_mime_types(self) -> None:
-        """Test TabularDataExtractor supported MIME types."""
         expected_types = {
             "text/csv",
             "text/tab-separated-values",
@@ -1470,7 +1382,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == TabularDataExtractor.SUPPORTED_MIME_TYPES
 
     def test_misc_format_extractor_mime_types(self) -> None:
-        """Test MiscFormatExtractor supported MIME types."""
         expected_types = {
             "application/rtf",
             "text/troff",
@@ -1479,7 +1390,6 @@ class TestPandocExtractorSubclasses:
         assert expected_types == MiscFormatExtractor.SUPPORTED_MIME_TYPES
 
     def test_subclass_inheritance(self, test_config: ExtractionConfig) -> None:
-        """Test that all subclasses properly inherit from PandocExtractor."""
         subclasses = [
             MarkdownExtractor,
             OfficeDocumentExtractor,
@@ -1499,10 +1409,7 @@ class TestPandocExtractorSubclasses:
 
 
 class TestPandocExtractorSyncMethods:
-    """Test sync methods for comprehensive coverage."""
-
     def test_extract_metadata_sync_json_decode_error(self, test_config: ExtractionConfig) -> None:
-        """Test sync metadata extraction with JSON decode error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1533,7 +1440,6 @@ class TestPandocExtractorSyncMethods:
             mock_unlink.assert_called_once()
 
     def test_extract_metadata_sync_os_error(self, test_config: ExtractionConfig) -> None:
-        """Test sync metadata extraction with OS error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1555,7 +1461,6 @@ class TestPandocExtractorSyncMethods:
             mock_unlink.assert_called_once()
 
     def test_extract_file_sync_os_error(self, test_config: ExtractionConfig) -> None:
-        """Test sync file extraction with OS error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1577,7 +1482,6 @@ class TestPandocExtractorSyncMethods:
             mock_unlink.assert_called_once()
 
     def test_extract_file_sync_subprocess_error(self, test_config: ExtractionConfig) -> None:
-        """Test sync file extraction with subprocess error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_path = Path("/test/file.md")
 
@@ -1605,11 +1509,8 @@ class TestPandocExtractorSyncMethods:
 
 
 class TestPandocExtractorAsyncErrorsComprehensive:
-    """Test async methods error scenarios for comprehensive coverage."""
-
     @pytest.mark.anyio
     async def test_handle_extract_metadata_json_decode_error(self, test_config: ExtractionConfig) -> None:
-        """Test async metadata extraction with JSON decode error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_file = Path("/test/file.md")
 
@@ -1637,7 +1538,6 @@ class TestPandocExtractorAsyncErrorsComprehensive:
 
     @pytest.mark.anyio
     async def test_handle_extract_metadata_os_error(self, test_config: ExtractionConfig) -> None:
-        """Test async metadata extraction with OS error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_file = Path("/test/file.md")
 
@@ -1657,7 +1557,6 @@ class TestPandocExtractorAsyncErrorsComprehensive:
 
     @pytest.mark.anyio
     async def test_handle_extract_file_os_error(self, test_config: ExtractionConfig) -> None:
-        """Test async file extraction with OS error."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         test_file = Path("/test/file.md")
 
@@ -1677,10 +1576,7 @@ class TestPandocExtractorAsyncErrorsComprehensive:
 
 
 class TestPandocExtractorMetadataEdgeCasesComprehensive:
-    """Test metadata extraction edge cases."""
-
     def test_extract_meta_value_meta_blocks_no_para(self, test_config: ExtractionConfig) -> None:
-        """Test extracting MetaBlocks with no Para blocks."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {
             "t": "MetaBlocks",
@@ -1694,7 +1590,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert result is None
 
     def test_extract_meta_value_meta_blocks_empty_para(self, test_config: ExtractionConfig) -> None:
-        """Test extracting MetaBlocks with empty Para blocks."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {
             "t": "MetaBlocks",
@@ -1708,7 +1603,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert result is None
 
     def test_extract_meta_value_empty_content(self, test_config: ExtractionConfig) -> None:
-        """Test extracting meta value with empty content."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         node = {"t": "MetaList", "c": []}
@@ -1720,7 +1614,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert result is None
 
     def test_extract_meta_value_non_dict_content(self, test_config: ExtractionConfig) -> None:
-        """Test extracting meta value with non-dict items in list."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         node = {
             "t": "MetaList",
@@ -1735,7 +1628,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert result == ["valid_item"]
 
     def test_extract_inline_text_empty_content(self, test_config: ExtractionConfig) -> None:
-        """Test extracting inline text with empty content."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         node = {"t": "Emph", "c": []}
@@ -1747,7 +1639,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert result is None
 
     def test_extract_inlines_with_empty_results(self, test_config: ExtractionConfig) -> None:
-        """Test extracting inlines that result in empty strings."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         nodes: list[dict[str, Any]] = [
             {"t": "Unknown", "c": "content"},
@@ -1759,7 +1650,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert result == " "
 
     def test_extract_metadata_contributors_field(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with contributors field."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "contributors": {"t": "MetaString", "c": "Contributor Name"},
@@ -1769,7 +1659,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert result["authors"] == ["Contributor Name"]
 
     def test_extract_metadata_languages_field(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with languages field (direct mapping)."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "languages": {"t": "MetaString", "c": "en"},
@@ -1779,7 +1668,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert result["languages"] == ["en"]
 
     def test_extract_metadata_invalid_citations_structure(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with invalid citations structure."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "citations": "not_a_list",
@@ -1789,7 +1677,6 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
         assert "citations" not in result
 
     def test_extract_metadata_blocks_invalid_citation_structure(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with invalid citation structure in blocks."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "blocks": [
@@ -1804,10 +1691,7 @@ class TestPandocExtractorMetadataEdgeCasesComprehensive:
 
 
 class TestPandocExtractorVersionValidationEdgeCasesComprehensive:
-    """Test version validation edge cases."""
-
     def test_validate_pandoc_version_sync_file_not_found(self, test_config: ExtractionConfig) -> None:
-        """Test sync version validation when pandoc is not found."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = False
 
@@ -1816,7 +1700,6 @@ class TestPandocExtractorVersionValidationEdgeCasesComprehensive:
                 extractor._validate_pandoc_version_sync()
 
     def test_validate_pandoc_version_sync_already_checked(self, test_config: ExtractionConfig) -> None:
-        """Test sync version validation when already checked."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = True
 
@@ -1825,7 +1708,6 @@ class TestPandocExtractorVersionValidationEdgeCasesComprehensive:
             mock_run.assert_not_called()
 
     def test_validate_pandoc_version_sync_complex_patterns(self, test_config: ExtractionConfig) -> None:
-        """Test sync version validation with complex version patterns."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         version_strings = [
@@ -1846,7 +1728,6 @@ class TestPandocExtractorVersionValidationEdgeCasesComprehensive:
                 assert extractor._checked_version is True
 
     def test_validate_pandoc_version_sync_no_match_found(self, test_config: ExtractionConfig) -> None:
-        """Test sync version validation when no version pattern matches."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         extractor._checked_version = False
 
@@ -1860,23 +1741,18 @@ class TestPandocExtractorVersionValidationEdgeCasesComprehensive:
 
 
 class TestPandocExtractorMIMETypeHandlingComprehensive:
-    """Test MIME type handling edge cases."""
-
     def test_get_pandoc_type_fallback_to_markdown(self, test_config: ExtractionConfig) -> None:
-        """Test fallback to markdown for text/markdown MIME type."""
         extractor = PandocExtractor("text/markdown", test_config)
         result = extractor._get_pandoc_type_from_mime_type("text/markdown")
         assert result == "markdown"
 
     def test_get_pandoc_type_prefix_matching(self, test_config: ExtractionConfig) -> None:
-        """Test prefix matching for MIME types."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         result = extractor._get_pandoc_type_from_mime_type("text/x-markdown; charset=utf-8")
         assert result == "markdown"
 
     def test_get_pandoc_key_all_mappings(self) -> None:
-        """Test all key mappings comprehensively."""
         assert PandocExtractor._get_pandoc_key("abstract") == "summary"
         assert PandocExtractor._get_pandoc_key("date") == "created_at"
         assert PandocExtractor._get_pandoc_key("author") == "authors"
@@ -1892,10 +1768,7 @@ class TestPandocExtractorMIMETypeHandlingComprehensive:
 
 
 class TestPandocExtractorComplexMetadataComprehensive:
-    """Test complex metadata scenarios."""
-
     def test_extract_metadata_complex_nested_structure(self, test_config: ExtractionConfig) -> None:
-        """Test metadata extraction with complex nested structures."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         raw_meta = {
             "title": {
@@ -1955,10 +1828,7 @@ class TestPandocExtractorComplexMetadataComprehensive:
 
 
 class TestPandocConstantsAndTypesComprehensive:
-    """Test constants and type definitions."""
-
     def test_block_constants(self) -> None:
-        """Test that block constants are properly defined."""
         from kreuzberg._extractors._pandoc import (
             BLOCK_CODE,
             BLOCK_HEADER,
@@ -1976,7 +1846,6 @@ class TestPandocConstantsAndTypesComprehensive:
         assert BLOCK_ORDERED == "OrderedList"
 
     def test_inline_constants(self) -> None:
-        """Test that inline constants are properly defined."""
         from kreuzberg._extractors._pandoc import (
             INLINE_CODE,
             INLINE_EMPH,
@@ -1998,7 +1867,6 @@ class TestPandocConstantsAndTypesComprehensive:
         assert INLINE_MATH == "Math"
 
     def test_meta_constants(self) -> None:
-        """Test that meta constants are properly defined."""
         from kreuzberg._extractors._pandoc import (
             META_BLOCKS,
             META_INLINES,
@@ -2014,14 +1882,12 @@ class TestPandocConstantsAndTypesComprehensive:
         assert META_BLOCKS == "MetaBlocks"
 
     def test_field_constants(self) -> None:
-        """Test that field constants are properly defined."""
         from kreuzberg._extractors._pandoc import CONTENT_FIELD, TYPE_FIELD
 
         assert CONTENT_FIELD == "c"
         assert TYPE_FIELD == "t"
 
     def test_mime_type_mappings_complete(self, test_config: ExtractionConfig) -> None:
-        """Test that all MIME type mappings are complete."""
         extractor = PandocExtractor("text/x-markdown", test_config)
 
         pandoc_types = extractor.MIMETYPE_TO_PANDOC_TYPE_MAPPING
@@ -2031,7 +1897,6 @@ class TestPandocConstantsAndTypesComprehensive:
             assert mime_type in extensions, f"Missing file extension for MIME type: {mime_type}"
 
     def test_file_cleanup_on_exception(self, test_config: ExtractionConfig) -> None:
-        """Test that temp files are cleaned up even when extraction fails."""
         extractor = PandocExtractor("text/x-markdown", test_config)
         content = b"# Test Content"
 

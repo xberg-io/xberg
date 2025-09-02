@@ -1,5 +1,3 @@
-"""Tests for kreuzberg._utils._errors module."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,7 +14,6 @@ from kreuzberg.exceptions import ValidationError
 
 
 def test_create_error_context_basic() -> None:
-    """Test basic error context creation."""
     context = create_error_context(operation="test_operation")
 
     assert context["operation"] == "test_operation"
@@ -25,7 +22,6 @@ def test_create_error_context_basic() -> None:
 
 
 def test_create_error_context_with_file_path() -> None:
-    """Test error context with file path."""
     test_file = Path(__file__)
 
     context = create_error_context(operation="test_op", file_path=test_file)
@@ -37,7 +33,6 @@ def test_create_error_context_with_file_path() -> None:
 
 
 def test_create_error_context_with_string_path() -> None:
-    """Test error context with string file path."""
     test_path = str(Path(__file__))
 
     context = create_error_context(operation="test_op", file_path=test_path)
@@ -47,7 +42,6 @@ def test_create_error_context_with_string_path() -> None:
 
 
 def test_create_error_context_with_nonexistent_file() -> None:
-    """Test error context with non-existent file."""
     fake_path = Path("/nonexistent/file.txt")
 
     context = create_error_context(operation="test_op", file_path=fake_path)
@@ -58,7 +52,6 @@ def test_create_error_context_with_nonexistent_file() -> None:
 
 
 def test_create_error_context_with_error() -> None:
-    """Test error context with exception."""
     test_error = ValueError("Test error message")
 
     context = create_error_context(operation="test_op", error=test_error)
@@ -69,7 +62,6 @@ def test_create_error_context_with_error() -> None:
 
 
 def test_create_error_context_with_system_error() -> None:
-    """Test error context with system error triggering system info."""
     memory_error = OSError("Out of memory error")
 
     with (
@@ -94,7 +86,6 @@ def test_create_error_context_with_system_error() -> None:
 
 
 def test_create_error_context_system_info_exception() -> None:
-    """Test error context when system info collection fails."""
     memory_error = OSError("memory allocation failed")
 
     with patch("psutil.virtual_memory", side_effect=Exception("psutil failed")):
@@ -105,7 +96,6 @@ def test_create_error_context_system_info_exception() -> None:
 
 
 def test_create_error_context_with_extra_args() -> None:
-    """Test error context with extra keyword arguments."""
     context = create_error_context(
         operation="test_op", custom_field="custom_value", another_field=42, nested_data={"key": "value"}
     )
@@ -116,7 +106,6 @@ def test_create_error_context_with_extra_args() -> None:
 
 
 def test_is_transient_error_with_transient_types() -> None:
-    """Test transient error detection with exception types."""
     assert is_transient_error(OSError("test")) is True
     assert is_transient_error(PermissionError("access denied")) is True
     assert is_transient_error(TimeoutError("timeout")) is True
@@ -125,7 +114,6 @@ def test_is_transient_error_with_transient_types() -> None:
 
 
 def test_is_transient_error_with_patterns() -> None:
-    """Test transient error detection with error message patterns."""
     assert is_transient_error(Exception("temporary failure")) is True
     assert is_transient_error(Exception("file is locked")) is True
     assert is_transient_error(Exception("resource in use")) is True
@@ -142,14 +130,12 @@ def test_is_transient_error_with_patterns() -> None:
 
 
 def test_is_transient_error_non_transient() -> None:
-    """Test that non-transient errors are correctly identified."""
     assert is_transient_error(ValueError("invalid value")) is False
     assert is_transient_error(TypeError("wrong type")) is False
     assert is_transient_error(Exception("some other error")) is False
 
 
 def test_is_resource_error() -> None:
-    """Test resource error detection."""
     assert is_resource_error(Exception("memory error")) is True
     assert is_resource_error(Exception("out of memory")) is True
     assert is_resource_error(Exception("cannot allocate")) is True
@@ -165,7 +151,6 @@ def test_is_resource_error() -> None:
 
 
 def test_should_retry_max_attempts_reached() -> None:
-    """Test retry logic when max attempts reached."""
     error = OSError("temporary failure")
 
     assert should_retry(error, attempt=1, max_attempts=3) is True
@@ -175,7 +160,6 @@ def test_should_retry_max_attempts_reached() -> None:
 
 
 def test_should_retry_validation_error() -> None:
-    """Test that validation errors are never retried."""
     validation_error = ValidationError("invalid input")
 
     assert should_retry(validation_error, attempt=1, max_attempts=3) is False
@@ -183,7 +167,6 @@ def test_should_retry_validation_error() -> None:
 
 
 def test_should_retry_transient_vs_non_transient() -> None:
-    """Test retry logic for transient vs non-transient errors."""
     transient_error = OSError("temporary failure")
     non_transient_error = ValueError("invalid value")
 
@@ -192,10 +175,7 @@ def test_should_retry_transient_vs_non_transient() -> None:
 
 
 class TestBatchExtractionResult:
-    """Test BatchExtractionResult class."""
-
     def test_init(self) -> None:
-        """Test initialization."""
         result = BatchExtractionResult()
 
         assert result.successful == []
@@ -203,7 +183,6 @@ class TestBatchExtractionResult:
         assert result.total_count == 0
 
     def test_add_success(self) -> None:
-        """Test adding successful results."""
         result = BatchExtractionResult()
 
         result.add_success(0, "result1")
@@ -214,7 +193,6 @@ class TestBatchExtractionResult:
         assert result.successful[1] == (2, "result3")
 
     def test_add_failure(self) -> None:
-        """Test adding failed results."""
         result = BatchExtractionResult()
         error = ValueError("test error")
         context = {"file": "test.pdf"}
@@ -229,7 +207,6 @@ class TestBatchExtractionResult:
         assert error_info["context"] == context
 
     def test_properties(self) -> None:
-        """Test computed properties."""
         result = BatchExtractionResult()
         result.total_count = 5
 
@@ -243,12 +220,10 @@ class TestBatchExtractionResult:
         assert result.success_rate == 40.0
 
     def test_success_rate_zero_total(self) -> None:
-        """Test success rate when total count is zero."""
         result = BatchExtractionResult()
         assert result.success_rate == 0.0
 
     def test_get_ordered_results(self) -> None:
-        """Test getting results in original order."""
         result = BatchExtractionResult()
         result.total_count = 4
 
@@ -264,7 +239,6 @@ class TestBatchExtractionResult:
         assert ordered[3] is None
 
     def test_get_summary(self) -> None:
-        """Test getting operation summary."""
         result = BatchExtractionResult()
         result.total_count = 3
 

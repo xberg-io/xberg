@@ -44,8 +44,6 @@ async def test_extract_pptx_with_notes(mocker: MockerFixture, extractor: Present
 
 @pytest.mark.anyio
 async def test_extract_path_async(mocker: MockerFixture, extractor: PresentationExtractor, tmp_path: Path) -> None:
-    """Test async path extraction - covers lines 69-70."""
-
     mock_presentation = mocker.MagicMock()
     mock_presentation.slides = []
     mock_presentation.core_properties = mocker.MagicMock()
@@ -62,7 +60,6 @@ async def test_extract_path_async(mocker: MockerFixture, extractor: Presentation
 
 
 def test_extract_bytes_sync(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test sync bytes extraction - covers line 82."""
     mock_presentation = mocker.MagicMock()
     mock_presentation.slides = []
     mock_presentation.core_properties = mocker.MagicMock()
@@ -76,8 +73,6 @@ def test_extract_bytes_sync(mocker: MockerFixture, extractor: PresentationExtrac
 
 
 def test_extract_path_sync(mocker: MockerFixture, extractor: PresentationExtractor, tmp_path: Path) -> None:
-    """Test sync path extraction - covers lines 94-95."""
-
     mock_presentation = mocker.MagicMock()
     mock_presentation.slides = []
     mock_presentation.core_properties = mocker.MagicMock()
@@ -94,7 +89,6 @@ def test_extract_path_sync(mocker: MockerFixture, extractor: PresentationExtract
 
 
 def test_extract_pptx_with_slide_title(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test extraction with slide title - covers line 131."""
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
     mock_title_shape = mocker.MagicMock()
@@ -121,7 +115,6 @@ def test_extract_pptx_with_slide_title(mocker: MockerFixture, extractor: Present
 
 
 def test_extract_pptx_with_shapes_no_shape_type(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test extraction with shapes that don't have shape_type - covers lines 134-135."""
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
     mock_shape_no_type = mocker.MagicMock()
@@ -142,7 +135,6 @@ def test_extract_pptx_with_shapes_no_shape_type(mocker: MockerFixture, extractor
 
 
 def test_extract_pptx_with_picture_shape(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test extraction with picture shapes - covers lines 137-145."""
     from pptx.enum.shapes import MSO_SHAPE_TYPE
 
     mock_presentation = mocker.MagicMock()
@@ -175,7 +167,6 @@ def test_extract_pptx_with_picture_shape(mocker: MockerFixture, extractor: Prese
 
 
 def test_extract_pptx_with_table_shape(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test extraction with table shapes - covers lines 147-162."""
     from pptx.enum.shapes import MSO_SHAPE_TYPE
 
     mock_presentation = mocker.MagicMock()
@@ -219,7 +210,6 @@ def test_extract_pptx_with_table_shape(mocker: MockerFixture, extractor: Present
 
 
 def test_extract_pptx_with_text_frame_shape(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test extraction with text frame shapes - covers lines 164-165."""
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
     mock_text_shape = mocker.MagicMock()
@@ -243,7 +233,6 @@ def test_extract_pptx_with_text_frame_shape(mocker: MockerFixture, extractor: Pr
 
 
 def test_extract_presentation_metadata(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test metadata extraction - covers lines 210-231."""
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
 
@@ -293,7 +282,6 @@ def test_extract_presentation_metadata(mocker: MockerFixture, extractor: Present
 
 
 def test_extract_presentation_metadata_no_text_frame(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test metadata extraction with shapes that don't have text_frame - covers lines 222-223."""
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
 
@@ -319,7 +307,6 @@ def test_extract_presentation_metadata_no_text_frame(mocker: MockerFixture, extr
 
 
 def test_extract_pptx_shape_without_text_frame(mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-    """Test extraction with shapes that don't have text_frame - covers branch 164->133."""
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
     mock_shape = mocker.MagicMock()
@@ -343,7 +330,6 @@ def test_extract_pptx_shape_without_text_frame(mocker: MockerFixture, extractor:
 def test_extract_presentation_metadata_run_without_font(
     mocker: MockerFixture, extractor: PresentationExtractor
 ) -> None:
-    """Test metadata extraction with runs that don't have font - covers branch 227->226."""
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
 
@@ -378,7 +364,6 @@ def test_extract_presentation_metadata_run_without_font(
 def test_extract_presentation_metadata_font_without_name(
     mocker: MockerFixture, extractor: PresentationExtractor
 ) -> None:
-    """Test metadata extraction with fonts that don't have name - covers branch 227->226."""
     mock_presentation = mocker.MagicMock()
     mock_slide = mocker.MagicMock()
 
@@ -411,12 +396,9 @@ def test_extract_presentation_metadata_font_without_name(
 
 
 class TestPresentationExtractorComprehensiveScenarios:
-    """Test comprehensive scenarios for presentation extraction."""
-
     def test_extract_pptx_picture_shape_no_alt_text(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test extraction with picture shapes that have no alt text - covers line 143-145."""
         from pptx.enum.shapes import MSO_SHAPE_TYPE
 
         mock_presentation = mocker.MagicMock()
@@ -444,7 +426,6 @@ class TestPresentationExtractorComprehensiveScenarios:
         assert result.mime_type == "text/markdown"
 
     def test_extract_pptx_placeholder_with_image(self, mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-        """Test extraction with placeholder shapes that have images - covers line 137-139."""
         from pptx.enum.shapes import MSO_SHAPE_TYPE
 
         mock_presentation = mocker.MagicMock()
@@ -477,7 +458,6 @@ class TestPresentationExtractorComprehensiveScenarios:
         assert result.mime_type == "text/markdown"
 
     def test_extract_pptx_non_title_text_frame(self, mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-        """Test extraction with text frame that is not a title - covers line 165-166."""
         mock_presentation = mocker.MagicMock()
         mock_slide = mocker.MagicMock()
         mock_title_shape = mocker.MagicMock()
@@ -510,7 +490,6 @@ class TestPresentationExtractorComprehensiveScenarios:
         assert result.mime_type == "text/markdown"
 
     def test_extract_pptx_notes_text_frame_none(self, mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-        """Test extraction when notes_text_frame is None - covers line 172-173."""
         mock_presentation = mocker.MagicMock()
         mock_slide = mocker.MagicMock()
         mock_notes_slide = mocker.MagicMock()
@@ -534,7 +513,6 @@ class TestPresentationExtractorComprehensiveScenarios:
     def test_extract_pptx_shapes_no_title_attribute(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test extraction when slide.shapes has no title attribute - covers line 127-129."""
         mock_presentation = mocker.MagicMock()
         mock_slide = mocker.MagicMock()
         mock_text_shape = mocker.MagicMock()
@@ -564,7 +542,6 @@ class TestPresentationExtractorComprehensiveScenarios:
     def test_extract_pptx_multiple_slides_comprehensive(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test extraction with multiple slides - covers slide numbering and content accumulation."""
         mock_presentation = mocker.MagicMock()
 
         mock_slide1 = mocker.MagicMock()
@@ -608,12 +585,9 @@ class TestPresentationExtractorComprehensiveScenarios:
 
 
 class TestPresentationExtractorMetadataComprehensive:
-    """Test comprehensive metadata extraction scenarios."""
-
     def test_extract_presentation_metadata_all_properties(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test metadata extraction with all core properties populated."""
         from datetime import datetime, timezone
 
         mock_presentation = mocker.MagicMock()
@@ -679,7 +653,6 @@ class TestPresentationExtractorMetadataComprehensive:
     def test_extract_presentation_metadata_empty_presentation(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test metadata extraction with presentation that has no slides."""
         mock_presentation = mocker.MagicMock()
         mock_presentation.slides = []
         mock_presentation.core_properties = mocker.MagicMock()
@@ -696,7 +669,6 @@ class TestPresentationExtractorMetadataComprehensive:
     def test_extract_presentation_metadata_multiple_fonts(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test metadata extraction with multiple unique fonts."""
         mock_presentation = mocker.MagicMock()
         mock_slide = mocker.MagicMock()
 
@@ -746,7 +718,6 @@ class TestPresentationExtractorMetadataComprehensive:
     def test_extract_presentation_metadata_structure_single_vs_plural(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test metadata structure info with singular vs plural forms."""
         mock_presentation = mocker.MagicMock()
 
         mock_slide1 = mocker.MagicMock()
@@ -776,7 +747,6 @@ class TestPresentationExtractorMetadataComprehensive:
     def test_extract_presentation_metadata_existing_summary_preserved(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test that existing summary in metadata is preserved."""
         mock_presentation = mocker.MagicMock()
         mock_slide = mocker.MagicMock()
         mock_slide.shapes = []
@@ -805,12 +775,9 @@ class TestPresentationExtractorMetadataComprehensive:
 
 
 class TestPresentationExtractorTableProcessingEdgeCases:
-    """Test table processing edge cases."""
-
     def test_extract_pptx_table_with_html_content(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test table extraction with content that needs HTML escaping."""
         from pptx.enum.shapes import MSO_SHAPE_TYPE
 
         mock_presentation = mocker.MagicMock()
@@ -857,7 +824,6 @@ class TestPresentationExtractorTableProcessingEdgeCases:
         assert result.mime_type == "text/markdown"
 
     def test_extract_pptx_table_empty_cells(self, mocker: MockerFixture, extractor: PresentationExtractor) -> None:
-        """Test table extraction with empty cells."""
         from pptx.enum.shapes import MSO_SHAPE_TYPE
 
         mock_presentation = mocker.MagicMock()
@@ -902,12 +868,9 @@ class TestPresentationExtractorTableProcessingEdgeCases:
 
 
 class TestPresentationExtractorImageProcessingEdgeCases:
-    """Test image processing edge cases."""
-
     def test_extract_pptx_picture_shape_special_characters_in_name(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test picture extraction with special characters in shape name."""
         from pptx.enum.shapes import MSO_SHAPE_TYPE
 
         mock_presentation = mocker.MagicMock()
@@ -941,7 +904,6 @@ class TestPresentationExtractorImageProcessingEdgeCases:
     def test_extract_pptx_placeholder_without_image_attribute(
         self, mocker: MockerFixture, extractor: PresentationExtractor
     ) -> None:
-        """Test placeholder shapes without image attribute are not processed as images."""
         from pptx.enum.shapes import MSO_SHAPE_TYPE
 
         mock_presentation = mocker.MagicMock()

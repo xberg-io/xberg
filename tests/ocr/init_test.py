@@ -1,5 +1,3 @@
-"""Tests for OCR backend initialization."""
-
 from __future__ import annotations
 
 from kreuzberg._ocr import get_ocr_backend
@@ -9,25 +7,21 @@ from kreuzberg._ocr._tesseract import TesseractBackend
 
 
 def test_get_ocr_backend_easyocr() -> None:
-    """Test getting EasyOCR backend."""
     backend = get_ocr_backend("easyocr")
     assert isinstance(backend, EasyOCRBackend)
 
 
 def test_get_ocr_backend_paddleocr() -> None:
-    """Test getting PaddleOCR backend."""
     backend = get_ocr_backend("paddleocr")
     assert isinstance(backend, PaddleBackend)
 
 
 def test_get_ocr_backend_tesseract() -> None:
-    """Test getting Tesseract backend (default)."""
     backend = get_ocr_backend("tesseract")
     assert isinstance(backend, TesseractBackend)
 
 
 def test_get_ocr_backend_caching() -> None:
-    """Test that backends are cached."""
     backend1 = get_ocr_backend("easyocr")
     backend2 = get_ocr_backend("easyocr")
     assert backend1 is backend2

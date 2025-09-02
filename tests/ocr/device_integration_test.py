@@ -1,5 +1,3 @@
-"""Integration tests for device handling in OCR backends."""
-
 from __future__ import annotations
 
 from dataclasses import asdict
@@ -257,7 +255,6 @@ def test_paddleocr_backward_compatibility_use_gpu_false() -> None:
 
 
 def test_config_dataclass_default_values() -> None:
-    """Test that new device parameters have sensible defaults."""
     easy_config = EasyOCRConfig()
     assert easy_config.device == "auto"
     assert easy_config.gpu_memory_limit is None

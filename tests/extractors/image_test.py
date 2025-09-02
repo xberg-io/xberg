@@ -168,7 +168,6 @@ async def test_extract_bytes_async(mock_ocr_backend: MagicMock) -> None:
 
 
 def test_ocr_backend_none_validation_error() -> None:
-    """Test validation error when OCR backend is None."""
     config = ExtractionConfig(ocr_backend=None)
     extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -178,7 +177,6 @@ def test_ocr_backend_none_validation_error() -> None:
 
 @pytest.mark.anyio
 async def test_ocr_backend_none_validation_error_async() -> None:
-    """Test validation error when OCR backend is None in async mode."""
     config = ExtractionConfig(ocr_backend=None)
     extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -187,7 +185,6 @@ async def test_ocr_backend_none_validation_error_async() -> None:
 
 
 def test_extract_bytes_temp_file_cleanup_on_error() -> None:
-    """Test that temp files are cleaned up even when processing fails."""
     config = ExtractionConfig(ocr_backend="tesseract")
     extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -211,7 +208,6 @@ def test_extract_bytes_temp_file_cleanup_on_error() -> None:
 
 
 def test_extract_path_sync_no_ocr_backend() -> None:
-    """Test sync path extraction when ocr_backend is None."""
     config = ExtractionConfig(ocr_backend=None)
     extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -222,7 +218,6 @@ def test_extract_path_sync_no_ocr_backend() -> None:
 
 
 def test_extract_bytes_with_different_mime_types() -> None:
-    """Test extract_bytes_sync with different image MIME types."""
     config = ExtractionConfig(ocr_backend="tesseract")
 
     mime_types = ["image/png", "image/jpeg", "image/tiff", "image/webp"]
@@ -234,7 +229,6 @@ def test_extract_bytes_with_different_mime_types() -> None:
 
 
 def test_extract_bytes_sync_with_ocr_config() -> None:
-    """Test extract_bytes_sync with specific OCR configuration."""
     from kreuzberg._ocr._tesseract import PSMMode, TesseractConfig
 
     tesseract_config = TesseractConfig(
@@ -268,7 +262,6 @@ def test_extract_bytes_sync_with_ocr_config() -> None:
 
 
 def test_extract_bytes_sync_temp_file_creation() -> None:
-    """Test that temporary files are created and cleaned up properly."""
     config = ExtractionConfig(ocr_backend="tesseract")
     extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -300,7 +293,6 @@ def test_extract_bytes_sync_temp_file_creation() -> None:
 
 @pytest.mark.anyio
 async def test_extract_bytes_async_delegation() -> None:
-    """Test that async extraction properly delegates through extract_path_async."""
     config = ExtractionConfig(ocr_backend="tesseract")
     extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -321,7 +313,6 @@ async def test_extract_bytes_async_delegation() -> None:
 
 @pytest.mark.anyio
 async def test_extract_path_async_delegation(mock_ocr_backend: MagicMock) -> None:
-    """Test that async path extraction properly uses OCR backend."""
     config = ExtractionConfig(ocr_backend="tesseract")
     extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -341,7 +332,6 @@ async def test_extract_path_async_delegation(mock_ocr_backend: MagicMock) -> Non
 
 
 def test_extract_path_sync_with_tesseract_config(mock_ocr_backend: MagicMock) -> None:
-    """Test sync path extraction with TesseractConfig."""
     from kreuzberg._ocr._tesseract import TesseractConfig
 
     tesseract_config = TesseractConfig()
@@ -362,7 +352,6 @@ def test_extract_path_sync_with_tesseract_config(mock_ocr_backend: MagicMock) ->
 
 
 def test_extract_path_sync_with_paddleocr_config(mock_ocr_backend: MagicMock) -> None:
-    """Test sync path extraction with PaddleOCRConfig."""
     from kreuzberg._ocr._paddleocr import PaddleOCRConfig
 
     paddle_config = PaddleOCRConfig()
@@ -383,7 +372,6 @@ def test_extract_path_sync_with_paddleocr_config(mock_ocr_backend: MagicMock) ->
 
 
 def test_extract_path_sync_with_easyocr_config(mock_ocr_backend: MagicMock) -> None:
-    """Test sync path extraction with EasyOCRConfig."""
     from kreuzberg._ocr._easyocr import EasyOCRConfig
 
     easy_config = EasyOCRConfig()
@@ -405,7 +393,6 @@ def test_extract_path_sync_with_easyocr_config(mock_ocr_backend: MagicMock) -> N
 
 @pytest.mark.anyio
 async def test_extract_real_image_integration() -> None:
-    """Integration test with real image and OCR."""
     test_image_path = Path(__file__).parent.parent / "test_source_files" / "images" / "test_hello_world.png"
     if not test_image_path.exists():
         pytest.skip("Test image not found")
@@ -421,7 +408,6 @@ async def test_extract_real_image_integration() -> None:
 
 
 def test_extract_real_image_sync_integration() -> None:
-    """Integration test with real image and OCR (sync)."""
     test_image_path = Path(__file__).parent.parent / "test_source_files" / "images" / "test_hello_world.png"
     if not test_image_path.exists():
         pytest.skip("Test image not found")
@@ -437,8 +423,6 @@ def test_extract_real_image_sync_integration() -> None:
 
 
 class TestImageExtractorComprehensiveMimeTypes:
-    """Test comprehensive MIME type handling."""
-
     @pytest.mark.parametrize(
         "mime_type,expected_extension",
         [
@@ -463,7 +447,6 @@ class TestImageExtractorComprehensiveMimeTypes:
         ],
     )
     def test_all_mime_type_mappings(self, mime_type: str, expected_extension: str) -> None:
-        """Test all MIME type to extension mappings."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type=mime_type, config=config)
 
@@ -471,7 +454,6 @@ class TestImageExtractorComprehensiveMimeTypes:
         assert extension == expected_extension
 
     def test_partial_mime_type_matching_all_cases(self) -> None:
-        """Test partial MIME type matching for all types."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -485,7 +467,6 @@ class TestImageExtractorComprehensiveMimeTypes:
         assert extension in ["pnm", "pbm", "pgm", "ppm"]
 
     def test_mime_type_case_sensitivity(self) -> None:
-        """Test that MIME type matching is case-sensitive."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -497,10 +478,7 @@ class TestImageExtractorComprehensiveMimeTypes:
 
 
 class TestImageExtractorSyncPathExtractionComprehensive:
-    """Test comprehensive sync path extraction scenarios."""
-
     def test_extract_path_sync_unknown_ocr_backend(self, mock_ocr_backend: MagicMock) -> None:
-        """Test sync path extraction with unknown OCR backend."""
         config = ExtractionConfig(ocr_backend="unknown_backend")  # type: ignore[arg-type]
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -508,7 +486,6 @@ class TestImageExtractorSyncPathExtractionComprehensive:
             extractor.extract_path_sync(Path("test.png"))
 
     def test_extract_path_sync_with_default_tesseract_config(self, mock_ocr_backend: MagicMock) -> None:
-        """Test sync path extraction when ocr_config is None (uses default)."""
         config = ExtractionConfig(ocr_backend="tesseract", ocr_config=None)
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -522,7 +499,6 @@ class TestImageExtractorSyncPathExtractionComprehensive:
         assert result.mime_type == expected_result.mime_type
 
     def test_extract_path_sync_with_default_paddleocr_config(self, mock_ocr_backend: MagicMock) -> None:
-        """Test sync path extraction when ocr_config is None (uses default)."""
         config = ExtractionConfig(ocr_backend="paddleocr", ocr_config=None)
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -536,7 +512,6 @@ class TestImageExtractorSyncPathExtractionComprehensive:
         assert result.mime_type == expected_result.mime_type
 
     def test_extract_path_sync_with_default_easyocr_config(self, mock_ocr_backend: MagicMock) -> None:
-        """Test sync path extraction when ocr_config is None (uses default)."""
         config = ExtractionConfig(ocr_backend="easyocr", ocr_config=None)
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -550,7 +525,6 @@ class TestImageExtractorSyncPathExtractionComprehensive:
         assert result.mime_type == expected_result.mime_type
 
     def test_extract_path_sync_with_custom_ocr_configs(self, mock_ocr_backend: MagicMock) -> None:
-        """Test sync path extraction with custom OCR configurations."""
         from kreuzberg._ocr._tesseract import PSMMode, TesseractConfig
 
         tesseract_config = TesseractConfig(
@@ -578,10 +552,7 @@ class TestImageExtractorSyncPathExtractionComprehensive:
 
 
 class TestImageExtractorTempFileHandlingComprehensive:
-    """Test comprehensive temporary file handling scenarios."""
-
     def test_extract_bytes_sync_fd_close_error(self) -> None:
-        """Test handling when file descriptor close fails."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -600,7 +571,6 @@ class TestImageExtractorTempFileHandlingComprehensive:
                     mock_unlink.assert_called_once()
 
     def test_extract_bytes_sync_unlink_error_suppressed(self) -> None:
-        """Test that unlink errors are suppressed."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -625,7 +595,6 @@ class TestImageExtractorTempFileHandlingComprehensive:
 
     @pytest.mark.anyio
     async def test_extract_bytes_async_temp_file_cleanup(self) -> None:
-        """Test async temp file cleanup on error."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -650,10 +619,7 @@ class TestImageExtractorTempFileHandlingComprehensive:
 
 
 class TestImageExtractorEdgeCases:
-    """Test edge cases and error conditions."""
-
     def test_supported_mime_types_constant(self) -> None:
-        """Test that SUPPORTED_MIME_TYPES matches expected set."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -661,7 +627,6 @@ class TestImageExtractorEdgeCases:
             assert mime_type in extractor.SUPPORTED_MIME_TYPES
 
     def test_extract_bytes_sync_with_all_mime_types(self) -> None:
-        """Test extract_bytes_sync with all supported MIME types."""
         config = ExtractionConfig(ocr_backend="tesseract")
 
         for mime_type in ImageExtractor.IMAGE_MIME_TYPE_EXT_MAP:
@@ -677,7 +642,6 @@ class TestImageExtractorEdgeCases:
                 assert result.content == f"Extracted from {mime_type}"
 
     def test_mime_type_validation_context(self) -> None:
-        """Test that ValidationError includes proper context."""
         config = ExtractionConfig(ocr_backend="tesseract")
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -688,7 +652,6 @@ class TestImageExtractorEdgeCases:
         assert exc_info.value.context == {"mime_type": "video/mp4"}
 
     def test_quality_processing_applied(self, mock_ocr_backend: MagicMock) -> None:
-        """Test that quality processing is applied to results."""
         config = ExtractionConfig(ocr_backend="tesseract", enable_quality_processing=True)
         extractor = ImageExtractor(mime_type="image/png", config=config)
 
@@ -703,7 +666,6 @@ class TestImageExtractorEdgeCases:
 
     @pytest.mark.anyio
     async def test_async_path_delegation_preserves_config(self, mock_ocr_backend: MagicMock) -> None:
-        """Test that async path extraction preserves all config options."""
         from kreuzberg._ocr._tesseract import PSMMode, TesseractConfig
 
         tesseract_config = TesseractConfig(language="jpn", psm=PSMMode.SINGLE_WORD, textord_space_size_is_variable=True)

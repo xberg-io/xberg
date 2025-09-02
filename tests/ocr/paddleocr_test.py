@@ -672,8 +672,6 @@ def test_validate_language_code_invalid(invalid_language_code: str) -> None:
 
 @pytest.mark.anyio
 async def test_process_image_grayscale_conversion() -> None:
-    """Test grayscale to RGB conversion - covers lines 130-133."""
-
     backend = PaddleBackend()
 
     grayscale_image = Image.new("L", (100, 100), color=128)
@@ -696,7 +694,6 @@ async def test_process_image_grayscale_conversion() -> None:
 
 @pytest.mark.anyio
 async def test_process_paddle_result_current_line_handling() -> None:
-    """Test current line handling in result processing - covers lines 198-201."""
     test_image = Image.new("RGB", (200, 100), color="white")
 
     mock_results = [
@@ -715,7 +712,6 @@ async def test_process_paddle_result_current_line_handling() -> None:
 
 
 def test_process_paddle_result_image_size_fallback() -> None:
-    """Test image size fallback for mocked images - covers line 218."""
     from unittest.mock import Mock
 
     mock_image = Mock()
@@ -733,7 +729,6 @@ def test_process_paddle_result_image_size_fallback() -> None:
 
 @pytest.mark.anyio
 async def test_init_paddle_ocr_gpu_memory_conversion() -> None:
-    """Test GPU memory limit conversion - covers line 284."""
     from unittest.mock import Mock, patch
 
     PaddleBackend._paddle_ocr = None
@@ -764,7 +759,6 @@ async def test_init_paddle_ocr_gpu_memory_conversion() -> None:
 
 @pytest.mark.anyio
 async def test_resolve_device_config_deprecated_use_gpu_warnings() -> None:
-    """Test deprecated use_gpu warnings - covers lines 312-319, 321."""
     import warnings
     from unittest.mock import patch
 
@@ -795,7 +789,6 @@ async def test_resolve_device_config_deprecated_use_gpu_warnings() -> None:
 
 @pytest.mark.anyio
 async def test_resolve_device_config_mps_warning() -> None:
-    """Test MPS not supported warning - covers lines 330-335."""
     import warnings
     from unittest.mock import patch
 
@@ -814,7 +807,6 @@ async def test_resolve_device_config_mps_warning() -> None:
 
 @pytest.mark.anyio
 async def test_resolve_device_config_validation_error_fallback() -> None:
-    """Test ValidationError fallback for deprecated use_gpu=False - covers lines 345-348."""
     from unittest.mock import patch
 
     with patch("kreuzberg._utils._device.validate_device_request") as mock_validate:
@@ -853,7 +845,6 @@ async def test_init_paddle_ocr_with_invalid_language(
 
 
 def test_process_image_sync(backend: PaddleBackend) -> None:
-    """Test sync image processing."""
     from unittest.mock import Mock, patch
 
     image = Image.new("RGB", (100, 100))
@@ -878,7 +869,6 @@ def test_process_image_sync(backend: PaddleBackend) -> None:
 
 
 def test_process_file_sync(backend: PaddleBackend, tmp_path: Path) -> None:
-    """Test sync file processing."""
     from unittest.mock import Mock, patch
 
     test_image = Image.new("RGB", (100, 100))

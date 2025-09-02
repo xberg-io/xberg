@@ -1,5 +1,3 @@
-"""Tests for batch extraction functions."""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -20,7 +18,6 @@ from kreuzberg.extraction import (
 
 @pytest.fixture
 def test_files(tmp_path: Path) -> list[Path]:
-    """Create test files for batch extraction."""
     files = []
     for i in range(3):
         file_path = tmp_path / f"test_{i}.txt"
@@ -31,7 +28,6 @@ def test_files(tmp_path: Path) -> list[Path]:
 
 @pytest.fixture
 def test_bytes() -> list[tuple[bytes, str]]:
-    """Create test bytes for batch extraction."""
     return [
         (b"Test content 1", "text/plain"),
         (b"Test content 2", "text/plain"),
@@ -41,14 +37,12 @@ def test_bytes() -> list[tuple[bytes, str]]:
 
 @pytest.mark.anyio
 async def test_batch_extract_file_empty() -> None:
-    """Test batch extraction with empty file list."""
     results = await batch_extract_file([])
     assert results == []
 
 
 @pytest.mark.anyio
 async def test_batch_extract_file_single(test_files: list[Path]) -> None:
-    """Test batch extraction with single file."""
     results = await batch_extract_file([test_files[0]])
     assert len(results) == 1
     assert results[0].content == "Test content 0"
@@ -56,7 +50,6 @@ async def test_batch_extract_file_single(test_files: list[Path]) -> None:
 
 @pytest.mark.anyio
 async def test_batch_extract_file_multiple(test_files: list[Path]) -> None:
-    """Test batch extraction with multiple files."""
     results = await batch_extract_file(test_files)
     assert len(results) == 3
     for i, result in enumerate(results):
@@ -65,8 +58,6 @@ async def test_batch_extract_file_multiple(test_files: list[Path]) -> None:
 
 @pytest.mark.anyio
 async def test_batch_extract_file_with_error() -> None:
-    """Test batch extraction with file error."""
-
     async def mock_extract_file(file_path: Path, mime_type: Any, config: Any) -> ExtractionResult:
         if file_path == Path("file1"):
             return ExtractionResult(content="OK1", mime_type="text/plain", metadata={}, chunks=[])
@@ -87,14 +78,12 @@ async def test_batch_extract_file_with_error() -> None:
 
 @pytest.mark.anyio
 async def test_batch_extract_bytes_empty() -> None:
-    """Test batch byte extraction with empty list."""
     results = await batch_extract_bytes([])
     assert results == []
 
 
 @pytest.mark.anyio
 async def test_batch_extract_bytes_single(test_bytes: list[tuple[bytes, str]]) -> None:
-    """Test batch byte extraction with single item."""
     results = await batch_extract_bytes([test_bytes[0]])
     assert len(results) == 1
     assert "Test content 1" in results[0].content
@@ -102,7 +91,6 @@ async def test_batch_extract_bytes_single(test_bytes: list[tuple[bytes, str]]) -
 
 @pytest.mark.anyio
 async def test_batch_extract_bytes_multiple(test_bytes: list[tuple[bytes, str]]) -> None:
-    """Test batch byte extraction with multiple items."""
     results = await batch_extract_bytes(test_bytes)
     assert len(results) == 3
     for i, result in enumerate(results):
@@ -110,20 +98,17 @@ async def test_batch_extract_bytes_multiple(test_bytes: list[tuple[bytes, str]])
 
 
 def test_batch_extract_file_sync_empty() -> None:
-    """Test sync batch extraction with empty file list."""
     results = batch_extract_file_sync([])
     assert results == []
 
 
 def test_batch_extract_file_sync_single(test_files: list[Path]) -> None:
-    """Test sync batch extraction with single file."""
     results = batch_extract_file_sync([test_files[0]])
     assert len(results) == 1
     assert results[0].content == "Test content 0"
 
 
 def test_batch_extract_file_sync_multiple(test_files: list[Path]) -> None:
-    """Test sync batch extraction with multiple files."""
     results = batch_extract_file_sync(test_files)
     assert len(results) == 3
     for i, result in enumerate(results):
@@ -131,8 +116,6 @@ def test_batch_extract_file_sync_multiple(test_files: list[Path]) -> None:
 
 
 def test_batch_extract_file_sync_with_error(tmp_path: Path) -> None:
-    """Test sync batch extraction with file error."""
-
     valid_file = tmp_path / "valid.txt"
     valid_file.write_text("Valid content")
 
@@ -147,7 +130,6 @@ def test_batch_extract_file_sync_with_error(tmp_path: Path) -> None:
 
 
 def test_batch_extract_file_sync_with_config(test_files: list[Path]) -> None:
-    """Test sync batch extraction with custom config."""
     config = ExtractionConfig(chunk_content=True, max_chars=100)
 
     with patch("kreuzberg.extraction.extract_file_sync") as mock_extract:
@@ -164,20 +146,17 @@ def test_batch_extract_file_sync_with_config(test_files: list[Path]) -> None:
 
 
 def test_batch_extract_bytes_sync_empty() -> None:
-    """Test sync batch byte extraction with empty list."""
     results = batch_extract_bytes_sync([])
     assert results == []
 
 
 def test_batch_extract_bytes_sync_single(test_bytes: list[tuple[bytes, str]]) -> None:
-    """Test sync batch byte extraction with single item."""
     results = batch_extract_bytes_sync([test_bytes[0]])
     assert len(results) == 1
     assert "Test content 1" in results[0].content
 
 
 def test_batch_extract_bytes_sync_multiple(test_bytes: list[tuple[bytes, str]]) -> None:
-    """Test sync batch byte extraction with multiple items."""
     results = batch_extract_bytes_sync(test_bytes)
     assert len(results) == 3
     for i, result in enumerate(results):
@@ -185,7 +164,6 @@ def test_batch_extract_bytes_sync_multiple(test_bytes: list[tuple[bytes, str]]) 
 
 
 def test_batch_extract_bytes_sync_with_error() -> None:
-    """Test sync batch byte extraction with error."""
     with patch("kreuzberg.extraction.extract_bytes_sync") as mock_extract:
         mock_extract.side_effect = [
             ExtractionResult(content="OK", mime_type="text/plain", metadata={}, chunks=[]),
@@ -202,7 +180,6 @@ def test_batch_extract_bytes_sync_with_error() -> None:
 
 
 def test_batch_extract_file_sync_parallel_processing(test_files: list[Path]) -> None:
-    """Test that sync batch extraction uses parallel processing."""
     with patch("kreuzberg.extraction.ThreadPoolExecutor") as mock_executor_class:
         mock_executor = Mock()
         mock_executor_class.return_value.__enter__.return_value = mock_executor
@@ -228,7 +205,6 @@ def test_batch_extract_file_sync_parallel_processing(test_files: list[Path]) -> 
 
 
 def test_batch_extract_bytes_sync_parallel_processing(test_bytes: list[tuple[bytes, str]]) -> None:
-    """Test that sync batch byte extraction uses parallel processing."""
     with patch("kreuzberg.extraction.ThreadPoolExecutor") as mock_executor_class:
         mock_executor = Mock()
         mock_executor_class.return_value.__enter__.return_value = mock_executor
@@ -255,7 +231,6 @@ def test_batch_extract_bytes_sync_parallel_processing(test_bytes: list[tuple[byt
 
 @pytest.mark.anyio
 async def test_batch_extract_file_preserves_order() -> None:
-    """Test that batch extraction preserves file order even with async processing."""
     file_paths = [Path(f"file{i}") for i in range(5)]
 
     with patch("kreuzberg.extraction.extract_file") as mock_extract:

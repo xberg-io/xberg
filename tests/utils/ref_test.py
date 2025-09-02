@@ -1,5 +1,3 @@
-"""Tests for Ref utility class."""
-
 from __future__ import annotations
 
 import pytest
@@ -8,8 +6,6 @@ from kreuzberg._utils._ref import Ref
 
 
 def test_ref_basic_functionality() -> None:
-    """Test basic Ref functionality."""
-
     def factory() -> str:
         return "test_value"
 
@@ -26,8 +22,6 @@ def test_ref_basic_functionality() -> None:
 
 
 def test_ref_clear() -> None:
-    """Test Ref clear functionality."""
-
     def factory() -> list[str]:
         return ["test"]
 
@@ -45,8 +39,6 @@ def test_ref_clear() -> None:
 
 
 def test_ref_multiple_instances() -> None:
-    """Test multiple Ref instances don't interfere."""
-
     def factory1() -> str:
         return "value1"
 
@@ -65,8 +57,6 @@ def test_ref_multiple_instances() -> None:
 
 
 def test_ref_clear_all() -> None:
-    """Test clearing all refs."""
-
     def factory1() -> str:
         return "value1"
 
@@ -89,8 +79,6 @@ def test_ref_clear_all() -> None:
 
 
 def test_ref_factory_exception() -> None:
-    """Test behavior when factory raises exception."""
-
     def failing_factory() -> str:
         raise ValueError("Factory failed")
 

@@ -1,5 +1,3 @@
-"""Tests for the cache utility module."""
-
 from __future__ import annotations
 
 import os
@@ -31,21 +29,18 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def temp_cache_dir() -> Generator[Path, None, None]:
-    """Create a temporary cache directory."""
     with tempfile.TemporaryDirectory() as temp_dir:
         yield Path(temp_dir)
 
 
 @pytest.fixture
 def cache(temp_cache_dir: Path) -> KreuzbergCache[ExtractionResult]:
-    """Create a test cache instance."""
     return KreuzbergCache[ExtractionResult](
         cache_type="test", cache_dir=temp_cache_dir, max_cache_size_mb=10.0, max_age_days=1
     )
 
 
 def test_cache_init_default_dir() -> None:
-    """Test cache initialization with default directory."""
     cache = KreuzbergCache[str](cache_type="test")
 
     expected_dir = Path.cwd() / ".kreuzberg" / "test"
@@ -56,7 +51,6 @@ def test_cache_init_default_dir() -> None:
 
 
 def test_cache_init_custom_dir(temp_cache_dir: Path) -> None:
-    """Test cache initialization with custom directory."""
     cache = KreuzbergCache[str](cache_type="custom", cache_dir=temp_cache_dir, max_cache_size_mb=100.0, max_age_days=7)
 
     assert cache.cache_dir == temp_cache_dir
@@ -66,7 +60,6 @@ def test_cache_init_custom_dir(temp_cache_dir: Path) -> None:
 
 
 def test_get_cache_key(cache: KreuzbergCache[ExtractionResult]) -> None:
-    """Test cache key generation."""
     key1 = cache._get_cache_key(file_path="/test/file.pdf", config="default")
     key2 = cache._get_cache_key(config="default", file_path="/test/file.pdf")
     key3 = cache._get_cache_key(file_path="/test/other.pdf", config="default")
@@ -82,7 +75,6 @@ def test_get_cache_key(cache: KreuzbergCache[ExtractionResult]) -> None:
 
 
 def test_get_cache_path(cache: KreuzbergCache[ExtractionResult]) -> None:
-    """Test cache path generation."""
     cache_key = "test1234567890ab"
     cache_path = cache._get_cache_path(cache_key)
 
@@ -91,13 +83,11 @@ def test_get_cache_path(cache: KreuzbergCache[ExtractionResult]) -> None:
 
 
 def test_is_cache_valid_nonexistent(cache: KreuzbergCache[ExtractionResult]) -> None:
-    """Test cache validity check for non-existent file."""
     cache_path = cache.cache_dir / "nonexistent.msgpack"
     assert not cache._is_cache_valid(cache_path)
 
 
 def test_is_cache_valid_fresh_file(cache: KreuzbergCache[ExtractionResult]) -> None:
-    """Test cache validity check for fresh file."""
     cache_path = cache.cache_dir / "fresh.msgpack"
     cache_path.write_text("test content")
 
@@ -105,7 +95,6 @@ def test_is_cache_valid_fresh_file(cache: KreuzbergCache[ExtractionResult]) -> N
 
 
 def test_is_cache_valid_old_file(cache: KreuzbergCache[ExtractionResult]) -> None:
-    """Test cache validity check for old file."""
     cache_path = cache.cache_dir / "old.msgpack"
     cache_path.write_text("test content")
 
@@ -116,7 +105,6 @@ def test_is_cache_valid_old_file(cache: KreuzbergCache[ExtractionResult]) -> Non
 
 
 def test_is_cache_valid_os_error(cache: KreuzbergCache[ExtractionResult]) -> None:
-    """Test cache validity check with OS error."""
     cache_path = cache.cache_dir / "error.msgpack"
 
     with patch("pathlib.Path.stat", side_effect=OSError("Permission denied")):
@@ -124,7 +112,6 @@ def test_is_cache_valid_os_error(cache: KreuzbergCache[ExtractionResult]) -> Non
 
 
 def test_serialize_result(cache: KreuzbergCache[ExtractionResult]) -> None:
-    """Test result serialization."""
     result = ExtractionResult(content="Test content", mime_type="text/plain", metadata={}, chunks=[], tables=[])
 
     serialized = cache._serialize_result(result)
@@ -136,7 +123,6 @@ def test_serialize_result(cache: KreuzbergCache[ExtractionResult]) -> None:
 
 
 def test_deserialize_result_extraction_result(cache: KreuzbergCache[ExtractionResult]) -> None:
-    """Test ExtractionResult deserialization."""
     result_data = {
         "content": "Test content",
         "mime_type": "text/plain",
@@ -156,7 +142,6 @@ def test_deserialize_result_extraction_result(cache: KreuzbergCache[ExtractionRe
 
 
 def test_deserialize_result_regular_object(cache: KreuzbergCache[str]) -> None:
-    """Test regular object deserialization."""
     cached_data = {"type": "str", "data": "test string", "cached_at": time.time()}
 
     deserialized = cache._deserialize_result(cached_data)
@@ -164,8 +149,6 @@ def test_deserialize_result_regular_object(cache: KreuzbergCache[str]) -> None:
 
 
 def test_get_hit(cache: KreuzbergCache[str]) -> None:
-    """Test synchronous cache hit."""
-
     cache.set("test_value", key1="value1", key2="value2")
 
     result = cache.get(key1="value1", key2="value2")
@@ -173,13 +156,11 @@ def test_get_hit(cache: KreuzbergCache[str]) -> None:
 
 
 def test_get_miss(cache: KreuzbergCache[str]) -> None:
-    """Test synchronous cache miss."""
     result = cache.get(key1="nonexistent")
     assert result is None
 
 
 def test_set(cache: KreuzbergCache[str]) -> None:
-    """Test synchronous cache set."""
     cache.set("test_value", key1="value1", key2="value2")
 
     cache_key = cache._get_cache_key(key1="value1", key2="value2")
@@ -192,8 +173,6 @@ def test_set(cache: KreuzbergCache[str]) -> None:
 
 @pytest.mark.anyio
 async def test_aget_hit(cache: KreuzbergCache[str]) -> None:
-    """Test asynchronous cache hit."""
-
     await cache.aset("test_value", key1="value1", key2="value2")
 
     result = await cache.aget(key1="value1", key2="value2")
@@ -202,14 +181,12 @@ async def test_aget_hit(cache: KreuzbergCache[str]) -> None:
 
 @pytest.mark.anyio
 async def test_aget_miss(cache: KreuzbergCache[str]) -> None:
-    """Test asynchronous cache miss."""
     result = await cache.aget(key1="nonexistent")
     assert result is None
 
 
 @pytest.mark.anyio
 async def test_aset(cache: KreuzbergCache[str]) -> None:
-    """Test asynchronous cache set."""
     await cache.aset("test_value", key1="value1", key2="value2")
 
     cache_key = cache._get_cache_key(key1="value1", key2="value2")
@@ -221,8 +198,6 @@ async def test_aset(cache: KreuzbergCache[str]) -> None:
 
 
 def test_clear(cache: KreuzbergCache[str]) -> None:
-    """Test cache clearing."""
-
     cache.set("value1", key="test1")
     cache.set("value2", key="test2")
 
@@ -236,8 +211,6 @@ def test_clear(cache: KreuzbergCache[str]) -> None:
 
 
 def test_cleanup_cache(cache: KreuzbergCache[str]) -> None:
-    """Test cleanup of expired entries."""
-
     cache_path = cache.cache_dir / "expired.msgpack"
     cache_path.write_text("expired content")
 
@@ -253,8 +226,6 @@ def test_cleanup_cache(cache: KreuzbergCache[str]) -> None:
 
 
 def test_cleanup_cache_size_limit(cache: KreuzbergCache[str]) -> None:
-    """Test cleanup respects size limits."""
-
     for i in range(20):
         cache.set(f"value_{i}" * 1000, key=f"test_{i}")
 
@@ -271,15 +242,11 @@ def test_cleanup_cache_size_limit(cache: KreuzbergCache[str]) -> None:
 
 
 def test_cleanup_cache_exception_handling(cache: KreuzbergCache[str]) -> None:
-    """Test cleanup handles exceptions gracefully."""
-
     with patch("pathlib.Path.glob", side_effect=OSError("Permission denied")):
         cache._cleanup_cache()
 
 
 def test_get_serialization_error(cache: KreuzbergCache[str]) -> None:
-    """Test get handles serialization errors gracefully."""
-
     cache_key = cache._get_cache_key(key="test")
     cache_path = cache._get_cache_path(cache_key)
     cache_path.write_bytes(b"corrupted msgpack data")
@@ -291,8 +258,6 @@ def test_get_serialization_error(cache: KreuzbergCache[str]) -> None:
 
 
 def test_set_serialization_error(cache: KreuzbergCache[str]) -> None:
-    """Test set handles serialization errors gracefully."""
-
     unserializable = lambda x: x  # noqa: E731
 
     with patch("kreuzberg._utils._cache.serialize", side_effect=TypeError("Serialize error")):
@@ -300,8 +265,6 @@ def test_set_serialization_error(cache: KreuzbergCache[str]) -> None:
 
 
 def test_is_processing(cache: KreuzbergCache[str]) -> None:
-    """Test processing state tracking."""
-
     assert not cache.is_processing(key="test")
 
     event = cache.mark_processing(key="test")
@@ -314,7 +277,6 @@ def test_is_processing(cache: KreuzbergCache[str]) -> None:
 
 
 def test_mark_processing_duplicate(cache: KreuzbergCache[str]) -> None:
-    """Test marking same key as processing multiple times."""
     event1 = cache.mark_processing(key="test")
     event2 = cache.mark_processing(key="test")
 
@@ -322,14 +284,10 @@ def test_mark_processing_duplicate(cache: KreuzbergCache[str]) -> None:
 
 
 def test_mark_complete_nonexistent(cache: KreuzbergCache[str]) -> None:
-    """Test marking non-existent key as complete."""
-
     cache.mark_complete(key="nonexistent")
 
 
 def test_get_stats(cache: KreuzbergCache[str]) -> None:
-    """Test cache statistics."""
-
     cache.set("value1", key="test1")
     cache.set("value2", key="test2")
 
@@ -346,7 +304,6 @@ def test_get_stats(cache: KreuzbergCache[str]) -> None:
 
 
 def test_get_stats_os_error(cache: KreuzbergCache[str]) -> None:
-    """Test get_stats handles OS errors gracefully."""
     with patch("pathlib.Path.glob", side_effect=OSError("Permission denied")):
         stats = cache.get_stats()
 
@@ -357,7 +314,6 @@ def test_get_stats_os_error(cache: KreuzbergCache[str]) -> None:
 
 
 def test_get_ocr_cache() -> None:
-    """Test OCR cache factory function."""
     _ocr_cache_ref.clear()
 
     cache = get_ocr_cache()
@@ -369,7 +325,6 @@ def test_get_ocr_cache() -> None:
 
 
 def test_get_ocr_cache_with_env_vars() -> None:
-    """Test OCR cache with environment variables."""
     _ocr_cache_ref.clear()
 
     with patch.dict(
@@ -386,7 +341,6 @@ def test_get_ocr_cache_with_env_vars() -> None:
 
 
 def test_get_document_cache() -> None:
-    """Test document cache factory function."""
     _document_cache_ref.clear()
     cache = get_document_cache()
     assert isinstance(cache, KreuzbergCache)
@@ -394,7 +348,6 @@ def test_get_document_cache() -> None:
 
 
 def test_get_table_cache() -> None:
-    """Test table cache factory function."""
     _table_cache_ref.clear()
     cache = get_table_cache()
     assert isinstance(cache, KreuzbergCache)
@@ -402,7 +355,6 @@ def test_get_table_cache() -> None:
 
 
 def test_get_mime_cache() -> None:
-    """Test MIME cache factory function."""
     _mime_cache_ref.clear()
     cache = get_mime_cache()
     assert isinstance(cache, KreuzbergCache)
@@ -410,7 +362,6 @@ def test_get_mime_cache() -> None:
 
 
 def test_clear_all_caches() -> None:
-    """Test clearing all global caches."""
     _ocr_cache_ref.clear()
     _document_cache_ref.clear()
     _table_cache_ref.clear()
@@ -430,8 +381,6 @@ def test_clear_all_caches() -> None:
 
 
 def test_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) -> None:
-    """Test periodic cleanup trigger during set operations."""
-
     with patch.object(cache, "_cleanup_cache") as mock_cleanup:
         for i in range(200):
             cache_key = cache._get_cache_key(test_key=f"test_{i}")
@@ -447,8 +396,6 @@ def test_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) -> None:
 
 @pytest.mark.anyio
 async def test_async_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) -> None:
-    """Test periodic cleanup trigger during async set operations."""
-
     with patch.object(cache, "_cleanup_cache") as mock_cleanup:
         for i in range(200):
             cache_key = cache._get_cache_key(test_key=f"test_{i}")
@@ -464,8 +411,6 @@ async def test_async_cleanup_cache_periodic_trigger(cache: KreuzbergCache[str]) 
 
 @pytest.mark.anyio
 async def test_aget_serialization_error(cache: KreuzbergCache[str]) -> None:
-    """Test async get handles serialization errors gracefully."""
-
     cache_key = cache._get_cache_key(key="test")
     cache_path = cache._get_cache_path(cache_key)
     cache_path.write_bytes(b"corrupted msgpack data")
@@ -476,8 +421,6 @@ async def test_aget_serialization_error(cache: KreuzbergCache[str]) -> None:
 
 @pytest.mark.anyio
 async def test_aset_serialization_error(cache: KreuzbergCache[str]) -> None:
-    """Test async set handles serialization errors gracefully."""
-
     unserializable = lambda x: x  # noqa: E731
 
     with patch("kreuzberg._utils._cache.serialize", side_effect=TypeError("Serialize error")):

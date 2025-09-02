@@ -1,5 +1,3 @@
-"""Integration tests for GMFT isolated process execution."""
-
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -13,7 +11,6 @@ from kreuzberg.exceptions import ParsingError
 
 @pytest.fixture
 def sample_pdf(tmp_path: Path) -> Path:
-    """Create a simple valid PDF file."""
     pdf_file = tmp_path / "sample.pdf"
 
     pdf_content = b"""%PDF-1.4
@@ -43,8 +40,6 @@ startxref
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Process isolation not fully supported on Windows")
 def test_gmft_isolated_enabled_by_default(sample_pdf: Path, monkeypatch: MonkeyPatch) -> None:
-    """Test that GMFT isolation is enabled by default."""
-
     monkeypatch.delenv("KREUZBERG_GMFT_ISOLATED", raising=False)
 
     # This should use isolated process by default  # ~keep
@@ -62,7 +57,6 @@ def test_gmft_isolated_enabled_by_default(sample_pdf: Path, monkeypatch: MonkeyP
 
 @pytest.mark.skipif(sys.platform == "win32", reason="Process isolation not fully supported on Windows")
 def test_gmft_isolated_can_be_disabled(sample_pdf: Path, monkeypatch: MonkeyPatch) -> None:
-    """Test that GMFT isolation can be disabled via env var."""
     monkeypatch.setenv("KREUZBERG_GMFT_ISOLATED", "false")
 
     # This should NOT use isolated process  # ~keep
@@ -79,7 +73,6 @@ def test_gmft_isolated_can_be_disabled(sample_pdf: Path, monkeypatch: MonkeyPatc
 @pytest.mark.anyio
 @pytest.mark.skipif(sys.platform == "win32", reason="Process isolation not fully supported on Windows")
 async def test_gmft_isolated_async(sample_pdf: Path) -> None:
-    """Test async version of isolated GMFT."""
     try:
         result = await extract_tables(sample_pdf, GMFTConfig(), use_isolated_process=True)
         assert isinstance(result, list)
@@ -90,7 +83,6 @@ async def test_gmft_isolated_async(sample_pdf: Path) -> None:
 
 
 def test_gmft_config_serialization() -> None:
-    """Test that GMFTConfig can be serialized for process passing."""
     config = GMFTConfig(
         verbosity=2,
         detector_base_threshold=0.8,

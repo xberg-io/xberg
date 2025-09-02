@@ -1,5 +1,3 @@
-"""Tests for error handling utilities."""
-
 from __future__ import annotations
 
 from datetime import datetime
@@ -23,14 +21,12 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def test_file(tmp_path: Path) -> Path:
-    """Create a test file."""
     file_path = tmp_path / "test.txt"
     file_path.write_text("test content")
     return file_path
 
 
 def test_create_error_context_basic() -> None:
-    """Test basic error context creation."""
     context = create_error_context(operation="test_op")
 
     assert context["operation"] == "test_op"
@@ -39,7 +35,6 @@ def test_create_error_context_basic() -> None:
 
 
 def test_create_error_context_with_file(test_file: Path) -> None:
-    """Test error context with file information."""
     context = create_error_context(
         operation="file_read",
         file_path=test_file,
@@ -53,7 +48,6 @@ def test_create_error_context_with_file(test_file: Path) -> None:
 
 
 def test_create_error_context_with_nonexistent_file() -> None:
-    """Test error context with non-existent file."""
     context = create_error_context(
         operation="file_read",
         file_path="/nonexistent/file.txt",
@@ -65,7 +59,6 @@ def test_create_error_context_with_nonexistent_file() -> None:
 
 
 def test_create_error_context_with_error() -> None:
-    """Test error context with exception."""
     try:
         raise ValueError("Test error message")
     except ValueError as e:
@@ -82,7 +75,6 @@ def test_create_error_context_with_error() -> None:
 
 
 def test_create_error_context_with_extra() -> None:
-    """Test error context with extra fields."""
     context = create_error_context(
         operation="test_op",
         custom_field="custom_value",
@@ -94,7 +86,6 @@ def test_create_error_context_with_extra() -> None:
 
 
 def test_create_error_context_with_resource_error() -> None:
-    """Test error context with resource-related error includes system info."""
     try:
         raise MemoryError("Out of memory")
     except MemoryError as e:
@@ -112,7 +103,6 @@ def test_create_error_context_with_resource_error() -> None:
 
 
 def test_create_error_context_system_info_error() -> None:
-    """Test error context when system info collection fails."""
     with patch("psutil.virtual_memory", side_effect=Exception("psutil error")):
         try:
             raise RuntimeError("Resource exhausted")
@@ -127,7 +117,6 @@ def test_create_error_context_system_info_error() -> None:
 
 
 def test_create_error_context_with_path_string() -> None:
-    """Test error context with string path."""
     import os
 
     test_path = "/some/path/file.txt"
@@ -142,8 +131,6 @@ def test_create_error_context_with_path_string() -> None:
 
 
 def test_is_transient_error() -> None:
-    """Test transient error detection."""
-
     assert is_transient_error(OSError("Resource temporarily unavailable"))
     assert is_transient_error(PermissionError("Access denied"))
     assert is_transient_error(TimeoutError("Operation timed out"))
@@ -161,8 +148,6 @@ def test_is_transient_error() -> None:
 
 
 def test_is_resource_error() -> None:
-    """Test resource error detection."""
-
     assert is_resource_error(MemoryError("Out of memory"))
     assert is_resource_error(OSError("Cannot allocate memory"))
     assert is_resource_error(OSError("Too many open files"))
@@ -179,8 +164,6 @@ def test_is_resource_error() -> None:
 
 
 def test_should_retry() -> None:
-    """Test retry logic."""
-
     error = TimeoutError("Request timed out")
     assert should_retry(error, attempt=1, max_attempts=3)
     assert should_retry(error, attempt=2, max_attempts=3)
@@ -194,7 +177,6 @@ def test_should_retry() -> None:
 
 
 def test_should_retry_max_attempts() -> None:
-    """Test retry logic respects max attempts."""
     error = TimeoutError("Timeout")
 
     assert should_retry(error, attempt=1)
@@ -206,10 +188,7 @@ def test_should_retry_max_attempts() -> None:
 
 
 class TestBatchExtractionResult:
-    """Tests for BatchExtractionResult class."""
-
     def test_init(self) -> None:
-        """Test initialization."""
         result = BatchExtractionResult()
 
         assert result.successful == []
@@ -220,7 +199,6 @@ class TestBatchExtractionResult:
         assert result.success_rate == 0.0
 
     def test_add_success(self) -> None:
-        """Test adding successful results."""
         result = BatchExtractionResult()
         result.total_count = 3
 
@@ -231,7 +209,6 @@ class TestBatchExtractionResult:
         assert result.successful == [(0, "Result 1"), (2, "Result 3")]
 
     def test_add_failure(self) -> None:
-        """Test adding failed results."""
         result = BatchExtractionResult()
         result.total_count = 3
 
@@ -250,7 +227,6 @@ class TestBatchExtractionResult:
         assert error_info["context"] == context
 
     def test_success_rate(self) -> None:
-        """Test success rate calculation."""
         result = BatchExtractionResult()
         result.total_count = 4
 
@@ -262,7 +238,6 @@ class TestBatchExtractionResult:
         assert result.success_rate == 75.0
 
     def test_get_ordered_results(self) -> None:
-        """Test getting results in original order."""
         result = BatchExtractionResult()
         result.total_count = 5
 
@@ -277,7 +252,6 @@ class TestBatchExtractionResult:
         assert ordered == ["First", None, "Third", None, "Fifth"]
 
     def test_get_summary(self) -> None:
-        """Test getting operation summary."""
         result = BatchExtractionResult()
         result.total_count = 3
 
@@ -299,7 +273,6 @@ class TestBatchExtractionResult:
         assert failure["message"] == "Bad value"
 
     def test_empty_batch_success_rate(self) -> None:
-        """Test success rate for empty batch."""
         result = BatchExtractionResult()
 
         assert result.success_rate == 0.0

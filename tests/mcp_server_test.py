@@ -30,33 +30,28 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_mcp_server_initialization() -> None:
-    """Test that the MCP server initializes correctly."""
     assert mcp.name == "Kreuzberg Text Extraction"
     assert mcp is not None
 
 
 def test_mcp_server_tools_available() -> None:
-    """Test that all expected tools are available."""
     assert callable(extract_document)
     assert callable(extract_bytes)
     assert callable(extract_simple)
 
 
 def test_mcp_server_resources_available() -> None:
-    """Test that all expected resources are available."""
     assert callable(get_default_config)
     assert callable(get_available_backends)
     assert callable(get_supported_formats)
 
 
 def test_mcp_server_prompts_available() -> None:
-    """Test that all expected prompts are available."""
     assert callable(extract_and_summarize)
     assert callable(extract_structured)
 
 
 def test_extract_simple_with_text_file(tmp_path: Path) -> None:
-    """Test simple text extraction from a file."""
     test_file = tmp_path / "test.txt"
     test_content = "Hello, World! This is a test document."
     test_file.write_text(test_content)
@@ -67,14 +62,12 @@ def test_extract_simple_with_text_file(tmp_path: Path) -> None:
 
 
 def test_extract_simple_with_pdf(searchable_pdf: Path) -> None:
-    """Test simple extraction from a PDF file."""
     result = extract_simple(file_path=str(searchable_pdf))
     assert isinstance(result, str)
     assert "Sample PDF" in result
 
 
 def test_extract_document_basic(searchable_pdf: Path) -> None:
-    """Test basic document extraction."""
     result = extract_document(file_path=str(searchable_pdf), mime_type="application/pdf")
 
     assert isinstance(result, dict)
@@ -86,7 +79,6 @@ def test_extract_document_basic(searchable_pdf: Path) -> None:
 
 
 def test_extract_document_with_chunking(searchable_pdf: Path) -> None:
-    """Test document extraction with chunking enabled."""
     result = extract_document(file_path=str(searchable_pdf), chunk_content=True, max_chars=500, max_overlap=50)
 
     assert isinstance(result, dict)
@@ -97,7 +89,6 @@ def test_extract_document_with_chunking(searchable_pdf: Path) -> None:
 
 
 def test_extract_document_with_entities(searchable_pdf: Path) -> None:
-    """Test document extraction with entity extraction."""
     result = extract_document(file_path=str(searchable_pdf), extract_entities=True)
 
     assert isinstance(result, dict)
@@ -105,7 +96,6 @@ def test_extract_document_with_entities(searchable_pdf: Path) -> None:
 
 
 def test_extract_document_with_keywords(searchable_pdf: Path) -> None:
-    """Test document extraction with keyword extraction."""
     result = extract_document(file_path=str(searchable_pdf), extract_keywords=True, keyword_count=5)
 
     assert isinstance(result, dict)
@@ -113,7 +103,6 @@ def test_extract_document_with_keywords(searchable_pdf: Path) -> None:
 
 
 def test_extract_document_with_language_detection(searchable_pdf: Path) -> None:
-    """Test document extraction with language detection."""
     result = extract_document(file_path=str(searchable_pdf), auto_detect_language=True)
 
     assert isinstance(result, dict)
@@ -121,7 +110,6 @@ def test_extract_document_with_language_detection(searchable_pdf: Path) -> None:
 
 
 def test_extract_bytes_basic(searchable_pdf: Path) -> None:
-    """Test basic bytes extraction."""
     with searchable_pdf.open("rb") as f:
         content_bytes = f.read()
 
@@ -137,7 +125,6 @@ def test_extract_bytes_basic(searchable_pdf: Path) -> None:
 
 
 def test_extract_bytes_with_options(searchable_pdf: Path) -> None:
-    """Test bytes extraction with various options."""
     with searchable_pdf.open("rb") as f:
         content_bytes = f.read()
 
@@ -162,7 +149,6 @@ def test_extract_bytes_with_options(searchable_pdf: Path) -> None:
 
 
 def test_extract_document_different_backends(searchable_pdf: Path) -> None:
-    """Test extraction with different OCR backends."""
     backends = ["tesseract", "easyocr", "paddleocr"]
 
     for backend in backends:
@@ -172,19 +158,16 @@ def test_extract_document_different_backends(searchable_pdf: Path) -> None:
 
 
 def test_extract_document_invalid_file() -> None:
-    """Test extraction with invalid file path."""
     with pytest.raises(Exception):  # noqa: B017, PT011
         extract_document(file_path="/nonexistent/file.pdf")
 
 
 def test_extract_bytes_invalid_base64() -> None:
-    """Test extraction with invalid base64 content."""
     with pytest.raises(Exception):  # noqa: B017, PT011
         extract_bytes(content_base64="invalid_base64", mime_type="application/pdf")
 
 
 def test_get_default_config() -> None:
-    """Test getting default configuration."""
     result = get_default_config()
     assert isinstance(result, str)
     assert "force_ocr" in result
@@ -193,7 +176,6 @@ def test_get_default_config() -> None:
 
 
 def test_get_available_backends() -> None:
-    """Test getting available OCR backends."""
     result = get_available_backends()
     assert isinstance(result, str)
     assert "tesseract" in result
@@ -202,7 +184,6 @@ def test_get_available_backends() -> None:
 
 
 def test_get_supported_formats() -> None:
-    """Test getting supported file formats."""
     result = get_supported_formats()
     assert isinstance(result, str)
     assert "PDF" in result
@@ -211,14 +192,12 @@ def test_get_supported_formats() -> None:
 
 
 def test_get_invalid_resource() -> None:
-    """Test getting invalid resource."""
     assert callable(get_default_config)
     assert callable(get_available_backends)
     assert callable(get_supported_formats)
 
 
 def test_extract_and_summarize_prompt(searchable_pdf: Path) -> None:
-    """Test extract and summarize prompt."""
     result = extract_and_summarize(file_path=str(searchable_pdf))
     assert isinstance(result, list)
     assert len(result) > 0
@@ -231,7 +210,6 @@ def test_extract_and_summarize_prompt(searchable_pdf: Path) -> None:
 
 
 def test_extract_structured_prompt(searchable_pdf: Path) -> None:
-    """Test extract structured prompt."""
     with (
         patch("kreuzberg._entity_extraction.extract_entities") as mock_entities,
         patch("kreuzberg._entity_extraction.extract_keywords") as mock_keywords,
@@ -251,25 +229,21 @@ def test_extract_structured_prompt(searchable_pdf: Path) -> None:
 
 
 def test_extract_and_summarize_with_invalid_file() -> None:
-    """Test extract and summarize prompt with invalid file."""
     with pytest.raises(Exception):  # noqa: B017, PT011
         extract_and_summarize(file_path="/nonexistent/file.pdf")
 
 
 def test_extract_structured_with_invalid_file() -> None:
-    """Test extract structured prompt with invalid file."""
     with pytest.raises(Exception):  # noqa: B017, PT011
         extract_structured(file_path="/nonexistent/file.pdf")
 
 
 def test_invalid_prompt() -> None:
-    """Test getting invalid prompt."""
     assert callable(extract_and_summarize)
     assert callable(extract_structured)
 
 
 def test_full_workflow_pdf(searchable_pdf: Path) -> None:
-    """Test complete workflow with PDF file."""
     simple_result = extract_simple(file_path=str(searchable_pdf))
     assert isinstance(simple_result, str)
     assert "Sample PDF" in simple_result
@@ -294,7 +268,6 @@ def test_full_workflow_pdf(searchable_pdf: Path) -> None:
 
 
 def test_multiple_file_types(searchable_pdf: Path, docx_document: Path) -> None:
-    """Test extraction with multiple file types."""
     pdf_result = extract_simple(file_path=str(searchable_pdf))
     assert isinstance(pdf_result, str)
     assert len(pdf_result) > 0
@@ -307,7 +280,6 @@ def test_multiple_file_types(searchable_pdf: Path, docx_document: Path) -> None:
 
 
 def test_bytes_vs_file_consistency(searchable_pdf: Path) -> None:
-    """Test that bytes and file extraction produce consistent results."""
     file_result = extract_simple(file_path=str(searchable_pdf))
 
     with searchable_pdf.open("rb") as f:
@@ -320,7 +292,6 @@ def test_bytes_vs_file_consistency(searchable_pdf: Path) -> None:
 
 
 def test_configuration_consistency() -> None:
-    """Test that configuration resources are consistent."""
     default_config = get_default_config()
     backends = get_available_backends()
     formats = get_supported_formats()
@@ -335,7 +306,6 @@ def test_configuration_consistency() -> None:
 
 
 def test_error_handling() -> None:
-    """Test error handling across different components."""
     with pytest.raises(Exception):  # noqa: B017, PT011
         extract_simple(file_path="/nonexistent/file.pdf")
 
@@ -351,7 +321,6 @@ def test_error_handling() -> None:
 
 
 def test_create_config_with_overrides_no_discovered_config(tmp_path: Path) -> None:
-    """Test config creation when no config file is discovered."""
     from kreuzberg._mcp.server import _create_config_with_overrides
 
     with patch("kreuzberg._mcp.server.try_discover_config", return_value=None):
@@ -366,7 +335,6 @@ def test_create_config_with_overrides_no_discovered_config(tmp_path: Path) -> No
 
 
 def test_create_config_with_overrides_discovered_config(tmp_path: Path) -> None:
-    """Test config creation with discovered config as base."""
     from kreuzberg import ExtractionConfig
     from kreuzberg._mcp.server import _create_config_with_overrides
 
@@ -389,7 +357,6 @@ def test_create_config_with_overrides_discovered_config(tmp_path: Path) -> None:
 
 
 def test_extract_document_with_tables(tmp_path: Path) -> None:
-    """Test document extraction with table extraction enabled."""
     test_file = tmp_path / "test.txt"
     test_file.write_text("Simple test content")
 
@@ -418,7 +385,6 @@ def test_extract_document_with_tables(tmp_path: Path) -> None:
 
 
 def test_extract_document_all_parameters(tmp_path: Path) -> None:
-    """Test document extraction with all possible parameters."""
     test_file = tmp_path / "test.txt"
     test_file.write_text("Test content for comprehensive parameter testing.")
 
@@ -463,7 +429,6 @@ def test_extract_document_all_parameters(tmp_path: Path) -> None:
 
 
 def test_extract_bytes_all_parameters() -> None:
-    """Test bytes extraction with all possible parameters."""
     test_content = "Test content for comprehensive bytes parameter testing."
     content_bytes = test_content.encode("utf-8")
     content_base64 = base64.b64encode(content_bytes).decode()
@@ -508,7 +473,6 @@ def test_extract_bytes_all_parameters() -> None:
 
 
 def test_extract_bytes_base64_edge_cases() -> None:
-    """Test bytes extraction with edge case base64 inputs."""
     empty_base64 = base64.b64encode(b"").decode()
     result = extract_bytes(content_base64=empty_base64, mime_type="text/plain")
     assert isinstance(result, dict)
@@ -521,7 +485,6 @@ def test_extract_bytes_base64_edge_cases() -> None:
 
 
 def test_extract_simple_with_mime_type_override(tmp_path: Path) -> None:
-    """Test simple extraction with explicit MIME type."""
     test_file = tmp_path / "test.bin"
     test_content = "This is actually text content"
     test_file.write_text(test_content)
@@ -532,7 +495,6 @@ def test_extract_simple_with_mime_type_override(tmp_path: Path) -> None:
 
 
 def test_get_discovered_config_with_config() -> None:
-    """Test getting discovered config when config exists."""
     from kreuzberg import ExtractionConfig
     from kreuzberg._mcp.server import get_discovered_config
 
@@ -548,7 +510,6 @@ def test_get_discovered_config_with_config() -> None:
 
 
 def test_get_discovered_config_no_config() -> None:
-    """Test getting discovered config when no config exists."""
     from kreuzberg._mcp.server import get_discovered_config
 
     with patch("kreuzberg._mcp.server.try_discover_config", return_value=None):
@@ -558,7 +519,6 @@ def test_get_discovered_config_no_config() -> None:
 
 
 def test_extract_structured_with_entities_and_keywords(searchable_pdf: Path) -> None:
-    """Test structured extraction with mocked entities and keywords."""
     from kreuzberg._types import Entity
 
     mock_entities = [
@@ -584,7 +544,6 @@ def test_extract_structured_with_entities_and_keywords(searchable_pdf: Path) -> 
 
 
 def test_extract_structured_with_tables(tmp_path: Path) -> None:
-    """Test structured extraction when tables are found."""
     test_file = tmp_path / "test.txt"
     test_file.write_text("Simple test content")
 
@@ -619,7 +578,6 @@ def test_extract_structured_with_tables(tmp_path: Path) -> None:
 
 
 def test_extract_and_summarize_content_length(tmp_path: Path) -> None:
-    """Test extract and summarize with different content lengths."""
     short_file = tmp_path / "short.txt"
     short_file.write_text("Short.")
 
@@ -639,7 +597,6 @@ def test_extract_and_summarize_content_length(tmp_path: Path) -> None:
 
 
 def test_extract_document_with_special_characters(tmp_path: Path) -> None:
-    """Test document extraction with special characters."""
     test_file = tmp_path / "special.txt"
     special_content = "Special chars: àáâãäåæçèéêë ñ ü ß 中文 🚀"
     test_file.write_text(special_content, encoding="utf-8")
@@ -653,7 +610,6 @@ def test_extract_document_with_special_characters(tmp_path: Path) -> None:
 
 
 def test_extract_bytes_with_special_mime_types() -> None:
-    """Test bytes extraction with various MIME types."""
     test_content = "Test content with special handling"
     test_bytes = test_content.encode("utf-8")
     content_base64 = base64.b64encode(test_bytes).decode()
@@ -668,7 +624,6 @@ def test_extract_bytes_with_special_mime_types() -> None:
 
 
 def test_extract_document_ocr_backend_switching(tmp_path: Path) -> None:
-    """Test switching between different OCR backends."""
     test_file = tmp_path / "test.txt"
     test_file.write_text("OCR backend test content")
 
@@ -685,7 +640,6 @@ def test_extract_document_ocr_backend_switching(tmp_path: Path) -> None:
 
 
 def test_mcp_server_tool_parameter_validation() -> None:
-    """Test parameter validation for MCP server tools."""
     with pytest.raises(Exception):  # noqa: B017, PT011
         extract_document(
             file_path="/nonexistent",
@@ -694,7 +648,6 @@ def test_mcp_server_tool_parameter_validation() -> None:
 
 
 def test_configuration_resource_json_validity() -> None:
-    """Test that configuration resources return valid JSON."""
     from kreuzberg._mcp.server import get_discovered_config
 
     default_config = get_default_config()
@@ -713,7 +666,6 @@ def test_configuration_resource_json_validity() -> None:
 
 
 def test_extract_multiple_files_consistency(tmp_path: Path) -> None:
-    """Test extraction consistency across multiple files."""
     files = []
     for i in range(3):
         test_file = tmp_path / f"test_{i}.txt"
@@ -731,7 +683,6 @@ def test_extract_multiple_files_consistency(tmp_path: Path) -> None:
 
 
 def test_resource_availability_consistency() -> None:
-    """Test that resource functions are consistently available."""
     from kreuzberg._mcp.server import (
         get_available_backends,
         get_default_config,
@@ -756,8 +707,6 @@ def test_resource_availability_consistency() -> None:
 
 
 def test_prompt_functions_text_content_structure() -> None:
-    """Test that prompt functions return properly structured TextContent."""
-
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
         f.write("Test content for prompt functions")
         temp_file = f.name
@@ -786,7 +735,6 @@ def test_prompt_functions_text_content_structure() -> None:
 
 
 def test_config_merging_priority() -> None:
-    """Test that tool parameters take priority over discovered config."""
     from kreuzberg import ExtractionConfig
     from kreuzberg._mcp.server import _create_config_with_overrides
 

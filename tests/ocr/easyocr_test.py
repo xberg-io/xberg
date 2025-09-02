@@ -373,7 +373,6 @@ async def test_process_easyocr_result_full_format(backend: EasyOCRBackend) -> No
 
 
 def test_is_gpu_available_with_torch() -> None:
-    """Test GPU availability check when torch is available - covers lines 318-321."""
     mock_torch = Mock()
     mock_torch.cuda.is_available.return_value = True
 
@@ -384,14 +383,12 @@ def test_is_gpu_available_with_torch() -> None:
 
 
 def test_is_gpu_available_without_torch() -> None:
-    """Test GPU availability check when torch is not available - covers lines 318-323."""
     with patch("builtins.__import__", side_effect=ImportError("No module named 'torch'")):
         result = EasyOCRBackend._is_gpu_available()
         assert result is False
 
 
 def test_resolve_device_config_deprecated_use_gpu_true() -> None:
-    """Test deprecated use_gpu=True parameter - covers lines 388-395."""
     with pytest.warns(DeprecationWarning, match="The 'use_gpu' parameter is deprecated"):
         device_info = EasyOCRBackend._resolve_device_config(use_gpu=True, device="auto")
 
@@ -399,7 +396,6 @@ def test_resolve_device_config_deprecated_use_gpu_true() -> None:
 
 
 def test_resolve_device_config_deprecated_use_gpu_conflicts() -> None:
-    """Test deprecated use_gpu with conflicting device parameter - covers line 397."""
     with pytest.warns(DeprecationWarning, match="Both 'use_gpu' and 'device' parameters specified"):
         device_info = EasyOCRBackend._resolve_device_config(use_gpu=True, device="cpu")
 
@@ -407,7 +403,6 @@ def test_resolve_device_config_deprecated_use_gpu_conflicts() -> None:
 
 
 def test_resolve_device_config_validation_error_fallback() -> None:
-    """Test ValidationError fallback for deprecated use_gpu=False - covers lines 412-415."""
     with patch(
         "kreuzberg._utils._device.validate_device_request", side_effect=ValidationError("Device validation failed")
     ):
@@ -417,22 +412,16 @@ def test_resolve_device_config_validation_error_fallback() -> None:
 
 
 def test_resolve_device_config_validation_error_reraise_other_cases() -> None:
-    """Test ValidationError is re-raised for non-fallback cases - covers line 416 (raise)."""
-
     with pytest.raises(ValidationError, match="Requested device.*not available"):
         EasyOCRBackend._resolve_device_config(use_gpu=True, device="cuda", fallback_to_cpu=False)
 
 
 def test_resolve_device_config_validation_error_reraise() -> None:
-    """Test ValidationError is re-raised when not using deprecated fallback."""
-
     with pytest.raises(ValidationError, match="Requested device 'invalid' is not available"):
         EasyOCRBackend._resolve_device_config(use_gpu=True, device="invalid", fallback_to_cpu=False)
 
 
 def test_process_results_edge_cases() -> None:
-    """Test text processing edge cases - covers lines 279, 295."""
-
     mock_results = [
         ([[10, 10], [50, 10], [50, 30], [10, 30]], "Hello", 0.9),
         ([[60, 12], [100, 12], [100, 32], [60, 32]], "World", 0.8),
@@ -448,8 +437,6 @@ def test_process_results_edge_cases() -> None:
 
 @pytest.mark.anyio
 async def test_init_easyocr_already_initialized() -> None:
-    """Test early return when reader already exists - covers line 337."""
-
     original_reader = EasyOCRBackend._reader
     EasyOCRBackend._reader = Mock()
 
@@ -463,7 +450,6 @@ async def test_init_easyocr_already_initialized() -> None:
 
 
 def test_process_image_sync(backend: EasyOCRBackend) -> None:
-    """Test sync image processing."""
     from unittest.mock import Mock, patch
 
     image = Image.new("RGB", (100, 100))
@@ -481,7 +467,6 @@ def test_process_image_sync(backend: EasyOCRBackend) -> None:
 
 
 def test_process_file_sync(backend: EasyOCRBackend, tmp_path: Path) -> None:
-    """Test sync file processing."""
     from unittest.mock import Mock, patch
 
     test_image = Image.new("RGB", (100, 100))

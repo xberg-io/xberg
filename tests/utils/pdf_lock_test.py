@@ -1,5 +1,3 @@
-"""Tests for PDF lock utilities."""
-
 from __future__ import annotations
 
 import hashlib
@@ -19,7 +17,6 @@ from kreuzberg._utils._pdf_lock import (
 
 
 def test_get_file_key_string_path() -> None:
-    """Test _get_file_key with string path."""
     path = "/tmp/test.pdf"
     key = _get_file_key(path)
 
@@ -29,7 +26,6 @@ def test_get_file_key_string_path() -> None:
 
 
 def test_get_file_key_path_object() -> None:
-    """Test _get_file_key with Path object."""
     path = Path("/tmp/test.pdf")
     key = _get_file_key(path)
 
@@ -39,7 +35,6 @@ def test_get_file_key_path_object() -> None:
 
 
 def test_get_file_key_consistent() -> None:
-    """Test that _get_file_key returns consistent results."""
     path1 = "/tmp/test.pdf"
     path2 = Path("/tmp/test.pdf")
 
@@ -50,7 +45,6 @@ def test_get_file_key_consistent() -> None:
 
 
 def test_get_file_lock_creates_new_lock() -> None:
-    """Test _get_file_lock creates new lock for new file."""
     path = "/tmp/unique_test_file.pdf"
     lock = _get_file_lock(path)
 
@@ -58,7 +52,6 @@ def test_get_file_lock_creates_new_lock() -> None:
 
 
 def test_get_file_lock_reuses_existing_lock() -> None:
-    """Test _get_file_lock reuses existing lock for same file."""
     path = "/tmp/test_reuse.pdf"
 
     lock1 = _get_file_lock(path)
@@ -68,7 +61,6 @@ def test_get_file_lock_reuses_existing_lock() -> None:
 
 
 def test_get_file_lock_different_files() -> None:
-    """Test _get_file_lock creates different locks for different files."""
     path1 = "/tmp/file1.pdf"
     path2 = "/tmp/file2.pdf"
 
@@ -79,8 +71,6 @@ def test_get_file_lock_different_files() -> None:
 
 
 def test_pypdfium_lock_context_manager() -> None:
-    """Test pypdfium_lock context manager."""
-
     execution_order = []
 
     def thread_func(thread_id: int) -> None:
@@ -111,7 +101,6 @@ def test_pypdfium_lock_context_manager() -> None:
 
 
 def test_pypdfium_file_lock_context_manager(tmp_path: Path) -> None:
-    """Test pypdfium_file_lock context manager."""
     test_file = tmp_path / "test.pdf"
     test_file.write_bytes(b"fake pdf content")
 
@@ -137,7 +126,6 @@ def test_pypdfium_file_lock_context_manager(tmp_path: Path) -> None:
 
 
 def test_pypdfium_file_lock_different_files(tmp_path: Path) -> None:
-    """Test pypdfium_file_lock allows concurrent access to different files."""
     file1 = tmp_path / "file1.pdf"
     file2 = tmp_path / "file2.pdf"
     file1.write_bytes(b"content1")
@@ -166,7 +154,6 @@ def test_pypdfium_file_lock_different_files(tmp_path: Path) -> None:
 
 
 def test_with_pypdfium_lock_decorator() -> None:
-    """Test with_pypdfium_lock decorator."""
     execution_order = []
 
     @with_pypdfium_lock
@@ -198,8 +185,6 @@ def test_with_pypdfium_lock_decorator() -> None:
 
 
 def test_with_pypdfium_lock_preserves_return_value() -> None:
-    """Test that decorator preserves function return value."""
-
     @with_pypdfium_lock
     def test_function(x: int, y: int) -> int:
         return x + y
@@ -209,8 +194,6 @@ def test_with_pypdfium_lock_preserves_return_value() -> None:
 
 
 def test_with_pypdfium_lock_preserves_exceptions() -> None:
-    """Test that decorator preserves exceptions."""
-
     @with_pypdfium_lock
     def test_function() -> None:
         raise ValueError("Test error")
@@ -220,7 +203,6 @@ def test_with_pypdfium_lock_preserves_exceptions() -> None:
 
 
 def test_file_lock_cache_cleanup() -> None:
-    """Test that file lock cache can be cleaned up by GC."""
     from kreuzberg._utils._pdf_lock import _FILE_LOCKS_CACHE
 
     initial_size = len(_FILE_LOCKS_CACHE)

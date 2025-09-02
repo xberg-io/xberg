@@ -104,7 +104,6 @@ def test_extract_keywords_missing_keybert(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 def test_spacy_entity_extraction_config_defaults() -> None:
-    """Test SpacyEntityExtractionConfig default values."""
     config = SpacyEntityExtractionConfig()
     assert config.language_models is not None
     assert isinstance(config.language_models, tuple)
@@ -114,7 +113,6 @@ def test_spacy_entity_extraction_config_defaults() -> None:
 
 
 def test_spacy_entity_extraction_config_custom_models() -> None:
-    """Test SpacyEntityExtractionConfig with custom language models."""
     custom_models = {"en": "en_core_web_lg", "fr": "fr_core_news_sm"}
     config = SpacyEntityExtractionConfig(language_models=custom_models)
     assert isinstance(config.language_models, tuple)
@@ -122,7 +120,6 @@ def test_spacy_entity_extraction_config_custom_models() -> None:
 
 
 def test_spacy_entity_extraction_config_get_model_for_language() -> None:
-    """Test get_model_for_language method."""
     config = SpacyEntityExtractionConfig()
 
     assert config.get_model_for_language("en") == "en_core_web_sm"
@@ -136,7 +133,6 @@ def test_spacy_entity_extraction_config_get_model_for_language() -> None:
 
 
 def test_spacy_entity_extraction_config_get_fallback_model() -> None:
-    """Test get_fallback_model method."""
     config_with_fallback = SpacyEntityExtractionConfig(fallback_to_multilingual=True)
     assert config_with_fallback.get_fallback_model() == "xx_ent_wiki_sm"
 
@@ -145,13 +141,11 @@ def test_spacy_entity_extraction_config_get_fallback_model() -> None:
 
 
 def test_spacy_entity_extraction_config_empty_models() -> None:
-    """Test SpacyEntityExtractionConfig with empty language models."""
     config = SpacyEntityExtractionConfig(language_models={})
     assert config.get_model_for_language("en") is None
 
 
 def test_spacy_entity_extraction_config_model_cache_dir() -> None:
-    """Test SpacyEntityExtractionConfig with model cache directory."""
     import tempfile
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -160,7 +154,6 @@ def test_spacy_entity_extraction_config_model_cache_dir() -> None:
 
 
 def test_select_spacy_model_fallback() -> None:
-    """Test _select_spacy_model with fallback behavior."""
     config = SpacyEntityExtractionConfig(language_models={"en": "en_core_web_sm"}, fallback_to_multilingual=True)
 
     model = ee._select_spacy_model(["en"], config)
@@ -177,20 +170,16 @@ def test_select_spacy_model_fallback() -> None:
 
 
 def test_extract_entities_empty_input() -> None:
-    """Test extract_entities with empty input."""
     result = ee.extract_entities("", entity_types=["PERSON"])
     assert result == []
 
 
 def test_extract_entities_no_entities_types() -> None:
-    """Test extract_entities with no entity types specified."""
     result = ee.extract_entities(SAMPLE_TEXT, entity_types=())
     assert isinstance(result, list)
 
 
 def test_extract_keywords_with_default_count(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test extract_keywords with default count."""
-
     class DummyModel:
         def extract_keywords(self, _text: str, top_n: int = 10) -> list[tuple[str, float]]:
             return [("keyword", 0.5)] * min(top_n, 3)
@@ -204,8 +193,6 @@ def test_extract_keywords_with_default_count(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_extract_keywords_empty_input(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Test extract_keywords with empty input."""
-
     class DummyModel:
         def extract_keywords(self, _text: str, top_n: int = 10) -> list[tuple[str, float]]:
             return []
@@ -219,10 +206,7 @@ def test_extract_keywords_empty_input(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class TestSpacyEntityExtractionConfigComprehensive:
-    """Test comprehensive SpacyEntityExtractionConfig scenarios."""
-
     def test_spacy_config_tuple_language_models(self) -> None:
-        """Test SpacyEntityExtractionConfig with tuple language models."""
         models_tuple = (("en", "en_core_web_sm"), ("fr", "fr_core_news_sm"))
         config = SpacyEntityExtractionConfig(language_models=models_tuple)
 
@@ -230,7 +214,6 @@ class TestSpacyEntityExtractionConfigComprehensive:
         assert config.language_models == models_tuple
 
     def test_spacy_config_default_language_models_comprehensive(self) -> None:
-        """Test that default language models include all expected languages."""
         config = SpacyEntityExtractionConfig()
         models_dict = (
             dict(config.language_models) if isinstance(config.language_models, tuple) else config.language_models
@@ -243,7 +226,6 @@ class TestSpacyEntityExtractionConfigComprehensive:
             assert models_dict[lang].endswith("_sm")
 
     def test_spacy_config_get_model_complex_language_codes(self) -> None:
-        """Test get_model_for_language with complex language codes."""
         config = SpacyEntityExtractionConfig()
 
         assert config.get_model_for_language("en-US-POSIX") == "en_core_web_sm"
@@ -253,7 +235,6 @@ class TestSpacyEntityExtractionConfigComprehensive:
         assert config.get_model_for_language("En-Us") == "en_core_web_sm"
 
     def test_spacy_config_no_language_models(self) -> None:
-        """Test SpacyEntityExtractionConfig behavior when language_models is None after post_init."""
         config = SpacyEntityExtractionConfig()
         object.__setattr__(config, "language_models", None)
 
@@ -261,7 +242,6 @@ class TestSpacyEntityExtractionConfigComprehensive:
         assert config.get_model_for_language("any") is None
 
     def test_spacy_config_pathlib_model_cache_dir(self) -> None:
-        """Test SpacyEntityExtractionConfig with pathlib.Path model cache directory."""
         import tempfile
         from pathlib import Path
 
@@ -272,11 +252,7 @@ class TestSpacyEntityExtractionConfigComprehensive:
 
 
 class TestEntityExtractionEdgeCases:
-    """Test entity extraction edge cases."""
-
     def test_extract_entities_very_long_text(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_entities with text longer than max_doc_length."""
-
         class DummyDoc:
             def __init__(self, text: str):
                 self.ents: list[Any] = []
@@ -301,8 +277,6 @@ class TestEntityExtractionEdgeCases:
         assert isinstance(result, list)
 
     def test_extract_entities_custom_max_doc_length(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_entities with custom max_doc_length."""
-
         class DummyDoc:
             def __init__(self, text: str):
                 self.ents: list[Any] = []
@@ -328,7 +302,6 @@ class TestEntityExtractionEdgeCases:
         assert isinstance(result, list)
 
     def test_extract_entities_multiple_custom_patterns(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_entities with multiple custom patterns."""
         mock_spacy = MagicMock()
         monkeypatch.setitem(sys.modules, "spacy", mock_spacy)
 
@@ -349,7 +322,6 @@ class TestEntityExtractionEdgeCases:
         assert entity_types == {"INVOICE_ID", "DATE", "EMAIL", "PHONE"}
 
     def test_extract_entities_overlapping_patterns(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_entities with overlapping custom patterns."""
         mock_spacy = MagicMock()
         monkeypatch.setitem(sys.modules, "spacy", mock_spacy)
 
@@ -369,7 +341,6 @@ class TestEntityExtractionEdgeCases:
         assert entity_types == {"EMAIL", "DOMAIN", "TLD"}
 
     def test_extract_entities_spacy_model_loading_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_entities when spaCy model loading fails."""
         mock_spacy = MagicMock()
         monkeypatch.setitem(sys.modules, "spacy", mock_spacy)
 
@@ -382,7 +353,6 @@ class TestEntityExtractionEdgeCases:
         assert result == []
 
     def test_extract_entities_no_model_selected(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_entities when no model is selected."""
         mock_spacy = MagicMock()
         monkeypatch.setitem(sys.modules, "spacy", mock_spacy)
 
@@ -395,8 +365,6 @@ class TestEntityExtractionEdgeCases:
         assert result == []
 
     def test_extract_entities_case_insensitive_entity_types(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_entities with case-insensitive entity type matching."""
-
         class DummyEnt:
             def __init__(self, label: str, text: str, start_char: int, end_char: int):
                 self.label_ = label
@@ -432,31 +400,25 @@ class TestEntityExtractionEdgeCases:
 
 
 class TestSpacyModelSelectionComprehensive:
-    """Test comprehensive spaCy model selection scenarios."""
-
     def test_select_spacy_model_empty_languages(self) -> None:
-        """Test _select_spacy_model with empty languages list."""
         config = SpacyEntityExtractionConfig()
 
         model = ee._select_spacy_model([], config)
         assert model == "en_core_web_sm"
 
     def test_select_spacy_model_multiple_languages_first_match(self) -> None:
-        """Test _select_spacy_model returns first matching language."""
         config = SpacyEntityExtractionConfig()
 
         model = ee._select_spacy_model(["unknown", "de", "fr"], config)
         assert model == "de_core_news_sm"
 
     def test_select_spacy_model_base_language_fallback(self) -> None:
-        """Test _select_spacy_model with base language fallback."""
         config = SpacyEntityExtractionConfig()
 
         model = ee._select_spacy_model(["de-AT"], config)
         assert model == "de_core_news_sm"
 
     def test_select_spacy_model_no_fallback_when_disabled(self) -> None:
-        """Test _select_spacy_model without fallback when disabled."""
         config = SpacyEntityExtractionConfig(fallback_to_multilingual=False)
 
         model = ee._select_spacy_model(["unknown"], config)
@@ -464,10 +426,7 @@ class TestSpacyModelSelectionComprehensive:
 
 
 class TestSpacyModelLoadingComprehensive:
-    """Test comprehensive spaCy model loading scenarios."""
-
     def test_load_spacy_model_with_cache_dir(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test _load_spacy_model with custom cache directory."""
         import os
         import tempfile
 
@@ -498,8 +457,6 @@ class TestSpacyModelLoadingComprehensive:
                     del os.environ["SPACY_DATA"]
 
     def test_load_spacy_model_os_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test _load_spacy_model with OSError."""
-
         def mock_spacy_load_error(model_name: str) -> None:
             raise OSError("Model not found")
 
@@ -512,8 +469,6 @@ class TestSpacyModelLoadingComprehensive:
         assert result is None
 
     def test_load_spacy_model_import_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test _load_spacy_model with ImportError during load."""
-
         def mock_spacy_load_error(model_name: str) -> None:
             raise ImportError("spaCy import error")
 
@@ -527,11 +482,7 @@ class TestSpacyModelLoadingComprehensive:
 
 
 class TestKeywordExtractionComprehensive:
-    """Test comprehensive keyword extraction scenarios."""
-
     def test_extract_keywords_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_keywords with RuntimeError from KeyBERT."""
-
         class DummyModel:
             def extract_keywords(self, _text: str, top_n: int = 10) -> None:
                 raise RuntimeError("KeyBERT processing error")
@@ -544,8 +495,6 @@ class TestKeywordExtractionComprehensive:
         assert result == []
 
     def test_extract_keywords_os_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_keywords with OSError from KeyBERT."""
-
         class DummyModel:
             def extract_keywords(self, _text: str, top_n: int = 10) -> None:
                 raise OSError("Model file not found")
@@ -558,8 +507,6 @@ class TestKeywordExtractionComprehensive:
         assert result == []
 
     def test_extract_keywords_value_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_keywords with ValueError from KeyBERT."""
-
         class DummyModel:
             def extract_keywords(self, _text: str, top_n: int = 10) -> None:
                 raise ValueError("Invalid input parameters")
@@ -572,8 +519,6 @@ class TestKeywordExtractionComprehensive:
         assert result == []
 
     def test_extract_keywords_zero_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_keywords with zero keyword count."""
-
         class DummyModel:
             def extract_keywords(self, _text: str, top_n: int = 10) -> list[tuple[str, float]]:
                 return [] if top_n == 0 else [("keyword", 0.5)]
@@ -586,8 +531,6 @@ class TestKeywordExtractionComprehensive:
         assert result == []
 
     def test_extract_keywords_float_conversion(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test extract_keywords properly converts scores to float."""
-
         class DummyModel:
             def extract_keywords(self, _text: str, top_n: int = 10) -> list[tuple[str, Any]]:
                 return [
@@ -608,10 +551,7 @@ class TestKeywordExtractionComprehensive:
 
 
 class TestEntityExtractionConfigurationEdgeCases:
-    """Test entity extraction configuration edge cases."""
-
     def test_spacy_config_post_init_dict_conversion(self) -> None:
-        """Test SpacyEntityExtractionConfig __post_init__ dict to tuple conversion."""
         models_dict = {"fr": "fr_core_news_sm", "en": "en_core_web_sm", "de": "de_core_news_sm"}
         config = SpacyEntityExtractionConfig(language_models=models_dict)
 
@@ -620,7 +560,6 @@ class TestEntityExtractionConfigurationEdgeCases:
         assert config.language_models == expected_tuple
 
     def test_spacy_config_post_init_none_to_defaults(self) -> None:
-        """Test SpacyEntityExtractionConfig __post_init__ None to defaults conversion."""
         config = SpacyEntityExtractionConfig(language_models=None)
 
         assert config.language_models is not None
@@ -628,7 +567,6 @@ class TestEntityExtractionConfigurationEdgeCases:
         assert len(config.language_models) > 0
 
     def test_spacy_config_immutability(self) -> None:
-        """Test SpacyEntityExtractionConfig is properly frozen."""
         config = SpacyEntityExtractionConfig()
 
         with pytest.raises(AttributeError):

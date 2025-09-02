@@ -1,5 +1,3 @@
-"""Tests for HTML to Markdown configuration."""
-
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -12,7 +10,6 @@ from kreuzberg._types import HTMLToMarkdownConfig
 
 
 def test_html_to_markdown_config_defaults() -> None:
-    """Test that HTMLToMarkdownConfig has correct defaults."""
     config = HTMLToMarkdownConfig()
     assert config.preprocess_html is True
     assert config.preprocessing_preset == "aggressive"
@@ -23,7 +20,6 @@ def test_html_to_markdown_config_defaults() -> None:
 
 
 def test_html_to_markdown_config_to_dict() -> None:
-    """Test conversion to dictionary excludes None values."""
     config = HTMLToMarkdownConfig(
         heading_style="atx",
         wrap=True,
@@ -39,7 +35,6 @@ def test_html_to_markdown_config_to_dict() -> None:
 
 
 def test_html_extraction_with_custom_config() -> None:
-    """Test HTML extraction with custom configuration."""
     html_content = b"""
     <html>
     <body>
@@ -63,7 +58,6 @@ def test_html_extraction_with_custom_config() -> None:
 
 
 def test_html_extraction_with_default_config() -> None:
-    """Test HTML extraction with default configuration."""
     html_content = b"""
     <html>
     <body>
@@ -80,7 +74,6 @@ def test_html_extraction_with_default_config() -> None:
 
 
 def test_html_to_markdown_config_from_toml() -> None:
-    """Test loading HTML-to-Markdown config from TOML file."""
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "kreuzberg.toml"
         config_file.write_text("""
@@ -106,7 +99,6 @@ preprocessing_preset = "minimal"
 
 
 def test_html_to_markdown_config_partial_toml() -> None:
-    """Test loading partial HTML-to-Markdown config from TOML."""
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "kreuzberg.toml"
         config_file.write_text("""
@@ -136,7 +128,6 @@ bullets = "-"
     ],
 )
 def test_html_extraction_with_heading_styles(heading_style: Any, expected_marker: str) -> None:
-    """Test HTML extraction with different heading styles."""
     html_content = b"<html><body><h1>Main Title</h1></body></html>"
 
     config = ExtractionConfig(html_to_markdown_config=HTMLToMarkdownConfig(heading_style=heading_style))
@@ -158,7 +149,6 @@ def test_html_extraction_with_heading_styles(heading_style: Any, expected_marker
     ],
 )
 def test_preprocessing_presets(preprocessing_preset: Any, should_remove_nav: bool) -> None:
-    """Test different preprocessing presets."""
     html_content = b"""
     <html>
     <body>
@@ -186,13 +176,11 @@ def test_preprocessing_presets(preprocessing_preset: Any, should_remove_nav: boo
 
 
 def test_html_to_markdown_config_with_invalid_literal() -> None:
-    """Test that invalid literal values are handled properly."""
     config = HTMLToMarkdownConfig(heading_style="invalid_style")  # type: ignore[arg-type]
     assert config.heading_style == "invalid_style"  # type: ignore[comparison-overlap]
 
 
 def test_config_merging() -> None:
-    """Test that programmatic config overrides file config."""
     with tempfile.TemporaryDirectory() as tmpdir:
         config_file = Path(tmpdir) / "kreuzberg.toml"
         config_file.write_text("""
@@ -220,7 +208,6 @@ wrap = false
 
 
 def test_html_to_markdown_config_immutability() -> None:
-    """Test that HTMLToMarkdownConfig is immutable (frozen)."""
     config = HTMLToMarkdownConfig()
 
     with pytest.raises(AttributeError):

@@ -10,21 +10,18 @@ def test_kreuzberg_error_serialize_context_with_bytes() -> None:
 
 
 def test_kreuzberg_error_serialize_context_with_list() -> None:
-    """Test serialization of list context."""
     error = KreuzbergError("Test error")
     serialized = error._serialize_context([b"bytes", "string", 123])
     assert serialized == ["bytes", "string", 123]
 
 
 def test_kreuzberg_error_serialize_context_with_tuple() -> None:
-    """Test serialization of tuple context."""
     error = KreuzbergError("Test error")
     serialized = error._serialize_context((b"bytes", "string", 123))
     assert serialized == ["bytes", "string", 123]
 
 
 def test_kreuzberg_error_serialize_context_with_exception() -> None:
-    """Test serialization of exception context."""
     error = KreuzbergError("Test error")
     inner_exception = ValueError("Inner error")
     serialized = error._serialize_context(inner_exception)
@@ -35,7 +32,6 @@ def test_kreuzberg_error_serialize_context_with_exception() -> None:
 
 
 def test_kreuzberg_error_serialize_context_nested() -> None:
-    """Test serialization of nested context structures."""
     error = KreuzbergError("Test error")
     context = {
         "list": [b"bytes", Exception("test")],
@@ -52,7 +48,6 @@ def test_kreuzberg_error_serialize_context_nested() -> None:
 
 
 def test_kreuzberg_error_str_with_context() -> None:
-    """Test string representation with context."""
     context = {"error_code": 500, "details": "Server error"}
     error = KreuzbergError("Something went wrong", context=context)
     error_str = str(error)
@@ -63,7 +58,6 @@ def test_kreuzberg_error_str_with_context() -> None:
 
 
 def test_kreuzberg_error_str_without_context() -> None:
-    """Test string representation without context."""
     error = KreuzbergError("Something went wrong")
     error_str = str(error)
     assert error_str == "KreuzbergError: Something went wrong"
@@ -71,28 +65,24 @@ def test_kreuzberg_error_str_without_context() -> None:
 
 
 def test_parsing_error() -> None:
-    """Test ParsingError creation."""
     error = ParsingError("Parse failed", context={"line": 10})
     assert str(error).startswith("ParsingError: Parse failed")
     assert error.context == {"line": 10}
 
 
 def test_validation_error() -> None:
-    """Test ValidationError creation."""
     error = ValidationError("Validation failed", context={"field": "email"})
     assert str(error).startswith("ValidationError: Validation failed")
     assert error.context == {"field": "email"}
 
 
 def test_ocr_error() -> None:
-    """Test OCRError creation."""
     error = OCRError("OCR failed", context={"confidence": 0.1})
     assert str(error).startswith("OCRError: OCR failed")
     assert error.context == {"confidence": 0.1}
 
 
 def test_missing_dependency_error_create_for_package() -> None:
-    """Test MissingDependencyError creation."""
     error = MissingDependencyError.create_for_package(
         dependency_group="ocr", functionality="optical character recognition", package_name="tesseract"
     )

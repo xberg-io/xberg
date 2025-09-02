@@ -1,5 +1,3 @@
-"""Tests for document classification functionality."""
-
 from __future__ import annotations
 
 import builtins
@@ -35,7 +33,6 @@ if TYPE_CHECKING:
     ],
 )
 async def test_extract_file_with_all_document_types(doc_type: str, file_name: str, test_files_path: Path) -> None:
-    """Test that document classification works for all document types."""
     from kreuzberg import extract_file
 
     test_file = test_files_path / file_name
@@ -47,7 +44,6 @@ async def test_extract_file_with_all_document_types(doc_type: str, file_name: st
 
 
 def test_classify_document_low_confidence() -> None:
-    """Test that no document type is returned for low confidence."""
     result = ExtractionResult(
         content="Some random text that doesn't match any patterns",
         mime_type="text/plain",
@@ -62,7 +58,6 @@ def test_classify_document_low_confidence() -> None:
 
 
 def test_classify_document_high_confidence() -> None:
-    """Test that document type is returned for high confidence."""
     result = ExtractionResult(
         content="INVOICE #12345 Total: $100.00 Due Date: 01/01/2024",
         mime_type="text/plain",
@@ -78,7 +73,6 @@ def test_classify_document_high_confidence() -> None:
 
 
 def test_document_classifiers_available() -> None:
-    """Test that all document classifiers are available."""
     expected_types = {"invoice", "receipt", "contract", "report", "form"}
     assert set(DOCUMENT_CLASSIFIERS.keys()) == expected_types
 
@@ -88,7 +82,6 @@ def test_document_classifiers_available() -> None:
 
 
 def test_document_classifiers_patterns() -> None:
-    """Test that document classifiers have valid patterns."""
     for patterns in DOCUMENT_CLASSIFIERS.values():
         assert isinstance(patterns, list)
         assert len(patterns) > 0
@@ -99,7 +92,6 @@ def test_document_classifiers_patterns() -> None:
 
 
 def test_document_classifiers_keywords() -> None:
-    """Test that document classifiers contain keyword patterns."""
     invoice_patterns = DOCUMENT_CLASSIFIERS["invoice"]
     assert any("invoice" in pattern.lower() for pattern in invoice_patterns)
 
@@ -108,7 +100,6 @@ def test_document_classifiers_keywords() -> None:
 
 
 def test_classify_document_with_metadata() -> None:
-    """Test classification with metadata content."""
     result = ExtractionResult(
         content="Regular content",
         mime_type="text/plain",
@@ -123,7 +114,6 @@ def test_classify_document_with_metadata() -> None:
 
 
 def test_classify_document_disabled() -> None:
-    """Test classification when disabled in config."""
     result = ExtractionResult(
         content="INVOICE #12345 Total: $100.00",
         mime_type="text/plain",
@@ -138,7 +128,6 @@ def test_classify_document_disabled() -> None:
 
 
 def test_classify_document_empty_content() -> None:
-    """Test classification with empty content."""
     result = ExtractionResult(
         content="",
         mime_type="text/plain",
@@ -153,7 +142,6 @@ def test_classify_document_empty_content() -> None:
 
 
 def test_classify_document_with_exclusions() -> None:
-    """Test classification with multiple document type indicators."""
     result = ExtractionResult(
         content="CONTRACT AGREEMENT INVOICE #12345 Total: $100.00",
         mime_type="text/plain",
@@ -169,7 +157,6 @@ def test_classify_document_with_exclusions() -> None:
 
 
 def test_classify_document_from_layout_basic() -> None:
-    """Test basic layout-based classification."""
     layout_df = pd.DataFrame(
         {
             "text": ["INVOICE", "#12345", "Total:", "$100.00"],
@@ -194,7 +181,6 @@ def test_classify_document_from_layout_basic() -> None:
 
 
 def test_classify_document_from_layout_no_layout() -> None:
-    """Test layout classification when no layout data is available."""
     result = ExtractionResult(
         content="INVOICE #12345",
         mime_type="text/plain",
@@ -209,7 +195,6 @@ def test_classify_document_from_layout_no_layout() -> None:
 
 
 def test_classify_document_from_layout_empty_layout() -> None:
-    """Test layout classification with empty layout."""
     layout_df = pd.DataFrame()
 
     result = ExtractionResult(
@@ -227,7 +212,6 @@ def test_classify_document_from_layout_empty_layout() -> None:
 
 
 def test_classify_document_from_layout_missing_columns() -> None:
-    """Test layout classification with missing required columns."""
     layout_df = pd.DataFrame({"text": ["Test"], "missing_columns": [1]})
 
     result = ExtractionResult(
@@ -245,7 +229,6 @@ def test_classify_document_from_layout_missing_columns() -> None:
 
 
 def test_classify_document_from_layout_no_pattern_matches() -> None:
-    """Test layout classification with no pattern matches."""
     layout_df = pd.DataFrame(
         {
             "text": ["Generic text", "No patterns here", "Just regular content"],
@@ -269,7 +252,6 @@ def test_classify_document_from_layout_no_pattern_matches() -> None:
 
 
 def test_classify_document_from_layout_header_patterns() -> None:
-    """Test layout classification focusing on header patterns."""
     layout_df = pd.DataFrame(
         {
             "text": ["INVOICE", "Company Name", "Item description", "Total: $100"],
@@ -294,7 +276,6 @@ def test_classify_document_from_layout_header_patterns() -> None:
 
 
 def test_classify_document_from_layout_position_scoring() -> None:
-    """Test that layout position affects scoring."""
     layout_df = pd.DataFrame(
         {
             "text": ["receipt", "store info", "items", "total"],
@@ -318,7 +299,6 @@ def test_classify_document_from_layout_position_scoring() -> None:
 
 
 def test_auto_detect_document_type_from_content() -> None:
-    """Test auto-detection prioritizing content-based classification."""
     result = ExtractionResult(
         content="INVOICE #12345 Amount Due: $500.00 Payment Terms: Net 30",
         mime_type="text/plain",
@@ -334,7 +314,6 @@ def test_auto_detect_document_type_from_content() -> None:
 
 
 def test_auto_detect_document_type_from_layout() -> None:
-    """Test auto-detection falling back to layout when content is weak."""
     layout_df = pd.DataFrame(
         {
             "text": ["RECEIPT", "Store: ABC Shop", "Item: Coffee", "Total: $5.00"],
@@ -358,7 +337,6 @@ def test_auto_detect_document_type_from_layout() -> None:
 
 
 def test_auto_detect_document_type_disabled() -> None:
-    """Test auto-detection when disabled."""
     result = ExtractionResult(
         content="INVOICE #12345",
         mime_type="text/plain",
@@ -373,7 +351,6 @@ def test_auto_detect_document_type_disabled() -> None:
 
 
 def test_auto_detect_document_type_no_matches() -> None:
-    """Test auto-detection when no classification matches."""
     result = ExtractionResult(
         content="Random text with no document indicators",
         mime_type="text/plain",
@@ -388,7 +365,6 @@ def test_auto_detect_document_type_no_matches() -> None:
 
 
 def test_auto_detect_document_type_confidence_threshold() -> None:
-    """Test auto-detection respects confidence threshold."""
     result = ExtractionResult(
         content="Maybe invoice payment receipt unclear document",
         mime_type="text/plain",
@@ -404,7 +380,6 @@ def test_auto_detect_document_type_confidence_threshold() -> None:
 
 @pytest.mark.anyio
 async def test_document_classification_integration_invoice(test_files_path: Path) -> None:
-    """Test end-to-end document classification for invoice."""
     from kreuzberg import extract_file
 
     invoice_file = test_files_path / "invoice_test.txt"
@@ -419,7 +394,6 @@ async def test_document_classification_integration_invoice(test_files_path: Path
 
 @pytest.mark.anyio
 async def test_document_classification_integration_receipt(test_files_path: Path) -> None:
-    """Test end-to-end document classification for receipt."""
     from kreuzberg import extract_file
 
     receipt_file = test_files_path / "receipt_test.txt"
@@ -434,7 +408,6 @@ async def test_document_classification_integration_receipt(test_files_path: Path
 
 @pytest.mark.anyio
 async def test_document_classification_integration_contract(test_files_path: Path) -> None:
-    """Test end-to-end document classification for contract."""
     from kreuzberg import extract_file
 
     contract_file = test_files_path / "contract_test.txt"
@@ -449,7 +422,6 @@ async def test_document_classification_integration_contract(test_files_path: Pat
 
 @pytest.mark.anyio
 async def test_document_classification_integration_report(test_files_path: Path) -> None:
-    """Test end-to-end document classification for report."""
     from kreuzberg import extract_file
 
     report_file = test_files_path / "report_test.txt"
@@ -464,7 +436,6 @@ async def test_document_classification_integration_report(test_files_path: Path)
 
 @pytest.mark.anyio
 async def test_document_classification_integration_form(test_files_path: Path) -> None:
-    """Test end-to-end document classification for form."""
     from kreuzberg import extract_file
 
     form_file = test_files_path / "form_test.txt"
@@ -479,7 +450,6 @@ async def test_document_classification_integration_form(test_files_path: Path) -
 
 @pytest.mark.anyio
 async def test_document_classification_integration_disabled(test_files_path: Path) -> None:
-    """Test that classification can be disabled."""
     from kreuzberg import extract_file
 
     invoice_file = test_files_path / "invoice_test.txt"
@@ -492,7 +462,6 @@ async def test_document_classification_integration_disabled(test_files_path: Pat
 
 
 def test_classify_document_invoice(mocker: MockerFixture) -> None:
-    """Test document classification for invoice type."""
     mock_translate = mocker.patch(
         "kreuzberg._document_classification._get_translated_text",
         return_value="this is an invoice with invoice number 12345 and total amount $100",
@@ -514,7 +483,6 @@ def test_classify_document_invoice(mocker: MockerFixture) -> None:
 
 
 def test_classify_document_receipt(mocker: MockerFixture) -> None:
-    """Test document classification for receipt type."""
     mocker.patch(
         "kreuzberg._document_classification._get_translated_text",
         return_value="cash receipt subtotal $50 total due $55",
@@ -531,7 +499,6 @@ def test_classify_document_receipt(mocker: MockerFixture) -> None:
 
 
 def test_classify_document_contract(mocker: MockerFixture) -> None:
-    """Test document classification for contract type."""
     mocker.patch(
         "kreuzberg._document_classification._get_translated_text",
         return_value="this agreement between party a and party b includes terms and conditions",
@@ -552,7 +519,6 @@ def test_classify_document_contract(mocker: MockerFixture) -> None:
 
 
 def test_classify_document_no_match(mocker: MockerFixture) -> None:
-    """Test document classification with no matching patterns."""
     mocker.patch(
         "kreuzberg._document_classification._get_translated_text",
         return_value="this is just some random text with no specific document indicators",
@@ -572,7 +538,6 @@ def test_classify_document_no_match(mocker: MockerFixture) -> None:
 
 
 def test_classify_document_comprehensive_low_confidence_detailed(mocker: MockerFixture) -> None:
-    """Test document classification with confidence below threshold."""
     mocker.patch(
         "kreuzberg._document_classification._get_translated_text",
         return_value="random text without clear patterns",
@@ -588,7 +553,6 @@ def test_classify_document_comprehensive_low_confidence_detailed(mocker: MockerF
 
 
 def test_classify_document_comprehensive_with_metadata_detailed(mocker: MockerFixture) -> None:
-    """Test document classification including metadata."""
     mock_translate = mocker.patch(
         "kreuzberg._document_classification._get_translated_text",
         return_value="invoice document title invoice number 12345",
@@ -604,7 +568,6 @@ def test_classify_document_comprehensive_with_metadata_detailed(mocker: MockerFi
 
 
 def test_classify_document_from_layout_disabled() -> None:
-    """Test layout-based classification when auto_detect_document_type is False."""
     result = ExtractionResult(content="Test content", mime_type="text/plain", metadata={})
     config = ExtractionConfig(auto_detect_document_type=False)
 
@@ -615,7 +578,6 @@ def test_classify_document_from_layout_disabled() -> None:
 
 
 def test_classify_document_from_layout_comprehensive_no_layout_detailed() -> None:
-    """Test layout-based classification with no layout data."""
     result = ExtractionResult(content="Test content", mime_type="text/plain", metadata={}, layout=None)
     config = ExtractionConfig(auto_detect_document_type=True)
 
@@ -626,7 +588,6 @@ def test_classify_document_from_layout_comprehensive_no_layout_detailed() -> Non
 
 
 def test_classify_document_from_layout_comprehensive_empty_layout_detailed() -> None:
-    """Test layout-based classification with empty layout data."""
     empty_df = pd.DataFrame()
     result = ExtractionResult(content="Test content", mime_type="text/plain", metadata={}, layout=empty_df)
     config = ExtractionConfig(auto_detect_document_type=True)
@@ -638,7 +599,6 @@ def test_classify_document_from_layout_comprehensive_empty_layout_detailed() -> 
 
 
 def test_classify_document_from_layout_comprehensive_missing_columns_detailed() -> None:
-    """Test layout-based classification with missing required columns."""
     layout_df = pd.DataFrame({"text": ["some text"], "left": [10]})
     result = ExtractionResult(content="Test content", mime_type="text/plain", metadata={}, layout=layout_df)
     config = ExtractionConfig(auto_detect_document_type=True)
@@ -650,7 +610,6 @@ def test_classify_document_from_layout_comprehensive_missing_columns_detailed() 
 
 
 def test_classify_document_from_layout_invoice(mocker: MockerFixture) -> None:
-    """Test layout-based classification for invoice."""
     layout_df = pd.DataFrame(
         {
             "text": ["INVOICE", "Invoice Number: 12345", "Total Amount: $500"],
@@ -674,7 +633,6 @@ def test_classify_document_from_layout_invoice(mocker: MockerFixture) -> None:
 
 
 def test_classify_document_from_layout_translation_error(mocker: MockerFixture) -> None:
-    """Test layout-based classification when translation fails."""
     layout_df = pd.DataFrame({"text": ["INVOICE", "Total Amount: $500"], "top": [10, 50], "height": [20, 15]})
 
     result = ExtractionResult(content="Test content", mime_type="text/plain", metadata={}, layout=layout_df)
@@ -690,7 +648,6 @@ def test_classify_document_from_layout_translation_error(mocker: MockerFixture) 
 
 
 def test_classify_document_from_layout_header_bonus() -> None:
-    """Test layout-based classification with header position bonus."""
     layout_df = pd.DataFrame(
         {
             "text": ["INVOICE"],
@@ -709,7 +666,6 @@ def test_classify_document_from_layout_header_bonus() -> None:
 
 
 def test_get_translated_text_basic(mocker: MockerFixture) -> None:
-    """Test basic text translation functionality."""
     from kreuzberg._document_classification import _get_translated_text
 
     mock_translator = mocker.Mock()
@@ -725,7 +681,6 @@ def test_get_translated_text_basic(mocker: MockerFixture) -> None:
 
 
 def test_get_translated_text_with_metadata(mocker: MockerFixture) -> None:
-    """Test text translation with metadata included."""
     from kreuzberg._document_classification import _get_translated_text
 
     mock_translator = mocker.Mock()
@@ -742,7 +697,6 @@ def test_get_translated_text_with_metadata(mocker: MockerFixture) -> None:
 
 
 def test_get_translated_text_translation_error(mocker: MockerFixture) -> None:
-    """Test text translation fallback when translation fails."""
     from kreuzberg._document_classification import _get_translated_text
 
     mocker.patch("deep_translator.GoogleTranslator", side_effect=Exception("Translation API error"))
@@ -755,7 +709,6 @@ def test_get_translated_text_translation_error(mocker: MockerFixture) -> None:
 
 
 def test_auto_detect_document_type_text_mode(mocker: MockerFixture) -> None:
-    """Test auto_detect_document_type in text mode."""
     mock_classify = mocker.patch("kreuzberg._document_classification.classify_document", return_value=("invoice", 0.8))
 
     result = ExtractionResult(content="Invoice content", mime_type="text/plain", metadata={})
@@ -769,7 +722,6 @@ def test_auto_detect_document_type_text_mode(mocker: MockerFixture) -> None:
 
 
 def test_auto_detect_document_type_vision_mode_with_file(mocker: MockerFixture) -> None:
-    """Test auto_detect_document_type in vision mode with file path."""
     mock_ocr_result = ExtractionResult(
         content="OCR extracted text",
         mime_type="text/plain",
@@ -797,7 +749,6 @@ def test_auto_detect_document_type_vision_mode_with_file(mocker: MockerFixture) 
 
 
 def test_auto_detect_document_type_vision_mode_no_file(mocker: MockerFixture) -> None:
-    """Test auto_detect_document_type in vision mode without file path."""
     mock_classify = mocker.patch("kreuzberg._document_classification.classify_document", return_value=("report", 0.7))
 
     result = ExtractionResult(content="Report content", mime_type="text/plain", metadata={})
@@ -811,7 +762,6 @@ def test_auto_detect_document_type_vision_mode_no_file(mocker: MockerFixture) ->
 
 
 def test_auto_detect_document_type_with_existing_layout(mocker: MockerFixture) -> None:
-    """Test auto_detect_document_type with existing layout data."""
     layout_df = pd.DataFrame({"text": ["CONTRACT", "Agreement between parties"], "top": [10, 50], "height": [20, 15]})
 
     result = ExtractionResult(content="Contract content", mime_type="text/plain", metadata={}, layout=layout_df)
@@ -830,7 +780,6 @@ def test_auto_detect_document_type_with_existing_layout(mocker: MockerFixture) -
 
 
 def test_auto_detect_document_type_mixed_patterns(mocker: MockerFixture) -> None:
-    """Test document classification with mixed patterns from different types."""
     mocker.patch(
         "kreuzberg._document_classification._get_translated_text",
         return_value="invoice receipt contract report form",
@@ -847,7 +796,6 @@ def test_auto_detect_document_type_mixed_patterns(mocker: MockerFixture) -> None
 
 
 def test_classify_document_confidence_calculation(mocker: MockerFixture) -> None:
-    """Test confidence calculation in document classification."""
     mocker.patch(
         "kreuzberg._document_classification._get_translated_text",
         return_value="invoice invoice number total amount",
@@ -863,7 +811,6 @@ def test_classify_document_confidence_calculation(mocker: MockerFixture) -> None
 
 
 def test_missing_deep_translator_import_error(mocker: MockerFixture) -> None:
-    """Test that MissingDependencyError is raised when deep-translator is not installed."""
     original_module = sys.modules.pop("deep_translator", None)
 
     try:

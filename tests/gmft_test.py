@@ -245,7 +245,6 @@ async def test_gmft_config_custom_values() -> None:
 
 
 def test_extract_tables_sync_with_tiny_pdf(tiny_pdf_with_tables: Path) -> None:
-    """Test sync table extraction - covers lines 246-334."""
     try:
         from kreuzberg._gmft import extract_tables_sync
 
@@ -269,7 +268,6 @@ def test_extract_tables_sync_with_tiny_pdf(tiny_pdf_with_tables: Path) -> None:
 
 
 def test_extract_tables_sync_missing_dependency(tiny_pdf_with_tables: Path) -> None:
-    """Test sync extraction with missing dependency - covers lines 259-260, 277."""
     if os.getenv("KREUZBERG_GMFT_ISOLATED", "true").lower() == "true":
         pytest.skip("Cannot test missing dependency with isolated process")
 
@@ -284,7 +282,6 @@ def test_extract_tables_sync_missing_dependency(tiny_pdf_with_tables: Path) -> N
 
 
 def test_extract_tables_sync_os_error(tmp_path: Path) -> None:
-    """Test sync extraction with OS error when reading file stats - covers lines 259-264."""
     if os.getenv("KREUZBERG_GMFT_ISOLATED", "true").lower() == "true":
         pytest.skip("File errors handled differently in isolated process")
 
@@ -298,7 +295,6 @@ def test_extract_tables_sync_os_error(tmp_path: Path) -> None:
 
 @pytest.mark.anyio
 async def test_extract_tables_cache_processing_coordination(tiny_pdf_with_tables: Path) -> None:
-    """Test cache processing coordination - covers lines 160-168."""
     import anyio
 
     from kreuzberg._gmft import extract_tables
@@ -354,7 +350,6 @@ async def test_extract_tables_cache_processing_coordination(tiny_pdf_with_tables
 
 @pytest.mark.anyio
 async def test_extract_tables_cache_hit(tiny_pdf_with_tables: Path) -> None:
-    """Test cache hit path - should return cached result without processing."""
     from kreuzberg._gmft import extract_tables
     from kreuzberg._utils._cache import get_table_cache
 
@@ -398,10 +393,7 @@ async def test_extract_tables_cache_hit(tiny_pdf_with_tables: Path) -> None:
 
 
 class TestGMFTConfigComprehensive:
-    """Test comprehensive GMFTConfig scenarios."""
-
     def test_gmft_config_cell_required_confidence_edge_cases(self) -> None:
-        """Test GMFTConfig with edge case confidence values."""
         custom_confidence = {
             0: 0.0,
             1: 1.0,
@@ -419,12 +411,10 @@ class TestGMFTConfigComprehensive:
         assert config.cell_required_confidence[3] == 0.999
 
     def test_gmft_config_semantic_hierarchical_left_fill_none(self) -> None:
-        """Test GMFTConfig with semantic_hierarchical_left_fill set to None."""
         config = GMFTConfig(semantic_hierarchical_left_fill=None)
         assert config.semantic_hierarchical_left_fill is None
 
     def test_gmft_config_extreme_threshold_values(self) -> None:
-        """Test GMFTConfig with extreme threshold values."""
         config = GMFTConfig(
             total_overlap_reject_threshold=1.0,
             total_overlap_warn_threshold=0.0,
@@ -440,7 +430,6 @@ class TestGMFTConfigComprehensive:
         assert config.iob_warn_threshold == 1.0
 
     def test_gmft_config_large_table_extreme_values(self) -> None:
-        """Test GMFTConfig with extreme large table configuration."""
         config = GMFTConfig(
             large_table_if_n_rows_removed=0,
             large_table_threshold=0,
@@ -457,11 +446,8 @@ class TestGMFTConfigComprehensive:
 
 
 class TestGMFTEnvironmentVariableHandling:
-    """Test environment variable handling in GMFT."""
-
     @pytest.mark.anyio
     async def test_extract_tables_isolated_environment_true(self, tiny_pdf_with_tables: Path) -> None:
-        """Test extract_tables with KREUZBERG_GMFT_ISOLATED=true."""
         with patch.dict(os.environ, {"KREUZBERG_GMFT_ISOLATED": "true"}):
             try:
                 result = await extract_tables(tiny_pdf_with_tables, use_isolated_process=None)
@@ -471,7 +457,6 @@ class TestGMFTEnvironmentVariableHandling:
 
     @pytest.mark.anyio
     async def test_extract_tables_isolated_environment_1(self, tiny_pdf_with_tables: Path) -> None:
-        """Test extract_tables with KREUZBERG_GMFT_ISOLATED=1."""
         with patch.dict(os.environ, {"KREUZBERG_GMFT_ISOLATED": "1"}):
             try:
                 result = await extract_tables(tiny_pdf_with_tables, use_isolated_process=None)
@@ -481,7 +466,6 @@ class TestGMFTEnvironmentVariableHandling:
 
     @pytest.mark.anyio
     async def test_extract_tables_isolated_environment_yes(self, tiny_pdf_with_tables: Path) -> None:
-        """Test extract_tables with KREUZBERG_GMFT_ISOLATED=yes."""
         with patch.dict(os.environ, {"KREUZBERG_GMFT_ISOLATED": "yes"}):
             try:
                 result = await extract_tables(tiny_pdf_with_tables, use_isolated_process=None)
@@ -491,7 +475,6 @@ class TestGMFTEnvironmentVariableHandling:
 
     @pytest.mark.anyio
     async def test_extract_tables_isolated_environment_false(self, tiny_pdf_with_tables: Path) -> None:
-        """Test extract_tables with KREUZBERG_GMFT_ISOLATED=false."""
         with patch.dict(os.environ, {"KREUZBERG_GMFT_ISOLATED": "false"}):
             try:
                 result = await extract_tables(tiny_pdf_with_tables, use_isolated_process=None)
@@ -500,7 +483,6 @@ class TestGMFTEnvironmentVariableHandling:
                 pytest.skip("GMFT dependency not installed")
 
     def test_extract_tables_sync_isolated_environment_variables(self, tiny_pdf_with_tables: Path) -> None:
-        """Test sync extract_tables with various environment variable values."""
         test_values = ["true", "1", "yes", "false", "0", "no"]
 
         for env_value in test_values:
@@ -513,11 +495,8 @@ class TestGMFTEnvironmentVariableHandling:
 
 
 class TestGMFTCacheProcessingEdgeCases:
-    """Test GMFT cache processing edge cases."""
-
     @pytest.mark.anyio
     async def test_extract_tables_file_stat_error_handling(self, tmp_path: Path) -> None:
-        """Test extract_tables handles file stat errors gracefully."""
         nonexistent_file = tmp_path / "nonexistent.pdf"
 
         try:
@@ -527,7 +506,6 @@ class TestGMFTCacheProcessingEdgeCases:
             pass
 
     def test_extract_tables_sync_file_stat_error_handling(self, tmp_path: Path) -> None:
-        """Test sync extract_tables handles file stat errors gracefully."""
         nonexistent_file = tmp_path / "nonexistent.pdf"
 
         try:
@@ -538,7 +516,6 @@ class TestGMFTCacheProcessingEdgeCases:
 
     @pytest.mark.anyio
     async def test_extract_tables_cache_processing_coordination_wait_failure(self, tiny_pdf_with_tables: Path) -> None:
-        """Test cache processing coordination when wait event fails to complete."""
         from kreuzberg._gmft import extract_tables
         from kreuzberg._utils._cache import get_table_cache
 
@@ -580,11 +557,8 @@ class TestGMFTCacheProcessingEdgeCases:
 
 
 class TestGMFTInlineExtractionEdgeCases:
-    """Test inline (non-isolated) extraction edge cases."""
-
     @pytest.mark.anyio
     async def test_extract_tables_inline_with_doc_close_error(self, tiny_pdf_with_tables: Path) -> None:
-        """Test inline extraction handles document close errors gracefully."""
         if os.getenv("KREUZBERG_GMFT_ISOLATED", "true").lower() == "true":
             pytest.skip("Testing inline extraction, but isolated mode is enabled")
 
@@ -600,7 +574,6 @@ class TestGMFTInlineExtractionEdgeCases:
                 pytest.skip("GMFT dependency not available for inline testing")
 
     def test_extract_tables_sync_inline_with_doc_close_error(self, tiny_pdf_with_tables: Path) -> None:
-        """Test sync inline extraction handles document close errors gracefully."""
         if os.getenv("KREUZBERG_GMFT_ISOLATED", "true").lower() == "true":
             pytest.skip("Testing inline extraction, but isolated mode is enabled")
 
@@ -615,7 +588,6 @@ class TestGMFTInlineExtractionEdgeCases:
 
     @pytest.mark.anyio
     async def test_extract_tables_inline_empty_cropped_tables(self, tiny_pdf_with_tables: Path) -> None:
-        """Test inline extraction with no cropped tables found."""
         if os.getenv("KREUZBERG_GMFT_ISOLATED", "true").lower() == "true":
             pytest.skip("Testing inline extraction, but isolated mode is enabled")
 
@@ -634,7 +606,6 @@ class TestGMFTInlineExtractionEdgeCases:
                 pytest.skip("GMFT dependency not available for inline testing")
 
     def test_extract_tables_sync_inline_empty_cropped_tables(self, tiny_pdf_with_tables: Path) -> None:
-        """Test sync inline extraction with no cropped tables found."""
         if os.getenv("KREUZBERG_GMFT_ISOLATED", "true").lower() == "true":
             pytest.skip("Testing inline extraction, but isolated mode is enabled")
 
@@ -649,11 +620,8 @@ class TestGMFTInlineExtractionEdgeCases:
 
 
 class TestGMFTWithoutTables:
-    """Test GMFT behavior with PDFs that have no tables - issue #104."""
-
     @pytest.mark.anyio
     async def test_extract_tables_pdf_without_tables_async(self) -> None:
-        """Test that extract_tables handles PDFs without tables gracefully (async)."""
         pdf_path = Path("tests/test_source_files/searchable.pdf")
 
         try:
@@ -674,7 +642,6 @@ class TestGMFTWithoutTables:
             pytest.skip("GMFT dependency not installed")
 
     def test_extract_tables_pdf_without_tables_sync(self) -> None:
-        """Test that extract_tables_sync handles PDFs without tables gracefully (sync)."""
         pdf_path = Path("tests/test_source_files/searchable.pdf")
 
         try:
@@ -696,7 +663,6 @@ class TestGMFTWithoutTables:
 
     @pytest.mark.anyio
     async def test_extract_file_with_gmft_pdf_without_tables(self) -> None:
-        """Test that extract_file with extract_tables=True handles PDFs without tables gracefully."""
         pdf_path = Path("tests/test_source_files/searchable.pdf")
 
         config = ExtractionConfig(
@@ -730,7 +696,6 @@ class TestGMFTWithoutTables:
             pytest.skip("GMFT dependency not installed")
 
     def test_extract_file_sync_with_gmft_pdf_without_tables(self) -> None:
-        """Test that extract_file_sync with extract_tables=True handles PDFs without tables gracefully."""
         pdf_path = Path("tests/test_source_files/searchable.pdf")
 
         from kreuzberg.extraction import extract_file_sync
@@ -767,10 +732,7 @@ class TestGMFTWithoutTables:
 
 
 class TestGMFTConfigSerialization:
-    """Test GMFTConfig serialization for multiprocessing."""
-
     def test_gmft_config_msgspec_serialization(self) -> None:
-        """Test GMFTConfig can be serialized and deserialized with msgspec."""
         import msgspec
 
         original_config = GMFTConfig(
@@ -793,7 +755,6 @@ class TestGMFTConfigSerialization:
         assert recreated_config.semantic_spanning_cells == original_config.semantic_spanning_cells
 
     def test_gmft_config_complex_cell_confidence_serialization(self) -> None:
-        """Test GMFTConfig with complex cell_required_confidence serialization."""
         import msgspec
 
         complex_confidence = {

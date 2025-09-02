@@ -1,5 +1,3 @@
-"""Tests for kreuzberg types."""
-
 from __future__ import annotations
 
 from unittest.mock import Mock, patch
@@ -14,7 +12,6 @@ from kreuzberg.exceptions import ValidationError
 
 
 def test_extraction_config_validation_ocr_config_without_backend() -> None:
-    """Test validation error when ocr_config provided without ocr_backend - covers line 163."""
     tesseract_config = TesseractConfig()
 
     with pytest.raises(ValidationError, match="'ocr_backend' is None but 'ocr_config' is provided"):
@@ -22,7 +19,6 @@ def test_extraction_config_validation_ocr_config_without_backend() -> None:
 
 
 def test_extraction_config_validation_incompatible_tesseract_config() -> None:
-    """Test validation error for incompatible tesseract config - covers line 170."""
     easyocr_config = EasyOCRConfig()
 
     with pytest.raises(ValidationError) as exc_info:
@@ -34,7 +30,6 @@ def test_extraction_config_validation_incompatible_tesseract_config() -> None:
 
 
 def test_extraction_config_validation_incompatible_easyocr_config() -> None:
-    """Test validation error for incompatible easyocr config."""
     tesseract_config = TesseractConfig()
 
     with pytest.raises(ValidationError) as exc_info:
@@ -46,7 +41,6 @@ def test_extraction_config_validation_incompatible_easyocr_config() -> None:
 
 
 def test_extraction_config_validation_incompatible_paddleocr_config() -> None:
-    """Test validation error for incompatible paddleocr config."""
     tesseract_config = TesseractConfig()
 
     with pytest.raises(ValidationError) as exc_info:
@@ -58,7 +52,6 @@ def test_extraction_config_validation_incompatible_paddleocr_config() -> None:
 
 
 def test_get_config_dict_with_custom_config() -> None:
-    """Test get_config_dict with custom OCR config - covers lines 181-183."""
     tesseract_config = TesseractConfig(language="fra", psm=6)  # type: ignore[arg-type]
     config = ExtractionConfig(ocr_backend="tesseract", ocr_config=tesseract_config)
 
@@ -70,7 +63,6 @@ def test_get_config_dict_with_custom_config() -> None:
 
 
 def test_get_config_dict_default_tesseract() -> None:
-    """Test get_config_dict with default tesseract config - covers lines 184-187."""
     config = ExtractionConfig(ocr_backend="tesseract", ocr_config=None)
 
     config_dict = config.get_config_dict()
@@ -81,7 +73,6 @@ def test_get_config_dict_default_tesseract() -> None:
 
 
 def test_get_config_dict_default_easyocr() -> None:
-    """Test get_config_dict with default easyocr config - covers lines 188-191."""
     config = ExtractionConfig(ocr_backend="easyocr", ocr_config=None)
 
     config_dict = config.get_config_dict()
@@ -92,7 +83,6 @@ def test_get_config_dict_default_easyocr() -> None:
 
 
 def test_get_config_dict_default_paddleocr() -> None:
-    """Test get_config_dict with default paddleocr config - covers lines 192-194."""
     config = ExtractionConfig(ocr_backend="paddleocr", ocr_config=None)
 
     config_dict = config.get_config_dict()
@@ -103,7 +93,6 @@ def test_get_config_dict_default_paddleocr() -> None:
 
 
 def test_get_config_dict_no_backend() -> None:
-    """Test get_config_dict with no OCR backend - covers line 195."""
     config = ExtractionConfig(ocr_backend=None, ocr_config=None)
 
     config_dict = config.get_config_dict()
@@ -112,8 +101,6 @@ def test_get_config_dict_no_backend() -> None:
 
 
 def test_extraction_config_valid_combinations() -> None:
-    """Test valid OCR backend and config combinations."""
-
     tesseract_config = TesseractConfig()
     config1 = ExtractionConfig(ocr_backend="tesseract", ocr_config=tesseract_config)
     assert config1.ocr_backend == "tesseract"
@@ -135,7 +122,6 @@ def test_extraction_config_valid_combinations() -> None:
 
 
 def test_extraction_result_to_dict() -> None:
-    """Test ExtractionResult.to_dict() method with all fields."""
     entities = [
         Entity(type="PERSON", text="John Doe", start=0, end=8),
         Entity(type="LOCATION", text="New York", start=10, end=18),
@@ -167,7 +153,6 @@ def test_extraction_result_to_dict() -> None:
 
 
 def test_extraction_result_to_dict_minimal() -> None:
-    """Test ExtractionResult.to_dict() with minimal fields."""
     result = ExtractionResult(
         content="Simple content",
         mime_type="text/plain",
@@ -187,7 +172,6 @@ def test_extraction_result_to_dict_minimal() -> None:
 
 
 def test_extraction_result_to_dict_with_include_none() -> None:
-    """Test ExtractionResult.to_dict() with include_none=True."""
     result = ExtractionResult(
         content="Simple content",
         mime_type="text/plain",
@@ -207,8 +191,6 @@ def test_extraction_result_to_dict_with_include_none() -> None:
 
 
 def test_extraction_result_export_tables_to_csv() -> None:
-    """Test ExtractionResult.export_tables_to_csv() method."""
-
     mock_table1 = Mock()
     mock_table2 = Mock()
 
@@ -234,7 +216,6 @@ def test_extraction_result_export_tables_to_csv() -> None:
 
 
 def test_extraction_result_export_tables_to_csv_empty() -> None:
-    """Test ExtractionResult.export_tables_to_csv() with no tables."""
     result = ExtractionResult(
         content="Content without tables",
         mime_type="text/plain",
@@ -248,8 +229,6 @@ def test_extraction_result_export_tables_to_csv_empty() -> None:
 
 
 def test_extraction_result_export_tables_to_tsv() -> None:
-    """Test ExtractionResult.export_tables_to_tsv() method."""
-
     mock_table1 = Mock()
     mock_table2 = Mock()
 
@@ -275,7 +254,6 @@ def test_extraction_result_export_tables_to_tsv() -> None:
 
 
 def test_extraction_result_export_tables_to_tsv_empty() -> None:
-    """Test ExtractionResult.export_tables_to_tsv() with no tables."""
     result = ExtractionResult(
         content="Content without tables",
         mime_type="text/plain",
@@ -289,8 +267,6 @@ def test_extraction_result_export_tables_to_tsv_empty() -> None:
 
 
 def test_extraction_result_get_table_summaries() -> None:
-    """Test ExtractionResult.get_table_summaries() method."""
-
     mock_table1 = Mock()
     mock_table2 = Mock()
 
@@ -325,7 +301,6 @@ def test_extraction_result_get_table_summaries() -> None:
 
 
 def test_extraction_result_get_table_summaries_empty() -> None:
-    """Test ExtractionResult.get_table_summaries() with no tables."""
     result = ExtractionResult(
         content="Content without tables",
         mime_type="text/plain",
@@ -339,8 +314,6 @@ def test_extraction_result_get_table_summaries_empty() -> None:
 
 
 def test_normalize_metadata() -> None:
-    """Test normalize_metadata function."""
-
     metadata = {
         "title": "Test Document",
         "authors": ["Alice", "Bob"],
@@ -364,8 +337,6 @@ def test_normalize_metadata() -> None:
 
 
 def test_normalize_metadata_with_none_values() -> None:
-    """Test normalize_metadata filters out None values."""
-
     metadata = {
         "title": "Test Document",
         "authors": None,
@@ -382,8 +353,6 @@ def test_normalize_metadata_with_none_values() -> None:
 
 
 def test_normalize_metadata_empty() -> None:
-    """Test normalize_metadata with empty dict."""
-
     normalized = normalize_metadata({})
     assert normalized == {}
 
@@ -392,7 +361,6 @@ def test_normalize_metadata_empty() -> None:
 
 
 def test_extraction_config_post_init_custom_entity_patterns() -> None:
-    """Test ExtractionConfig __post_init__ converts custom_entity_patterns to frozenset."""
     patterns = frozenset([("CUSTOM_TYPE", r"\d{3}-\d{3}-\d{4}")])
 
     config = ExtractionConfig(custom_entity_patterns=patterns)

@@ -1,5 +1,3 @@
-"""Tests for kreuzberg._playa helper functions."""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -30,7 +28,6 @@ if TYPE_CHECKING:
 
 
 def test_parse_date_string_basic() -> None:
-    """Test basic date string parsing."""
     assert _parse_date_string("D:20240101120000") == "2024-01-01T12:00:00"
 
     assert _parse_date_string("20240101120000") == "2024-01-01T12:00:00"
@@ -42,7 +39,6 @@ def test_parse_date_string_basic() -> None:
 
 
 def test_extract_basic_metadata() -> None:
-    """Test extraction of basic metadata fields."""
     pdf_info = {
         "title": b"Test Title",
         "subject": b"Test Subject",
@@ -70,7 +66,6 @@ def test_extract_basic_metadata() -> None:
 
 
 def test_extract_basic_metadata_alternative_keys() -> None:
-    """Test extraction with alternative key names."""
     pdf_info = {
         "Publisher": b"Test Publisher",
         "rights": b"Test Rights",
@@ -88,7 +83,6 @@ def test_extract_basic_metadata_alternative_keys() -> None:
 
 
 def test_extract_basic_metadata_skip_existing() -> None:
-    """Test that existing metadata is not overwritten."""
     pdf_info = {"title": b"New Title"}
     result: Metadata = {"title": "Existing Title"}
 
@@ -98,7 +92,6 @@ def test_extract_basic_metadata_skip_existing() -> None:
 
 
 def test_extract_author_metadata_string() -> None:
-    """Test author extraction from string format."""
     pdf_info = {"author": b"John Doe"}
     result: Metadata = {}
     _extract_author_metadata(pdf_info, result)
@@ -126,7 +119,6 @@ def test_extract_author_metadata_string() -> None:
 
 
 def test_extract_author_metadata_list() -> None:
-    """Test author extraction from list format."""
     pdf_info = {"author": [b"John Doe", b"Jane Smith"]}
     result: Metadata = {}
     _extract_author_metadata(pdf_info, result)
@@ -134,7 +126,6 @@ def test_extract_author_metadata_list() -> None:
 
 
 def test_extract_keyword_metadata_string() -> None:
-    """Test keyword extraction from string format."""
     pdf_info = {"keywords": b"python, programming, testing"}
     result: Metadata = {}
     _extract_keyword_metadata(pdf_info, result)
@@ -157,7 +148,6 @@ def test_extract_keyword_metadata_string() -> None:
 
 
 def test_extract_keyword_metadata_list() -> None:
-    """Test keyword extraction from list format."""
     pdf_info = {"keywords": [b"python", b"programming", b"testing"]}
     result: Metadata = {}
     _extract_keyword_metadata(pdf_info, result)
@@ -165,7 +155,6 @@ def test_extract_keyword_metadata_list() -> None:
 
 
 def test_extract_category_metadata_string() -> None:
-    """Test category extraction from string format."""
     pdf_info = {"categories": b"tech, programming, python"}
     result: Metadata = {}
     _extract_category_metadata(pdf_info, result)
@@ -183,7 +172,6 @@ def test_extract_category_metadata_string() -> None:
 
 
 def test_extract_category_metadata_list() -> None:
-    """Test category extraction from list format."""
     pdf_info = {"categories": [b"tech", b"programming"]}
     result: Metadata = {}
     _extract_category_metadata(pdf_info, result)
@@ -191,7 +179,6 @@ def test_extract_category_metadata_list() -> None:
 
 
 def test_extract_date_metadata() -> None:
-    """Test date metadata extraction."""
     pdf_info = {"creationdate": b"D:20240101120000"}
     result: Metadata = {}
     _extract_date_metadata(pdf_info, result)
@@ -224,7 +211,6 @@ def test_extract_date_metadata() -> None:
 
 
 def test_extract_creator_metadata() -> None:
-    """Test creator metadata extraction."""
     pdf_info = {"creator": b"Test Creator"}
     result: Metadata = {}
     _extract_creator_metadata(pdf_info, result)
@@ -247,7 +233,6 @@ def test_extract_creator_metadata() -> None:
 
 
 def test_extract_document_dimensions() -> None:
-    """Test document dimensions extraction."""
     page = Mock()
     page.width = 595.5
     page.height = 842.5
@@ -263,7 +248,6 @@ def test_extract_document_dimensions() -> None:
 
 
 def test_format_outline() -> None:
-    """Test outline formatting."""
     entry1 = Mock()
     entry1.title = "Chapter 1"
     entry1.children = []
@@ -293,7 +277,6 @@ def test_format_outline() -> None:
 
 
 def test_generate_outline_description() -> None:
-    """Test outline description generation."""
     entry1 = Mock()
     entry1.title = "Chapter 1"
     entry1.children = []
@@ -311,7 +294,6 @@ def test_generate_outline_description() -> None:
 
 
 def test_generate_document_summary() -> None:
-    """Test document summary generation."""
     document = Mock()
     document.pages = [Mock(), Mock(), Mock()]
     document.is_printable = True
@@ -356,7 +338,6 @@ def test_generate_document_summary() -> None:
 
 
 def test_collect_document_permissions() -> None:
-    """Test document permissions collection."""
     document = Mock()
 
     document.is_printable = True
@@ -379,7 +360,6 @@ def test_collect_document_permissions() -> None:
 
 
 def test_extract_structure_information() -> None:
-    """Test structure information extraction."""
     element1 = Mock()
     element1.language = "EN"
     element1.role = None
@@ -435,7 +415,6 @@ def test_extract_structure_information() -> None:
 
 
 def test_extract_pdf_metadata_sync() -> None:
-    """Test synchronous version of extract_pdf_metadata."""
     mock_document = Mock()
     mock_info = Mock()
     mock_info.items.return_value = [("Title", b"Test Title"), ("Author", b"Test Author")]
@@ -473,7 +452,6 @@ def test_extract_pdf_metadata_sync() -> None:
 
 
 def test_extract_pdf_metadata_sync_with_password() -> None:
-    """Test synchronous extraction with password."""
     mock_document = Mock()
     mock_document.info = []
     mock_document.pages = []

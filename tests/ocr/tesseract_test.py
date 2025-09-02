@@ -295,7 +295,6 @@ async def test_process_file_linux(backend: TesseractBackend, mocker: MockerFixtu
 async def test_process_image_cache_processing_coordination(
     backend: TesseractBackend, tmp_path: Path, mocker: MockerFixture
 ) -> None:
-    """Test cache processing coordination for process_image - covers lines 256-264."""
     from kreuzberg._utils._cache import get_ocr_cache
 
     test_image = Image.new("RGB", (100, 50), color="white")
@@ -345,7 +344,6 @@ async def test_process_image_cache_processing_coordination(
 async def test_process_file_cache_processing_coordination(
     backend: TesseractBackend, tmp_path: Path, mocker: MockerFixture
 ) -> None:
-    """Test cache processing coordination for process_file - covers lines 323-331."""
     from kreuzberg._utils._cache import get_ocr_cache
 
     test_file = tmp_path / "test.png"
@@ -398,7 +396,6 @@ async def test_process_file_cache_processing_coordination(
 
 
 def test_validate_language_code_error() -> None:
-    """Test language code validation error - covers line 436."""
     backend = TesseractBackend()
 
     with pytest.raises(ValidationError, match="provided language code is not supported"):
@@ -407,8 +404,6 @@ def test_validate_language_code_error() -> None:
 
 @pytest.mark.anyio
 async def test_process_image_validation_error(backend: TesseractBackend) -> None:
-    """Test validation error in process_image - covers line 251."""
-
     test_image = Image.new("RGB", (1, 1), color="white")
 
     from unittest.mock import patch
@@ -420,8 +415,6 @@ async def test_process_image_validation_error(backend: TesseractBackend) -> None
 
 @pytest.mark.anyio
 async def test_process_file_validation_error(backend: TesseractBackend, tmp_path: Path) -> None:
-    """Test validation error in process_file - covers line 357."""
-
     test_file = tmp_path / "test.png"
     test_image = Image.new("RGB", (100, 50), color="white")
     test_image.save(test_file)
@@ -434,8 +427,6 @@ async def test_process_file_validation_error(backend: TesseractBackend, tmp_path
 
 
 def test_process_image_sync(backend: TesseractBackend) -> None:
-    """Test sync image processing."""
-
     image = Image.new("RGB", (100, 100))
 
     with (
@@ -456,8 +447,6 @@ def test_process_image_sync(backend: TesseractBackend) -> None:
 
 
 def test_process_file_sync(backend: TesseractBackend, ocr_image: Path) -> None:
-    """Test sync file processing."""
-
     with (
         patch.object(backend, "_run_tesseract_sync") as mock_run,
         patch("tempfile.NamedTemporaryFile") as mock_temp,
@@ -476,10 +465,7 @@ def test_process_file_sync(backend: TesseractBackend, ocr_image: Path) -> None:
 
 
 class TestTesseractConfigValidation:
-    """Test comprehensive TesseractConfig validation."""
-
     def test_tesseract_config_all_parameters(self) -> None:
-        """Test TesseractConfig with all parameters."""
         from kreuzberg._ocr._tesseract import TesseractConfig
 
         config = TesseractConfig(
@@ -509,7 +495,6 @@ class TestTesseractConfigValidation:
         assert config.thresholding_method is True
 
     def test_tesseract_config_default_values(self) -> None:
-        """Test TesseractConfig with default values."""
         from kreuzberg._ocr._tesseract import TesseractConfig
 
         config = TesseractConfig()
@@ -543,7 +528,6 @@ class TestTesseractConfigValidation:
         ],
     )
     def test_psm_mode_values(self, psm_mode: PSMMode) -> None:
-        """Test all PSM mode values."""
         from kreuzberg._ocr._tesseract import TesseractConfig
 
         config = TesseractConfig(psm=psm_mode)
@@ -553,10 +537,7 @@ class TestTesseractConfigValidation:
 
 
 class TestTesseractCommandBuilding:
-    """Test tesseract command building functionality."""
-
     def test_build_tesseract_command_basic(self, backend: TesseractBackend) -> None:
-        """Test basic tesseract command building."""
         command = backend._build_tesseract_command(
             path=Path("input.png"), output_base="output", language="eng", psm=PSMMode.AUTO
         )
@@ -570,7 +551,6 @@ class TestTesseractCommandBuilding:
         assert "3" in command
 
     def test_build_tesseract_command_complex(self, backend: TesseractBackend) -> None:
-        """Test complex tesseract command building with all options."""
         command = backend._build_tesseract_command(
             path=Path("complex_input.tiff"),
             output_base="complex_output",
@@ -602,7 +582,6 @@ class TestTesseractCommandBuilding:
         assert "thresholding_method=0" in command_str
 
     def test_build_tesseract_command_no_config(self, backend: TesseractBackend) -> None:
-        """Test tesseract command building with no config."""
         command = backend._build_tesseract_command(
             path=Path("input.jpg"), output_base="output", language="eng", psm=PSMMode.AUTO
         )
@@ -615,10 +594,7 @@ class TestTesseractCommandBuilding:
 
 
 class TestTesseractFileHandling:
-    """Test file handling functionality."""
-
     def test_get_file_info(self, backend: TesseractBackend, tmp_path: Path) -> None:
-        """Test file info extraction."""
         test_file = tmp_path / "test_file.png"
         test_file.write_text("dummy content")
 
@@ -632,7 +608,6 @@ class TestTesseractFileHandling:
         assert isinstance(file_info["mtime"], float)
 
     def test_get_file_info_nonexistent(self, backend: TesseractBackend) -> None:
-        """Test file info with nonexistent file."""
         nonexistent = Path("/nonexistent/file.png")
 
         with pytest.raises(FileNotFoundError):
@@ -640,8 +615,6 @@ class TestTesseractFileHandling:
 
 
 class TestTesseractLanguageValidation:
-    """Test comprehensive language validation."""
-
     @pytest.mark.parametrize(
         "language_code",
         [
@@ -767,12 +740,10 @@ class TestTesseractLanguageValidation:
         ],
     )
     def test_all_supported_language_codes(self, language_code: str) -> None:
-        """Test all supported language codes."""
         result = TesseractBackend._validate_language_code(language_code)
         assert result == language_code.lower()
 
     def test_multi_language_codes(self) -> None:
-        """Test multiple language codes."""
         result = TesseractBackend._validate_language_code("eng+deu+fra")
         assert result == "eng+deu+fra"
 
@@ -780,7 +751,6 @@ class TestTesseractLanguageValidation:
         assert result == "chi_sim+eng"
 
     def test_case_insensitive_language_codes(self) -> None:
-        """Test case insensitive language codes."""
         result = TesseractBackend._validate_language_code("ENG")
         assert result == "eng"
 
@@ -789,10 +759,7 @@ class TestTesseractLanguageValidation:
 
 
 class TestTesseractSyncMethods:
-    """Test synchronous methods."""
-
     def test_run_tesseract_sync_success(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test successful sync tesseract execution."""
         mock_run = mocker.patch("subprocess.run")
         mock_result = Mock()
         mock_result.returncode = 0
@@ -805,7 +772,6 @@ class TestTesseractSyncMethods:
         mock_run.assert_called_once_with(command, check=False, env=ANY, capture_output=True, text=True, timeout=30)
 
     def test_run_tesseract_sync_error(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test sync tesseract execution with error."""
         mock_run = mocker.patch("subprocess.run")
         mock_result = Mock()
         mock_result.returncode = 1
@@ -818,7 +784,6 @@ class TestTesseractSyncMethods:
             backend._run_tesseract_sync(command)
 
     def test_run_tesseract_sync_runtime_error(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test sync tesseract execution with runtime error."""
         mock_run = mocker.patch("subprocess.run")
         mock_run.side_effect = RuntimeError("Command execution failed")
 
@@ -828,7 +793,6 @@ class TestTesseractSyncMethods:
             backend._run_tesseract_sync(command)
 
     def test_validate_tesseract_version_sync_success(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test successful sync version validation."""
         mock_run = mocker.patch("subprocess.run")
         mock_result = Mock()
         mock_result.returncode = 0
@@ -844,7 +808,6 @@ class TestTesseractSyncMethods:
         assert TesseractBackend._version_checked is True
 
     def test_validate_tesseract_version_sync_too_old(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test sync version validation with old version."""
         mock_run = mocker.patch("subprocess.run")
         mock_result = Mock()
         mock_result.returncode = 0
@@ -858,7 +821,6 @@ class TestTesseractSyncMethods:
             backend._validate_tesseract_version_sync()
 
     def test_validate_tesseract_version_sync_not_found(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test sync version validation when tesseract not found."""
         mock_run = mocker.patch("subprocess.run")
         mock_run.side_effect = FileNotFoundError("tesseract not found")
 
@@ -869,11 +831,8 @@ class TestTesseractSyncMethods:
 
 
 class TestTesseractEnvironmentVariables:
-    """Test environment variable handling."""
-
     @pytest.mark.anyio
     async def test_linux_omp_thread_limit(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test OMP_THREAD_LIMIT environment variable on Linux."""
         mocker.patch("sys.platform", "linux")
 
         async def mock_run_process(*args: Any, **kwargs: Any) -> Mock:
@@ -893,7 +852,6 @@ class TestTesseractEnvironmentVariables:
 
     @pytest.mark.anyio
     async def test_non_linux_no_env_vars(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test no environment variables on non-Linux platforms."""
         mocker.patch("sys.platform", "darwin")
 
         async def mock_run_process(*args: Any, **kwargs: Any) -> Mock:
@@ -913,11 +871,8 @@ class TestTesseractEnvironmentVariables:
 
 
 class TestTesseractImageProcessing:
-    """Test image processing functionality."""
-
     @pytest.mark.anyio
     async def test_process_image_with_different_modes(self, backend: TesseractBackend, mock_run_process: Mock) -> None:
-        """Test image processing with different image modes."""
         modes = ["RGB", "RGBA", "L", "P", "CMYK"]
 
         for mode in modes:
@@ -932,25 +887,20 @@ class TestTesseractImageProcessing:
 
     @pytest.mark.anyio
     async def test_process_image_very_small(self, backend: TesseractBackend, mock_run_process: Mock) -> None:
-        """Test processing very small images."""
         image = Image.new("RGB", (1, 1), "white")
         result = await backend.process_image(image, language="eng")
         assert isinstance(result, ExtractionResult)
 
     @pytest.mark.anyio
     async def test_process_image_very_large(self, backend: TesseractBackend, mock_run_process: Mock) -> None:
-        """Test processing large images."""
         image = Image.new("RGB", (2000, 1500), "white")
         result = await backend.process_image(image, language="eng")
         assert isinstance(result, ExtractionResult)
 
 
 class TestTesseractErrorHandling:
-    """Test comprehensive error handling."""
-
     @pytest.mark.anyio
     async def test_process_file_file_not_found(self, backend: TesseractBackend) -> None:
-        """Test processing non-existent file."""
         nonexistent_file = Path("/nonexistent/file.png")
 
         with pytest.raises(OCRError, match="Failed to OCR using tesseract"):
@@ -958,7 +908,6 @@ class TestTesseractErrorHandling:
 
     @pytest.mark.anyio
     async def test_process_image_invalid_format(self, backend: TesseractBackend, mock_run_process: Mock) -> None:
-        """Test processing corrupted/invalid image."""
         image = Image.new("RGB", (100, 100), "white")
 
         async def error_side_effect(*args: Any, **kwargs: Any) -> Mock:
@@ -980,7 +929,6 @@ class TestTesseractErrorHandling:
             await backend.process_image(image, language="eng")
 
     def test_sync_process_image_temp_file_error(self, backend: TesseractBackend, mocker: MockerFixture) -> None:
-        """Test sync image processing with temp file creation error."""
         image = Image.new("RGB", (100, 100), "white")
 
         mocker.patch("tempfile.NamedTemporaryFile", side_effect=OSError("Cannot create temp file"))
@@ -991,7 +939,6 @@ class TestTesseractErrorHandling:
     def test_sync_process_file_read_error(
         self, backend: TesseractBackend, tmp_path: Path, mocker: MockerFixture
     ) -> None:
-        """Test sync file processing with read error."""
         test_file = tmp_path / "test.png"
         test_file.write_bytes(b"fake image data")
 
@@ -1004,17 +951,13 @@ class TestTesseractErrorHandling:
 
 
 class TestTesseractConfigEdgeCases:
-    """Test configuration edge cases."""
-
     def test_empty_whitelist(self) -> None:
-        """Test empty whitelist."""
         from kreuzberg._ocr._tesseract import TesseractConfig
 
         config = TesseractConfig(tessedit_char_whitelist="")
         assert config.tessedit_char_whitelist == ""
 
     def test_very_long_whitelist(self) -> None:
-        """Test very long whitelist."""
         from kreuzberg._ocr._tesseract import TesseractConfig
 
         long_whitelist = "".join(chr(i) for i in range(32, 127))
@@ -1023,7 +966,6 @@ class TestTesseractConfigEdgeCases:
         assert len(config.tessedit_char_whitelist) > 90
 
     def test_unicode_language_combinations(self) -> None:
-        """Test various Unicode language combinations."""
         valid_combinations = [
             "ara+eng",
             "chi_sim+eng+deu",
@@ -1038,11 +980,7 @@ class TestTesseractConfigEdgeCases:
 
 
 class TestTesseractUtilityFunctions:
-    """Test utility functions."""
-
     def test_normalize_spaces_in_results(self, backend: TesseractBackend, mock_run_process: Mock) -> None:
-        """Test that normalize_spaces is properly applied to results."""
-
         async def mock_with_extra_spaces(*args: Any, **kwargs: Any) -> Mock:
             if "--version" in args[0]:
                 result = Mock()
@@ -1080,7 +1018,6 @@ class TestTesseractUtilityFunctions:
 
 @pytest.mark.anyio
 async def test_tesseract_concurrent_processing(backend: TesseractBackend, mock_run_process: Mock) -> None:
-    """Test concurrent image processing."""
     import asyncio
 
     images = [Image.new("RGB", (50, 50), f"color{i}") for i in range(5)]
@@ -1098,7 +1035,6 @@ async def test_tesseract_concurrent_processing(backend: TesseractBackend, mock_r
 
 @pytest.mark.anyio
 async def test_tesseract_memory_efficiency(backend: TesseractBackend, mock_run_process: Mock) -> None:
-    """Test memory efficiency with large images."""
     large_image = Image.new("RGB", (1000, 1000), "white")
 
     result = await backend.process_image(large_image, language="eng")

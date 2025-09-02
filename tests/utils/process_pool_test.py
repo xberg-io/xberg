@@ -1,5 +1,3 @@
-"""Tests for process pool utilities."""
-
 from __future__ import annotations
 
 import multiprocessing as mp
@@ -25,33 +23,27 @@ if TYPE_CHECKING:
 
 
 def _simple_add(x: int, y: int) -> int:
-    """Simple addition function for testing."""
     return x + y
 
 
 def _process_data(data: dict[str, Any]) -> dict[str, Any]:
-    """Process data for testing."""
     return {"processed": True, "value": data.get("value", 0) * 2}
 
 
 def _failing_function() -> None:
-    """Function that raises an exception for testing."""
     raise ValueError("Test error")
 
 
 def _compute_square(n: int) -> int:
-    """Compute square of a number for testing."""
     return n * n
 
 
 def test_pool_size() -> None:
-    """Test that pool size is correctly calculated."""
     expected_size = max(1, mp.cpu_count() - 1)
     assert expected_size == _POOL_SIZE
 
 
 def test_init_process_pool() -> None:
-    """Test process pool initialization."""
     shutdown_process_pool()
 
     pool = _get_process_pool()
@@ -65,7 +57,6 @@ def test_init_process_pool() -> None:
 
 
 def test_process_pool_context_manager() -> None:
-    """Test process pool context manager."""
     shutdown_process_pool()
 
     with process_pool() as pool:
@@ -78,7 +69,6 @@ def test_process_pool_context_manager() -> None:
 
 
 def test_process_pool_error_recovery() -> None:
-    """Test process pool recovery after error."""
     shutdown_process_pool()
 
     with patch("kreuzberg._utils._process_pool.ProcessPoolExecutor") as mock_pool_class:
@@ -106,7 +96,6 @@ def test_process_pool_error_recovery() -> None:
 
 
 def test_submit_to_process_pool() -> None:
-    """Test submitting work to process pool."""
     shutdown_process_pool()
 
     result = submit_to_process_pool(_simple_add, 5, 10)
@@ -119,8 +108,6 @@ def test_submit_to_process_pool() -> None:
 
 
 def test_shutdown_process_pool() -> None:
-    """Test process pool shutdown."""
-
     _get_process_pool()
 
     assert _process_pool_ref.is_initialized()
@@ -133,7 +120,6 @@ def test_shutdown_process_pool() -> None:
 
 
 def test_extract_pdf_text_worker(searchable_pdf: Path) -> None:
-    """Test PDF text extraction worker."""
     path_str = str(searchable_pdf)
 
     pdf_path_str, text = _extract_pdf_text_worker(path_str)
@@ -145,7 +131,6 @@ def test_extract_pdf_text_worker(searchable_pdf: Path) -> None:
 
 
 def test_extract_pdf_text_worker_error() -> None:
-    """Test PDF text extraction worker with invalid file."""
     result = _extract_pdf_text_worker("/nonexistent/file.pdf")
 
     assert result[0] == "/nonexistent/file.pdf"
@@ -153,7 +138,6 @@ def test_extract_pdf_text_worker_error() -> None:
 
 
 def test_extract_pdf_text_worker_with_mock() -> None:
-    """Test PDF text extraction worker with mocked pypdfium2."""
     with patch("pypdfium2.PdfDocument") as mock_pdf_class:
         mock_pdf = Mock()
         mock_page = Mock()
@@ -174,7 +158,6 @@ def test_extract_pdf_text_worker_with_mock() -> None:
 
 
 def test_extract_pdf_images_worker(searchable_pdf: Path) -> None:
-    """Test PDF image extraction worker."""
     path_str = str(searchable_pdf)
 
     pdf_path_str, images = _extract_pdf_images_worker(path_str, scale=2.0)
@@ -190,7 +173,6 @@ def test_extract_pdf_images_worker(searchable_pdf: Path) -> None:
 
 
 def test_extract_pdf_images_worker_error() -> None:
-    """Test PDF image extraction worker with invalid file."""
     result = _extract_pdf_images_worker("/nonexistent/file.pdf")
 
     assert result[0] == "/nonexistent/file.pdf"
@@ -198,7 +180,6 @@ def test_extract_pdf_images_worker_error() -> None:
 
 
 def test_extract_pdf_images_worker_with_mock() -> None:
-    """Test PDF image extraction worker with mocked pypdfium2."""
     with patch("pypdfium2.PdfDocument") as mock_pdf_class:
         mock_pdf = Mock()
         mock_page = Mock()
@@ -230,7 +211,6 @@ def test_extract_pdf_images_worker_with_mock() -> None:
 
 
 def test_process_pool_concurrent_usage() -> None:
-    """Test concurrent usage of process pool."""
     shutdown_process_pool()
 
     results = []

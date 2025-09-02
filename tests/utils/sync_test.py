@@ -1,5 +1,3 @@
-"""Tests for sync utilities."""
-
 from __future__ import annotations
 
 import anyio
@@ -16,30 +14,25 @@ from kreuzberg._utils._sync import (
 
 
 def sync_function(x: int, y: int = 10) -> int:
-    """Test synchronous function."""
     return x + y
 
 
 async def async_function(x: int, y: int = 10) -> int:
-    """Test asynchronous function."""
     await anyio.sleep(0.01)
     return x + y
 
 
 def test_run_maybe_async_with_sync_function() -> None:
-    """Test run_maybe_async with a synchronous function."""
     result = run_maybe_async(sync_function, 5, y=15)
     assert result == 20
 
 
 def test_run_maybe_async_with_async_function() -> None:
-    """Test run_maybe_async with an asynchronous function."""
     result: int = run_maybe_async(async_function, 5, y=15)  # type: ignore[arg-type]
     assert result == 20
 
 
 def test_run_maybe_async_with_args_and_kwargs() -> None:
-    """Test run_maybe_async with both positional and keyword arguments."""
     result: int = run_maybe_async(sync_function, 7, y=3)
     assert result == 10
 
@@ -48,20 +41,16 @@ def test_run_maybe_async_with_args_and_kwargs() -> None:
 
 
 def test_run_sync_only_with_sync_function() -> None:
-    """Test run_sync_only with a synchronous function."""
     result = run_sync_only(sync_function, 8, y=12)
     assert result == 20
 
 
 def test_run_sync_only_with_async_function_raises_error() -> None:
-    """Test run_sync_only raises error with asynchronous function."""
     with pytest.raises(RuntimeError, match="Cannot run async function async_function in sync-only context"):
         run_sync_only(async_function, 5, y=15)  # type: ignore[arg-type]
 
 
 def test_run_sync_only_error_message() -> None:
-    """Test that run_sync_only error message includes function name."""
-
     async def custom_async_function() -> None:
         pass
 
@@ -73,8 +62,6 @@ def test_run_sync_only_error_message() -> None:
 
 
 def test_run_maybe_async_with_no_args() -> None:
-    """Test run_maybe_async with functions that take no arguments."""
-
     def no_arg_sync() -> str:
         return "sync_result"
 
@@ -86,8 +73,6 @@ def test_run_maybe_async_with_no_args() -> None:
 
 
 def test_run_sync_only_with_no_args() -> None:
-    """Test run_sync_only with function that takes no arguments."""
-
     def no_arg_sync() -> str:
         return "sync_only_result"
 
@@ -95,8 +80,6 @@ def test_run_sync_only_with_no_args() -> None:
 
 
 def test_run_maybe_async_with_exception() -> None:
-    """Test run_maybe_async propagates exceptions correctly."""
-
     def sync_error() -> None:
         raise ValueError("Sync error")
 
@@ -111,8 +94,6 @@ def test_run_maybe_async_with_exception() -> None:
 
 
 def test_run_sync_only_with_exception() -> None:
-    """Test run_sync_only propagates exceptions correctly."""
-
     def sync_error() -> None:
         raise ValueError("Sync only error")
 
@@ -121,8 +102,6 @@ def test_run_sync_only_with_exception() -> None:
 
 
 def test_run_maybe_async_return_types() -> None:
-    """Test run_maybe_async preserves return types correctly."""
-
     def return_list() -> list[int]:
         return [1, 2, 3]
 
@@ -140,22 +119,18 @@ def test_run_maybe_async_return_types() -> None:
 
 @pytest.mark.anyio
 async def test_async_run_sync_with_sync_function() -> None:
-    """Test async run_sync with a synchronous function."""
     result = await run_sync(sync_function, 5, y=15)
     assert result == 20
 
 
 @pytest.mark.anyio
 async def test_async_run_sync_with_args_and_kwargs() -> None:
-    """Test async run_sync with both positional and keyword arguments."""
     result = await run_sync(sync_function, 7, y=3)
     assert result == 10
 
 
 @pytest.mark.anyio
 async def test_async_run_sync_with_no_args() -> None:
-    """Test async run_sync with functions that take no arguments."""
-
     def no_arg_sync() -> str:
         return "async_sync_result"
 
@@ -165,8 +140,6 @@ async def test_async_run_sync_with_no_args() -> None:
 
 @pytest.mark.anyio
 async def test_async_run_sync_with_exception() -> None:
-    """Test async run_sync propagates exceptions correctly."""
-
     def sync_error() -> None:
         raise ValueError("Async sync error")
 
@@ -176,22 +149,18 @@ async def test_async_run_sync_with_exception() -> None:
 
 @pytest.mark.anyio
 async def test_run_maybe_sync_with_sync_function() -> None:
-    """Test run_maybe_sync with synchronous function."""
     result = await run_maybe_sync(sync_function, 5, y=15)
     assert result == 20
 
 
 @pytest.mark.anyio
 async def test_run_maybe_sync_with_async_function() -> None:
-    """Test run_maybe_sync with asynchronous function."""
     result: int = await run_maybe_sync(async_function, 5, y=15)
     assert result == 20
 
 
 @pytest.mark.anyio
 async def test_run_maybe_sync_with_exception() -> None:
-    """Test run_maybe_sync propagates exceptions correctly."""
-
     def sync_error() -> None:
         raise ValueError("Maybe sync error")
 
@@ -207,8 +176,6 @@ async def test_run_maybe_sync_with_exception() -> None:
 
 @pytest.mark.anyio
 async def test_run_taskgroup() -> None:
-    """Test run_taskgroup with multiple async tasks."""
-
     async def task1() -> int:
         await anyio.sleep(0.01)
         return 1
@@ -227,8 +194,6 @@ async def test_run_taskgroup() -> None:
 
 @pytest.mark.anyio
 async def test_run_taskgroup_with_exception() -> None:
-    """Test run_taskgroup handles exceptions."""
-
     async def good_task() -> int:
         await anyio.sleep(0.01)
         return 42
@@ -251,15 +216,12 @@ async def test_run_taskgroup_with_exception() -> None:
 
 @pytest.mark.anyio
 async def test_run_taskgroup_empty() -> None:
-    """Test run_taskgroup with no tasks."""
     results = await run_taskgroup()
     assert results == []
 
 
 @pytest.mark.anyio
 async def test_run_taskgroup_batched() -> None:
-    """Test run_taskgroup_batched with multiple batches."""
-
     async def make_task(value: int) -> int:
         await anyio.sleep(0.01)
         return value
@@ -271,8 +233,6 @@ async def test_run_taskgroup_batched() -> None:
 
 @pytest.mark.anyio
 async def test_run_taskgroup_batched_single_batch() -> None:
-    """Test run_taskgroup_batched with single batch."""
-
     async def make_task(value: int) -> int:
         await anyio.sleep(0.01)
         return value * 2
@@ -284,8 +244,6 @@ async def test_run_taskgroup_batched_single_batch() -> None:
 
 @pytest.mark.anyio
 async def test_run_taskgroup_batched_exact_batches() -> None:
-    """Test run_taskgroup_batched with exact batch sizes."""
-
     async def make_task(value: int) -> int:
         await anyio.sleep(0.01)
         return value + 10
@@ -297,6 +255,5 @@ async def test_run_taskgroup_batched_exact_batches() -> None:
 
 @pytest.mark.anyio
 async def test_run_taskgroup_batched_empty() -> None:
-    """Test run_taskgroup_batched with no tasks."""
     results = await run_taskgroup_batched(batch_size=2)
     assert results == []

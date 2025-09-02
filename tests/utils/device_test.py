@@ -1,5 +1,3 @@
-"""Tests for device detection and management utilities."""
-
 from __future__ import annotations
 
 import sys

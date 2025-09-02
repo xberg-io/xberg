@@ -36,7 +36,6 @@ async def test_extract_html_string_bytes(extractor: HTMLExtractor) -> None:
 
 
 def test_extract_html_path_sync(html_document: Path, extractor: HTMLExtractor) -> None:
-    """Test sync path extraction for HTML files."""
     result = extractor.extract_path_sync(html_document)
     assert isinstance(result.content, str)
     assert result.content.strip()
@@ -44,7 +43,6 @@ def test_extract_html_path_sync(html_document: Path, extractor: HTMLExtractor) -
 
 
 def test_extract_html_bytes_sync(extractor: HTMLExtractor) -> None:
-    """Test sync bytes extraction for HTML content."""
     html_content = b"<html><body><h2>Sync Test</h2><p>Testing sync extraction.</p></body></html>"
     result = extractor.extract_bytes_sync(html_content)
     assert isinstance(result.content, str)

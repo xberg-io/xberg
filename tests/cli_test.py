@@ -1,5 +1,3 @@
-"""Tests for the CLI module."""
-
 from __future__ import annotations
 
 import json
@@ -34,10 +32,7 @@ pytestmark = pytest.mark.skipif(not CLI_AVAILABLE, reason="CLI dependencies not 
 
 
 class TestCliConfig:
-    """Test configuration parsing functionality."""
-
     def test_load_config_from_file(self, tmp_path: Path) -> None:
-        """Test loading configuration from TOML file."""
         config_file = tmp_path / "pyproject.toml"
         config_file.write_text("""
 [tool.kreuzberg]
@@ -58,12 +53,10 @@ psm = 3
         assert config["tesseract"]["psm"] == 3
 
     def test_load_config_file_not_found(self) -> None:
-        """Test error when config file doesn't exist."""
         with pytest.raises(ValidationError, match="Configuration file not found"):
             load_config_from_file(Path("nonexistent.toml"))
 
     def test_load_config_invalid_toml(self, tmp_path: Path) -> None:
-        """Test error when config file has invalid TOML."""
         config_file = tmp_path / "invalid.toml"
         config_file.write_text("invalid toml content [")
 
@@ -71,7 +64,6 @@ psm = 3
             load_config_from_file(config_file)
 
     def test_merge_configs(self) -> None:
-        """Test configuration merging."""
         base = {
             "force_ocr": False,
             "max_chars": 1000,
@@ -89,7 +81,6 @@ psm = 3
         assert result["tesseract"]["psm"] == 3
 
     def test_parse_ocr_backend_config(self) -> None:
-        """Test parsing OCR backend configuration."""
         config_dict = {
             "tesseract": {"language": "eng", "psm": 3},
             "easyocr": {"languages": ["en", "de"]},
@@ -103,7 +94,6 @@ psm = 3
         assert parse_ocr_backend_config(config_dict, "paddleocr") is None
 
     def test_build_extraction_config(self) -> None:
-        """Test building ExtractionConfig from file and CLI args."""
         file_config = {
             "force_ocr": True,
             "chunk_content": False,
@@ -126,32 +116,25 @@ psm = 3
         assert (config.ocr_config.psm.value if hasattr(config.ocr_config.psm, "value") else config.ocr_config.psm) == 6
 
     def test_build_extraction_config_ocr_none(self) -> None:
-        """Test building config with OCR disabled."""
         cli_args = {"ocr_backend": "none"}
         config = build_extraction_config({}, cli_args)
         assert config.ocr_backend is None
 
 
 class TestCli:
-    """Test CLI commands."""
-
     def test_cli_help(self) -> None:
-        """Test CLI help output."""
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
         assert "Kreuzberg - Text extraction from documents" in result.output
 
     def test_cli_version(self) -> None:
-        """Test CLI version output."""
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
         assert "kreuzberg, version" in result.output
 
     def test_extract_file(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        """Test extracting from a file."""
-
         test_file = tmp_path / "test.pdf"
         test_file.write_bytes(b"dummy content")
 
@@ -171,7 +154,6 @@ class TestCli:
         assert "Extracted text content" in result.output
 
     def test_extract_file_with_output(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        """Test extracting to an output file."""
         test_file = tmp_path / "test.pdf"
         test_file.write_bytes(b"dummy content")
         output_file = tmp_path / "output.txt"
@@ -192,7 +174,6 @@ class TestCli:
         assert output_file.read_text() == "Extracted text"
 
     def test_extract_stdin(self, mocker: MockerFixture) -> None:
-        """Test extracting from stdin."""
         mock_result = Mock()
         mock_result.content = "Text from stdin"
         mock_result.mime_type = "text/plain"
@@ -209,7 +190,6 @@ class TestCli:
         assert "Text from stdin" in result.output
 
     def test_extract_with_options(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        """Test extraction with various options."""
         test_file = tmp_path / "test.pdf"
         test_file.write_bytes(b"dummy")
 
@@ -254,7 +234,6 @@ class TestCli:
         assert output_data["tables"] == [{"data": [[1, 2], [3, 4]]}]
 
     def test_extract_with_config_file(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        """Test extraction with config file."""
         test_file = tmp_path / "test.pdf"
         test_file.write_bytes(b"dummy")
 
@@ -283,7 +262,6 @@ max_chars = 2000
         assert config.max_chars == 2000
 
     def test_config_command(self, tmp_path: Path) -> None:
-        """Test config command."""
         config_file = tmp_path / "pyproject.toml"
         config_file.write_text("""
 [tool.kreuzberg]
@@ -299,7 +277,6 @@ chunk_content = false
         assert "force_ocr" in result.output
 
     def test_error_handling(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        """Test error handling."""
         from kreuzberg.exceptions import ParsingError
 
         test_file = tmp_path / "test.pdf"
@@ -315,7 +292,6 @@ chunk_content = false
         assert "Failed to parse" in result.output
 
     def test_missing_dependency_error(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        """Test missing dependency error handling."""
         from kreuzberg.exceptions import MissingDependencyError
 
         test_file = tmp_path / "test.pdf"

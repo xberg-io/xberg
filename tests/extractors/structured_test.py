@@ -93,7 +93,6 @@ enabled = true
 
     @pytest.mark.anyio
     async def test_extract_bytes_async(self) -> None:
-        """Test async extraction."""
         config = ExtractionConfig()
         extractor = StructuredDataExtractor(JSON_MIME_TYPE, config)
 
@@ -106,7 +105,6 @@ enabled = true
 
     @pytest.mark.anyio
     async def test_extract_path_async(self) -> None:
-        """Test async path extraction."""
         import tempfile
         from pathlib import Path
 
@@ -125,7 +123,6 @@ enabled = true
             temp_path.unlink()
 
     def test_extract_path_sync(self) -> None:
-        """Test sync path extraction."""
         import tempfile
         from pathlib import Path
 
@@ -144,7 +141,6 @@ enabled = true
             temp_path.unlink()
 
     def test_extract_toml_without_tomllib(self) -> None:
-        """Test TOML extraction when tomllib is not available."""
         import sys
         from unittest.mock import patch
 
@@ -162,7 +158,6 @@ enabled = true
         assert "tomllib/tomli not available" in result.metadata["warning"]
 
     def test_extract_yaml_without_pyyaml(self) -> None:
-        """Test YAML extraction when PyYAML is not available."""
         import sys
         from unittest.mock import patch
 
@@ -180,7 +175,6 @@ enabled = true
         assert "PyYAML not available" in result.metadata["warning"]
 
     def test_extract_from_list_data(self) -> None:
-        """Test extraction from list data structure."""
         config = ExtractionConfig()
         extractor = StructuredDataExtractor(JSON_MIME_TYPE, config)
 
@@ -194,7 +188,6 @@ enabled = true
         assert "200" in result.content
 
     def test_extract_simple_string_data(self) -> None:
-        """Test extraction from simple string data."""
         config = ExtractionConfig()
         extractor = StructuredDataExtractor(JSON_MIME_TYPE, config)
 
@@ -205,7 +198,6 @@ enabled = true
         assert "This is a simple string" in result.content
 
     def test_extract_simple_number_data(self) -> None:
-        """Test extraction from simple number data."""
         config = ExtractionConfig()
         extractor = StructuredDataExtractor(JSON_MIME_TYPE, config)
 
@@ -216,7 +208,6 @@ enabled = true
         assert "42" in result.content
 
     def test_extract_complex_nested_structure(self) -> None:
-        """Test extraction from complex nested data structures."""
         config = ExtractionConfig()
         extractor = StructuredDataExtractor(JSON_MIME_TYPE, config)
 
@@ -253,7 +244,6 @@ enabled = true
         assert result.metadata["title"] == "Complex Document"
 
     def test_extract_nested_lists(self) -> None:
-        """Test extraction from nested list structures."""
         config = ExtractionConfig()
         extractor = StructuredDataExtractor(JSON_MIME_TYPE, config)
 
@@ -278,7 +268,6 @@ enabled = true
         assert "123" in result.content
 
     def test_extract_with_none_values(self) -> None:
-        """Test extraction with None values in data."""
         config = ExtractionConfig()
         extractor = StructuredDataExtractor(JSON_MIME_TYPE, config)
 

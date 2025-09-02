@@ -1,5 +1,3 @@
-"""Tests for email extraction functionality."""
-
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -14,14 +12,12 @@ from kreuzberg.exceptions import MissingDependencyError
 
 @pytest.fixture
 def email_extractor() -> EmailExtractor:
-    """Create EmailExtractor instance for testing."""
     config = ExtractionConfig()
     return EmailExtractor(EML_MIME_TYPE, config)
 
 
 @pytest.fixture
 def sample_email_path(tmp_path: Path) -> Path:
-    """Create a sample email file for testing."""
     email_content = """Subject: Test Email
 From: test@example.com
 To: recipient@example.com
@@ -34,7 +30,6 @@ This is a test email body.
 
 
 def test_mime_types() -> None:
-    """Test that email MIME types are properly defined."""
     from kreuzberg._extractors._email import EmailExtractor
 
     assert EML_MIME_TYPE in EmailExtractor.SUPPORTED_MIME_TYPES
@@ -42,7 +37,6 @@ def test_mime_types() -> None:
 
 
 def test_extract_bytes_sync(email_extractor: EmailExtractor) -> None:
-    """Test sync bytes extraction."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -60,7 +54,6 @@ def test_extract_bytes_sync(email_extractor: EmailExtractor) -> None:
 
 
 def test_extract_path_sync_basic(email_extractor: EmailExtractor, sample_email_path: Path) -> None:
-    """Test sync path extraction."""
     result = email_extractor.extract_path_sync(sample_email_path)
 
     assert result.content
@@ -69,7 +62,6 @@ def test_extract_path_sync_basic(email_extractor: EmailExtractor, sample_email_p
 
 
 def test_missing_mailparse_dependency_basic() -> None:
-    """Test handling when mailparse is not available."""
     config = ExtractionConfig()
     extractor = EmailExtractor(EML_MIME_TYPE, config)
 
@@ -80,7 +72,6 @@ def test_missing_mailparse_dependency_basic() -> None:
 
 @pytest.mark.anyio
 async def test_extract_bytes_async(email_extractor: EmailExtractor) -> None:
-    """Test async bytes extraction."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -99,7 +90,6 @@ async def test_extract_bytes_async(email_extractor: EmailExtractor) -> None:
 
 @pytest.mark.anyio
 async def test_extract_path_async(email_extractor: EmailExtractor, sample_email_path: Path) -> None:
-    """Test async path extraction."""
     result = await email_extractor.extract_path_async(sample_email_path)
 
     assert result.content
@@ -109,7 +99,6 @@ async def test_extract_path_async(email_extractor: EmailExtractor, sample_email_
 
 @pytest.mark.anyio
 async def test_missing_mailparse_dependency_async() -> None:
-    """Test handling when mailparse is not available in async mode."""
     config = ExtractionConfig()
     extractor = EmailExtractor(EML_MIME_TYPE, config)
 
@@ -119,7 +108,6 @@ async def test_missing_mailparse_dependency_async() -> None:
 
 
 def test_email_header_extraction(email_extractor: EmailExtractor) -> None:
-    """Test that email headers are properly extracted and formatted."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -143,7 +131,6 @@ def test_email_header_extraction(email_extractor: EmailExtractor) -> None:
 
 
 def test_email_complex_headers(email_extractor: EmailExtractor) -> None:
-    """Test extraction with complex header structures."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": {"email": "sender@example.com", "name": "Sender Name"},
@@ -167,7 +154,6 @@ def test_email_complex_headers(email_extractor: EmailExtractor) -> None:
 
 
 def test_email_missing_headers(email_extractor: EmailExtractor) -> None:
-    """Test email with missing headers."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "text": "Simple email without subject or date.",
@@ -181,7 +167,6 @@ def test_email_missing_headers(email_extractor: EmailExtractor) -> None:
 
 
 def test_email_with_html_content_with_html2text(email_extractor: EmailExtractor) -> None:
-    """Test email with HTML content when html2text is available."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -202,7 +187,6 @@ def test_email_with_html_content_with_html2text(email_extractor: EmailExtractor)
 
 
 def test_email_with_html_content_without_html2text(email_extractor: EmailExtractor) -> None:
-    """Test email with HTML content when html2text is not available."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -218,7 +202,6 @@ def test_email_with_html_content_without_html2text(email_extractor: EmailExtract
 
 
 def test_email_with_attachments(email_extractor: EmailExtractor) -> None:
-    """Test email with attachments."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -239,7 +222,6 @@ def test_email_with_attachments(email_extractor: EmailExtractor) -> None:
 
 
 def test_email_with_empty_attachments(email_extractor: EmailExtractor) -> None:
-    """Test email with empty attachments list."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -256,7 +238,6 @@ def test_email_with_empty_attachments(email_extractor: EmailExtractor) -> None:
 
 
 def test_missing_mailparse_dependency() -> None:
-    """Test handling when mailparse is not available."""
     config = ExtractionConfig()
     extractor = EmailExtractor(EML_MIME_TYPE, config)
 
@@ -266,7 +247,6 @@ def test_missing_mailparse_dependency() -> None:
 
 
 def test_email_with_html_body_without_html2text(email_extractor: EmailExtractor) -> None:
-    """Test HTML email body extraction without html2text (fallback)."""
     with patch("kreuzberg._extractors._email.html2text", None):
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
@@ -284,7 +264,6 @@ def test_email_with_html_body_without_html2text(email_extractor: EmailExtractor)
 
 
 def test_email_text_preferred_over_html(email_extractor: EmailExtractor) -> None:
-    """Test that text content is preferred over HTML when both exist."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -301,7 +280,6 @@ def test_email_text_preferred_over_html(email_extractor: EmailExtractor) -> None
 
 
 def test_email_with_attachments_detailed(email_extractor: EmailExtractor) -> None:
-    """Test email with attachments."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -322,7 +300,6 @@ def test_email_with_attachments_detailed(email_extractor: EmailExtractor) -> Non
 
 
 def test_email_without_attachments(email_extractor: EmailExtractor) -> None:
-    """Test email without attachments."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": "sender@example.com",
@@ -338,21 +315,18 @@ def test_email_without_attachments(email_extractor: EmailExtractor) -> None:
 
 
 def test_missing_mailparse_dependency_with_fixture(email_extractor: EmailExtractor) -> None:
-    """Test error when mailparse is not installed."""
     with patch("kreuzberg._extractors._email.mailparse", None):
         with pytest.raises(MissingDependencyError, match="mailparse is required"):
             email_extractor.extract_bytes_sync(b"dummy")
 
 
 def test_mailparse_exception(email_extractor: EmailExtractor) -> None:
-    """Test handling of exceptions from mailparse."""
     with patch("mailparse.EmailDecode.load", side_effect=Exception("Parse error")):
         with pytest.raises(RuntimeError, match="Failed to parse email content"):
             email_extractor.extract_bytes_sync(b"invalid email content")
 
 
 def test_extract_path_sync(email_extractor: EmailExtractor, sample_email_path: Path) -> None:
-    """Test sync path extraction."""
     result = email_extractor.extract_path_sync(sample_email_path)
 
     assert result.content
@@ -361,7 +335,6 @@ def test_extract_path_sync(email_extractor: EmailExtractor, sample_email_path: P
 
 
 def test_empty_email(email_extractor: EmailExtractor) -> None:
-    """Test extraction of empty/minimal email."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {}
 
@@ -372,7 +345,6 @@ def test_empty_email(email_extractor: EmailExtractor) -> None:
 
 
 def test_email_with_all_fields(email_extractor: EmailExtractor) -> None:
-    """Test email with all possible fields populated."""
     with patch("mailparse.EmailDecode.load") as mock_load:
         mock_load.return_value = {
             "from": {"email": "sender@example.com", "name": "Sender Name"},
@@ -406,10 +378,7 @@ def test_email_with_all_fields(email_extractor: EmailExtractor) -> None:
 
 
 class TestEmailExtractorFormatEmailField:
-    """Test _format_email_field method comprehensively."""
-
     def test_format_email_field_list_with_dicts(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting list of email dicts."""
         field = [
             {"email": "test1@example.com", "name": "Test User 1"},
             {"email": "test2@example.com", "name": "Test User 2"},
@@ -419,7 +388,6 @@ class TestEmailExtractorFormatEmailField:
         assert result == "test1@example.com, test2@example.com, test3@example.com"
 
     def test_format_email_field_list_with_dicts_empty_email(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting list with dicts that have empty email."""
         field = [
             {"email": "", "name": "Empty Email"},
             {"email": "valid@example.com", "name": "Valid User"},
@@ -429,13 +397,11 @@ class TestEmailExtractorFormatEmailField:
         assert result == "valid@example.com"
 
     def test_format_email_field_list_with_strings(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting list of string emails."""
         field = ["email1@example.com", "email2@example.com", "email3@example.com"]
         result = email_extractor._format_email_field(field)
         assert result == "email1@example.com, email2@example.com, email3@example.com"
 
     def test_format_email_field_list_mixed_types(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting list with mixed dict/string types."""
         field = [
             {"email": "dict@example.com", "name": "Dict User"},
             "string@example.com",
@@ -446,41 +412,33 @@ class TestEmailExtractorFormatEmailField:
         assert result == "dict@example.com, string@example.com, 123, another@example.com"
 
     def test_format_email_field_single_dict(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting single dict."""
         field = {"email": "single@example.com", "name": "Single User"}
         result = email_extractor._format_email_field(field)
         assert result == "single@example.com"
 
     def test_format_email_field_single_dict_no_email(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting single dict without email key."""
         field = {"name": "No Email Key"}
         result = email_extractor._format_email_field(field)
         assert result == ""
 
     def test_format_email_field_single_string(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting single string."""
         field = "single@example.com"
         result = email_extractor._format_email_field(field)
         assert result == "single@example.com"
 
     def test_format_email_field_none_value(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting None value."""
         field = None
         result = email_extractor._format_email_field(field)
         assert result == "None"
 
     def test_format_email_field_empty_list(self, email_extractor: EmailExtractor) -> None:
-        """Test formatting empty list."""
         field: list[Any] = []
         result = email_extractor._format_email_field(field)
         assert result == ""
 
 
 class TestEmailExtractorHeaderExtractionComprehensive:
-    """Test header extraction edge cases."""
-
     def test_extract_headers_from_field_dict_with_name(self, email_extractor: EmailExtractor) -> None:
-        """Test from field as dict with name."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "from": {"email": "sender@example.com", "name": "Sender Name"},
@@ -493,7 +451,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "From: sender@example.com" in result.content
 
     def test_extract_headers_from_field_dict_no_email(self, email_extractor: EmailExtractor) -> None:
-        """Test from field as dict without email key."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "from": {"name": "Sender Name"},
@@ -506,7 +463,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "From:" in result.content
 
     def test_extract_headers_from_field_string(self, email_extractor: EmailExtractor) -> None:
-        """Test from field as plain string."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "from": "sender@example.com",
@@ -519,7 +475,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "From: sender@example.com" in result.content
 
     def test_extract_headers_to_field_list_dict(self, email_extractor: EmailExtractor) -> None:
-        """Test to field as list of dicts."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "to": [
@@ -535,7 +490,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "To: recipient1@example.com, recipient2@example.com" in result.content
 
     def test_extract_headers_to_field_list_empty(self, email_extractor: EmailExtractor) -> None:
-        """Test to field as empty list."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "to": [],
@@ -548,7 +502,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "To:" not in result.content
 
     def test_extract_headers_to_field_list_first_no_email(self, email_extractor: EmailExtractor) -> None:
-        """Test to field list where first item has no email."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "to": [
@@ -564,7 +517,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "To: , recipient2@example.com" in result.content
 
     def test_extract_headers_to_field_list_strings(self, email_extractor: EmailExtractor) -> None:
-        """Test to field as list of strings."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "to": ["recipient1@example.com", "recipient2@example.com"],
@@ -577,7 +529,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "To: recipient1@example.com, recipient2@example.com" in result.content
 
     def test_extract_headers_to_field_single_dict(self, email_extractor: EmailExtractor) -> None:
-        """Test to field as single dict."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "to": {"email": "single@example.com", "name": "Single Recipient"},
@@ -590,7 +541,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "To: single@example.com" in result.content
 
     def test_extract_headers_to_field_single_string(self, email_extractor: EmailExtractor) -> None:
-        """Test to field as single string."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "to": "single@example.com",
@@ -603,7 +553,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "To: single@example.com" in result.content
 
     def test_extract_headers_cc_bcc_various_types(self, email_extractor: EmailExtractor) -> None:
-        """Test CC and BCC fields with various data types."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "cc": {"email": "cc@example.com", "name": "CC Person"},
@@ -619,7 +568,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert "BCC: bcc1@example.com, bcc2@example.com" in result.content
 
     def test_extract_headers_none_values(self, email_extractor: EmailExtractor) -> None:
-        """Test headers with None values."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "from": None,
@@ -642,7 +590,6 @@ class TestEmailExtractorHeaderExtractionComprehensive:
             assert result.content == "Body content"
 
     def test_extract_headers_empty_string_values(self, email_extractor: EmailExtractor) -> None:
-        """Test headers with empty string values."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "from": "",
@@ -666,10 +613,7 @@ class TestEmailExtractorHeaderExtractionComprehensive:
 
 
 class TestEmailExtractorBodyExtractionComprehensive:
-    """Test body extraction edge cases."""
-
     def test_extract_body_text_only(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with text content only."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "text": "Plain text content",
@@ -680,7 +624,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
             assert result.content == "\nPlain text content"
 
     def test_extract_body_html_only_with_html2text(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with HTML content using html2text converter."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "html": "<p>HTML <strong>content</strong></p>",
@@ -699,7 +642,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
                 assert mock_converter.ignore_images is True
 
     def test_extract_body_html_only_without_html2text(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with HTML content without html2text (fallback)."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "html": "<p>HTML &amp; <strong>content</strong> &lt;test&gt;</p>",
@@ -711,7 +653,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
                 assert result.content == "\nHTML & content <test>"
 
     def test_extract_body_both_text_and_html(self, email_extractor: EmailExtractor) -> None:
-        """Test that text is preferred when both text and HTML exist."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "text": "Plain text version",
@@ -723,7 +664,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
             assert result.content == "\nPlain text version"
 
     def test_extract_body_no_content(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with no body content."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "subject": "Subject Only",
@@ -734,7 +674,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
             assert result.content == "Subject: Subject Only"
 
     def test_extract_body_empty_text_and_html(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with empty text and HTML fields."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "text": "",
@@ -747,7 +686,6 @@ class TestEmailExtractorBodyExtractionComprehensive:
             assert result.content == "Subject: Empty Body\n"
 
     def test_extract_body_none_text_and_html(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with None text and HTML fields."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "text": None,
@@ -761,10 +699,7 @@ class TestEmailExtractorBodyExtractionComprehensive:
 
 
 class TestEmailExtractorAttachmentExtractionComprehensive:
-    """Test attachment extraction edge cases."""
-
     def test_extract_attachments_with_names(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with various attachment name scenarios."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "attachments": [
@@ -784,7 +719,6 @@ class TestEmailExtractorAttachmentExtractionComprehensive:
             assert f"Attachments: {', '.join(expected_names)}" in result.content
 
     def test_extract_attachments_none_list(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with None attachments."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "attachments": None,
@@ -797,7 +731,6 @@ class TestEmailExtractorAttachmentExtractionComprehensive:
             assert "Attachments:" not in result.content
 
     def test_extract_attachments_falsy_but_exists(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction with falsy but existing attachments key."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "attachments": 0,
@@ -810,7 +743,6 @@ class TestEmailExtractorAttachmentExtractionComprehensive:
             assert "Attachments:" not in result.content
 
     def test_extract_attachments_empty_names_only(self, email_extractor: EmailExtractor) -> None:
-        """Test extraction where all attachments have no/empty names."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "attachments": [
@@ -828,28 +760,22 @@ class TestEmailExtractorAttachmentExtractionComprehensive:
 
 
 class TestEmailExtractorErrorHandlingComprehensive:
-    """Test error handling scenarios."""
-
     def test_mailparse_load_generic_exception(self, email_extractor: EmailExtractor) -> None:
-        """Test handling of generic exception from mailparse.load."""
         with patch("mailparse.EmailDecode.load", side_effect=ValueError("Invalid email format")):
             with pytest.raises(RuntimeError, match="Failed to parse email content: Invalid email format"):
                 email_extractor.extract_bytes_sync(b"invalid email")
 
     def test_mailparse_load_attribute_error(self, email_extractor: EmailExtractor) -> None:
-        """Test handling of AttributeError from mailparse.load."""
         with patch("mailparse.EmailDecode.load", side_effect=AttributeError("Missing attribute")):
             with pytest.raises(RuntimeError, match="Failed to parse email content: Missing attribute"):
                 email_extractor.extract_bytes_sync(b"malformed email")
 
     def test_mailparse_load_key_error(self, email_extractor: EmailExtractor) -> None:
-        """Test handling of KeyError from mailparse.load."""
         with patch("mailparse.EmailDecode.load", side_effect=KeyError("missing_key")):
             with pytest.raises(RuntimeError, match="Failed to parse email content: 'missing_key'"):
                 email_extractor.extract_bytes_sync(b"incomplete email")
 
     def test_mailparse_load_unicode_decode_error(self, email_extractor: EmailExtractor) -> None:
-        """Test handling of UnicodeDecodeError from mailparse.load."""
         unicode_error = UnicodeDecodeError("utf-8", b"\xff\xfe", 0, 2, "invalid start byte")
         with patch("mailparse.EmailDecode.load", side_effect=unicode_error):
             with pytest.raises(RuntimeError, match="Failed to parse email content"):
@@ -857,10 +783,7 @@ class TestEmailExtractorErrorHandlingComprehensive:
 
 
 class TestEmailExtractorIntegrationComprehensive:
-    """Test integration scenarios with complex emails."""
-
     def test_complex_email_all_features(self, email_extractor: EmailExtractor) -> None:
-        """Test processing complex email with all features."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "from": {"email": "complex@example.com", "name": "Complex Sender"},
@@ -906,7 +829,6 @@ class TestEmailExtractorIntegrationComprehensive:
             assert result.metadata["attachments"] == ["document.pdf", "presentation.pptx", "data.xlsx"]
 
     def test_malformed_email_structure_recovery(self, email_extractor: EmailExtractor) -> None:
-        """Test processing malformed email that still partially parses."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "from": {"not_email_key": "malformed@example.com"},
@@ -926,7 +848,6 @@ class TestEmailExtractorIntegrationComprehensive:
 
     @pytest.mark.anyio
     async def test_async_complex_email(self, email_extractor: EmailExtractor) -> None:
-        """Test async processing of complex email."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "from": "async@example.com",
@@ -945,7 +866,6 @@ class TestEmailExtractorIntegrationComprehensive:
             assert result.metadata["subject"] == "Async Complex Email"
 
     def test_html_with_complex_entities_without_html2text(self, email_extractor: EmailExtractor) -> None:
-        """Test HTML processing with complex entities without html2text."""
         with patch("mailparse.EmailDecode.load") as mock_load:
             mock_load.return_value = {
                 "html": """

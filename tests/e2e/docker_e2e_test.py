@@ -1,20 +1,3 @@
-"""
-End-to-end tests for Kreuzberg Docker images.
-
-This script tests all Docker images to ensure they work correctly with various features:
-- CLI functionality
-- API server functionality
-- File extraction (various formats)
-- OCR capabilities
-- Volume mounting
-- Configuration handling
-- Security best practices
-- Resource limits
-
-Note: This is a standalone script, not a pytest test module.
-It should be run directly: python tests/e2e/docker_e2e_test.py
-"""
-
 import argparse
 import asyncio
 import json
@@ -49,7 +32,6 @@ test_results: dict[str, dict[str, Any]] = {}
 
 
 def run_command(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
-    """Run a command and return exit code, stdout, and stderr."""
     try:
         result = subprocess.run(cmd, check=False, capture_output=True, text=True, timeout=timeout)
         return result.returncode, result.stdout, result.stderr
@@ -60,7 +42,6 @@ def run_command(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
 
 
 async def run_command_async(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
-    """Run a command asynchronously with timeout."""
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -79,20 +60,17 @@ async def run_command_async(cmd: list[str], timeout: int = 30) -> tuple[int, str
 
 
 def generate_random_container_name() -> str:
-    """Generate a secure random container name."""
     suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=8))
     return f"kreuzberg-test-{suffix}"
 
 
 def test_image_exists(image_name: str) -> bool:
-    """Test if Docker image exists."""
     cmd = ["docker", "images", "-q", image_name]
     exit_code, stdout, _ = run_command(cmd)
     return exit_code == 0 and stdout.strip() != ""
 
 
 def test_cli_help(image_name: str) -> bool:
-    """Test CLI help command."""
     cmd = [
         "docker",
         "run",
@@ -113,7 +91,6 @@ def test_cli_help(image_name: str) -> bool:
 
 
 def test_cli_version(image_name: str) -> bool:
-    """Test CLI version command."""
     cmd = [
         "docker",
         "run",
@@ -134,8 +111,6 @@ def test_cli_version(image_name: str) -> bool:
 
 
 def test_api_health(image_name: str) -> bool:
-    """Test API health endpoint."""
-
     container_name = generate_random_container_name()
     port = random.randint(9000, 9999)
 
@@ -176,8 +151,6 @@ def test_api_health(image_name: str) -> bool:
 
 
 def test_file_extraction(image_name: str, test_file: str) -> bool:
-    """Test file extraction via CLI."""
-
     with tempfile.TemporaryDirectory():
         test_file_path = TEST_FILES_DIR / test_file
         if not test_file_path.exists():
@@ -219,8 +192,6 @@ def test_file_extraction(image_name: str, test_file: str) -> bool:
 
 
 def test_ocr_extraction(image_name: str, image_variant: str) -> bool:
-    """Test OCR extraction based on image variant."""
-
     test_file = "ocr-image.jpg"
     test_file_path = TEST_FILES_DIR / test_file
 
@@ -257,8 +228,6 @@ def test_ocr_extraction(image_name: str, image_variant: str) -> bool:
 
 
 def test_api_extraction(image_name: str) -> bool:
-    """Test file extraction via API."""
-
     container_name = generate_random_container_name()
     port = random.randint(9000, 9999)
 
@@ -320,8 +289,6 @@ def test_api_extraction(image_name: str) -> bool:
 
 
 def test_table_extraction(image_name: str) -> bool:
-    """Test table extraction for GMFT image."""
-
     test_file = "pdfs_with_tables/tiny.pdf"
     test_file_path = TEST_FILES_DIR / test_file
 
@@ -368,8 +335,6 @@ exit(0 if success else 1)
 
 
 def test_volume_security(image_name: str) -> bool:
-    """Test volume mount security."""
-
     with tempfile.TemporaryDirectory() as tmpdir:
         test_file = Path(tmpdir) / "test.txt"
         test_content = "Test content for volume security"
@@ -392,8 +357,6 @@ def test_volume_security(image_name: str) -> bool:
 
 
 def test_resource_limits(image_name: str) -> bool:
-    """Test that container respects resource limits."""
-
     cmd = [
         "docker",
         "run",
@@ -413,8 +376,6 @@ def test_resource_limits(image_name: str) -> bool:
 
 
 def test_malicious_input_handling(image_name: str) -> bool:
-    """Test handling of malicious inputs."""
-
     with tempfile.TemporaryDirectory() as tmpdir:
         cmd = [
             "docker",
@@ -435,8 +396,6 @@ def test_malicious_input_handling(image_name: str) -> bool:
 
 
 def run_tests_for_image(image_variant: str, image_name: str) -> dict[str, bool]:
-    """Run all tests for a specific Docker image."""
-
     results = {}
 
     results["exists"] = test_image_exists(image_name)
@@ -463,8 +422,6 @@ def run_tests_for_image(image_variant: str, image_name: str) -> dict[str, bool]:
 
 
 def print_summary(all_results: dict[str, dict[str, bool]]) -> bool:
-    """Print test summary."""
-
     total_tests = 0
     total_passed = 0
 
@@ -487,7 +444,6 @@ def print_summary(all_results: dict[str, dict[str, bool]]) -> bool:
 
 
 def main() -> None:
-    """Main test runner."""
     parser = argparse.ArgumentParser(description="Kreuzberg Docker E2E Tests")
     parser.add_argument("--image", help="Test a specific image variant or full image name", default=None)
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")

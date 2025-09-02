@@ -165,19 +165,16 @@ def test_validate_mime_type_with_dots_in_name() -> None:
 
 
 def test_validate_mime_type_file_not_exists() -> None:
-    """Test validation when file doesn't exist - covers lines 229-231."""
     with pytest.raises(ValidationError, match="The file does not exist"):
         validate_mime_type(file_path="nonexistent_file.txt", check_file_exists=True)
 
 
 def test_validate_mime_type_no_file_path() -> None:
-    """Test validation when no file_path provided - covers line 234."""
     with pytest.raises(ValidationError, match="Could not determine mime type"):
         validate_mime_type(file_path=None)
 
 
 def test_validate_mime_type_file_stat_error(tmp_path: Path) -> None:
-    """Test validation when file stat fails - covers lines 183-184."""
     from unittest.mock import patch
 
     test_file = tmp_path / "test.txt"
@@ -189,7 +186,6 @@ def test_validate_mime_type_file_stat_error(tmp_path: Path) -> None:
 
 
 def test_validate_mime_type_uncached_fallback(tmp_path: Path) -> None:
-    """Test fallback to uncached detection - covers line 208."""
     from kreuzberg._mime_types import _detect_mime_type_uncached
 
     test_file = tmp_path / "test.txt"

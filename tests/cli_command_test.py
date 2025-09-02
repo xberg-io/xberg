@@ -1,5 +1,3 @@
-"""Comprehensive Click-based tests for kreuzberg CLI commands."""
-
 from __future__ import annotations
 
 import json
@@ -26,22 +24,17 @@ pytestmark = pytest.mark.skipif(not CLI_AVAILABLE, reason="CLI dependencies not 
 
 
 class TestOcrBackendParamType:
-    """Test the custom OCR backend parameter type."""
-
     def test_convert_none(self) -> None:
-        """Test converting None value."""
         param_type = OcrBackendParamType()
         result = param_type.convert(None, None, None)
         assert result is None
 
     def test_convert_none_string(self) -> None:
-        """Test converting 'none' string."""
         param_type = OcrBackendParamType()
         result = param_type.convert("none", None, None)
         assert result == "none"
 
     def test_convert_valid_backends(self) -> None:
-        """Test converting valid backend names."""
         param_type = OcrBackendParamType()
 
         assert param_type.convert("tesseract", None, None) == "tesseract"
@@ -50,7 +43,6 @@ class TestOcrBackendParamType:
         assert param_type.convert("paddleocr", None, None) == "paddleocr"
 
     def test_convert_invalid_backend(self) -> None:
-        """Test converting invalid backend name."""
         param_type = OcrBackendParamType()
 
         with pytest.raises(click.exceptions.BadParameter, match="Invalid OCR backend"):
@@ -58,10 +50,7 @@ class TestOcrBackendParamType:
 
 
 class TestFormatExtractionResult:
-    """Test extraction result formatting."""
-
     def test_format_json_output(self) -> None:
-        """Test JSON output formatting."""
         metadata: Metadata = {"title": "Test Document", "authors": ["Test Author"]}
         result = ExtractionResult(
             content="Test content",
@@ -81,14 +70,12 @@ class TestFormatExtractionResult:
         assert len(data["chunks"]) == 2
 
     def test_format_text_output_no_metadata(self) -> None:
-        """Test text output without metadata."""
         result = ExtractionResult(content="Test content", metadata={}, mime_type="text/plain")
 
         output = format_extraction_result(result, show_metadata=False, output_format="text")
         assert output == "Test content"
 
     def test_format_text_output_with_metadata(self) -> None:
-        """Test text output with metadata."""
         metadata: Metadata = {"title": "Test Document"}
         result = ExtractionResult(content="Test content", metadata=metadata, mime_type="text/plain")
 
@@ -98,7 +85,6 @@ class TestFormatExtractionResult:
         assert '"title": "Test Document"' in output
 
     def test_format_text_output_with_tables(self) -> None:
-        """Test text output with tables."""
         result = ExtractionResult(
             content="Test content",
             metadata={},
@@ -112,10 +98,7 @@ class TestFormatExtractionResult:
 
 
 class TestCliCommands:
-    """Test CLI commands using Click's CliRunner."""
-
     def test_cli_no_subcommand(self) -> None:
-        """Test CLI with no subcommand shows help."""
         runner = CliRunner()
         result = runner.invoke(cli, [])
 
@@ -124,7 +107,6 @@ class TestCliCommands:
         assert "Commands:" in result.output
 
     def test_cli_version(self) -> None:
-        """Test CLI version option."""
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
 
@@ -133,7 +115,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_file_basic(self, mock_extract: Mock) -> None:
-        """Test basic file extraction."""
         mock_result = ExtractionResult(
             content="Extracted text content", metadata={"title": "Test"}, mime_type="text/plain"
         )
@@ -152,7 +133,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_bytes_sync")
     def test_extract_stdin(self, mock_extract: Mock) -> None:
-        """Test extraction from stdin."""
         mock_result = ExtractionResult(content="Content from stdin", metadata={}, mime_type="text/plain")
         mock_extract.return_value = mock_result
 
@@ -166,7 +146,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_with_output_file(self, mock_extract: Mock) -> None:
-        """Test extraction with output file."""
         mock_result = ExtractionResult(content="Output file content", metadata={}, mime_type="text/plain")
         mock_extract.return_value = mock_result
 
@@ -184,7 +163,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_with_json_output(self, mock_extract: Mock) -> None:
-        """Test extraction with JSON output format."""
         metadata: Metadata = {"title": "JSON Test"}
         mock_result = ExtractionResult(content="JSON content", metadata=metadata, mime_type="application/pdf")
         mock_extract.return_value = mock_result
@@ -204,7 +182,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_with_metadata(self, mock_extract: Mock) -> None:
-        """Test extraction with metadata display."""
         metadata: Metadata = {"authors": ["Test Author"], "created_at": "2024-01-01"}
         mock_result = ExtractionResult(content="Content with metadata", metadata=metadata, mime_type="text/plain")
         mock_extract.return_value = mock_result
@@ -224,7 +201,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_with_ocr_options(self, mock_extract: Mock) -> None:
-        """Test extraction with OCR options."""
         mock_result = ExtractionResult(content="OCR content", metadata={}, mime_type="text/plain")
         mock_extract.return_value = mock_result
 
@@ -256,7 +232,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_with_chunking(self, mock_extract: Mock) -> None:
-        """Test extraction with content chunking."""
         mock_result = ExtractionResult(
             content="Chunked content",
             metadata={},
@@ -292,7 +267,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_with_tables(self, mock_extract: Mock) -> None:
-        """Test extraction with table extraction enabled."""
         mock_result = ExtractionResult(
             content="Document with tables",
             metadata={},
@@ -316,7 +290,6 @@ class TestCliCommands:
     @patch("kreuzberg.cli.load_config_from_file")
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_with_config_file(self, mock_extract: Mock, mock_load_config: Mock, mock_find_config: Mock) -> None:
-        """Test extraction with configuration file."""
         mock_find_config.return_value = None
         mock_load_config.return_value = {"force_ocr": True, "chunk_content": True}
         mock_result = ExtractionResult(content="Config file test", metadata={}, mime_type="text/plain")
@@ -337,7 +310,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_verbose_mode(self, mock_extract: Mock) -> None:
-        """Test extraction with verbose mode."""
         mock_result = ExtractionResult(content="Verbose output", metadata={}, mime_type="text/plain")
         mock_extract.return_value = mock_result
 
@@ -353,7 +325,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_error_handling(self, mock_extract: Mock) -> None:
-        """Test extraction error handling."""
         mock_extract.side_effect = Exception("Extraction failed")
 
         runner = CliRunner()
@@ -368,7 +339,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_missing_dependency_error(self, mock_extract: Mock) -> None:
-        """Test extraction with missing dependency error."""
         from kreuzberg.exceptions import MissingDependencyError
 
         mock_extract.side_effect = MissingDependencyError.create_for_package(
@@ -389,7 +359,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_all_ocr_backends(self, mock_extract: Mock) -> None:
-        """Test extraction with different OCR backends."""
         mock_result = ExtractionResult(content="OCR result", metadata={}, mime_type="text/plain")
         mock_extract.return_value = mock_result
 
@@ -407,7 +376,6 @@ class TestCliCommands:
             assert "OCR result" in result.output
 
     def test_extract_nonexistent_file(self) -> None:
-        """Test extraction with nonexistent file."""
         runner = CliRunner()
         result = runner.invoke(cli, ["extract", "nonexistent.txt"])
 
@@ -416,7 +384,6 @@ class TestCliCommands:
 
     @patch("kreuzberg.cli.extract_file_sync")
     def test_extract_progress_display(self, mock_extract: Mock, mocker: MockerFixture) -> None:
-        """Test extraction with progress display."""
         mock_result = ExtractionResult(content="Progress test", metadata={}, mime_type="text/plain")
         mock_extract.return_value = mock_result
 
@@ -434,10 +401,7 @@ class TestCliCommands:
 
 
 class TestConfigCommand:
-    """Test the config command."""
-
     def test_config_no_config_file(self) -> None:
-        """Test config command when no config file exists."""
         with patch("kreuzberg.cli.find_config_file", return_value=None):
             runner = CliRunner()
             result = runner.invoke(cli, ["config"])
@@ -448,7 +412,6 @@ class TestConfigCommand:
             assert "force_ocr: False" in result.output
 
     def test_config_with_config_file(self) -> None:
-        """Test config command with existing config file."""
         runner = CliRunner()
         with runner.isolated_filesystem():
             config_file = Path("pyproject.toml")
@@ -470,7 +433,6 @@ max_chars = 5000
             assert '"max_chars": 5000' in result.output
 
     def test_config_with_specified_file(self) -> None:
-        """Test config command with specified config file."""
         runner = CliRunner()
         with runner.isolated_filesystem():
             config_file = Path("custom_config.toml")
@@ -488,7 +450,6 @@ ocr_backend = "easyocr"
             assert '"ocr_backend": "easyocr"' in result.output
 
     def test_config_error_handling(self) -> None:
-        """Test config command error handling."""
         with patch("kreuzberg.cli.load_config_from_file", side_effect=Exception("Config load error")):
             runner = CliRunner()
             with runner.isolated_filesystem():

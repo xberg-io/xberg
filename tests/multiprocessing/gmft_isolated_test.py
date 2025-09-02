@@ -1,5 +1,3 @@
-"""Unit tests for GMFT isolated process execution."""
-
 from __future__ import annotations
 
 import contextlib
@@ -35,7 +33,6 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def sample_pdf(tmp_path: Path) -> Path:
-    """Create a simple valid PDF file."""
     pdf_file = tmp_path / "sample.pdf"
 
     pdf_content = b"""%PDF-1.4
@@ -65,7 +62,6 @@ startxref
 
 @pytest.fixture
 def mock_gmft_modules() -> Generator[None, None, None]:
-    """Mock GMFT modules for testing."""
     with patch.dict(
         "sys.modules",
         {
@@ -87,7 +83,6 @@ def mock_gmft_modules() -> Generator[None, None, None]:
     reason="Mock patching issues with multiprocessing on Python 3.10 in CI",
 )
 def test_extract_tables_in_process_success(sample_pdf: Path, mock_gmft_modules: None) -> None:
-    """Test successful table extraction in isolated process."""
     config = GMFTConfig()
     config_dict = asdict(config).copy()
     result_queue: Any = mp.Queue()
@@ -136,7 +131,6 @@ def test_extract_tables_in_process_success(sample_pdf: Path, mock_gmft_modules: 
 
 
 def test_extract_tables_in_process_exception(sample_pdf: Path) -> None:
-    """Test exception handling in isolated process."""
     config = GMFTConfig()
     config_dict = asdict(config).copy()
     result_queue: Any = mp.Queue()
@@ -152,7 +146,6 @@ def test_extract_tables_in_process_exception(sample_pdf: Path) -> None:
 
 
 def test_extract_tables_isolated_timeout(sample_pdf: Path) -> None:
-    """Test timeout handling in extract_tables_isolated."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -175,7 +168,6 @@ def test_extract_tables_isolated_timeout(sample_pdf: Path) -> None:
 
 
 def test_extract_tables_isolated_segfault(sample_pdf: Path) -> None:
-    """Test segmentation fault handling."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -198,7 +190,6 @@ def test_extract_tables_isolated_segfault(sample_pdf: Path) -> None:
 
 
 def test_extract_tables_isolated_unexpected_death(sample_pdf: Path) -> None:
-    """Test handling of unexpected process death."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -219,7 +210,6 @@ def test_extract_tables_isolated_unexpected_death(sample_pdf: Path) -> None:
 
 
 def test_extract_tables_isolated_error_result(sample_pdf: Path) -> None:
-    """Test handling of error result from subprocess."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -240,7 +230,6 @@ def test_extract_tables_isolated_error_result(sample_pdf: Path) -> None:
 
 
 def test_extract_tables_isolated_success(sample_pdf: Path) -> None:
-    """Test successful table extraction."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -282,7 +271,6 @@ def test_extract_tables_isolated_success(sample_pdf: Path) -> None:
 
 
 def test_extract_tables_isolated_process_cleanup_timeout(sample_pdf: Path) -> None:
-    """Test process cleanup when termination times out."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -307,7 +295,6 @@ def test_extract_tables_isolated_process_cleanup_timeout(sample_pdf: Path) -> No
 
 @pytest.mark.anyio
 async def test_extract_tables_isolated_async_success(sample_pdf: Path) -> None:
-    """Test successful async table extraction."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -349,7 +336,6 @@ async def test_extract_tables_isolated_async_success(sample_pdf: Path) -> None:
 
 @pytest.mark.anyio
 async def test_extract_tables_isolated_async_timeout(sample_pdf: Path) -> None:
-    """Test async timeout handling."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -370,7 +356,6 @@ async def test_extract_tables_isolated_async_timeout(sample_pdf: Path) -> None:
 
 @pytest.mark.anyio
 async def test_extract_tables_isolated_async_segfault(sample_pdf: Path) -> None:
-    """Test async segmentation fault handling."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -392,7 +377,6 @@ async def test_extract_tables_isolated_async_segfault(sample_pdf: Path) -> None:
 
 @pytest.mark.anyio
 async def test_extract_tables_isolated_async_unexpected_death(sample_pdf: Path) -> None:
-    """Test async handling of unexpected process death."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -414,7 +398,6 @@ async def test_extract_tables_isolated_async_unexpected_death(sample_pdf: Path) 
 
 @pytest.mark.anyio
 async def test_extract_tables_isolated_async_error_result(sample_pdf: Path) -> None:
-    """Test async handling of error result from subprocess."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -436,7 +419,6 @@ async def test_extract_tables_isolated_async_error_result(sample_pdf: Path) -> N
 
 @pytest.mark.anyio
 async def test_extract_tables_isolated_async_process_cleanup(sample_pdf: Path) -> None:
-    """Test async process cleanup when termination times out."""
     config = GMFTConfig()
 
     with patch("multiprocessing.get_context") as mock_get_context:
@@ -459,7 +441,6 @@ async def test_extract_tables_isolated_async_process_cleanup(sample_pdf: Path) -
 
 
 def test_signal_handling() -> None:
-    """Test signal handling in process."""
     with patch("signal.signal") as mock_signal:
         config = GMFTConfig()
         config_dict = asdict(config).copy()

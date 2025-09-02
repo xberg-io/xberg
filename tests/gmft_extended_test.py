@@ -1,5 +1,3 @@
-"""Extended tests for GMFT functionality."""
-
 from __future__ import annotations
 
 from dataclasses import replace
@@ -19,7 +17,6 @@ if TYPE_CHECKING:
 
 
 def test_gmft_config_defaults() -> None:
-    """Test GMFTConfig default values."""
     config = GMFTConfig()
 
     assert config.verbosity == 0
@@ -39,7 +36,6 @@ def test_gmft_config_defaults() -> None:
 
 
 def test_gmft_config_custom() -> None:
-    """Test GMFTConfig with custom values."""
     config = GMFTConfig(
         verbosity=2,
         formatter_base_threshold=0.5,
@@ -52,7 +48,6 @@ def test_gmft_config_custom() -> None:
 
 
 def test_gmft_config_replace() -> None:
-    """Test replacing GMFTConfig values."""
     config = GMFTConfig()
     new_config = replace(config, verbosity=3)
 
@@ -61,7 +56,6 @@ def test_gmft_config_replace() -> None:
 
 
 def test_gmft_config_hash() -> None:
-    """Test GMFTConfig is hashable."""
     config1 = GMFTConfig(verbosity=1)
     config2 = GMFTConfig(verbosity=1)
     config3 = GMFTConfig(verbosity=2)
@@ -75,7 +69,6 @@ def test_gmft_config_hash() -> None:
 
 
 def test_extract_tables_sync_missing_dependency(tiny_pdf_with_tables: Path) -> None:
-    """Test extract_tables_sync when gmft is not installed."""
     import os
 
     if os.getenv("KREUZBERG_GMFT_ISOLATED", "true").lower() == "true":
@@ -93,8 +86,6 @@ def test_extract_tables_sync_missing_dependency(tiny_pdf_with_tables: Path) -> N
 
 
 def test_extract_tables_sync_success(tiny_pdf_with_tables: Path) -> None:
-    """Test successful table extraction."""
-
     try:
         results = extract_tables_sync(tiny_pdf_with_tables)
         assert isinstance(results, list)
@@ -107,7 +98,6 @@ def test_extract_tables_sync_success(tiny_pdf_with_tables: Path) -> None:
 
 
 def test_extract_tables_sync_custom_config(tiny_pdf_with_tables: Path) -> None:
-    """Test table extraction with custom config."""
     config = GMFTConfig(
         verbosity=2,
         detector_base_threshold=0.8,
@@ -123,7 +113,6 @@ def test_extract_tables_sync_custom_config(tiny_pdf_with_tables: Path) -> None:
 
 
 def test_extract_tables_sync_multiple_tables(tiny_pdf_with_tables: Path) -> None:
-    """Test extraction of multiple tables."""
     try:
         results = extract_tables_sync(tiny_pdf_with_tables)
 
@@ -133,8 +122,6 @@ def test_extract_tables_sync_multiple_tables(tiny_pdf_with_tables: Path) -> None
 
 
 def test_extract_tables_sync_no_tables(tmp_path: Path) -> None:
-    """Test extraction when no tables are found."""
-
     no_tables_pdf = tmp_path / "no_tables.pdf"
 
     import pypdfium2 as pdfium

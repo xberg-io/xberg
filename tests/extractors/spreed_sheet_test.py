@@ -241,7 +241,6 @@ async def test_extract_path_async_parsing_error_passthrough(
 def test_extract_path_sync_with_exception(
     extractor: SpreadSheetExtractor, excel_document: Path, mocker: MockerFixture
 ) -> None:
-    """Test sync path extraction handles exceptions properly."""
     mock_error = ValueError("Sync test error")
     mocker.patch.object(CalamineWorkbook, "from_path", side_effect=mock_error)
 
@@ -257,7 +256,6 @@ def test_extract_path_sync_with_exception(
 def test_extract_path_sync_parsing_error_wrapping(
     extractor: SpreadSheetExtractor, excel_document: Path, mocker: MockerFixture
 ) -> None:
-    """Test sync path extraction wraps ParsingError in new error."""
     original_error = ParsingError("Original sync parsing error")
     mocker.patch.object(CalamineWorkbook, "from_path", side_effect=original_error)
 
@@ -270,8 +268,6 @@ def test_extract_path_sync_parsing_error_wrapping(
 
 @pytest.mark.anyio
 async def test_extract_bytes_async_exception_cleanup(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test extract_bytes_async properly cleans up temp file on exception."""
-
     mock_path = "/tmp/test_excel.xlsx"
     mock_unlink = mocker.AsyncMock()
 
@@ -294,7 +290,6 @@ async def test_extract_bytes_async_exception_cleanup(extractor: SpreadSheetExtra
 
 
 def test_convert_sheet_to_text_sync_empty_rows(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test _convert_sheet_to_text_sync handles empty rows properly to cover line 180."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_sheet = mocker.Mock()
 
@@ -315,7 +310,6 @@ def test_convert_sheet_to_text_sync_empty_rows(extractor: SpreadSheetExtractor, 
 
 
 def test_convert_sheet_to_text_sync_no_rows(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test _convert_sheet_to_text_sync handles empty sheets to cover else branch at line 171."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_sheet = mocker.Mock()
 
@@ -328,7 +322,6 @@ def test_convert_sheet_to_text_sync_no_rows(extractor: SpreadSheetExtractor, moc
 
 
 def test_extract_spreadsheet_metadata_comprehensive(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test comprehensive metadata extraction from spreadsheet."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Summary"]
 
@@ -374,7 +367,6 @@ def test_extract_spreadsheet_metadata_comprehensive(extractor: SpreadSheetExtrac
 
 
 def test_extract_spreadsheet_metadata_no_metadata(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test metadata extraction when workbook has no metadata."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["Sheet1"]
     mock_workbook.metadata = None
@@ -390,7 +382,6 @@ def test_extract_spreadsheet_metadata_no_metadata(extractor: SpreadSheetExtracto
 
 
 def test_extract_spreadsheet_metadata_many_sheets(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test metadata extraction with many sheets (should not list all names)."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6", "Sheet7"]
     mock_workbook.metadata = None
@@ -406,7 +397,6 @@ def test_extract_spreadsheet_metadata_many_sheets(extractor: SpreadSheetExtracto
 
 
 def test_extract_document_properties_minimal(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test document properties extraction with minimal data."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_metadata = mocker.Mock()
     mock_metadata.title = "Simple Title"
@@ -431,7 +421,6 @@ def test_extract_document_properties_minimal(extractor: SpreadSheetExtractor, mo
 
 
 def test_extract_date_properties_string_dates(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test date properties extraction with string dates."""
     mock_props = mocker.Mock()
     mock_props.created = "2023-01-01"
     mock_props.modified = "2023-02-01"
@@ -444,7 +433,6 @@ def test_extract_date_properties_string_dates(extractor: SpreadSheetExtractor, m
 
 
 def test_analyze_content_complexity_no_formulas(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test content complexity analysis without formulas."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["Data"]
 
@@ -464,7 +452,6 @@ def test_analyze_content_complexity_no_formulas(extractor: SpreadSheetExtractor,
 
 
 def test_analyze_content_complexity_empty_sheets(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test content complexity analysis with empty sheets."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["Empty"]
 
@@ -479,7 +466,6 @@ def test_analyze_content_complexity_empty_sheets(extractor: SpreadSheetExtractor
 
 
 def test_enhance_sheet_with_table_data_pandas_available(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test enhanced sheet processing when pandas is available."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_sheet = mocker.Mock()
     mock_sheet.to_python.return_value = [["Name", "Age", "City"], ["Alice", 25, "New York"], ["Bob", 30, "Chicago"]]
@@ -499,7 +485,6 @@ def test_enhance_sheet_with_table_data_pandas_available(extractor: SpreadSheetEx
 
 
 def test_enhance_sheet_with_table_data_empty_sheet(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test enhanced sheet processing with empty sheet."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_sheet = mocker.Mock()
     mock_sheet.to_python.return_value = []
@@ -513,7 +498,6 @@ def test_enhance_sheet_with_table_data_empty_sheet(extractor: SpreadSheetExtract
 def test_enhance_sheet_with_table_data_no_data_after_cleanup(
     extractor: SpreadSheetExtractor, mocker: MockerFixture
 ) -> None:
-    """Test enhanced sheet processing when DataFrame becomes empty after cleanup."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_sheet = mocker.Mock()
     mock_sheet.to_python.return_value = [[None, None], [None, None]]
@@ -532,7 +516,6 @@ def test_enhance_sheet_with_table_data_no_data_after_cleanup(
 def test_enhance_sheet_with_table_data_pandas_error_fallback(
     extractor: SpreadSheetExtractor, mocker: MockerFixture
 ) -> None:
-    """Test enhanced sheet processing falls back when pandas/enhancement fails."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_sheet = mocker.Mock()
     mock_sheet.to_python.return_value = [["Header"], ["Data"]]
@@ -547,7 +530,6 @@ def test_enhance_sheet_with_table_data_pandas_error_fallback(
 
 
 def test_extract_document_properties_no_hasattr(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test document properties extraction when workbook lacks hasattr for metadata."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     del mock_workbook.metadata
 
@@ -558,7 +540,6 @@ def test_extract_document_properties_no_hasattr(extractor: SpreadSheetExtractor,
 
 
 def test_extract_document_properties_exception_handling(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test document properties extraction handles exceptions gracefully."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_metadata = mocker.Mock()
 
@@ -572,7 +553,6 @@ def test_extract_document_properties_exception_handling(extractor: SpreadSheetEx
 
 
 def test_extract_date_properties_invalid_dates(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test date properties extraction with invalid date objects."""
     mock_props = mocker.Mock()
     mock_props.created = mocker.Mock()
     mock_props.created.isoformat = mocker.Mock(side_effect=Exception("Invalid date"))
@@ -586,7 +566,6 @@ def test_extract_date_properties_invalid_dates(extractor: SpreadSheetExtractor, 
 
 
 def test_add_structure_info_no_sheet_names(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test structure info addition when workbook has no sheet_names."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     del mock_workbook.sheet_names
 
@@ -597,7 +576,6 @@ def test_add_structure_info_no_sheet_names(extractor: SpreadSheetExtractor, mock
 
 
 def test_add_structure_info_empty_sheet_names(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test structure info addition when workbook has empty sheet_names."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = []
 
@@ -608,7 +586,6 @@ def test_add_structure_info_empty_sheet_names(extractor: SpreadSheetExtractor, m
 
 
 def test_analyze_content_complexity_exception_handling(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test content complexity analysis handles exceptions gracefully."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["ErrorSheet"]
 
@@ -621,7 +598,6 @@ def test_analyze_content_complexity_exception_handling(extractor: SpreadSheetExt
 
 
 def test_analyze_content_complexity_with_empty_rows(extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-    """Test content complexity analysis with mixed empty and non-empty rows."""
     mock_workbook = mocker.Mock(spec=CalamineWorkbook)
     mock_workbook.sheet_names = ["MixedSheet"]
 
@@ -643,10 +619,7 @@ def test_analyze_content_complexity_with_empty_rows(extractor: SpreadSheetExtrac
 
 
 class TestSpreadSheetExtractorComprehensiveCellConversion:
-    """Test cell conversion edge cases for comprehensive coverage."""
-
     def test_convert_cell_to_str_complex_numeric_types(self, extractor: SpreadSheetExtractor) -> None:
-        """Test cell conversion with complex numeric types."""
         complex_num = complex(3, 4)
         result = extractor._convert_cell_to_str(complex_num)
         assert result == "(3+4j)"
@@ -660,7 +633,6 @@ class TestSpreadSheetExtractorComprehensiveCellConversion:
         assert result == "3.141592653589793"
 
     def test_convert_cell_to_str_edge_case_objects(self, extractor: SpreadSheetExtractor) -> None:
-        """Test cell conversion with edge case objects."""
         test_list = [1, 2, 3]
         result = extractor._convert_cell_to_str(test_list)
         assert result == "[1, 2, 3]"
@@ -678,7 +650,6 @@ class TestSpreadSheetExtractorComprehensiveCellConversion:
         assert result == "custom_object"
 
     def test_convert_cell_to_str_datetime_variants(self, extractor: SpreadSheetExtractor) -> None:
-        """Test cell conversion with various datetime objects."""
         from datetime import datetime, time, timedelta, timezone
 
         dt_with_microseconds = datetime(2023, 1, 1, 12, 30, 45, 123456, tzinfo=timezone.utc)
@@ -699,10 +670,7 @@ class TestSpreadSheetExtractorComprehensiveCellConversion:
 
 
 class TestSpreadSheetExtractorSyncExtensiveErrorHandling:
-    """Test sync methods with extensive error handling scenarios."""
-
     def test_extract_bytes_sync_file_write_error(self, extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-        """Test extract_bytes_sync handles file write errors properly."""
         test_content = b"fake excel data"
 
         mock_fd = 5
@@ -724,7 +692,6 @@ class TestSpreadSheetExtractorSyncExtensiveErrorHandling:
     def test_extract_bytes_sync_cleanup_error_suppressed(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test extract_bytes_sync suppresses cleanup errors."""
         test_content = b"fake excel data"
 
         mock_fd = 5
@@ -746,13 +713,10 @@ class TestSpreadSheetExtractorSyncExtensiveErrorHandling:
 
 
 class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
-    """Test async methods with comprehensive scenarios."""
-
     @pytest.mark.anyio
     async def test_convert_sheet_to_text_csv_processing_edge_cases(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test CSV processing edge cases in _convert_sheet_to_text."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
 
@@ -781,7 +745,6 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
     async def test_convert_sheet_to_text_uneven_rows(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test _convert_sheet_to_text with very uneven row lengths."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
 
@@ -810,7 +773,6 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
     async def test_convert_sheet_to_text_all_none_cells(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test _convert_sheet_to_text with sheet containing only None values."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
 
@@ -834,12 +796,9 @@ class TestSpreadSheetExtractorAsyncComprehensiveScenarios:
 
 
 class TestSpreadSheetExtractorMetadataEdgeCases:
-    """Test metadata extraction edge cases."""
-
     def test_extract_document_properties_partial_metadata(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test document properties extraction with partial metadata availability."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_metadata = mocker.Mock()
 
@@ -860,7 +819,6 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
     def test_extract_document_properties_empty_strings(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test document properties extraction with empty string values."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_metadata = mocker.Mock()
 
@@ -881,7 +839,6 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
     def test_extract_document_properties_complex_keywords(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test keyword processing with complex formatting."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_metadata = mocker.Mock()
 
@@ -897,7 +854,6 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
     def test_extract_document_properties_keywords_empty_after_processing(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test keyword processing when all keywords are empty after cleaning."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_metadata = mocker.Mock()
 
@@ -912,7 +868,6 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
     def test_extract_date_properties_non_datetime_objects(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test date property extraction with non-datetime objects that have isoformat."""
         mock_props = mocker.Mock()
 
         mock_date_like = mocker.Mock()
@@ -929,10 +884,7 @@ class TestSpreadSheetExtractorMetadataEdgeCases:
 
 
 class TestSpreadSheetExtractorStructureInfoEdgeCases:
-    """Test structure info generation edge cases."""
-
     def test_add_structure_info_single_sheet(self, extractor: SpreadSheetExtractor, mocker: MockerFixture) -> None:
-        """Test structure info with single sheet (should use singular form)."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["OnlySheet"]
 
@@ -945,7 +897,6 @@ class TestSpreadSheetExtractorStructureInfoEdgeCases:
     def test_add_structure_info_exactly_max_sheets(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test structure info with exactly the maximum number of sheets to list."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5"]
 
@@ -958,7 +909,6 @@ class TestSpreadSheetExtractorStructureInfoEdgeCases:
     def test_add_structure_info_one_over_max_sheets(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test structure info with one more than maximum sheets to list."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6"]
 
@@ -970,12 +920,9 @@ class TestSpreadSheetExtractorStructureInfoEdgeCases:
 
 
 class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
-    """Test content complexity analysis edge cases."""
-
     def test_analyze_content_complexity_formula_detection_edge_cases(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test formula detection with various edge cases."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["FormulaSheet"]
 
@@ -997,7 +944,6 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
     def test_analyze_content_complexity_no_meaningful_cells(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test complexity analysis with sheets containing no meaningful data."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["EmptyDataSheet"]
 
@@ -1017,7 +963,6 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
     def test_analyze_content_complexity_row_processing_limits(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test complexity analysis respects row processing limits."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["LargeSheet"]
 
@@ -1036,7 +981,6 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
     def test_analyze_content_complexity_sheet_processing_limits(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test complexity analysis respects sheet processing limits."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5"]
 
@@ -1053,7 +997,6 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
     def test_analyze_content_complexity_existing_summary_preserved(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test complexity analysis doesn't overwrite existing summary."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_workbook.sheet_names = ["DataSheet"]
 
@@ -1068,12 +1011,9 @@ class TestSpreadSheetExtractorComplexityAnalysisEdgeCases:
 
 
 class TestSpreadSheetExtractorEnhancedTableProcessingExtensive:
-    """Test enhanced table processing with extensive scenarios."""
-
     def test_enhance_sheet_with_table_data_pandas_dataframe_operations(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test enhanced sheet processing with DataFrame operations."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = [
@@ -1107,7 +1047,6 @@ class TestSpreadSheetExtractorEnhancedTableProcessingExtensive:
     def test_enhance_sheet_with_table_data_value_error_fallback(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test enhanced sheet processing falls back on ValueError."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = [["Header"], ["Data"]]
@@ -1123,7 +1062,6 @@ class TestSpreadSheetExtractorEnhancedTableProcessingExtensive:
     def test_enhance_sheet_with_table_data_attribute_error_fallback(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test enhanced sheet processing falls back on AttributeError."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = [["Header"], ["Data"]]
@@ -1142,7 +1080,6 @@ class TestSpreadSheetExtractorEnhancedTableProcessingExtensive:
     def test_enhance_sheet_with_table_data_data_contains_only_empty_rows(
         self, extractor: SpreadSheetExtractor, mocker: MockerFixture
     ) -> None:
-        """Test enhanced sheet processing when data contains only empty rows."""
         mock_workbook = mocker.Mock(spec=CalamineWorkbook)
         mock_sheet = mocker.Mock()
         mock_sheet.to_python.return_value = [
