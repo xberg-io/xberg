@@ -957,7 +957,7 @@ name = "exceptiongroup"
 version = "1.3.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/0b/9f/a65090624ecf468cdca03533906e7c69ed7588582240cfe7cc9e770b50eb/exceptiongroup-1.3.0.tar.gz", hash = "sha256:b241f5885f560bc56a59ee63ca4c6a8bfa46ae4ad651af316d4e81817bb9fd88", size = 29749, upload-time = "2025-05-10T17:42:51.123Z" }
 wheels = [
@@ -1153,11 +1153,11 @@ wheels = [
 
 [[package]]
 name = "fsspec"
-version = "2025.7.0"
+version = "2025.9.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/8b/02/0835e6ab9cfc03916fe3f78c0956cfcdb6ff2669ffa6651065d5ebf7fc98/fsspec-2025.7.0.tar.gz", hash = "sha256:786120687ffa54b8283d942929540d8bc5ccfa820deb555a2b5d0ed2b737bf58", size = 304432, upload-time = "2025-07-15T16:05:21.19Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/de/e0/bab50af11c2d75c9c4a2a26a5254573c0bd97cea152254401510950486fa/fsspec-2025.9.0.tar.gz", hash = "sha256:19fd429483d25d28b65ec68f9f4adc16c17ea2c7c7bf54ec61360d478fb19c19", size = 304847, upload-time = "2025-09-02T19:10:49.215Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2f/e0/014d5d9d7a4564cf1c40b5039bc882db69fd881111e03ab3657ac0b218e2/fsspec-2025.7.0-py3-none-any.whl", hash = "sha256:8b012e39f63c7d5f10474de957f3ab793b47b45ae7d39f2fb735f8bbe25c0e21", size = 199597, upload-time = "2025-07-15T16:05:19.529Z" },
+    { url = "https://files.pythonhosted.org/packages/47/71/70db47e4f6ce3e5c37a607355f80da8860a33226be640226ac52cb05ef2e/fsspec-2025.9.0-py3-none-any.whl", hash = "sha256:530dc2a2af60a414a832059574df4a6e10cce927f6f4a78209390fe38955cfb7", size = 199289, upload-time = "2025-09-02T19:10:47.708Z" },
 ]
 
 [[package]]
@@ -1262,15 +1262,15 @@ wheels = [
 
 [[package]]
 name = "html-to-markdown"
-version = "1.9.0"
+version = "1.9.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "nh3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ca/88/5636b978592b2222473d6fdc3a395bc348d3f792307019ad9f57efe9604d/html_to_markdown-1.9.0.tar.gz", hash = "sha256:9cd066d33612a0fc00119f65bee7b5da98093c2fdd10493694fb08d15d1b2a2c", size = 38094, upload-time = "2025-07-29T15:40:00.28Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/30/d3/bfbdd64147eadaf0384993324c17c1d0f13d8b32f74074486cbeec533c0c/html_to_markdown-1.9.1.tar.gz", hash = "sha256:ce1052f20b7147de7cf99e0833cc6ef25824b7e3b3a6c902f73d62fe0040c3db", size = 37059, upload-time = "2025-09-02T18:34:59.156Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d4/e5/30ead7ebecc9dd1a5c91e85643064c5c255af44c19043fed85a3e2e251b4/html_to_markdown-1.9.0-py3-none-any.whl", hash = "sha256:00655a3b659440314a442d0467d185aa062103fd61564904b764fc692d91b8fc", size = 34471, upload-time = "2025-07-29T15:39:58.319Z" },
+    { url = "https://files.pythonhosted.org/packages/b2/24/01815cad670f7940a30bb7fd7a20575471aaf88cfd4a8890d24302e795db/html_to_markdown-1.9.1-py3-none-any.whl", hash = "sha256:4b770694a6bb68f5416ce0f6d0b36d2c28069d14a4f8f66c788e74832aee406f", size = 33152, upload-time = "2025-09-02T18:34:57.887Z" },
 ]
 
 [package.optional-dependencies]
