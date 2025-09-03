@@ -67,3 +67,16 @@ Represents an extracted named entity:
 A TypedDict that contains optional metadata fields extracted from documents:
 
 ::: kreuzberg.Metadata
+
+## OutputFormatType
+
+The output format for Tesseract OCR processing:
+
+```python
+OutputFormatType = Literal["text", "tsv", "hocr", "markdown"]
+```
+
+- `markdown` (default): Structured markdown output with preserved formatting
+- `text`: Plain text, fastest option
+- `tsv`: Tab-separated values with word positions and confidence scores
+- `hocr`: HTML-based OCR format with detailed position information

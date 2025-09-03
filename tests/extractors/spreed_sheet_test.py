@@ -1117,7 +1117,5 @@ def test_spreadsheet_table_enhance_sheet_with_table_data_data_contains_only_empt
 
     result = extractor._enhance_sheet_with_table_data(mock_workbook, "OnlyEmptyRows")
 
-    # The current implementation creates a table for rows with empty strings
-    # since pandas doesn't treat empty strings as NaN by default
     assert "## OnlyEmptyRows" in result
-    assert "|" in result  # Should contain table formatting
+    assert "|" in result

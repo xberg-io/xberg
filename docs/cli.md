@@ -43,7 +43,7 @@ kreuzberg extract -
 ### General Options
 
 - `-o, --output PATH`: Output file path (default: stdout)
-- `--output-format [text|json]`: Output format
+- `--output-format [text|json|markdown|tsv|hocr]`: Output format for extraction
 - `--show-metadata`: Include metadata in output
 - `-v, --verbose`: Verbose output for debugging
 
@@ -52,6 +52,7 @@ kreuzberg extract -
 - `--force-ocr`: Force OCR processing
 - `--chunk-content`: Enable content chunking
 - `--extract-tables`: Enable table extraction
+- `--enable-table-detection`: Enable table extraction from scanned documents (with TSV format)
 - `--max-chars INTEGER`: Maximum characters per chunk (default: 2000)
 - `--max-overlap INTEGER`: Maximum overlap between chunks (default: 100)
 
@@ -63,6 +64,7 @@ kreuzberg extract -
 
 - `--tesseract-lang TEXT`: Language(s) (e.g., 'eng+deu')
 - `--tesseract-psm INTEGER`: PSM mode (0-13)
+- `--tesseract-output-format [text|markdown|tsv|hocr]`: OCR output format (default: markdown)
 
 #### EasyOCR Options
 
@@ -97,6 +99,39 @@ Use a specific config file:
 
 ```bash
 kreuzberg extract document.pdf --config custom-config.toml
+```
+
+## OCR Output Format Examples
+
+### Extract tables from scanned documents
+
+```bash
+# Extract tables using TSV format with table detection
+kreuzberg extract invoice.png --tesseract-output-format tsv --enable-table-detection
+```
+
+### Fast text extraction
+
+```bash
+# Use text format for fastest extraction
+kreuzberg extract document.pdf --tesseract-output-format text
+```
+
+### Get structured markdown output
+
+```bash
+# Markdown is the default format
+kreuzberg extract document.jpg
+
+# Or explicitly specify markdown
+kreuzberg extract document.jpg --tesseract-output-format markdown
+```
+
+### Extract with position information
+
+```bash
+# Use hOCR format to get word positions
+kreuzberg extract document.pdf --tesseract-output-format hocr -o output.html
 ```
 
 ## Examples

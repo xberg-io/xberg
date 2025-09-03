@@ -135,6 +135,130 @@ result = await extract_file(
 
     For PaddleOCR, the supported language codes are different: `ch` (Chinese), `en` (English), `french`, `german`, `japan`, and `korean`.
 
+## Output Formats
+
+Tesseract in Kreuzberg supports multiple output formats, each optimized for different use cases.
+
+### Default: Markdown Format
+
+Since v3.5.0, **markdown is the default output format** for Tesseract OCR. This provides:
+
+- Better document structure preservation
+- Readable formatting with headings, lists, and emphasis
+- Clean output suitable for LLMs and downstream processing
+
+```python
+from kreuzberg import extract_file
+
+# Uses markdown format by default
+result = await extract_file("document.jpg")
+print(result.content)  # Markdown-formatted text
+```
+
+### Performance Considerations
+
+Output formats listed by speed (fastest to slowest):
+
+#### 1. Text Format (Fastest)
+
+Direct text extraction with minimal overhead.
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, TesseractConfig
+
+result = await extract_file("document.jpg", config=ExtractionConfig(ocr_config=TesseractConfig(output_format="text")))
+```
+
+Use when: You only need plain text without formatting.
+
+#### 2. hOCR Format
+
+Raw HTML-based OCR output with no post-processing.
+
+```python
+result = await extract_file("document.jpg", config=ExtractionConfig(ocr_config=TesseractConfig(output_format="hocr")))
+```
+
+Use when: You need word positions and bounding boxes for layout analysis.
+
+#### 3. Markdown Format (Default)
+
+Structured markdown with HTML parsing and conversion.
+
+```python
+result = await extract_file("document.jpg", config=ExtractionConfig(ocr_config=TesseractConfig(output_format="markdown")))
+```
+
+Use when: You want readable, structured output with preserved formatting.
+
+#### 4. TSV Format
+
+Tab-separated values with optional table detection.
+
+```python
+result = await extract_file("document.jpg", config=ExtractionConfig(ocr_config=TesseractConfig(output_format="tsv")))
+```
+
+Use when: You need confidence scores or want to extract tables.
+
+### Table Extraction from Scanned Documents
+
+Enable TSV-based table detection for extracting tables from scanned documents or images:
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, TesseractConfig
+
+result = await extract_file(
+    "scanned_invoice.pdf",
+    config=ExtractionConfig(
+        ocr_config=TesseractConfig(
+            output_format="tsv",
+            enable_table_detection=True,
+            table_column_threshold=20,  # Pixel threshold for column clustering
+            table_row_threshold_ratio=0.5,  # Row threshold as ratio of text height
+            table_min_confidence=30.0,  # Minimum OCR confidence for words
+        )
+    ),
+)
+
+# Access extracted tables
+for i, table in enumerate(result.tables):
+    print(f"Table {i+1}:")
+    print(table["text"])  # Markdown-formatted table
+    print(f"Found on page: {table['page_number']}")
+```
+
+#### Table Detection Parameters
+
+- **`enable_table_detection`**: Set to `True` to activate table extraction
+- **`table_column_threshold`**: Pixel distance for grouping words into columns (default: 20)
+- **`table_row_threshold_ratio`**: Ratio of mean text height for row grouping (default: 0.5)
+- **`table_min_confidence`**: Minimum OCR confidence to include words (default: 30.0)
+
+#### Example: Processing Scanned Receipts
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, TesseractConfig
+
+# Configure for receipt processing
+config = ExtractionConfig(
+    ocr_config=TesseractConfig(
+        output_format="tsv",
+        enable_table_detection=True,
+        table_column_threshold=30,  # Wider threshold for receipt columns
+        psm=PSMMode.SPARSE_TEXT,  # Better for scattered text
+    )
+)
+
+result = await extract_file("receipt.jpg", config=config)
+
+# Process extracted tables
+if result.tables:
+    receipt_table = result.tables[0]
+    print("Receipt items:")
+    print(receipt_table["text"])
+```
+
 ## Performance Optimization
 
 ### Default Configuration

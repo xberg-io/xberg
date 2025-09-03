@@ -111,9 +111,10 @@ tasks:
       - uv run ruff format
 
   lint:
-    desc: "Lint code with ruff"
+    desc: "Lint code with ruff and docs with markdownlint"
     cmds:
       - uv run ruff check
+      - npx markdownlint-cli docs/**/*.md
 
   lint:fix:
     desc: "Fix linting issues with ruff"
@@ -134,6 +135,11 @@ tasks:
     desc: "Serve documentation locally"
     cmds:
       - uv run mkdocs serve
+
+  docs:lint:
+    desc: "Lint documentation with markdownlint"
+    cmds:
+      - npx markdownlint-cli docs/**/*.md
 
   ci:
     desc: "Run full CI pipeline locally"

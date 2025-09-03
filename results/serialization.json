@@ -1,0 +1,11 @@
+{
+  "timestamp": "2025-09-03T22:07:13.413346+00:00",
+  "trials": 100,
+  "data_size_chars": 20000,
+  "json": {
+    "serialize_mean": 5.9485435485839844e-5,
+    "serialize_stdev": 5.3108610505241484e-6,
+    "deserialize_mean": 1.4755725860595703e-5,
+    "deserialize_stdev": 1.1161725809228454e-6
+  }
+}

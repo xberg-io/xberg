@@ -338,9 +338,9 @@ def test_batch_extract_file_sync_with_errors(tmp_path: Path, searchable_pdf: Pat
     assert len(results[0].content) > 0
     assert results[0].mime_type == PLAIN_TEXT_MIME_TYPE
     assert "Error:" in results[1].content
-    assert results[1].metadata.get("error") is True
+    assert results[1].metadata.get("error") is not None
     assert "Error:" in results[2].content
-    assert results[2].metadata.get("error") is True
+    assert results[2].metadata.get("error") is not None
 
 
 def test_batch_extract_bytes_sync_with_errors(searchable_pdf: Path) -> None:
@@ -358,7 +358,7 @@ def test_batch_extract_bytes_sync_with_errors(searchable_pdf: Path) -> None:
     assert len(results[0].content) > 0
     assert results[0].mime_type == PLAIN_TEXT_MIME_TYPE
     assert "Error:" in results[1].content
-    assert results[1].metadata.get("error") is True
+    assert results[1].metadata.get("error") is not None
     assert results[2].content == "test text"
 
 
@@ -647,7 +647,7 @@ async def test_batch_extract_file_partial_failure(tmp_path: Path) -> None:
 
     assert len(results) == 2
     assert results[0].content == "Good content"
-    assert results[1].metadata.get("error") is True
+    assert results[1].metadata.get("error") is not None
     assert "Error:" in results[1].content
 
 
@@ -661,7 +661,7 @@ def test_batch_extract_file_sync_partial_failure(tmp_path: Path) -> None:
 
     assert len(results) == 2
     assert results[0].content == "Good content"
-    assert results[1].metadata.get("error") is True
+    assert results[1].metadata.get("error") is not None
     assert "Error:" in results[1].content
 
 

@@ -33,6 +33,12 @@ choco install -y tesseract
     - Ubuntu: `sudo apt-get install tesseract-ocr-deu` (for German)
     - macOS: `brew install tesseract-lang`
 
+**Output Formats:**
+
+- Default output format is `markdown` for better structure preservation
+- Supports `text`, `tsv`, `hocr`, and `markdown` formats
+- Table extraction capability via TSV format with automatic structure detection
+
 **Configuration:**
 
 ```python
@@ -42,7 +48,9 @@ result = await extract_file(
     "document.pdf",
     config=ExtractionConfig(
         ocr_backend="tesseract",
-        ocr_config=TesseractConfig(language="eng+deu", psm=PSMMode.AUTO),
+        ocr_config=TesseractConfig(
+            language="eng+deu", psm=PSMMode.AUTO, output_format="markdown"  # Default, can be text/tsv/hocr
+        ),
     ),
 )
 ```

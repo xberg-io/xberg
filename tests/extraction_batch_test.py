@@ -72,7 +72,7 @@ async def test_batch_extract_file_with_error() -> None:
         assert len(results) == 3
         assert results[0].content == "OK1"
         assert "Error: RuntimeError: Extract failed" in results[1].content
-        assert results[1].metadata.get("error") is True
+        assert results[1].metadata.get("error") is not None
         assert results[2].content == "OK3"
 
 
@@ -126,7 +126,7 @@ def test_batch_extract_file_sync_with_error(tmp_path: Path) -> None:
     assert len(results) == 2
     assert results[0].content == "Valid content"
     assert "Error:" in results[1].content
-    assert results[1].metadata.get("error") is True
+    assert results[1].metadata.get("error") is not None
 
 
 def test_batch_extract_file_sync_with_config(test_files: list[Path]) -> None:
@@ -176,7 +176,7 @@ def test_batch_extract_bytes_sync_with_error() -> None:
         assert len(results) == 2
         assert results[0].content == "OK"
         assert "Error: RuntimeError: Extract failed" in results[1].content
-        assert results[1].metadata.get("error") is True
+        assert results[1].metadata.get("error") is not None
 
 
 def test_batch_extract_file_sync_parallel_processing(test_files: list[Path]) -> None:

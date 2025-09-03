@@ -1743,8 +1743,8 @@ def test_pandoc_metadata_edge_cases_extract_metadata_blocks_invalid_citation_str
     extractor = PandocExtractor("text/x-markdown", test_config)
     raw_meta = {
         "blocks": [
-            {"t": "Para", "c": []},  # Non-Cite block
-            {"t": "Cite", "c": [["not_a_dict"], []]},  # Invalid dict structure
+            {"t": "Para", "c": []},
+            {"t": "Cite", "c": [["not_a_dict"], []]},
         ]
     }
 

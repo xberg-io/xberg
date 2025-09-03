@@ -513,10 +513,342 @@ def test_cli_ocr_backend_none(tmp_path: Path) -> None:
     assert "should not use OCR" in result.stdout
 
 
+def test_cli_tesseract_output_format_text(tmp_path: Path) -> None:
+    """Test Tesseract text output format."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Text for Tesseract text format testing.")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(txt_file),
+            "--ocr-backend",
+            "tesseract",
+            "--tesseract-output-format",
+            "text",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    assert "Tesseract text format" in result.stdout
+
+
+def test_cli_tesseract_output_format_markdown(tmp_path: Path) -> None:
+    """Test Tesseract markdown output format (default)."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Text for **markdown** format testing.")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(txt_file),
+            "--ocr-backend",
+            "tesseract",
+            "--tesseract-output-format",
+            "markdown",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    assert "markdown" in result.stdout
+
+
+def test_cli_tesseract_output_format_tsv(tmp_path: Path) -> None:
+    """Test Tesseract TSV output format."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Text for TSV format testing.")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(txt_file),
+            "--ocr-backend",
+            "tesseract",
+            "--tesseract-output-format",
+            "tsv",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    assert "TSV format" in result.stdout
+
+
+def test_cli_tesseract_output_format_hocr(tmp_path: Path) -> None:
+    """Test Tesseract hOCR output format."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Text for hOCR format testing.")
+
+    output_file = tmp_path / "output.html"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(txt_file),
+            "--ocr-backend",
+            "tesseract",
+            "--tesseract-output-format",
+            "hocr",
+            "-o",
+            str(output_file),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    assert output_file.exists()
+    content = output_file.read_text()
+    assert "hOCR format" in content
+
+
+def test_cli_enable_table_detection(tmp_path: Path) -> None:
+    """Test table detection feature."""
+    html_file = tmp_path / "table.html"
+    html_file.write_text("""
+    <html>
+        <body>
+            <table>
+                <tr><th>Product</th><th>Price</th></tr>
+                <tr><td>Apple</td><td>$1.00</td></tr>
+                <tr><td>Orange</td><td>$0.80</td></tr>
+            </table>
+        </body>
+    </html>
+    """)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(html_file),
+            "--ocr-backend",
+            "tesseract",
+            "--tesseract-output-format",
+            "tsv",
+            "--enable-table-detection",
+            "--output-format",
+            "json",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    output_data = json.loads(result.stdout)
+    assert "content" in output_data
+    assert "Product" in output_data["content"]
+    assert "Apple" in output_data["content"]
+
+
+def test_cli_tesseract_with_image_file(tmp_path: Path) -> None:
+    """Test Tesseract with actual image file if available."""
+    image_files = list(Path("tests/test_source_files").glob("*.png"))
+    if not image_files:
+        pytest.skip("No PNG test files available")
+
+    image_file = image_files[0]
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(image_file),
+            "--ocr-backend",
+            "tesseract",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=Path.cwd(),
+    )
+
+    if result.returncode < 0:
+        pytest.skip(f"Image extraction terminated by signal {-result.returncode}")
+
+    assert result.returncode == 0
+    assert len(result.stdout.strip()) > 0
+
+
+def test_cli_table_detection_with_tsv(tmp_path: Path) -> None:
+    """Test combined TSV format with table detection."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Simple text with potential table structure.")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(txt_file),
+            "--ocr-backend",
+            "tesseract",
+            "--tesseract-output-format",
+            "tsv",
+            "--enable-table-detection",
+            "--output-format",
+            "json",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    output_data = json.loads(result.stdout)
+    assert "content" in output_data
+    assert "Simple text" in output_data["content"]
+
+
+def test_cli_all_tesseract_options_combined(tmp_path: Path) -> None:
+    """Test combining multiple Tesseract options."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Comprehensive Tesseract options test.")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(txt_file),
+            "--ocr-backend",
+            "tesseract",
+            "--tesseract-lang",
+            "eng",
+            "--tesseract-psm",
+            "6",
+            "--tesseract-output-format",
+            "markdown",
+            "--enable-table-detection",
+            "--force-ocr",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    assert "Comprehensive Tesseract" in result.stdout
+
+
+def test_cli_help_shows_new_options() -> None:
+    """Test that help text includes new Tesseract options."""
+    result = subprocess.run(
+        [sys.executable, "-m", "kreuzberg", "extract", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    assert "--tesseract-output-format" in result.stdout
+    assert "--enable-table-detection" in result.stdout
+    assert "markdown" in result.stdout
+    assert "tsv" in result.stdout
+    assert "hocr" in result.stdout
+
+
+def test_cli_config_with_tesseract_output_format(tmp_path: Path) -> None:
+    """Test config file with Tesseract output format."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Config test content.")
+
+    config_file = tmp_path / "pyproject.toml"
+    config_file.write_text("""
+[tool.kreuzberg]
+force_ocr = false
+ocr_backend = "tesseract"
+
+[tool.kreuzberg.tesseract]
+output_format = "markdown"
+enable_table_detection = false
+language = "eng"
+""")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(txt_file),
+            "--config",
+            str(config_file),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode == 0
+    assert "Config test content" in result.stdout
+
+
+def test_cli_invalid_tesseract_output_format(tmp_path: Path) -> None:
+    """Test error handling for invalid Tesseract output format."""
+    txt_file = tmp_path / "test.txt"
+    txt_file.write_text("Test content")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "kreuzberg",
+            "extract",
+            str(txt_file),
+            "--tesseract-output-format",
+            "invalid",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=Path.cwd(),
+    )
+
+    assert result.returncode != 0
+    assert "Invalid value" in result.stderr or "invalid" in result.stderr
+
+
 def test_cli_unicode_character_handling(tmp_path: Path) -> None:
-    """Test that CLI correctly handles Unicode characters including the problematic U+2015."""
     txt_file = tmp_path / "unicode_test.txt"
-    # Include the problematic character U+2015 (horizontal bar) that was reported in issue #111
     unicode_content = "Test with Unicode: — (em dash) ― (horizontal bar U+2015) • (bullet) € (euro) 中文 (Chinese)"
     txt_file.write_text(unicode_content, encoding="utf-8")
 
@@ -525,14 +857,13 @@ def test_cli_unicode_character_handling(tmp_path: Path) -> None:
         check=False,
         capture_output=True,
         text=True,
-        encoding="utf-8",  # Ensure subprocess uses UTF-8
+        encoding="utf-8",
         cwd=Path.cwd(),
     )
 
     assert result.returncode == 0
-    # Check that all Unicode characters are present in the output
-    assert "—" in result.stdout  # em dash
-    assert "―" in result.stdout  # horizontal bar (U+2015)
-    assert "•" in result.stdout  # bullet
-    assert "€" in result.stdout  # euro
-    assert "中文" in result.stdout  # Chinese characters
+    assert "—" in result.stdout
+    assert "―" in result.stdout
+    assert "•" in result.stdout
+    assert "€" in result.stdout
+    assert "中文" in result.stdout

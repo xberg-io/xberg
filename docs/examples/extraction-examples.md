@@ -157,6 +157,109 @@ async def extract_tables_from_pdf():
     # Process tables...
 ```
 
+## OCR Output Formats and Table Extraction
+
+### Choosing the Right Output Format
+
+Kreuzberg's Tesseract backend supports multiple output formats, each optimized for different use cases.
+
+#### Fast Plain Text Extraction
+
+Use the `text` format for the fastest extraction when you don't need formatting:
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, TesseractConfig
+
+async def extract_plain_text():
+    result = await extract_file("document.jpg", config=ExtractionConfig(ocr_config=TesseractConfig(output_format="text")))
+    print(result.content)
+```
+
+#### Default Markdown with Structure
+
+The default `markdown` format preserves document structure:
+
+```python
+from kreuzberg import extract_file
+
+async def extract_with_markdown():
+    # Markdown is the default format
+    result = await extract_file("document.jpg")
+    print(result.content)  # Structured markdown output
+```
+
+#### Extract Tables from Scanned Documents
+
+Use TSV format with table detection to extract tables from images:
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, TesseractConfig
+
+async def extract_tables():
+    result = await extract_file(
+        "scanned_table.png",
+        config=ExtractionConfig(
+            ocr_config=TesseractConfig(
+                output_format="tsv",
+                enable_table_detection=True,
+                table_column_threshold=20,  # Adjust for column spacing
+                table_row_threshold_ratio=0.5,  # Adjust for row spacing
+            )
+        ),
+    )
+
+    # Access extracted tables
+    for table in result.tables:
+        print("Extracted table in markdown format:")
+        print(table["text"])
+        print(f"Page number: {table['page_number']}")
+```
+
+#### Get Word Positions with hOCR
+
+Use hOCR format to access detailed position information:
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, TesseractConfig
+
+async def extract_with_positions():
+    result = await extract_file("document.jpg", config=ExtractionConfig(ocr_config=TesseractConfig(output_format="hocr")))
+    # result.content contains HTML with position data
+    print(result.content[:500])  # hOCR HTML output
+```
+
+### Processing Scanned Invoices
+
+Complete example for extracting data from scanned invoices:
+
+```python
+from kreuzberg import extract_file, ExtractionConfig, TesseractConfig, PSMMode
+
+async def process_invoice():
+    # Configure for invoice processing
+    config = ExtractionConfig(
+        ocr_config=TesseractConfig(
+            output_format="tsv",
+            enable_table_detection=True,
+            table_column_threshold=25,  # Adjust for invoice layout
+            psm=PSMMode.SPARSE_TEXT,  # Good for forms and invoices
+            language="eng",
+        )
+    )
+
+    result = await extract_file("invoice_scan.pdf", config=config)
+
+    # Get the main text content
+    print("Invoice text:")
+    print(result.content)
+
+    # Extract tables (line items)
+    if result.tables:
+        print("\nInvoice line items:")
+        for table in result.tables:
+            print(table["text"])
+```
+
 ## Batch Processing
 
 ```python

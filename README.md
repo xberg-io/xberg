@@ -18,7 +18,7 @@
 - **Text Extraction**: High-fidelity text extraction preserving document structure and formatting
 - **Metadata Extraction**: Comprehensive metadata including author, creation date, language, and document properties
 - **Format Support**: 18 document types including PDF, Microsoft Office, images, HTML, and structured data formats
-- **OCR Integration**: Tesseract OCR with multilingual support for 12 common business languages
+- **OCR Integration**: Tesseract OCR with markdown output (default) and table extraction from scanned documents
 - **Document Classification**: Automatic document type detection (contracts, forms, invoices, receipts, reports)
 
 ### Technical Architecture

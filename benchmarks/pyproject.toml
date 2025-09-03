@@ -11,6 +11,11 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
+# Entry points commented out due to uv workspace limitations
+# Run with: uv run python -m benchmarks.src COMMAND
+# [project.scripts]
+# kreuzberg-bench = "src.cli:app"
+
 dependencies = [
   "kreuzberg",
   "matplotlib>=3.7",
@@ -21,8 +26,6 @@ dependencies = [
   "rich>=13",
   "typer>=0.9",
 ]
-
-scripts.kreuzberg-bench = "kreuzberg_benchmarks.cli:app"
 
 [tool.ruff]
 lint.extend-ignore = [ "ARG002", "B008", "B904", "BLE001", "E722", "PLR2004", "PYI036", "SLF001" ]

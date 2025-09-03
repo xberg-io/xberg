@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-09-03T22:14:27.854172+00:00",
+  "test_file": "tests/test_source_files/non-ascii-text.pdf",
+  "cold_cache_duration": 45.781373023986816,
+  "warm_cache_duration": 4.696846008300781e-5,
+  "batch_duration": 0.5284528732299805,
+  "speedup_factor": 974725.8680203046,
+  "content_length": 86047
+}

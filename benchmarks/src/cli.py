@@ -1,5 +1,7 @@
 """Command-line interface for Kreuzberg benchmarks."""
 
+# type: ignore[index,unused-ignore]
+
 from __future__ import annotations
 
 import json
@@ -246,8 +248,7 @@ def run(
         runner.print_summary(suite)
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        output_file = output_dir / f"{suite_name}_{timestamp}.json"
+        output_file = output_dir / f"{suite_name}.json"
         runner.save_results(suite, output_file)
 
         latest_file = output_dir / "latest.json"
@@ -317,6 +318,14 @@ def compare(
 
 
 @app.command()
+def tesseract() -> None:
+    """Run Tesseract OCR output format benchmarks (DEPRECATED)."""
+    console.print(
+        "[yellow]This command is deprecated. Use 'baseline', 'statistical', or 'serialization' commands instead.[/yellow]"
+    )
+
+
+@app.command()
 def analyze(
     result_file: Path = typer.Argument(..., help="Benchmark result file to analyze"),
     quality_report: bool = typer.Option(
@@ -375,6 +384,330 @@ def analyze(
 
     if quality_report:
         _generate_quality_report(data, console)
+
+
+@app.command()
+def baseline(
+    output_file: Path | None = typer.Option(
+        None, "--output", "-o", help="Save results to file"
+    ),
+) -> None:
+    """Run baseline performance benchmark."""
+    import asyncio
+    import time
+    from kreuzberg import extract_file_sync, batch_extract_file
+    from kreuzberg._utils._cache import clear_all_caches
+
+    console.print("[bold blue]Baseline Performance Benchmark[/bold blue]")
+
+    test_files_dir = Path("tests/test_source_files")
+    test_files = list(test_files_dir.glob("*.pdf"))
+
+    if not test_files:
+        console.print("[red]No test files found in tests/test_source_files[/red]")
+        return
+
+    single_file = test_files[0]
+    mixed_files = test_files[:3] if len(test_files) >= 3 else [single_file] * 3
+
+    results = {}
+    console.print(f"Testing with file: {single_file.name}")
+
+    # Cold cache test
+    clear_all_caches()
+    start_time = time.time()
+    result = extract_file_sync(single_file)
+    cold_duration = time.time() - start_time
+
+    # Warm cache test
+    start_time = time.time()
+    result = extract_file_sync(single_file)
+    warm_duration = time.time() - start_time
+
+    # Batch test
+    clear_all_caches()
+    start_time = time.time()
+
+    async def run_batch() -> list[Any]:
+        return await batch_extract_file(mixed_files)
+
+    asyncio.run(run_batch())
+    batch_duration = time.time() - start_time
+
+    results = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "test_file": str(single_file),
+        "cold_cache_duration": cold_duration,
+        "warm_cache_duration": warm_duration,
+        "batch_duration": batch_duration,
+        "speedup_factor": cold_duration / warm_duration if warm_duration > 0 else 0,
+        "content_length": len(result.content),
+    }
+
+    # Display results
+    console.print(f"\n[green]Cold cache extraction: {cold_duration:.3f}s[/green]")
+    console.print(f"[green]Warm cache extraction: {warm_duration:.3f}s[/green]")
+    console.print(f"[green]Batch extraction: {batch_duration:.3f}s[/green]")
+    console.print(f"[yellow]Cache speedup: {results['speedup_factor']:.2f}x[/yellow]")
+
+    if output_file:
+        with open(output_file, "w") as f:
+            json.dump(results, f, indent=2)
+        console.print(f"[blue]Results saved to {output_file}[/blue]")
+    else:
+        # Save to default location
+        output_dir = Path("results")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        default_file = output_dir / "baseline.json"
+        with open(default_file, "w") as f:
+            json.dump(results, f, indent=2)
+        console.print(f"[blue]Results saved to {default_file}[/blue]")
+
+
+@app.command()
+def statistical(
+    trials: int = typer.Option(5, "--trials", "-t", help="Number of trials to run"),
+    output_file: Path | None = typer.Option(
+        None, "--output", "-o", help="Save results to file"
+    ),
+) -> None:
+    """Run statistical benchmark with multiple trials."""
+    import asyncio
+    import statistics
+    import time
+    from kreuzberg import ExtractionConfig, extract_file
+    from kreuzberg._utils._cache import clear_all_caches
+
+    console.print("[bold blue]Statistical Performance Benchmark[/bold blue]")
+
+    test_files_dir = Path("tests/test_source_files")
+    pdf_files = list(test_files_dir.glob("*.pdf"))
+
+    if not pdf_files:
+        console.print("[red]No PDF test files found[/red]")
+        return
+
+    single_file = pdf_files[0]
+    config = ExtractionConfig(
+        force_ocr=True, ocr_backend="tesseract", extract_tables=True, chunk_content=True
+    )
+
+    console.print(f"File: {single_file.name}")
+    console.print(f"Trials: {trials}")
+    console.print("=" * 60)
+
+    cold_times = []
+    warm_times = []
+
+    async def run_trial() -> tuple[float, float]:
+        # Cold cache trial
+        clear_all_caches()
+        start_time = time.time()
+        await extract_file(single_file, config=config)
+        cold_time = time.time() - start_time
+        cold_times.append(cold_time)
+
+        # Warm cache trial
+        start_time = time.time()
+        await extract_file(single_file, config=config)
+        warm_time = time.time() - start_time
+        warm_times.append(warm_time)
+
+        return cold_time, warm_time
+
+    console.print("Running trials...")
+    for i in range(trials):
+        cold_time, warm_time = asyncio.run(run_trial())
+        console.print(f"Trial {i + 1}: Cold={cold_time:.3f}s, Warm={warm_time:.3f}s")
+
+    results = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "test_file": str(single_file),
+        "trials": trials,
+        "cold_cache": {
+            "mean": statistics.mean(cold_times),
+            "stdev": statistics.stdev(cold_times) if len(cold_times) > 1 else 0,
+            "median": statistics.median(cold_times),
+            "min": min(cold_times),
+            "max": max(cold_times),
+            "raw_times": cold_times,
+        },
+        "warm_cache": {
+            "mean": statistics.mean(warm_times),
+            "stdev": statistics.stdev(warm_times) if len(warm_times) > 1 else 0,
+            "median": statistics.median(warm_times),
+            "min": min(warm_times),
+            "max": max(warm_times),
+            "raw_times": warm_times,
+        },
+    }
+
+    # Display summary
+    cold_cache = results["cold_cache"]
+    warm_cache = results["warm_cache"]
+
+    console.print(
+        f"\n[green]Cold cache - Mean: {cold_cache['mean']:.3f}s ± {cold_cache['stdev']:.3f}s[/green]"  # type: ignore[index]
+    )
+    console.print(
+        f"[green]Warm cache - Mean: {warm_cache['mean']:.3f}s ± {warm_cache['stdev']:.3f}s[/green]"  # type: ignore[index]
+    )
+    speedup = cold_cache["mean"] / warm_cache["mean"] if warm_cache["mean"] > 0 else 0  # type: ignore[index]
+    console.print(f"[yellow]Average speedup: {speedup:.2f}x[/yellow]")
+
+    if output_file:
+        with open(output_file, "w") as f:
+            json.dump(results, f, indent=2)
+        console.print(f"[blue]Results saved to {output_file}[/blue]")
+    else:
+        # Save to default location
+        output_dir = Path("results")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        default_file = output_dir / "statistical.json"
+        with open(default_file, "w") as f:
+            json.dump(results, f, indent=2)
+        console.print(f"[blue]Results saved to {default_file}[/blue]")
+
+
+@app.command()
+def serialization(
+    output_file: Path | None = typer.Option(
+        None, "--output", "-o", help="Save results to file"
+    ),
+) -> None:
+    """Benchmark serialization performance (JSON vs msgpack)."""
+    import time
+    import statistics
+    from kreuzberg._types import ExtractionResult
+
+    console.print("[bold blue]Serialization Performance Benchmark[/bold blue]")
+
+    # Create test data
+    large_content = "This is a realistic OCR result content. " * 500
+    metadata: dict[str, Any] = {
+        "file_path": "/some/long/path/to/document.pdf",
+        "ocr_backend": "tesseract",
+        "ocr_config": {"language": "eng", "psm": 3},
+        "processing_time": 15.234,
+        "confidence_scores": [0.95, 0.87, 0.92, 0.88, 0.94],
+        "page_count": 10,
+    }
+
+    test_result = ExtractionResult(
+        content=large_content,
+        mime_type="text/plain",
+        metadata=metadata,  # type: ignore[arg-type]
+        chunks=["chunk1", "chunk2", "chunk3"] * 20,
+    )
+
+    cache_data = {
+        "type": "ExtractionResult",
+        "data": test_result,
+        "timestamp": time.time(),
+        "version": "1.0.0",
+    }
+
+    trials = 100
+    json_serialize_times = []
+    json_deserialize_times = []
+
+    # JSON benchmarks
+    console.print("Benchmarking JSON serialization...")
+    for _ in range(trials):
+        start_time = time.time()
+        json_str = json.dumps(cache_data, default=str)
+        json_serialize_times.append(time.time() - start_time)
+
+        start_time = time.time()
+        json.loads(json_str)
+        json_deserialize_times.append(time.time() - start_time)
+
+    # Try msgpack if available
+    msgpack_serialize_times = []
+    msgpack_deserialize_times = []
+
+    try:
+        import msgpack  # type: ignore[import-not-found]
+
+        console.print("Benchmarking msgpack serialization...")
+
+        for _ in range(trials):
+            start_time = time.time()
+            msgpack_bytes = msgpack.packb(cache_data, default=str)
+            msgpack_serialize_times.append(time.time() - start_time)
+
+            start_time = time.time()
+            msgpack.unpackb(msgpack_bytes, raw=False)
+            msgpack_deserialize_times.append(time.time() - start_time)
+
+    except ImportError:
+        console.print(
+            "[yellow]msgpack not available - skipping msgpack benchmarks[/yellow]"
+        )
+
+    results = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "trials": trials,
+        "data_size_chars": len(large_content),
+        "json": {
+            "serialize_mean": statistics.mean(json_serialize_times),
+            "serialize_stdev": statistics.stdev(json_serialize_times),
+            "deserialize_mean": statistics.mean(json_deserialize_times),
+            "deserialize_stdev": statistics.stdev(json_deserialize_times),
+        },
+    }
+
+    if msgpack_serialize_times:
+        results["msgpack"] = {
+            "serialize_mean": statistics.mean(msgpack_serialize_times),
+            "serialize_stdev": statistics.stdev(msgpack_serialize_times),
+            "deserialize_mean": statistics.mean(msgpack_deserialize_times),
+            "deserialize_stdev": statistics.stdev(msgpack_deserialize_times),
+        }
+
+        # Calculate speedup
+        json_data = results["json"]
+        msgpack_data = results["msgpack"]
+
+        json_total = json_data["serialize_mean"] + json_data["deserialize_mean"]  # type: ignore[index]
+        msgpack_total = (
+            msgpack_data["serialize_mean"] + msgpack_data["deserialize_mean"]  # type: ignore[index]
+        )
+        speedup = json_total / msgpack_total if msgpack_total > 0 else 0
+        results["msgpack_speedup"] = speedup
+
+    # Display results
+    json_data = results["json"]
+    console.print(
+        f"\n[green]JSON serialize: {json_data['serialize_mean']:.6f}s ± {json_data['serialize_stdev']:.6f}s[/green]"  # type: ignore[index]
+    )
+    console.print(
+        f"[green]JSON deserialize: {json_data['deserialize_mean']:.6f}s ± {json_data['deserialize_stdev']:.6f}s[/green]"  # type: ignore[index]
+    )
+
+    if "msgpack" in results:
+        msgpack_data = results["msgpack"]
+        console.print(
+            f"[green]msgpack serialize: {msgpack_data['serialize_mean']:.6f}s ± {msgpack_data['serialize_stdev']:.6f}s[/green]"  # type: ignore[index]
+        )
+        console.print(
+            f"[green]msgpack deserialize: {msgpack_data['deserialize_mean']:.6f}s ± {msgpack_data['deserialize_stdev']:.6f}s[/green]"  # type: ignore[index]
+        )
+        speedup_val = results["msgpack_speedup"]
+        console.print(f"[yellow]msgpack speedup: {speedup_val:.2f}x[/yellow]")
+
+    if output_file:
+        with open(output_file, "w") as f:
+            json.dump(results, f, indent=2)
+        console.print(f"[blue]Results saved to {output_file}[/blue]")
+    else:
+        # Save to default location
+        output_dir = Path("results")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        default_file = output_dir / "serialization.json"
+        with open(default_file, "w") as f:
+            json.dump(results, f, indent=2)
+        console.print(f"[blue]Results saved to {default_file}[/blue]")
 
 
 if __name__ == "__main__":
