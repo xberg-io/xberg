@@ -80,7 +80,8 @@ async def test_gmft_integration_with_extraction_api(tiny_pdf_with_tables: Path) 
 
             assert "|" in table["text"]
 
-            assert not table["df"].empty
+            assert table["df"] is not None
+            assert not table["df"].is_empty()
 
     except MissingDependencyError:
         pytest.skip("GMFT dependency not installed")
@@ -387,6 +388,8 @@ async def test_extract_tables_cache_hit(tiny_pdf_with_tables: Path) -> None:
     assert len(result) == len(cached_tables)
     assert result[0]["page_number"] == cached_tables[0]["page_number"]
     assert result[0]["text"] == cached_tables[0]["text"]
+    assert result[0]["df"] is not None
+    assert cached_tables[0]["df"] is not None
     assert result[0]["df"].equals(cached_tables[0]["df"])
     assert len(result) == 1
     assert result[0]["text"] == "cached table"
@@ -618,7 +621,7 @@ def test_gmft_inline_extraction_edge_cases_sync_empty_cropped_tables(tiny_pdf_wi
         pytest.skip("Testing inline extraction, but isolated mode is enabled")
 
     try:
-        from gmft.auto import AutoTableDetector  # type: ignore[attr-defined]
+        from gmft.auto import AutoTableDetector
 
         with patch.object(AutoTableDetector, "extract", return_value=[]):
             result = extract_tables_sync(tiny_pdf_with_tables, use_isolated_process=False)

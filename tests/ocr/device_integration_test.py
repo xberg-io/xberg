@@ -5,8 +5,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from kreuzberg._ocr._easyocr import EasyOCRBackend, EasyOCRConfig
-from kreuzberg._ocr._paddleocr import PaddleBackend, PaddleOCRConfig
+from kreuzberg._ocr._easyocr import EasyOCRBackend
+from kreuzberg._ocr._paddleocr import PaddleBackend
+from kreuzberg._types import EasyOCRConfig, PaddleOCRConfig
 from kreuzberg._utils._device import DeviceInfo
 from kreuzberg.exceptions import ValidationError
 

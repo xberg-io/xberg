@@ -16,6 +16,7 @@ from kreuzberg._config import (
     build_extraction_config,
     build_extraction_config_from_dict,
     discover_and_load_config,
+    discover_config,
     find_config_file,
     find_default_config,
     load_config_from_file,
@@ -23,7 +24,6 @@ from kreuzberg._config import (
     load_default_config,
     merge_configs,
     parse_ocr_backend_config,
-    try_discover_config,
 )
 from kreuzberg._types import (
     EasyOCRConfig,
@@ -442,8 +442,8 @@ def test_discover_and_load_config_with_default(tmp_path: Path) -> None:
         discover_and_load_config(str(tmp_path))
 
 
-def test_try_discover_config_returns_none(tmp_path: Path) -> None:
-    result = try_discover_config(str(tmp_path))
+def test_discover_config_returns_none(tmp_path: Path) -> None:
+    result = discover_config(str(tmp_path))
     assert result is None
 
 
@@ -623,26 +623,26 @@ requires = ["hatchling"]
         discover_and_load_config(tmp_path)
 
 
-def test_high_level_api_try_discover_config_success(tmp_path: Path) -> None:
+def test_high_level_api_discover_config_success(tmp_path: Path) -> None:
     config_file = tmp_path / "kreuzberg.toml"
     config_file.write_text("force_ocr = true")
 
-    result = try_discover_config(tmp_path)
+    result = discover_config(tmp_path)
     assert isinstance(result, ExtractionConfig)
     assert result.force_ocr is True
 
 
-def test_high_level_api_try_discover_config_not_found(tmp_path: Path) -> None:
-    result = try_discover_config(tmp_path)
+def test_high_level_api_discover_config_not_found(tmp_path: Path) -> None:
+    result = discover_config(tmp_path)
     assert result is None
 
 
-def test_high_level_api_try_discover_config_invalid(tmp_path: Path) -> None:
+def test_high_level_api_discover_config_invalid(tmp_path: Path) -> None:
     config_file = tmp_path / "kreuzberg.toml"
     config_file.write_text("invalid [ toml")
 
     with pytest.raises(ValidationError) as exc_info:
-        try_discover_config(tmp_path)
+        discover_config(tmp_path)
     assert "Invalid TOML" in str(exc_info.value)
 
 
@@ -893,7 +893,7 @@ def test_config_integration_discovery_with_cwd() -> None:
         original_cwd = Path.cwd()
         try:
             os.chdir(tmp_dir)
-            result = try_discover_config()
+            result = discover_config()
             assert result is not None
             assert result.force_ocr is True
         finally:
@@ -1344,7 +1344,7 @@ def test_high_level_api_comprehensive_try_discover_string_path(tmp_path: Path) -
     config_file = tmp_path / "kreuzberg.toml"
     config_file.write_text("chunk_content = true")
 
-    result = try_discover_config(str(tmp_path))
+    result = discover_config(str(tmp_path))
     assert result is not None
     assert result.chunk_content is True
 

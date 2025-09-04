@@ -4,6 +4,7 @@ import pytest
 
 from kreuzberg import ExtractionConfig, TesseractConfig, extract_file_sync
 from kreuzberg._ocr._tesseract import TesseractBackend
+from kreuzberg._types import OutputFormatType
 from kreuzberg._utils._cache import clear_all_caches
 
 
@@ -86,7 +87,7 @@ class TestTesseractSyncFormats:
         if not test_image_path.exists():
             pytest.skip("Test image not found")
 
-        formats = ["text", "hocr", "markdown", "tsv"]
+        formats: list[OutputFormatType] = ["text", "hocr", "markdown", "tsv"]
         results = {}
 
         for fmt in formats:
@@ -141,7 +142,7 @@ class TestTesseractSyncFormats:
 
     @pytest.mark.parametrize("output_format", ["text", "hocr", "markdown", "tsv"])
     def test_cache_isolation_by_format(
-        self, tesseract_backend: TesseractBackend, test_image_path: Path, output_format: str
+        self, tesseract_backend: TesseractBackend, test_image_path: Path, output_format: OutputFormatType
     ) -> None:
         if not test_image_path.exists():
             pytest.skip("Test image not found")
@@ -160,7 +161,7 @@ class TestTesseractSyncFormats:
         if not test_image_path.exists():
             pytest.skip("Test image not found")
 
-        config = TesseractConfig(output_format="invalid_format", language="eng")
+        config = TesseractConfig(output_format="invalid_format", language="eng")  # type: ignore[arg-type]
         result = tesseract_backend.process_file_sync(test_image_path, **config.to_dict())
 
         assert result.mime_type == "text/plain"

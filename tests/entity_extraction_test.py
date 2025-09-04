@@ -8,8 +8,7 @@ import pytest
 
 from kreuzberg import MissingDependencyError
 from kreuzberg import _entity_extraction as ee
-from kreuzberg._entity_extraction import SpacyEntityExtractionConfig
-from kreuzberg._types import Entity
+from kreuzberg._types import Entity, SpacyEntityExtractionConfig
 
 SAMPLE_TEXT = "John Doe visited Berlin on 2023-01-01. Contact: john@example.com or +49-123-4567."
 

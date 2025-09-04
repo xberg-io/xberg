@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kreuzberg._ocr._tesseract import PSMMode, TesseractBackend, TesseractConfig
+from kreuzberg._ocr._tesseract import TesseractBackend
+from kreuzberg._types import PSMMode, TesseractConfig
 
 if TYPE_CHECKING:
     from pathlib import Path

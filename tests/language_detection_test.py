@@ -5,7 +5,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from kreuzberg import MissingDependencyError
-from kreuzberg._language_detection import LanguageDetectionConfig, _create_fast_langdetect_config, detect_languages
+from kreuzberg._language_detection import _create_fast_langdetect_config, detect_languages
+from kreuzberg._types import LanguageDetectionConfig
 
 
 def test_language_detection_config_defaults() -> None:

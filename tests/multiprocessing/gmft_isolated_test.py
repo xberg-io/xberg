@@ -16,7 +16,11 @@ from PIL import Image
 
 from kreuzberg._gmft import (
     _extract_tables_in_process,
+)
+from kreuzberg._gmft import (
     _extract_tables_isolated as extract_tables_isolated,
+)
+from kreuzberg._gmft import (
     _extract_tables_isolated_async as extract_tables_isolated_async,
 )
 from kreuzberg._types import GMFTConfig
