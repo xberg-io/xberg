@@ -67,7 +67,7 @@ dependencies = [
   "polars>=1.33.0",
   "psutil>=7.0.0",
   "pypdfium2==4.30.0",                                # pinned due to bug in 4.30.1, until v5 is stable
-  "python-calamine>=0.3.2",
+  "python-calamine>=0.5.2",
   "python-pptx>=1.0.2",
   "typing-extensions>=4.15.0; python_version<'3.12'",
 ]
