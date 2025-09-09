@@ -1,115 +1,8 @@
-metadata:
-  name: "Kreuzberg"
-  version: "3.5.0"
-  description: "A text extraction library supporting PDFs, images, office documents and more"
-
-targets:
-  claude-files:
-    - "CLAUDE.md"
-    - ".claude/**/*.md"
-
-  cursor-files:
-    - ".cursorrules"
-
-  windsurf-files:
-    - ".windsurfrules"
-
-  gemini-files:
-    - "GEMINI.md"
-
-outputs:
-  - file: "CLAUDE.md"
-    template: |
-      # CLAUDE.md
-
-      This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-      ## Project Overview
-
-      {{ .Description }}
-
-      {{ range .Rules }}
-      ## {{ .Name }}
-      {{ .Content }}
-      {{ end }}
-
-      {{ range .Sections }}
-      ## {{ .Title }}
-      {{ .Content }}
-      {{ end }}
-
-  - file: "GEMINI.md"
-    template: |
-      # GEMINI.md
-
-      This file provides guidance to Gemini when working with code in this repository.
-
-      ## Project Overview
-
-      {{ .Description }}
-
-      {{ range .Rules }}
-      ## {{ .Name }}
-      {{ .Content }}
-      {{ end }}
-
-      {{ range .Sections }}
-      ## {{ .Title }}
-      {{ .Content }}
-      {{ end }}
-
-  - file: ".cursorrules"
-    template: |
-      # Kreuzberg
-      A text extraction library supporting PDFs, images, office documents and more
-
-      {{ range .Rules }}
-      ## {{ .Name }}
-      {{ .Content }}
-      {{ end }}
-
-      {{ range .Sections }}
-      ## {{ .Title }}
-      {{ .Content }}
-      {{ end }}
-
-  - file: ".windsurfrules"
-    template: |
-      # Kreuzberg
-      A text extraction library supporting PDFs, images, office documents and more
-
-      {{ range .Rules }}
-      ## {{ .Name }}
-      {{ .Content }}
-      {{ end }}
-
-      {{ range .Sections }}
-      ## {{ .Title }}
-      {{ .Content }}
-      {{ end }}
-
-  - path: ".claude/agents/"
-    type: "agent"
-    naming_scheme: "{priority:02d}-{name}.md"
-    template: |
-      # Agent: {{ .Name }}
-
-      **Description**: {{ .Description }}
-      **Priority**: {{ .Priority }}
-
-      ## Tools Available
-      {{ range .Tools }}
-      - {{ . }}
-      {{ end }}
-
-      ## System Prompt
-      {{ .SystemPrompt }}
-
 agents:
-  - name: "python-engineer"
-    description: "Expert Python developer for implementing features and fixing bugs"
-    priority: 10
-    targets: ["@claude-files"]
+  - description: Expert Python developer for implementing features and fixing bugs
+    id: python-engineer
+    name: python-engineer
+    priority: critical
     system_prompt: |
       You are an expert Python engineer specializing in the Kreuzberg text extraction library.
 
@@ -138,11 +31,13 @@ agents:
       - ALWAYS prefer editing existing files
       - All builtin imports at top level (except cyclical/optional)
       - Maintain 95% test coverage requirement
-
-  - name: "test-engineer"
-    description: "Writes comprehensive tests for kreuzberg functionality"
-    priority: 9
-    targets: ["@claude-files"]
+    targets:
+      - CLAUDE.md
+      - .claude/**/*.md
+  - description: Writes comprehensive tests for kreuzberg functionality
+    id: test-engineer
+    name: test-engineer
+    priority: high
     system_prompt: |
       You are a test automation expert for the Kreuzberg text extraction library.
 
@@ -173,16 +68,13 @@ agents:
       - Use descriptive names that explain what's being tested
 
       Always ensure tests are isolated, repeatable, and fast.
-
-  - name: "code-reviewer"
-    description: "Reviews code for quality, security, and compliance"
-    priority: 10
-    targets: ["@claude-files"]
-    tools:
-      - "Read"
-      - "Grep"
-      - "Glob"
-      - "LS"
+    targets:
+      - CLAUDE.md
+      - .claude/**/*.md
+  - description: Reviews code for quality, security, and compliance
+    id: code-reviewer
+    name: code-reviewer
+    priority: critical
     system_prompt: |
       You are a senior code reviewer for the Kreuzberg text extraction library.
 
@@ -231,11 +123,18 @@ agents:
 
       Provide specific, actionable feedback with code examples when relevant.
       Rate severity: Critical, High, Medium, Low.
-
-  - name: "infra-engineer"
-    description: "Manages infrastructure, CI/CD, Docker, and deployment configurations"
-    priority: 9
-    targets: ["@claude-files"]
+    targets:
+      - CLAUDE.md
+      - .claude/**/*.md
+    tools:
+      - Read
+      - Grep
+      - Glob
+      - LS
+  - description: Manages infrastructure, CI/CD, Docker, and deployment configurations
+    id: infra-engineer
+    name: infra-engineer
+    priority: high
     system_prompt: |
       You are an infrastructure and DevOps engineer for the Kreuzberg text extraction library.
 
@@ -300,11 +199,13 @@ agents:
       - Security first approach
       - Resource optimization
       - Clear documentation
-
-  - name: "performance-optimizer"
-    description: "Optimizes performance and resource usage"
-    priority: 8
-    targets: ["@claude-files"]
+    targets:
+      - CLAUDE.md
+      - .claude/**/*.md
+  - description: Optimizes performance and resource usage
+    id: performance-optimizer
+    name: performance-optimizer
+    priority: medium
     system_prompt: |
       You are a performance optimization specialist for the Kreuzberg text extraction library.
 
@@ -349,11 +250,108 @@ agents:
       Always measure before and after optimization.
       Focus on bottlenecks identified through profiling.
       Ensure optimizations don't break functionality or reduce code clarity.
+    targets:
+      - CLAUDE.md
+      - .claude/**/*.md
+metadata:
+  description: A text extraction library supporting PDFs, images, office documents and more
+  name: Kreuzberg
+  version: 3.5.0
+outputs:
+  - path: CLAUDE.md
+    template:
+      type: inline
+      value: |
+        # CLAUDE.md
 
+        This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+        ## Project Overview
+
+        {{ .Description }}
+
+        {{ range .Rules }}
+        ## {{ .Name }}
+        {{ .Content }}
+        {{ end }}
+
+        {{ range .Sections }}
+        ## {{ .Name }}
+        {{ .Content }}
+        {{ end }}
+  - path: GEMINI.md
+    template:
+      type: inline
+      value: |
+        # GEMINI.md
+
+        This file provides guidance to Gemini when working with code in this repository.
+
+        ## Project Overview
+
+        {{ .Description }}
+
+        {{ range .Rules }}
+        ## {{ .Name }}
+        {{ .Content }}
+        {{ end }}
+
+        {{ range .Sections }}
+        ## {{ .Name }}
+        {{ .Content }}
+        {{ end }}
+  - path: .cursorrules
+    template:
+      type: inline
+      value: |
+        # Kreuzberg
+        A text extraction library supporting PDFs, images, office documents and more
+
+        {{ range .Rules }}
+        ## {{ .Name }}
+        {{ .Content }}
+        {{ end }}
+
+        {{ range .Sections }}
+        ## {{ .Name }}
+        {{ .Content }}
+        {{ end }}
+  - path: .windsurfrules
+    template:
+      type: inline
+      value: |
+        # Kreuzberg
+        A text extraction library supporting PDFs, images, office documents and more
+
+        {{ range .Rules }}
+        ## {{ .Name }}
+        {{ .Content }}
+        {{ end }}
+
+        {{ range .Sections }}
+        ## {{ .Name }}
+        {{ .Content }}
+        {{ end }}
+  - naming_scheme: "{priority:02d}-{name}.md"
+    path: .claude/agents/
+    template:
+      type: inline
+      value: |
+        # Agent: {{ .Name }}
+
+        **Description**: {{ .Description }}
+        **Priority**: {{ .Priority }}
+
+        ## Tools Available
+        {{ range .Tools }}
+        - {{ . }}
+        {{ end }}
+
+        ## System Prompt
+        {{ .SystemPrompt }}
+    type: agent
 rules:
-  - name: "Development Commands"
-    priority: 10
-    content: |
+  - content: |
       ### Dependencies
       - Install dependencies: `uv sync`
       - Install with all optional dependencies: `uv sync --all-extras`
@@ -378,10 +376,9 @@ rules:
       - Build docs: `uv run mkdocs build --clean --strict`
       - Serve docs locally: `uv run mkdocs serve`
       - Install doc dependencies: `uv sync --group doc`
-
-  - name: "Important Instructions"
-    priority: 10
-    content: |
+    name: Development Commands
+    priority: critical
+  - content: |
       - Do what has been asked; nothing more, nothing less
       - NEVER create files unless they're absolutely necessary for achieving your goal
       - ALWAYS prefer editing an existing file to creating a new one
@@ -389,10 +386,9 @@ rules:
       - Only create documentation files if explicitly requested by the User
       - All builtin imports should be at the top level (except for cyclical or optional dependencies)
       - When committing, always use the format specified in the CLAUDE.md
-
-  - name: "Architecture"
-    priority: 9
-    content: |
+    name: Important Instructions
+    priority: critical
+  - content: |
       ### Core Extraction Flow
       1. **Entry Point**: `extraction.py` provides main functions (`extract_file`, `extract_bytes`, etc.)
       2. **Registry Pattern**: `ExtractorRegistry` selects appropriate extractor based on MIME type
@@ -415,10 +411,9 @@ rules:
       - New OCR backends: Implement `BaseOCR` interface
       - Configuration options: Extend `ExtractionConfig` or create backend-specific configs
       - Hooks: Use `pre_validate_hook` and `post_extraction_hook` for custom processing
-
-  - name: "Error Handling"
-    priority: 8
-    content: |
+    name: Architecture
+    priority: high
+  - content: |
       - **Exception-based**: All errors are raised as exceptions, no tuple returns
       - **Base class**: All exceptions inherit from `KreuzbergError`
       - **Context**: Exceptions include a `context` parameter with debugging information
@@ -427,20 +422,18 @@ rules:
         - `ParsingError`: Document parsing failures
         - `OCRError`: OCR processing failures
         - `MissingDependencyError`: Missing optional dependencies
-
-  - name: "Testing Patterns"
-    priority: 7
-    content: |
+    name: Error Handling
+    priority: medium
+  - content: |
       - Test files in `tests/test_source_files/` for various formats
       - Mock OCR responses for predictable testing
       - Both sync and async test variants
       - Comprehensive error case coverage
       - OCR tests marked as `xfail` in CI environments for resilience
       - Integration tests use timeouts and retry logic where appropriate
-
-  - name: "CI/CD and Deployment"
-    priority: 6
-    content: |
+    name: Testing Patterns
+    priority: low
+  - content: |
       ### GitHub Actions Workflows
       - **Release**: Automated PyPI publishing via GitHub releases, triggers Docker builds
       - **Docker**: Multi-platform Docker builds (linux/amd64, linux/arm64), triggered by releases
@@ -462,10 +455,9 @@ rules:
       - **Docker version detection**: Use `git tag --sort=-version:refname | head -n1` not `git describe`
       - **Docs dependencies**: Use `uv sync --group doc` for proper mkdocs-material[imaging] support
       - **Docker Hub README**: May fail due to permissions, use `continue-on-error: true`
-
-  - name: "Package Management"
-    priority: 6
-    content: |
+    name: CI/CD and Deployment
+    priority: minimal
+  - content: |
       ### Optional Dependencies Structure
       ```toml
       [project.optional-dependencies]
@@ -499,10 +491,10 @@ rules:
       - **Usage**: Required for PDFs with AES encryption (RC4 is supported in base installation)
       - **Password Support**: Supports single password or list of passwords to try in sequence
       - **Size Impact**: Increases installation size by ~24MB due to cryptography package
-
+    name: Package Management
+    priority: minimal
 sections:
-  - title: "Language Detection"
-    content: |
+  - content: |
       ### Automatic Language Detection (v3.5.0+)
       - **Feature**: Automatically detect languages in extracted text
       - **Implementation**: Uses fast-langdetect library for high-performance detection
@@ -511,9 +503,9 @@ sections:
         - Configure via `LanguageDetectionConfig` for confidence thresholds
       - **Output**: Results available in `ExtractionResult.detected_languages`
       - **Integration**: Works with all extraction methods and file types
-
-  - title: "Planned Features"
-    content: |
+    id: language-detection
+    name: Language Detection
+  - content: |
       ### Structured Extraction (Issue #55)
       - **Goal**: Enable extraction of structured data from documents using vision models
       - **Implementation**:
@@ -522,3 +514,5 @@ sections:
         - Use LiteLLM for vision model integration
         - Implement retry logic with error feedback
       - **Configuration**: Currently programmatic only (no `kreuzberg.toml`)
+    id: planned-features
+    name: Planned Features

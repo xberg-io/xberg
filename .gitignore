@@ -66,3 +66,6 @@ yarn-error.log*
 *.tmp
 *.temp
 .tmp/
+
+# AI Rules generated files
+.claude/agents/
