@@ -483,7 +483,6 @@ def test_image_sync_path_extraction_unknown_backend(mock_ocr_backend: MagicMock)
     config = ExtractionConfig(ocr_backend="unknown_backend")  # type: ignore[arg-type]
     extractor = ImageExtractor(mime_type="image/png", config=config)
 
-    # Mock should raise NotImplementedError for unknown backend
     mock_ocr_backend.process_file_sync.side_effect = NotImplementedError("Sync OCR not implemented for unknown_backend")
 
     with pytest.raises(NotImplementedError, match="Sync OCR not implemented for unknown_backend"):

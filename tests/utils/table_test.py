@@ -336,7 +336,6 @@ def test_is_numeric_column_special_formats() -> None:
 def test_is_numeric_column_error_handling() -> None:
     from kreuzberg._utils._table import _is_numeric_column
 
-    # Polars requires strict=False for mixed types (float and string)
     problematic_series = pl.Series([float("inf"), float("-inf"), float("nan"), "1", "2"], strict=False)
 
     result = _is_numeric_column(problematic_series)
