@@ -348,4 +348,6 @@ class TestProcessingTimeEstimation:
         assert float(easyocr_est["estimated_seconds"]) > float(tesseract_est["estimated_seconds"])
 
         # All should have same megapixels
-        assert float(tesseract_est["megapixels"]) == float(easyocr_est["megapixels"]) == float(paddleocr_est["megapixels"])
+        assert (
+            float(tesseract_est["megapixels"]) == float(easyocr_est["megapixels"]) == float(paddleocr_est["megapixels"])
+        )

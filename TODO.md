@@ -110,4 +110,4 @@ class ExtractionConfig(ConfigDict):
 
 ---
 
-_Last updated: 2025-09-13_
+## Last updated: 2025-09-13
