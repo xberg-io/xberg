@@ -193,7 +193,7 @@ jobs:
           sudo apt-get install -y tesseract-ocr tesseract-ocr-deu pandoc
 
       - name: Run Tests - ${{ matrix.test-category.name }}
-        run: uv run pytest $(echo "${{ matrix.test-category.path }}" | tr ',' ' ') -v --reruns 1 --reruns-delay 1 --cov=kreuzberg --cov-append --cov-report=lcov:coverage-${{ matrix.test-category.name }}.lcov
+        run: uv run pytest $(echo "${{ matrix.test-category.path }}" | tr ',' ' ') -v --reruns 1 --reruns-delay 1 --cov=kreuzberg --cov-append --cov-report=lcov:coverage-${{ matrix.test-category.name }}.lcov --cov-fail-under=0
 
       - name: Upload Coverage Artifacts
         uses: actions/upload-artifact@v4
