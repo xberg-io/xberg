@@ -1306,15 +1306,15 @@ wheels = [
 
 [[package]]
 name = "html-to-markdown"
-version = "1.15.0"
+version = "1.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "nh3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/36/03/232cce6c964e2ebd0863f359545cfe9fa568a8388a631854457493b8dcad/html_to_markdown-1.15.0.tar.gz", hash = "sha256:02dba1945e94939acd4d7d7474a08a4940dc66d894b3f6040b4a283fb501debc", size = 44826, upload-time = "2025-09-26T05:29:24.006Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/17/4769ba8c297e6e741012f47cc1007d0d63e0204ba5e860f8d126673824d4/html_to_markdown-1.16.0.tar.gz", hash = "sha256:f730872b62b7552b7f86d26f0e8a28f24934b0a47fd8cc8ed428b3d3027dfbf8", size = 47682, upload-time = "2025-09-27T09:34:08.288Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d7/3b/fde2bd312073694bafde24dd6785ef1e183864cb6dccaa79b13513bac786/html_to_markdown-1.15.0-py3-none-any.whl", hash = "sha256:198c9880407952b6c15a78e85a636276d59755d113380cdc8a878e1190290ee3", size = 37701, upload-time = "2025-09-26T05:29:22.812Z" },
+    { url = "https://files.pythonhosted.org/packages/e9/7f/5e6e48087ef56b3e1ecf6ffec09fbc716d88abdc98f1821a91e8582759b6/html_to_markdown-1.16.0-py3-none-any.whl", hash = "sha256:f52c515fcb696a153c8340583d6d3090923a72697a269b627ecb054a03dac762", size = 40018, upload-time = "2025-09-27T09:34:06.779Z" },
 ]
 
 [package.optional-dependencies]
@@ -1781,7 +1781,7 @@ requires-dist = [
     { name = "exceptiongroup", marker = "python_full_version < '3.11'", specifier = ">=1.2.2" },
     { name = "fast-langdetect", marker = "extra == 'langdetect'", specifier = ">=1.0.0" },
     { name = "gmft", marker = "extra == 'gmft'", specifier = ">=0.4.2" },
-    { name = "html-to-markdown", extras = ["lxml"], specifier = ">=1.15.0" },
+    { name = "html-to-markdown", extras = ["lxml"], specifier = ">=1.16.0" },
     { name = "keybert", marker = "extra == 'entity-extraction'", specifier = ">=0.9.0" },
     { name = "kreuzberg", extras = ["additional-extensions", "api", "chunking", "cli", "crypto", "document-classification", "easyocr", "entity-extraction", "gmft", "langdetect", "paddleocr"], marker = "extra == 'all'" },
     { name = "langcodes", specifier = ">=3.5.0" },
