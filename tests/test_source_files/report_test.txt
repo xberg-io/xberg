@@ -1,4 +1,0 @@
-This is a test report.
-This report contains a summary of our findings.
-The analysis shows a positive trend.
-Conclusion: The project was a success.

@@ -1,2 +1,0 @@
-Este es un texto en español para probar la detección de idioma.
-Contiene palabras y frases en español para verificar la funcionalidad.

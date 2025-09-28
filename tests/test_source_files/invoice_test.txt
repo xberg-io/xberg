@@ -1,4 +1,0 @@
-This is a test invoice.
-Invoice Number: 12345
-Bill to: Test Corp
-Total Amount: $99.99

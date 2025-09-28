@@ -1,2 +1,0 @@
-Ceci est un texte français pour tester la détection de langue.
-Il contient des mots et des phrases françaises pour vérifier la fonctionnalité.
