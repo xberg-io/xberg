@@ -253,10 +253,8 @@ async def test_extract_bytes_with_entity_extraction_runtime_error() -> None:
 
     with patch("kreuzberg.extraction.extract_entities") as mock_extract:
         mock_extract.side_effect = RuntimeError("Entity extraction failed")
-        result = await extract_bytes(content, mime_type, config)
-
-    assert result.entities is None
-    mock_extract.assert_called_once()
+        with pytest.raises(RuntimeError, match="Entity extraction failed"):
+            await extract_bytes(content, mime_type, config)
 
 
 def test_extract_bytes_sync_with_entity_extraction_runtime_error() -> None:
@@ -266,10 +264,8 @@ def test_extract_bytes_sync_with_entity_extraction_runtime_error() -> None:
 
     with patch("kreuzberg.extraction.extract_entities") as mock_extract:
         mock_extract.side_effect = RuntimeError("Entity extraction failed")
-        result = extract_bytes_sync(content, mime_type, config)
-
-    assert result.entities is None
-    mock_extract.assert_called_once()
+        with pytest.raises(RuntimeError, match="Entity extraction failed"):
+            extract_bytes_sync(content, mime_type, config)
 
 
 @pytest.mark.anyio
@@ -295,10 +291,8 @@ async def test_extract_bytes_with_keyword_extraction_runtime_error() -> None:
 
     with patch("kreuzberg.extraction.extract_keywords") as mock_extract:
         mock_extract.side_effect = RuntimeError("Keyword extraction failed")
-        result = await extract_bytes(content, mime_type, config)
-
-    assert result.keywords is None
-    mock_extract.assert_called_once()
+        with pytest.raises(RuntimeError, match="Keyword extraction failed"):
+            await extract_bytes(content, mime_type, config)
 
 
 def test_extract_bytes_sync_with_keyword_extraction_runtime_error() -> None:
@@ -308,10 +302,8 @@ def test_extract_bytes_sync_with_keyword_extraction_runtime_error() -> None:
 
     with patch("kreuzberg.extraction.extract_keywords") as mock_extract:
         mock_extract.side_effect = RuntimeError("Keyword extraction failed")
-        result = extract_bytes_sync(content, mime_type, config)
-
-    assert result.keywords is None
-    mock_extract.assert_called_once()
+        with pytest.raises(RuntimeError, match="Keyword extraction failed"):
+            extract_bytes_sync(content, mime_type, config)
 
 
 @pytest.mark.anyio
