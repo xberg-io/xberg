@@ -36,17 +36,14 @@ except ImportError:
 
 
 try:
-    from extractous import Extractor
+    from extractous import Extractor  # type: ignore[import-untyped]
 except ImportError:
     Extractor = None
 
 
 from typing import TYPE_CHECKING, Any
 
-try:
-    from typing import Never
-except ImportError:
-    from typing_extensions import Never
+from typing_extensions import Never
 
 if TYPE_CHECKING:
     from .types import AsyncExtractorProtocol, ExtractorProtocol
@@ -142,7 +139,7 @@ class DoclingExtractor:
                 suppress_mps_warnings=True,
             )
 
-            table_options = TableStructureOptions(do_cell_matching=True, mode="accurate")
+            table_options = TableStructureOptions(do_cell_matching=True, mode="accurate")  # type: ignore[arg-type]
 
             layout_options = LayoutOptions(create_orphan_clusters=True, keep_empty_clusters=False)
 
@@ -163,7 +160,7 @@ class DoclingExtractor:
 
             format_options = {InputFormat.PDF: pdf_options}
 
-            self.converter = DocumentConverter(format_options=format_options)
+            self.converter = DocumentConverter(format_options=format_options)  # type: ignore[arg-type]
             self.max_file_size = 1024 * 1024 * 1024
             self.timeout = 600
 
@@ -482,7 +479,7 @@ class ExtractousExtractor:
         try:
             self._configure_adaptive_extraction(characteristics)
             result = self.extractor.extract_file_to_string(file_path)
-            return result[0] if isinstance(result, tuple) else result
+            return result[0] if isinstance(result, tuple) else result  # type: ignore[no-any-return]
         except Exception:
             return ""
 

@@ -4,14 +4,14 @@ import time
 import pytest
 from src.profiler import (
     AsyncPerformanceProfiler,
-    EnhancedResourceMonitor,
     PerformanceMetrics,
+    ResourceMonitor,
     profile_performance,
 )
 
 
-def test_enhanced_resource_monitor_initialization() -> None:
-    monitor = EnhancedResourceMonitor(sampling_interval_ms=100)
+def test_resource_monitor_initialization() -> None:
+    monitor = ResourceMonitor(sampling_interval_ms=100)
 
     assert monitor.sampling_interval == 0.1
     assert monitor.metrics_buffer == []
@@ -20,8 +20,8 @@ def test_enhanced_resource_monitor_initialization() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enhanced_resource_monitor_async_context() -> None:
-    monitor = EnhancedResourceMonitor(sampling_interval_ms=50)
+async def test_resource_monitor_async_context() -> None:
+    monitor = ResourceMonitor(sampling_interval_ms=50)
 
     await monitor.start()
     await asyncio.sleep(0.1)
@@ -96,8 +96,8 @@ def test_profile_performance_memory_tracking() -> None:
     assert len(metrics.samples) >= 1
 
 
-def test_enhanced_resource_monitor_psutil_error() -> None:
-    monitor = EnhancedResourceMonitor()
+def test_resource_monitor_psutil_error() -> None:
+    monitor = ResourceMonitor()
     assert monitor is not None
     assert monitor.process is not None
 
@@ -117,8 +117,8 @@ def test_profile_performance_fast_operation() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enhanced_resource_monitor_no_samples() -> None:
-    monitor = EnhancedResourceMonitor(sampling_interval_ms=1000)
+async def test_resource_monitor_no_samples() -> None:
+    monitor = ResourceMonitor(sampling_interval_ms=1000)
 
     await monitor.start()
     metrics = await monitor.stop()
@@ -182,7 +182,7 @@ async def test_async_profiler_concurrent_operations() -> None:
     async with AsyncPerformanceProfiler(sampling_interval_ms=25) as metrics:
         results = await asyncio.gather(task_a(), task_b())
 
-    assert results == [1, 2]
+    assert results == (1, 2)
     assert metrics.extraction_time >= 0.05
     assert len(metrics.samples) >= 0
 
@@ -205,8 +205,8 @@ def test_performance_metrics_with_io_data() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enhanced_resource_monitor_start_stop_multiple() -> None:
-    monitor = EnhancedResourceMonitor(sampling_interval_ms=50)
+async def test_resource_monitor_start_stop_multiple() -> None:
+    monitor = ResourceMonitor(sampling_interval_ms=50)
 
     await monitor.start()
     await asyncio.sleep(0.05)

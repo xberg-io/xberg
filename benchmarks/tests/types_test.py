@@ -282,6 +282,7 @@ def test_benchmark_config_creation() -> None:
     assert config.max_memory_mb == 2048
     assert len(config.frameworks) == 2
     assert len(config.categories) == 2
+    assert config.file_types is not None
     assert len(config.file_types) == 2
     assert config.save_extracted_text is True
     assert config.detailed_errors is True

@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 import msgspec
 from src.types import (
@@ -11,7 +12,7 @@ from src.types import (
 )
 
 
-def create_test_result(status: ExtractionStatus = ExtractionStatus.SUCCESS, **kwargs) -> BenchmarkResult:
+def create_test_result(status: ExtractionStatus = ExtractionStatus.SUCCESS, **kwargs: Any) -> BenchmarkResult:
     defaults = {
         "file_path": "test.pdf",
         "file_size": 1000,
@@ -27,7 +28,7 @@ def create_test_result(status: ExtractionStatus = ExtractionStatus.SUCCESS, **kw
         "status": status,
     }
     defaults.update(kwargs)
-    return BenchmarkResult(**defaults)
+    return BenchmarkResult(**defaults)  # type: ignore[arg-type]
 
 
 def test_benchmark_result_has_required_fields() -> None:

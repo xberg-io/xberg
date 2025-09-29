@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -240,6 +240,6 @@ def sample_docx_path(test_documents_dir: Path) -> Path:
     return docx_files[0]
 
 
-def pytest_configure(config) -> None:
+def pytest_configure(config: Any) -> None:
     config.addinivalue_line("markers", "benchmark_pandoc: mark test as pandoc benchmark")
     config.addinivalue_line("markers", "memory_profile: mark test for memory profiling")
