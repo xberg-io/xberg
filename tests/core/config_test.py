@@ -387,10 +387,10 @@ def test_build_extraction_config_from_dict_invalid_gmft() -> None:
 
 
 def test_build_extraction_config_from_dict_with_html_to_markdown() -> None:
-    config_dict = {"html_to_markdown": {"strip": ["script", "style"]}}
+    config_dict = {"html_to_markdown": {"strip_tags": ["script", "style"]}}
     config = build_extraction_config_from_dict(config_dict)
     assert isinstance(config.html_to_markdown_config, HTMLToMarkdownConfig)
-    assert config.html_to_markdown_config.strip == ["script", "style"]
+    assert config.html_to_markdown_config.strip_tags == ("script", "style")
 
 
 def test_build_extraction_config_from_dict_invalid_html_to_markdown() -> None:

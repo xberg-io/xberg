@@ -5,7 +5,7 @@ requires = [ "hatchling" ]
 
 [project]
 name = "kreuzberg"
-version = "3.19.1"
+version = "3.20.0"
 description = "Document intelligence framework for Python - Extract text, metadata, and structured data from diverse file formats"
 readme = "README.md"
 keywords = [
@@ -33,7 +33,7 @@ keywords = [
 ]
 license = { text = "MIT" }
 authors = [ { name = "Na'aman Hirschfeld", email = "nhirschfed@gmail.com" } ]
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Intended Audience :: Developers",
@@ -46,6 +46,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: Database",
   "Topic :: Multimedia :: Graphics :: Capture :: Scanners",
   "Topic :: Office/Business :: Office Suites",
@@ -60,18 +61,18 @@ dependencies = [
   "anyio>=4.11.0",
   "chardetng-py>=0.3.5",
   "exceptiongroup>=1.2.2; python_version<'3.11'",
-  "html-to-markdown[lxml]>=1.16.0",
+  "html-to-markdown>=2.1.0",
   "langcodes>=3.5.0",
-  "mcp>=1.15.0",
+  "mcp>=1.17.0",
   "msgspec>=0.18.0",
   "numpy>=2.0.0",
   "playa-pdf>=0.7.0",
-  "polars>=1.33.1",
+  "polars>=1.34.0",
   "psutil>=7.1.0",
   "pypdfium2==4.30.0",                                # pinned due to bug in 4.30.1, until v5 is stable
   "python-calamine>=0.5.3",
   "python-pptx>=1.0.2",
-  "transformers>=4.30.0",
+  "transformers>=4.57.0",
   "typing-extensions>=4.15.0; python_version<'3.12'",
 ]
 
@@ -83,23 +84,23 @@ optional-dependencies.all = [
   "kreuzberg[additional-extensions,api,chunking,cli,crypto,document-classification,easyocr,entity-extraction,gmft,langdetect,paddleocr]",
 ]
 optional-dependencies.api = [
-  "litestar[standard,structlog,opentelemetry]>=2.17.0",
+  "litestar[opentelemetry,standard,structlog]>=2.18.0",
 ]
 optional-dependencies.chunking = [ "semantic-text-splitter>=0.28.0" ]
 optional-dependencies.cli = [
   "click>=8.3.0",
-  "rich>=14.1.0",
+  "rich>=14.2.0",
   "tomli>=2.0.0; python_version<'3.11'",
 ]
 optional-dependencies.crypto = [ "playa-pdf[crypto]>=0.7.0" ]
 optional-dependencies.document-classification = [ "deep-translator>=1.11.4" ]
-optional-dependencies.easyocr = [ "easyocr>=1.7.2" ]
-optional-dependencies.entity-extraction = [ "keybert>=0.9.0", "spacy>=3.8.7" ]
-optional-dependencies.gmft = [ "gmft>=0.4.2", "transformers>=4.25.0" ]
+optional-dependencies.easyocr = [ "easyocr>=1.7.2; python_version<'3.14'" ]
+optional-dependencies.entity-extraction = [ "keybert>=0.9.0", "spacy>=3.8.7; python_version<'3.14'" ]
+optional-dependencies.gmft = [ "gmft>=0.4.2", "transformers>=4.57.0" ]
 optional-dependencies.langdetect = [ "fast-langdetect>=1.0.0" ]
 optional-dependencies.paddleocr = [
-  "paddleocr>=3.2.0",
-  "paddlepaddle>=3.2.0",
+  "paddleocr>=3.2.0; python_version<'3.14'",
+  "paddlepaddle>=3.2.0; python_version<'3.14'",
   "setuptools>=80.9.0",
 ]
 urls.documentation = "https://kreuzberg.dev"
@@ -116,10 +117,10 @@ dev = [
   "pytest-benchmark>=5.1.0",
   "pytest-cov>=7.0.0",
   "pytest-mock>=3.15.1",
-  "pytest-rerunfailures>=16.0.1",
+  "pytest-rerunfailures>=16.1",
   "pytest-timeout>=2.4.0",
-  "rich>=14.1.0",
-  "ruff>=0.13.2",
+  "rich>=14.2.0",
+  "ruff>=0.14.0",
   "tabulate>=0.9.0",
   "trio>=0.31.0",
   "types-pyyaml>=6.0.12.20250915",
@@ -138,6 +139,12 @@ packages = [ "kreuzberg" ]
 
 [tool.setuptools.package-data]
 kreuzberg = [ "py.typed" ]
+
+[tool.uv.workspace]
+members = [ ".", "comparative-benchmarks" ]
+
+[tool.uv.sources]
+uv-bump = { git = "https://github.com/Goldziher/uv-bump" }
 
 [tool.ruff]
 target-version = "py310"
@@ -279,6 +286,7 @@ module = [
   "fast_langdetect",
   "mailparse",
   "keybert",
+  "html_to_markdown._html_to_markdown",
 ]
 ignore_missing_imports = true
 
@@ -286,9 +294,3 @@ ignore_missing_imports = true
 module = "scripts.*"
 ignore_missing_imports = true
 disallow_untyped_calls = false
-
-[tool.uv.workspace]
-members = [ ".", "comparative-benchmarks" ]
-
-[tool.uv.sources]
-uv-bump = { git = "https://github.com/Goldziher/uv-bump" }

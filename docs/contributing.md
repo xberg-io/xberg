@@ -72,7 +72,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Notes
 
-- Python 3.10-3.13 supported
+- Python 3.10-3.14 supported (note: EasyOCR, PaddleOCR, and entity extraction extras remain unavailable on 3.14 until upstream wheels support it)
 - System dependencies (optional): Tesseract, Pandoc
 - Prek runs automatically on commit
 - Join our [Discord](https://discord.gg/pXxagNK2zN) for help

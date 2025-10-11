@@ -34,6 +34,10 @@ The Kreuzberg core package can be installed using pip with:
 pip install kreuzberg
 ```
 
+!!! note "Python Compatibility"
+
+    Kreuzberg runs on Python 3.10 through 3.14. The core library fully supports 3.14, but some optional extras (EasyOCR, PaddleOCR, entity extraction via spaCy) remain unavailable until their upstream wheels add 3.14 support.
+
 ## Optional Features
 
 ### OCR
@@ -91,6 +95,10 @@ EasyOCR is a Python-based OCR backend with wide language support and strong perf
 pip install "kreuzberg[easyocr]"
 ```
 
+!!! warning
+
+    EasyOCR wheels are currently available only for Python 3.13 and below. On Python 3.14 this extra is skipped until upstream support lands.
+
 #### PaddleOCR
 
 PaddleOCR is particularly strong for Chinese and other Asian languages. It requires additional system dependencies for OpenCV support:
@@ -113,6 +121,10 @@ OpenGL libraries are typically included with graphics drivers on Windows.
 ```shell
 pip install "kreuzberg[paddleocr]"
 ```
+
+!!! warning
+
+    PaddleOCR/PaddlePaddle do not yet ship Python 3.14 wheels. Installation on 3.14 will skip this extra until the upstream projects add support.
 
 ### Chunking
 

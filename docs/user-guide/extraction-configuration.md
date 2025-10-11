@@ -805,6 +805,10 @@ python -m spacy download de_core_news_sm   # German
 python -m spacy download fr_core_news_sm   # French
 ```
 
+!!! warning
+
+    spaCy has not yet published Python 3.14 wheels. Entity extraction is unavailable on 3.14 installations until upstream support arrives.
+
 Available spaCy models include: `en_core_web_sm`, `de_core_news_sm`, `fr_core_news_sm`, `es_core_news_sm`, `pt_core_news_sm`, `it_core_news_sm`, `nl_core_news_sm`, `zh_core_web_sm`, `ja_core_news_sm`, `ko_core_news_sm`, `ru_core_news_sm`, and many others.
 
 ### DPI and Image Processing
@@ -901,12 +905,17 @@ html_config = HTMLToMarkdownConfig(
     newline_style="spaces",  # Line break style
     preprocess_html=True,  # Clean HTML before conversion
     preprocessing_preset="standard",  # HTML cleaning level
+    strip_tags=("script", "style"),
 )
 
 result = await extract_file(
     "document.html",
     config=ExtractionConfig(html_to_markdown_config=html_config),
 )
+
+# Inline images, SVGs, and embedded assets are automatically captured when
+# `ExtractionConfig(extract_images=True)` is enabled. The converter enforces
+# the extractor image size limits while decoding data URIs.
 ```
 
 Available heading styles:

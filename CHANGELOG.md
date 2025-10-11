@@ -150,6 +150,22 @@ The following internal GMFT options have been removed for simplicity:
 
 - **Error Handling**: RuntimeError and OSError in keyword extraction and OCR processing will now bubble up instead of being silently handled. This ensures critical system issues are reported to developers.
 
+## [3.20.0] - 2025-10-11
+
+### Added
+
+- **Inline HTML Asset Extraction**: Inline `<img>` data URIs and inline SVGs are now captured automatically when `extract_images=True`, powered by html-to-markdown 2.1
+- **Python 3.14 (core)**: The core library is validated on Python 3.14; extras depending on EasyOCR, PaddleOCR, or spaCy remain unavailable until their upstream wheels add support
+
+### Changed
+
+- **HTML Extraction Pipeline**: The HTML extractor and Tesseract hOCR processing now delegate to the html-to-markdown 2.1 Rust bindings for faster conversion and unified behaviour
+- **Configuration Surface**: `HTMLToMarkdownConfig` now mirrors the converter options (tuple-normalised `strip_tags`, `keep_inline_images_in`, etc.) and feeds bindings directly
+
+### Removed
+
+- **Legacy BeautifulSoup Path**: Dropped the BeautifulSoup-based HTML parser and the unused HTML streaming helper in favour of the Rust pipeline
+
 ## [3.18.0] - 2025-09-27
 
 ### Added
