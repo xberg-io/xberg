@@ -138,7 +138,7 @@ setup_go_paths_windows() {
 	export PKG_CONFIG_PATH="${repo_root}/crates/kreuzberg-ffi:${PKG_CONFIG_PATH:-}"
 
 	# Ensure both target directories are in PATH for DLL lookup
-	export PATH="${gnu_target}:${release_target}:${PATH:-}"
+	export PATH="${gnu_target};${release_target};${PATH:-}"
 
 	# cgo settings for Windows with static linking
 	export CGO_ENABLED=1

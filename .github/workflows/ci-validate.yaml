@@ -182,11 +182,20 @@ jobs:
           # Remove build artifacts that aren't needed after linting
           rm -rf target/debug/incremental 2>/dev/null || true
           rm -rf target/release/incremental 2>/dev/null || true
-          # Remove Pdfium artifacts if present
-          rm -rf target/*/build/kreuzberg-*/out/pdfium 2>/dev/null || true
+          # Remove Pdfium artifacts if present - use explicit, safer patterns
+          if [ -d "target/debug/build" ]; then
+            find target/debug/build -type d -name pdfium -path "*/kreuzberg-ffi-*/out/pdfium" -delete 2>/dev/null || {
+              echo "Warning: Failed to clean some debug pdfium directories" >&2
+            }
+          fi
+          if [ -d "target/release/build" ]; then
+            find target/release/build -type d -name pdfium -path "*/kreuzberg-ffi-*/out/pdfium" -delete 2>/dev/null || {
+              echo "Warning: Failed to clean some release pdfium directories" >&2
+            }
+          fi
           # Clean Python cache
-          find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-          find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
+          find . -type d -name __pycache__ -delete 2>/dev/null || true
+          find . -type d -name .pytest_cache -delete 2>/dev/null || true
           echo "=== Disk space after cleanup ===" >&2
           df -h / >&2
         shell: bash

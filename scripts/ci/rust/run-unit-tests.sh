@@ -20,13 +20,60 @@ echo "=== Running Rust unit tests ==="
 
 setup_tessdata
 
-echo "TESSDATA_PREFIX: ${TESSDATA_PREFIX:-not set}"
+echo "Test environment configuration:"
+echo "  TESSDATA_PREFIX: ${TESSDATA_PREFIX:-not set}"
+echo "  RUST_BACKTRACE: ${RUST_BACKTRACE:-not set}"
+echo "  CARGO_TERM_COLOR: ${CARGO_TERM_COLOR:-not set}"
 
-cargo test \
+echo "Workspace information:"
+echo "  Repository: $REPO_ROOT"
+echo "  Excluded packages: kreuzberg-e2e-generator, kreuzberg-py, kreuzberg-node"
+
+# Check if test data is available
+if [ ! -d "$TESSDATA_PREFIX" ]; then
+	echo "WARNING: TESSDATA_PREFIX directory not found: $TESSDATA_PREFIX"
+	echo "Attempting to create it..."
+	mkdir -p "$TESSDATA_PREFIX"
+	ensure_tessdata "$TESSDATA_PREFIX"
+fi
+
+# Verify critical tessdata files
+echo "Verifying Tesseract data files..."
+for lang in eng osd; do
+	langfile="$TESSDATA_PREFIX/${lang}.traineddata"
+	if [ -f "$langfile" ]; then
+		size=$(stat -f%z "$langfile" 2>/dev/null || stat -c%s "$langfile" 2>/dev/null || echo "unknown")
+		echo "  ✓ ${lang}.traineddata (${size} bytes)"
+	else
+		echo "  WARNING: Missing ${lang}.traineddata"
+	fi
+done
+
+echo "=== Starting cargo test ==="
+
+# Run tests with detailed output and capture logs
+TEST_LOG="/tmp/cargo-test-$$.log"
+if ! cargo test \
 	--workspace \
 	--exclude kreuzberg-e2e-generator \
 	--exclude kreuzberg-py \
 	--exclude kreuzberg-node \
-	--all-features
+	--all-features \
+	--verbose 2>&1 | tee "$TEST_LOG"; then
+	echo "=== Test execution failed ==="
+	echo "Last 50 lines of test output:"
+	tail -n 50 "$TEST_LOG"
+	echo ""
+	echo "Collecting diagnostic information..."
+	echo "Disk space:"
+	df -h . || du -h . 2>/dev/null | head -1
+	echo "Cargo environment:"
+	cargo --version
+	rustc --version
+	rm -f "$TEST_LOG"
+	exit 1
+fi
 
-echo "Tests complete"
+rm -f "$TEST_LOG"
+
+echo "=== Tests complete ==="

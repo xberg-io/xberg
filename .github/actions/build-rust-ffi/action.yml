@@ -1,0 +1,243 @@
+name: Build Rust FFI Library
+description: Build Rust FFI library (kreuzberg-ffi or language-specific FFI bindings) with proper flags and error handling
+
+inputs:
+  crate-name:
+    description: 'Name of the Rust crate to build (e.g., kreuzberg-ffi, kreuzberg-py, kreuzberg-node, kreuzberg-rb)'
+    required: true
+  features:
+    description: 'Cargo features to enable (comma-separated, optional)'
+    required: false
+    default: ''
+  target:
+    description: 'Rust target triple (optional, defaults to host)'
+    required: false
+    default: ''
+  build-profile:
+    description: 'Build profile (release or dev)'
+    required: false
+    default: 'release'
+  verbose:
+    description: 'Enable verbose build output'
+    required: false
+    default: 'true'
+  additional-flags:
+    description: 'Additional cargo build flags (optional)'
+    required: false
+    default: ''
+
+outputs:
+  library-path:
+    description: 'Path to the built library'
+    value: ${{ steps.build.outputs.library-path }}
+  target-dir:
+    description: 'Cargo target directory'
+    value: ${{ steps.build.outputs.target-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Validate inputs
+      shell: bash
+      run: |
+        echo "=== Rust FFI Build Configuration ==="
+        echo "Crate: ${{ inputs.crate-name }}"
+        echo "Features: ${{ inputs.features || 'default' }}"
+        echo "Target: ${{ inputs.target || 'host' }}"
+        echo "Profile: ${{ inputs.build-profile }}"
+        echo "Verbose: ${{ inputs.verbose }}"
+        echo "Additional flags: ${{ inputs.additional-flags || 'none' }}"
+        echo ""
+
+        # Validate crate exists
+        if [ ! -f "crates/${{ inputs.crate-name }}/Cargo.toml" ]; then
+          if [ ! -f "packages/ruby/ext/kreuzberg_rb/native/Cargo.toml" ] || [ "${{ inputs.crate-name }}" != "kreuzberg-rb" ]; then
+            echo "Error: Crate '${{ inputs.crate-name }}' not found in crates/ or packages/ruby/ext/kreuzberg_rb/native/"
+            exit 1
+          fi
+        fi
+
+        echo "✓ Crate validation passed"
+
+    - name: Build FFI library
+      id: build
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        echo "=== Building Rust FFI library ==="
+
+        # Determine working directory
+        if [ "${{ inputs.crate-name }}" = "kreuzberg-rb" ]; then
+          CRATE_DIR="packages/ruby/ext/kreuzberg_rb/native"
+        else
+          CRATE_DIR="crates/${{ inputs.crate-name }}"
+        fi
+
+        # Build cargo command array safely (avoid eval vulnerability)
+        CARGO_ARGS=("build" "--package" "${{ inputs.crate-name }}")
+
+        # Add profile flag
+        if [ "${{ inputs.build-profile }}" = "release" ]; then
+          CARGO_ARGS+=("--release")
+          PROFILE_DIR="release"
+        else
+          PROFILE_DIR="debug"
+        fi
+
+        # Add features if specified
+        if [ -n "${{ inputs.features }}" ]; then
+          CARGO_ARGS+=("--features" "${{ inputs.features }}")
+        fi
+
+        # Add target if specified
+        if [ -n "${{ inputs.target }}" ]; then
+          CARGO_ARGS+=("--target" "${{ inputs.target }}")
+          TARGET_SUBDIR="${{ inputs.target }}/"
+        else
+          TARGET_SUBDIR=""
+        fi
+
+        # Add verbose flag
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          CARGO_ARGS+=("--verbose")
+        fi
+
+        # Add additional flags safely (split on whitespace, properly quoted)
+        if [ -n "${{ inputs.additional-flags }}" ]; then
+          read -ra EXTRA_FLAGS <<< "${{ inputs.additional-flags }}"
+          CARGO_ARGS+=("${EXTRA_FLAGS[@]}")
+        fi
+
+        # Log the command for debugging (quote arguments for clarity)
+        echo "Build command: cargo ${CARGO_ARGS[*]}"
+        echo ""
+
+        # Set environment for clean build
+        export RUSTC_WRAPPER=""
+        export CARGO_BUILD_RUSTC_WRAPPER=""
+        export SCCACHE_GHA_ENABLED="false"
+
+        # Execute build with error handling (no eval, safe array expansion)
+        # Use unique temporary file with automatic cleanup
+        BUILD_LOG=$(mktemp)
+        trap 'rm -f "$BUILD_LOG"' EXIT
+
+        if ! cargo "${CARGO_ARGS[@]}" 2>&1 | tee "$BUILD_LOG"; then
+          echo ""
+          echo "=== Build Failed ==="
+          echo "Command: cargo ${CARGO_ARGS[*]}"
+          echo ""
+          echo "Last 50 lines of build output:"
+          tail -50 "$BUILD_LOG"
+          echo ""
+          echo "Checking for common errors:"
+
+          # Check for linking errors
+          if grep -i "link" "$BUILD_LOG" | grep -i "error" | head -5; then
+            echo "⚠️ Linking errors detected. Check library paths and dependencies."
+          fi
+
+          # Check for missing dependencies
+          if grep -i "could not find" "$BUILD_LOG" | head -5; then
+            echo "⚠️ Missing dependencies detected."
+          fi
+
+          # Check for OpenSSL issues
+          if grep -i "openssl" "$BUILD_LOG" | grep -i "error" | head -5; then
+            echo "⚠️ OpenSSL errors detected. Verify OPENSSL_DIR is set correctly."
+          fi
+
+          exit 1
+        fi
+
+        # Determine target directory
+        if [ -n "${CARGO_TARGET_DIR:-}" ]; then
+          TARGET_DIR="$CARGO_TARGET_DIR"
+        else
+          TARGET_DIR="target"
+        fi
+
+        FULL_TARGET_DIR="${TARGET_DIR}/${TARGET_SUBDIR}${PROFILE_DIR}"
+
+        echo ""
+        echo "=== Build Successful ==="
+        echo "Target directory: $FULL_TARGET_DIR"
+
+        # Find built library
+        echo ""
+        echo "Searching for built library artifacts..."
+
+        # Define library patterns based on crate type
+        case "${{ inputs.crate-name }}" in
+          kreuzberg-ffi)
+            LIB_PATTERNS="libkreuzberg_ffi.so libkreuzberg_ffi.dylib kreuzberg_ffi.dll libkreuzberg_ffi.a libkreuzberg_ffi.rlib"
+            ;;
+          kreuzberg-py)
+            LIB_PATTERNS="lib_internal_bindings.so lib_internal_bindings.dylib _internal_bindings.pyd _internal_bindings.dll"
+            ;;
+          kreuzberg-node)
+            LIB_PATTERNS="libkreuzberg_node.so libkreuzberg_node.dylib kreuzberg_node.dll kreuzberg_node.node"
+            ;;
+          kreuzberg-rb)
+            LIB_PATTERNS="libkreuzberg_rb.so libkreuzberg_rb.dylib kreuzberg_rb.dll"
+            ;;
+          *)
+            LIB_PATTERNS="lib${{ inputs.crate-name }}.so lib${{ inputs.crate-name }}.dylib ${{ inputs.crate-name }}.dll"
+            ;;
+        esac
+
+        FOUND_LIB=""
+        for pattern in $LIB_PATTERNS; do
+          if [ -f "$FULL_TARGET_DIR/$pattern" ]; then
+            FOUND_LIB="$FULL_TARGET_DIR/$pattern"
+            echo "✓ Found library: $FOUND_LIB"
+            ls -lh "$FOUND_LIB"
+            break
+          fi
+        done
+
+        if [ -z "$FOUND_LIB" ]; then
+          echo "⚠️ Could not find expected library artifact. Listing all files:"
+          ls -lh "$FULL_TARGET_DIR/" | grep -E '\.(so|dylib|dll|a|rlib|pyd)$' || echo "No library files found"
+        fi
+
+        # Output for subsequent steps
+        echo "library-path=$FOUND_LIB" >> "$GITHUB_OUTPUT"
+        echo "target-dir=$FULL_TARGET_DIR" >> "$GITHUB_OUTPUT"
+
+        echo ""
+        echo "=== FFI Build Complete ==="
+
+    - name: Verify build artifacts
+      shell: bash
+      run: |
+        echo "=== Verifying Build Artifacts ==="
+
+        LIBRARY_PATH="${{ steps.build.outputs.library-path }}"
+        TARGET_DIR="${{ steps.build.outputs.target-dir }}"
+
+        if [ -n "$LIBRARY_PATH" ] && [ -f "$LIBRARY_PATH" ]; then
+          echo "✓ Library artifact verified: $LIBRARY_PATH"
+
+          # Display file info
+          if command -v file &> /dev/null; then
+            echo ""
+            echo "File type:"
+            file "$LIBRARY_PATH"
+          fi
+
+          # Check symbols on Unix (optional, non-blocking)
+          if [[ "$RUNNER_OS" != "Windows" ]] && command -v nm &> /dev/null; then
+            echo ""
+            echo "Exported symbols (first 10):"
+            nm -D "$LIBRARY_PATH" 2>/dev/null | grep -E "^[0-9a-f]+ T " | head -10 || echo "Could not extract symbols"
+          fi
+        else
+          echo "⚠️ Library artifact not found at expected path"
+          echo "Target directory contents:"
+          ls -lh "$TARGET_DIR/" || echo "Target directory does not exist"
+        fi
+
+        echo ""
+        echo "✓ Artifact verification complete"

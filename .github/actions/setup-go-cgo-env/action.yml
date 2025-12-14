@@ -84,7 +84,7 @@ runs:
         }
 
         # Add FFI library directory to PATH for runtime linking
-        $env:PATH = "$FFI_PATH;$env:PATH"
+        $env:PATH = "${FFI_PATH};$($env:PATH)"
 
         # pkg-config path for finding kreuzberg-ffi.pc
         $PKG_CONFIG_PATH = "$(Join-Path $REPO_ROOT 'crates/kreuzberg-ffi');$env:PKG_CONFIG_PATH"

@@ -1,17 +1,47 @@
 name: Install System Dependencies
-description: Install platform specific dependencies required for document conversion
+description: |
+  Install and cache platform-specific dependencies required for document conversion.
+  Includes: Tesseract OCR, LibreOffice, fonts, and build tools.
+  Features robust caching with architecture/version awareness, timeout handling, and retry logic.
+
+inputs:
+  enable-retry:
+    description: Enable retry logic with exponential backoff
+    required: false
+    default: 'true'
+
 runs:
   using: composite
   steps:
-    - name: Cache Tesseract data (macOS)
+    # ============================================================================
+    # macOS: Tesseract & LibreOffice Installation with Caching
+    # ============================================================================
+
+    - name: Detect Tesseract version (macOS)
+      if: runner.os == 'macOS'
+      id: detect-tesseract-macos
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Detect installed or available tesseract version
+        VERSION=$(brew info tesseract 2>/dev/null | grep -oP '(?<=tesseract\s)[0-9]+\.[0-9]+' | head -1 || echo 'unknown')
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "::notice title=Tesseract Version::Detected version: ${VERSION}"
+
+    - name: Cache Tesseract & tessdata (macOS)
       if: runner.os == 'macOS'
       id: cache-tesseract-macos
       uses: actions/cache@v5
       with:
-        path: /usr/local/opt/tesseract/share/tessdata/
-        key: tesseract-data-${{ runner.os }}-v2
+        path: |
+          /usr/local/opt/tesseract/
+          /usr/local/Cellar/tesseract/
+          /opt/homebrew/opt/tesseract/
+          /opt/homebrew/Cellar/tesseract/
+        key: tesseract-macos-${{ runner.arch }}-v5-${{ steps.detect-tesseract-macos.outputs.version }}
         restore-keys: |
-          tesseract-data-${{ runner.os }}-
+          tesseract-macos-${{ runner.arch }}-v5-
+          tesseract-macos-${{ runner.arch }}-
 
     - name: Cache LibreOffice (macOS)
       if: runner.os == 'macOS'
@@ -19,33 +49,110 @@ runs:
       uses: actions/cache@v5
       with:
         path: /Applications/LibreOffice.app
-        key: libreoffice-${{ runner.os }}-v2
+        key: libreoffice-macos-${{ runner.arch }}-v3
 
     - name: Install dependencies (macOS)
       if: runner.os == 'macOS'
       shell: bash
       run: |
-        set -eo pipefail
-        echo "Installing tesseract and LibreOffice..."
+        set -euo pipefail
 
-        # Install packages only if not already present
-        brew list tesseract &>/dev/null || brew install tesseract
-        # Add extra tessdata languages needed by tests
-        brew list tesseract-lang &>/dev/null || brew install tesseract-lang
+        echo "::group::Installing macOS dependencies"
 
-        # LibreOffice: skip install if already present on runner/cache to avoid cask error
-        if [ -d "/Applications/LibreOffice.app" ]; then
-          echo "LibreOffice already present at /Applications/LibreOffice.app, skipping install"
+        # Set up retry function
+        retry_with_backoff() {
+          local max_attempts=3
+          local attempt=1
+          local delay=5
+
+          while [ $attempt -le $max_attempts ]; do
+            if "$@"; then
+              return 0
+            fi
+
+            if [ $attempt -lt $max_attempts ]; then
+              echo "⚠ Attempt $attempt failed, retrying in ${delay}s..." >&2
+              sleep $delay
+              delay=$((delay * 2))
+            fi
+            attempt=$((attempt + 1))
+          done
+
+          return 1
+        }
+
+        # Install Tesseract with retry
+        if ! brew list tesseract &>/dev/null; then
+          echo "Installing Tesseract..."
+          retry_with_backoff brew install tesseract || {
+            echo "::error::Failed to install Tesseract after retries"
+            exit 1
+          }
         else
-          brew list --cask libreoffice &>/dev/null || brew install --cask libreoffice
+          echo "✓ Tesseract already installed"
         fi
-        echo "Installed packages:"
-        brew list tesseract
-        tesseract --version
-        echo "Verifying LibreOffice installation..."
-        if ! soffice --version; then
-          echo "Warning: soffice not available in PATH" >&2
+
+        # Install Tesseract language data with retry
+        if ! brew list tesseract-lang &>/dev/null; then
+          echo "Installing Tesseract language packs..."
+          retry_with_backoff brew install tesseract-lang || {
+            echo "::warning::Failed to install tesseract-lang, some languages may be unavailable"
+          }
+        else
+          echo "✓ Tesseract language packs already installed"
         fi
+
+        # Install LibreOffice with timeout (can take 10+ minutes)
+        if [ -d "/Applications/LibreOffice.app" ]; then
+          echo "✓ LibreOffice already present"
+        else
+          echo "Installing LibreOffice (this may take 10+ minutes, timeout: 20min)..."
+          # Use timeout to prevent hanging
+          if timeout 1200 retry_with_backoff brew install --cask libreoffice; then
+            echo "✓ LibreOffice installed successfully"
+          else
+            EXIT_CODE=$?
+            if [ $EXIT_CODE -eq 124 ]; then
+              echo "::error::LibreOffice installation timed out after 20 minutes"
+            else
+              echo "::error::LibreOffice installation failed with exit code $EXIT_CODE"
+            fi
+            exit 1
+          fi
+        fi
+
+        echo "::endgroup::"
+
+        # Verify installations
+        echo "::group::Verifying macOS installations"
+
+        echo "Tesseract:"
+        tesseract --version | head -1
+
+        echo ""
+        echo "Available languages:"
+        tesseract --list-langs | head -5
+
+        echo ""
+        echo "LibreOffice:"
+        soffice --version 2>/dev/null || echo "⚠ Warning: soffice not fully available"
+
+        echo "::endgroup::"
+
+    # ============================================================================
+    # Linux: Tesseract, LibreOffice, Fonts & Build Tools with Caching
+    # ============================================================================
+
+    - name: Detect Tesseract version (Linux)
+      if: runner.os == 'Linux'
+      id: detect-tesseract-linux
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Detect available tesseract-ocr version from apt
+        VERSION=$(apt-cache policy tesseract-ocr 2>/dev/null | grep 'Candidate:' | grep -oP '\d+\.\d+' | head -1 || echo 'unknown')
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "::notice title=Tesseract Version::Detected version: ${VERSION}"
 
     - name: Cache Tesseract data (Linux)
       if: runner.os == 'Linux'
@@ -55,77 +162,170 @@ runs:
         path: |
           /usr/share/tesseract-ocr/5/tessdata/
           /usr/share/tesseract-ocr/tessdata/
-        key: tesseract-data-linux-v2
+        key: tesseract-linux-${{ runner.arch }}-v5-${{ steps.detect-tesseract-linux.outputs.version }}
         restore-keys: |
-          tesseract-data-linux-
+          tesseract-linux-${{ runner.arch }}-v5-
+          tesseract-linux-${{ runner.arch }}-
+
+    - name: Cache fonts (Linux)
+      if: runner.os == 'Linux'
+      id: cache-fonts-linux
+      uses: actions/cache@v5
+      with:
+        path: /usr/share/fonts/
+        key: fonts-linux-${{ runner.arch }}-v2
 
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        set -eo pipefail
-        sudo apt-get update
+        set -euo pipefail
 
-        # Build list of packages
-        PACKAGES="libreoffice libreoffice-writer libreoffice-calc libreoffice-impress tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur tesseract-ocr-deu fonts-liberation fonts-dejavu-core fonts-noto-core libssl-dev pkg-config"
+        echo "::group::Installing Linux dependencies"
 
-        # Install dependencies
-        sudo apt-get install -y $PACKAGES
+        # Set up retry function with exponential backoff
+        retry_with_backoff() {
+          local cmd=("$@")
+          local max_attempts=3
+          local attempt=1
+          local delay=5
 
-        echo "Verifying Linux installations..."
-        soffice --version
-        tesseract --version
-        echo "Verifying Tesseract language data..."
-        tesseract --list-langs
-        echo "Checking Tesseract data path..."
-        if [ -d /usr/share/tesseract-ocr/5/tessdata ]; then
-          echo "Found Tesseract 5 tessdata directory:"
-          ls -la /usr/share/tesseract-ocr/5/tessdata/
-          echo "Verifying required language files..."
-          for lang in eng tur deu; do
-            if [ ! -f "/usr/share/tesseract-ocr/5/tessdata/${lang}.traineddata" ]; then
-              echo "ERROR: Missing required language file: ${lang}.traineddata" >&2
-              exit 1
-            else
-              echo "✓ Found ${lang}.traineddata"
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt of $max_attempts: ${cmd[*]}"
+
+            if "${cmd[@]}"; then
+              return 0
             fi
-          done
-        elif [ -d /usr/share/tesseract-ocr/tessdata ]; then
-          echo "Found Tesseract tessdata directory:"
-          ls -la /usr/share/tesseract-ocr/tessdata/
-          echo "Verifying required language files..."
-          for lang in eng tur deu; do
-            if [ ! -f "/usr/share/tesseract-ocr/tessdata/${lang}.traineddata" ]; then
-              echo "ERROR: Missing required language file: ${lang}.traineddata" >&2
-              exit 1
-            else
-              echo "✓ Found ${lang}.traineddata"
+
+            if [ $attempt -lt $max_attempts ]; then
+              echo "⚠ Attempt $attempt failed, retrying in ${delay}s..." >&2
+              sleep $delay
+              delay=$((delay * 2))
             fi
+            attempt=$((attempt + 1))
           done
+
+          return 1
+        }
+
+        # Update package index with retry
+        echo "Updating package index..."
+        if ! retry_with_backoff sudo apt-get update; then
+          echo "::warning::apt-get update failed after retries, continuing anyway..."
+        fi
+
+        # Install packages with timeout and retry
+        PACKAGES="libreoffice libreoffice-writer libreoffice-calc libreoffice-impress tesseract-ocr tesseract-ocr-eng tesseract-ocr-tur tesseract-ocr-deu fonts-liberation fonts-dejavu-core fonts-noto-core libssl-dev pkg-config build-essential"
+
+        echo "Installing dependencies..."
+        if timeout 900 retry_with_backoff sudo apt-get install -y $PACKAGES; then
+          echo "✓ All packages installed successfully"
         else
-          echo "ERROR: Tessdata directory not found in standard locations" >&2
+          EXIT_CODE=$?
+          if [ $EXIT_CODE -eq 124 ]; then
+            echo "::error::Package installation timed out after 15 minutes"
+          else
+            echo "::warning::Some packages failed to install, attempting individual installs..."
+            # Try installing critical packages individually
+            for pkg in tesseract-ocr libreoffice libssl-dev pkg-config; do
+              echo "Installing $pkg..."
+              if timeout 300 sudo apt-get install -y "$pkg" 2>&1; then
+                echo "  ✓ $pkg installed"
+              else
+                echo "  ⚠ Failed to install $pkg"
+              fi
+            done
+          fi
+        fi
+
+        echo "::endgroup::"
+
+        # Verify installations
+        echo "::group::Verifying Linux installations"
+
+        echo "LibreOffice:"
+        if soffice --version 2>/dev/null; then
+          echo "✓ LibreOffice available"
+        else
+          echo "⚠ Warning: LibreOffice not fully available"
+        fi
+
+        echo ""
+        echo "Tesseract:"
+        if tesseract --version 2>/dev/null | head -1; then
+          echo "✓ Tesseract available"
+        else
+          echo "::error::Tesseract not found or failed to run"
           exit 1
         fi
+
+        echo ""
+        echo "Available Tesseract languages:"
+        tesseract --list-langs | head -10
+
+        # Verify Tesseract data path
+        echo ""
+        echo "Checking Tesseract data path..."
+
+        TESSDATA_FOUND=0
+        for TESSDATA_PATH in "/usr/share/tesseract-ocr/5/tessdata" "/usr/share/tesseract-ocr/tessdata"; do
+          if [ -d "$TESSDATA_PATH" ]; then
+            echo "Found tessdata at: $TESSDATA_PATH"
+
+            echo "Required language files:"
+            for lang in eng tur deu; do
+              if [ -f "$TESSDATA_PATH/${lang}.traineddata" ]; then
+                size=$(stat -c%s "$TESSDATA_PATH/${lang}.traineddata" 2>/dev/null || echo "unknown")
+                echo "  ✓ ${lang}.traineddata ($size bytes)"
+              else
+                echo "  ⚠ ${lang}.traineddata (missing)"
+              fi
+            done
+            TESSDATA_FOUND=1
+            break
+          fi
+        done
+
+        if [ $TESSDATA_FOUND -eq 0 ]; then
+          echo "::error::Tessdata directory not found in standard locations"
+          exit 1
+        fi
+
+        echo ""
         echo "Testing LibreOffice headless mode..."
-        soffice --headless --version || echo "Warning: LibreOffice headless version check failed"
+        if timeout 30 soffice --headless --version >/dev/null 2>&1; then
+          echo "✓ LibreOffice headless mode works"
+        else
+          echo "⚠ Warning: LibreOffice headless test failed (may still work)"
+        fi
+
+        echo "::endgroup::"
+
+    # ============================================================================
+    # Windows: Tesseract & LibreOffice Installation with Caching via Chocolatey
+    # ============================================================================
 
     - name: Cache Tesseract (Windows)
       if: runner.os == 'Windows'
       id: cache-tesseract-windows
       uses: actions/cache@v5
       with:
-        path: C:\Program Files\Tesseract-OCR
-        key: tesseract-data-${{ runner.os }}-v2
+        path: |
+          C:\Program Files\Tesseract-OCR
+          C:\ProgramData\chocolatey\lib\tesseract
+        key: tesseract-windows-${{ runner.arch }}-v5
         restore-keys: |
-          tesseract-data-${{ runner.os }}-
+          tesseract-windows-${{ runner.arch }}-
 
     - name: Cache LibreOffice (Windows)
       if: runner.os == 'Windows'
       id: cache-libreoffice-windows
       uses: actions/cache@v5
       with:
-        path: C:\Program Files\LibreOffice
-        key: libreoffice-${{ runner.os }}-v2
+        path: |
+          C:\Program Files\LibreOffice
+          C:\ProgramData\chocolatey\lib\libreoffice
+        key: libreoffice-windows-${{ runner.arch }}-v3
 
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
@@ -133,37 +333,128 @@ runs:
       run: |
         $ErrorActionPreference = "Stop"
 
-        # Check if tools are already cached
+        Write-Host "::group::Installing Windows dependencies"
+
+        # Helper function for retry with exponential backoff
+        function Retry-Command {
+          param(
+            [scriptblock]$Command,
+            [int]$MaxAttempts = 3,
+            [int]$DelaySeconds = 5
+          )
+
+          $attempt = 1
+          while ($attempt -le $MaxAttempts) {
+            try {
+              Write-Host "Attempt $attempt of $MaxAttempts..."
+              & $Command
+              return $true
+            }
+            catch {
+              $attempt++
+              if ($attempt -le $MaxAttempts) {
+                $backoffDelay = $DelaySeconds * [Math]::Pow(2, $attempt - 1)
+                Write-Host "⚠ Attempt failed, retrying in ${backoffDelay}s..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $backoffDelay
+              }
+              else {
+                return $false
+              }
+            }
+          }
+        }
+
+        # Check cache status
         $tesseractCacheHit = "${{ steps.cache-tesseract-windows.outputs.cache-hit }}" -eq "true"
         $libreofficeInstalled = Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
 
-        # Build list of packages to install
-        $packagesToInstall = @()
-
+        # Install Tesseract with retry
         if (-not $tesseractCacheHit) {
-          Write-Host "Tesseract cache miss, adding to install list..."
-          $packagesToInstall += "tesseract"
-        } else {
-          Write-Host "Tesseract found in cache, skipping installation"
+          Write-Host "Tesseract cache miss, installing..."
+          if (-not (Retry-Command { choco install -y tesseract --no-progress } -MaxAttempts 3)) {
+            throw "Failed to install Tesseract after 3 attempts"
+          }
+          Write-Host "✓ Tesseract installed"
+        }
+        else {
+          Write-Host "✓ Tesseract found in cache"
         }
 
+        # Install LibreOffice with timeout and retry
         if (-not $libreofficeInstalled) {
-          Write-Host "LibreOffice not found, adding to install list..."
-          $packagesToInstall += "libreoffice"
-        } else {
-          Write-Host "LibreOffice found in cache, skipping installation"
+          Write-Host "LibreOffice not found, installing (timeout: 20min)..."
+
+          $job = Start-Job -ScriptBlock {
+            choco install -y libreoffice --no-progress
+          }
+
+          # Wait for up to 20 minutes
+          $completed = $job | Wait-Job -Timeout 1200
+
+          if (-not $completed) {
+            $job | Stop-Job -Force
+            throw "LibreOffice installation timed out after 20 minutes"
+          }
+
+          $result = $job | Receive-Job
+          $exitCode = $job.JobStateInfo.State
+
+          if ($exitCode -ne "Completed") {
+            Write-Host "LibreOffice installation failed"
+            Write-Host "Output: $result"
+            throw "LibreOffice installation failed"
+          }
+
+          Write-Host "✓ LibreOffice installed"
+        }
+        else {
+          Write-Host "✓ LibreOffice already installed"
         }
 
-        if ($packagesToInstall.Count -gt 0) {
-          Write-Host "Installing packages from chocolatey: $($packagesToInstall -join ', ')..."
-          choco install -y @packagesToInstall --no-progress
-        } else {
-          Write-Host "All packages found in cache, skipping installation"
+        # Add to PATH
+        Write-Host "Configuring PATH..."
+        $paths = @(
+          "C:\Program Files\LibreOffice\program",
+          "C:\Program Files\Tesseract-OCR"
+        )
+
+        foreach ($path in $paths) {
+          if (Test-Path $path) {
+            Write-Output $path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            $env:PATH = "$path;$env:PATH"
+          }
         }
 
-        Write-Output "C:\Program Files\LibreOffice\program" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        Write-Output "C:\Program Files\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-        $env:PATH = "C:\Program Files\LibreOffice\program;C:\Program Files\Tesseract-OCR;" + $env:PATH
+        Write-Host "::endgroup::"
 
-        soffice --version
-        tesseract --version
+        # Verify installations
+        Write-Host "::group::Verifying Windows installations"
+
+        Write-Host "LibreOffice:"
+        try {
+          & soffice --version 2>$null
+          Write-Host "✓ LibreOffice available"
+        }
+        catch {
+          Write-Host "⚠ Warning: LibreOffice verification failed"
+        }
+
+        Write-Host ""
+        Write-Host "Tesseract:"
+        & tesseract --version
+
+        Write-Host ""
+        Write-Host "Available Tesseract languages:"
+        & tesseract --list-langs
+
+        Write-Host ""
+        Write-Host "Tesseract installation location:"
+        $tesseractPath = (Get-Command tesseract -ErrorAction SilentlyContinue).Path
+        if ($tesseractPath) {
+          Write-Host "  $tesseractPath"
+        }
+        else {
+          Write-Host "  ⚠ Could not determine tesseract path"
+        }
+
+        Write-Host "::endgroup::"

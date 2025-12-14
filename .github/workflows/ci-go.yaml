@@ -285,118 +285,165 @@ jobs:
           done
           rm -rf ffi-download
 
-      - name: Debug - Show directory structure and artifact contents
+      - name: Verify FFI library location and permissions
         shell: bash
         run: |
           echo "=========================================="
-          echo "Artifact and Directory Structure Diagnostics"
+          echo "FFI Library Verification"
           echo "=========================================="
-          echo "Current directory: $(pwd)"
-          echo
-          echo "=== FFI Library Files ==="
           if [[ "$RUNNER_OS" == "Windows" ]]; then
             echo "Looking for Windows library files (.dll, .a, .lib)..."
-            find . -type f \( -name "*.dll" -o -name "*.a" -o -name "*.lib" \) 2>/dev/null || echo "No library files found"
+            if ls target/x86_64-pc-windows-gnu/release/libkreuzberg_ffi.* 2>/dev/null; then
+              echo "✓ Found FFI library in GNU target"
+              ls -lh target/x86_64-pc-windows-gnu/release/libkreuzberg_ffi.*
+            elif ls target/release/libkreuzberg_ffi.* 2>/dev/null; then
+              echo "✓ Found FFI library in release target"
+              ls -lh target/release/libkreuzberg_ffi.*
+            else
+              echo "✗ Error: FFI library not found in expected locations"
+              find . -name "libkreuzberg_ffi.*" -o -name "kreuzberg_ffi.*" 2>/dev/null || echo "No FFI library files found"
+              exit 1
+            fi
           else
             echo "Looking for Unix library files (.so, .dylib, .a)..."
-            find . -type f \( -name "*.so" -o -name "*.dylib" -o -name "*.a" \) 2>/dev/null || echo "No library files found"
-          fi
-          echo
-
-          echo "=== Downloaded Artifact Contents (ffi-download directory) ==="
-          if [ -d "ffi-download" ]; then
-            ls -laR ffi-download
-            echo
-            echo "Artifact file details:"
-            file ffi-download/* 2>/dev/null || echo "No files to analyze"
-          else
-            echo "ffi-download directory not found"
-          fi
-          echo
-
-          echo "=== Target directory structure ==="
-          ls -laR target/ 2>/dev/null || echo "target/ not found"
-          echo
-
-          echo "=== Detailed library file information ==="
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "GNU target libraries:"
-            ls -lh target/x86_64-pc-windows-gnu/release/*.{dll,a,lib} 2>/dev/null || echo "No files in GNU target"
-            echo "Standard target libraries:"
-            ls -lh target/release/*.{dll,a,lib} 2>/dev/null || echo "No files in release target"
-          else
-            echo "Target release libraries:"
-            ls -lh target/release/libkreuzberg_ffi.* 2>/dev/null || echo "No libkreuzberg_ffi files found"
+            if ls target/release/libkreuzberg_ffi.* 2>/dev/null; then
+              echo "✓ Found FFI library in target/release"
+              ls -lh target/release/libkreuzberg_ffi.*
+            else
+              echo "✗ Error: FFI library not found in target/release"
+              exit 1
+            fi
           fi
 
-      - name: Make FFI library executable
+      - name: Make FFI library executable (Unix)
+        if: runner.os != 'Windows'
         run: chmod +x target/release/libkreuzberg_ffi.* || true
 
-      - name: Set CGO environment variables (Windows only)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          $workspace = (Get-Location).Path
-          Add-Content -Path $env:GITHUB_ENV -Value "CGO_LDFLAGS=-L$workspace\target\x86_64-pc-windows-gnu\release -L$workspace\target\release -lkreuzberg_ffi -static-libgcc -static-libstdc++"
+      - name: Setup Tesseract Cache
+        uses: ./.github/actions/setup-tesseract-cache
+        with:
+          label: ${{ runner.os }}-tesseract-${{ env.PDFIUM_VERSION }}
+          enable-cache: 'true'
 
-      - name: Debug - Environment and CGO configuration
+      - name: Setup Go CGO environment
+        uses: ./.github/actions/setup-go-cgo-env
+        with:
+          ffi-lib-dir: 'target/release'
+          enable-rpath: 'true'
+
+      - name: Set library paths for test execution
         shell: bash
         run: |
+          set -euo pipefail
           echo "=========================================="
-          echo "Pre-test Environment Diagnostics"
+          echo "Setting library paths for test execution"
+          echo "=========================================="
+
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            # Windows: Add FFI library directory to PATH
+            export PATH="${PWD}/target/x86_64-pc-windows-gnu/release;${PWD}/target/release;${PATH:-}"
+            echo "PATH updated to include FFI library directories"
+          else
+            # Unix: Set LD_LIBRARY_PATH and DYLD_* variables
+            export LD_LIBRARY_PATH="${PWD}/target/release:${LD_LIBRARY_PATH:-}"
+            export DYLD_LIBRARY_PATH="${PWD}/target/release:${DYLD_LIBRARY_PATH:-}"
+            export DYLD_FALLBACK_LIBRARY_PATH="${PWD}/target/release:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+          fi
+
+          # Persist to GITHUB_ENV for subsequent steps
+          echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH:-}" >> $GITHUB_ENV
+          echo "PATH=${PATH}" >> $GITHUB_ENV
+
+          echo "✓ Library paths set successfully"
+          echo "  LD_LIBRARY_PATH: ${LD_LIBRARY_PATH:-<not set>}"
+          echo "  DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-<not set>}"
+
+      - name: Verify CGO configuration
+        shell: bash
+        run: |
+          set +e  # Don't exit on errors for diagnostics
+          echo "=========================================="
+          echo "Pre-test CGO Configuration"
           echo "=========================================="
           echo "Operating System: $RUNNER_OS"
-          echo "Current working directory: $(pwd)"
-          echo
-          echo "=== Go Environment ==="
-          go version
-          go env
-          echo
-          echo "=== CGO and Compiler Settings ==="
-          echo "CC: ${CC:-<not set>}"
-          echo "CXX: ${CXX:-<not set>}"
-          echo "CGO_ENABLED: ${CGO_ENABLED:-<not set>}"
-          echo "CGO_CFLAGS: ${CGO_CFLAGS:-<not set>}"
-          echo "CGO_LDFLAGS: ${CGO_LDFLAGS:-<not set>}"
-          echo
-          echo "=== Library Paths ==="
+          echo "Go version: $(go version)"
+          echo ""
+          echo "=== CGO Settings ==="
+          echo "CGO_ENABLED=${CGO_ENABLED:-<not set>}"
+          echo "CGO_CFLAGS=${CGO_CFLAGS:-<not set>}"
+          echo "CGO_LDFLAGS=${CGO_LDFLAGS:-<not set>}"
+          echo ""
+          echo "=== Runtime Library Paths ==="
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            echo "PATH includes:"
-            echo "$PATH" | tr ';' '\n' | grep -E "(target|mingw|gcc)" || echo "No target/mingw paths found"
+            echo "PATH (first 500 chars):"
+            echo "$PATH" | head -c 500
+            echo "..."
           else
             echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH:-<not set>}"
             echo "DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-<not set>}"
             echo "DYLD_FALLBACK_LIBRARY_PATH: ${DYLD_FALLBACK_LIBRARY_PATH:-<not set>}"
           fi
-          echo
+          echo ""
+          echo "=== pkg-config ==="
+          echo "PKG_CONFIG_PATH: ${PKG_CONFIG_PATH:-<not set>}"
+          if pkg-config --exists kreuzberg-ffi 2>/dev/null; then
+            echo "✓ pkg-config can find kreuzberg-ffi"
+          else
+            echo "⚠ pkg-config cannot find kreuzberg-ffi (build may not be complete yet)"
+          fi
+          echo ""
+          echo "=== FFI Library Files ==="
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            if ls target/x86_64-pc-windows-gnu/release/libkreuzberg_ffi.* 2>/dev/null; then
+              ls -lh target/x86_64-pc-windows-gnu/release/libkreuzberg_ffi.*
+            elif ls target/release/libkreuzberg_ffi.* 2>/dev/null; then
+              ls -lh target/release/libkreuzberg_ffi.*
+            else
+              echo "✗ No FFI library found"
+            fi
+          else
+            if ls target/release/libkreuzberg_ffi.* 2>/dev/null; then
+              ls -lh target/release/libkreuzberg_ffi.*
+            else
+              echo "✗ No FFI library found"
+            fi
+          fi
+          echo "=========================================="
 
       - name: Run Go tests
         run: scripts/ci/go/run-tests.sh
         shell: bash
+        env:
+          LD_LIBRARY_PATH: ${{ env.LD_LIBRARY_PATH }}
+          DYLD_LIBRARY_PATH: ${{ env.DYLD_LIBRARY_PATH }}
+          DYLD_FALLBACK_LIBRARY_PATH: ${{ env.DYLD_FALLBACK_LIBRARY_PATH }}
+          PATH: ${{ env.PATH }}
+          CGO_ENABLED: ${{ env.CGO_ENABLED }}
+          CGO_CFLAGS: ${{ env.CGO_CFLAGS }}
+          CGO_LDFLAGS: ${{ env.CGO_LDFLAGS }}
+          PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}
 
       - name: Install Task
         uses: ./.github/actions/install-task
 
       - name: Run E2E tests
         run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            export PATH="${PWD}/target/x86_64-pc-windows-gnu/release:${PWD}/target/release:${PATH}"
-            export CGO_LDFLAGS="-L${PWD}/target/x86_64-pc-windows-gnu/release -L${PWD}/target/release -lkreuzberg_ffi -static-libgcc -static-libstdc++"
-          else
-            export LD_LIBRARY_PATH="${PWD}/target/release:${LD_LIBRARY_PATH:-}"
-            export DYLD_LIBRARY_PATH="${PWD}/target/release:${DYLD_LIBRARY_PATH:-}"
-            export DYLD_FALLBACK_LIBRARY_PATH="${PWD}/target/release:${DYLD_FALLBACK_LIBRARY_PATH:-}"
-            if [[ "$RUNNER_OS" == "macOS" ]]; then
-              export CGO_LDFLAGS="-L${PWD}/target/release -Wl,-rpath,${PWD}/target/release"
-            else
-              export CGO_LDFLAGS="-L${PWD}/target/release -Wl,-rpath,${PWD}/target/release"
-            fi
-          fi
-          # Set PKG_CONFIG_PATH so cgo can find kreuzberg-ffi.pc
-          export PKG_CONFIG_PATH="${PWD}/crates/kreuzberg-ffi:${PKG_CONFIG_PATH:-}"
+          # Environment variables are already set by previous steps
+          # Just ensure TESSDATA_PREFIX is configured for OCR
           if [[ "$RUNNER_OS" == "macOS" ]]; then
             export TESSDATA_PREFIX=/opt/homebrew/share/tessdata
           else
             export TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata
           fi
           task e2e:go:test
+        env:
+          LD_LIBRARY_PATH: ${{ env.LD_LIBRARY_PATH }}
+          DYLD_LIBRARY_PATH: ${{ env.DYLD_LIBRARY_PATH }}
+          DYLD_FALLBACK_LIBRARY_PATH: ${{ env.DYLD_FALLBACK_LIBRARY_PATH }}
+          PATH: ${{ env.PATH }}
+          CGO_ENABLED: ${{ env.CGO_ENABLED }}
+          CGO_CFLAGS: ${{ env.CGO_CFLAGS }}
+          CGO_LDFLAGS: ${{ env.CGO_LDFLAGS }}
+          PKG_CONFIG_PATH: ${{ env.PKG_CONFIG_PATH }}
