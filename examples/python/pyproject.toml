@@ -20,5 +20,10 @@ dependencies = [
   "kreuzberg",
 ]
 
+[tool.hatch.build.targets.wheel]
+only-include = [
+  "*.py",
+]
+
 [tool.uv.sources]
 kreuzberg = { workspace = true }

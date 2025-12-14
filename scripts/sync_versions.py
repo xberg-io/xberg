@@ -191,7 +191,7 @@ def main():
     unchanged_files: List[str] = []
 
     for pkg_json in repo_root.rglob("package.json"):
-        if any(part in pkg_json.parts for part in ["node_modules", ".git", "target", "dist"]):
+        if any(part in pkg_json.parts for part in ["node_modules", ".git", "target", "dist", "examples", "e2e"]):
             continue
 
         changed, old_ver, new_ver = update_package_json(pkg_json, version)

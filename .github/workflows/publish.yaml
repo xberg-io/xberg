@@ -2124,7 +2124,7 @@ jobs:
 
       - name: Wait for npm indexing
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
-        run: bash scripts/publish/wait-for-package.sh npm "@kreuzberg/node" "${{ needs.prepare.outputs.version }}" 10
+        run: bash scripts/publish/wait-for-package.sh npm "@kreuzberg/node" "${{ needs.prepare.outputs.version }}" 15
 
       - name: Publish main Node package
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
@@ -2223,7 +2223,7 @@ jobs:
 
       - name: Wait for npm indexing
         if: ${{ steps.npm_check.outputs.exists != 'true' }}
-        run: bash scripts/publish/wait-for-package.sh npm "@kreuzberg/wasm" "${{ needs.prepare.outputs.version }}" 10
+        run: bash scripts/publish/wait-for-package.sh npm "@kreuzberg/wasm" "${{ needs.prepare.outputs.version }}" 15
 
       - name: Package WASM artifacts
         if: ${{ steps.npm_check.outputs.exists != 'true' }}
@@ -2402,6 +2402,11 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.checkout_ref }}
+
       - name: Extract release info
         id: release
         env:

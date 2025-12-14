@@ -6,3 +6,4 @@ packages:
   - "examples/wasm-browser"
   - "examples/wasm-cloudflare-workers"
   - "examples/typescript"
+  - 'e2e/smoke/node'

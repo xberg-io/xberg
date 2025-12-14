@@ -10,7 +10,7 @@
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.5.0",
 		"@cloudflare/workers-types": "^4.20241127.0",
-		"@kreuzberg/wasm": "4.0.0-rc.8",
+		"@kreuzberg/wasm": "workspace:*",
 		"vitest": "^2.1.0",
 		"wrangler": "^3.88.0"
 	},

@@ -52,6 +52,7 @@ cache-keys = [
 members = [
   "packages/python",
   "examples/python",
+  "v3/kreuzberg",
 ]
 
 [tool.ruff]
@@ -231,7 +232,10 @@ module = [
   "easyocr",
   "paddle",
   "paddle.*",
+  "paddle.utils",
+  "paddle.utils.*",
   "paddle.utils.gast",
+  "paddle.utils.gast.*",
   "paddleocr",
   "torch",
   "kreuzberg._internal_bindings",
@@ -242,6 +246,7 @@ module = [
 ]
 ignore_missing_imports = true
 ignore_errors = true
+follow_imports = "skip"
 
 [[tool.mypy.overrides]]
 module = [ "numpy", "numpy.*" ]

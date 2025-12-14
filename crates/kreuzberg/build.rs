@@ -627,13 +627,41 @@ fn link_dynamically(pdfium_dir: &Path, target: &str) {
 /// Embeds PDFium into the binary as a static library. Adds system
 /// dependencies required for static linking on Linux.
 /// Supports flexible archive structures by finding library in multiple locations.
+///
+/// Note: bblanchon/pdfium-binaries only provides dynamic libraries.
+/// On macOS, this will fallback to dynamic linking with a warning.
+/// On Linux, static libraries may not be available either - will provide helpful error.
 fn link_statically(pdfium_dir: &Path, target: &str) {
-    let (runtime_lib_name, runtime_subdir) = runtime_library_info(target);
+    // For static linking, we need libpdfium.a (not .dylib or .so)
+    let static_lib_name = "libpdfium.a";
+    let lib_subdir = "lib";
 
     // Find the actual library location (handles multiple possible archive structures)
-    let lib_path = match find_pdfium_library(pdfium_dir, &runtime_lib_name, runtime_subdir) {
+    let lib_path = match find_pdfium_library(pdfium_dir, static_lib_name, lib_subdir) {
         Ok(path) => path.parent().unwrap_or(pdfium_dir).to_path_buf(),
-        Err(err) => panic!("{}", err),
+        Err(_err) => {
+            // Static library not found - check if we're on macOS and can fallback
+            if target.contains("darwin") {
+                eprintln!("cargo:warning=Static PDFium library (libpdfium.a) not found for macOS.");
+                eprintln!("cargo:warning=bblanchon/pdfium-binaries only provides dynamic libraries.");
+                eprintln!("cargo:warning=Falling back to dynamic linking for local development.");
+                eprintln!("cargo:warning=Production Linux builds will attempt static linking.");
+
+                // Fallback to dynamic linking on macOS
+                link_dynamically(pdfium_dir, target);
+                return;
+            } else {
+                // On Linux/Windows, provide helpful error
+                panic!(
+                    "Static PDFium library (libpdfium.a) not found.\n\n\
+                     bblanchon/pdfium-binaries only provides dynamic libraries.\n\
+                     For static linking, either:\n\
+                     1. Build PDFium yourself: https://github.com/ajrcarey/pdfium-render/issues/53\n\
+                     2. Set PDFIUM_STATIC_LIB_PATH to point to your static library directory\n\
+                     3. Use 'pdf' (dynamic) or 'pdf-bundled' features instead of 'pdf-static'"
+                );
+            }
+        }
     };
 
     println!("cargo:rustc-link-search=native={}", lib_path.display());

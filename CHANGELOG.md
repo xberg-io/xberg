@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **PDFium static linking (`pdf-static` feature)** (build.rs)
+  - Fixed `link_statically()` to correctly search for static library (`libpdfium.a`) instead of dynamic library (`.dylib`/`.so`)
+  - Added macOS fallback to dynamic linking when static library unavailable (bblanchon/pdfium-binaries only provides dynamic libraries)
+  - Improved error messages explaining that `bblanchon/pdfium-binaries` doesn't provide static archives
+  - Added clear guidance for users needing static linking: build PDFium yourself, use `PDFIUM_STATIC_LIB_PATH`, or use alternative features
+  - Prevents build failures with helpful warnings on macOS, actionable errors on Linux
+
 ## [4.0.0-rc.8] - 2025-12-14
 
 ### Added
