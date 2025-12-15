@@ -89,7 +89,7 @@ for crate_dir in kreuzberg kreuzberg-ffi kreuzberg-tesseract; do
 done
 
 sed -i.bak \
-	's/^kreuzberg-tesseract = { version = "[^"]*", optional = true }/kreuzberg-tesseract = { path = "..\\/kreuzberg-tesseract", optional = true }/' \
+	's/^kreuzberg-tesseract = { version = "[^"]*", optional = true }/kreuzberg-tesseract = { path = "..\/kreuzberg-tesseract", optional = true }/' \
 	"$REPO_ROOT/packages/ruby/vendor/kreuzberg/Cargo.toml"
 rm -f "$REPO_ROOT/packages/ruby/vendor/kreuzberg/Cargo.toml.bak"
 
