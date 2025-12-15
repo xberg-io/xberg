@@ -108,7 +108,7 @@
 		"@types/which": "^3.0.4",
 		"@vitest/coverage-v8": "^4.0.15",
 		"archiver": "^7.0.1",
-		"oxlint": "^1.32.0",
+		"oxlint": "^1.33.0",
 		"tsup": "^8.5.1",
 		"typescript": "^5.9.3",
 		"vitest": "^4.0.15"
