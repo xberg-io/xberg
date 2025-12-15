@@ -42,6 +42,49 @@ if ($null -eq $src) {
 
 New-Item -ItemType Directory -Force -Path $destDir | Out-Null
 Copy-Item -Force $src $dest
+
+$pdfiumFile = $null
+switch ($target) {
+	"aarch64-apple-darwin" { $pdfiumFile = "libpdfium.dylib"; break }
+	"x86_64-apple-darwin" { $pdfiumFile = "libpdfium.dylib"; break }
+	"x86_64-pc-windows-msvc" { $pdfiumFile = "pdfium.dll"; break }
+	"aarch64-pc-windows-msvc" { $pdfiumFile = "pdfium.dll"; break }
+	"x86_64-unknown-linux-gnu" { $pdfiumFile = "libpdfium.so"; break }
+	"aarch64-unknown-linux-gnu" { $pdfiumFile = "libpdfium.so"; break }
+	"armv7-unknown-linux-gnueabihf" { $pdfiumFile = "libpdfium.so"; break }
+}
+
+if ($null -eq $pdfiumFile) { throw "Unable to determine PDFium runtime filename for target $target" }
+
+$pdfiumCandidates = @(
+	(Join-Path "crates/kreuzberg-node" $pdfiumFile),
+	(Join-Path "target/release" $pdfiumFile),
+	(Join-Path ("target/" + $target + "/release") $pdfiumFile)
+)
+
+$pdfiumSrc = $null
+foreach ($candidate in $pdfiumCandidates) {
+	if (Test-Path $candidate) {
+		$pdfiumSrc = $candidate
+		break
+	}
+}
+
+if ($null -eq $pdfiumSrc) {
+	Write-Host ("Missing PDFium runtime library (" + $pdfiumFile + "). Searched:")
+	$pdfiumCandidates | ForEach-Object { Write-Host ("  - " + $_) }
+	throw "PDFium runtime missing"
+}
+
+Copy-Item -Force $pdfiumSrc (Join-Path $destDir $pdfiumFile)
+
+$pkgJsonPath = Join-Path $destDir "package.json"
+if (-Not (Test-Path $pkgJsonPath)) { throw ("Platform package.json missing: " + $pkgJsonPath) }
+$pkg = Get-Content $pkgJsonPath -Raw | ConvertFrom-Json
+if ($null -eq $pkg.files) { $pkg | Add-Member -NotePropertyName files -NotePropertyValue @() }
+if (-Not ($pkg.files -contains $pdfiumFile)) { $pkg.files += $pdfiumFile }
+($pkg | ConvertTo-Json -Depth 10) + "`n" | Set-Content -NoNewline -Path $pkgJsonPath
+
 Get-ChildItem -Path $destDir | Out-Host
 
 tar -czf ("node-bindings-" + $env:TARGET + ".tar.gz") -C crates/kreuzberg-node npm
