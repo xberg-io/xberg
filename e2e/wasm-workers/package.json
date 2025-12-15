@@ -14,5 +14,5 @@
 		"vitest": "^2.1.0",
 		"wrangler": "^3.88.0"
 	},
-	"version": "4.0.0-rc.8"
+	"version": "4.0.0-rc.9"
 }

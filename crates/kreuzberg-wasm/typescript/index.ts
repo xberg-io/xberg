@@ -298,13 +298,12 @@ export async function initWasm(): Promise<void> {
 			// Dynamic WASM import and initialization
 			let wasmModule: unknown;
 			try {
-				// Try importing from pkg directory (development/monorepo layout)
-				// @ts-expect-error - Path may not exist at type-check time
-				wasmModule = await import("../../pkg/kreuzberg_wasm");
+				// Try importing from wasm-pack output (pkg/) shipped with the published package.
+				wasmModule = await import("../pkg/kreuzberg_wasm.js");
 			} catch {
-				// Fallback to dist-relative path (published package layout)
+				// Fallback to dist-relative path (legacy builds which copy wasm-pack outputs into dist/)
 				// @ts-expect-error - Dynamic import path
-				wasmModule = await import("./kreuzberg_wasm");
+				wasmModule = await import("./kreuzberg_wasm.js");
 			}
 			wasm = wasmModule as unknown as WasmModule;
 

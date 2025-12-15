@@ -16,7 +16,7 @@
 High-performance document intelligence for Go backed by the Rust core that powers every Kreuzberg binding.
 
 > **🚀 Version 4.0.0 Release Candidate**
-> This binding targets the 4.0.0-rc.8 APIs. Report issues at [github.com/kreuzberg-dev/kreuzberg](https://github.com/kreuzberg-dev/kreuzberg).
+> This binding targets the 4.0.0-rc.9 APIs. Report issues at [github.com/kreuzberg-dev/kreuzberg](https://github.com/kreuzberg-dev/kreuzberg).
 
 ## Install
 

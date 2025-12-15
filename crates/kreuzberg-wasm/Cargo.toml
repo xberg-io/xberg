@@ -18,7 +18,7 @@ crate-type = ["cdylib", "rlib"]
 kreuzberg = { path = "../kreuzberg", default-features = false, features = ["wasm-target"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-wasm-bindgen-rayon = "1.3"
+wasm-bindgen-rayon = { version = "1.3", optional = true }
 serde-wasm-bindgen = "0.6"
 js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Blob", "File", "FileReader", "console"] }
@@ -40,6 +40,7 @@ wasm-bindgen-test = "0.3"
 default = []
 embeddings = ["kreuzberg/embeddings"]
 ocr-wasm = []
+threads = ["dep:wasm-bindgen-rayon"]
 console_error_panic_hook = ["dep:console_error_panic_hook"]
 
 [package.metadata.wasm-pack.profile.release]

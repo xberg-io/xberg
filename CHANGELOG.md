@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0-rc.9] - 2025-12-15
+
 ### Added
 - **`PDFIUM_STATIC_LIB_PATH` environment variable for custom static library paths** (build.rs)
   - Enables Docker builds with pdfium compiled from source
@@ -16,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Platform-specific system library linking (pthread, dl on Linux)
 
 ### Fixed
+- **Java: Maven publish now bundles native libraries** (including Windows DLLs)
+  - Fixed Maven Central publish step to stage `java-natives-*` into the JAR and fail early if missing
+- **Node: npm optional native packages now contain the `.node` binary**
+  - Fixed packaging to copy the built `.node` into each `@kreuzberg/node-<rid>` platform package before publish
+  - Added a publish-time guard to fail if any platform package is missing its `.node` file
+- **WASM: Node.js runtime no longer crashes with `self is not defined`**
+  - Made `wasm-bindgen-rayon` thread pool support opt-in and removed it from default Node-target WASM builds
+  - Fixed Node.js WASM initialization to import the wasm-pack glue from `pkg/kreuzberg_wasm.js`
 - **PDFium static linking (`pdf-static` feature)** (build.rs)
   - Fixed `link_statically()` to correctly search for static library (`libpdfium.a`) instead of dynamic library (`.dylib`/`.so`)
   - Added macOS fallback to dynamic linking when static library unavailable (bblanchon/pdfium-binaries only provides dynamic libraries)

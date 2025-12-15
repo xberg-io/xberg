@@ -2,15 +2,6 @@
 # This file configures Rust compiler flags and build settings specific to
 # WebAssembly (wasm32-unknown-unknown) compilation.
 
-[build]
-# Prevent wasm32 target rustflags from being applied to host builds
-# (build scripts / proc-macros). Without this, host crates can fail to build
-# because the wasm linker args are forwarded to the host linker (clang).
-target-applies-to-host = false
-#
-# Context: We cross-compile from host architecture (x86_64/aarch64) to wasm32,
-# so the [target.wasm32-unknown-unknown] settings below only apply to WASM builds.
-
 [target.wasm32-unknown-unknown]
 # rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
 #
@@ -54,20 +45,4 @@ target-applies-to-host = false
 rustflags = [
     "--cfg",
     "getrandom_backend=\"wasm_js\"",
-    "-C",
-    "target-feature=+atomics,+bulk-memory",
-    "-C",
-    "link-arg=--shared-memory",
-    "-C",
-    "link-arg=--max-memory=2147483648",
-    "-C",
-    "link-arg=--import-memory",
-    "-C",
-    "link-arg=--export=__wasm_init_tls",
-    "-C",
-    "link-arg=--export=__tls_size",
-    "-C",
-    "link-arg=--export=__tls_align",
-    "-C",
-    "link-arg=--export=__tls_base",
 ]

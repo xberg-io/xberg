@@ -866,7 +866,7 @@ jobs:
         with:
           pdfium-version: ${{ env.PDFIUM_VERSION }}
 
-      - name: Stage Pdfium runtime artifacts
+      - name: Stage PDFium runtime artifacts
         uses: ./.github/actions/stage-pdfium-runtime
         with:
           destination: packages/ruby/ext/kreuzberg_rb/native
@@ -980,6 +980,11 @@ jobs:
         uses: ./.github/actions/download-pdfium
         with:
           pdfium-version: ${{ env.PDFIUM_VERSION }}
+
+      - name: Stage PDFium runtime
+        uses: ./.github/actions/stage-pdfium-runtime
+        with:
+          destination: target/release
 
       - name: Setup ONNX Runtime (Unix only)
         if: matrix.settings.build_features == 'default'
@@ -1196,6 +1201,11 @@ jobs:
         uses: ./.github/actions/download-pdfium
         with:
           pdfium-version: ${{ env.PDFIUM_VERSION }}
+
+      - name: Stage PDFium runtime
+        uses: ./.github/actions/stage-pdfium-runtime
+        with:
+          destination: target/release
 
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
@@ -2231,11 +2241,42 @@ jobs:
         with:
           pdfium-version: ${{ env.PDFIUM_VERSION }}
 
+      - name: Stage PDFium runtime
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.maven_check.outputs.exists != 'true' }}
+        uses: ./.github/actions/stage-pdfium-runtime
+        with:
+          destination: target/release
+
       - name: Setup ONNX Runtime
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.maven_check.outputs.exists != 'true' }}
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Download Java native artifacts
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.maven_check.outputs.exists != 'true' }}
+        uses: actions/download-artifact@v6
+        with:
+          pattern: java-natives-*
+          path: artifacts/java-natives
+          merge-multiple: false
+
+      - name: Stage Java native resources
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.maven_check.outputs.exists != 'true' }}
+        shell: bash
+        run: scripts/ci/java/stage-native-resources.sh "artifacts/java-natives" "packages/java/src/main/resources/natives"
+
+      - name: Verify bundled native resources
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.maven_check.outputs.exists != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f packages/java/src/main/resources/natives/linux-x86_64/libkreuzberg_ffi.so
+          test -f packages/java/src/main/resources/natives/linux-x86_64/libpdfium.so
+          test -f packages/java/src/main/resources/natives/macos-arm64/libkreuzberg_ffi.dylib
+          test -f packages/java/src/main/resources/natives/macos-arm64/libpdfium.dylib
+          test -f packages/java/src/main/resources/natives/windows-x86_64/kreuzberg_ffi.dll
+          test -f packages/java/src/main/resources/natives/windows-x86_64/pdfium.dll
 
       - name: Prefer gpg2 binary
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.maven_check.outputs.exists != 'true' }}

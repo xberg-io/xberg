@@ -97,6 +97,11 @@ jobs:
         with:
           pdfium-version: ${{ env.PDFIUM_VERSION }}
 
+      - name: Stage PDFium runtime
+        uses: ./.github/actions/stage-pdfium-runtime
+        with:
+          destination: target/release
+
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
         with:
@@ -213,7 +218,7 @@ jobs:
         with:
           pdfium-version: ${{ env.PDFIUM_VERSION }}
 
-      - name: Stage Pdfium runtime
+      - name: Stage PDFium runtime
         uses: ./.github/actions/stage-pdfium-runtime
         with:
           destination: target/release

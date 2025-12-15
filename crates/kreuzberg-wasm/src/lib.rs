@@ -13,86 +13,24 @@
 
 use wasm_bindgen::prelude::*;
 
-/// Re-export of wasm-bindgen-rayon's init_thread_pool function
+/// Initialize a WebAssembly thread pool (optional).
 ///
-/// This function initializes a thread pool for parallel processing in WebAssembly contexts.
-/// It must be called before any parallel computation using rayon can be performed.
-///
-/// ## When to Call
-///
-/// Call this function once during application initialization, after the WASM module has been
-/// loaded but before any document extraction that might benefit from parallelization.
-///
-/// ## Parameters
-///
-/// The function accepts a number specifying the size of the thread pool (number of worker threads).
-/// Common values:
-/// - `navigator.hardwareConcurrency`: Browser API for available CPU cores (recommended for web)
-/// - `num_cpus::get()`: Rust crate for detecting available CPUs (server-side)
-/// - `1`: Explicitly use single-threaded mode if needed
-///
-/// ## Browser Requirements
-///
-/// For SharedArrayBuffer support (required for multi-threading in browsers):
-/// 1. The browser must support SharedArrayBuffer (Chrome 74+, Firefox 79+, Safari 15.2+)
-/// 2. The hosting page must set these HTTP headers:
-///    - `Cross-Origin-Opener-Policy: same-origin`
-///    - `Cross-Origin-Embedder-Policy: require-corp`
-///
-/// Without these headers, SharedArrayBuffer is disabled and initialization will fail gracefully.
-///
-/// ## Graceful Degradation
-///
-/// If initialization fails (due to missing headers, unsupported browser, or other reasons),
-/// document extraction will automatically fall back to single-threaded processing.
-/// This means the application will still work correctly, just without the performance benefits.
-///
-/// ## Example: Browser Usage
-///
-/// ```typescript
-/// import { initThreadPool } from '@kreuzberg/wasm';
-///
-/// // Initialize thread pool with available CPU cores
-/// await initThreadPool(navigator.hardwareConcurrency);
-/// ```
-///
-/// ## Example: Server-Side Usage (Node.js/Deno)
-///
-/// ```typescript
-/// import { initThreadPool } from '@kreuzberg/wasm';
-/// import { availableParallelism } from 'os';
-///
-/// // Initialize with available CPU cores
-/// const cpuCount = availableParallelism();
-/// await initThreadPool(cpuCount);
-/// ```
-///
-/// ## Example: Error Handling
-///
-/// ```typescript
-/// try {
-///   await initThreadPool(navigator.hardwareConcurrency);
-///   console.log('Multi-threading enabled');
-/// } catch (error) {
-///   console.warn('Multi-threading unavailable, using single-threaded mode:', error);
-///   // Application continues to work with single-threaded extraction
-/// }
-/// ```
-///
-/// ## Performance Notes
-///
-/// - Each thread pool thread has its own memory context, so total memory usage is roughly
-///   (number of threads) × (memory per extraction)
-/// - For large documents in constrained environments, consider using fewer threads
-/// - The thread pool is initialized lazily on first use, so calling this function is optional
-///   but recommended for predictable performance during initial document processing
-///
-/// ## See Also
-///
-/// - [wasm-bindgen-rayon documentation](https://docs.rs/wasm-bindgen-rayon/)
-/// - [MDN: Cross-Origin-Opener-Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Opener-Policy)
-/// - [MDN: Cross-Origin-Embedder-Policy](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Cross-Origin-Embedder-Policy)
-pub use wasm_bindgen_rayon::init_thread_pool;
+/// By default, Kreuzberg's WASM build ships without multi-threading enabled.
+/// If the `threads` feature is enabled at build time, this function delegates
+/// to `wasm-bindgen-rayon` to spawn a worker-based thread pool.
+#[cfg(feature = "threads")]
+#[wasm_bindgen(js_name = initThreadPool)]
+pub fn init_thread_pool(num_threads: usize) -> js_sys::Promise {
+    wasm_bindgen_rayon::init_thread_pool(num_threads)
+}
+
+#[cfg(not(feature = "threads"))]
+#[wasm_bindgen(js_name = initThreadPool)]
+pub fn init_thread_pool(_num_threads: usize) -> js_sys::Promise {
+    js_sys::Promise::reject(&JsValue::from_str(
+        "Thread pool is not available in this build (feature `threads` is disabled).",
+    ))
+}
 
 // Module declarations
 pub mod config;
@@ -164,30 +102,43 @@ pub fn get_module_info() -> ModuleInfo {
 /// to work in single-threaded mode if the thread pool cannot be initialized.
 #[wasm_bindgen]
 pub fn init_thread_pool_safe(num_threads: u32) -> bool {
-    // Validate input
-    if num_threads == 0 {
+    #[cfg(not(feature = "threads"))]
+    {
+        let _ = num_threads;
         #[cfg(target_arch = "wasm32")]
-        web_sys::console::warn_1(&"Invalid thread count (0). Using single-threaded mode.".into());
-        return false;
+        web_sys::console::warn_1(&"Thread pool is not available in this build (feature `threads` is disabled).".into());
+        false
     }
 
-    // Attempt to initialize the thread pool
-    // This is wrapped to handle potential failures gracefully
-    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        // The init_thread_pool function from wasm_bindgen_rayon handles
-        // thread pool setup. If called in a non-WASM environment or if
-        // rayon initialization fails, we catch and handle it gracefully.
-        init_thread_pool(num_threads as usize)
-    })) {
-        Ok(_) => {
+    #[cfg(feature = "threads")]
+    {
+        // Validate input
+        if num_threads == 0 {
             #[cfg(target_arch = "wasm32")]
-            web_sys::console::log_1(&format!("Thread pool initialized with {} threads", num_threads).into());
-            true
+            web_sys::console::warn_1(&"Invalid thread count (0). Using single-threaded mode.".into());
+            return false;
         }
-        Err(_) => {
-            #[cfg(target_arch = "wasm32")]
-            web_sys::console::warn_1(&"Failed to initialize thread pool. Falling back to single-threaded mode.".into());
-            false
+
+        // Attempt to initialize the thread pool
+        // This is wrapped to handle potential failures gracefully
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // The init_thread_pool function from wasm_bindgen_rayon handles
+            // thread pool setup. If called in a non-WASM environment or if
+            // rayon initialization fails, we catch and handle it gracefully.
+            init_thread_pool(num_threads as usize)
+        })) {
+            Ok(_) => {
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::log_1(&format!("Thread pool initialized with {} threads", num_threads).into());
+                true
+            }
+            Err(_) => {
+                #[cfg(target_arch = "wasm32")]
+                web_sys::console::warn_1(
+                    &"Failed to initialize thread pool. Falling back to single-threaded mode.".into(),
+                );
+                false
+            }
         }
     }
 }
