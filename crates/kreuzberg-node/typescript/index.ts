@@ -70,6 +70,68 @@ import type {
 	ValidatorProtocol,
 } from "./types.js";
 
+/**
+ * @internal Native NAPI binding interface for the Kreuzberg native module.
+ * This interface defines the shape of methods available in the compiled native addon.
+ */
+interface NativeBinding {
+	extractFileSync(
+		filePath: string,
+		mimeType: string | null,
+		config: Record<string, unknown> | null,
+	): Record<string, unknown>;
+	extractFile(
+		filePath: string,
+		mimeType: string | null,
+		config: Record<string, unknown> | null,
+	): Promise<Record<string, unknown>>;
+	extractBytesSync(data: Buffer, mimeType: string, config: Record<string, unknown> | null): Record<string, unknown>;
+	extractBytes(
+		data: Buffer,
+		mimeType: string,
+		config: Record<string, unknown> | null,
+	): Promise<Record<string, unknown>>;
+	batchExtractFilesSync(paths: string[], config: Record<string, unknown> | null): Record<string, unknown>[];
+	batchExtractFiles(paths: string[], config: Record<string, unknown> | null): Promise<Record<string, unknown>[]>;
+	batchExtractBytesSync(
+		dataArray: Buffer[],
+		mimeTypes: string[],
+		config: Record<string, unknown> | null,
+	): Record<string, unknown>[];
+	batchExtractBytes(
+		dataArray: Buffer[],
+		mimeTypes: string[],
+		config: Record<string, unknown> | null,
+	): Promise<Record<string, unknown>[]>;
+	registerPostProcessor(processor: Record<string, unknown>): void;
+	unregisterPostProcessor(name: string): void;
+	clearPostProcessors(): void;
+	listPostProcessors(): string[];
+	registerValidator(validator: Record<string, unknown>): void;
+	unregisterValidator(name: string): void;
+	clearValidators(): void;
+	listValidators(): string[];
+	registerOcrBackend(backend: Record<string, unknown>): void;
+	unregisterOcrBackend(name: string): void;
+	clearOcrBackends(): void;
+	listOcrBackends(): string[];
+	registerDocumentExtractor(extractor: Record<string, unknown>): void;
+	unregisterDocumentExtractor(name: string): void;
+	clearDocumentExtractors(): void;
+	listDocumentExtractors(): string[];
+	detectMimeType(filePath: string): string;
+	detectMimeTypeFromBytes(data: Buffer): string;
+	detectMimeTypeFromPath(filePath: string): string;
+	validateMimeType(mimeType: string): string;
+	getExtensionsForMime(mimeType: string): string[];
+	listEmbeddingPresets(): string[];
+	getEmbeddingPreset(name: string): Record<string, unknown> | null;
+	getLastErrorCode(): number;
+	getLastPanicContext(): Record<string, unknown> | null;
+	loadExtractionConfigFromFile(filePath: string): Record<string, unknown>;
+	discoverExtractionConfig(): Record<string, unknown> | null;
+}
+
 export {
 	CacheError,
 	ErrorCode,
@@ -85,8 +147,7 @@ export {
 export { GutenOcrBackend } from "./ocr/guten-ocr.js";
 export * from "./types.js";
 
-// biome-ignore lint/suspicious/noExplicitAny: NAPI binding type is dynamically loaded
-let binding: any = null;
+let binding: NativeBinding | null = null;
 let bindingInitialized = false;
 
 function createNativeBindingError(error: unknown): Error {
@@ -148,7 +209,7 @@ function assertUint8ArrayList(values: unknown, name: string): Uint8Array[] {
  * @internal Allows tests to provide a mocked native binding.
  */
 export function __setBindingForTests(mock: unknown): void {
-	binding = mock;
+	binding = mock as NativeBinding;
 	bindingInitialized = true;
 }
 
@@ -160,24 +221,54 @@ export function __resetBindingForTests(): void {
 	bindingInitialized = false;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: NAPI binding type is dynamically loaded
-function loadNativeBinding(): any {
-	const localRequire =
-		typeof require !== "undefined"
-			? // biome-ignore lint/suspicious/noExplicitAny: Node typings are available at runtime
-				(require as any)
-			: createRequire(import.meta.url);
+function loadNativeBinding(): NativeBinding {
+	const localRequire: ((path: string) => unknown) | undefined =
+		typeof require !== "undefined" ? (require as (path: string) => unknown) : createRequire(import.meta.url);
 
 	if (!localRequire) {
 		throw new Error("Unable to resolve native binding loader (require not available).");
 	}
 
-	return localRequire("../index.js");
+	const loadedModule = localRequire("../index.js") as unknown;
+
+	// Validate that the loaded module is an object
+	if (typeof loadedModule !== "object" || loadedModule === null) {
+		throw new Error(
+			"Native binding is not a valid object. " + "Ensure the native module is properly built and compatible.",
+		);
+	}
+
+	const module = loadedModule as Record<string, unknown>;
+
+	// Validate that the loaded module has the expected methods
+	const requiredMethods = [
+		"extractFileSync",
+		"extractFile",
+		"extractBytesSync",
+		"extractBytes",
+		"batchExtractFilesSync",
+		"batchExtractFiles",
+		"batchExtractBytesSync",
+		"batchExtractBytes",
+	];
+
+	for (const method of requiredMethods) {
+		if (typeof module[method] !== "function") {
+			throw new Error(
+				`Native binding is missing required method: ${method}. ` +
+					"Ensure the native module is properly built and compatible.",
+			);
+		}
+	}
+
+	return module as unknown as NativeBinding;
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: NAPI binding type is dynamically loaded
-function getBinding(): any {
+function getBinding(): NativeBinding {
 	if (bindingInitialized) {
+		if (binding === null) {
+			throw new Error("Native binding was previously failed to load.");
+		}
 		return binding;
 	}
 
@@ -188,6 +279,7 @@ function getBinding(): any {
 			return binding;
 		}
 	} catch (error) {
+		bindingInitialized = true; // Mark as attempted even on failure
 		throw createNativeBindingError(error);
 	}
 
@@ -197,10 +289,13 @@ function getBinding(): any {
 	);
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: JSON.parse returns any
-function parseMetadata(metadataStr: string): any {
+function parseMetadata(metadataStr: string): Record<string, unknown> {
 	try {
-		return JSON.parse(metadataStr);
+		const parsed = JSON.parse(metadataStr) as unknown;
+		if (typeof parsed === "object" && parsed !== null) {
+			return parsed as Record<string, unknown>;
+		}
+		return {};
 	} catch {
 		return {};
 	}
@@ -219,9 +314,8 @@ function ensureUint8Array(value: unknown): Uint8Array {
 	return new Uint8Array();
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: JSON payload from native binding is untyped
-function convertChunk(rawChunk: any): Chunk {
-	if (!rawChunk) {
+function convertChunk(rawChunk: unknown): Chunk {
+	if (!rawChunk || typeof rawChunk !== "object") {
 		return {
 			content: "",
 			metadata: {
@@ -234,25 +328,36 @@ function convertChunk(rawChunk: any): Chunk {
 			embedding: null,
 		};
 	}
-	const metadata = rawChunk.metadata ?? {};
+
+	const chunk = rawChunk as Record<string, unknown>;
+	// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+	const metadata = (chunk["metadata"] as Record<string, unknown>) ?? {};
 	return {
-		content: rawChunk.content ?? "",
-		embedding: rawChunk.embedding ?? null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		content: (chunk["content"] as string) ?? "",
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		embedding: (chunk["embedding"] as number[] | null) ?? null,
 		metadata: {
-			byteStart: metadata.byte_start ?? metadata.charStart ?? 0,
-			byteEnd: metadata.byte_end ?? metadata.charEnd ?? 0,
-			tokenCount: metadata.token_count ?? metadata.tokenCount ?? null,
-			chunkIndex: metadata.chunk_index ?? metadata.chunkIndex ?? 0,
-			totalChunks: metadata.total_chunks ?? metadata.totalChunks ?? 0,
-			firstPage: metadata.first_page ?? metadata.firstPage ?? null,
-			lastPage: metadata.last_page ?? metadata.lastPage ?? null,
+			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+			byteStart: ((metadata["byte_start"] ?? metadata["charStart"]) as number) ?? 0,
+			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+			byteEnd: ((metadata["byte_end"] ?? metadata["charEnd"]) as number) ?? 0,
+			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+			tokenCount: ((metadata["token_count"] ?? metadata["tokenCount"]) as number | null) ?? null,
+			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+			chunkIndex: ((metadata["chunk_index"] ?? metadata["chunkIndex"]) as number) ?? 0,
+			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+			totalChunks: ((metadata["total_chunks"] ?? metadata["totalChunks"]) as number) ?? 0,
+			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+			firstPage: ((metadata["first_page"] ?? metadata["firstPage"]) as number | null) ?? null,
+			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+			lastPage: ((metadata["last_page"] ?? metadata["lastPage"]) as number | null) ?? null,
 		},
 	};
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: JSON payload from native binding is untyped
-function convertImage(rawImage: any): ExtractedImage {
-	if (!rawImage) {
+function convertImage(rawImage: unknown): ExtractedImage {
+	if (!rawImage || typeof rawImage !== "object") {
 		return {
 			data: new Uint8Array(),
 			format: "unknown",
@@ -268,34 +373,70 @@ function convertImage(rawImage: any): ExtractedImage {
 		};
 	}
 
+	const image = rawImage as Record<string, unknown>;
 	return {
-		data: ensureUint8Array(rawImage.data),
-		format: rawImage.format ?? "unknown",
-		imageIndex: rawImage.imageIndex ?? 0,
-		pageNumber: rawImage.pageNumber ?? null,
-		width: rawImage.width ?? null,
-		height: rawImage.height ?? null,
-		colorspace: rawImage.colorspace ?? null,
-		bitsPerComponent: rawImage.bitsPerComponent ?? null,
-		isMask: rawImage.isMask ?? false,
-		description: rawImage.description ?? null,
-		ocrResult: rawImage.ocrResult ? convertResult(rawImage.ocrResult) : null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		data: ensureUint8Array(image["data"]),
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		format: (image["format"] as string) ?? "unknown",
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		imageIndex: (image["imageIndex"] as number) ?? 0,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		pageNumber: (image["pageNumber"] as number | null) ?? null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		width: (image["width"] as number | null) ?? null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		height: (image["height"] as number | null) ?? null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		colorspace: (image["colorspace"] as string | null) ?? null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		bitsPerComponent: (image["bitsPerComponent"] as number | null) ?? null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		isMask: (image["isMask"] as boolean) ?? false,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		description: (image["description"] as string | null) ?? null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		ocrResult: image["ocrResult"] ? convertResult(image["ocrResult"]) : null,
 	};
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Raw NAPI result is untyped
-function convertResult(rawResult: any): ExtractionResult {
+function convertResult(rawResult: unknown): ExtractionResult {
+	if (!rawResult || typeof rawResult !== "object") {
+		return {
+			content: "",
+			mimeType: "application/octet-stream",
+			metadata: {},
+			tables: [],
+			detectedLanguages: null,
+			chunks: null,
+			images: null,
+			pages: null,
+		};
+	}
+
+	const result = rawResult as Record<string, unknown>;
+	// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+	const metadata = result["metadata"];
+	const metadataValue =
+		typeof metadata === "string" ? parseMetadata(metadata) : ((metadata as Record<string, unknown>) ?? {});
+
 	return {
-		content: rawResult.content,
-		mimeType: rawResult.mimeType,
-		metadata: typeof rawResult.metadata === "string" ? parseMetadata(rawResult.metadata) : rawResult.metadata,
-		tables: rawResult.tables || [],
-		detectedLanguages: rawResult.detectedLanguages || null,
-		chunks: Array.isArray(rawResult.chunks)
-			? (rawResult.chunks as unknown[]).map((chunk) => convertChunk(chunk))
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		content: (result["content"] as string) ?? "",
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		mimeType: (result["mimeType"] as string) ?? "application/octet-stream",
+		metadata: metadataValue,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		tables: Array.isArray(result["tables"]) ? (result["tables"] as Table[]) : [],
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		detectedLanguages: Array.isArray(result["detectedLanguages"]) ? (result["detectedLanguages"] as string[]) : null,
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		chunks: Array.isArray(result["chunks"])
+			? (result["chunks"] as unknown[]).map((chunk) => convertChunk(chunk))
 			: null,
-		images: Array.isArray(rawResult.images)
-			? (rawResult.images as unknown[]).map((image) => convertImage(image))
+		// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+		images: Array.isArray(result["images"])
+			? (result["images"] as unknown[]).map((image) => convertImage(image))
 			: null,
 	};
 }
@@ -554,6 +695,10 @@ function normalizeExtractionConfig(config: ExtractionConfigType | null): NativeE
  * @param mimeType - Optional MIME type hint (auto-detected if null)
  * @param config - Extraction configuration (uses defaults if null)
  * @returns ExtractionResult with content, metadata, and tables
+ * @throws Error when file cannot be read or parsed
+ * @throws ParsingError when document format is invalid
+ * @throws OcrError when OCR processing fails
+ * @throws KreuzbergError for other extraction failures
  *
  * @example
  * ```typescript
@@ -597,6 +742,10 @@ export function extractFileSync(
  * @param mimeType - Optional MIME type hint (auto-detected if null)
  * @param config - Extraction configuration (uses defaults if null)
  * @returns Promise<ExtractionResult> with content, metadata, and tables
+ * @throws Error when file cannot be read or parsed
+ * @throws ParsingError when document format is invalid
+ * @throws OcrError when OCR processing fails
+ * @throws KreuzbergError for other extraction failures
  *
  * @example
  * ```typescript
@@ -637,6 +786,11 @@ export async function extractFile(
  * @param mimeType - MIME type of the data (required for format detection)
  * @param config - Extraction configuration (uses defaults if null)
  * @returns ExtractionResult with content, metadata, and tables
+ * @throws TypeError when data is not a valid Uint8Array
+ * @throws Error when file cannot be read or parsed
+ * @throws ParsingError when document format is invalid
+ * @throws OcrError when OCR processing fails
+ * @throws KreuzbergError for other extraction failures
  *
  * @example
  * ```typescript
@@ -669,6 +823,11 @@ export function extractBytesSync(
  * @param mimeType - MIME type of the data (required for format detection)
  * @param config - Extraction configuration (uses defaults if null)
  * @returns Promise<ExtractionResult> with content, metadata, and tables
+ * @throws TypeError when data is not a valid Uint8Array
+ * @throws Error when file cannot be read or parsed
+ * @throws ParsingError when document format is invalid
+ * @throws OcrError when OCR processing fails
+ * @throws KreuzbergError for other extraction failures
  *
  * @example
  * ```typescript
@@ -686,7 +845,6 @@ export async function extractBytes(
 	config: ExtractionConfigType | null = null,
 ): Promise<ExtractionResult> {
 	const validated = assertUint8Array(data, "data");
-	// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noUncheckedIndexedAccess
 	if (process.env["KREUZBERG_DEBUG_GUTEN"] === "1") {
 		console.log("[TypeScript] Debug input header:", Array.from(validated.slice(0, 8)));
 	}
@@ -709,6 +867,10 @@ export async function extractBytes(
  * @param paths - List of file paths to extract
  * @param config - Extraction configuration (uses defaults if null)
  * @returns Array of ExtractionResults (one per file, in same order as input)
+ * @throws Error when file cannot be read or parsed
+ * @throws ParsingError when document format is invalid
+ * @throws OcrError when OCR processing fails
+ * @throws KreuzbergError for other extraction failures
  *
  * @example
  * ```typescript
@@ -742,6 +904,10 @@ export function batchExtractFilesSync(paths: string[], config: ExtractionConfigT
  * @param paths - List of file paths to extract
  * @param config - Extraction configuration (uses defaults if null)
  * @returns Promise resolving to array of ExtractionResults (one per file, in same order as input)
+ * @throws Error when file cannot be read or parsed
+ * @throws ParsingError when document format is invalid
+ * @throws OcrError when OCR processing fails
+ * @throws KreuzbergError for other extraction failures
  *
  * @example
  * ```typescript
@@ -782,6 +948,11 @@ export async function batchExtractFiles(
  * @param mimeTypes - List of MIME types (one per data item, required for format detection)
  * @param config - Extraction configuration (uses defaults if null)
  * @returns Array of ExtractionResults (one per data item, in same order as input)
+ * @throws TypeError when dataList contains non-Uint8Array items or length mismatch
+ * @throws Error when file cannot be read or parsed
+ * @throws ParsingError when document format is invalid
+ * @throws OcrError when OCR processing fails
+ * @throws KreuzbergError for other extraction failures
  *
  * @example
  * ```typescript
@@ -829,6 +1000,11 @@ export function batchExtractBytesSync(
  * @param mimeTypes - List of MIME types (one per data item, required for format detection)
  * @param config - Extraction configuration (uses defaults if null)
  * @returns Promise resolving to array of ExtractionResults (one per data item, in same order as input)
+ * @throws TypeError when dataList contains non-Uint8Array items or length mismatch
+ * @throws Error when file cannot be read or parsed
+ * @throws ParsingError when document format is invalid
+ * @throws OcrError when OCR processing fails
+ * @throws KreuzbergError for other extraction failures
  *
  * @example
  * ```typescript
@@ -1247,7 +1423,6 @@ export function registerOcrBackend(backend: OcrBackendProtocol): void {
 			...processArgs: [OcrProcessPayload | OcrProcessTuple | NestedOcrProcessTuple, string?]
 		): Promise<string> {
 			const [imagePayload, maybeLanguage] = processArgs;
-			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noUncheckedIndexedAccess
 			if (process.env["KREUZBERG_DEBUG_GUTEN"] === "1") {
 				console.log("[registerOcrBackend] JS arguments", { length: processArgs.length });
 				console.log("[registerOcrBackend] Raw args", {
@@ -1272,7 +1447,6 @@ export function registerOcrBackend(backend: OcrBackendProtocol): void {
 				throw new Error("OCR backend did not receive a language parameter");
 			}
 
-			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noUncheckedIndexedAccess
 			if (process.env["KREUZBERG_DEBUG_GUTEN"] === "1") {
 				const length = typeof rawBytes === "string" ? rawBytes.length : rawBytes.length;
 				console.log(
@@ -1525,7 +1699,7 @@ export const ExtractionConfig = {
  */
 export function detectMimeType(bytes: Buffer): string {
 	const binding = getBinding();
-	return binding.detectMimeType(bytes);
+	return binding.detectMimeTypeFromBytes(bytes);
 }
 
 /**
@@ -1535,10 +1709,8 @@ export function detectMimeType(bytes: Buffer): string {
  * if extension-based detection fails.
  *
  * @param path - Path to the file (string)
- * @param checkExists - Whether to verify file existence (default: true)
  * @returns The detected MIME type string
  *
- * @throws {Error} If file doesn't exist (when checkExists is true)
  * @throws {Error} If MIME type cannot be determined from path/extension
  * @throws {Error} If extension is unknown
  *
@@ -1554,9 +1726,9 @@ export function detectMimeType(bytes: Buffer): string {
  * console.log(mimeType2); // 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
  * ```
  */
-export function detectMimeTypeFromPath(path: string, checkExists?: boolean): string {
+export function detectMimeTypeFromPath(path: string): string {
 	const binding = getBinding();
-	return binding.detectMimeTypeFromPath(path, checkExists);
+	return binding.detectMimeTypeFromPath(path);
 }
 
 /**
@@ -1685,7 +1857,8 @@ export function listEmbeddingPresets(): string[] {
  */
 export function getEmbeddingPreset(name: string): EmbeddingPreset | null {
 	const binding = getBinding();
-	return binding.getEmbeddingPreset(name);
+	const result = binding.getEmbeddingPreset(name);
+	return result as unknown as EmbeddingPreset | null;
 }
 
 /**
@@ -1751,7 +1924,8 @@ export function getLastErrorCode(): number {
  */
 export function getLastPanicContext(): PanicContext | null {
 	const binding = getBinding();
-	return binding.getLastPanicContext();
+	const result = binding.getLastPanicContext();
+	return result as unknown as PanicContext | null;
 }
 
 export const __version__ = "4.0.0-rc.9";

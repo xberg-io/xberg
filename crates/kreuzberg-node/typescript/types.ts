@@ -8,64 +8,201 @@
 // ============================================================================
 // ============================================================================
 
+/**
+ * Tesseract OCR engine configuration options.
+ *
+ * @example
+ * ```typescript
+ * const config: TesseractConfig = {
+ *   psm: 6,
+ *   enableTableDetection: true,
+ *   tesseditCharWhitelist: '0123456789'
+ * };
+ * ```
+ */
 export interface TesseractConfig {
+	/**
+	 * Page Segmentation Mode (0-13). Controls how Tesseract segments and recognizes text.
+	 * Common values: 3 (auto), 6 (single uniform block), 11 (sparse text).
+	 * Default: 3 (auto layout analysis).
+	 */
 	psm?: number;
+
+	/**
+	 * Enable table detection during OCR processing.
+	 * When true, Tesseract attempts to preserve table structure in the output.
+	 * Default: false.
+	 */
 	enableTableDetection?: boolean;
+
+	/**
+	 * Whitelist of characters Tesseract should recognize.
+	 * Only these characters will be returned by the OCR engine.
+	 * Use empty string to allow all characters. Useful for constraining output to digits,
+	 * specific alphabets, or other character sets.
+	 * Default: null (recognize all).
+	 */
 	tesseditCharWhitelist?: string;
 }
 
+/**
+ * OCR (Optical Character Recognition) configuration.
+ *
+ * Controls which OCR engine to use and how it processes images.
+ */
 export interface OcrConfig {
+	/** OCR backend name (e.g., 'tesseract', 'paddleocr', 'easyocr'). Required. */
 	backend: string;
+
+	/** ISO 639-1/3 language code(s) for OCR (e.g., 'eng', 'fra', 'deu'). Default: 'eng'. */
 	language?: string;
+
+	/** Tesseract engine-specific configuration options. Only used when backend is 'tesseract'. */
 	tesseractConfig?: TesseractConfig;
 }
 
+/**
+ * Document chunking configuration for splitting large documents.
+ *
+ * Breaks large documents into smaller, manageable chunks while preserving context.
+ * Useful for RAG (Retrieval Augmented Generation) and vector database indexing.
+ */
 export interface ChunkingConfig {
+	/** Maximum characters per chunk. Default: 4096. */
 	maxChars?: number;
+
+	/** Maximum overlapping characters between consecutive chunks for context preservation. Default: 512. */
 	maxOverlap?: number;
+
+	/**
+	 * Alternative to maxChars: chunk size using different unit.
+	 * Mutually exclusive with maxChars.
+	 */
 	chunkSize?: number;
+
+	/**
+	 * Alternative to maxOverlap: overlap amount using different unit.
+	 * Mutually exclusive with maxOverlap.
+	 */
 	chunkOverlap?: number;
+
+	/**
+	 * Named preset configuration (e.g., 'default', 'aggressive', 'minimal').
+	 * Uses preset values if neither maxChars nor chunkSize is specified.
+	 */
 	preset?: string;
+
+	/** Embedding configuration for generating vector embeddings for each chunk. */
 	embedding?: Record<string, unknown>;
+
+	/** Enable or disable chunking. Default: true when chunking config is provided. */
 	enabled?: boolean;
 }
 
+/**
+ * Language detection configuration.
+ *
+ * Automatically detects the language(s) of extracted content.
+ */
 export interface LanguageDetectionConfig {
+	/** Enable automatic language detection. Default: true. */
 	enabled?: boolean;
+
+	/** Minimum confidence score (0.0-1.0) for language detection. Default: 0.5. */
 	minConfidence?: number;
+
+	/** Detect multiple languages in the same document. Default: false. */
 	detectMultiple?: boolean;
 }
 
+/**
+ * Token reduction configuration for optimizing token usage.
+ *
+ * Reduces the number of tokens in extracted content while preserving meaning.
+ * Useful for reducing costs in LLM pipelines.
+ */
 export interface TokenReductionConfig {
+	/** Reduction mode: 'aggressive' or 'conservative'. Default: 'conservative'. */
 	mode?: string;
+
+	/** Preserve tokens for semantically important words even in aggressive mode. Default: true. */
 	preserveImportantWords?: boolean;
 }
 
+/**
+ * PDF-specific extraction configuration.
+ *
+ * Controls how PDF documents are processed.
+ */
 export interface PdfConfig {
+	/** Extract images from PDF pages. Default: true. */
 	extractImages?: boolean;
+
+	/** List of passwords to try for password-protected PDFs. */
 	passwords?: string[];
+
+	/** Extract document metadata (title, author, creation date, etc.). Default: true. */
 	extractMetadata?: boolean;
 }
 
+/**
+ * Image extraction and processing configuration.
+ *
+ * Controls how images are extracted and optimized from documents.
+ */
 export interface ImageExtractionConfig {
+	/** Enable image extraction from documents. Default: true. */
 	extractImages?: boolean;
+
+	/** Target DPI (dots per inch) for extracted images. Higher DPI = better quality but larger files. Default: 150. */
 	targetDpi?: number;
+
+	/** Maximum image dimension (width or height) in pixels. Images larger than this are downscaled. Default: 2000. */
 	maxImageDimension?: number;
+
+	/** Automatically adjust DPI based on image content and quality. Default: true. */
 	autoAdjustDpi?: boolean;
+
+	/** Minimum DPI to maintain for image quality. Default: 72. */
 	minDpi?: number;
+
+	/** Maximum DPI to avoid excessive file sizes. Default: 300. */
 	maxDpi?: number;
 }
 
+/**
+ * Post-processor configuration for modifying extracted content.
+ *
+ * Post-processors allow customization and cleanup of extraction results
+ * without failing the extraction if they encounter errors.
+ */
 export interface PostProcessorConfig {
+	/** Enable or disable post-processing entirely. Default: true. */
 	enabled?: boolean;
+
+	/** List of processor names to enable (allowlist). When set, only these are used. */
 	enabledProcessors?: string[];
+
+	/** List of processor names to disable (denylist). These are skipped. */
 	disabledProcessors?: string[];
 }
 
+/**
+ * HTML preprocessing options.
+ *
+ * Cleans HTML content before conversion to Markdown.
+ */
 export interface HtmlPreprocessingOptions {
+	/** Enable HTML preprocessing. Default: true. */
 	enabled?: boolean;
+
+	/** Preset cleanup level: 'minimal' (light), 'standard' (balanced), 'aggressive' (heavy). Default: 'standard'. */
 	preset?: "minimal" | "standard" | "aggressive";
+
+	/** Remove navigation menus and headers. Default: true. */
 	removeNavigation?: boolean;
+
+	/** Remove form elements. Default: true. */
 	removeForms?: boolean;
 }
 
@@ -496,8 +633,11 @@ export interface Metadata {
 
 	error?: ErrorMetadata | null;
 
-	// biome-ignore lint/suspicious/noExplicitAny: Postprocessors can add arbitrary metadata fields
-	[key: string]: any;
+	/**
+	 * Additional fields may be added at runtime by postprocessors.
+	 * Use bracket notation to safely access unexpected properties.
+	 */
+	[key: string]: unknown;
 }
 
 export interface ExtractionResult {

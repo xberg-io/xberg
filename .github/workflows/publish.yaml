@@ -1223,6 +1223,14 @@ jobs:
         shell: bash
         run: scripts/ci/java/stage-native-resources.sh "artifacts/java-natives" "packages/java/src/main/resources/natives"
 
+      - name: Verify bundled native resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f packages/java/src/main/resources/natives/linux-x86_64/libkreuzberg_ffi.so
+          test -f packages/java/src/main/resources/natives/macos-arm64/libkreuzberg_ffi.dylib
+          test -f packages/java/src/main/resources/natives/windows-x86_64/kreuzberg_ffi.dll
+
       - name: Build and package
         working-directory: packages/java
         run: mvn clean package -DskipTests
