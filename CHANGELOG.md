@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - All 13 previously undocumented methods now have complete @param/@return/@raise/@example tags
   - Documentation fully aligned with RBS type definitions and Node/WASM TypeScript bindings
   - All tests passing (207 examples, 0 failures), Rubocop clean, Steep type checking passes
+- **C# bindings: Complete XML documentation coverage**
+  - Added comprehensive XML documentation to 9 utility methods (List/Unregister/Clear variants)
+  - Added <summary>, <param>, <returns>, <exception>, <remarks>, and <seealso> tags
+  - All methods now have practical <example> code blocks where applicable
+  - Documentation fully aligned with TypeScript/Ruby/Java bindings
+  - Build verified: zero warnings, zero errors, proper P/Invoke safety patterns
 - **Ruby gem publishing: Switched to comprehensive vendoring script**
   - Publish workflow now uses `scripts/ci/ruby/vendor-kreuzberg-core.sh` (comprehensive) instead of `scripts/publish/ruby/vendor-kreuzberg-crate.sh` (minimal)
   - Ensures all vendored crates are included: `kreuzberg`, `kreuzberg-ffi`, `kreuzberg-tesseract`, `rb-sys`
