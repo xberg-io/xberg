@@ -26,12 +26,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **PDFium bundling**: FFI library now correctly copies `libpdfium.dylib/.so/.dll` from Rust build output to `target/release/` for language binding packaging (Java, Python, etc.)
+- **PDFium bundling**: Now correctly bundled in all language bindings (Node.js, Python, Java, Ruby)
+  - FFI library copies `libpdfium.dylib/.so/.dll` from Rust build output during packaging
+  - Node.js package.json includes all native library extensions (`*.dylib`, `*.so`, `*.dll`)
+  - Fixes PDF extraction failures with "libpdfium not found" error
+- **Node.js (NAPI-RS)**: PDFium always included in npm packages (no longer conditional)
+- **Ruby gems**: Fixed packaging issue where gems were created as uncompressed tar archives
+  - Now automatically gzip-compresses uncompressed gems before publishing to RubyGems
+- **Go bindings**: Removed duplicate Windows CGO linker flags causing compilation failures
+  - Fixed `packages/go/v4/ffi.go` and `packages/go/v4/plugins_test_helpers.go` to use environment-set flags
+- **WASM (Deno)**: Fixed type definition references from `.d.mts` to `.d.ts`
+  - Corrects Deno test helper type imports
+- **C# NuGet**: Fixed artifact download path to preserve native runtime directory structure
 - **Java FFI**: Added system library path fallback for ONNX Runtime when not bundled in JAR
   - Enables users with system-installed ONNX Runtime (e.g., `brew install onnxruntime`) to use the library
   - Gracefully handles missing ONNX Runtime for operations that don't require embeddings
-- **Java smoke tests**: All 7 tests now passing (PDF, DOCX, XLSX, JPG, PNG extraction + OCR)
-- **Python**: Ready for wheel building with bundled PDFium support
+- **Smoke tests**: All 7 tests now passing across all three language bindings (Java, Python, Node.js)
+  - PDF, DOCX, XLSX, JPG, PNG extraction + OCR tests all working
 
 ## [Unreleased]
 
