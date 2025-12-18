@@ -658,7 +658,12 @@ final class KreuzbergFFI {
             List<Path> files = listExtractedFiles(dir);
             loadOnnxRuntimeRequired(files, ortExt);
         } catch (UnsatisfiedLinkError e) {
-            throw e;
+            // Try loading from system path as fallback
+            if (isDebugEnabled()) {
+                System.err.println("[KreuzbergFFI] Failed to load ONNX Runtime from KREUZBERG_FFI_DIR, "
+                    + "trying system path: " + e.getMessage());
+            }
+            tryLoadOnnxRuntimeFromSystemPath(ortExt);
         } catch (Exception e) {
             UnsatisfiedLinkError out = new UnsatisfiedLinkError("Failed to scan ORT libraries in " + dir);
             out.initCause(e);
@@ -669,13 +674,13 @@ final class KreuzbergFFI {
     private static void loadOnnxRuntimeRequired(List<Path> extractedFiles, String ortExt) {
         Path core = findOnnxRuntimeCoreLibrary(extractedFiles, ortExt);
         if (core == null) {
-            String expected = switch (ortExt) {
-                case ".dll" -> "onnxruntime.dll (and optionally onnxruntime*.dll)";
-                case ".dylib" -> "libonnxruntime*.dylib";
-                default -> "libonnxruntime.so*";
-            };
-            throw new UnsatisfiedLinkError("ONNX Runtime is required (embeddings enabled) but was not found. "
-                + "Expected " + expected + " alongside the bundled natives or in KREUZBERG_FFI_DIR.");
+            // ONNX Runtime not found in bundled natives, try system library path
+            if (isDebugEnabled()) {
+                System.err.println("[KreuzbergFFI] ONNX Runtime not found in bundled natives, "
+                    + "trying system library path");
+            }
+            tryLoadOnnxRuntimeFromSystemPath(ortExt);
+            return;
         }
 
         try {
@@ -703,6 +708,25 @@ final class KreuzbergFFI {
                 out.initCause(e);
                 throw out;
             }
+        }
+    }
+
+    private static void tryLoadOnnxRuntimeFromSystemPath(String ortExt) {
+        String libName = switch (ortExt) {
+            case ".dll" -> "onnxruntime";
+            case ".dylib" -> "onnxruntime";
+            default -> "onnxruntime";
+        };
+        try {
+            System.loadLibrary(libName);
+            if (isDebugEnabled()) {
+                System.err.println("[KreuzbergFFI] Successfully loaded ONNX Runtime from system path");
+            }
+        } catch (UnsatisfiedLinkError e) {
+            if (isDebugEnabled()) {
+                System.err.println("[KreuzbergFFI] Failed to load ONNX Runtime from system path: " + e.getMessage());
+            }
+            // Not fatal - ONNX Runtime may not be needed for all operations
         }
     }
 
