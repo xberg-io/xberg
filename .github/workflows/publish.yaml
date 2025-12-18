@@ -1482,7 +1482,7 @@ jobs:
         uses: actions/download-artifact@v7
         with:
           pattern: csharp-native-assets-*
-          path: packages/csharp/Kreuzberg
+          path: packages/csharp/Kreuzberg/runtimes
           merge-multiple: true
 
       - name: Verify native assets were downloaded
