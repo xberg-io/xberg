@@ -1677,6 +1677,8 @@ jobs:
           tags: ${{ steps.docker_meta.outputs.tags }}
           labels: ${{ steps.docker_meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max,scope=publish-docker-${{ matrix.variant }}
 
       - name: Docker dry-run summary
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}

@@ -74,8 +74,15 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker image
-        shell: bash
-        run: scripts/ci/docker/build-image.sh "${{ matrix.variant }}"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.variant }}
+          push: false
+          build-args: |
+            PDFIUM_VERSION=${{ env.PDFIUM_VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max,scope=ci-docker-${{ matrix.variant }}
 
       - name: Test Docker image size
         shell: bash
