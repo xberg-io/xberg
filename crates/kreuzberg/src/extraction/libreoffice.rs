@@ -361,6 +361,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_check_libreoffice_available() {
         let result = check_libreoffice_available().await;
         if result.is_err() {
@@ -370,6 +371,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_office_doc_missing_file() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -391,6 +393,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_doc_to_docx_empty_bytes() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -403,6 +406,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_ppt_to_pptx_empty_bytes() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -415,6 +419,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_doc_to_docx_invalid_doc() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -427,6 +432,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_ppt_to_pptx_invalid_ppt() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -439,6 +445,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_office_doc_invalid_target_format() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -459,6 +466,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_check_libreoffice_missing_dependency_error() {
         let result = check_libreoffice_available().await;
 
@@ -473,6 +481,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_office_doc_creates_output_dir() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -507,6 +516,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_doc_to_docx_temp_cleanup() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -517,6 +527,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_ppt_to_pptx_temp_cleanup() {
         if check_libreoffice_available().await.is_err() {
             return;
@@ -527,6 +538,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_os = "windows"))]
     async fn test_convert_office_doc_timeout_kills_process() {
         if check_libreoffice_available().await.is_err() {
             return;
