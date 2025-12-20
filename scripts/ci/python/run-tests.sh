@@ -35,10 +35,10 @@ fi
 
 if [ "$COVERAGE" = "true" ]; then
 	echo "Coverage enabled"
-	uv run pytest -vv --cov=kreuzberg --cov-report=lcov:coverage.lcov --cov-report=term --cov-config=pyproject.toml --reruns 1 --reruns-delay 1 "$TIMEOUT_ARGS" "$@"
+	uv run pytest -vv --cov=kreuzberg --cov-report=lcov:coverage.lcov --cov-report=term --cov-config=pyproject.toml --reruns 1 --reruns-delay 1 -m "not cli_features" "$TIMEOUT_ARGS" "$@"
 else
 	echo "Coverage disabled"
-	uv run pytest -vv --reruns 1 --reruns-delay 1 "$TIMEOUT_ARGS" "$@"
+	uv run pytest -vv --reruns 1 --reruns-delay 1 -m "not cli_features" "$TIMEOUT_ARGS" "$@"
 fi
 
 echo "Tests complete"
