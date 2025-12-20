@@ -75,8 +75,11 @@ fn init_template_env() -> Environment<'static> {
         .expect("Failed to add base template");
 
     // Flamegraph gallery template
-    env.add_template("flamegraphs.html.jinja", include_str!("../templates/flamegraphs.html.jinja"))
-        .expect("Failed to add flamegraphs template");
+    env.add_template(
+        "flamegraphs.html.jinja",
+        include_str!("../templates/flamegraphs.html.jinja"),
+    )
+    .expect("Failed to add flamegraphs template");
 
     // Components
     env.add_template(
@@ -479,10 +482,7 @@ struct FlamegraphGalleryData {
 /// * Returns I/O error if directory cannot be accessed
 /// * Returns error if template rendering fails
 /// * Gracefully handles missing directories (exits with Ok)
-pub fn generate_flamegraph_index(
-    flamegraphs_dir: &Path,
-    output_file: &Path,
-) -> Result<()> {
+pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> Result<()> {
     // Create parent directory if needed
     if let Some(parent) = output_file.parent() {
         fs::create_dir_all(parent).map_err(Error::Io)?;
@@ -539,12 +539,11 @@ pub fn generate_flamegraph_index(
                                         .to_string();
 
                                     // Build relative path for linking
-                                    let relative_path = pathdiff::diff_paths(&svg_path, output_file.parent().unwrap_or(Path::new(".")))
-                                        .unwrap_or_else(|| svg_path.clone());
+                                    let relative_path =
+                                        pathdiff::diff_paths(&svg_path, output_file.parent().unwrap_or(Path::new(".")))
+                                            .unwrap_or_else(|| svg_path.clone());
 
-                                    let relative_path_str = relative_path
-                                        .to_string_lossy()
-                                        .to_string();
+                                    let relative_path_str = relative_path.to_string_lossy().to_string();
 
                                     let title = format!("{} - {} ({})", framework_name, mode_name, fixture_name);
 
@@ -565,12 +564,11 @@ pub fn generate_flamegraph_index(
                             .unwrap_or("unknown")
                             .to_string();
 
-                        let relative_path = pathdiff::diff_paths(&mode_path, output_file.parent().unwrap_or(Path::new(".")))
-                            .unwrap_or_else(|| mode_path.clone());
+                        let relative_path =
+                            pathdiff::diff_paths(&mode_path, output_file.parent().unwrap_or(Path::new(".")))
+                                .unwrap_or_else(|| mode_path.clone());
 
-                        let relative_path_str = relative_path
-                            .to_string_lossy()
-                            .to_string();
+                        let relative_path_str = relative_path.to_string_lossy().to_string();
 
                         let title = format!("{} ({})", framework_name, fixture_name);
 
@@ -596,10 +594,7 @@ pub fn generate_flamegraph_index(
     // Build sorted list of frameworks
     let mut framework_list: Vec<_> = frameworks
         .into_iter()
-        .map(|(name, flamegraphs)| FrameworkFlamegraphs {
-            name,
-            flamegraphs,
-        })
+        .map(|(name, flamegraphs)| FrameworkFlamegraphs { name, flamegraphs })
         .collect();
 
     framework_list.sort_by(|a, b| a.name.cmp(&b.name));

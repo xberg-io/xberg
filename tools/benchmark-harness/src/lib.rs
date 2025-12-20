@@ -22,7 +22,7 @@ pub use adapters::{NativeAdapter, NodeAdapter, PythonAdapter, RubyAdapter};
 pub use config::{BenchmarkConfig, BenchmarkMode};
 pub use error::{Error, Result};
 pub use fixture::{Fixture, FixtureManager};
-pub use html::{write_html, generate_flamegraph_index};
+pub use html::{generate_flamegraph_index, write_html};
 pub use monitoring::{ResourceMonitor, ResourceSample, ResourceStats};
 pub use output::{write_by_extension_analysis, write_json};
 pub use registry::AdapterRegistry;

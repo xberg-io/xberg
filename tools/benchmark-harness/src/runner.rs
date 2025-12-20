@@ -226,10 +226,7 @@ impl BenchmarkRunner {
                 BenchmarkMode::SingleFile => "single-file",
                 BenchmarkMode::Batch => "batch",
             };
-            let fixture_stem = file_path
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("unknown");
+            let fixture_stem = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
 
             let flamegraph_path = format!("flamegraphs/{}/{}/{}.svg", framework_name, mode_name, fixture_stem);
 

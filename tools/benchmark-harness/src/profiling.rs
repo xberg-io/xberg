@@ -183,23 +183,17 @@ impl ProfilingResult {
             && !parent.as_os_str().is_empty()
         {
             std::fs::create_dir_all(parent)
-                .map_err(|e| crate::Error::Profiling(
-                    format!("Failed to create output directory: {}", e)
-                ))?;
+                .map_err(|e| crate::Error::Profiling(format!("Failed to create output directory: {}", e)))?;
         }
 
         // Open file for writing
         let file = std::fs::File::create(output_path)
-            .map_err(|e| crate::Error::Profiling(
-                format!("Failed to create output file: {}", e)
-            ))?;
+            .map_err(|e| crate::Error::Profiling(format!("Failed to create output file: {}", e)))?;
 
         // Generate and write flamegraph
         self.report
             .flamegraph(file)
-            .map_err(|e| crate::Error::Profiling(
-                format!("Failed to generate flamegraph: {}", e)
-            ))?;
+            .map_err(|e| crate::Error::Profiling(format!("Failed to generate flamegraph: {}", e)))?;
 
         // Log output path to stderr
         eprintln!("Flamegraph written to: {}", output_path.display());
@@ -253,7 +247,7 @@ pub mod noop {
 
 /// Re-export the appropriate implementation based on feature and platform
 #[cfg(not(all(feature = "profiling", not(target_os = "windows"))))]
-pub use noop::{ProfilingResult, ProfileGuard};
+pub use noop::{ProfileGuard, ProfilingResult};
 
 #[cfg(test)]
 mod tests {

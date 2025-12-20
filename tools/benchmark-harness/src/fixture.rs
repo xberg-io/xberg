@@ -164,13 +164,7 @@ impl FixtureManager {
                     .filter(|s| !s.is_empty())
                     .collect::<HashSet<String>>()
             })
-            .and_then(|set: HashSet<String>| {
-                if set.is_empty() {
-                    None
-                } else {
-                    Some(set)
-                }
-            })
+            .and_then(|set: HashSet<String>| if set.is_empty() { None } else { Some(set) })
     }
 
     /// Load all fixtures from a directory (recursively)
@@ -182,11 +176,7 @@ impl FixtureManager {
     }
 
     /// Internal method for loading fixtures from a directory (with filter control)
-    fn load_fixtures_from_dir_internal(
-        &mut self,
-        dir: impl AsRef<Path>,
-        apply_filter: bool,
-    ) -> Result<()> {
+    fn load_fixtures_from_dir_internal(&mut self, dir: impl AsRef<Path>, apply_filter: bool) -> Result<()> {
         let dir = dir.as_ref();
 
         if !dir.exists() {
@@ -221,13 +211,12 @@ impl FixtureManager {
                 let mut fixture_names = Vec::new();
 
                 for fixture_path in &all_fixtures {
-                    if let Some(stem) = fixture_path.file_stem().and_then(|s| s.to_str()) {
-                        if profiling_set.contains(stem) {
-                            if self.load_fixture(fixture_path).is_ok() {
-                                loaded_count += 1;
-                                fixture_names.push(stem.to_string());
-                            }
-                        }
+                    if let Some(stem) = fixture_path.file_stem().and_then(|s| s.to_str())
+                        && profiling_set.contains(stem)
+                        && self.load_fixture(fixture_path).is_ok()
+                    {
+                        loaded_count += 1;
+                        fixture_names.push(stem.to_string());
                     }
                 }
 
@@ -300,8 +289,8 @@ impl Default for FixtureManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::sync::Mutex;
+    use tempfile::TempDir;
 
     // Lock for serializing environment variable access in tests
     static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -377,8 +366,7 @@ mod tests {
                 metadata: HashMap::new(),
                 ground_truth: None,
             };
-            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap())
-                .unwrap();
+            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
         }
 
         // Test with profiling filter
@@ -430,8 +418,7 @@ mod tests {
                 metadata: HashMap::new(),
                 ground_truth: None,
             };
-            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap())
-                .unwrap();
+            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
         }
 
         // Ensure env var is not set
@@ -465,8 +452,7 @@ mod tests {
                 metadata: HashMap::new(),
                 ground_truth: None,
             };
-            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap())
-                .unwrap();
+            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
         }
 
         // Test with whitespace in env var
@@ -506,8 +492,7 @@ mod tests {
                 metadata: HashMap::new(),
                 ground_truth: None,
             };
-            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap())
-                .unwrap();
+            std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
         }
 
         // Test with some non-existent fixtures (should not fail, just load matching ones)
