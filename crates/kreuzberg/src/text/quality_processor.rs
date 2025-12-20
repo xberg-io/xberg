@@ -49,18 +49,16 @@ impl Plugin for QualityProcessor {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl PostProcessor for QualityProcessor {
     async fn process(&self, result: &mut ExtractionResult, _config: &ExtractionConfig) -> Result<()> {
+        // Convert metadata to string hashmap with single allocation instead of cloning
+        let metadata_strings: std::collections::HashMap<String, String> = result
+            .metadata
+            .additional
+            .iter()
+            .map(|(k, v)| (k.clone(), v.to_string()))
+            .collect();
+
         // Calculate quality score
-        let quality_score = crate::text::quality::calculate_quality_score(
-            &result.content,
-            Some(
-                &result
-                    .metadata
-                    .additional
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.to_string()))
-                    .collect(),
-            ),
-        );
+        let quality_score = crate::text::quality::calculate_quality_score(&result.content, Some(&metadata_strings));
 
         result.metadata.additional.insert(
             "quality_score".to_string(),

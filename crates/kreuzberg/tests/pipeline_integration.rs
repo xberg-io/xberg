@@ -7,7 +7,7 @@
 
 use async_trait::async_trait;
 use kreuzberg::core::config::{ExtractionConfig, PostProcessorConfig};
-use kreuzberg::core::pipeline::run_pipeline;
+use kreuzberg::core::pipeline::{clear_processor_cache, run_pipeline};
 use kreuzberg::plugins::registry::get_post_processor_registry;
 use kreuzberg::plugins::{Plugin, PostProcessor, ProcessingStage};
 use kreuzberg::types::{ExtractionResult, Metadata};
@@ -123,6 +123,8 @@ fn clear_processor_registry() {
         .write()
         .expect("Failed to acquire write lock on registry in test");
     let _ = reg.shutdown_all();
+    drop(reg);
+    let _ = clear_processor_cache();
 }
 
 #[tokio::test]

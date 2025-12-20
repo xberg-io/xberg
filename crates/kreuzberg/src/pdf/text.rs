@@ -1,3 +1,7 @@
+//! PDF text extraction module.
+//!
+//! This module provides functions to extract text content from PDF files using the pdfium-render library.
+
 use super::bindings::bind_pdfium;
 use super::error::{PdfError, Result};
 use crate::core::config::PageConfig;
@@ -120,29 +124,65 @@ pub fn extract_text_from_pdf_document(
     let page_count = document.pages().len() as usize;
 
     if page_config.is_none() {
-        let estimated_size = page_count * 2048;
-        let mut content = String::with_capacity(estimated_size);
+        // First pass: pre-calculate exact total size needed
+        let mut total_size = 0usize;
+        let mut page_texts = Vec::with_capacity(page_count);
 
         for page in document.pages().iter() {
             let text = page
                 .text()
                 .map_err(|e| PdfError::TextExtractionFailed(format!("Page text extraction failed: {}", e)))?;
 
-            let page_text = text.all();
+            let page_text = text.all().to_owned();
+            total_size += page_text.len();
+            page_texts.push(page_text);
+        }
 
-            if !content.is_empty() {
+        // Add separator bytes: (page_count - 1) * 2 for "\n\n"
+        if page_count > 1 {
+            total_size += (page_count - 1) * 2;
+        }
+
+        // Second pass: single allocation with exact capacity
+        let mut content = String::with_capacity(total_size);
+        for (idx, page_text) in page_texts.into_iter().enumerate() {
+            if idx > 0 {
                 content.push_str("\n\n");
             }
             content.push_str(&page_text);
         }
 
-        content.shrink_to_fit();
         return Ok((content, None, None));
     }
 
     let config = page_config.unwrap();
-    let estimated_size = page_count * 2048;
-    let mut content = String::with_capacity(estimated_size);
+
+    // First pass: collect page texts and calculate exact size
+    let mut page_texts = Vec::with_capacity(page_count);
+    let mut total_size = 0usize;
+
+    for page in document.pages().iter() {
+        let text = page
+            .text()
+            .map_err(|e| PdfError::TextExtractionFailed(format!("Page text extraction failed: {}", e)))?;
+
+        let page_text = text.all().to_owned();
+        total_size += page_text.len();
+        page_texts.push(page_text);
+    }
+
+    // Pre-calculate separator/marker sizes
+    if config.insert_page_markers {
+        for page_num in 2..=page_count {
+            let marker = config.marker_format.replace("{page_num}", &page_num.to_string());
+            total_size += marker.len();
+        }
+    } else if page_count > 1 {
+        total_size += (page_count - 1) * 2; // "\n\n" separators
+    }
+
+    // Second pass: single allocation with exact capacity
+    let mut content = String::with_capacity(total_size);
     let mut boundaries = Vec::with_capacity(page_count);
     let mut page_contents = if config.extract_pages {
         Some(Vec::with_capacity(page_count))
@@ -150,14 +190,8 @@ pub fn extract_text_from_pdf_document(
         None
     };
 
-    for (page_idx, page) in document.pages().iter().enumerate() {
+    for (page_idx, page_text) in page_texts.into_iter().enumerate() {
         let page_number = page_idx + 1;
-
-        let text = page
-            .text()
-            .map_err(|e| PdfError::TextExtractionFailed(format!("Page text extraction failed: {}", e)))?;
-
-        let page_text = text.all();
 
         if page_number > 1 && config.insert_page_markers {
             let marker = config.marker_format.replace("{page_num}", &page_number.to_string());
@@ -169,9 +203,7 @@ pub fn extract_text_from_pdf_document(
         }
 
         let byte_start = content.len();
-
         content.push_str(&page_text);
-
         let byte_end = content.len();
 
         boundaries.push(PageBoundary {
@@ -189,8 +221,6 @@ pub fn extract_text_from_pdf_document(
             });
         }
     }
-
-    content.shrink_to_fit();
 
     Ok((content, Some(boundaries), page_contents))
 }

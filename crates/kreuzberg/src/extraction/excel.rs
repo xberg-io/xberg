@@ -160,19 +160,36 @@ fn process_sheet(name: &str, range: &Range<Data>) -> ExcelSheet {
 }
 
 fn generate_markdown_from_range_optimized(sheet_name: &str, range: &Range<Data>, capacity: usize) -> String {
-    let mut result = String::with_capacity(capacity);
-
-    write!(result, "## {}\n\n", sheet_name).unwrap();
-
     let rows: Vec<_> = range.rows().collect();
     if rows.is_empty() {
-        result.push_str("*No data*");
+        let mut result = String::with_capacity(50 + sheet_name.len());
+        write!(result, "## {}\n\n*No data*", sheet_name).unwrap();
         return result;
     }
 
     let header = &rows[0];
     let header_len = header.len();
+    let row_count = rows.len();
 
+    // Pre-calculate exact size needed for markdown table
+    // Base: "## sheet_name\n\n"
+    let mut exact_size = 16 + sheet_name.len();
+
+    // Header row: "| " + cells + " |\n"
+    exact_size += 2 + (header_len * 2); // " | " separators and delimiters
+    exact_size += header_len * 10; // approximate cell content
+
+    // Separator row: "| " + "---" * header_len + " | " * (header_len - 1) + " |\n"
+    exact_size += 5 + (header_len * 5);
+
+    // Data rows (row_count - 1 data rows)
+    exact_size += (row_count - 1) * (5 + header_len * 15);
+
+    let mut result = String::with_capacity(exact_size.max(capacity));
+
+    write!(result, "## {}\n\n", sheet_name).unwrap();
+
+    // Header row
     result.push_str("| ");
     for (i, cell) in header.iter().enumerate() {
         if i > 0 {
@@ -182,6 +199,7 @@ fn generate_markdown_from_range_optimized(sheet_name: &str, range: &Range<Data>,
     }
     result.push_str(" |\n");
 
+    // Separator row
     result.push_str("| ");
     for i in 0..header_len {
         if i > 0 {
@@ -191,6 +209,7 @@ fn generate_markdown_from_range_optimized(sheet_name: &str, range: &Range<Data>,
     }
     result.push_str(" |\n");
 
+    // Data rows
     for row in rows.iter().skip(1) {
         result.push_str("| ");
         for i in 0..header_len {

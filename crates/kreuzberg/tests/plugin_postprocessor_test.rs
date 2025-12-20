@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use kreuzberg::core::config::ExtractionConfig;
+use kreuzberg::core::pipeline::clear_processor_cache;
 use kreuzberg::plugins::registry::get_post_processor_registry;
 use kreuzberg::plugins::{Plugin, PostProcessor, ProcessingStage};
 use kreuzberg::types::ExtractionResult;
@@ -164,6 +165,16 @@ impl PostProcessor for FailingProcessor {
     }
 }
 
+fn clear_processor_registry_and_cache() {
+    let registry = get_post_processor_registry();
+    let mut reg = registry
+        .write()
+        .expect("Failed to acquire write lock on registry in test");
+    let _ = reg.shutdown_all();
+    drop(reg);
+    let _ = clear_processor_cache();
+}
+
 #[serial]
 #[test]
 fn test_register_custom_postprocessor() {
@@ -202,6 +213,7 @@ fn test_register_custom_postprocessor() {
 #[serial]
 #[test]
 fn test_postprocessor_called_during_extraction() {
+    clear_processor_registry_and_cache();
     let test_file = "../../test_documents/text/fake_text.txt";
     let registry = get_post_processor_registry();
 
@@ -244,6 +256,7 @@ fn test_postprocessor_called_during_extraction() {
 #[serial]
 #[test]
 fn test_postprocessor_modifies_content() {
+    clear_processor_registry_and_cache();
     let test_file = "../../test_documents/text/fake_text.txt";
     let registry = get_post_processor_registry();
 
@@ -275,6 +288,7 @@ fn test_postprocessor_modifies_content() {
 #[serial]
 #[test]
 fn test_postprocessor_adds_metadata() {
+    clear_processor_registry_and_cache();
     let test_file = "../../test_documents/text/fake_text.txt";
     let registry = get_post_processor_registry();
 
@@ -417,6 +431,7 @@ fn test_clear_all_postprocessors() {
 #[serial]
 #[test]
 fn test_postprocessor_error_handling() {
+    clear_processor_registry_and_cache();
     let test_file = "../../test_documents/text/fake_text.txt";
     let registry = get_post_processor_registry();
 
@@ -485,6 +500,7 @@ fn test_postprocessor_invalid_name() {
 #[serial]
 #[test]
 fn test_multiple_postprocessors_execution_order() {
+    clear_processor_registry_and_cache();
     let test_file = "../../test_documents/text/fake_text.txt";
     let registry = get_post_processor_registry();
 
@@ -530,6 +546,7 @@ fn test_multiple_postprocessors_execution_order() {
 #[serial]
 #[test]
 fn test_postprocessor_preserves_mime_type() {
+    clear_processor_registry_and_cache();
     let test_file = "../../test_documents/text/fake_text.txt";
     let registry = get_post_processor_registry();
 
