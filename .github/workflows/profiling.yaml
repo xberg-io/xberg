@@ -1090,18 +1090,7 @@ jobs:
           java-version: "25"
 
       - name: Setup Maven 4
-        shell: bash
-        run: |
-          MAVEN_VERSION="4.0.0-rc-4"
-          MAVEN_URL="https://archive.apache.org/dist/maven/maven-4/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz"
-          MAVEN_HOME="${RUNNER_TEMP}/apache-maven-${MAVEN_VERSION}"
-
-          curl -fsSL "$MAVEN_URL" -o "${RUNNER_TEMP}/maven.tar.gz"
-          tar -xzf "${RUNNER_TEMP}/maven.tar.gz" -C "${RUNNER_TEMP}"
-          echo "${MAVEN_HOME}/bin" >> "$GITHUB_PATH"
-
-          # Verify Maven version
-          "${MAVEN_HOME}/bin/mvn" --version
+        uses: ./.github/actions/setup-maven-4
 
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
