@@ -1,5 +1,7 @@
 package dev.kreuzberg.config;
 
+import dev.kreuzberg.KreuzbergException;
+import dev.kreuzberg.ValidationHelper;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -77,6 +79,13 @@ public final class TesseractConfig {
     }
 
     public Builder psm(Integer psm) {
+      if (psm != null) {
+        try {
+          ValidationHelper.validateTesseractPsm(psm);
+        } catch (KreuzbergException e) {
+          throw new IllegalArgumentException(e.getMessage(), e);
+        }
+      }
       this.psm = psm;
       return this;
     }

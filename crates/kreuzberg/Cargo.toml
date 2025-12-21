@@ -17,9 +17,12 @@ readme = "README.md"
 crate-type = ["rlib"]
 
 [features]
-default = ["tokio-runtime"]
+default = ["tokio-runtime", "simd-utf8"]
 
 profiling = ["dep:pprof"]
+
+# Performance features
+simd-utf8 = ["dep:simdutf8"]
 
 # Runtime features
 tokio-runtime = ["dep:tokio"]
@@ -89,6 +92,8 @@ mcp-http = ["mcp", "api"]                                          # NEW - enabl
 otel = ["dep:opentelemetry", "dep:opentelemetry_sdk", "dep:tracing-opentelemetry"]
 
 # WASM-compatible feature bundle
+# Note: Office support is NOT included because office extractors require tokio-runtime,
+# which is incompatible with WASM targets. Use basic image format support instead.
 wasm-target = ["pdf", "html", "xml", "email", "language-detection", "chunking", "quality"]
 wasm-threads = ["dep:wasm-bindgen-rayon"]
 
@@ -133,6 +138,9 @@ ahash = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 base64-simd = "0.8"
+bitvec = "1.0"
+dashmap = "6.1"
+simdutf8 = { version = "0.1", optional = true }
 hex = { workspace = true }
 lazy_static = "1.5.0"
 libc = { workspace = true }
@@ -239,6 +247,11 @@ image = { workspace = true, default-features = false, features = ["png"] }
 [[bench]]
 name = "otel_overhead"
 harness = false
+
+[[bench]]
+name = "token_reduction"
+harness = true
+required-features = ["quality"]
 
 # Only build profiling tooling on non-Windows targets (pprof depends on Unix APIs)
 [target.'cfg(not(target_os = "windows"))'.dependencies]

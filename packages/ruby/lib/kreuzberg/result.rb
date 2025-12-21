@@ -175,6 +175,84 @@ module Kreuzberg
       to_h.to_json(*)
     end
 
+    # Get the total number of pages in the document
+    #
+    # @return [Integer] Total page count (>= 0), or -1 on error
+    #
+    # @example
+    #   result = Kreuzberg.extract_file_sync("document.pdf")
+    #   puts "Document has #{result.page_count} pages"
+    #
+    def page_count
+      # This is a placeholder that would use FFI in the actual implementation
+      # For now, derive from metadata
+      if @metadata.is_a?(Hash) && @metadata['pages'].is_a?(Hash)
+        @metadata['pages']['total_count'] || 0
+      else
+        0
+      end
+    end
+
+    # Get the total number of text chunks
+    #
+    # Returns 0 if chunking was not performed.
+    #
+    # @return [Integer] Total chunk count (>= 0), or -1 on error
+    #
+    # @example
+    #   result = Kreuzberg.extract_file_sync("document.pdf")
+    #   puts "Document has #{result.chunk_count} chunks"
+    #
+    def chunk_count
+      @chunks&.length || 0
+    end
+
+    # Get the primary detected language
+    #
+    # @return [String, nil] ISO 639 language code (e.g., "en", "de"), or nil if not detected
+    #
+    # @example
+    #   result = Kreuzberg.extract_file_sync("document.pdf")
+    #   lang = result.detected_language
+    #   puts "Language: #{lang}" if lang
+    #
+    def detected_language
+      return @metadata['language'] if @metadata.is_a?(Hash) && @metadata['language']
+      return @detected_languages&.first if @detected_languages&.any?
+
+      nil
+    end
+
+    # Get a metadata field by name
+    #
+    # Supports dot notation for nested fields (e.g., "format.pages").
+    #
+    # @param name [String, Symbol] Field name
+    # @return [Object, nil] Field value, or nil if field doesn't exist
+    #
+    # @example Get a top-level field
+    #   result = Kreuzberg.extract_file_sync("document.pdf")
+    #   title = result.metadata_field("title")
+    #   puts "Title: #{title}" if title
+    #
+    # @example Get a nested field
+    #   format_info = result.metadata_field("format.pages")
+    #
+    def metadata_field(name)
+      return nil unless @metadata.is_a?(Hash)
+
+      parts = name.to_s.split('.')
+      value = @metadata
+
+      parts.each do |part|
+        return nil unless value.is_a?(Hash)
+
+        value = value[part]
+      end
+
+      value
+    end
+
     private
 
     def serialize_tables

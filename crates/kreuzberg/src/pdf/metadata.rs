@@ -143,6 +143,14 @@ pub fn extract_metadata_from_document(
     document: &PdfDocument<'_>,
     page_boundaries: Option<&[PageBoundary]>,
 ) -> Result<PdfExtractionMetadata> {
+    extract_metadata_from_document_impl(document, page_boundaries)
+}
+
+/// Internal implementation of metadata extraction that can be reused by unified extraction.
+pub(crate) fn extract_metadata_from_document_impl(
+    document: &PdfDocument<'_>,
+    page_boundaries: Option<&[PageBoundary]>,
+) -> Result<PdfExtractionMetadata> {
     let pdf_specific = extract_pdf_specific_metadata(document)?;
 
     let common = extract_common_metadata_from_document(document)?;

@@ -107,7 +107,9 @@ fn detect_page_breaks(bytes: &[u8]) -> Result<Vec<usize>> {
 
     let document_xml = match archive.by_name("word/document.xml") {
         Ok(mut file) => {
-            let mut content = String::new();
+            // Estimate XML size; typical DOCX documents have 50KB-5MB XML
+            let estimated_size = file.size() as usize;
+            let mut content = String::with_capacity(estimated_size);
             std::io::Read::read_to_string(&mut file, &mut content)
                 .map_err(|e| KreuzbergError::parsing(format!("Failed to read document.xml: {}", e)))?;
             content
@@ -115,7 +117,8 @@ fn detect_page_breaks(bytes: &[u8]) -> Result<Vec<usize>> {
         Err(_) => return Ok(Vec::new()),
     };
 
-    let mut breaks = Vec::new();
+    // Pre-allocate Vec; typical documents have 5-20 page breaks
+    let mut breaks = Vec::with_capacity(16);
     let search_pattern = r#"<w:br w:type="page"/>"#;
 
     for (idx, _) in document_xml.match_indices(search_pattern) {
@@ -153,7 +156,8 @@ fn map_page_breaks_to_boundaries(text: &str, page_breaks: Vec<usize>) -> Result<
     let char_count = text.chars().count();
     let chars_per_page = char_count / page_count;
 
-    let mut boundaries = Vec::new();
+    // Pre-allocate Vec; we know exact capacity from page_breaks
+    let mut boundaries = Vec::with_capacity(page_count);
     let mut byte_offset = 0;
 
     for page_num in 1..=page_count {

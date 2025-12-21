@@ -1,5 +1,7 @@
 package dev.kreuzberg.config;
 
+import dev.kreuzberg.KreuzbergException;
+import dev.kreuzberg.ValidationHelper;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -116,6 +118,11 @@ public final class OcrConfig {
      * @return this builder
      */
     public Builder backend(String backend) {
+      try {
+        ValidationHelper.validateOcrBackend(backend);
+      } catch (KreuzbergException e) {
+        throw new IllegalArgumentException(e.getMessage(), e);
+      }
       this.backend = backend;
       return this;
     }
@@ -127,6 +134,11 @@ public final class OcrConfig {
      * @return this builder
      */
     public Builder language(String language) {
+      try {
+        ValidationHelper.validateLanguageCode(language);
+      } catch (KreuzbergException e) {
+        throw new IllegalArgumentException(e.getMessage(), e);
+      }
       this.language = language;
       return this;
     }

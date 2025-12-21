@@ -13,6 +13,11 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(feature = "profiling")]
+use crate::profile_report::ProfileReport;
+#[cfg(feature = "profiling")]
+use crate::profiling::ProfileGuard;
+
 /// Calculate percentile from duration values
 ///
 /// # Arguments
@@ -26,6 +31,28 @@ fn calculate_duration_percentile(mut values: Vec<Duration>, percentile: f64) -> 
     values.sort();
     let index = ((values.len() as f64 - 1.0) * percentile).max(0.0) as usize;
     values[index]
+}
+
+/// Calculate amplified iteration count for profiling when needed
+///
+/// When profiling is enabled, tasks can be amplified (repeated) to increase the
+/// profiling duration and collect more samples. This function determines how many
+/// times to repeat the task based on its estimated duration to reach a target
+/// profiling duration.
+///
+/// # Arguments
+/// * `estimated_duration_ms` - Estimated task duration in milliseconds
+/// * `target_profile_duration_ms` - Target minimum profiling duration (default 1000ms)
+///
+/// # Returns
+/// Number of amplified iterations (minimum 1)
+fn calculate_amplified_iterations(estimated_duration_ms: u64, target_profile_duration_ms: u64) -> usize {
+    if estimated_duration_ms == 0 {
+        return 1;
+    }
+
+    let amplification = (target_profile_duration_ms as f64 / estimated_duration_ms as f64).ceil() as usize;
+    amplification.max(1)
 }
 
 /// Calculate statistics from iteration results
@@ -84,6 +111,15 @@ fn calculate_statistics(iterations: &[IterationResult]) -> DurationStatistics {
         p99,
         sample_count: iterations.len(),
     }
+}
+
+/// Check if profiling is enabled via environment variable
+///
+/// # Returns
+/// `true` if `ENABLE_PROFILING=true` is set, `false` otherwise
+#[cfg(feature = "profiling")]
+fn should_profile() -> bool {
+    std::env::var("ENABLE_PROFILING").unwrap_or_default() == "true"
 }
 
 /// Aggregate performance metrics from iterations (average)
@@ -181,14 +217,124 @@ impl BenchmarkRunner {
         config: &BenchmarkConfig,
         cold_start_duration: Option<Duration>,
     ) -> Result<BenchmarkResult> {
-        let total_iterations = config.warmup_iterations + config.benchmark_iterations;
         let mut all_results = Vec::new();
 
-        for iteration in 0..total_iterations {
-            let result = adapter.extract(file_path, config.timeout).await?;
+        // Estimate task duration from first warmup iteration for adaptive profiling
+        let estimated_task_duration_ms = if config.profiling.enabled {
+            let warmup_start = std::time::Instant::now();
+            let warmup_result = adapter.extract(file_path, config.timeout).await?;
+            let _warmup_duration = warmup_start.elapsed();
+            warmup_result.duration.as_millis() as u64
+        } else {
+            config.profiling.task_duration_ms
+        };
 
-            if iteration >= config.warmup_iterations {
+        // Calculate adaptive sampling frequency based on task duration
+        #[cfg(feature = "profiling")]
+        let sampling_frequency =
+            crate::config::ProfilingConfig::calculate_optimal_frequency(estimated_task_duration_ms);
+
+        // Initialize profiler with adaptive frequency if profiling is enabled
+        #[cfg(feature = "profiling")]
+        let profiler = if should_profile() && config.profiling.enabled {
+            match ProfileGuard::new(sampling_frequency) {
+                Ok(g) => {
+                    eprintln!(
+                        "Profiling enabled: {} Hz sampling frequency for ~{}ms tasks",
+                        sampling_frequency, estimated_task_duration_ms
+                    );
+                    Some(g)
+                }
+                Err(e) => {
+                    eprintln!("Warning: Failed to start profiler: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        // Run warmup iterations if needed and not already completed for profiling
+        let warmup_start = if config.profiling.enabled { 1 } else { 0 };
+        for _iteration in warmup_start..config.warmup_iterations {
+            let result = adapter.extract(file_path, config.timeout).await?;
+            // Warmup iterations are discarded
+            drop(result);
+        }
+
+        // Run benchmark iterations with optional task amplification
+        let amplification_factor = if config.profiling.enabled {
+            calculate_amplified_iterations(estimated_task_duration_ms, 1000)
+        } else {
+            1
+        };
+
+        for _iteration in 0..config.benchmark_iterations {
+            // Run amplified iterations for profiling
+            for _amp in 0..amplification_factor {
+                let result = adapter.extract(file_path, config.timeout).await?;
                 all_results.push(result);
+            }
+        }
+
+        // Finish profiling if enabled and configured
+        #[cfg(feature = "profiling")]
+        if let Some(profiler) = profiler {
+            let framework_name = adapter.name();
+            let mode_name = match config.benchmark_mode {
+                BenchmarkMode::SingleFile => "single-file",
+                BenchmarkMode::Batch => "batch",
+            };
+            let fixture_stem = file_path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+
+            let flamegraph_path = format!("flamegraphs/{}/{}/{}.svg", framework_name, mode_name, fixture_stem);
+            let report_path = format!(
+                "flamegraphs/{}/{}/{}_report.html",
+                framework_name, mode_name, fixture_stem
+            );
+
+            match profiler.finish() {
+                Ok(result) => {
+                    eprintln!(
+                        "Profiling complete: {} samples collected in {:?}",
+                        result.sample_count, result.duration
+                    );
+
+                    // Check if sample count meets threshold
+                    if result.sample_count < config.profiling.sample_count_threshold {
+                        eprintln!(
+                            "Warning: Low sample count ({} < {} threshold); profile may have high variance",
+                            result.sample_count, config.profiling.sample_count_threshold
+                        );
+                    }
+
+                    // Generate flamegraph if enabled in config
+                    if config.profiling.flamegraph_enabled {
+                        let path = Path::new(&flamegraph_path);
+                        if let Err(e) = result.generate_flamegraph(path) {
+                            eprintln!("Warning: Failed to generate flamegraph: {}", e);
+                        }
+
+                        // Generate profiling report
+                        let profile_report = ProfileReport::from_profiling_result(&result, framework_name);
+                        let html_report = profile_report.generate_html();
+
+                        // Write HTML report
+                        let report_file_path = Path::new(&report_path);
+                        if let Some(parent) = report_file_path.parent()
+                            && !parent.as_os_str().is_empty()
+                        {
+                            if let Err(e) = std::fs::create_dir_all(parent) {
+                                eprintln!("Warning: Failed to create report directory: {}", e);
+                            } else if let Err(e) = std::fs::write(report_file_path, html_report) {
+                                eprintln!("Warning: Failed to write HTML report: {}", e);
+                            } else {
+                                eprintln!("Profile report written to: {}", report_path);
+                            }
+                        }
+                    }
+                }
+                Err(e) => eprintln!("Warning: Profiling error: {}", e),
             }
         }
 
@@ -539,5 +685,63 @@ mod tests {
 
         let results = runner.run(&[]).await.unwrap();
         assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_calculate_amplified_iterations() {
+        assert_eq!(calculate_amplified_iterations(100, 1000), 10);
+        assert_eq!(calculate_amplified_iterations(500, 1000), 2);
+        assert_eq!(calculate_amplified_iterations(2000, 1000), 1);
+        assert_eq!(calculate_amplified_iterations(0, 1000), 1);
+        assert_eq!(calculate_amplified_iterations(1, 1000), 1000);
+    }
+
+    #[test]
+    fn test_profiling_config_optimal_frequency() {
+        // Quick tasks: highest frequency
+        assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(50), 10000);
+        assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(99), 10000);
+
+        // Medium tasks: standard frequency
+        assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(100), 1000);
+        assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(500), 1000);
+        assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(999), 1000);
+
+        // Long tasks: lower frequency
+        assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(1000), 100);
+        assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(5000), 100);
+    }
+
+    #[test]
+    fn test_profiling_config_validation() {
+        let mut config = crate::ProfilingConfig::default();
+
+        // Valid config should pass
+        assert!(config.validate().is_ok());
+
+        // Invalid sampling frequency
+        config.sampling_frequency = 50;
+        assert!(config.validate().is_err());
+
+        config.sampling_frequency = 20000;
+        assert!(config.validate().is_err());
+
+        // Valid frequency again
+        config.sampling_frequency = 1000;
+        assert!(config.validate().is_ok());
+
+        // Invalid batch size
+        config.batch_size = 0;
+        assert!(config.validate().is_err());
+
+        config.batch_size = 10;
+        assert!(config.validate().is_ok());
+
+        // Invalid sample count threshold
+        config.sample_count_threshold = 0;
+        assert!(config.validate().is_err());
+
+        config.sample_count_threshold = 500;
+        assert!(config.validate().is_ok());
     }
 }

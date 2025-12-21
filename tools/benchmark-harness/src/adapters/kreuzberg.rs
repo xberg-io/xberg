@@ -217,6 +217,22 @@ pub fn create_node_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
+/// Create Node async-batch adapter (Promise.all extractFile)
+pub fn create_node_async_batch_adapter() -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("kreuzberg_extract.ts")?;
+    let (command, mut args) = find_node()?;
+
+    args.push(script_path.to_string_lossy().to_string());
+    args.push("async-batch".to_string());
+
+    Ok(SubprocessAdapter::with_batch_support(
+        "kreuzberg-node-async-batch",
+        command,
+        args,
+        vec![],
+    ))
+}
+
 /// Create WASM async adapter (extractFile via @kreuzberg/wasm)
 pub fn create_wasm_async_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract_wasm.ts")?;
@@ -317,7 +333,7 @@ pub fn create_go_batch_adapter() -> Result<SubprocessAdapter> {
     Ok(adapter)
 }
 
-/// Create Java sync adapter
+/// Create Java sync adapter with warmup phase
 pub fn create_java_sync_adapter() -> Result<SubprocessAdapter> {
     let _script_path = get_script_path("KreuzbergExtractJava.java")?;
     let command = find_java()?;
@@ -343,6 +359,37 @@ pub fn create_java_sync_adapter() -> Result<SubprocessAdapter> {
     Ok(SubprocessAdapter::new("kreuzberg-java-sync", command, args, env))
 }
 
+/// Create Java batch adapter
+pub fn create_java_batch_adapter() -> Result<SubprocessAdapter> {
+    let _script_path = get_script_path("KreuzbergExtractJava.java")?;
+    let command = find_java()?;
+    let classpath = workspace_root()?.join("packages/java/target/classes");
+    if !classpath.exists() {
+        return Err(crate::Error::Config(format!(
+            "Java classes not found at {} – run `mvn package` inside packages/java first",
+            classpath.display()
+        )));
+    }
+    let lib_dir = native_library_dir()?;
+    let lib_dir_str = lib_dir.to_string_lossy().to_string();
+    let mut env = build_library_env()?;
+    env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir_str.clone()));
+    let args = vec![
+        "--enable-native-access=ALL-UNNAMED".to_string(),
+        format!("-Djava.library.path={}", lib_dir.display()),
+        "--class-path".to_string(),
+        classpath.to_string_lossy().to_string(),
+        "KreuzbergExtractJava".to_string(),
+        "batch".to_string(),
+    ];
+    Ok(SubprocessAdapter::with_batch_support(
+        "kreuzberg-java-batch",
+        command,
+        args,
+        env,
+    ))
+}
+
 /// Create C# sync adapter
 pub fn create_csharp_sync_adapter() -> Result<SubprocessAdapter> {
     let command = find_dotnet()?;
@@ -364,6 +411,34 @@ pub fn create_csharp_sync_adapter() -> Result<SubprocessAdapter> {
     let mut env = build_library_env()?;
     env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir.to_string_lossy().to_string()));
     Ok(SubprocessAdapter::new("kreuzberg-csharp-sync", command, args, env))
+}
+
+/// Create C# batch adapter
+pub fn create_csharp_batch_adapter() -> Result<SubprocessAdapter> {
+    let command = find_dotnet()?;
+    let project = workspace_root()?.join("packages/csharp/Benchmark/Benchmark.csproj");
+    if !project.exists() {
+        return Err(crate::Error::Config(format!(
+            "C# benchmark project missing at {}",
+            project.display()
+        )));
+    }
+    let args = vec![
+        "run".to_string(),
+        "--project".to_string(),
+        project.to_string_lossy().to_string(),
+        "--".to_string(),
+        "--batch".to_string(),
+    ];
+    let lib_dir = native_library_dir()?;
+    let mut env = build_library_env()?;
+    env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir.to_string_lossy().to_string()));
+    Ok(SubprocessAdapter::with_batch_support(
+        "kreuzberg-csharp-batch",
+        command,
+        args,
+        env,
+    ))
 }
 
 #[cfg(test)]

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 module Kreuzberg
   module Config
     # OCR configuration
@@ -308,10 +310,9 @@ module Kreuzberg
         @binarization_method = binarization_method.to_s
         @invert_colors = invert_colors ? true : false
 
-        valid_methods = %w[otsu sauvola adaptive]
-        return if valid_methods.include?(@binarization_method)
-
-        raise ArgumentError, "binarization_method must be one of: #{valid_methods.join(', ')}"
+        # Validate binarization method via FFI
+        result = Kreuzberg._validate_binarization_method_native(@binarization_method)
+        raise ArgumentError, "Invalid binarization_method: #{@binarization_method}" if result.zero?
       end
 
       def to_h
@@ -345,10 +346,9 @@ module Kreuzberg
         @mode = mode.to_s
         @preserve_important_words = preserve_important_words ? true : false
 
-        valid_modes = %w[off light moderate aggressive maximum]
-        return if valid_modes.include?(@mode)
-
-        raise ArgumentError, "mode must be one of: #{valid_modes.join(', ')}"
+        # Validate token reduction level via FFI
+        result = Kreuzberg._validate_token_reduction_level_native(@mode)
+        raise ArgumentError, "Invalid token reduction mode: #{@mode}" if result.zero?
       end
 
       def to_h
@@ -706,6 +706,91 @@ module Kreuzberg
       end
       # rubocop:enable Metrics/CyclomaticComplexity
 
+      # Serialize configuration to JSON string
+      #
+      # @return [String] JSON representation of the configuration
+      #
+      # @example
+      #   config = Extraction.new(use_cache: true)
+      #   json = config.to_json
+      #   puts json  # => "{\"use_cache\":true,...}"
+      #
+      def to_json(*_args)
+        json_hash = to_h
+        Kreuzberg._config_to_json_native(JSON.generate(json_hash))
+      end
+
+      # Get a field from the configuration
+      #
+      # Supports dot notation for nested fields (e.g., "ocr.backend")
+      #
+      # @param field_name [String, Symbol] Field name to retrieve
+      # @return [Object, nil] Parsed field value, or nil if field doesn't exist
+      #
+      # @example Get a top-level field
+      #   config = Extraction.new(use_cache: true)
+      #   config.get_field("use_cache")  # => true
+      #
+      # @example Get a nested field
+      #   config = Extraction.new(ocr: OCR.new(backend: "tesseract"))
+      #   config.get_field("ocr.backend")  # => "tesseract"
+      #
+      def get_field(field_name)
+        json_hash = to_h
+        Kreuzberg._config_get_field_native(JSON.generate(json_hash), field_name.to_s)
+      end
+
+      # Merge another configuration into this one
+      #
+      # Returns a new configuration with fields from the other config overriding
+      # fields from this config (shallow merge).
+      #
+      # @param other [Extraction, Hash] Configuration to merge
+      # @return [Extraction] New merged configuration
+      #
+      # @example
+      #   base = Extraction.new(use_cache: true, force_ocr: false)
+      #   override = Extraction.new(force_ocr: true)
+      #   merged = base.merge(override)
+      #   merged.use_cache   # => true
+      #   merged.force_ocr   # => true
+      #
+      def merge(other)
+        other_config = other.is_a?(Extraction) ? other : Extraction.new(**other)
+        merged_json = Kreuzberg._config_merge_native(JSON.generate(to_h), JSON.generate(other_config.to_h))
+        merged_hash = JSON.parse(merged_json)
+        # Filter to only known keywords to avoid unknown keyword errors
+        known_keys = %i[
+          use_cache enable_quality_processing force_ocr ocr chunking
+          language_detection pdf_options image_extraction image_preprocessing
+          postprocessor token_reduction keywords html_options pages
+          max_concurrent_extractions
+        ]
+        filtered_hash = merged_hash.transform_keys(&:to_sym).select { |k, _| known_keys.include?(k) }
+        Extraction.new(**filtered_hash)
+      end
+
+      # Merge another configuration into this one (mutating)
+      #
+      # Modifies this configuration in-place by merging fields from another config.
+      #
+      # @param other [Extraction, Hash] Configuration to merge
+      # @return [self]
+      #
+      # @example
+      #   base = Extraction.new(use_cache: true, force_ocr: false)
+      #   override = Extraction.new(force_ocr: true)
+      #   base.merge!(override)
+      #   base.use_cache   # => true
+      #   base.force_ocr   # => true
+      #
+      def merge!(other)
+        other_config = other.is_a?(Extraction) ? other : Extraction.new(**other)
+        merged = merge(other_config)
+        update_from_merged(merged)
+        self
+      end
+
       private
 
       def normalize_config(value, klass)
@@ -715,6 +800,24 @@ module Kreuzberg
         return klass.new(**value.transform_keys(&:to_sym)) if value.is_a?(Hash)
 
         raise ArgumentError, "Expected #{klass}, Hash, or nil, got #{value.class}"
+      end
+
+      def update_from_merged(merged)
+        @use_cache = merged.use_cache
+        @enable_quality_processing = merged.enable_quality_processing
+        @force_ocr = merged.force_ocr
+        @ocr = merged.ocr
+        @chunking = merged.chunking
+        @language_detection = merged.language_detection
+        @pdf_options = merged.pdf_options
+        @image_extraction = merged.image_extraction
+        @image_preprocessing = merged.image_preprocessing
+        @postprocessor = merged.postprocessor
+        @token_reduction = merged.token_reduction
+        @keywords = merged.keywords
+        @html_options = merged.html_options
+        @pages = merged.pages
+        @max_concurrent_extractions = merged.max_concurrent_extractions
       end
     end
 

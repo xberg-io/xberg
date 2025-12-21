@@ -109,7 +109,8 @@ pub fn parse_eml_content(data: &[u8]) -> Result<EmailExtractionResult> {
         String::new()
     };
 
-    let mut attachments = Vec::new();
+    // Pre-allocate attachments Vec; typical emails have 1-5 attachments
+    let mut attachments = Vec::with_capacity(message.attachments().count().min(20));
     for attachment in message.attachments() {
         let filename = attachment.attachment_name().map(|s| s.to_string());
 
@@ -324,7 +325,8 @@ pub fn extract_email_content(data: &[u8], mime_type: &str) -> Result<EmailExtrac
 
 /// Build text output from email extraction result
 pub fn build_email_text_output(result: &EmailExtractionResult) -> String {
-    let mut text_parts = Vec::new();
+    // Pre-allocate Vec; typical emails have 7-10 header/content sections
+    let mut text_parts = Vec::with_capacity(10);
 
     if let Some(ref subject) = result.subject {
         text_parts.push(format!("Subject: {}", subject));
@@ -353,12 +355,12 @@ pub fn build_email_text_output(result: &EmailExtractionResult) -> String {
     text_parts.push(result.cleaned_text.clone());
 
     if !result.attachments.is_empty() {
-        let attachment_names: Vec<String> = result
-            .attachments
-            .iter()
-            .filter_map(|att| att.name.as_ref().or(att.filename.as_ref()))
-            .cloned()
-            .collect();
+        let mut attachment_names = Vec::with_capacity(result.attachments.len().min(20));
+        for att in &result.attachments {
+            if let Some(name) = att.name.as_ref().or(att.filename.as_ref()) {
+                attachment_names.push(name.clone());
+            }
+        }
         if !attachment_names.is_empty() {
             text_parts.push(format!("Attachments: {}", attachment_names.join(", ")));
         }
@@ -372,14 +374,16 @@ fn clean_html_content(html: &str) -> String {
         return String::new();
     }
 
+    // Pre-allocate with capacity hint: typically 60-80% of original after cleaning
+    let mut result = String::with_capacity(html.len().saturating_mul(8).saturating_div(10));
+
     let cleaned = script_regex().replace_all(html, "");
     let cleaned = style_regex().replace_all(&cleaned, "");
-
     let cleaned = html_tag_regex().replace_all(&cleaned, "");
-
     let cleaned = whitespace_regex().replace_all(&cleaned, " ");
 
-    cleaned.trim().to_string()
+    result.push_str(cleaned.trim());
+    result
 }
 
 fn is_image_mime_type(mime_type: &str) -> bool {

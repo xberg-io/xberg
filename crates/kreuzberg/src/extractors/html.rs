@@ -4,6 +4,7 @@ use crate::Result;
 use crate::core::config::ExtractionConfig;
 use crate::extractors::SyncExtractor;
 use crate::plugins::{DocumentExtractor, Plugin};
+use crate::text::utf8_validation;
 use crate::types::{ExtractionResult, Metadata, Table};
 use async_trait::async_trait;
 #[cfg(feature = "tokio-runtime")]
@@ -197,7 +198,7 @@ impl Plugin for HtmlExtractor {
 
 impl SyncExtractor for HtmlExtractor {
     fn extract_sync(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
-        let html = std::str::from_utf8(content)
+        let html = utf8_validation::from_utf8(content)
             .map(|s| s.to_string())
             .unwrap_or_else(|_| String::from_utf8_lossy(content).to_string());
 

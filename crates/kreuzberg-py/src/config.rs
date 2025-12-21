@@ -9,7 +9,7 @@ use html_to_markdown_rs::options::{
 };
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyAny, PyDict};
 
 /// Main extraction configuration.
 ///
@@ -2194,4 +2194,139 @@ impl From<kreuzberg::keywords::KeywordConfig> for KeywordConfig {
     fn from(config: kreuzberg::keywords::KeywordConfig) -> Self {
         Self { inner: config }
     }
+}
+
+/// Serialize an ExtractionConfig to JSON string.
+///
+/// Converts the configuration to its JSON representation.
+///
+/// Args:
+///     config (ExtractionConfig): Configuration to serialize
+///
+/// Returns:
+///     str: JSON string representation of the config
+///
+/// Example:
+///     >>> from kreuzberg import ExtractionConfig, config_to_json
+///     >>> config = ExtractionConfig(use_cache=True)
+///     >>> json_str = config_to_json(config)
+///     >>> print(json_str)
+#[pyfunction]
+#[pyo3(signature = (config))]
+pub fn config_to_json(config: ExtractionConfig) -> PyResult<String> {
+    serde_json::to_string(&config.inner)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to serialize config to JSON: {}", e)))
+}
+
+/// Get a specific field from config.
+///
+/// Retrieves a nested field from the configuration by path. Supports dot notation
+/// for nested fields (e.g., "ocr.backend").
+///
+/// Args:
+///     config (ExtractionConfig): Configuration to query
+///     field_name (str): Field path (e.g., "use_cache", "ocr.backend")
+///
+/// Returns:
+///     Any | None: Field value parsed from JSON, or None if field not found
+///
+/// Example:
+///     >>> from kreuzberg import ExtractionConfig, config_get_field
+///     >>> config = ExtractionConfig(use_cache=True)
+///     >>> use_cache = config_get_field(config, "use_cache")
+///     >>> print(use_cache)  # True
+#[pyfunction]
+#[pyo3(signature = (config, field_name))]
+pub fn config_get_field(config: ExtractionConfig, field_name: &str) -> PyResult<Option<Py<PyAny>>> {
+    let json_value = serde_json::to_value(&config.inner)
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to serialize config: {}", e)))?;
+
+    let mut current = &json_value;
+    for part in field_name.split('.') {
+        if let Some(obj) = current.as_object() {
+            match obj.get(part) {
+                Some(val) => current = val,
+                None => return Ok(None),
+            }
+        } else {
+            return Ok(None);
+        }
+    }
+
+    Python::attach(|py| {
+        crate::plugins::json_value_to_py(py, current)
+            .map(|v| v.unbind())
+            .map(Some)
+    })
+}
+
+/// Merge two configurations.
+///
+/// Performs a merge of two ExtractionConfig structures, where override takes
+/// precedence. The base config is modified in-place.
+///
+/// Args:
+///     base (ExtractionConfig): Base configuration (will be modified)
+///     override (ExtractionConfig): Override configuration (applied on top of base)
+///
+/// Example:
+///     >>> from kreuzberg import ExtractionConfig, config_merge
+///     >>> base = ExtractionConfig(use_cache=True, force_ocr=False)
+///     >>> override = ExtractionConfig(force_ocr=True)
+///     >>> config_merge(base, override)
+///     >>> print(base.force_ocr)  # True
+///     >>> print(base.use_cache)  # True (unchanged)
+#[pyfunction]
+#[pyo3(signature = (base, override_config))]
+pub fn config_merge(py: Python<'_>, base: Py<ExtractionConfig>, override_config: &ExtractionConfig) -> PyResult<()> {
+    // Shallow merge: override non-default fields from override into base
+    let override_default = kreuzberg::ExtractionConfig::default();
+
+    // Get mutable borrow of base
+    let mut base_mut = base.borrow_mut(py);
+
+    if override_config.inner.use_cache != override_default.use_cache {
+        base_mut.inner.use_cache = override_config.inner.use_cache;
+    }
+    if override_config.inner.enable_quality_processing != override_default.enable_quality_processing {
+        base_mut.inner.enable_quality_processing = override_config.inner.enable_quality_processing;
+    }
+    if override_config.inner.force_ocr != override_default.force_ocr {
+        base_mut.inner.force_ocr = override_config.inner.force_ocr;
+    }
+    if override_config.inner.ocr.is_some() {
+        base_mut.inner.ocr = override_config.inner.ocr.clone();
+    }
+    if override_config.inner.chunking.is_some() {
+        base_mut.inner.chunking = override_config.inner.chunking.clone();
+    }
+    if override_config.inner.images.is_some() {
+        base_mut.inner.images = override_config.inner.images.clone();
+    }
+    if override_config.inner.pdf_options.is_some() {
+        base_mut.inner.pdf_options = override_config.inner.pdf_options.clone();
+    }
+    if override_config.inner.token_reduction.is_some() {
+        base_mut.inner.token_reduction = override_config.inner.token_reduction.clone();
+    }
+    if override_config.inner.language_detection.is_some() {
+        base_mut.inner.language_detection = override_config.inner.language_detection.clone();
+    }
+    if override_config.inner.keywords.is_some() {
+        base_mut.inner.keywords = override_config.inner.keywords.clone();
+    }
+    if override_config.inner.postprocessor.is_some() {
+        base_mut.inner.postprocessor = override_config.inner.postprocessor.clone();
+    }
+    if override_config.inner.html_options.is_some() {
+        base_mut.inner.html_options = override_config.inner.html_options.clone();
+    }
+    if override_config.inner.max_concurrent_extractions.is_some() {
+        base_mut.inner.max_concurrent_extractions = override_config.inner.max_concurrent_extractions;
+    }
+    if override_config.inner.pages.is_some() {
+        base_mut.inner.pages = override_config.inner.pages.clone();
+    }
+
+    Ok(())
 }

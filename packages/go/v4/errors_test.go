@@ -6,7 +6,7 @@ import (
 )
 
 func TestClassifyNativeErrorReturnsValidationError(t *testing.T) {
-	err := classifyNativeError("Validation error: Document did not pass schema", ErrorCodeInvalidArgument, nil)
+	err := classifyNativeError("Validation error: Document did not pass schema", ErrorCodeValidation, nil)
 	valErr, ok := err.(*ValidationError)
 	if !ok {
 		t.Fatalf("expected ValidationError, got %T", err)
@@ -31,7 +31,7 @@ func TestClassifyNativeErrorMissingDependency(t *testing.T) {
 }
 
 func TestClassifyNativeErrorPlugin(t *testing.T) {
-	err := classifyNativeError("Plugin error in 'custom': failed to register", ErrorCodeGenericError, nil)
+	err := classifyNativeError("Plugin error in 'custom': failed to register", ErrorCodePlugin, nil)
 	pluginErr, ok := err.(*PluginError)
 	if !ok {
 		t.Fatalf("expected PluginError, got %T", err)
@@ -49,7 +49,7 @@ func TestErrorWithPanicContext(t *testing.T) {
 		Message:      "unexpected state",
 		TimestampSec: 1234567890,
 	}
-	err := classifyNativeError("OCR error: processing failed", ErrorCodePanic, panicCtx)
+	err := classifyNativeError("OCR error: processing failed", ErrorCodeOcr, panicCtx)
 	ocrErr, ok := err.(*OCRError)
 	if !ok {
 		t.Fatalf("expected OCRError, got %T", err)
@@ -93,5 +93,92 @@ func TestLoadExtractionConfigFromFileValidation(t *testing.T) {
 	}
 	if _, ok := err.(*ValidationError); !ok {
 		t.Fatalf("expected ValidationError, got %T", err)
+	}
+}
+
+// Phase 2 Error Classification Tests
+
+func TestErrorCodeCount(t *testing.T) {
+	count := ErrorCodeCount()
+	if count != 8 {
+		t.Fatalf("expected 8 error codes, got %d", count)
+	}
+}
+
+func TestErrorCodeName(t *testing.T) {
+	tests := []struct {
+		code uint32
+		want string
+	}{
+		{0, "validation"},
+		{1, "parsing"},
+		{2, "ocr"},
+		{3, "missing_dependency"},
+		{4, "io"},
+		{5, "plugin"},
+		{6, "unsupported_format"},
+		{7, "internal"},
+		{99, "unknown"}, // invalid code
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := ErrorCodeName(tt.code); got != tt.want {
+				t.Errorf("ErrorCodeName(%d) = %q, want %q", tt.code, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestErrorCodeDescription(t *testing.T) {
+	tests := []struct {
+		code uint32
+		want string
+	}{
+		{0, "Input validation error"},
+		{1, "Document parsing error"},
+		{2, "OCR processing error"},
+		{3, "Missing system dependency"},
+		{4, "File system I/O error"},
+		{5, "Plugin error"},
+		{6, "Unsupported format"},
+		{7, "Internal library error"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := ErrorCodeDescription(tt.code); got != tt.want {
+				t.Errorf("ErrorCodeDescription(%d) = %q, want %q", tt.code, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestErrorCodeStringMethod(t *testing.T) {
+	tests := []struct {
+		code ErrorCode
+		want string
+	}{
+		{ErrorCodeValidation, "validation"},
+		{ErrorCodeParsing, "parsing"},
+		{ErrorCodeOcr, "ocr"},
+		{ErrorCodeMissingDependency, "missing_dependency"},
+		{ErrorCodeIo, "io"},
+		{ErrorCodePlugin, "plugin"},
+		{ErrorCodeUnsupportedFormat, "unsupported_format"},
+		{ErrorCodeInternal, "internal"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := tt.code.String(); got != tt.want {
+				t.Errorf("ErrorCode.String() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestErrorCodeDescriptionMethod(t *testing.T) {
+	code := ErrorCodeOcr
+	desc := code.Description()
+	if desc != "OCR processing error" {
+		t.Errorf("ErrorCode.Description() = %q, want %q", desc, "OCR processing error")
 	}
 }

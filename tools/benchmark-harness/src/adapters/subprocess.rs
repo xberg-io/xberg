@@ -90,12 +90,19 @@ impl SubprocessAdapter {
     async fn execute_subprocess(&self, file_path: &Path, timeout: Duration) -> Result<(String, String, Duration)> {
         let start = Instant::now();
 
+        // Convert relative paths to absolute to ensure proper working directory handling
+        let absolute_path = if file_path.is_absolute() {
+            file_path.to_path_buf()
+        } else {
+            std::env::current_dir().map_err(Error::Io)?.join(file_path)
+        };
+
         let mut cmd = Command::new(&self.command);
         if let Some(dir) = &self.working_dir {
             cmd.current_dir(dir);
         }
         cmd.args(&self.args);
-        cmd.arg(file_path.to_string_lossy().as_ref());
+        cmd.arg(absolute_path.to_string_lossy().as_ref());
 
         for (key, value) in &self.env {
             cmd.env(key, value);
@@ -149,8 +156,15 @@ impl SubprocessAdapter {
         }
         cmd.args(&self.args);
 
+        // Convert all relative paths to absolute for proper working directory handling
+        let cwd = std::env::current_dir().map_err(Error::Io)?;
         for path in file_paths {
-            cmd.arg(path.to_string_lossy().as_ref());
+            let absolute_path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                cwd.join(path)
+            };
+            cmd.arg(absolute_path.to_string_lossy().as_ref());
         }
 
         for (key, value) in &self.env {
@@ -247,7 +261,8 @@ impl FrameworkAdapter for SubprocessAdapter {
             Ok(result) => result,
             Err(e) => {
                 let samples = monitor.stop().await;
-                let resource_stats = ResourceMonitor::calculate_stats(&samples);
+                let snapshots = monitor.get_snapshots().await;
+                let resource_stats = ResourceMonitor::calculate_stats(&samples, &snapshots);
 
                 return Ok(BenchmarkResult {
                     framework: self.name.clone(),
@@ -282,7 +297,8 @@ impl FrameworkAdapter for SubprocessAdapter {
         };
 
         let samples = monitor.stop().await;
-        let resource_stats = ResourceMonitor::calculate_stats(&samples);
+        let snapshots = monitor.get_snapshots().await;
+        let resource_stats = ResourceMonitor::calculate_stats(&samples, &snapshots);
 
         let parsed = match self.parse_output(&stdout) {
             Ok(value) => value,
@@ -394,7 +410,8 @@ impl FrameworkAdapter for SubprocessAdapter {
             Ok(result) => result,
             Err(e) => {
                 let samples = monitor.stop().await;
-                let resource_stats = ResourceMonitor::calculate_stats(&samples);
+                let snapshots = monitor.get_snapshots().await;
+                let resource_stats = ResourceMonitor::calculate_stats(&samples, &snapshots);
 
                 return Ok(vec![BenchmarkResult {
                     framework: self.name.clone(),
@@ -425,7 +442,8 @@ impl FrameworkAdapter for SubprocessAdapter {
         };
 
         let samples = monitor.stop().await;
-        let resource_stats = ResourceMonitor::calculate_stats(&samples);
+        let snapshots = monitor.get_snapshots().await;
+        let resource_stats = ResourceMonitor::calculate_stats(&samples, &snapshots);
 
         let batch_throughput = if duration.as_secs_f64() > 0.0 {
             total_file_size as f64 / duration.as_secs_f64()

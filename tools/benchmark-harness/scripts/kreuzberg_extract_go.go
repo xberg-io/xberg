@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	kz "github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
@@ -81,7 +82,16 @@ func getWorkingDir() string {
 func extractSync(path string) (*payload, error) {
 	start := time.Now()
 	debug("ExtractFileSync called with path: %s", path)
-	result, err := kz.ExtractFileSync(path, nil)
+
+	// Resolve to absolute path to handle working directory issues
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		debug("filepath.Abs failed for %s: %v", path, err)
+		return nil, fmt.Errorf("failed to resolve path: %w", err)
+	}
+	debug("Resolved absolute path: %s", absPath)
+
+	result, err := kz.ExtractFileSync(absPath, nil)
 	if err != nil {
 		debug("ExtractFileSync failed: %v", err)
 		return nil, err
@@ -103,7 +113,20 @@ func extractSync(path string) (*payload, error) {
 func extractBatch(paths []string) (any, error) {
 	start := time.Now()
 	debug("BatchExtractFilesSync called with %d files", len(paths))
-	results, err := kz.BatchExtractFilesSync(paths, nil)
+
+	// Resolve all paths to absolute paths
+	absPaths := make([]string, len(paths))
+	for i, path := range paths {
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			debug("filepath.Abs failed for %s: %v", path, err)
+			return nil, fmt.Errorf("failed to resolve path %s: %w", path, err)
+		}
+		absPaths[i] = absPath
+		debug("Resolved path %d: %s -> %s", i, path, absPath)
+	}
+
+	results, err := kz.BatchExtractFilesSync(absPaths, nil)
 	if err != nil {
 		debug("BatchExtractFilesSync failed: %v", err)
 		return nil, err

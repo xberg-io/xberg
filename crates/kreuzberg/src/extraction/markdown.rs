@@ -40,12 +40,15 @@ pub fn cells_to_markdown(cells: &[Vec<String>]) -> String {
         return String::new();
     }
 
-    let mut markdown = String::new();
-
     let num_cols = cells.first().map(|r| r.len()).unwrap_or(0);
     if num_cols == 0 {
         return String::new();
     }
+
+    // Estimate capacity: each cell gets ~10 chars on average, plus 2 pipes per row
+    // Plus separator row. Typical markdown table: cells.len() * num_cols * 12 bytes
+    let estimated_capacity = cells.len().saturating_mul(num_cols).saturating_mul(12).max(64);
+    let mut markdown = String::with_capacity(estimated_capacity);
 
     if let Some(header) = cells.first() {
         markdown.push('|');

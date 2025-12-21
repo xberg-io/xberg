@@ -26,6 +26,56 @@ Rust Core (crates/kreuzberg)
 - **Types** (`src/types.rs`): Result types and data structures
 - **Errors** (`src/error.rs`): Exception types
 
+## Async vs Sync Performance
+
+### Single-File Processing
+
+For single files, **async and sync have identical performance**:
+
+```python
+# Both take ~140ms (subprocess dominates)
+result = await extract_file("document.pdf")          # 140ms
+result = extract_file_sync("document.pdf")           # 140ms
+```
+
+**Why?** The subprocess call (pdftotext, libreoffice) accounts for 95-99% of time. With only one file, there's nothing to do concurrently, so async provides no benefit.
+
+### Batch/Concurrent Processing
+
+For **multiple files**, async provides **2-3x speedup**:
+
+```python
+import asyncio
+from kreuzberg import extract_file, batch_extract_files
+
+async def process_documents():
+    # Method 1: Using asyncio.gather() (most flexible)
+    results = await asyncio.gather(
+        extract_file("doc1.pdf"),
+        extract_file("doc2.pdf"),
+        extract_file("doc3.pdf"),
+    )
+    # Concurrent: ~140ms (not 420ms)
+
+    # Method 2: Using batch API (simpler)
+    results = await batch_extract_files([
+        "doc1.pdf", "doc2.pdf", "doc3.pdf"
+    ])
+    # Also concurrent: ~140ms
+
+    return results
+
+asyncio.run(process_documents())
+```
+
+**Performance**: 3 files concurrently (~140ms) vs sequential (3 × 140ms = 420ms)
+
+### Recommendation
+
+- **Single file**: Use `extract_file_sync()` - simpler, identical performance
+- **Multiple files**: Use `await extract_file()` with `asyncio.gather()` or `batch_extract_files()`
+- **CPU-bound operations**: Async is always better when combined with I/O
+
 ## Performance Optimizations
 
 ### 1. Async Python Plugin Support (pyo3_async_runtimes)

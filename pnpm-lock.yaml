@@ -183,6 +183,10 @@ importers:
         version: 4.54.0(@cloudflare/workers-types@4.20251216.0)
 
   packages/typescript/core:
+    dependencies:
+      '@kreuzberg/node':
+        specifier: workspace:*
+        version: link:../../../crates/kreuzberg-node
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.3.9

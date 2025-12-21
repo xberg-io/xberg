@@ -40,6 +40,7 @@
 pub mod cache;
 pub mod error;
 pub mod hocr;
+pub mod language_registry;
 pub mod processor;
 pub mod table;
 pub mod tesseract_backend;
@@ -50,6 +51,7 @@ pub mod validation;
 pub use cache::{OcrCache, OcrCacheStats};
 pub use error::OcrError;
 pub use hocr::convert_hocr_to_markdown;
+pub use language_registry::LanguageRegistry;
 pub use processor::OcrProcessor;
 pub use table::{HocrWord, extract_words_from_tsv, reconstruct_table, table_to_markdown};
 pub use tesseract_backend::TesseractBackend;

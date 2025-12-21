@@ -159,6 +159,24 @@ macro_rules! ffi_panic_guard_bool {
     }};
 }
 
+/// Macro to wrap FFI functions that return i32 with panic catching.
+///
+/// This variant of ffi_panic_guard returns -1 on panic (suitable for i32-returning functions).
+#[macro_export]
+macro_rules! ffi_panic_guard_i32 {
+    ($function_name:expr, $body:expr) => {{
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body)) {
+            Ok(result) => result,
+            Err(panic_info) => {
+                let context =
+                    kreuzberg::panic_context::PanicContext::new(file!(), line!(), $function_name, panic_info.as_ref());
+                $crate::panic_shield::set_structured_error($crate::panic_shield::StructuredError::from_panic(context));
+                -1
+            }
+        }
+    }};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

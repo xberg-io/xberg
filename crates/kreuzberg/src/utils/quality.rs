@@ -1,3 +1,4 @@
+use crate::text::utf8_validation;
 use ahash::AHashMap;
 use memchr::{memchr, memchr3};
 use once_cell::sync::Lazy;
@@ -387,7 +388,11 @@ fn clean_repeated_punctuation_ascii(text: &str) -> Option<String> {
         }
     }
 
-    if changed { String::from_utf8(result).ok() } else { None }
+    if changed {
+        utf8_validation::string_from_utf8(result).ok()
+    } else {
+        None
+    }
 }
 
 #[inline]
@@ -461,7 +466,7 @@ pub(crate) fn normalize_whitespace_ascii(text: &str) -> Option<String> {
         }
     }
 
-    let normalized = String::from_utf8(result).unwrap_or_else(|_| text.to_string());
+    let normalized = utf8_validation::string_from_utf8(result).unwrap_or_else(|_| text.to_string());
 
     if changed { Some(normalized) } else { None }
 }
@@ -579,7 +584,11 @@ pub(crate) fn collapse_scattered_ascii(text: &str) -> Option<String> {
         i += 1;
     }
 
-    if changed { String::from_utf8(result).ok() } else { None }
+    if changed {
+        utf8_validation::string_from_utf8(result).ok()
+    } else {
+        None
+    }
 }
 
 /// Collapse redundant whitespace while preserving paragraph boundaries.

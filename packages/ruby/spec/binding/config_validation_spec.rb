@@ -236,6 +236,104 @@ RSpec.describe 'Configuration Validation' do
     end
   end
 
+  describe Kreuzberg::Config::ImagePreprocessing do
+    it 'has sensible defaults' do
+      config = described_class.new
+      expect(config.target_dpi).to eq(300)
+      expect(config.auto_rotate).to be true
+      expect(config.deskew).to be true
+      expect(config.denoise).to be false
+      expect(config.contrast_enhance).to be true
+      expect(config.binarization_method).to eq('otsu')
+      expect(config.invert_colors).to be false
+    end
+
+    it 'accepts custom values' do
+      config = described_class.new(
+        target_dpi: 600,
+        auto_rotate: false,
+        deskew: false,
+        denoise: true,
+        contrast_enhance: false,
+        binarization_method: 'sauvola',
+        invert_colors: true
+      )
+      expect(config.target_dpi).to eq(600)
+      expect(config.auto_rotate).to be false
+      expect(config.deskew).to be false
+      expect(config.denoise).to be true
+      expect(config.contrast_enhance).to be false
+      expect(config.binarization_method).to eq('sauvola')
+      expect(config.invert_colors).to be true
+    end
+
+    it 'validates binarization method via FFI' do
+      # Valid methods should work
+      expect { described_class.new(binarization_method: 'otsu') }.not_to raise_error
+      expect { described_class.new(binarization_method: 'adaptive') }.not_to raise_error
+      expect { described_class.new(binarization_method: 'sauvola') }.not_to raise_error
+    end
+
+    it 'rejects invalid binarization methods' do
+      expect do
+        described_class.new(binarization_method: 'invalid_method')
+      end.to raise_error(ArgumentError, /Invalid binarization_method/)
+    end
+
+    it 'converts to hash correctly' do
+      config = described_class.new(
+        target_dpi: 500,
+        binarization_method: 'adaptive'
+      )
+      hash = config.to_h
+      expect(hash[:target_dpi]).to eq(500)
+      expect(hash[:binarization_method]).to eq('adaptive')
+      expect(hash[:auto_rotate]).to be true
+    end
+  end
+
+  describe Kreuzberg::Config::TokenReduction do
+    it 'has sensible defaults' do
+      config = described_class.new
+      expect(config.mode).to eq('off')
+      expect(config.preserve_important_words).to be true
+    end
+
+    it 'accepts custom values' do
+      config = described_class.new(
+        mode: 'aggressive',
+        preserve_important_words: false
+      )
+      expect(config.mode).to eq('aggressive')
+      expect(config.preserve_important_words).to be false
+    end
+
+    it 'validates token reduction levels via FFI' do
+      # All valid modes should work
+      expect { described_class.new(mode: 'off') }.not_to raise_error
+      expect { described_class.new(mode: 'light') }.not_to raise_error
+      expect { described_class.new(mode: 'moderate') }.not_to raise_error
+      expect { described_class.new(mode: 'aggressive') }.not_to raise_error
+      expect { described_class.new(mode: 'maximum') }.not_to raise_error
+    end
+
+    it 'rejects invalid token reduction modes' do
+      expect do
+        described_class.new(mode: 'extreme')
+      end.to raise_error(ArgumentError, /Invalid token reduction mode/)
+    end
+
+    it 'converts to hash correctly' do
+      config = described_class.new(
+        mode: 'light',
+        preserve_important_words: true
+      )
+      hash = config.to_h
+      expect(hash[:mode]).to eq('light')
+      expect(hash[:preserve_important_words]).to be true
+    end
+  end
+
   describe 'config usage in extraction' do
     it 'works with OCR config' do
       path = create_test_file('OCR config test')

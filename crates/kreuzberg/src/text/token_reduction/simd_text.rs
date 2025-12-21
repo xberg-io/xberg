@@ -1,3 +1,4 @@
+use crate::text::utf8_validation;
 use memchr::{memchr, memchr3};
 
 pub struct SimdTextProcessor;
@@ -50,7 +51,7 @@ impl SimdTextProcessor {
             i = sequence_end;
         }
 
-        String::from_utf8(result).unwrap_or_else(|_| text.to_string())
+        utf8_validation::string_from_utf8(result).unwrap_or_else(|_| text.to_string())
     }
 
     #[inline]

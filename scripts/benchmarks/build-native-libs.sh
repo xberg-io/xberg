@@ -28,6 +28,12 @@ cd "$REPO_ROOT"
 # without pdf-static, pdf-bundled, or pdf-system
 cargo build --workspace --release \
 	--features full,profiling,api,mcp,otel
-cargo build --manifest-path tools/benchmark-harness/Cargo.toml --release
+cargo build --manifest-path tools/benchmark-harness/Cargo.toml --release --features profiling
+
+# Copy static libraries to target/release for downstream jobs (e.g., Ruby native extension)
+# that need to link against libkreuzberg_ffi.a
+if [ -d "$REPO_ROOT/target/release" ]; then
+	find "$REPO_ROOT/target" -type f -name "*.a" -exec cp -v {} "$REPO_ROOT/target/release/" \; 2>/dev/null || true
+fi
 
 echo "Native libraries build complete"

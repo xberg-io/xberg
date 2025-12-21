@@ -26,6 +26,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::error::Result;
+use crate::text::utf8_validation;
 use crate::types::TextExtractionResult;
 
 static MARKDOWN_HEADER: Lazy<Regex> =
@@ -38,18 +39,32 @@ static CODE_BLOCK_DELIMITER: Lazy<Regex> = Lazy::new(|| {
 });
 
 pub fn parse_text(text_bytes: &[u8], is_markdown: bool) -> Result<TextExtractionResult> {
-    let text = String::from_utf8_lossy(text_bytes).into_owned();
+    // Use Cow to avoid copy when UTF-8 validation passes
+    let text: std::borrow::Cow<'_, str> = match utf8_validation::from_utf8(text_bytes) {
+        Ok(s) => std::borrow::Cow::Borrowed(s),
+        Err(_) => std::borrow::Cow::Owned(String::from_utf8_lossy(text_bytes).into_owned()),
+    };
 
     let mut line_count = 0;
     let mut word_count = 0;
     let character_count = text.len();
 
-    let mut headers = Vec::new();
-    let mut links = Vec::new();
-    let mut code_blocks = Vec::new();
+    // Pre-allocate with capacity hints based on input size
+    // Markdown typically has 5-10% of bytes as headers
+    let estimated_headers_capacity = text.len().saturating_div(20).max(16);
+    // Links typically 5% of lines
+    let estimated_links_capacity = text.lines().count().saturating_div(20).max(4);
+    // Code blocks rarely more than 20-30 per document
+    let estimated_code_blocks_capacity = 8;
+
+    let mut headers = Vec::with_capacity(estimated_headers_capacity);
+    let mut links = Vec::with_capacity(estimated_links_capacity);
+    let mut code_blocks = Vec::with_capacity(estimated_code_blocks_capacity);
     let mut in_code_block = false;
-    let mut current_code_lang = String::new();
-    let mut current_code = String::new();
+    // Code language tags typically 5-20 bytes
+    let mut current_code_lang = String::with_capacity(16);
+    // Current code accumulates multiple lines; heuristic: 50 bytes avg per line
+    let mut current_code = String::with_capacity(128);
 
     for line in text.lines() {
         line_count += 1;
@@ -65,7 +80,8 @@ pub fn parse_text(text_bytes: &[u8], is_markdown: bool) -> Result<TextExtraction
                     if current_code_lang.is_empty() {
                         "plain".to_string()
                     } else {
-                        current_code_lang.clone()
+                        // Move string instead of clone
+                        std::mem::take(&mut current_code_lang)
                     },
                     current_code.trim_end().to_string(),
                 ));
@@ -74,6 +90,7 @@ pub fn parse_text(text_bytes: &[u8], is_markdown: bool) -> Result<TextExtraction
                 in_code_block = false;
             } else {
                 if let Some(caps) = CODE_BLOCK_DELIMITER.captures(line) {
+                    // Use cow to avoid copy when match is captured
                     current_code_lang = caps.get(1).map(|m| m.as_str()).unwrap_or("").to_string();
                 }
                 in_code_block = true;
@@ -94,14 +111,14 @@ pub fn parse_text(text_bytes: &[u8], is_markdown: bool) -> Result<TextExtraction
         }
 
         for caps in MARKDOWN_LINK.captures_iter(line) {
-            if let (Some(text), Some(url)) = (caps.get(1), caps.get(2)) {
-                links.push((text.as_str().to_string(), url.as_str().to_string()));
+            if let (Some(text_match), Some(url)) = (caps.get(1), caps.get(2)) {
+                links.push((text_match.as_str().to_string(), url.as_str().to_string()));
             }
         }
     }
 
     Ok(TextExtractionResult {
-        content: text,
+        content: text.into_owned(),
         line_count,
         word_count,
         character_count,

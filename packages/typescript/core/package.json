@@ -56,6 +56,9 @@
 		"lint": "biome check src",
 		"lint:fix": "biome check --write src"
 	},
+	"dependencies": {
+		"@kreuzberg/node": "workspace:*"
+	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.9",
 		"@types/node": "^25.0.2",

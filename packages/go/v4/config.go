@@ -1,5 +1,17 @@
 package kreuzberg
 
+import (
+	"encoding/json"
+	"fmt"
+	"unsafe"
+)
+
+/*
+#include "internal/ffi/kreuzberg.h"
+#include <stdlib.h>
+*/
+import "C"
+
 // BoolPtr returns a pointer to a bool value. Useful for initializing nullable config fields.
 func BoolPtr(b bool) *bool {
 	return &b
@@ -346,4 +358,178 @@ type PageConfig struct {
 	InsertPageMarkers *bool `json:"insert_page_markers,omitempty"`
 	// MarkerFormat specifies the format for page markers.
 	MarkerFormat *string `json:"marker_format,omitempty"`
+}
+
+// ConfigFromJSON parses an ExtractionConfig from a JSON string via FFI.
+// This is the primary method for converting JSON to a config structure.
+func ConfigFromJSON(jsonStr string) (*ExtractionConfig, error) {
+	if jsonStr == "" {
+		return nil, newValidationError("JSON string cannot be empty", nil)
+	}
+
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	ptr := C.kreuzberg_config_from_json(cJSON)
+	if ptr == nil {
+		return nil, lastError()
+	}
+	defer C.kreuzberg_config_free(ptr)
+
+	// Parse the config back from JSON to populate Go struct
+	cfg := &ExtractionConfig{}
+	if err := json.Unmarshal([]byte(jsonStr), cfg); err != nil {
+		return nil, newSerializationError("failed to decode config JSON", err)
+	}
+	return cfg, nil
+}
+
+// IsValidJSON validates a JSON config string without fully parsing it.
+// Returns true if the JSON is valid, false otherwise.
+func IsValidJSON(jsonStr string) bool {
+	if jsonStr == "" {
+		return false
+	}
+
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	result := int32(C.kreuzberg_config_is_valid(cJSON))
+	return result == 1
+}
+
+// ConfigToJSON serializes an ExtractionConfig to a JSON string via FFI.
+func ConfigToJSON(config *ExtractionConfig) (string, error) {
+	if config == nil {
+		return "", newValidationError("config cannot be nil", nil)
+	}
+
+	// Serialize to JSON first
+	data, err := json.Marshal(config)
+	if err != nil {
+		return "", newSerializationError("failed to encode config", err)
+	}
+
+	// Create a C config from JSON to get the serialized representation
+	jsonStr := string(data)
+	cJSON := C.CString(jsonStr)
+	defer C.free(unsafe.Pointer(cJSON))
+
+	ptr := C.kreuzberg_config_from_json(cJSON)
+	if ptr == nil {
+		return "", lastError()
+	}
+	defer C.kreuzberg_config_free(ptr)
+
+	// Get the serialized form from the FFI
+	cSerialized := C.kreuzberg_config_to_json(ptr)
+	if cSerialized == nil {
+		return "", lastError()
+	}
+	defer C.kreuzberg_free_string(cSerialized)
+
+	return C.GoString(cSerialized), nil
+}
+
+// ConfigGetField retrieves a specific field value from a config.
+// Field paths use dot notation for nested fields (e.g., "ocr.backend").
+// Returns the field value as a JSON string, or an error if the field doesn't exist.
+func ConfigGetField(config *ExtractionConfig, fieldName string) (interface{}, error) {
+	if config == nil {
+		return nil, newValidationError("config cannot be nil", nil)
+	}
+	if fieldName == "" {
+		return nil, newValidationError("field name cannot be empty", nil)
+	}
+
+	// Serialize config to JSON first
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, newSerializationError("failed to encode config", err)
+	}
+
+	cJSON := C.CString(string(data))
+	defer C.free(unsafe.Pointer(cJSON))
+
+	ptr := C.kreuzberg_config_from_json(cJSON)
+	if ptr == nil {
+		return nil, lastError()
+	}
+	defer C.kreuzberg_config_free(ptr)
+
+	cFieldName := C.CString(fieldName)
+	defer C.free(unsafe.Pointer(cFieldName))
+
+	cValue := C.kreuzberg_config_get_field(ptr, cFieldName)
+	if cValue == nil {
+		return nil, newValidationError(fmt.Sprintf("field not found: %s", fieldName), nil)
+	}
+	defer C.kreuzberg_free_string(cValue)
+
+	jsonStr := C.GoString(cValue)
+	var value interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &value); err != nil {
+		return nil, newSerializationError("failed to parse field value", err)
+	}
+	return value, nil
+}
+
+// ConfigMerge merges an override config into a base config.
+// Non-nil/default fields from override are copied into base.
+// Returns an error if the merge fails.
+func ConfigMerge(base, override *ExtractionConfig) error {
+	if base == nil {
+		return newValidationError("base config cannot be nil", nil)
+	}
+	if override == nil {
+		return newValidationError("override config cannot be nil", nil)
+	}
+
+	// Serialize both configs to JSON
+	baseData, err := json.Marshal(base)
+	if err != nil {
+		return newSerializationError("failed to encode base config", err)
+	}
+
+	overrideData, err := json.Marshal(override)
+	if err != nil {
+		return newSerializationError("failed to encode override config", err)
+	}
+
+	cBaseJSON := C.CString(string(baseData))
+	defer C.free(unsafe.Pointer(cBaseJSON))
+
+	cOverrideJSON := C.CString(string(overrideData))
+	defer C.free(unsafe.Pointer(cOverrideJSON))
+
+	basePtr := C.kreuzberg_config_from_json(cBaseJSON)
+	if basePtr == nil {
+		return lastError()
+	}
+	defer C.kreuzberg_config_free(basePtr)
+
+	overridePtr := C.kreuzberg_config_from_json(cOverrideJSON)
+	if overridePtr == nil {
+		return lastError()
+	}
+	defer C.kreuzberg_config_free(overridePtr)
+
+	result := int32(C.kreuzberg_config_merge(basePtr, overridePtr))
+	if result != 1 {
+		return lastError()
+	}
+
+	// Get the merged config back as JSON and update base
+	cMerged := C.kreuzberg_config_to_json(basePtr)
+	if cMerged == nil {
+		return lastError()
+	}
+	defer C.kreuzberg_free_string(cMerged)
+
+	mergedStr := C.GoString(cMerged)
+	if err := json.Unmarshal([]byte(mergedStr), base); err != nil {
+		return newSerializationError("failed to decode merged config", err)
+	}
+
+	return nil
 }

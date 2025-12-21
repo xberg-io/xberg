@@ -19,6 +19,7 @@ use crate::plugins::DocumentExtractor;
 use crate::types::ExtractionResult;
 #[cfg(feature = "office")]
 use crate::types::LibreOfficeConversionResult;
+use crate::utils::intern_mime_type;
 use crate::{KreuzbergError, Result};
 #[cfg(feature = "tokio-runtime")]
 use once_cell::sync::Lazy;
@@ -591,7 +592,7 @@ pub fn batch_extract_bytes_sync(
             use crate::types::{ErrorMetadata, Metadata};
             ExtractionResult {
                 content: format!("Error: {}", e),
-                mime_type: "text/plain".to_string(),
+                mime_type: pool_mime_type("text/plain"),
                 metadata: Metadata {
                     error: Some(ErrorMetadata {
                         error_type: format!("{:?}", e),
@@ -698,13 +699,29 @@ async fn extract_bytes_with_extractor(
     Ok(result)
 }
 
+/// Convert a MIME type string to a pooled String for efficient deduplication.
+///
+/// This function uses the string interning pool to reduce memory allocations
+/// for repeatedly used MIME types (e.g., "application/pdf" appears thousands of times
+/// in batch processing). The interned string is converted to an owned String to satisfy
+/// the ExtractionResult::mime_type field type.
+///
+/// # Performance
+///
+/// For pre-interned MIME types (all common types), this is O(1) pointer dereference.
+/// For unknown MIME types, this allocates once per unique type and caches the result.
+#[allow(dead_code)]
+fn pool_mime_type(mime_type: &str) -> String {
+    intern_mime_type(mime_type).to_string()
+}
+
 #[cfg(feature = "office")]
 fn apply_libreoffice_metadata(
     result: &mut ExtractionResult,
     legacy_mime: &str,
     conversion: &LibreOfficeConversionResult,
 ) {
-    result.mime_type = legacy_mime.to_string();
+    result.mime_type = pool_mime_type(legacy_mime);
     result.metadata.additional.insert(
         "libreoffice_conversion".to_string(),
         json!({

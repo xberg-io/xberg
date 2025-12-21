@@ -2,7 +2,10 @@ name: CI Go
 
 on:
   push:
-    branches: [main]
+    branches-ignore:
+      - 'benchmarking-*'
+      - 'profiling-*'
+      - 'feat/profiling-flamegraphs'
     paths:
       - '.github/actions/**'
       - 'packages/go/v4/**'

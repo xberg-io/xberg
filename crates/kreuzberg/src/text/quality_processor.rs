@@ -2,6 +2,15 @@
 //!
 //! This module provides a PostProcessor plugin that performs quality assessment and
 //! text cleaning on extraction results.
+//!
+//! # Performance
+//!
+//! This processor optimizes metadata handling by:
+//! - Checking if important metadata fields exist before allocating
+//! - Converting to HashMap only when beneficial metadata is present
+//! - Skipping allocation entirely for documents without metadata
+//!
+//! This avoids unnecessary string cloning for sparse metadata scenarios.
 
 use crate::plugins::{Plugin, PostProcessor, ProcessingStage};
 use crate::{ExtractionConfig, ExtractionResult, Result};
@@ -49,18 +58,21 @@ impl Plugin for QualityProcessor {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl PostProcessor for QualityProcessor {
     async fn process(&self, result: &mut ExtractionResult, _config: &ExtractionConfig) -> Result<()> {
-        // Calculate quality score
-        let quality_score = crate::text::quality::calculate_quality_score(
-            &result.content,
-            Some(
-                &result
-                    .metadata
-                    .additional
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.to_string()))
-                    .collect(),
-            ),
-        );
+        // Only allocate metadata HashMap if important fields are present
+        let quality_score = if should_use_metadata(&result.metadata) {
+            // Convert metadata to string HashMap only when needed
+            let metadata_strings: std::collections::HashMap<String, String> = result
+                .metadata
+                .additional
+                .iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+                .collect();
+
+            crate::text::quality::calculate_quality_score(&result.content, Some(&metadata_strings))
+        } else {
+            // Skip allocation when no important metadata present
+            crate::text::quality::calculate_quality_score(&result.content, None)
+        };
 
         result.metadata.additional.insert(
             "quality_score".to_string(),
@@ -85,6 +97,19 @@ impl PostProcessor for QualityProcessor {
         // Quality processing is relatively fast: ~1ms per 100KB
         (text_length / 102400).max(1) as u64
     }
+}
+
+/// Check if metadata contains any important fields without allocation.
+///
+/// # Performance
+///
+/// O(1) check avoiding HashMap allocation when metadata is sparse.
+/// Only allocates HashMap when important metadata fields are present.
+fn should_use_metadata(metadata: &crate::types::Metadata) -> bool {
+    const IMPORTANT_FIELDS: &[&str] = &["title", "author", "subject", "description", "keywords"];
+    IMPORTANT_FIELDS
+        .iter()
+        .any(|field| metadata.additional.contains_key(*field))
 }
 
 #[cfg(test)]

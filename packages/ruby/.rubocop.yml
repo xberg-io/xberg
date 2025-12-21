@@ -52,6 +52,7 @@ Metrics/AbcSize:
   Exclude:
     - 'spec/**/*'
     - 'examples/**/*'
+    - 'lib/kreuzberg/config.rb'
 
 Naming/FileName:
   Enabled: true
@@ -96,6 +97,10 @@ Metrics/CyclomaticComplexity:
 
 Metrics/PerceivedComplexity:
   Max: 12
+  Exclude:
+    - 'lib/kreuzberg/config.rb'
+
+Metrics/ClassLength:
   Exclude:
     - 'lib/kreuzberg/config.rb'
 

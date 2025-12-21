@@ -75,6 +75,82 @@ module Kreuzberg
       rescue StandardError
         nil
       end
+
+      # Get detailed error information from the last operation.
+      #
+      # Returns comprehensive error details including message, code, type, source location,
+      # and panic information.
+      #
+      # @return [Hash] Hash with keys: :message, :error_code, :error_type, :source_file,
+      #   :source_function, :source_line, :context_info, :is_panic
+      #
+      # @example Get error details
+      #   details = Kreuzberg::ErrorContext.error_details
+      #   puts "Error: #{details[:message]}"
+      #   puts "Code: #{details[:error_code]}"
+      #   puts "Type: #{details[:error_type]}"
+      def error_details
+        Kreuzberg._get_error_details_native
+      rescue StandardError
+        {}
+      end
+
+      # Classify an error message into a Kreuzberg error code.
+      #
+      # Analyzes an error message and returns the most likely error code (0-7).
+      # Useful for converting third-party error messages into Kreuzberg categories.
+      #
+      # @param message [String] The error message to classify
+      # @return [Integer] Error code (0-7)
+      #
+      # Error code mapping:
+      # - 0: Validation
+      # - 1: Parsing
+      # - 2: OCR
+      # - 3: MissingDependency
+      # - 4: IO
+      # - 5: Plugin
+      # - 6: UnsupportedFormat
+      # - 7: Internal
+      #
+      # @example Classify an error
+      #   code = Kreuzberg::ErrorContext.classify_error("File not found")
+      #   if code == 4
+      #     puts "This is an I/O error"
+      #   end
+      def classify_error(message)
+        Kreuzberg._classify_error_native(message)
+      rescue StandardError
+        7  # Internal error
+      end
+
+      # Get the human-readable name of an error code.
+      #
+      # @param code [Integer] Numeric error code (0-7)
+      # @return [String] Human-readable error code name (e.g., "validation", "io")
+      #
+      # @example Get error code name
+      #   name = Kreuzberg::ErrorContext.error_code_name(0)
+      #   puts name  # => "validation"
+      def error_code_name(code)
+        Kreuzberg._error_code_name_native(code)
+      rescue StandardError
+        'unknown'
+      end
+
+      # Get the description of an error code.
+      #
+      # @param code [Integer] Numeric error code (0-7)
+      # @return [String] Description of the error code
+      #
+      # @example Get error code description
+      #   desc = Kreuzberg::ErrorContext.error_code_description(0)
+      #   puts desc  # => "Input validation error"
+      def error_code_description(code)
+        Kreuzberg._error_code_description_native(code)
+      rescue StandardError
+        'Unknown error code'
+      end
     end
   end
 end

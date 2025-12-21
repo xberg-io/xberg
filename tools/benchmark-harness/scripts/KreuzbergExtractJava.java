@@ -3,27 +3,129 @@ import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.KreuzbergException;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class KreuzbergExtractJava {
     private static final double NANOS_IN_MILLISECOND = 1_000_000.0;
+    private static final int WARMUP_ITERATIONS = 10;
 
     private KreuzbergExtractJava() { }
 
     public static void main(String[] args) {
         if (args.length < 2) {
-            System.err.println("Usage: KreuzbergExtractJava <mode> <file_path>");
-            System.err.println("Modes: sync");
+            System.err.println("Usage: KreuzbergExtractJava <mode> <file_path> [additional_files...]");
+            System.err.println("Modes: sync, warmup, batch");
             System.exit(1);
         }
 
         String mode = args[0];
-        if (!"sync".equals(mode)) {
+        if (!"sync".equals(mode) && !"warmup".equals(mode) && !"batch".equals(mode)) {
             System.err.printf("Unsupported mode '%s'%n", mode);
             System.exit(1);
         }
 
+        if ("warmup".equals(mode)) {
+            handleWarmupMode(args);
+            return;
+        } else if ("batch".equals(mode)) {
+            handleBatchMode(args);
+            return;
+        }
+
         // Enable debug logging if KREUZBERG_BENCHMARK_DEBUG is set
         boolean debug = "true".equalsIgnoreCase(System.getenv("KREUZBERG_BENCHMARK_DEBUG"));
+        handleSyncMode(args, debug);
+    }
+
+    private static void handleWarmupMode(String[] args) {
+        if (args.length < 2) {
+            System.err.println("Usage: KreuzbergExtractJava warmup <file_path>");
+            System.exit(1);
+        }
+
+        boolean debug = "true".equalsIgnoreCase(System.getenv("KREUZBERG_BENCHMARK_DEBUG"));
+        if (debug) {
+            debugLog("Warmup phase starting", "");
+        }
+
+        Path path = Path.of(args[1]);
+        try {
+            // Execute WARMUP_ITERATIONS iterations without recording times
+            for (int i = 0; i < WARMUP_ITERATIONS; i++) {
+                Kreuzberg.extractFile(path);
+                if (debug && i % 2 == 0) {
+                    debugLog("Warmup iteration", String.valueOf(i + 1));
+                }
+            }
+            if (debug) {
+                debugLog("Warmup phase complete", String.valueOf(WARMUP_ITERATIONS) + " iterations");
+            }
+            // Output success marker
+            System.out.println("{\"status\":\"warmup_complete\"}");
+        } catch (KreuzbergException | RuntimeException | java.io.IOException e) {
+            if (debug) {
+                debugLog("Warmup failed", e.getClass().getName());
+                e.printStackTrace(System.err);
+            }
+            System.exit(1);
+        }
+    }
+
+    private static void handleBatchMode(String[] args) {
+        if (args.length < 2) {
+            System.err.println("Usage: KreuzbergExtractJava batch <file_path> [additional_files...]");
+            System.exit(1);
+        }
+
+        boolean debug = "true".equalsIgnoreCase(System.getenv("KREUZBERG_BENCHMARK_DEBUG"));
+        if (debug) {
+            debugLog("Batch mode starting", String.valueOf(args.length - 1) + " files");
+        }
+
+        List<Path> paths = new ArrayList<>();
+        for (int i = 1; i < args.length; i++) {
+            paths.add(Path.of(args[i]));
+        }
+
+        long start = System.nanoTime();
+        try {
+            List<ExtractionResult> results = new ArrayList<>();
+            for (Path path : paths) {
+                results.add(Kreuzberg.extractFile(path));
+            }
+            double totalMs = (System.nanoTime() - start) / NANOS_IN_MILLISECOND;
+
+            if (debug) {
+                debugLog("Batch extraction completed", String.valueOf(results.size()) + " results");
+            }
+
+            // Output results
+            if (results.size() == 1) {
+                String json = toJson(results.get(0), totalMs / results.size());
+                System.out.print(json);
+            } else {
+                System.out.print("[");
+                for (int i = 0; i < results.size(); i++) {
+                    if (i > 0) System.out.print(",");
+                    System.out.print(toJson(results.get(i), totalMs / results.size()));
+                }
+                System.out.print("]");
+            }
+        } catch (KreuzbergException | RuntimeException | java.io.IOException e) {
+            if (debug) {
+                debugLog("Batch extraction failed", e.getClass().getName());
+                e.printStackTrace(System.err);
+            }
+            System.exit(1);
+        }
+    }
+
+    private static void handleSyncMode(String[] args, boolean debug) {
+        if (args.length < 2) {
+            System.err.println("Usage: KreuzbergExtractJava sync <file_path>");
+            System.exit(1);
+        }
 
         if (debug) {
             debugLog("java.version", System.getProperty("java.version"));

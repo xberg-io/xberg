@@ -1,0 +1,1202 @@
+name: Profiling (Flamegraphs)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'packages/**'
+      - 'tools/benchmark-harness/**'
+      - '.github/workflows/profiling.yaml'
+  workflow_dispatch:
+
+env:
+  ITERATIONS: "1"
+  ENABLE_PROFILING: "true"
+  PROFILING_FIXTURES: "pdf_small,pdf_medium,docx_simple,html_simple,image_table,markdown_technical"
+  PDFIUM_VERSION: "7578"
+  ORT_VERSION: "1.23.2"
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: "-g"
+  MACOSX_DEPLOYMENT_TARGET: "14.0"
+  RUST_BACKTRACE: short
+  RUST_MIN_STACK: 16777216
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  setup:
+    name: Build harness + native libs (with profiling)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    outputs:
+      artifact-name: profiling-target
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Ensure benchmark harness exists
+        run: scripts/benchmarks/ensure-benchmark-harness-exists.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Cache PDFium
+        uses: ./.github/actions/cache-pdfium
+        with:
+          pdfium-version: ${{ env.PDFIUM_VERSION }}
+
+      - name: Download PDFium runtime
+        run: scripts/download_pdfium_runtime.sh
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build workspace (native libs + harness with profiling)
+        env:
+          ENABLE_PROFILING: "true"
+        run: scripts/benchmarks/build-native-libs.sh
+
+      - name: Log disk space before artifact upload
+        run: scripts/ci/validate/show-disk-space.sh "Disk space before artifact upload"
+
+      - name: Upload target artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-target
+          path: |
+            target/release
+          retention-days: 7
+
+      - name: Log disk space after artifact upload
+        run: scripts/ci/validate/show-disk-space.sh "Disk space after artifact upload"
+
+  bench-native:
+    name: kreuzberg-native (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-native
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-native-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-native-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-python-sync:
+    name: kreuzberg-python-sync (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.11"
+          cache-prefix: profiling-python
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build Python bindings
+        run: scripts/benchmarks/build-python-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-python-sync
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-python-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-python-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-python-async:
+    name: kreuzberg-python-async (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.11"
+          cache-prefix: profiling-python
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build Python bindings
+        run: scripts/benchmarks/build-python-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-python-async
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-python-async-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-python-async-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-python-batch:
+    name: kreuzberg-python-batch (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.11"
+          cache-prefix: profiling-python
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build Python bindings
+        run: scripts/benchmarks/build-python-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-python-batch
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-python-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-python-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-node-async:
+    name: kreuzberg-node-async (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node-workspace
+
+      - name: Verify Node setup (async)
+        run: scripts/ci/benchmarks/verify-node-setup.sh "Node setup (async)"
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build Node bindings and install locally
+        env:
+          TARGET: x86_64-unknown-linux-gnu
+        run: scripts/benchmarks/build-node-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-node-async
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-node-async-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-node-async-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-node-batch:
+    name: kreuzberg-node-batch (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node-workspace
+
+      - name: Verify Node setup (batch)
+        run: scripts/ci/benchmarks/verify-node-setup.sh "Node setup (batch)"
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build Node bindings and install locally
+        env:
+          TARGET: x86_64-unknown-linux-gnu
+        run: scripts/benchmarks/build-node-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-node-batch
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-node-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-node-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-wasm-async:
+    name: kreuzberg-wasm-async (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node-workspace
+
+      - name: Build WASM bindings
+        run: scripts/benchmarks/build-wasm-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-wasm-async
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-wasm-async-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-wasm-async-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-wasm-batch:
+    name: kreuzberg-wasm-batch (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node-workspace
+
+      - name: Build WASM bindings
+        run: scripts/benchmarks/build-wasm-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-wasm-batch
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-wasm-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-wasm-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-ruby-sync:
+    name: kreuzberg-ruby-sync (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+
+      - name: Install Bundler
+        shell: bash
+        run: scripts/ci/ruby/install-bundler.sh
+
+      - name: Install Ruby deps
+        shell: bash
+        run: scripts/ci/ruby/install-ruby-deps.sh
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Vendor kreuzberg core for Ruby
+        run: scripts/ci/ruby/vendor-kreuzberg-core.sh
+
+      - name: Build Ruby native gem
+        env:
+          PLATFORM: x86_64-linux
+        run: scripts/benchmarks/build-ruby-gem.sh
+
+      - name: Compile Ruby native extension
+        shell: bash
+        run: scripts/ci/ruby/compile-extension.sh
+
+      - name: Build kreuzberg CLI
+        shell: bash
+        run: cargo build --release --package kreuzberg-cli
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-ruby-sync
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-ruby-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-ruby-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-ruby-batch:
+    name: kreuzberg-ruby-batch (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+
+      - name: Install Bundler
+        shell: bash
+        run: scripts/ci/ruby/install-bundler.sh
+
+      - name: Install Ruby deps
+        shell: bash
+        run: scripts/ci/ruby/install-ruby-deps.sh
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Vendor kreuzberg core for Ruby
+        run: scripts/ci/ruby/vendor-kreuzberg-core.sh
+
+      - name: Build Ruby native gem
+        env:
+          PLATFORM: x86_64-linux
+        run: scripts/benchmarks/build-ruby-gem.sh
+
+      - name: Compile Ruby native extension
+        shell: bash
+        run: scripts/ci/ruby/compile-extension.sh
+
+      - name: Build kreuzberg CLI
+        shell: bash
+        run: cargo build --release --package kreuzberg-cli
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-ruby-batch
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-ruby-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-ruby-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-go-sync:
+    name: kreuzberg-go-sync (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache-dependency-path: packages/go/v4/go.sum
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Prime Go modules
+        working-directory: packages/go/v4
+        run: go mod download
+
+      - name: Build Go bindings
+        run: scripts/benchmarks/build-go-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-go-sync
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+          KREUZBERG_BENCHMARK_DEBUG: "true"
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-go-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-go-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-go-batch:
+    name: kreuzberg-go-batch (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache-dependency-path: packages/go/v4/go.sum
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Prime Go modules
+        working-directory: packages/go/v4
+        run: go mod download
+
+      - name: Build Go bindings
+        run: scripts/benchmarks/build-go-bindings.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-go-batch
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+          KREUZBERG_BENCHMARK_DEBUG: "true"
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-go-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-go-batch-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-java-sync:
+    name: kreuzberg-java-sync (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Setup Maven 4
+        uses: ./.github/actions/setup-maven-4
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build Java bindings
+        run: scripts/benchmarks/build-java-package.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-java-sync
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-java-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-java-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7
+
+  bench-csharp-sync:
+    name: kreuzberg-csharp-sync (${{ matrix.mode }}) [profiling]
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: profiling
+          use-sccache: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build C# bindings
+        run: scripts/benchmarks/build-csharp-benchmark.sh
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-csharp-sync
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
+          PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: profiling-results-kreuzberg-csharp-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Upload flamegraph artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: flamegraphs-kreuzberg-csharp-sync-${{ matrix.mode }}-${{ github.run_id }}
+          path: flamegraphs/
+          retention-days: 7

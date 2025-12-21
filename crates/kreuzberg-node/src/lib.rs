@@ -1,5 +1,6 @@
 #![deny(clippy::all)]
 
+use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
 use html_to_markdown_rs::options::{
     CodeBlockStyle, ConversionOptions, HeadingStyle, HighlightStyle, ListIndentType, NewlineStyle,
     PreprocessingOptions as HtmlPreprocessingOptions, PreprocessingPreset, WhitespaceMode,
@@ -12,18 +13,36 @@ use kreuzberg::plugins::registry::{get_post_processor_registry, get_validator_re
 use kreuzberg::{
     Chunk as RustChunk, ChunkMetadata as RustChunkMetadata, ChunkingConfig as RustChunkingConfig,
     EmbeddingConfig as RustEmbeddingConfig, EmbeddingModelType as RustEmbeddingModelType, ExtractionConfig,
-    ExtractionResult as RustExtractionResult, ImageExtractionConfig as RustImageExtractionConfig,
+    ExtractionResult as RustExtractionResult, ImageExtractionConfig as RustImageExtractionConfig, KNOWN_FORMATS,
     LanguageDetectionConfig as RustLanguageDetectionConfig, OcrConfig as RustOcrConfig, PdfConfig as RustPdfConfig,
     PostProcessorConfig as RustPostProcessorConfig, TesseractConfig as RustTesseractConfig,
     TokenReductionConfig as RustTokenReductionConfig,
 };
+use lazy_static::lazy_static;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
+use once_cell::sync::Lazy;
+use std::collections::HashSet;
 use std::ffi::{CStr, c_char};
+
+// KNOWN_FORMAT_FIELDS is imported from kreuzberg::core::formats::KNOWN_FORMATS
+// This is the single source of truth for format field names across all language bindings.
+// See crates/kreuzberg/src/core/formats.rs for the canonical list of 58 known format fields.
+static KNOWN_FORMAT_FIELDS: Lazy<HashSet<&'static str>> = Lazy::new(|| KNOWN_FORMATS.iter().copied().collect());
 
 #[allow(unused_extern_crates)]
 extern crate kreuzberg_ffi;
 
+/// Metadata field structure returned from FFI
+/// Mirrors CMetadataField from kreuzberg-ffi/src/result.rs
+#[repr(C)]
+pub struct CMetadataField {
+    name: *const c_char,
+    json_value: *mut c_char,
+    is_null: i32,
+}
+
+#[allow(improper_ctypes)]
 unsafe extern "C" {
     /// Get the last error code from FFI.
     ///
@@ -42,6 +61,86 @@ unsafe extern "C" {
     ///
     /// Maps to kreuzberg_free_string() in the FFI library.
     pub fn kreuzberg_free_string(ptr: *mut c_char);
+
+    // Validation functions from kreuzberg_ffi
+    pub fn kreuzberg_validate_binarization_method(method: *const c_char) -> i32;
+    pub fn kreuzberg_validate_ocr_backend(backend: *const c_char) -> i32;
+    pub fn kreuzberg_validate_language_code(code: *const c_char) -> i32;
+    pub fn kreuzberg_validate_token_reduction_level(level: *const c_char) -> i32;
+    pub fn kreuzberg_validate_tesseract_psm(psm: i32) -> i32;
+    pub fn kreuzberg_validate_tesseract_oem(oem: i32) -> i32;
+    pub fn kreuzberg_validate_output_format(format: *const c_char) -> i32;
+    pub fn kreuzberg_validate_confidence(confidence: f64) -> i32;
+    pub fn kreuzberg_validate_dpi(dpi: i32) -> i32;
+    pub fn kreuzberg_validate_chunking_params(max_chars: usize, max_overlap: usize) -> i32;
+
+    // List functions that return JSON arrays as C strings
+    pub fn kreuzberg_get_valid_binarization_methods() -> *mut c_char;
+    pub fn kreuzberg_get_valid_language_codes() -> *mut c_char;
+    pub fn kreuzberg_get_valid_ocr_backends() -> *mut c_char;
+    pub fn kreuzberg_get_valid_token_reduction_levels() -> *mut c_char;
+
+    // Phase 1 Config FFI functions
+    pub fn kreuzberg_config_from_json(json_config: *const c_char) -> *mut ExtractionConfig;
+    pub fn kreuzberg_config_free(config: *mut ExtractionConfig);
+    pub fn kreuzberg_config_to_json(config: *const ExtractionConfig) -> *mut c_char;
+    pub fn kreuzberg_config_get_field(config: *const ExtractionConfig, field_name: *const c_char) -> *mut c_char;
+    pub fn kreuzberg_config_merge(base: *mut ExtractionConfig, override_config: *const ExtractionConfig) -> i32;
+
+    // Phase 1 Result FFI functions
+    pub fn kreuzberg_result_get_page_count(result: *const RustExtractionResult) -> i32;
+    pub fn kreuzberg_result_get_chunk_count(result: *const RustExtractionResult) -> i32;
+    pub fn kreuzberg_result_get_detected_language(result: *const RustExtractionResult) -> *mut c_char;
+    pub fn kreuzberg_result_get_metadata_field(
+        result: *const RustExtractionResult,
+        field_name: *const c_char,
+    ) -> CMetadataField;
+
+    // Phase 2 Error FFI functions - centralized error code definitions
+    /// Get the name of an error code as a C string.
+    /// Returns pointer to static string valid for program lifetime.
+    /// Example: kreuzberg_error_code_name(0) -> "validation"
+    pub fn kreuzberg_error_code_name(code: u32) -> *const c_char;
+
+    /// Get the description of an error code as a C string.
+    /// Returns pointer to static string valid for program lifetime.
+    /// Example: kreuzberg_error_code_description(0) -> "Input validation error"
+    pub fn kreuzberg_error_code_description(code: u32) -> *const c_char;
+
+    /// Get the validation error code constant (0)
+    pub fn kreuzberg_error_code_validation() -> u32;
+
+    /// Get the parsing error code constant (1)
+    pub fn kreuzberg_error_code_parsing() -> u32;
+
+    /// Get the OCR error code constant (2)
+    pub fn kreuzberg_error_code_ocr() -> u32;
+
+    /// Get the missing dependency error code constant (3)
+    pub fn kreuzberg_error_code_missing_dependency() -> u32;
+
+    /// Get the I/O error code constant (4)
+    pub fn kreuzberg_error_code_io() -> u32;
+
+    /// Get the plugin error code constant (5)
+    pub fn kreuzberg_error_code_plugin() -> u32;
+
+    /// Get the unsupported format error code constant (6)
+    pub fn kreuzberg_error_code_unsupported_format() -> u32;
+
+    /// Get the internal error code constant (7)
+    pub fn kreuzberg_error_code_internal() -> u32;
+
+    /// Get the total count of valid error codes (8)
+    pub fn kreuzberg_error_code_count() -> u32;
+}
+
+lazy_static! {
+    static ref WORKER_POOL: tokio::runtime::Runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(4)
+        .enable_all()
+        .build()
+        .expect("Failed to create Tokio worker thread pool");
 }
 
 /// Helper function to retrieve panic context from FFI.
@@ -184,6 +283,203 @@ fn validate_plugin_object(obj: &Object, plugin_type: &str, required_methods: &[&
     }
 
     Ok(())
+}
+
+// ============================================================================
+// Phase 2 Error Handling FFI Wrappers
+// ============================================================================
+
+/// Returns the human-readable name for an error code.
+///
+/// Maps to FFI function kreuzberg_error_code_name().
+///
+/// # Arguments
+///
+/// * `code` - Numeric error code (0-7)
+///
+/// # Returns
+///
+/// A string containing the error code name (e.g., "validation", "ocr", "unknown")
+///
+/// # Examples
+///
+/// ```typescript
+/// const name = getErrorCodeName(0);  // returns "validation"
+/// const name = getErrorCodeName(2);  // returns "ocr"
+/// const name = getErrorCodeName(99); // returns "unknown"
+/// ```
+#[napi]
+pub fn get_error_code_name(code: u32) -> String {
+    unsafe {
+        let ptr = kreuzberg_error_code_name(code);
+        if ptr.is_null() {
+            "unknown".to_string()
+        } else {
+            CStr::from_ptr(ptr).to_str().unwrap_or("unknown").to_string()
+        }
+    }
+}
+
+/// Returns the description for an error code.
+///
+/// Maps to FFI function kreuzberg_error_code_description().
+///
+/// # Arguments
+///
+/// * `code` - Numeric error code (0-7)
+///
+/// # Returns
+///
+/// A string containing a brief description of the error
+///
+/// # Examples
+///
+/// ```typescript
+/// const desc = getErrorCodeDescription(0);  // returns "Input validation error"
+/// const desc = getErrorCodeDescription(4);  // returns "File system I/O error"
+/// const desc = getErrorCodeDescription(99); // returns "Unknown error code"
+/// ```
+#[napi]
+pub fn get_error_code_description(code: u32) -> String {
+    unsafe {
+        let ptr = kreuzberg_error_code_description(code);
+        if ptr.is_null() {
+            "Unknown error code".to_string()
+        } else {
+            CStr::from_ptr(ptr).to_str().unwrap_or("Unknown error code").to_string()
+        }
+    }
+}
+
+/// Classifies an error message string into an error code category.
+///
+/// This function analyzes the error message content and returns the most likely
+/// error code (0-7) based on keyword patterns. Used to programmatically classify
+/// errors for handling purposes.
+///
+/// # Arguments
+///
+/// * `error_message` - The error message string to classify
+///
+/// # Returns
+///
+/// An object with:
+/// - `code`: The numeric error code (0-7)
+/// - `name`: The error code name string
+/// - `description`: Brief description of the error type
+/// - `confidence`: Confidence score (0.0-1.0) of the classification
+///
+/// # Classification Rules
+///
+/// - **Validation (0)**: Keywords: invalid, validation, invalid_argument, schema, required, unexpected field
+/// - **Parsing (1)**: Keywords: parsing, parse_error, corrupted, malformed, invalid format, decode, encoding
+/// - **Ocr (2)**: Keywords: ocr, optical, character, recognition, tesseract, language, model
+/// - **MissingDependency (3)**: Keywords: not found, not installed, missing, dependency, require, unavailable
+/// - **Io (4)**: Keywords: io, file, disk, read, write, permission, access, path
+/// - **Plugin (5)**: Keywords: plugin, register, extension, handler, processor
+/// - **UnsupportedFormat (6)**: Keywords: unsupported, format, mime, type, codec
+/// - **Internal (7)**: Keywords: internal, bug, panic, unexpected, invariant
+///
+/// # Examples
+///
+/// ```typescript
+/// const result = classifyError("PDF file is corrupted");
+/// // Returns: { code: 1, name: "parsing", confidence: 0.95 }
+///
+/// const result = classifyError("Tesseract not found");
+/// // Returns: { code: 3, name: "missing_dependency", confidence: 0.9 }
+/// ```
+#[napi(object)]
+pub struct ErrorClassification {
+    pub code: u32,
+    pub name: String,
+    pub description: String,
+    pub confidence: f64,
+}
+
+#[napi]
+pub fn classify_error(error_message: String) -> ErrorClassification {
+    let lower = error_message.to_lowercase();
+
+    // Calculate confidence and determine error code based on keywords
+    let (code, confidence) = if lower.contains("validation")
+        || lower.contains("invalid_argument")
+        || lower.contains("schema")
+        || lower.contains("required")
+        || lower.contains("unexpected field")
+    {
+        (0u32, 0.9)
+    } else if lower.contains("parsing")
+        || lower.contains("parse_error")
+        || lower.contains("corrupted")
+        || lower.contains("malformed")
+        || lower.contains("invalid format")
+        || lower.contains("decode")
+        || lower.contains("encoding")
+    {
+        (1u32, 0.85)
+    } else if lower.contains("ocr")
+        || lower.contains("optical")
+        || lower.contains("character")
+        || lower.contains("recognition")
+        || lower.contains("tesseract")
+        || lower.contains("language")
+        || lower.contains("model")
+    {
+        (2u32, 0.88)
+    } else if lower.contains("not found")
+        || lower.contains("not installed")
+        || lower.contains("missing")
+        || lower.contains("dependency")
+        || lower.contains("require")
+        || lower.contains("unavailable")
+    {
+        (3u32, 0.92)
+    } else if lower.contains("io")
+        || lower.contains("file")
+        || lower.contains("disk")
+        || lower.contains("read")
+        || lower.contains("write")
+        || lower.contains("permission")
+        || lower.contains("access")
+        || lower.contains("path")
+    {
+        (4u32, 0.87)
+    } else if lower.contains("plugin")
+        || lower.contains("register")
+        || lower.contains("extension")
+        || lower.contains("handler")
+        || lower.contains("processor")
+    {
+        (5u32, 0.84)
+    } else if lower.contains("unsupported")
+        || lower.contains("format")
+        || lower.contains("mime")
+        || lower.contains("type")
+        || lower.contains("codec")
+    {
+        (6u32, 0.83)
+    } else if lower.contains("internal")
+        || lower.contains("bug")
+        || lower.contains("panic")
+        || lower.contains("unexpected")
+        || lower.contains("invariant")
+    {
+        (7u32, 0.86)
+    } else {
+        // Default to internal with low confidence
+        (7u32, 0.1)
+    };
+
+    let name = get_error_code_name(code);
+    let description = get_error_code_description(code);
+
+    ErrorClassification {
+        code,
+        name,
+        description,
+        confidence,
+    }
 }
 
 #[napi(object)]
@@ -1322,72 +1618,8 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                 .remove("error")
                 .and_then(|v| serde_json::from_value(v).ok());
 
-            let known_format_fields: std::collections::HashSet<&str> = [
-                "format_type",
-                "title",
-                "author",
-                "keywords",
-                "creator",
-                "producer",
-                "creation_date",
-                "modification_date",
-                "page_count",
-                "sheet_count",
-                "sheet_names",
-                "from_email",
-                "from_name",
-                "to_emails",
-                "cc_emails",
-                "bcc_emails",
-                "message_id",
-                "attachments",
-                "description",
-                "summary",
-                "fonts",
-                "format",
-                "file_count",
-                "file_list",
-                "total_size",
-                "compressed_size",
-                "width",
-                "height",
-                "element_count",
-                "unique_elements",
-                "line_count",
-                "word_count",
-                "character_count",
-                "headers",
-                "links",
-                "code_blocks",
-                "canonical",
-                "base_href",
-                "og_title",
-                "og_description",
-                "og_image",
-                "og_url",
-                "og_type",
-                "og_site_name",
-                "twitter_card",
-                "twitter_title",
-                "twitter_description",
-                "twitter_image",
-                "twitter_site",
-                "twitter_creator",
-                "link_author",
-                "link_license",
-                "link_alternate",
-                "psm",
-                "output_format",
-                "table_count",
-                "table_rows",
-                "table_cols",
-            ]
-            .iter()
-            .copied()
-            .collect();
-
             let mut format_fields = serde_json::Map::new();
-            for key in known_format_fields.iter() {
+            for key in KNOWN_FORMAT_FIELDS.iter() {
                 if let Some(value) = metadata_map.remove(*key) {
                     format_fields.insert(key.to_string(), value);
                 }
@@ -1621,10 +1853,13 @@ pub async fn extract_file(
 ) -> Result<JsExtractionResult> {
     let rust_config = resolve_config(config)?;
 
-    kreuzberg::extract_file(&file_path, mime_type.as_deref(), &rust_config)
+    let result = WORKER_POOL
+        .spawn_blocking(move || kreuzberg::extract_file_sync(&file_path, mime_type.as_deref(), &rust_config))
         .await
-        .map_err(convert_error)
-        .and_then(JsExtractionResult::try_from)
+        .map_err(|e| Error::from_reason(format!("Worker thread error: {}", e)))?
+        .map_err(convert_error)?;
+
+    JsExtractionResult::try_from(result)
 }
 
 /// Extract content from bytes (synchronous).
@@ -1664,9 +1899,9 @@ pub fn extract_bytes_sync(
 ) -> Result<JsExtractionResult> {
     let rust_config = resolve_config(config)?;
 
-    let owned_data = data.to_vec();
+    let bytes = data.as_ref();
 
-    kreuzberg::extract_bytes_sync(&owned_data, &mime_type, &rust_config)
+    kreuzberg::extract_bytes_sync(bytes, &mime_type, &rust_config)
         .map_err(convert_error)
         .and_then(JsExtractionResult::try_from)
 }
@@ -1702,19 +1937,15 @@ pub async fn extract_bytes(
     config: Option<JsExtractionConfig>,
 ) -> Result<JsExtractionResult> {
     let rust_config = resolve_config(config)?;
-    let owned_data = data.to_vec();
-    #[cfg(debug_assertions)]
-    {
-        if std::env::var("KREUZBERG_DEBUG_GUTEN").as_deref() == Ok("1") && mime_type.starts_with("image/") {
-            let header: Vec<u8> = owned_data.iter().take(8).copied().collect();
-            eprintln!("[Rust Binding] Debug input header: {:?}", header);
-        }
-    }
+    let data_vec = data.to_vec();
 
-    kreuzberg::extract_bytes(&owned_data, &mime_type, &rust_config)
+    let result = WORKER_POOL
+        .spawn_blocking(move || kreuzberg::extract_bytes_sync(&data_vec, &mime_type, &rust_config))
         .await
-        .map_err(convert_error)
-        .and_then(JsExtractionResult::try_from)
+        .map_err(|e| Error::from_reason(format!("Worker thread error: {}", e)))?
+        .map_err(convert_error)?;
+
+    JsExtractionResult::try_from(result)
 }
 
 /// Batch extract from multiple files (synchronous).
@@ -1784,10 +2015,13 @@ pub async fn batch_extract_files(
 ) -> Result<Vec<JsExtractionResult>> {
     let rust_config = resolve_config(config)?;
 
-    kreuzberg::batch_extract_file(paths, &rust_config)
+    let results = WORKER_POOL
+        .spawn_blocking(move || kreuzberg::batch_extract_file_sync(paths, &rust_config))
         .await
-        .map_err(convert_error)
-        .and_then(|results| results.into_iter().map(JsExtractionResult::try_from).collect())
+        .map_err(|e| Error::from_reason(format!("Worker thread error: {}", e)))?
+        .map_err(convert_error)?;
+
+    results.into_iter().map(JsExtractionResult::try_from).collect()
 }
 
 /// Batch extract from multiple byte arrays (synchronous).
@@ -1824,14 +2058,23 @@ pub fn batch_extract_bytes_sync(
     mime_types: Vec<String>,
     config: Option<JsExtractionConfig>,
 ) -> Result<Vec<JsExtractionResult>> {
+    if data_list.len() != mime_types.len() {
+        return Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "data_list length ({}) must match mime_types length ({})",
+                data_list.len(),
+                mime_types.len()
+            ),
+        ));
+    }
+
     let rust_config = resolve_config(config)?;
 
-    let owned_data: Vec<Vec<u8>> = data_list.iter().map(|b| b.to_vec()).collect();
-
-    let contents: Vec<(&[u8], &str)> = owned_data
+    let contents: Vec<(&[u8], &str)> = data_list
         .iter()
         .zip(mime_types.iter())
-        .map(|(data, mime)| (data.as_slice(), mime.as_str()))
+        .map(|(data, mime)| (data.as_ref(), mime.as_str()))
         .collect();
 
     kreuzberg::batch_extract_bytes_sync(contents, &rust_config)
@@ -1878,24 +2121,41 @@ pub async fn batch_extract_bytes(
     mime_types: Vec<String>,
     config: Option<JsExtractionConfig>,
 ) -> Result<Vec<JsExtractionResult>> {
+    if data_list.len() != mime_types.len() {
+        return Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "data_list length ({}) must match mime_types length ({})",
+                data_list.len(),
+                mime_types.len()
+            ),
+        ));
+    }
+
     let rust_config = resolve_config(config)?;
 
-    let owned_data: Vec<Vec<u8>> = data_list.iter().map(|b| b.to_vec()).collect();
-
-    let contents: Vec<(&[u8], &str)> = owned_data
+    let contents: Vec<(Vec<u8>, String)> = data_list
         .iter()
         .zip(mime_types.iter())
-        .map(|(data, mime)| (data.as_slice(), mime.as_str()))
+        .map(|(data, mime)| (data.to_vec(), mime.clone()))
         .collect();
 
-    kreuzberg::batch_extract_bytes(contents, &rust_config)
+    let results = WORKER_POOL
+        .spawn_blocking(move || {
+            let contents_refs: Vec<(&[u8], &str)> = contents
+                .iter()
+                .map(|(data, mime)| (data.as_slice(), mime.as_str()))
+                .collect();
+            kreuzberg::batch_extract_bytes_sync(contents_refs, &rust_config)
+        })
         .await
-        .map_err(convert_error)
-        .and_then(|results| results.into_iter().map(JsExtractionResult::try_from).collect())
+        .map_err(|e| Error::from_reason(format!("Worker thread error: {}", e)))?
+        .map_err(convert_error)?;
+
+    results.into_iter().map(JsExtractionResult::try_from).collect()
 }
 
 use async_trait::async_trait;
-use base64::Engine;
 use kreuzberg::plugins::{Plugin, PostProcessor as RustPostProcessor, ProcessingStage};
 use napi::bindgen_prelude::Promise;
 use napi::threadsafe_function::ThreadsafeFunction;
@@ -1951,30 +2211,20 @@ impl RustPostProcessor for JsPostProcessor {
         result: &mut kreuzberg::ExtractionResult,
         _config: &kreuzberg::ExtractionConfig,
     ) -> std::result::Result<(), kreuzberg::KreuzbergError> {
-        eprintln!("\n[POST-PROCESSOR] === Starting JS Post-Processor '{}' ===", self.name);
-        eprintln!(
-            "[POST-PROCESSOR] Original Rust metadata.additional keys: {:?}",
-            result.metadata.additional.keys().collect::<Vec<_>>()
-        );
-
         let js_result =
             JsExtractionResult::try_from(result.clone()).map_err(|e| kreuzberg::KreuzbergError::Plugin {
                 message: format!("Failed to convert result for JavaScript PostProcessor: {}", e),
                 plugin_name: self.name.clone(),
             })?;
-        let json_input = serde_json::to_string(&js_result).map_err(|e| kreuzberg::KreuzbergError::Plugin {
-            message: format!("Failed to serialize result for JavaScript PostProcessor: {}", e),
+        let encoded = rmp_serde::to_vec(&js_result).map_err(|e| kreuzberg::KreuzbergError::Plugin {
+            message: format!("Failed to encode result for JavaScript PostProcessor: {}", e),
             plugin_name: self.name.clone(),
         })?;
+        let encoded_b64 = BASE64.encode(&encoded);
 
-        eprintln!(
-            "[POST-PROCESSOR] JSON being sent to JS (first 500 chars): {}",
-            &json_input.chars().take(500).collect::<String>()
-        );
-
-        let json_output = self
+        let output_b64 = self
             .process_fn
-            .call_async(json_input)
+            .call_async(encoded_b64)
             .await
             .map_err(|e| kreuzberg::KreuzbergError::Plugin {
                 message: format!("JavaScript PostProcessor '{}' call failed: {}", self.name, e),
@@ -1986,13 +2236,14 @@ impl RustPostProcessor for JsPostProcessor {
                 plugin_name: self.name.clone(),
             })?;
 
-        eprintln!(
-            "[POST-PROCESSOR] JSON received from JS (first 500 chars): {}",
-            &json_output.chars().take(500).collect::<String>()
-        );
-
+        let decoded = BASE64
+            .decode(output_b64.as_bytes())
+            .map_err(|e| kreuzberg::KreuzbergError::Plugin {
+                message: format!("Failed to decode result from JavaScript PostProcessor: {}", e),
+                plugin_name: self.name.clone(),
+            })?;
         let updated: JsExtractionResult =
-            serde_json::from_str(&json_output).map_err(|e| kreuzberg::KreuzbergError::Plugin {
+            rmp_serde::from_slice(&decoded).map_err(|e| kreuzberg::KreuzbergError::Plugin {
                 message: format!(
                     "Failed to deserialize result from JavaScript PostProcessor '{}': {}",
                     self.name, e
@@ -2005,12 +2256,6 @@ impl RustPostProcessor for JsPostProcessor {
                 message: format!("Failed to convert result from JavaScript PostProcessor: {}", e),
                 plugin_name: self.name.clone(),
             })?;
-
-        eprintln!(
-            "[POST-PROCESSOR] Final Rust metadata.additional keys after conversion: {:?}",
-            rust_result.metadata.additional.keys().collect::<Vec<_>>()
-        );
-        eprintln!("[POST-PROCESSOR] === Completed JS Post-Processor '{}' ===\n", self.name);
 
         *result = rust_result;
         Ok(())
@@ -2217,13 +2462,13 @@ impl RustValidator for JsValidator {
                 message: format!("Failed to convert result for JavaScript Validator: {}", e),
                 plugin_name: self.name.clone(),
             })?;
-        let json_input = serde_json::to_string(&js_result).map_err(|e| kreuzberg::KreuzbergError::Plugin {
-            message: format!("Failed to serialize result for JavaScript Validator: {}", e),
+        let json_string = serde_json::to_string(&js_result).map_err(|e| kreuzberg::KreuzbergError::Plugin {
+            message: format!("Failed to encode result for JavaScript Validator: {}", e),
             plugin_name: self.name.clone(),
         })?;
 
         self.validate_fn
-            .call_async(json_input)
+            .call_async(json_string)
             .await
             .map_err(|e| {
                 let err_msg = e.to_string();
@@ -2454,18 +2699,11 @@ impl RustOcrBackend for JsOcrBackend {
         image_bytes: &[u8],
         config: &kreuzberg::OcrConfig,
     ) -> std::result::Result<kreuzberg::ExtractionResult, kreuzberg::KreuzbergError> {
-        #[cfg(debug_assertions)]
-        {
-            if std::env::var("KREUZBERG_DEBUG_GUTEN").as_deref() == Ok("1") {
-                let header: Vec<u8> = image_bytes.iter().take(8).copied().collect();
-                eprintln!("[Rust OCR] Debug input header: {:?}", header);
-            }
-        }
         let encoded = base64::engine::general_purpose::STANDARD.encode(image_bytes);
         let language = config.language.clone();
         let backend_name = self.name.clone();
 
-        let json_output = self
+        let output_b64 = self
             .process_image_fn
             .call_async((encoded, language))
             .await
@@ -2479,8 +2717,17 @@ impl RustOcrBackend for JsOcrBackend {
                 source: Some(Box::new(e)),
             })?;
 
+        let decoded = BASE64
+            .decode(output_b64.as_bytes())
+            .map_err(|e| kreuzberg::KreuzbergError::Ocr {
+                message: format!(
+                    "Failed to decode result from JavaScript OCR backend '{}': {}",
+                    backend_name, e
+                ),
+                source: Some(Box::new(e)),
+            })?;
         let wire_result: serde_json::Value =
-            serde_json::from_str(&json_output).map_err(|e| kreuzberg::KreuzbergError::Ocr {
+            rmp_serde::from_slice(&decoded).map_err(|e| kreuzberg::KreuzbergError::Ocr {
                 message: format!(
                     "Failed to deserialize result from JavaScript OCR backend '{}': {}",
                     backend_name, e
@@ -3106,6 +3353,712 @@ pub fn get_last_error_code() -> i32 {
 pub fn get_last_panic_context() -> Option<serde_json::Value> {
     get_panic_context()
 }
+
+// ============================================================================
+// Validation Functions
+// ============================================================================
+
+/// Validates a binarization method string.
+///
+/// Valid methods: "otsu", "adaptive", "sauvola"
+///
+/// # Arguments
+///
+/// * `method` - The binarization method to validate
+///
+/// # Returns
+///
+/// `true` if valid, `false` if invalid.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateBinarizationMethod } from '@kreuzberg/node';
+///
+/// if (validateBinarizationMethod('otsu')) {
+///   console.log('Valid method');
+/// } else {
+///   console.log('Invalid method');
+/// }
+/// ```
+#[napi(js_name = "validateBinarizationMethod")]
+pub fn validate_binarization_method(method: String) -> Result<bool> {
+    let c_str = std::ffi::CString::new(method.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in binarization method: {}", method),
+        )
+    })?;
+
+    let result = unsafe { kreuzberg_validate_binarization_method(c_str.as_ptr()) };
+    Ok(result == 1)
+}
+
+/// Validates an OCR backend string.
+///
+/// Valid backends: "tesseract", "easyocr", "paddleocr"
+///
+/// # Arguments
+///
+/// * `backend` - The OCR backend to validate
+///
+/// # Returns
+///
+/// `true` if valid, `false` if invalid.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateOcrBackend } from '@kreuzberg/node';
+///
+/// if (validateOcrBackend('tesseract')) {
+///   console.log('Valid backend');
+/// }
+/// ```
+#[napi(js_name = "validateOcrBackend")]
+pub fn validate_ocr_backend(backend: String) -> Result<bool> {
+    let c_str = std::ffi::CString::new(backend.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in OCR backend: {}", backend),
+        )
+    })?;
+
+    let result = unsafe { kreuzberg_validate_ocr_backend(c_str.as_ptr()) };
+    Ok(result == 1)
+}
+
+/// Validates a language code (ISO 639-1 or 639-3 format).
+///
+/// Accepts both 2-letter codes (e.g., "en", "de") and 3-letter codes (e.g., "eng", "deu").
+///
+/// # Arguments
+///
+/// * `code` - The language code to validate
+///
+/// # Returns
+///
+/// `true` if valid, `false` if invalid.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateLanguageCode } from '@kreuzberg/node';
+///
+/// if (validateLanguageCode('en')) {
+///   console.log('Valid language code');
+/// }
+/// ```
+#[napi(js_name = "validateLanguageCode")]
+pub fn validate_language_code(code: String) -> Result<bool> {
+    let c_str = std::ffi::CString::new(code.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in language code: {}", code),
+        )
+    })?;
+
+    let result = unsafe { kreuzberg_validate_language_code(c_str.as_ptr()) };
+    Ok(result == 1)
+}
+
+/// Validates a token reduction level string.
+///
+/// Valid levels: "off", "light", "moderate", "aggressive", "maximum"
+///
+/// # Arguments
+///
+/// * `level` - The token reduction level to validate
+///
+/// # Returns
+///
+/// `true` if valid, `false` if invalid.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateTokenReductionLevel } from '@kreuzberg/node';
+///
+/// if (validateTokenReductionLevel('moderate')) {
+///   console.log('Valid token reduction level');
+/// }
+/// ```
+#[napi(js_name = "validateTokenReductionLevel")]
+pub fn validate_token_reduction_level(level: String) -> Result<bool> {
+    let c_str = std::ffi::CString::new(level.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in token reduction level: {}", level),
+        )
+    })?;
+
+    let result = unsafe { kreuzberg_validate_token_reduction_level(c_str.as_ptr()) };
+    Ok(result == 1)
+}
+
+/// Validates a Tesseract Page Segmentation Mode (PSM) value.
+///
+/// Valid range: 0-13
+///
+/// # Arguments
+///
+/// * `psm` - The PSM value to validate
+///
+/// # Returns
+///
+/// `true` if valid (0-13), `false` otherwise.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateTesseractPsm } from '@kreuzberg/node';
+///
+/// if (validateTesseractPsm(3)) {
+///   console.log('Valid PSM');
+/// }
+/// ```
+#[napi(js_name = "validateTesseractPsm")]
+pub fn validate_tesseract_psm(psm: i32) -> bool {
+    unsafe { kreuzberg_validate_tesseract_psm(psm) == 1 }
+}
+
+/// Validates a Tesseract OCR Engine Mode (OEM) value.
+///
+/// Valid range: 0-3
+///
+/// # Arguments
+///
+/// * `oem` - The OEM value to validate
+///
+/// # Returns
+///
+/// `true` if valid (0-3), `false` otherwise.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateTesseractOem } from '@kreuzberg/node';
+///
+/// if (validateTesseractOem(1)) {
+///   console.log('Valid OEM');
+/// }
+/// ```
+#[napi(js_name = "validateTesseractOem")]
+pub fn validate_tesseract_oem(oem: i32) -> bool {
+    unsafe { kreuzberg_validate_tesseract_oem(oem) == 1 }
+}
+
+/// Validates a tesseract output format string.
+///
+/// Valid formats: "text", "markdown"
+///
+/// # Arguments
+///
+/// * `format` - The output format to validate
+///
+/// # Returns
+///
+/// `true` if valid, `false` if invalid.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateOutputFormat } from '@kreuzberg/node';
+///
+/// if (validateOutputFormat('markdown')) {
+///   console.log('Valid output format');
+/// }
+/// ```
+#[napi(js_name = "validateOutputFormat")]
+pub fn validate_output_format(format: String) -> Result<bool> {
+    let c_str = std::ffi::CString::new(format.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in output format: {}", format),
+        )
+    })?;
+
+    let result = unsafe { kreuzberg_validate_output_format(c_str.as_ptr()) };
+    Ok(result == 1)
+}
+
+/// Validates a confidence threshold value.
+///
+/// Valid range: 0.0 to 1.0 (inclusive)
+///
+/// # Arguments
+///
+/// * `confidence` - The confidence threshold to validate
+///
+/// # Returns
+///
+/// `true` if valid, `false` if invalid.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateConfidence } from '@kreuzberg/node';
+///
+/// if (validateConfidence(0.75)) {
+///   console.log('Valid confidence threshold');
+/// }
+/// ```
+#[napi(js_name = "validateConfidence")]
+pub fn validate_confidence(confidence: f64) -> bool {
+    unsafe { kreuzberg_validate_confidence(confidence) == 1 }
+}
+
+/// Validates a DPI (dots per inch) value.
+///
+/// Valid range: 1-2400
+///
+/// # Arguments
+///
+/// * `dpi` - The DPI value to validate
+///
+/// # Returns
+///
+/// `true` if valid, `false` if invalid.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateDpi } from '@kreuzberg/node';
+///
+/// if (validateDpi(300)) {
+///   console.log('Valid DPI');
+/// }
+/// ```
+#[napi(js_name = "validateDpi")]
+pub fn validate_dpi(dpi: i32) -> bool {
+    unsafe { kreuzberg_validate_dpi(dpi) == 1 }
+}
+
+/// Validates chunking parameters.
+///
+/// Checks that `maxChars > 0` and `maxOverlap < maxChars`.
+///
+/// # Arguments
+///
+/// * `max_chars` - Maximum characters per chunk
+/// * `max_overlap` - Maximum overlap between chunks
+///
+/// # Returns
+///
+/// `true` if valid, `false` if invalid.
+///
+/// # Example
+///
+/// ```typescript
+/// import { validateChunkingParams } from '@kreuzberg/node';
+///
+/// if (validateChunkingParams(1000, 200)) {
+///   console.log('Valid chunking parameters');
+/// }
+/// ```
+#[napi(js_name = "validateChunkingParams")]
+pub fn validate_chunking_params(max_chars: u32, max_overlap: u32) -> bool {
+    unsafe { kreuzberg_validate_chunking_params(max_chars as usize, max_overlap as usize) == 1 }
+}
+
+/// Get valid binarization methods.
+///
+/// Returns a list of all valid binarization method values.
+///
+/// # Returns
+///
+/// Array of valid binarization methods: ["otsu", "adaptive", "sauvola"]
+///
+/// # Example
+///
+/// ```typescript
+/// import { getValidBinarizationMethods } from '@kreuzberg/node';
+///
+/// const methods = getValidBinarizationMethods();
+/// console.log(methods); // ['otsu', 'adaptive', 'sauvola']
+/// ```
+#[napi(js_name = "getValidBinarizationMethods")]
+pub fn get_valid_binarization_methods() -> Result<Vec<String>> {
+    let json_str = unsafe {
+        let ptr = kreuzberg_get_valid_binarization_methods();
+        if ptr.is_null() {
+            return Err(napi::Error::new(
+                napi::Status::GenericFailure,
+                "Failed to get valid binarization methods",
+            ));
+        }
+
+        let c_str = CStr::from_ptr(ptr);
+        let result = c_str
+            .to_str()
+            .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Invalid UTF-8 in binarization methods"))?
+            .to_string();
+
+        kreuzberg_free_string(ptr as *mut c_char);
+        result
+    };
+
+    let parsed: Vec<String> = serde_json::from_str(&json_str).map_err(|_| {
+        napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to parse binarization methods JSON",
+        )
+    })?;
+
+    Ok(parsed)
+}
+
+/// Get valid language codes.
+///
+/// Returns a list of all valid language codes in ISO 639-1 and 639-3 formats.
+///
+/// # Returns
+///
+/// Array of valid language codes (both 2-letter and 3-letter codes)
+///
+/// # Example
+///
+/// ```typescript
+/// import { getValidLanguageCodes } from '@kreuzberg/node';
+///
+/// const codes = getValidLanguageCodes();
+/// console.log(codes); // ['en', 'de', 'fr', ..., 'eng', 'deu', 'fra', ...]
+/// ```
+#[napi(js_name = "getValidLanguageCodes")]
+pub fn get_valid_language_codes() -> Result<Vec<String>> {
+    let json_str = unsafe {
+        let ptr = kreuzberg_get_valid_language_codes();
+        if ptr.is_null() {
+            return Err(napi::Error::new(
+                napi::Status::GenericFailure,
+                "Failed to get valid language codes",
+            ));
+        }
+
+        let c_str = CStr::from_ptr(ptr);
+        let result = c_str
+            .to_str()
+            .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Invalid UTF-8 in language codes"))?
+            .to_string();
+
+        kreuzberg_free_string(ptr as *mut c_char);
+        result
+    };
+
+    let parsed: Vec<String> = serde_json::from_str(&json_str)
+        .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Failed to parse language codes JSON"))?;
+
+    Ok(parsed)
+}
+
+/// Get valid OCR backends.
+///
+/// Returns a list of all valid OCR backend values.
+///
+/// # Returns
+///
+/// Array of valid OCR backends: ["tesseract", "easyocr", "paddleocr"]
+///
+/// # Example
+///
+/// ```typescript
+/// import { getValidOcrBackends } from '@kreuzberg/node';
+///
+/// const backends = getValidOcrBackends();
+/// console.log(backends); // ['tesseract', 'easyocr', 'paddleocr']
+/// ```
+#[napi(js_name = "getValidOcrBackends")]
+pub fn get_valid_ocr_backends() -> Result<Vec<String>> {
+    let json_str = unsafe {
+        let ptr = kreuzberg_get_valid_ocr_backends();
+        if ptr.is_null() {
+            return Err(napi::Error::new(
+                napi::Status::GenericFailure,
+                "Failed to get valid OCR backends",
+            ));
+        }
+
+        let c_str = CStr::from_ptr(ptr);
+        let result = c_str
+            .to_str()
+            .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Invalid UTF-8 in OCR backends"))?
+            .to_string();
+
+        kreuzberg_free_string(ptr as *mut c_char);
+        result
+    };
+
+    let parsed: Vec<String> = serde_json::from_str(&json_str)
+        .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Failed to parse OCR backends JSON"))?;
+
+    Ok(parsed)
+}
+
+/// Get valid token reduction levels.
+///
+/// Returns a list of all valid token reduction level values.
+///
+/// # Returns
+///
+/// Array of valid levels: ["off", "light", "moderate", "aggressive", "maximum"]
+///
+/// # Example
+///
+/// ```typescript
+/// import { getValidTokenReductionLevels } from '@kreuzberg/node';
+///
+/// const levels = getValidTokenReductionLevels();
+/// console.log(levels); // ['off', 'light', 'moderate', 'aggressive', 'maximum']
+/// ```
+#[napi(js_name = "getValidTokenReductionLevels")]
+pub fn get_valid_token_reduction_levels() -> Result<Vec<String>> {
+    let json_str = unsafe {
+        let ptr = kreuzberg_get_valid_token_reduction_levels();
+        if ptr.is_null() {
+            return Err(napi::Error::new(
+                napi::Status::GenericFailure,
+                "Failed to get valid token reduction levels",
+            ));
+        }
+
+        let c_str = CStr::from_ptr(ptr);
+        let result = c_str
+            .to_str()
+            .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Invalid UTF-8 in token reduction levels"))?
+            .to_string();
+
+        kreuzberg_free_string(ptr as *mut c_char);
+        result
+    };
+
+    let parsed: Vec<String> = serde_json::from_str(&json_str).map_err(|_| {
+        napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to parse token reduction levels JSON",
+        )
+    })?;
+
+    Ok(parsed)
+}
+
+// ============================================================================
+// Phase 1 Config FFI Wrappers
+// ============================================================================
+
+/// Validate and normalize an ExtractionConfig JSON string via FFI.
+///
+/// This validates the JSON and returns a normalized version, using the shared
+/// FFI layer to ensure consistent validation across all language bindings.
+///
+/// # Arguments
+///
+/// * `json_str` - A JSON string containing the configuration
+///
+/// # Returns
+///
+/// The normalized JSON string representation of the config, or error
+#[napi(js_name = "configValidateAndNormalize")]
+pub fn config_validate_and_normalize(json_str: String) -> Result<String> {
+    let c_str = std::ffi::CString::new(json_str.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in config JSON: {}", json_str),
+        )
+    })?;
+
+    let config_ptr = unsafe { kreuzberg_config_from_json(c_str.as_ptr()) };
+
+    if config_ptr.is_null() {
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to parse config from JSON",
+        ));
+    }
+
+    let json_ptr = unsafe { kreuzberg_config_to_json(config_ptr) };
+    unsafe {
+        kreuzberg_config_free(config_ptr);
+    }
+
+    if json_ptr.is_null() {
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to serialize parsed config to JSON",
+        ));
+    }
+
+    let result = unsafe {
+        let c_str = CStr::from_ptr(json_ptr);
+        let json_str = c_str
+            .to_str()
+            .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Invalid UTF-8 in JSON"))?
+            .to_string();
+
+        kreuzberg_free_string(json_ptr as *mut c_char);
+        json_str
+    };
+
+    Ok(result)
+}
+
+/// Get a specific field from config (represented as JSON string) by name via FFI.
+///
+/// Retrieves a configuration field by path, supporting nested access with
+/// dot notation (e.g., "ocr.backend"). Returns the field value as a JSON string.
+///
+/// # Arguments
+///
+/// * `json_str` - A JSON string representation of the configuration
+/// * `field_name` - The field path to retrieve (e.g., "useCache", "ocr.backend")
+///
+/// # Returns
+///
+/// The field value as a JSON string, or null if not found
+#[napi(js_name = "configGetFieldInternal")]
+pub fn config_get_field_internal(json_str: String, field_name: String) -> Result<Option<String>> {
+    let c_str = std::ffi::CString::new(json_str.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in config JSON: {}", json_str),
+        )
+    })?;
+
+    let config_ptr = unsafe { kreuzberg_config_from_json(c_str.as_ptr()) };
+
+    if config_ptr.is_null() {
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to parse config from JSON",
+        ));
+    }
+
+    let c_field_name = std::ffi::CString::new(field_name.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in field name: {}", field_name),
+        )
+    })?;
+
+    let field_ptr = unsafe { kreuzberg_config_get_field(config_ptr, c_field_name.as_ptr()) };
+    unsafe {
+        kreuzberg_config_free(config_ptr);
+    }
+
+    if field_ptr.is_null() {
+        return Ok(None);
+    }
+
+    let result = unsafe {
+        let c_str = CStr::from_ptr(field_ptr);
+        let field_str = c_str
+            .to_str()
+            .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Invalid UTF-8 in field value"))?
+            .to_string();
+
+        kreuzberg_free_string(field_ptr as *mut c_char);
+        field_str
+    };
+
+    Ok(Some(result))
+}
+
+/// Merge two configs (override takes precedence over base) via FFI.
+///
+/// Performs a shallow merge where fields from the override config take
+/// precedence over fields in the base config.
+///
+/// # Arguments
+///
+/// * `base_json` - A JSON string representation of the base ExtractionConfig
+/// * `override_json` - A JSON string representation of the override ExtractionConfig
+///
+/// # Returns
+///
+/// The merged configuration as a JSON string, or error
+#[napi(js_name = "configMergeInternal")]
+pub fn config_merge_internal(base_json: String, override_json: String) -> Result<String> {
+    let base_c_str = std::ffi::CString::new(base_json.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in base config JSON: {}", base_json),
+        )
+    })?;
+
+    let override_c_str = std::ffi::CString::new(override_json.clone()).map_err(|_| {
+        napi::Error::new(
+            napi::Status::InvalidArg,
+            format!("Invalid UTF-8 in override config JSON: {}", override_json),
+        )
+    })?;
+
+    let base_ptr = unsafe { kreuzberg_config_from_json(base_c_str.as_ptr()) };
+
+    if base_ptr.is_null() {
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to parse base config from JSON",
+        ));
+    }
+
+    let override_ptr = unsafe { kreuzberg_config_from_json(override_c_str.as_ptr()) };
+
+    if override_ptr.is_null() {
+        unsafe {
+            kreuzberg_config_free(base_ptr);
+        }
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to parse override config from JSON",
+        ));
+    }
+
+    let merge_result = unsafe { kreuzberg_config_merge(base_ptr, override_ptr) };
+
+    if merge_result == 0 {
+        unsafe {
+            kreuzberg_config_free(base_ptr);
+            kreuzberg_config_free(override_ptr);
+        }
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to merge configs",
+        ));
+    }
+
+    let json_ptr = unsafe { kreuzberg_config_to_json(base_ptr) };
+
+    unsafe {
+        kreuzberg_config_free(base_ptr);
+        kreuzberg_config_free(override_ptr);
+    }
+
+    if json_ptr.is_null() {
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            "Failed to serialize merged config to JSON",
+        ));
+    }
+
+    let result = unsafe {
+        let c_str = CStr::from_ptr(json_ptr);
+        let json_str = c_str
+            .to_str()
+            .map_err(|_| napi::Error::new(napi::Status::GenericFailure, "Invalid UTF-8 in JSON"))?
+            .to_string();
+
+        kreuzberg_free_string(json_ptr as *mut c_char);
+        json_str
+    };
+
+    Ok(result)
+}
+
+// ============================================================================
+// Phase 1 Result FFI Wrappers (Implemented via TypeScript wrappers)
+// ============================================================================
+// Result methods (getPageCount, getChunkCount, etc.) are implemented as
+// methods on the ExtractionResult type in the TypeScript SDK.
+// The Rust FFI functions are called from within those TypeScript method implementations.
 
 // #[cfg(all(
 // #[global_allocator]

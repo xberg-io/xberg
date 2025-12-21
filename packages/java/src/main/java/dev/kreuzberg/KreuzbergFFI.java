@@ -30,7 +30,7 @@ import java.util.jar.JarFile;
  * <p><strong>Internal API:</strong> This class is not intended for direct use.
  * Use the high-level {@link Kreuzberg} class instead.</p>
  */
-final class KreuzbergFFI {
+public final class KreuzbergFFI {
     private static final Linker LINKER = Linker.nativeLinker();
     private static final SymbolLookup LOOKUP;
     private static final long C_STRING_MAX_SIZE = 67108864L;
@@ -39,47 +39,74 @@ final class KreuzbergFFI {
     private static String cachedExtractKey;
     private static Path cachedExtractDir;
 
-    static final MethodHandle KREUZBERG_EXTRACT_FILE_SYNC;
-    static final MethodHandle KREUZBERG_EXTRACT_FILE_SYNC_WITH_CONFIG;
-    static final MethodHandle KREUZBERG_EXTRACT_BYTES_SYNC;
-    static final MethodHandle KREUZBERG_EXTRACT_BYTES_SYNC_WITH_CONFIG;
-    static final MethodHandle KREUZBERG_BATCH_EXTRACT_FILES_SYNC;
-    static final MethodHandle KREUZBERG_BATCH_EXTRACT_BYTES_SYNC;
-    static final MethodHandle KREUZBERG_LOAD_EXTRACTION_CONFIG_FROM_FILE;
-    static final MethodHandle KREUZBERG_FREE_STRING;
-    static final MethodHandle KREUZBERG_FREE_RESULT;
-    static final MethodHandle KREUZBERG_FREE_BATCH_RESULT;
-    static final MethodHandle KREUZBERG_LAST_ERROR;
-    static final MethodHandle KREUZBERG_LAST_ERROR_CODE;
-    static final MethodHandle KREUZBERG_LAST_PANIC_CONTEXT;
-    static final MethodHandle KREUZBERG_VERSION;
-    static final MethodHandle KREUZBERG_CLONE_STRING;
-    static final MethodHandle KREUZBERG_REGISTER_POST_PROCESSOR;
-    static final MethodHandle KREUZBERG_REGISTER_POST_PROCESSOR_WITH_STAGE;
-    static final MethodHandle KREUZBERG_UNREGISTER_POST_PROCESSOR;
-    static final MethodHandle KREUZBERG_CLEAR_POST_PROCESSORS;
-    static final MethodHandle KREUZBERG_LIST_POST_PROCESSORS;
-    static final MethodHandle KREUZBERG_REGISTER_VALIDATOR;
-    static final MethodHandle KREUZBERG_UNREGISTER_VALIDATOR;
-    static final MethodHandle KREUZBERG_CLEAR_VALIDATORS;
-    static final MethodHandle KREUZBERG_LIST_VALIDATORS;
-    static final MethodHandle KREUZBERG_REGISTER_OCR_BACKEND;
-    static final MethodHandle KREUZBERG_REGISTER_OCR_BACKEND_WITH_LANGUAGES;
-    static final MethodHandle KREUZBERG_UNREGISTER_OCR_BACKEND;
-    static final MethodHandle KREUZBERG_LIST_OCR_BACKENDS;
-    static final MethodHandle KREUZBERG_CLEAR_OCR_BACKENDS;
-    static final MethodHandle KREUZBERG_LIST_DOCUMENT_EXTRACTORS;
-    static final MethodHandle KREUZBERG_UNREGISTER_DOCUMENT_EXTRACTOR;
-    static final MethodHandle KREUZBERG_CLEAR_DOCUMENT_EXTRACTORS;
-    static final MethodHandle KREUZBERG_DETECT_MIME_TYPE;
-    static final MethodHandle KREUZBERG_VALIDATE_MIME_TYPE;
-    static final MethodHandle KREUZBERG_DETECT_MIME_TYPE_FROM_BYTES;
-    static final MethodHandle KREUZBERG_GET_EXTENSIONS_FOR_MIME;
-    static final MethodHandle KREUZBERG_CONFIG_DISCOVER;
-    static final MethodHandle KREUZBERG_LIST_EMBEDDING_PRESETS;
-    static final MethodHandle KREUZBERG_GET_EMBEDDING_PRESET;
+    public static final MethodHandle KREUZBERG_EXTRACT_FILE_SYNC;
+    public static final MethodHandle KREUZBERG_EXTRACT_FILE_SYNC_WITH_CONFIG;
+    public static final MethodHandle KREUZBERG_EXTRACT_BYTES_SYNC;
+    public static final MethodHandle KREUZBERG_EXTRACT_BYTES_SYNC_WITH_CONFIG;
+    public static final MethodHandle KREUZBERG_BATCH_EXTRACT_FILES_SYNC;
+    public static final MethodHandle KREUZBERG_BATCH_EXTRACT_BYTES_SYNC;
+    public static final MethodHandle KREUZBERG_LOAD_EXTRACTION_CONFIG_FROM_FILE;
+    public static final MethodHandle KREUZBERG_FREE_STRING;
+    public static final MethodHandle KREUZBERG_FREE_RESULT;
+    public static final MethodHandle KREUZBERG_FREE_BATCH_RESULT;
+    public static final MethodHandle KREUZBERG_LAST_ERROR;
+    public static final MethodHandle KREUZBERG_LAST_ERROR_CODE;
+    public static final MethodHandle KREUZBERG_LAST_PANIC_CONTEXT;
+    public static final MethodHandle KREUZBERG_VERSION;
+    public static final MethodHandle KREUZBERG_CLONE_STRING;
+    public static final MethodHandle KREUZBERG_REGISTER_POST_PROCESSOR;
+    public static final MethodHandle KREUZBERG_REGISTER_POST_PROCESSOR_WITH_STAGE;
+    public static final MethodHandle KREUZBERG_UNREGISTER_POST_PROCESSOR;
+    public static final MethodHandle KREUZBERG_CLEAR_POST_PROCESSORS;
+    public static final MethodHandle KREUZBERG_LIST_POST_PROCESSORS;
+    public static final MethodHandle KREUZBERG_REGISTER_VALIDATOR;
+    public static final MethodHandle KREUZBERG_UNREGISTER_VALIDATOR;
+    public static final MethodHandle KREUZBERG_CLEAR_VALIDATORS;
+    public static final MethodHandle KREUZBERG_LIST_VALIDATORS;
+    public static final MethodHandle KREUZBERG_REGISTER_OCR_BACKEND;
+    public static final MethodHandle KREUZBERG_REGISTER_OCR_BACKEND_WITH_LANGUAGES;
+    public static final MethodHandle KREUZBERG_UNREGISTER_OCR_BACKEND;
+    public static final MethodHandle KREUZBERG_LIST_OCR_BACKENDS;
+    public static final MethodHandle KREUZBERG_CLEAR_OCR_BACKENDS;
+    public static final MethodHandle KREUZBERG_LIST_DOCUMENT_EXTRACTORS;
+    public static final MethodHandle KREUZBERG_UNREGISTER_DOCUMENT_EXTRACTOR;
+    public static final MethodHandle KREUZBERG_CLEAR_DOCUMENT_EXTRACTORS;
+    public static final MethodHandle KREUZBERG_DETECT_MIME_TYPE;
+    public static final MethodHandle KREUZBERG_VALIDATE_MIME_TYPE;
+    public static final MethodHandle KREUZBERG_DETECT_MIME_TYPE_FROM_BYTES;
+    public static final MethodHandle KREUZBERG_GET_EXTENSIONS_FOR_MIME;
+    public static final MethodHandle KREUZBERG_CONFIG_DISCOVER;
+    public static final MethodHandle KREUZBERG_LIST_EMBEDDING_PRESETS;
+    public static final MethodHandle KREUZBERG_GET_EMBEDDING_PRESET;
+    public static final MethodHandle KREUZBERG_VALIDATE_BINARIZATION_METHOD;
+    public static final MethodHandle KREUZBERG_VALIDATE_OCR_BACKEND;
+    public static final MethodHandle KREUZBERG_VALIDATE_LANGUAGE_CODE;
+    public static final MethodHandle KREUZBERG_VALIDATE_TOKEN_REDUCTION_LEVEL;
+    public static final MethodHandle KREUZBERG_VALIDATE_TESSERACT_PSM;
+    public static final MethodHandle KREUZBERG_VALIDATE_TESSERACT_OEM;
+    public static final MethodHandle KREUZBERG_VALIDATE_OUTPUT_FORMAT;
+    public static final MethodHandle KREUZBERG_VALIDATE_CONFIDENCE;
+    public static final MethodHandle KREUZBERG_VALIDATE_DPI;
+    public static final MethodHandle KREUZBERG_VALIDATE_CHUNKING_PARAMS;
+    public static final MethodHandle KREUZBERG_GET_VALID_BINARIZATION_METHODS;
+    public static final MethodHandle KREUZBERG_GET_VALID_LANGUAGE_CODES;
+    public static final MethodHandle KREUZBERG_GET_VALID_OCR_BACKENDS;
+    public static final MethodHandle KREUZBERG_GET_VALID_TOKEN_REDUCTION_LEVELS;
+    public static final MethodHandle KREUZBERG_CONFIG_FROM_JSON;
+    public static final MethodHandle KREUZBERG_CONFIG_FREE;
+    public static final MethodHandle KREUZBERG_CONFIG_TO_JSON;
+    public static final MethodHandle KREUZBERG_CONFIG_GET_FIELD;
+    public static final MethodHandle KREUZBERG_CONFIG_MERGE;
+    public static final MethodHandle KREUZBERG_RESULT_GET_PAGE_COUNT;
+    public static final MethodHandle KREUZBERG_RESULT_GET_CHUNK_COUNT;
+    public static final MethodHandle KREUZBERG_RESULT_GET_DETECTED_LANGUAGE;
+    public static final MethodHandle KREUZBERG_RESULT_GET_METADATA_FIELD;
+    public static final MethodHandle KREUZBERG_GET_ERROR_DETAILS;
+    public static final MethodHandle KREUZBERG_CLASSIFY_ERROR;
+    public static final MethodHandle KREUZBERG_ERROR_CODE_NAME;
+    public static final MethodHandle KREUZBERG_ERROR_CODE_DESCRIPTION;
 
-    static final StructLayout C_EXTRACTION_RESULT_LAYOUT = MemoryLayout.structLayout(
+    public static final StructLayout C_EXTRACTION_RESULT_LAYOUT = MemoryLayout.structLayout(
         ValueLayout.ADDRESS.withName("content"),
         ValueLayout.ADDRESS.withName("mime_type"),
         ValueLayout.ADDRESS.withName("language"),
@@ -95,57 +122,57 @@ final class KreuzbergFFI {
         MemoryLayout.paddingLayout(7)
     );
 
-    static final long CONTENT_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long CONTENT_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("content"));
-    static final long MIME_TYPE_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long MIME_TYPE_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("mime_type"));
-    static final long LANGUAGE_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long LANGUAGE_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("language"));
-    static final long DATE_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long DATE_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("date"));
-    static final long SUBJECT_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long SUBJECT_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("subject"));
-    static final long TABLES_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long TABLES_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("tables_json"));
-    static final long DETECTED_LANGUAGES_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long DETECTED_LANGUAGES_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("detected_languages_json"));
-    static final long METADATA_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long METADATA_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("metadata_json"));
-    static final long CHUNKS_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long CHUNKS_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("chunks_json"));
-    static final long IMAGES_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long IMAGES_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("images_json"));
-    static final long PAGE_STRUCTURE_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long PAGE_STRUCTURE_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("page_structure_json"));
-    static final long SUCCESS_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
+    public static final long SUCCESS_OFFSET = C_EXTRACTION_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("success"));
 
-    static final StructLayout C_BATCH_RESULT_LAYOUT = MemoryLayout.structLayout(
+    public static final StructLayout C_BATCH_RESULT_LAYOUT = MemoryLayout.structLayout(
         ValueLayout.ADDRESS.withName("results"),
         ValueLayout.JAVA_LONG.withName("count"),
         ValueLayout.JAVA_BOOLEAN.withName("success"),
         MemoryLayout.paddingLayout(7)
     );
 
-    static final long BATCH_RESULTS_PTR_OFFSET = C_BATCH_RESULT_LAYOUT.byteOffset(
+    public static final long BATCH_RESULTS_PTR_OFFSET = C_BATCH_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("results"));
-    static final long BATCH_COUNT_OFFSET = C_BATCH_RESULT_LAYOUT.byteOffset(
+    public static final long BATCH_COUNT_OFFSET = C_BATCH_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("count"));
-    static final long BATCH_SUCCESS_OFFSET = C_BATCH_RESULT_LAYOUT.byteOffset(
+    public static final long BATCH_SUCCESS_OFFSET = C_BATCH_RESULT_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("success"));
 
-    static final StructLayout C_BYTES_WITH_MIME_LAYOUT = MemoryLayout.structLayout(
+    public static final StructLayout C_BYTES_WITH_MIME_LAYOUT = MemoryLayout.structLayout(
         ValueLayout.ADDRESS.withName("data"),
         ValueLayout.JAVA_LONG.withName("data_len"),
         ValueLayout.ADDRESS.withName("mime_type")
     );
-    static final long BYTES_DATA_OFFSET = C_BYTES_WITH_MIME_LAYOUT.byteOffset(
+    public static final long BYTES_DATA_OFFSET = C_BYTES_WITH_MIME_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("data"));
-    static final long BYTES_LEN_OFFSET = C_BYTES_WITH_MIME_LAYOUT.byteOffset(
+    public static final long BYTES_LEN_OFFSET = C_BYTES_WITH_MIME_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("data_len"));
-    static final long BYTES_MIME_OFFSET = C_BYTES_WITH_MIME_LAYOUT.byteOffset(
+    public static final long BYTES_MIME_OFFSET = C_BYTES_WITH_MIME_LAYOUT.byteOffset(
         MemoryLayout.PathElement.groupElement("mime_type"));
-    static final long BYTES_WITH_MIME_ALIGNMENT = 8;
+    public static final long BYTES_WITH_MIME_ALIGNMENT = 8;
 
     static {
         try {
@@ -387,6 +414,141 @@ final class KreuzbergFFI {
             KREUZBERG_GET_EMBEDDING_PRESET = linkFunction(
                 "kreuzberg_get_embedding_preset",
                 FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_VALIDATE_BINARIZATION_METHOD = linkFunction(
+                "kreuzberg_validate_binarization_method",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_VALIDATE_OCR_BACKEND = linkFunction(
+                "kreuzberg_validate_ocr_backend",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_VALIDATE_LANGUAGE_CODE = linkFunction(
+                "kreuzberg_validate_language_code",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_VALIDATE_TOKEN_REDUCTION_LEVEL = linkFunction(
+                "kreuzberg_validate_token_reduction_level",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_VALIDATE_TESSERACT_PSM = linkFunction(
+                "kreuzberg_validate_tesseract_psm",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT)
+            );
+
+            KREUZBERG_VALIDATE_TESSERACT_OEM = linkFunction(
+                "kreuzberg_validate_tesseract_oem",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT)
+            );
+
+            KREUZBERG_VALIDATE_OUTPUT_FORMAT = linkFunction(
+                "kreuzberg_validate_output_format",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_VALIDATE_CONFIDENCE = linkFunction(
+                "kreuzberg_validate_confidence",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_DOUBLE)
+            );
+
+            KREUZBERG_VALIDATE_DPI = linkFunction(
+                "kreuzberg_validate_dpi",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_INT)
+            );
+
+            KREUZBERG_VALIDATE_CHUNKING_PARAMS = linkFunction(
+                "kreuzberg_validate_chunking_params",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.JAVA_LONG, ValueLayout.JAVA_LONG)
+            );
+
+            KREUZBERG_GET_VALID_BINARIZATION_METHODS = linkFunction(
+                "kreuzberg_get_valid_binarization_methods",
+                FunctionDescriptor.of(ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_GET_VALID_LANGUAGE_CODES = linkFunction(
+                "kreuzberg_get_valid_language_codes",
+                FunctionDescriptor.of(ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_GET_VALID_OCR_BACKENDS = linkFunction(
+                "kreuzberg_get_valid_ocr_backends",
+                FunctionDescriptor.of(ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_GET_VALID_TOKEN_REDUCTION_LEVELS = linkFunction(
+                "kreuzberg_get_valid_token_reduction_levels",
+                FunctionDescriptor.of(ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_CONFIG_FROM_JSON = linkFunction(
+                "kreuzberg_config_from_json",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_CONFIG_FREE = linkFunction(
+                "kreuzberg_config_free",
+                FunctionDescriptor.ofVoid(ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_CONFIG_TO_JSON = linkFunction(
+                "kreuzberg_config_to_json",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_CONFIG_GET_FIELD = linkFunction(
+                "kreuzberg_config_get_field",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_CONFIG_MERGE = linkFunction(
+                "kreuzberg_config_merge",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_RESULT_GET_PAGE_COUNT = linkFunction(
+                "kreuzberg_result_get_page_count",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_RESULT_GET_CHUNK_COUNT = linkFunction(
+                "kreuzberg_result_get_chunk_count",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_RESULT_GET_DETECTED_LANGUAGE = linkFunction(
+                "kreuzberg_result_get_detected_language",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_RESULT_GET_METADATA_FIELD = linkFunction(
+                "kreuzberg_result_get_metadata_field",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_GET_ERROR_DETAILS = linkFunction(
+                "kreuzberg_get_error_details",
+                FunctionDescriptor.of(ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_CLASSIFY_ERROR = linkFunction(
+                "kreuzberg_classify_error",
+                FunctionDescriptor.of(ValueLayout.JAVA_INT, ValueLayout.ADDRESS)
+            );
+
+            KREUZBERG_ERROR_CODE_NAME = linkFunction(
+                "kreuzberg_error_code_name",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG)
+            );
+
+            KREUZBERG_ERROR_CODE_DESCRIPTION = linkFunction(
+                "kreuzberg_error_code_description",
+                FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG)
             );
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
@@ -794,11 +956,11 @@ final class KreuzbergFFI {
      * @param address the address of the C string
      * @return the Java String, or null if address is NULL
      */
-    static String readCString(MemorySegment address) {
+    public static String readCString(MemorySegment address) {
         if (address == null || address.address() == 0) {
             return null;
         }
-        return address.reinterpret(C_STRING_MAX_SIZE).getString(0);
+        return address.reinterpret(C_STRING_MAX_SIZE).getUtf8String(0);
     }
 
     /**
@@ -808,8 +970,8 @@ final class KreuzbergFFI {
      * @param str the Java string
      * @return a MemorySegment containing the C string
      */
-    static MemorySegment allocateCString(Arena arena, String str) {
-        return arena.allocateFrom(str);
+    public static MemorySegment allocateCString(Arena arena, String str) {
+        return arena.allocateUtf8String(str);
     }
 
     /**

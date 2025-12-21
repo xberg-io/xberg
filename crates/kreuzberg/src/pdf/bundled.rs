@@ -179,9 +179,18 @@ pub fn extract_bundled_pdfium() -> io::Result<PathBuf> {
     // SAFETY: EXTRACTION_LOCK is a static Mutex that protects against concurrent writes.
     // This serializes extraction across threads, preventing the "file too short" error
     // that occurs when one thread reads a partially-written file.
-    let _guard = EXTRACTION_LOCK
-        .lock()
-        .map_err(|e| io::Error::other(format!("Failed to acquire extraction lock: {}", e)))?;
+    //
+    // Lock poisoning recovery: If a previous holder panicked while holding the lock,
+    // we recover by extracting the inner value. This is safe because the lock guards
+    // only the extraction process itself - the state doesn't need to be consistent
+    // across panics since we use atomic file operations (write-then-rename).
+    let _guard = EXTRACTION_LOCK.lock().unwrap_or_else(|poisoned| {
+        // SAFETY: Recovering from poisoned lock is safe because:
+        // 1. We use atomic operations (write temp, then rename) that are safe to retry
+        // 2. The lock only serializes the extraction, doesn't protect invariants
+        // 3. A panic during extraction leaves either old or new file, both valid states
+        poisoned.into_inner()
+    });
 
     // Double-check after acquiring lock: another thread may have already extracted the file
     if is_extracted_library_valid(&lib_path, bundled_lib.len()) {

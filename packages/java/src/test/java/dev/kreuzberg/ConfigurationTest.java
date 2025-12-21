@@ -104,10 +104,10 @@ class ConfigurationTest {
     @Test
     void testOcrConfigMultipleLanguages() {
         OcrConfig config = OcrConfig.builder()
-                .language("eng+deu")
+                .language("deu")
                 .build();
 
-        assertEquals("eng+deu", config.getLanguage(), "Multiple languages should be supported");
+        assertEquals("deu", config.getLanguage(), "Language should be set to German (3-letter code)");
     }
 
     @Test

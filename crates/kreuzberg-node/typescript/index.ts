@@ -50,6 +50,7 @@ import type { PanicContext } from "./errors.js";
 import type {
 	Chunk,
 	ChunkingConfig,
+	ErrorClassification,
 	ExtractedImage,
 	ExtractionConfig as ExtractionConfigType,
 	ExtractionResult,
@@ -127,6 +128,9 @@ interface NativeBinding {
 	getExtensionsForMime(mimeType: string): string[];
 	listEmbeddingPresets(): string[];
 	getEmbeddingPreset(name: string): Record<string, unknown> | null;
+	getErrorCodeName(code: number): string;
+	getErrorCodeDescription(code: number): string;
+	classifyError(errorMessage: string): Record<string, unknown>;
 	getLastErrorCode(): number;
 	getLastPanicContext(): Record<string, unknown> | null;
 	loadExtractionConfigFromFile(filePath: string): Record<string, unknown>;
@@ -1977,6 +1981,88 @@ export function getLastPanicContext(): PanicContext | null {
 	const binding = getBinding();
 	const result = binding.getLastPanicContext();
 	return result as unknown as PanicContext | null;
+}
+
+/**
+ * Returns the human-readable name for an error code.
+ *
+ * Maps numeric error codes to their string names, providing a consistent way
+ * to get error code names across all platforms.
+ *
+ * @param code - The numeric error code (0-7)
+ * @returns The error code name as a string (e.g., "validation", "ocr", "unknown")
+ *
+ * @example
+ * ```typescript
+ * import { getErrorCodeName } from '@kreuzberg/node';
+ *
+ * const name = getErrorCodeName(0);  // returns "validation"
+ * const name = getErrorCodeName(2);  // returns "ocr"
+ * const name = getErrorCodeName(99); // returns "unknown"
+ * ```
+ */
+export function getErrorCodeName(code: number): string {
+	const binding = getBinding();
+	return binding.getErrorCodeName(code);
+}
+
+/**
+ * Returns the description for an error code.
+ *
+ * Retrieves user-friendly descriptions of error types from the FFI layer.
+ *
+ * @param code - The numeric error code (0-7)
+ * @returns A brief description of the error type
+ *
+ * @example
+ * ```typescript
+ * import { getErrorCodeDescription } from '@kreuzberg/node';
+ *
+ * const desc = getErrorCodeDescription(0);  // returns "Input validation error"
+ * const desc = getErrorCodeDescription(4);  // returns "File system I/O error"
+ * const desc = getErrorCodeDescription(99); // returns "Unknown error code"
+ * ```
+ */
+export function getErrorCodeDescription(code: number): string {
+	const binding = getBinding();
+	return binding.getErrorCodeDescription(code);
+}
+
+/**
+ * Classifies an error message string into an error code category.
+ *
+ * This function analyzes the error message content and returns the most likely
+ * error code (0-7) based on keyword patterns. Used to programmatically classify
+ * errors for handling purposes.
+ *
+ * The classification is based on keyword matching:
+ * - **Validation (0)**: Keywords like "invalid", "validation", "schema", "required"
+ * - **Parsing (1)**: Keywords like "parsing", "corrupted", "malformed"
+ * - **Ocr (2)**: Keywords like "ocr", "tesseract", "language", "model"
+ * - **MissingDependency (3)**: Keywords like "not found", "missing", "dependency"
+ * - **Io (4)**: Keywords like "file", "disk", "read", "write", "permission"
+ * - **Plugin (5)**: Keywords like "plugin", "register", "extension"
+ * - **UnsupportedFormat (6)**: Keywords like "unsupported", "format", "mime"
+ * - **Internal (7)**: Keywords like "internal", "bug", "panic"
+ *
+ * @param errorMessage - The error message string to classify
+ * @returns An object with the classification details
+ *
+ * @example
+ * ```typescript
+ * import { classifyError } from '@kreuzberg/node';
+ *
+ * const result = classifyError("PDF file is corrupted");
+ * // Returns: { code: 1, name: "parsing", confidence: 0.95 }
+ *
+ * const result = classifyError("Tesseract not found");
+ * // Returns: { code: 3, name: "missing_dependency", confidence: 0.9 }
+ * ```
+ */
+export function classifyError(errorMessage: string): ErrorClassification {
+	const binding = getBinding();
+	const result = binding.classifyError(errorMessage);
+	return result as unknown as ErrorClassification;
 }
 
 export const __version__ = "4.0.0-rc.15";

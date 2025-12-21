@@ -4,17 +4,22 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.kreuzberg.KreuzbergException;
+import dev.kreuzberg.KreuzbergFFI;
 import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Main extraction configuration.
  *
  * @since 4.0.0
  */
+@SuppressWarnings("PMD.AvoidCatchingThrowable")
 public final class ExtractionConfig {
   private static final ObjectMapper CONFIG_MAPPER = new ObjectMapper()
       .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -165,6 +170,164 @@ public final class ExtractionConfig {
    */
   public static ExtractionConfig discover() throws KreuzbergException {
     return dev.kreuzberg.Kreuzberg.discoverExtractionConfig();
+  }
+
+  /**
+   * Serialize configuration to JSON string via FFI.
+   *
+   * Uses the Rust FFI backend for consistent serialization.
+   *
+   * @return JSON representation of this configuration
+   * @throws KreuzbergException if serialization fails
+   * @since 4.0.0
+   */
+  public String toJson() throws KreuzbergException {
+    try (var arena = Arena.ofConfined()) {
+      // Create a temporary config in Rust FFI to serialize
+      String jsonInput = CONFIG_MAPPER.writeValueAsString(toMap());
+      MemorySegment configJsonSeg = KreuzbergFFI.allocateCString(arena, jsonInput);
+
+      MemorySegment configPtr = (MemorySegment) KreuzbergFFI.KREUZBERG_CONFIG_FROM_JSON.invoke(configJsonSeg);
+      if (configPtr == null || configPtr.address() == 0) {
+        throw new KreuzbergException("Failed to serialize config");
+      }
+
+      try {
+        MemorySegment jsonSeg = (MemorySegment) KreuzbergFFI.KREUZBERG_CONFIG_TO_JSON.invoke(configPtr);
+        if (jsonSeg == null || jsonSeg.address() == 0) {
+          throw new KreuzbergException("Failed to convert config to JSON");
+        }
+
+        String result = KreuzbergFFI.readCString(jsonSeg);
+        KreuzbergFFI.KREUZBERG_FREE_STRING.invoke(jsonSeg);
+        return result;
+      } finally {
+        try {
+          KreuzbergFFI.KREUZBERG_CONFIG_FREE.invoke(configPtr);
+        } catch (Throwable ignored) {
+        }
+      }
+    } catch (KreuzbergException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new KreuzbergException("Failed to serialize config to JSON", e);
+    }
+  }
+
+  /**
+   * Get a specific field from the configuration.
+   *
+   * Supports dot notation for nested fields (e.g., "ocr.backend").
+   *
+   * @param fieldName the field name or path (e.g., "use_cache", "ocr.backend")
+   * @return the field value as a JSON string, or empty if not found
+   * @throws KreuzbergException if retrieval fails
+   * @since 4.0.0
+   */
+  public Optional<String> getField(String fieldName) throws KreuzbergException {
+    if (fieldName == null || fieldName.isEmpty()) {
+      throw new IllegalArgumentException("fieldName cannot be null or empty");
+    }
+
+    try (var arena = Arena.ofConfined()) {
+      String jsonInput = CONFIG_MAPPER.writeValueAsString(toMap());
+      MemorySegment configJsonSeg = KreuzbergFFI.allocateCString(arena, jsonInput);
+
+      MemorySegment configPtr = (MemorySegment) KreuzbergFFI.KREUZBERG_CONFIG_FROM_JSON.invoke(configJsonSeg);
+      if (configPtr == null || configPtr.address() == 0) {
+        throw new KreuzbergException("Failed to create config for field retrieval");
+      }
+
+      try {
+        MemorySegment fieldNameSeg = KreuzbergFFI.allocateCString(arena, fieldName);
+        MemorySegment valueSeg = (MemorySegment)
+            KreuzbergFFI.KREUZBERG_CONFIG_GET_FIELD.invoke(configPtr, fieldNameSeg);
+
+        if (valueSeg == null || valueSeg.address() == 0) {
+          return Optional.empty();
+        }
+
+        String result = KreuzbergFFI.readCString(valueSeg);
+        try {
+          KreuzbergFFI.KREUZBERG_FREE_STRING.invoke(valueSeg);
+        } catch (Throwable ignored) {
+        }
+        return Optional.ofNullable(result);
+      } finally {
+        try {
+          KreuzbergFFI.KREUZBERG_CONFIG_FREE.invoke(configPtr);
+        } catch (Throwable ignored) {
+        }
+      }
+    } catch (KreuzbergException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new KreuzbergException("Failed to retrieve field: " + fieldName, e);
+    }
+  }
+
+  /**
+   * Merge another configuration into this one.
+   *
+   * Creates a new config with fields from the other config overriding this one.
+   *
+   * @param other the configuration to merge in
+   * @return a new merged ExtractionConfig
+   * @throws KreuzbergException if merging fails
+   * @since 4.0.0
+   */
+  public ExtractionConfig merge(ExtractionConfig other) throws KreuzbergException {
+    if (other == null) {
+      throw new IllegalArgumentException("other config cannot be null");
+    }
+
+    try (var arena = Arena.ofConfined()) {
+      String thisJson = CONFIG_MAPPER.writeValueAsString(toMap());
+      String otherJson = CONFIG_MAPPER.writeValueAsString(other.toMap());
+
+      MemorySegment thisJsonSeg = KreuzbergFFI.allocateCString(arena, thisJson);
+      MemorySegment otherJsonSeg = KreuzbergFFI.allocateCString(arena, otherJson);
+
+      MemorySegment thisPtr = (MemorySegment) KreuzbergFFI.KREUZBERG_CONFIG_FROM_JSON.invoke(thisJsonSeg);
+      MemorySegment otherPtr = (MemorySegment) KreuzbergFFI.KREUZBERG_CONFIG_FROM_JSON.invoke(otherJsonSeg);
+
+      if (thisPtr == null || thisPtr.address() == 0 || otherPtr == null || otherPtr.address() == 0) {
+        throw new KreuzbergException("Failed to create configs for merging");
+      }
+
+      try {
+        int result = (int) KreuzbergFFI.KREUZBERG_CONFIG_MERGE.invoke(thisPtr, otherPtr);
+        if (result != 1) {
+          throw new KreuzbergException("Config merge failed");
+        }
+
+        MemorySegment mergedJsonSeg = (MemorySegment) KreuzbergFFI.KREUZBERG_CONFIG_TO_JSON.invoke(thisPtr);
+        if (mergedJsonSeg == null || mergedJsonSeg.address() == 0) {
+          throw new KreuzbergException("Failed to serialize merged config");
+        }
+
+        String mergedJson = KreuzbergFFI.readCString(mergedJsonSeg);
+        try {
+          KreuzbergFFI.KREUZBERG_FREE_STRING.invoke(mergedJsonSeg);
+        } catch (Throwable ignored) {
+        }
+
+        return fromJson(mergedJson);
+      } finally {
+        try {
+          KreuzbergFFI.KREUZBERG_CONFIG_FREE.invoke(thisPtr);
+        } catch (Throwable ignored) {
+        }
+        try {
+          KreuzbergFFI.KREUZBERG_CONFIG_FREE.invoke(otherPtr);
+        } catch (Throwable ignored) {
+        }
+      }
+    } catch (KreuzbergException e) {
+      throw e;
+    } catch (Throwable e) {
+      throw new KreuzbergException("Failed to merge configs", e);
+    }
   }
 
   public Map<String, Object> toMap() {

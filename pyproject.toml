@@ -1,3 +1,7 @@
+[build-system]
+build-backend = "maturin"
+requires = [ "maturin>=1.10.2" ]
+
 [dependency-groups]
 dev = [
   "covdefaults>=2.3.0",

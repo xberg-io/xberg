@@ -1,8 +1,8 @@
 package dev.kreuzberg.config;
 
-import java.util.Arrays;
+import dev.kreuzberg.KreuzbergException;
+import dev.kreuzberg.ValidationHelper;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -11,9 +11,6 @@ import java.util.Map;
  * @since 4.0.0
  */
 public final class TokenReductionConfig {
-  private static final List<String> VALID_MODES =
-      Arrays.asList("off", "light", "moderate", "aggressive", "maximum");
-
   private final String mode;
   private final boolean preserveImportantWords;
 
@@ -49,9 +46,10 @@ public final class TokenReductionConfig {
     }
 
     public Builder mode(String mode) {
-      if (!VALID_MODES.contains(mode)) {
-        throw new IllegalArgumentException(
-            "mode must be one of: " + String.join(", ", VALID_MODES));
+      try {
+        ValidationHelper.validateTokenReductionLevel(mode);
+      } catch (KreuzbergException e) {
+        throw new IllegalArgumentException(e.getMessage(), e);
       }
       this.mode = mode;
       return this;

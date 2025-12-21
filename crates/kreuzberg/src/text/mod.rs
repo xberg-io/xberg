@@ -1,3 +1,5 @@
+pub mod utf8_validation;
+
 #[cfg(feature = "quality")]
 pub mod quality;
 

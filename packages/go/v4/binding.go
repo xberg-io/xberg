@@ -26,6 +26,51 @@ char *kreuzberg_validate_mime_type(const char *mime_type);
 char *kreuzberg_load_extraction_config_from_file(const char *path);
 char *kreuzberg_list_embedding_presets(void);
 char *kreuzberg_get_embedding_preset(const char *name);
+
+// Validation FFI functions
+int32_t kreuzberg_validate_binarization_method(const char *method);
+int32_t kreuzberg_validate_ocr_backend(const char *backend);
+int32_t kreuzberg_validate_language_code(const char *code);
+int32_t kreuzberg_validate_token_reduction_level(const char *level);
+int32_t kreuzberg_validate_tesseract_psm(int32_t psm);
+int32_t kreuzberg_validate_tesseract_oem(int32_t oem);
+int32_t kreuzberg_validate_output_format(const char *format);
+int32_t kreuzberg_validate_confidence(double confidence);
+int32_t kreuzberg_validate_dpi(int32_t dpi);
+int32_t kreuzberg_validate_chunking_params(uintptr_t max_chars, uintptr_t max_overlap);
+
+// List validation functions
+char *kreuzberg_get_valid_binarization_methods(void);
+char *kreuzberg_get_valid_language_codes(void);
+char *kreuzberg_get_valid_ocr_backends(void);
+char *kreuzberg_get_valid_token_reduction_levels(void);
+
+// Phase 1 Configuration FFI functions
+ExtractionConfig *kreuzberg_config_from_json(const char *json_config);
+void kreuzberg_config_free(ExtractionConfig *config);
+int32_t kreuzberg_config_is_valid(const char *json_config);
+char *kreuzberg_config_to_json(const ExtractionConfig *config);
+char *kreuzberg_config_get_field(const ExtractionConfig *config, const char *field_name);
+int32_t kreuzberg_config_merge(ExtractionConfig *base, const ExtractionConfig *override_config);
+
+// Phase 1 Result Accessor FFI functions
+int32_t kreuzberg_result_get_page_count(const CExtractionResult *result);
+int32_t kreuzberg_result_get_chunk_count(const CExtractionResult *result);
+char *kreuzberg_result_get_detected_language(const CExtractionResult *result);
+CMetadataField kreuzberg_result_get_metadata_field(const CExtractionResult *result, const char *field_name);
+
+// Phase 2 Error Classification FFI functions
+uint32_t kreuzberg_error_code_validation(void);
+uint32_t kreuzberg_error_code_parsing(void);
+uint32_t kreuzberg_error_code_ocr(void);
+uint32_t kreuzberg_error_code_missing_dependency(void);
+uint32_t kreuzberg_error_code_io(void);
+uint32_t kreuzberg_error_code_plugin(void);
+uint32_t kreuzberg_error_code_unsupported_format(void);
+uint32_t kreuzberg_error_code_internal(void);
+uint32_t kreuzberg_error_code_count(void);
+const char *kreuzberg_error_code_name(uint32_t code);
+const char *kreuzberg_error_code_description(uint32_t code);
 */
 import "C"
 
@@ -378,17 +423,16 @@ func lastError() error {
 	errMsg := C.GoString(errPtr)
 	code := ErrorCode(C.kreuzberg_last_error_code())
 
+	// Check for panic context regardless of error code
 	var panicCtx *PanicContext
-	if code == ErrorCodePanic {
-		panicPtr := C.kreuzberg_last_panic_context()
-		if panicPtr != nil {
-			defer C.kreuzberg_free_string(panicPtr)
-			panicJSON := C.GoString(panicPtr)
-			if panicJSON != "" {
-				var ctx PanicContext
-				if err := json.Unmarshal([]byte(panicJSON), &ctx); err == nil {
-					panicCtx = &ctx
-				}
+	panicPtr := C.kreuzberg_last_panic_context()
+	if panicPtr != nil {
+		defer C.kreuzberg_free_string(panicPtr)
+		panicJSON := C.GoString(panicPtr)
+		if panicJSON != "" {
+			var ctx PanicContext
+			if err := json.Unmarshal([]byte(panicJSON), &ctx); err == nil {
+				panicCtx = &ctx
 			}
 		}
 	}

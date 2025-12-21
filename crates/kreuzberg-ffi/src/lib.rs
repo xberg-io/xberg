@@ -3,11 +3,44 @@
 //! Provides a C-compatible API that can be consumed by Java (Panama FFI),
 //! Go (cgo), C# (P/Invoke), Zig, and other languages with C FFI support.
 
+mod batch_streaming;
+mod config;
+mod error;
 mod panic_shield;
+mod result;
+mod result_pool;
+mod result_view;
+mod string_intern;
+mod validation;
 
+pub use batch_streaming::{
+    ErrorCallback, ResultCallback, kreuzberg_extract_batch_parallel, kreuzberg_extract_batch_streaming,
+};
+pub use error::ErrorCode as KreuzbergErrorCode;
+pub use error::{
+    CErrorDetails, kreuzberg_classify_error, kreuzberg_error_code_count, kreuzberg_error_code_description,
+    kreuzberg_error_code_internal, kreuzberg_error_code_io, kreuzberg_error_code_missing_dependency,
+    kreuzberg_error_code_name, kreuzberg_error_code_ocr, kreuzberg_error_code_parsing, kreuzberg_error_code_plugin,
+    kreuzberg_error_code_unsupported_format, kreuzberg_error_code_validation, kreuzberg_get_error_details,
+};
 pub use panic_shield::{
     ErrorCode, StructuredError, clear_structured_error, get_last_error_code, get_last_error_message,
     get_last_panic_context, set_structured_error,
+};
+pub use result::{
+    CMetadataField, kreuzberg_result_get_chunk_count, kreuzberg_result_get_detected_language,
+    kreuzberg_result_get_metadata_field, kreuzberg_result_get_page_count,
+};
+pub use result_pool::{
+    CResultPoolStats, ResultPool, kreuzberg_extract_file_into_pool, kreuzberg_extract_file_into_pool_view,
+    kreuzberg_result_pool_free, kreuzberg_result_pool_new, kreuzberg_result_pool_reset, kreuzberg_result_pool_stats,
+};
+pub use result_view::{
+    CExtractionResultView, kreuzberg_get_result_view, kreuzberg_view_get_content, kreuzberg_view_get_mime_type,
+};
+pub use string_intern::{
+    CStringInternStats, kreuzberg_free_interned_string, kreuzberg_intern_string, kreuzberg_string_intern_reset,
+    kreuzberg_string_intern_stats,
 };
 
 use std::cell::RefCell;
@@ -3532,6 +3565,457 @@ pub unsafe extern "C" fn kreuzberg_config_discover() -> *mut c_char {
             }
         }
     })
+}
+
+/// Get supported languages for an OCR backend.
+///
+/// Returns a JSON array of supported language codes for the given backend.
+/// Supported backends: "easyocr", "paddleocr", "tesseract"
+///
+/// # Safety
+///
+/// - The returned string must be freed with `kreuzberg_free_string`
+/// - Returns NULL if backend not found or on error (check `kreuzberg_last_error`)
+///
+/// # Example (C)
+///
+/// ```c
+/// char* languages = kreuzberg_get_ocr_languages("easyocr");
+/// if (languages != NULL) {
+///     printf("EasyOCR languages: %s\n", languages);
+///     kreuzberg_free_string(languages);
+/// }
+/// ```
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_get_ocr_languages(backend: *const c_char) -> *mut c_char {
+    ffi_panic_guard!("kreuzberg_get_ocr_languages", {
+        clear_last_error();
+
+        if backend.is_null() {
+            set_last_error("Backend name cannot be NULL".to_string());
+            return ptr::null_mut();
+        }
+
+        let backend_str = match unsafe { CStr::from_ptr(backend) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in backend name: {}", e));
+                return ptr::null_mut();
+            }
+        };
+
+        use kreuzberg::ocr::LanguageRegistry;
+        let registry = LanguageRegistry::global();
+
+        match registry.get_supported_languages(backend_str) {
+            Some(languages) => match serde_json::to_string(languages) {
+                Ok(json) => match CString::new(json) {
+                    Ok(cstr) => cstr.into_raw(),
+                    Err(e) => {
+                        set_last_error(format!("Failed to serialize language list: {}", e));
+                        ptr::null_mut()
+                    }
+                },
+                Err(e) => {
+                    set_last_error(format!("Failed to serialize language list: {}", e));
+                    ptr::null_mut()
+                }
+            },
+            None => {
+                set_last_error(format!("Unknown OCR backend: '{}'", backend_str));
+                ptr::null_mut()
+            }
+        }
+    })
+}
+
+/// Check if a language is supported by an OCR backend.
+///
+/// Returns 1 (true) if the language is supported, 0 (false) otherwise.
+///
+/// # Arguments
+///
+/// * `backend` - Backend name (e.g., "easyocr", "paddleocr", "tesseract")
+/// * `language` - Language code to check
+///
+/// # Returns
+///
+/// 1 if supported, 0 if not supported or backend not found.
+///
+/// # Example (C)
+///
+/// ```c
+/// int is_supported = kreuzberg_is_language_supported("easyocr", "en");
+/// if (is_supported) {
+///     printf("English is supported by EasyOCR\n");
+/// }
+/// ```
+///
+/// # Safety
+///
+/// - `backend` and `language` must be valid pointers to valid UTF-8 C strings.
+/// - Both pointers can be checked for NULL; returns 0 if either is NULL.
+/// - The C strings must remain valid for the duration of the function call.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_is_language_supported(backend: *const c_char, language: *const c_char) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_is_language_supported", {
+        clear_last_error();
+
+        if backend.is_null() || language.is_null() {
+            set_last_error("Backend and language parameters cannot be NULL".to_string());
+            return 0;
+        }
+
+        let backend_str = match unsafe { CStr::from_ptr(backend) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in backend name: {}", e));
+                return 0;
+            }
+        };
+
+        let language_str = match unsafe { CStr::from_ptr(language) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in language code: {}", e));
+                return 0;
+            }
+        };
+
+        use kreuzberg::ocr::LanguageRegistry;
+        let registry = LanguageRegistry::global();
+
+        if registry.is_language_supported(backend_str, language_str) {
+            1
+        } else {
+            0
+        }
+    })
+}
+
+/// Get list of all registered OCR backends with language support.
+///
+/// Returns a JSON object mapping backend names to language counts.
+/// Example: `{"easyocr": 80, "paddleocr": 14, "tesseract": 100}`
+///
+/// # Safety
+///
+/// - The returned string must be freed with `kreuzberg_free_string`
+/// - Returns NULL on error (check `kreuzberg_last_error`)
+///
+/// # Example (C)
+///
+/// ```c
+/// char* backends = kreuzberg_list_ocr_backends_with_languages();
+/// if (backends != NULL) {
+///     printf("Available backends: %s\n", backends);
+///     kreuzberg_free_string(backends);
+/// }
+/// ```
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_list_ocr_backends_with_languages() -> *mut c_char {
+    ffi_panic_guard!("kreuzberg_list_ocr_backends_with_languages", {
+        clear_last_error();
+
+        use kreuzberg::ocr::LanguageRegistry;
+        let registry = LanguageRegistry::global();
+        let backends = registry.get_backends();
+
+        let mut backend_map = serde_json::json!({});
+        for backend in backends {
+            let count = registry.get_language_count(&backend);
+            backend_map[&backend] = serde_json::json!(count);
+        }
+
+        match CString::new(backend_map.to_string()) {
+            Ok(cstr) => cstr.into_raw(),
+            Err(e) => {
+                set_last_error(format!("Failed to serialize backend list: {}", e));
+                ptr::null_mut()
+            }
+        }
+    })
+}
+
+/// Validate a binarization method string.
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `method` must be a valid pointer to a valid UTF-8 C string or NULL.
+/// - If NULL is passed, an error is returned and error message is set.
+/// - The C string must remain valid for the duration of the function call.
+pub unsafe extern "C" fn kreuzberg_validate_binarization_method(method: *const c_char) -> i32 {
+    clear_last_error();
+
+    if method.is_null() {
+        set_last_error("binarization method cannot be NULL".to_string());
+        return 1;
+    }
+
+    let method_str = match unsafe { CStr::from_ptr(method).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(format!("Invalid UTF-8 in method string: {}", e));
+            return 1;
+        }
+    };
+
+    match kreuzberg::core::config_validation::validate_binarization_method(method_str) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate a token reduction level string.
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `level` must be a valid pointer to a valid UTF-8 C string or NULL.
+/// - If NULL is passed, an error is returned and error message is set.
+/// - The C string must remain valid for the duration of the function call.
+pub unsafe extern "C" fn kreuzberg_validate_token_reduction_level(level: *const c_char) -> i32 {
+    clear_last_error();
+
+    if level.is_null() {
+        set_last_error("token reduction level cannot be NULL".to_string());
+        return 1;
+    }
+
+    let level_str = match unsafe { CStr::from_ptr(level).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(format!("Invalid UTF-8 in level string: {}", e));
+            return 1;
+        }
+    };
+
+    match kreuzberg::core::config_validation::validate_token_reduction_level(level_str) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate an OCR backend string.
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `backend` must be a valid pointer to a valid UTF-8 C string or NULL.
+/// - If NULL is passed, an error is returned and error message is set.
+/// - The C string must remain valid for the duration of the function call.
+pub unsafe extern "C" fn kreuzberg_validate_ocr_backend(backend: *const c_char) -> i32 {
+    clear_last_error();
+
+    if backend.is_null() {
+        set_last_error("ocr backend cannot be NULL".to_string());
+        return 1;
+    }
+
+    let backend_str = match unsafe { CStr::from_ptr(backend).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(format!("Invalid UTF-8 in backend string: {}", e));
+            return 1;
+        }
+    };
+
+    match kreuzberg::core::config_validation::validate_ocr_backend(backend_str) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate a language code (ISO 639-1 or ISO 639-3).
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `code` must be a valid pointer to a valid UTF-8 C string or NULL.
+/// - If NULL is passed, an error is returned and error message is set.
+/// - The C string must remain valid for the duration of the function call.
+pub unsafe extern "C" fn kreuzberg_validate_language_code(code: *const c_char) -> i32 {
+    clear_last_error();
+
+    if code.is_null() {
+        set_last_error("language code cannot be NULL".to_string());
+        return 1;
+    }
+
+    let code_str = match unsafe { CStr::from_ptr(code).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(format!("Invalid UTF-8 in code string: {}", e));
+            return 1;
+        }
+    };
+
+    match kreuzberg::core::config_validation::validate_language_code(code_str) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate a tesseract Page Segmentation Mode (PSM).
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `psm` must be a valid Tesseract PSM value (typically 0-13).
+/// - Validation is performed on the numeric value with no pointer operations.
+pub unsafe extern "C" fn kreuzberg_validate_tesseract_psm(psm: i32) -> i32 {
+    clear_last_error();
+
+    match kreuzberg::core::config_validation::validate_tesseract_psm(psm) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate a tesseract OCR Engine Mode (OEM).
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `oem` must be a valid Tesseract OEM value (typically 0-3).
+/// - Validation is performed on the numeric value with no pointer operations.
+pub unsafe extern "C" fn kreuzberg_validate_tesseract_oem(oem: i32) -> i32 {
+    clear_last_error();
+
+    match kreuzberg::core::config_validation::validate_tesseract_oem(oem) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate a tesseract output format.
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `format` must be a valid pointer to a valid UTF-8 C string or NULL.
+/// - If NULL is passed, an error is returned and error message is set.
+/// - The C string must remain valid for the duration of the function call.
+pub unsafe extern "C" fn kreuzberg_validate_output_format(format: *const c_char) -> i32 {
+    clear_last_error();
+
+    if format.is_null() {
+        set_last_error("output format cannot be NULL".to_string());
+        return 1;
+    }
+
+    let format_str = match unsafe { CStr::from_ptr(format).to_str() } {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(format!("Invalid UTF-8 in format string: {}", e));
+            return 1;
+        }
+    };
+
+    match kreuzberg::core::config_validation::validate_output_format(format_str) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate a confidence threshold value (0.0-1.0).
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `confidence` must be a valid f64 value in the range [0.0, 1.0].
+/// - Validation is performed on the numeric value with no pointer operations.
+pub unsafe extern "C" fn kreuzberg_validate_confidence(confidence: f64) -> i32 {
+    clear_last_error();
+
+    match kreuzberg::core::config_validation::validate_confidence(confidence) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate a DPI (dots per inch) value.
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - `dpi` must be a valid DPI value (typically >= 50).
+/// - Validation is performed on the numeric value with no pointer operations.
+pub unsafe extern "C" fn kreuzberg_validate_dpi(dpi: i32) -> i32 {
+    clear_last_error();
+
+    match kreuzberg::core::config_validation::validate_dpi(dpi) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
+}
+
+/// Validate chunking parameters (max_chars > 0 and max_overlap < max_chars).
+///
+/// Returns 0 if valid, non-zero error code if invalid.
+/// Check kreuzberg_last_error() for error message.
+///
+/// # Safety
+///
+/// - Both `max_chars` and `max_overlap` must be valid usize values.
+/// - Validation checks that max_chars > 0 and max_overlap < max_chars.
+/// - No pointer operations are performed on the numeric parameters.
+pub unsafe extern "C" fn kreuzberg_validate_chunking_params(max_chars: usize, max_overlap: usize) -> i32 {
+    clear_last_error();
+
+    match kreuzberg::core::config_validation::validate_chunking_params(max_chars, max_overlap) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_last_error(e.to_string());
+            1
+        }
+    }
 }
 
 #[allow(non_upper_case_globals)]

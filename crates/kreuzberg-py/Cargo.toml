@@ -19,6 +19,7 @@ test = false
 [dependencies]
 async-trait = { workspace = true }
 kreuzberg = { path = "../kreuzberg", features = ["full", "bundled-pdfium"] }
+kreuzberg-ffi = { path = "../kreuzberg-ffi" }
 once_cell = "1.21"
 pyo3 = { version = "0.27.2", features = ["abi3-py310"] }
 pyo3-async-runtimes = { version = "0.27", features = ["tokio-runtime"] }

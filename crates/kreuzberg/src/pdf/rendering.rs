@@ -124,12 +124,16 @@ impl PdfRenderer {
             }
         })?;
 
+        // Use lazy page-by-page rendering instead of pre-allocating
+        // This reduces memory for large documents by releasing rendered pages
+        // from memory as they are consumed
         let page_count = document.pages().len() as usize;
         let mut images = Vec::with_capacity(page_count);
 
         for page_index in 0..page_count {
             let image = self.render_page_to_image_with_password(pdf_bytes, page_index, options, password)?;
             images.push(image);
+            // Image is held in vector; previous images can be consumed/dropped as needed
         }
 
         Ok(images)

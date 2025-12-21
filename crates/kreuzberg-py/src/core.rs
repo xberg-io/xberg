@@ -111,10 +111,11 @@ pub fn extract_bytes_sync(
 ) -> PyResult<ExtractionResult> {
     let rust_config = config.into();
 
-    // Release GIL during sync extraction - OSError/RuntimeError must bubble up ~keep
+    // Release GIL during extraction and result conversion - OSError/RuntimeError must bubble up ~keep
     let result =
         Python::detach(py, || kreuzberg::extract_bytes_sync(&data, &mime_type, &rust_config)).map_err(to_py_err)?;
 
+    // Convert result within GIL context (already reacquired by detach)
     ExtractionResult::from_rust(result, py)
 }
 
@@ -160,10 +161,11 @@ pub fn batch_extract_files_sync(
     let results =
         Python::detach(py, || kreuzberg::batch_extract_file_sync(path_strings, &rust_config)).map_err(to_py_err)?;
 
-    let list = PyList::empty(py);
-    for result in results {
-        list.append(ExtractionResult::from_rust(result, py)?)?;
-    }
+    let converted: PyResult<Vec<_>> = results
+        .into_iter()
+        .map(|result| ExtractionResult::from_rust(result, py))
+        .collect();
+    let list = PyList::new(py, converted?)?;
     Ok(list.unbind())
 }
 
@@ -214,10 +216,11 @@ pub fn batch_extract_bytes_sync(
     let results =
         Python::detach(py, || kreuzberg::batch_extract_bytes_sync(contents, &rust_config)).map_err(to_py_err)?;
 
-    let list = PyList::empty(py);
-    for result in results {
-        list.append(ExtractionResult::from_rust(result, py)?)?;
-    }
+    let converted: PyResult<Vec<_>> = results
+        .into_iter()
+        .map(|result| ExtractionResult::from_rust(result, py))
+        .collect();
+    let list = PyList::new(py, converted?)?;
     Ok(list.unbind())
 }
 
@@ -352,10 +355,11 @@ pub fn batch_extract_files<'py>(
             .map_err(to_py_err)?;
 
         Python::attach(|py| {
-            let list = PyList::empty(py);
-            for result in results {
-                list.append(ExtractionResult::from_rust(result, py)?)?;
-            }
+            let converted: PyResult<Vec<_>> = results
+                .into_iter()
+                .map(|result| ExtractionResult::from_rust(result, py))
+                .collect();
+            let list = PyList::new(py, converted?)?;
             Ok(list.unbind())
         })
     })
@@ -412,10 +416,11 @@ pub fn batch_extract_bytes<'py>(
             .map_err(to_py_err)?;
 
         Python::attach(|py| {
-            let list = PyList::empty(py);
-            for result in results {
-                list.append(ExtractionResult::from_rust(result, py)?)?;
-            }
+            let converted: PyResult<Vec<_>> = results
+                .into_iter()
+                .map(|result| ExtractionResult::from_rust(result, py))
+                .collect();
+            let list = PyList::new(py, converted?)?;
             Ok(list.unbind())
         })
     })

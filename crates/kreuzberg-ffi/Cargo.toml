@@ -19,8 +19,21 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 [features]
 # Mirror embeddings feature availability from kreuzberg dependency
 embeddings = []
+# Optional rayon for parallel batch processing
+rayon = ["dep:rayon"]
+# Re-export kreuzberg features for downstream conditional compilation
+pdf = []
+keywords-yake = []
+keywords-rake = []
 
 [dependencies]
+serde_json = { workspace = true }
+serde = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+html-to-markdown-rs = { version = "2.15.0", default-features = false }
+rayon = { version = "1.11", optional = true }
+
 # On Windows MinGW, disable embeddings/ort since ONNX Runtime is not available
 # in MinGW-compatible form. Use all other features but exclude embeddings.
 [target.'cfg(all(windows, target_env = "gnu"))'.dependencies]
@@ -42,22 +55,17 @@ kreuzberg = { path = "../kreuzberg", features = [
     "otel",
     "bundled-pdfium",
 ] }
-serde_json = { workspace = true }
-serde = { workspace = true }
-async-trait = { workspace = true }
-tokio = { workspace = true }
-html-to-markdown-rs = { version = "2.15.0", default-features = false }
 
 [target.'cfg(not(all(windows, target_env = "gnu")))'.dependencies]
 kreuzberg = { path = "../kreuzberg", features = ["full", "bundled-pdfium"] }
-serde_json = { workspace = true }
-serde = { workspace = true }
-async-trait = { workspace = true }
-tokio = { workspace = true }
-html-to-markdown-rs = { version = "2.15.0", default-features = false }
 
 [build-dependencies]
 cbindgen = "0.29"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+criterion = { version = "0.8", features = ["html_reports"] }
+
+[[bench]]
+name = "result_view_benchmark"
+harness = false

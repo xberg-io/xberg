@@ -2,7 +2,10 @@ name: CI Validate
 
 on:
   push:
-    branches: [main]
+    branches-ignore:
+      - 'benchmarking-*'
+      - 'profiling-*'
+      - 'feat/profiling-flamegraphs'
     paths:
       # All Rust crates
       - 'crates/kreuzberg/**'

@@ -167,4 +167,65 @@ export interface ExtractionConfig {
 	htmlOptions?: HtmlConversionOptions;
 	keywords?: KeywordConfig;
 	maxConcurrentExtractions?: number;
+
+	/**
+	 * Serialize the configuration to a JSON string.
+	 *
+	 * Converts this configuration object to its JSON representation.
+	 * The JSON can be used to create a new config via fromJson() or
+	 * passed to extraction functions that accept JSON configs.
+	 *
+	 * @returns JSON string representation of the configuration
+	 *
+	 * @example
+	 * ```typescript
+	 * const config: ExtractionConfig = { useCache: true };
+	 * const json = config.toJson();
+	 * console.log(json); // '{"useCache":true,...}'
+	 * ```
+	 */
+	toJson(): string;
+
+	/**
+	 * Get a configuration field by name (dot notation supported).
+	 *
+	 * Retrieves a nested configuration field using dot notation
+	 * (e.g., "ocr.backend", "images.targetDpi").
+	 *
+	 * @param fieldName - The field path to retrieve
+	 * @returns The field value as a JSON string, or null if not found
+	 *
+	 * @example
+	 * ```typescript
+	 * const config: ExtractionConfig = {
+	 *   ocr: { backend: 'tesseract' }
+	 * };
+	 * const backend = config.getField('ocr.backend');
+	 * console.log(backend); // '"tesseract"'
+	 *
+	 * const missing = config.getField('nonexistent');
+	 * console.log(missing); // null
+	 * ```
+	 */
+	getField(fieldName: string): string | null;
+
+	/**
+	 * Merge another configuration into this one.
+	 *
+	 * Performs a shallow merge where fields from the other config
+	 * take precedence over this config's fields. Modifies this config
+	 * in-place.
+	 *
+	 * @param other - Configuration to merge in (takes precedence)
+	 *
+	 * @example
+	 * ```typescript
+	 * const base: ExtractionConfig = { useCache: true, forceOcr: false };
+	 * const override: ExtractionConfig = { forceOcr: true };
+	 * base.merge(override);
+	 * console.log(base.useCache); // true
+	 * console.log(base.forceOcr); // true
+	 * ```
+	 */
+	merge(other: ExtractionConfig): void;
 }

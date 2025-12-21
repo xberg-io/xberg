@@ -95,7 +95,8 @@ impl FrameworkAdapter for NativeAdapter {
         let duration = start.elapsed();
 
         let samples = monitor.stop().await;
-        let resource_stats = ResourceMonitor::calculate_stats(&samples);
+        let snapshots = monitor.get_snapshots().await;
+        let resource_stats = ResourceMonitor::calculate_stats(&samples, &snapshots);
 
         let throughput = if duration.as_secs_f64() > 0.0 {
             file_size as f64 / duration.as_secs_f64()
@@ -184,7 +185,8 @@ impl FrameworkAdapter for NativeAdapter {
         let total_duration = start.elapsed();
 
         let samples = monitor.stop().await;
-        let resource_stats = ResourceMonitor::calculate_stats(&samples);
+        let snapshots = monitor.get_snapshots().await;
+        let resource_stats = ResourceMonitor::calculate_stats(&samples, &snapshots);
 
         let total_file_size: u64 = file_paths
             .iter()

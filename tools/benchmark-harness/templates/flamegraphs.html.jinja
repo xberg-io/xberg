@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flamegraph Gallery - Kreuzberg Benchmarks</title>
+    <style>
+{# CSS Variables - Matches MkDocs Material Theme #}
+:root {
+  --md-primary-fg-color: #323040;
+  --md-primary-fg-color--light: #4a4858;
+  --md-primary-fg-color--dark: #1a1926;
+
+  --md-accent-fg-color: #da2ae0;
+  --md-accent-fg-color-opposite: #58fbda;
+
+  --md-default-bg-color: #ffffff;
+  --md-default-bg-color--light: #f7fafc;
+  --md-default-bg-color--dark: #f2f2f4;
+
+  --md-default-fg-color: #323040;
+  --md-default-fg-color--light: #5b5966;
+  --md-default-fg-color--lighter: #718096;
+
+  --font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-family-headings: "Exo 2", var(--font-family);
+
+  --chart-color-1: #4299e1;
+  --chart-color-2: #48bb78;
+  --chart-color-3: #ed8936;
+  --chart-color-4: #9f7aea;
+  --chart-color-5: #f56565;
+
+  --accent-color: var(--md-accent-fg-color);
+  --background-color: var(--md-default-bg-color);
+  --background-color-light: var(--md-default-bg-color--light);
+  --text-color: var(--md-default-fg-color);
+  --text-color-secondary: var(--md-default-fg-color--light);
+  --text-color-tertiary: var(--md-default-fg-color--lighter);
+
+  --border-color: #e2e8f0;
+  --shadow-color: rgba(0, 0, 0, 0.1);
+  --hover-bg-color: rgba(218, 42, 224, 0.1);
+
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 1rem;
+  --spacing-md: 1.5rem;
+  --spacing-lg: 2rem;
+  --spacing-xl: 3rem;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --md-accent-fg-color: #58fbda;
+    --md-accent-fg-color-opposite: #da2ae0;
+
+    --md-default-bg-color: #23232c;
+    --md-default-bg-color--light: #2a2836;
+    --md-default-bg-color--dark: #1a1820;
+
+    --md-default-fg-color: #ffffff;
+    --md-default-fg-color--light: rgba(255, 255, 255, 0.8);
+    --md-default-fg-color--lighter: rgba(255, 255, 255, 0.6);
+
+    --chart-color-1: #63b3ed;
+    --chart-color-2: #68d391;
+    --chart-color-3: #f6ad55;
+    --chart-color-4: #b794f4;
+    --chart-color-5: #fc8181;
+
+    --border-color: rgba(255, 255, 255, 0.1);
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    --hover-bg-color: rgba(88, 251, 218, 0.1);
+  }
+}
+
+{# Global Styles #}
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--background-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+{# Layout #}
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+}
+
+{# Header #}
+.header {
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 2px solid var(--border-color);
+}
+
+.header h1 {
+  font-family: var(--font-family-headings);
+  font-size: 2.5rem;
+  margin-bottom: var(--spacing-sm);
+  color: var(--text-color);
+}
+
+.header p {
+  color: var(--text-color-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.header-meta {
+  display: flex;
+  gap: var(--spacing-lg);
+  flex-wrap: wrap;
+  margin-top: var(--spacing-md);
+  color: var(--text-color-tertiary);
+  font-size: 0.9rem;
+}
+
+.header-meta span {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.back-link {
+  display: inline-block;
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background-color: var(--background-color-light);
+  color: var(--accent-color);
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.back-link:hover {
+  background-color: var(--hover-bg-color);
+  transform: translateX(-2px);
+}
+
+{# Framework Sections #}
+.framework-section {
+  margin-bottom: var(--spacing-xl);
+}
+
+.framework-title {
+  font-family: var(--font-family-headings);
+  font-size: 1.5rem;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 2px solid var(--accent-color);
+  color: var(--text-color);
+}
+
+.framework-title::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 1.2em;
+  background-color: var(--accent-color);
+  margin-right: var(--spacing-xs);
+  border-radius: 2px;
+}
+
+{# Flamegraph Grid #}
+.flamegraph-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+@media (max-width: 768px) {
+  .flamegraph-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+{# Flamegraph Card #}
+.flamegraph-card {
+  background-color: var(--background-color-light);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.flamegraph-card:hover {
+  box-shadow: 0 8px 16px var(--shadow-color);
+  transform: translateY(-2px);
+  border-color: var(--accent-color);
+}
+
+.flamegraph-card-header {
+  padding: var(--spacing-md);
+  background-color: var(--background-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.flamegraph-card-title {
+  font-family: var(--font-family-headings);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+  color: var(--text-color);
+}
+
+.flamegraph-card-meta {
+  display: flex;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-color-tertiary);
+}
+
+.flamegraph-card-meta span {
+  display: inline-block;
+  background-color: var(--background-color-light);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.flamegraph-card-preview {
+  flex: 1;
+  min-height: 300px;
+  background-color: var(--background-color);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flamegraph-card-preview object {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+}
+
+.flamegraph-card-preview.loading {
+  background: linear-gradient(
+    90deg,
+    var(--background-color-light) 25%,
+    var(--background-color-dark) 50%,
+    var(--background-color-light) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.flamegraph-card-preview-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--spacing-md);
+  text-align: center;
+  color: var(--text-color-tertiary);
+}
+
+.flamegraph-card-preview-error p {
+  margin: var(--spacing-xs) 0;
+}
+
+.flamegraph-card-footer {
+  padding: var(--spacing-md);
+  background-color: var(--background-color);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.button {
+  flex: 1;
+  padding: var(--spacing-xs) var(--spacing-md);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: var(--font-family);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.button-primary {
+  background-color: var(--accent-color);
+  color: var(--background-color);
+}
+
+.button-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.button-secondary {
+  background-color: var(--background-color-light);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.button-secondary:hover {
+  background-color: var(--hover-bg-color);
+}
+
+{# Empty State #}
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-xl);
+  color: var(--text-color-secondary);
+}
+
+.empty-state h2 {
+  font-family: var(--font-family-headings);
+  margin-bottom: var(--spacing-md);
+}
+
+.empty-state p {
+  margin-bottom: var(--spacing-sm);
+}
+
+{# Footer #}
+.footer {
+  margin-top: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+  color: var(--text-color-tertiary);
+  font-size: 0.9rem;
+}
+
+{# Responsive adjustments #}
+@media (max-width: 1024px) {
+  .container {
+    padding: var(--spacing-md);
+  }
+
+  .header h1 {
+    font-size: 2rem;
+  }
+
+  .flamegraph-grid {
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: var(--spacing-sm);
+  }
+
+  .header h1 {
+    font-size: 1.5rem;
+  }
+
+  .header-meta {
+    gap: var(--spacing-sm);
+    font-size: 0.85rem;
+  }
+
+  .flamegraph-grid {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-sm);
+  }
+
+  .flamegraph-card-preview {
+    min-height: 250px;
+  }
+
+  .flamegraph-card-footer {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .button {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: 0.85rem;
+  }
+}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Flamegraph Gallery</h1>
+            <p>Performance profiling data for Kreuzberg document extraction benchmarks</p>
+            <div class="header-meta">
+                <span>Generated: {{ generated_at }}</span>
+                {% if total_flamegraphs %}
+                <span>Total flamegraphs: {{ total_flamegraphs }}</span>
+                {% endif %}
+                {% if total_frameworks %}
+                <span>Frameworks: {{ total_frameworks }}</span>
+                {% endif %}
+            </div>
+            <a href="index.html" class="back-link">← Back to Benchmark Results</a>
+        </header>
+
+        {% if frameworks|length > 0 %}
+            {% for framework in frameworks %}
+            <section class="framework-section">
+                <h2 class="framework-title">{{ framework.name }}</h2>
+
+                {% if framework.flamegraphs|length > 0 %}
+                <div class="flamegraph-grid">
+                    {% for flamegraph in framework.flamegraphs %}
+                    <div class="flamegraph-card">
+                        <div class="flamegraph-card-header">
+                            <div class="flamegraph-card-title">{{ flamegraph.title }}</div>
+                            <div class="flamegraph-card-meta">
+                                {% if flamegraph.mode %}
+                                <span>{{ flamegraph.mode }}</span>
+                                {% endif %}
+                                {% if flamegraph.fixture %}
+                                <span>{{ flamegraph.fixture }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="flamegraph-card-preview loading">
+                            <object data="{{ flamegraph.path }}" type="image/svg+xml">
+                                <div class="flamegraph-card-preview-error">
+                                    <p>Failed to load flamegraph</p>
+                                    <p>{{ flamegraph.path }}</p>
+                                </div>
+                            </object>
+                        </div>
+                        <div class="flamegraph-card-footer">
+                            <a href="{{ flamegraph.path }}" class="button button-primary" target="_blank">
+                                Open Full Size
+                            </a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <p>No flamegraphs found for this framework</p>
+                </div>
+                {% endif %}
+            </section>
+            {% endfor %}
+        {% else %}
+        <div class="empty-state">
+            <h2>No Flamegraphs Available</h2>
+            <p>No flamegraph SVG files were found in the flamegraphs directory.</p>
+            <p>Run benchmarks with profiling enabled to generate flamegraphs.</p>
+        </div>
+        {% endif %}
+
+        <footer class="footer">
+            <p>Kreuzberg Benchmark Suite - Performance Profiling Gallery</p>
+            <p style="font-size: 0.85rem; margin-top: var(--spacing-sm);">
+                Flamegraph visualization from <code>pprof</code> and <code>flamegraph.pl</code>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Remove loading state when object loads
+        document.querySelectorAll('.flamegraph-card-preview object').forEach(obj => {
+            obj.addEventListener('load', function() {
+                this.parentElement.classList.remove('loading');
+            });
+            obj.addEventListener('error', function() {
+                this.parentElement.classList.remove('loading');
+            });
+        });
+    </script>
+</body>
+</html>

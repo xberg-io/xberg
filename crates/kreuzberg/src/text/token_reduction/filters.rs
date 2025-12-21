@@ -1,6 +1,7 @@
 use crate::error::{KreuzbergError, Result};
 use crate::stopwords::STOPWORDS;
 use crate::text::token_reduction::config::TokenReductionConfig;
+use crate::text::utf8_validation;
 use ahash::{AHashMap, AHashSet};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -65,9 +66,12 @@ impl FilterPipeline {
     pub fn apply_light_filters(&self, text: &str) -> String {
         let mut result = text.to_string();
 
-        let mut preserved_blocks = AHashMap::new();
+        // Lazily allocate preserved_blocks only when actually needed.
+        let mut preserved_blocks: Option<AHashMap<String, String>> = None;
         if self.config.preserve_markdown {
-            result = self.extract_and_preserve_code(&result, &mut preserved_blocks);
+            let mut blocks = AHashMap::new();
+            result = self.extract_and_preserve_code(&result, &mut blocks);
+            preserved_blocks = Some(blocks);
         }
 
         result = HTML_COMMENT_REGEX.replace_all(&result, "").to_string();
@@ -80,7 +84,9 @@ impl FilterPipeline {
             result = self.preserve_markdown_structure(&result);
         }
 
-        result = self.restore_preserved_blocks(&result, &preserved_blocks);
+        if let Some(blocks) = &preserved_blocks {
+            result = self.restore_preserved_blocks(&result, blocks);
+        }
 
         result
     }
@@ -88,9 +94,12 @@ impl FilterPipeline {
     pub fn apply_moderate_filters(&self, text: &str) -> String {
         let mut result = self.apply_light_filters(text);
 
-        let mut preserved_blocks = AHashMap::new();
+        // Lazily allocate preserved_blocks only when preserve_code is enabled.
+        let mut preserved_blocks: Option<AHashMap<String, String>> = None;
         if self.config.preserve_code {
-            result = self.extract_and_preserve_code(&result, &mut preserved_blocks);
+            let mut blocks = AHashMap::new();
+            result = self.extract_and_preserve_code(&result, &mut blocks);
+            preserved_blocks = Some(blocks);
         }
 
         if self.config.preserve_markdown {
@@ -99,14 +108,17 @@ impl FilterPipeline {
             result = self.remove_stopwords(&result);
         }
 
-        result = self.restore_preserved_blocks(&result, &preserved_blocks);
+        if let Some(blocks) = &preserved_blocks {
+            result = self.restore_preserved_blocks(&result, blocks);
+        }
 
         result
     }
 
     fn remove_stopwords_preserving_markdown(&self, text: &str) -> String {
         let lines: Vec<&str> = text.lines().collect();
-        let mut processed_lines = Vec::new();
+        // Pre-allocate processed_lines with same capacity as input lines.
+        let mut processed_lines = Vec::with_capacity(lines.len());
 
         for line in lines {
             if MARKDOWN_HEADERS_REGEX.is_match(line) {
@@ -133,7 +145,8 @@ impl FilterPipeline {
 
     fn remove_stopwords(&self, text: &str) -> String {
         let words: Vec<&str> = text.split_whitespace().collect();
-        let mut filtered_words = Vec::with_capacity(words.len());
+        // Pre-allocate with estimated size after stopword removal (~70% kept in typical text).
+        let mut filtered_words = Vec::with_capacity((words.len() as f32 * 0.7).ceil() as usize);
 
         for word in words {
             if word.is_empty() {
@@ -161,7 +174,7 @@ impl FilterPipeline {
                     .filter(|&b| b.is_ascii_alphabetic())
                     .map(|b| b.to_ascii_lowercase())
                     .collect();
-                String::from_utf8(clean_bytes).unwrap_or_else(|_| {
+                utf8_validation::string_from_utf8(clean_bytes).unwrap_or_else(|_| {
                     word.chars()
                         .filter(|c| c.is_alphabetic())
                         .collect::<String>()
@@ -232,7 +245,8 @@ impl FilterPipeline {
 
     fn preserve_markdown_structure(&self, text: &str) -> String {
         let lines: Vec<&str> = text.lines().collect();
-        let mut processed_lines = Vec::new();
+        // Pre-allocate processed_lines with same capacity as input lines (no filtering expected).
+        let mut processed_lines = Vec::with_capacity(lines.len());
 
         for line in lines {
             if MARKDOWN_HEADERS_REGEX.is_match(line) {

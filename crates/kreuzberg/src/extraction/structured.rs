@@ -31,6 +31,7 @@
 //! # }
 //! ```
 use crate::error::{KreuzbergError, Result};
+use crate::text::utf8_validation;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -239,8 +240,8 @@ fn is_text_field(key: &str, custom_patterns: &[String]) -> bool {
 }
 
 pub fn parse_yaml(data: &[u8]) -> Result<StructuredDataResult> {
-    let yaml_str =
-        std::str::from_utf8(data).map_err(|e| KreuzbergError::parsing(format!("Invalid UTF-8 in YAML: {}", e)))?;
+    let yaml_str = utf8_validation::from_utf8(data)
+        .map_err(|e| KreuzbergError::parsing(format!("Invalid UTF-8 in YAML: {}", e)))?;
 
     let value: serde_json::Value = serde_yaml_ng::from_str(yaml_str)
         .map_err(|e| KreuzbergError::parsing(format!("Failed to parse YAML: {}", e)))?;
@@ -311,8 +312,8 @@ fn extract_from_value(
 }
 
 pub fn parse_toml(data: &[u8]) -> Result<StructuredDataResult> {
-    let toml_str =
-        std::str::from_utf8(data).map_err(|e| KreuzbergError::parsing(format!("Invalid UTF-8 in TOML: {}", e)))?;
+    let toml_str = utf8_validation::from_utf8(data)
+        .map_err(|e| KreuzbergError::parsing(format!("Invalid UTF-8 in TOML: {}", e)))?;
 
     let value: toml::Value =
         toml::from_str(toml_str).map_err(|e| KreuzbergError::parsing(format!("Failed to parse TOML: {}", e)))?;

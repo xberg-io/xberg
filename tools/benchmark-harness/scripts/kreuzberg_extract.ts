@@ -43,12 +43,24 @@ async function extractBatch(filePaths: string[]): Promise<ExtractionOutput[]> {
 	}));
 }
 
+async function extractAsyncBatch(filePaths: string[]): Promise<ExtractionOutput[]> {
+	const start = performance.now();
+	const promises = filePaths.map((fp) => extractAsync(fp));
+	const results = await Promise.all(promises);
+	const totalDurationMs = performance.now() - start;
+
+	return results.map((result, index) => ({
+		...result,
+		_batch_total_ms: totalDurationMs,
+	}));
+}
+
 async function main(): Promise<void> {
 	const args = process.argv.slice(2);
 
 	if (args.length < 2) {
 		console.error("Usage: kreuzberg_extract.ts <mode> <file_path> [additional_files...]");
-		console.error("Modes: async, batch");
+		console.error("Modes: async, batch, async-batch");
 		process.exit(1);
 	}
 
@@ -76,8 +88,21 @@ async function main(): Promise<void> {
 			} else {
 				console.log(JSON.stringify(results));
 			}
+		} else if (mode === "async-batch") {
+			if (filePaths.length < 1) {
+				console.error("Error: async-batch mode requires at least one file");
+				process.exit(1);
+			}
+
+			const results = await extractAsyncBatch(filePaths);
+
+			if (filePaths.length === 1) {
+				console.log(JSON.stringify(results[0]));
+			} else {
+				console.log(JSON.stringify(results));
+			}
 		} else {
-			console.error(`Error: Unknown mode '${mode}'. Use async or batch`);
+			console.error(`Error: Unknown mode '${mode}'. Use async, batch, or async-batch`);
 			process.exit(1);
 		}
 	} catch (err) {

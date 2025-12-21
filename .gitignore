@@ -134,3 +134,7 @@ libpdfium.a
 
 # Rust coverage profiling artifacts
 *.profraw
+
+# Profiling artifacts
+profiling-results/
+profiling-results-*/

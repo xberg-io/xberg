@@ -90,6 +90,8 @@ fn inline_image_format_to_str(format: &InlineImageFormat) -> String {
                 return "svg".to_string();
             }
 
+            // Pre-allocate with capacity; format strings are typically 4-10 chars
+            let mut result = String::with_capacity(10);
             let mut candidate = lower.as_str();
 
             if let Some(idx) = candidate.find(['+', ';']) {
@@ -105,7 +107,8 @@ fn inline_image_format_to_str(format: &InlineImageFormat) -> String {
             if candidate.is_empty() {
                 "bin".to_string()
             } else {
-                candidate.to_string()
+                result.push_str(candidate);
+                result
             }
         }
     }

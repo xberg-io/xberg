@@ -221,6 +221,68 @@ typedef char *(*DocumentExtractorCallback)(const uint8_t *content,
 typedef char *(*ValidatorCallback)(const char *result_json);
 
 /**
+ * C-compatible structured error details returned by `kreuzberg_get_error_details()`.
+ *
+ * All string fields (message, error_type, source_file, source_function, context_info)
+ * are dynamically allocated C strings that MUST be freed using `kreuzberg_free_string()`.
+ * Set fields are non-NULL; unset fields are NULL.
+ */
+typedef struct CErrorDetails {
+  /**
+   * The error message (must be freed with kreuzberg_free_string)
+   */
+  char *message;
+  /**
+   * Numeric error code (0-7 for Kreuzberg errors, 1-7 for panic_shield codes)
+   */
+  uint32_t error_code;
+  /**
+   * Human-readable error type name (must be freed with kreuzberg_free_string)
+   */
+  char *error_type;
+  /**
+   * Source file where error occurred (may be NULL)
+   */
+  char *source_file;
+  /**
+   * Source function where error occurred (may be NULL)
+   */
+  char *source_function;
+  /**
+   * Line number in source file (0 if unknown)
+   */
+  uint32_t source_line;
+  /**
+   * Additional context information (may be NULL)
+   */
+  char *context_info;
+  /**
+   * 1 if this error originated from a panic, 0 otherwise
+   */
+  int32_t is_panic;
+} CErrorDetails;
+
+/**
+ * Metadata field accessor structure
+ *
+ * Returned by `kreuzberg_result_get_metadata_field()`. Contains the field value
+ * as JSON and information about whether the field exists.
+ *
+ * # Fields
+ *
+ * * `name` - The field name requested (does not need to be freed)
+ * * `json_value` - JSON representation of the field value, or NULL if field doesn't exist
+ * * `is_null` - 1 if the field doesn't exist, 0 if it does
+ *
+ * The `json_value` pointer (if non-NULL) must be freed with `kreuzberg_free_string()`.
+ */
+typedef struct CMetadataField {
+  const char *name;
+  char *json_value;
+  int32_t is_null;
+} CMetadataField;
+
+/**
  * Extract text and metadata from a file (synchronous).
  *
  * # Safety
@@ -1083,5 +1145,1043 @@ ExtractionConfig *kreuzberg_config_from_file(const char *path);
  * ```
  */
 char *kreuzberg_config_discover(void);
+
+/**
+ * Get supported languages for an OCR backend.
+ *
+ * Returns a JSON array of supported language codes for the given backend.
+ * Supported backends: "easyocr", "paddleocr", "tesseract"
+ *
+ * # Safety
+ *
+ * - The returned string must be freed with `kreuzberg_free_string`
+ * - Returns NULL if backend not found or on error (check `kreuzberg_last_error`)
+ *
+ * # Example (C)
+ *
+ * ```c
+ * char* languages = kreuzberg_get_ocr_languages("easyocr");
+ * if (languages != NULL) {
+ *     printf("EasyOCR languages: %s\n", languages);
+ *     kreuzberg_free_string(languages);
+ * }
+ * ```
+ */
+char *kreuzberg_get_ocr_languages(const char *backend);
+
+/**
+ * Check if a language is supported by an OCR backend.
+ *
+ * Returns 1 (true) if the language is supported, 0 (false) otherwise.
+ *
+ * # Arguments
+ *
+ * * `backend` - Backend name (e.g., "easyocr", "paddleocr", "tesseract")
+ * * `language` - Language code to check
+ *
+ * # Returns
+ *
+ * 1 if supported, 0 if not supported or backend not found.
+ *
+ * # Example (C)
+ *
+ * ```c
+ * int is_supported = kreuzberg_is_language_supported("easyocr", "en");
+ * if (is_supported) {
+ *     printf("English is supported by EasyOCR\n");
+ * }
+ * ```
+ *
+ * # Safety
+ *
+ * - `backend` and `language` must be valid pointers to valid UTF-8 C strings.
+ * - Both pointers can be checked for NULL; returns 0 if either is NULL.
+ * - The C strings must remain valid for the duration of the function call.
+ */
+int32_t kreuzberg_is_language_supported(const char *backend, const char *language);
+
+/**
+ * Get list of all registered OCR backends with language support.
+ *
+ * Returns a JSON object mapping backend names to language counts.
+ * Example: `{"easyocr": 80, "paddleocr": 14, "tesseract": 100}`
+ *
+ * # Safety
+ *
+ * - The returned string must be freed with `kreuzberg_free_string`
+ * - Returns NULL on error (check `kreuzberg_last_error`)
+ *
+ * # Example (C)
+ *
+ * ```c
+ * char* backends = kreuzberg_list_ocr_backends_with_languages();
+ * if (backends != NULL) {
+ *     printf("Available backends: %s\n", backends);
+ *     kreuzberg_free_string(backends);
+ * }
+ * ```
+ */
+char *kreuzberg_list_ocr_backends_with_languages(void);
+
+/**
+ * Parse an ExtractionConfig from a JSON string.
+ *
+ * This is the primary FFI entry point for all language bindings to parse
+ * configuration from JSON. Replaces the need for each binding to implement
+ * its own JSON parsing logic.
+ *
+ * # Arguments
+ *
+ * * `json_config` - Null-terminated C string containing JSON configuration
+ *
+ * # Returns
+ *
+ * A pointer to an ExtractionConfig struct that MUST be freed with
+ * `kreuzberg_config_free`, or NULL on error (check kreuzberg_last_error).
+ *
+ * # Safety
+ *
+ * - `json_config` must be a valid null-terminated C string
+ * - The returned pointer must be freed with `kreuzberg_config_free`
+ * - Returns NULL if parsing fails (error available via `kreuzberg_last_error`)
+ *
+ * # Example (C)
+ *
+ * ```c
+ * const char* config_json = "{\"use_cache\": true, \"ocr\": {\"backend\": \"tesseract\"}}";
+ * ExtractionConfig* config = kreuzberg_config_from_json(config_json);
+ * if (config == NULL) {
+ *     printf("Error: %s\n", kreuzberg_last_error());
+ *     return 1;
+ * }
+ *
+ * // Use config...
+ * // char* result = kreuzberg_extract_file_with_config("doc.pdf", config);
+ *
+ * kreuzberg_config_free(config);
+ * ```
+ */
+ExtractionConfig *kreuzberg_config_from_json(const char *json_config);
+
+/**
+ * Free an ExtractionConfig allocated by kreuzberg_config_from_json or similar.
+ *
+ * # Safety
+ *
+ * - `config` must be a pointer previously returned by a config creation function
+ * - `config` can be NULL (no-op)
+ * - `config` must not be used after this call
+ *
+ * # Example (C)
+ *
+ * ```c
+ * ExtractionConfig* config = kreuzberg_config_from_json("{...}");
+ * if (config != NULL) {
+ *     // Use config...
+ *     kreuzberg_config_free(config);
+ * }
+ * ```
+ */
+void kreuzberg_config_free(ExtractionConfig *config);
+
+/**
+ * Validate a JSON config string without parsing it.
+ *
+ * This function checks if a JSON config string is valid and would parse correctly,
+ * without allocating the full ExtractionConfig structure. Useful for validation
+ * before committing to parsing.
+ *
+ * # Arguments
+ *
+ * * `json_config` - Null-terminated C string containing JSON configuration
+ *
+ * # Returns
+ *
+ * - 1 if valid (would parse successfully)
+ * - 0 if invalid (check `kreuzberg_last_error` for details)
+ *
+ * # Safety
+ *
+ * - `json_config` must be a valid null-terminated C string
+ *
+ * # Example (C)
+ *
+ * ```c
+ * const char* config_json = "{\"use_cache\": true}";
+ * if (kreuzberg_config_is_valid(config_json)) {
+ *     ExtractionConfig* config = kreuzberg_config_from_json(config_json);
+ *     // Use config...
+ *     kreuzberg_config_free(config);
+ * } else {
+ *     printf("Invalid config: %s\n", kreuzberg_last_error());
+ * }
+ * ```
+ */
+int32_t kreuzberg_config_is_valid(const char *json_config);
+
+/**
+ * Serialize an ExtractionConfig to JSON string.
+ *
+ * Converts an ExtractionConfig structure to its JSON representation, allowing
+ * bindings to serialize configs without reimplementing serialization logic.
+ *
+ * # Arguments
+ *
+ * * `config` - Pointer to an ExtractionConfig structure
+ *
+ * # Returns
+ *
+ * A pointer to a C string containing JSON that MUST be freed with `kreuzberg_free_string`.
+ * Returns NULL on error (check `kreuzberg_last_error`).
+ *
+ * # Safety
+ *
+ * - `config` must be a valid pointer to an ExtractionConfig
+ * - `config` cannot be NULL
+ * - The returned pointer must be freed with `kreuzberg_free_string`
+ *
+ * # Example (C)
+ *
+ * ```c
+ * ExtractionConfig* config = kreuzberg_config_from_json("{\"use_cache\": true}");
+ * if (config != NULL) {
+ *     char* json = kreuzberg_config_to_json(config);
+ *     if (json != NULL) {
+ *         printf("Serialized: %s\n", json);
+ *         kreuzberg_free_string(json);
+ *     }
+ *     kreuzberg_config_free(config);
+ * }
+ * ```
+ */
+char *kreuzberg_config_to_json(const ExtractionConfig *config);
+
+/**
+ * Get a specific field from config as JSON string.
+ *
+ * Retrieves a nested field from the configuration by path and returns its JSON
+ * representation. Supports dot notation for nested fields (e.g., "ocr.backend").
+ *
+ * # Arguments
+ *
+ * * `config` - Pointer to an ExtractionConfig structure
+ * * `field_name` - Null-terminated C string with field path (e.g., "use_cache", "ocr.backend")
+ *
+ * # Returns
+ *
+ * A pointer to a C string containing the field value as JSON, or NULL if:
+ * - The field doesn't exist
+ * - An error occurs during serialization
+ *
+ * The returned pointer (if non-NULL) must be freed with `kreuzberg_free_string`.
+ *
+ * # Safety
+ *
+ * - `config` must be a valid pointer to an ExtractionConfig
+ * - `field_name` must be a valid null-terminated C string
+ * - Neither parameter can be NULL
+ *
+ * # Example (C)
+ *
+ * ```c
+ * ExtractionConfig* config = kreuzberg_config_from_json(
+ *     "{\"use_cache\": true, \"ocr\": {\"backend\": \"tesseract\"}}"
+ * );
+ * if (config != NULL) {
+ *     char* use_cache = kreuzberg_config_get_field(config, "use_cache");
+ *     char* backend = kreuzberg_config_get_field(config, "ocr.backend");
+ *
+ *     if (use_cache != NULL) {
+ *         printf("use_cache: %s\n", use_cache);
+ *         kreuzberg_free_string(use_cache);
+ *     }
+ *
+ *     if (backend != NULL) {
+ *         printf("backend: %s\n", backend);
+ *         kreuzberg_free_string(backend);
+ *     }
+ *
+ *     kreuzberg_config_free(config);
+ * }
+ * ```
+ */
+char *kreuzberg_config_get_field(const ExtractionConfig *config, const char *field_name);
+
+/**
+ * Merge two configs (override takes precedence over base).
+ *
+ * Performs a shallow merge of two ExtractionConfig structures, where fields
+ * from `override_config` take precedence over fields in `base`. The `base`
+ * config is modified in-place.
+ *
+ * # Arguments
+ *
+ * * `base` - Pointer to the base ExtractionConfig (will be modified)
+ * * `override_config` - Pointer to the override ExtractionConfig (read-only)
+ *
+ * # Returns
+ *
+ * - 1 on success
+ * - 0 on error (check `kreuzberg_last_error`)
+ *
+ * # Safety
+ *
+ * - `base` must be a valid mutable pointer to an ExtractionConfig
+ * - `override_config` must be a valid pointer to an ExtractionConfig
+ * - Neither parameter can be NULL
+ * - `base` is modified in-place
+ *
+ * # Example (C)
+ *
+ * ```c
+ * ExtractionConfig* base = kreuzberg_config_from_json(
+ *     "{\"use_cache\": true, \"force_ocr\": false}"
+ * );
+ * ExtractionConfig* override = kreuzberg_config_from_json(
+ *     "{\"force_ocr\": true}"
+ * );
+ *
+ * if (kreuzberg_config_merge(base, override) == 1) {
+ *     // base now has: use_cache=true, force_ocr=true
+ *     char* json = kreuzberg_config_to_json(base);
+ *     printf("Merged config: %s\n", json);
+ *     kreuzberg_free_string(json);
+ * }
+ *
+ * kreuzberg_config_free(base);
+ * kreuzberg_config_free(override);
+ * ```
+ */
+int32_t kreuzberg_config_merge(ExtractionConfig *base, const ExtractionConfig *override_config);
+
+/**
+ * Returns the validation error code (0).
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_validation(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_validation(void);
+
+/**
+ * Returns the parsing error code (1).
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_parsing(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_parsing(void);
+
+/**
+ * Returns the OCR error code (2).
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_ocr(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_ocr(void);
+
+/**
+ * Returns the missing dependency error code (3).
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_missing_dependency(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_missing_dependency(void);
+
+/**
+ * Returns the I/O error code (4).
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_io(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_io(void);
+
+/**
+ * Returns the plugin error code (5).
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_plugin(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_plugin(void);
+
+/**
+ * Returns the unsupported format error code (6).
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_unsupported_format(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_unsupported_format(void);
+
+/**
+ * Returns the internal error code (7).
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_internal(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_internal(void);
+
+/**
+ * Returns the total count of valid error codes.
+ *
+ * Currently 8 error codes (0-7). This helps bindings validate error codes.
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_error_code_count(void);
+ * ```
+ */
+uint32_t kreuzberg_error_code_count(void);
+
+/**
+ * Returns the name of an error code as a C string.
+ *
+ * # Arguments
+ *
+ * - `code`: Numeric error code (0-7)
+ *
+ * # Returns
+ *
+ * Pointer to a null-terminated C string with the error name (e.g., "validation", "ocr").
+ * Returns a pointer to "unknown" if the code is invalid.
+ *
+ * The returned pointer is valid for the lifetime of the program and should not be freed.
+ *
+ * # Examples
+ *
+ * ```c
+ * const char* name = kreuzberg_error_code_name(0);
+ * printf("%s\n", name);  // prints: validation
+ * ```
+ *
+ * # C Signature
+ *
+ * ```c
+ * const char* kreuzberg_error_code_name(uint32_t code);
+ * ```
+ */
+const char *kreuzberg_error_code_name(uint32_t code);
+
+/**
+ * Returns the description of an error code as a C string.
+ *
+ * # Arguments
+ *
+ * - `code`: Numeric error code (0-7)
+ *
+ * # Returns
+ *
+ * Pointer to a null-terminated C string with a description (e.g., "Input validation error").
+ * Returns a pointer to "Unknown error code" if the code is invalid.
+ *
+ * The returned pointer is valid for the lifetime of the program and should not be freed.
+ *
+ * # C Signature
+ *
+ * ```c
+ * const char* kreuzberg_error_code_description(uint32_t code);
+ * ```
+ */
+const char *kreuzberg_error_code_description(uint32_t code);
+
+/**
+ * Retrieves detailed error information from the thread-local error storage.
+ *
+ * Returns structured error details including message, code, type, and source location.
+ * This function queries the error state captured by FFI functions and provides
+ * comprehensive error information for binding implementations.
+ *
+ * # Returns
+ *
+ * A `CErrorDetails` structure with the following characteristics:
+ * - All non-NULL string pointers must be freed with `kreuzberg_free_string()`
+ * - NULL pointers indicate the field is not available
+ * - `error_code` is a numeric code (0-7)
+ * - `source_line` is 0 if unknown
+ * - `is_panic` is 1 if error originated from a panic, 0 otherwise
+ *
+ * # Thread Safety
+ *
+ * This function is thread-safe. Each thread has its own error storage.
+ *
+ * # Example (C)
+ *
+ * ```c
+ * CErrorDetails details = kreuzberg_get_error_details();
+ * printf("Error: %s (code=%u, type=%s)\n", details.message, details.error_code, details.error_type);
+ * if (details.source_file != NULL) {
+ *     printf("  at %s:%u in %s\n", details.source_file, details.source_line, details.source_function);
+ * }
+ * kreuzberg_free_string(details.message);
+ * kreuzberg_free_string(details.error_type);
+ * if (details.source_file != NULL) kreuzberg_free_string(details.source_file);
+ * if (details.source_function != NULL) kreuzberg_free_string(details.source_function);
+ * if (details.context_info != NULL) kreuzberg_free_string(details.context_info);
+ * ```
+ *
+ * # C Signature
+ *
+ * ```c
+ * typedef struct {
+ *     char* message;
+ *     uint32_t error_code;
+ *     char* error_type;
+ *     char* source_file;
+ *     char* source_function;
+ *     uint32_t source_line;
+ *     char* context_info;
+ *     int is_panic;
+ * } CErrorDetails;
+ *
+ * CErrorDetails kreuzberg_get_error_details(void);
+ * ```
+ */
+struct CErrorDetails kreuzberg_get_error_details(void);
+
+/**
+ * Classifies an error based on the error message string.
+ *
+ * Analyzes an error message and attempts to classify it into one of the standard
+ * Kreuzberg error codes (0-7). This is useful for converting error messages from
+ * external libraries or system calls into Kreuzberg error categories.
+ *
+ * # Arguments
+ *
+ * - `error_message`: Pointer to a null-terminated C string with the error message
+ *
+ * # Returns
+ *
+ * Numeric error code (0-7) indicating the most likely error classification.
+ * Returns 7 (Internal) if the message cannot be reliably classified.
+ *
+ * # Classification Rules
+ *
+ * The classifier looks for common keywords and patterns:
+ * - **0 (Validation)**: "invalid", "validation", "parameter", "constraint", "format mismatch"
+ * - **1 (Parsing)**: "parse", "parsing", "corrupt", "unexpected", "malformed", "invalid format"
+ * - **2 (OCR)**: "ocr", "tesseract", "recognition", "optical"
+ * - **3 (MissingDependency)**: "not found", "missing", "dependency", "not installed", "unavailable"
+ * - **4 (Io)**: "io", "file", "read", "write", "permission", "access", "disk", "exists"
+ * - **5 (Plugin)**: "plugin", "loader", "registry", "extension"
+ * - **6 (UnsupportedFormat)**: "unsupported", "unknown format", "MIME type"
+ *
+ * # Thread Safety
+ *
+ * This function is thread-safe and has no side effects.
+ *
+ * # Example (C)
+ *
+ * ```c
+ * uint32_t code = kreuzberg_classify_error("Failed to open file: permission denied");
+ * if (code == kreuzberg_error_code_io()) {
+ *     printf("This is an I/O error\n");
+ * }
+ * ```
+ *
+ * # Safety
+ *
+ * - `error_message` must be a valid null-terminated C string or NULL
+ * - `error_message` must remain valid for the duration of the function call
+ *
+ * # C Signature
+ *
+ * ```c
+ * uint32_t kreuzberg_classify_error(const char* error_message);
+ * ```
+ */
+uint32_t kreuzberg_classify_error(const char *error_message);
+
+/**
+ * Get page count from extraction result.
+ *
+ * Returns the total number of pages/slides/sheets detected in the document.
+ *
+ * # Arguments
+ *
+ * * `result` - Pointer to an ExtractionResult structure
+ *
+ * # Returns
+ *
+ * The page count (>= 0) if successful, or -1 on error (check `kreuzberg_last_error`).
+ *
+ * # Safety
+ *
+ * - `result` must be a valid pointer to an ExtractionResult
+ * - `result` cannot be NULL
+ *
+ * # Example (C)
+ *
+ * ```c
+ * ExtractionResult* result = kreuzberg_extract_file("document.pdf", NULL);
+ * if (result != NULL) {
+ *     int page_count = kreuzberg_result_get_page_count(result);
+ *     if (page_count >= 0) {
+ *         printf("Document has %d pages\n", page_count);
+ *     }
+ *     kreuzberg_result_free(result);
+ * }
+ * ```
+ */
+int32_t kreuzberg_result_get_page_count(const CExtractionResult *result);
+
+/**
+ * Get chunk count from extraction result.
+ *
+ * Returns the number of text chunks when chunking is enabled, or 0 if chunking
+ * was not performed.
+ *
+ * # Arguments
+ *
+ * * `result` - Pointer to an ExtractionResult structure
+ *
+ * # Returns
+ *
+ * The chunk count (>= 0) if successful, or -1 on error (check `kreuzberg_last_error`).
+ *
+ * # Safety
+ *
+ * - `result` must be a valid pointer to an ExtractionResult
+ * - `result` cannot be NULL
+ *
+ * # Example (C)
+ *
+ * ```c
+ * ExtractionResult* result = kreuzberg_extract_file("document.pdf", config);
+ * if (result != NULL) {
+ *     int chunk_count = kreuzberg_result_get_chunk_count(result);
+ *     if (chunk_count >= 0) {
+ *         printf("Document has %d chunks\n", chunk_count);
+ *     }
+ *     kreuzberg_result_free(result);
+ * }
+ * ```
+ */
+int32_t kreuzberg_result_get_chunk_count(const CExtractionResult *result);
+
+/**
+ * Get detected language from extraction result.
+ *
+ * Returns the primary detected language as an ISO 639 language code.
+ * If multiple languages were detected, returns the primary one.
+ *
+ * # Arguments
+ *
+ * * `result` - Pointer to an ExtractionResult structure
+ *
+ * # Returns
+ *
+ * A pointer to a C string containing the language code (e.g., "en", "de"),
+ * or NULL if no language was detected or on error (check `kreuzberg_last_error`).
+ *
+ * The returned pointer must be freed with `kreuzberg_free_string()`.
+ *
+ * # Safety
+ *
+ * - `result` must be a valid pointer to an ExtractionResult
+ * - `result` cannot be NULL
+ * - The returned pointer (if non-NULL) must be freed with `kreuzberg_free_string`
+ *
+ * # Example (C)
+ *
+ * ```c
+ * ExtractionResult* result = kreuzberg_extract_file("document.pdf", NULL);
+ * if (result != NULL) {
+ *     char* language = kreuzberg_result_get_detected_language(result);
+ *     if (language != NULL) {
+ *         printf("Detected language: %s\n", language);
+ *         kreuzberg_free_string(language);
+ *     }
+ *     kreuzberg_result_free(result);
+ * }
+ * ```
+ */
+char *kreuzberg_result_get_detected_language(const CExtractionResult *result);
+
+/**
+ * Get a metadata field by name.
+ *
+ * Retrieves a metadata field from the extraction result and returns its value
+ * as a JSON string. Supports nested fields with dot notation (e.g., "format.pages").
+ *
+ * # Arguments
+ *
+ * * `result` - Pointer to an ExtractionResult structure
+ * * `field_name` - Null-terminated C string with the field name
+ *
+ * # Returns
+ *
+ * A CMetadataField structure containing:
+ * - `name`: The field name (caller should not free)
+ * - `json_value`: Pointer to field value as JSON string (must free with `kreuzberg_free_string`),
+ *   or NULL if field doesn't exist
+ * - `is_null`: 1 if field doesn't exist, 0 if it does
+ *
+ * # Safety
+ *
+ * - `result` must be a valid pointer to an ExtractionResult
+ * - `field_name` must be a valid null-terminated C string
+ * - Neither parameter can be NULL
+ * - The returned `json_value` (if non-NULL) must be freed with `kreuzberg_free_string`
+ *
+ * # Example (C)
+ *
+ * ```c
+ * ExtractionResult* result = kreuzberg_extract_file("document.pdf", NULL);
+ * if (result != NULL) {
+ *     CMetadataField title_field = kreuzberg_result_get_metadata_field(result, "title");
+ *     if (!title_field.is_null) {
+ *         printf("Title: %s\n", title_field.json_value);
+ *         kreuzberg_free_string(title_field.json_value);
+ *     }
+ *
+ *     CMetadataField author_field = kreuzberg_result_get_metadata_field(result, "authors");
+ *     if (!author_field.is_null) {
+ *         printf("Authors: %s\n", author_field.json_value);
+ *         kreuzberg_free_string(author_field.json_value);
+ *     }
+ *
+ *     kreuzberg_result_free(result);
+ * }
+ * ```
+ */
+struct CMetadataField kreuzberg_result_get_metadata_field(const CExtractionResult *result,
+                                                          const char *field_name);
+
+/**
+ * Validates a binarization method string.
+ *
+ * # Arguments
+ *
+ * * `method` - C string containing the binarization method (e.g., "otsu", "adaptive", "sauvola")
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # Safety
+ *
+ * * `method` must be a valid pointer to a null-terminated UTF-8 string
+ * * `method` cannot be NULL
+ * * The string must be valid for the duration of the call
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_binarization_method(const char* method);
+ * ```
+ */
+int32_t kreuzberg_validate_binarization_method(const char *method);
+
+/**
+ * Validates an OCR backend string.
+ *
+ * # Arguments
+ *
+ * * `backend` - C string containing the OCR backend (e.g., "tesseract", "easyocr", "paddleocr")
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # Safety
+ *
+ * * `backend` must be a valid pointer to a null-terminated UTF-8 string
+ * * `backend` cannot be NULL
+ * * The string must be valid for the duration of the call
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_ocr_backend(const char* backend);
+ * ```
+ */
+int32_t kreuzberg_validate_ocr_backend(const char *backend);
+
+/**
+ * Validates a language code (ISO 639-1 or 639-3 format).
+ *
+ * Accepts both 2-letter codes (e.g., "en", "de") and 3-letter codes (e.g., "eng", "deu").
+ *
+ * # Arguments
+ *
+ * * `code` - C string containing the language code
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # Safety
+ *
+ * * `code` must be a valid pointer to a null-terminated UTF-8 string
+ * * `code` cannot be NULL
+ * * The string must be valid for the duration of the call
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_language_code(const char* code);
+ * ```
+ */
+int32_t kreuzberg_validate_language_code(const char *code);
+
+/**
+ * Validates a token reduction level string.
+ *
+ * # Arguments
+ *
+ * * `level` - C string containing the token reduction level (e.g., "off", "light", "moderate")
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # Safety
+ *
+ * * `level` must be a valid pointer to a null-terminated UTF-8 string
+ * * `level` cannot be NULL
+ * * The string must be valid for the duration of the call
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_token_reduction_level(const char* level);
+ * ```
+ */
+int32_t kreuzberg_validate_token_reduction_level(const char *level);
+
+/**
+ * Validates a tesseract Page Segmentation Mode (PSM) value.
+ *
+ * # Arguments
+ *
+ * * `psm` - PSM value (valid range: 0-13)
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_tesseract_psm(int32_t psm);
+ * ```
+ */
+int32_t kreuzberg_validate_tesseract_psm(int32_t psm);
+
+/**
+ * Validates a tesseract OCR Engine Mode (OEM) value.
+ *
+ * # Arguments
+ *
+ * * `oem` - OEM value (valid range: 0-3)
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_tesseract_oem(int32_t oem);
+ * ```
+ */
+int32_t kreuzberg_validate_tesseract_oem(int32_t oem);
+
+/**
+ * Validates a tesseract output format string.
+ *
+ * # Arguments
+ *
+ * * `format` - C string containing the output format (e.g., "text", "markdown")
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # Safety
+ *
+ * * `format` must be a valid pointer to a null-terminated UTF-8 string
+ * * `format` cannot be NULL
+ * * The string must be valid for the duration of the call
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_output_format(const char* format);
+ * ```
+ */
+int32_t kreuzberg_validate_output_format(const char *format);
+
+/**
+ * Validates a confidence threshold value.
+ *
+ * Confidence thresholds must be between 0.0 and 1.0 inclusive.
+ *
+ * # Arguments
+ *
+ * * `confidence` - Confidence threshold value
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_confidence(double confidence);
+ * ```
+ */
+int32_t kreuzberg_validate_confidence(double confidence);
+
+/**
+ * Validates a DPI (dots per inch) value.
+ *
+ * DPI must be a positive integer, typically 72-600.
+ *
+ * # Arguments
+ *
+ * * `dpi` - DPI value
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_dpi(int32_t dpi);
+ * ```
+ */
+int32_t kreuzberg_validate_dpi(int32_t dpi);
+
+/**
+ * Validates chunking parameters.
+ *
+ * Checks that `max_chars > 0` and `max_overlap < max_chars`.
+ *
+ * # Arguments
+ *
+ * * `max_chars` - Maximum characters per chunk
+ * * `max_overlap` - Maximum overlap between chunks
+ *
+ * # Returns
+ *
+ * - `1` if valid
+ * - `0` if invalid (error message available via `kreuzberg_get_last_error_message()`)
+ *
+ * # C Signature
+ *
+ * ```c
+ * int32_t kreuzberg_validate_chunking_params(size_t max_chars, size_t max_overlap);
+ * ```
+ */
+int32_t kreuzberg_validate_chunking_params(uintptr_t max_chars, uintptr_t max_overlap);
+
+/**
+ * Returns valid binarization methods as a JSON array string.
+ *
+ * The returned string MUST be freed by the caller using `kreuzberg_free_string()`.
+ *
+ * # Returns
+ *
+ * A pointer to a dynamically allocated C string containing a JSON array of valid methods.
+ * Returns NULL if memory allocation fails (error message set via `set_last_error()`).
+ *
+ * # Example
+ *
+ * The returned JSON string looks like: `["otsu","adaptive","sauvola"]`
+ *
+ * # C Signature
+ *
+ * ```c
+ * char* kreuzberg_get_valid_binarization_methods(void);
+ * ```
+ */
+char *kreuzberg_get_valid_binarization_methods(void);
+
+/**
+ * Returns valid language codes as a JSON array string.
+ *
+ * The returned string MUST be freed by the caller using `kreuzberg_free_string()`.
+ *
+ * # Returns
+ *
+ * A pointer to a dynamically allocated C string containing a JSON array of valid codes.
+ * Returns NULL if memory allocation fails (error message set via `set_last_error()`).
+ *
+ * # C Signature
+ *
+ * ```c
+ * char* kreuzberg_get_valid_language_codes(void);
+ * ```
+ */
+char *kreuzberg_get_valid_language_codes(void);
+
+/**
+ * Returns valid OCR backends as a JSON array string.
+ *
+ * The returned string MUST be freed by the caller using `kreuzberg_free_string()`.
+ *
+ * # Returns
+ *
+ * A pointer to a dynamically allocated C string containing a JSON array of valid backends.
+ * Returns NULL if memory allocation fails (error message set via `set_last_error()`).
+ *
+ * # C Signature
+ *
+ * ```c
+ * char* kreuzberg_get_valid_ocr_backends(void);
+ * ```
+ */
+char *kreuzberg_get_valid_ocr_backends(void);
+
+/**
+ * Returns valid token reduction levels as a JSON array string.
+ *
+ * The returned string MUST be freed by the caller using `kreuzberg_free_string()`.
+ *
+ * # Returns
+ *
+ * A pointer to a dynamically allocated C string containing a JSON array of valid levels.
+ * Returns NULL if memory allocation fails (error message set via `set_last_error()`).
+ *
+ * # C Signature
+ *
+ * ```c
+ * char* kreuzberg_get_valid_token_reduction_levels(void);
+ * ```
+ */
+char *kreuzberg_get_valid_token_reduction_levels(void);
 
 #endif  /* KREUZBERG_FFI_H */

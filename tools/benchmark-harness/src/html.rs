@@ -3,6 +3,9 @@
 //! This module generates static HTML pages with embedded Chart.js visualizations
 //! for benchmark results. The output is a single self-contained HTML file that
 //! can be viewed in any browser without external dependencies (except Chart.js CDN).
+//!
+//! It also provides flamegraph index generation for interactive browsing of
+//! performance profiling data collected during benchmarks.
 
 use crate::types::BenchmarkResult;
 use crate::{Error, Result};
@@ -70,6 +73,13 @@ fn init_template_env() -> Environment<'static> {
     // Add all templates using include_str! for compile-time embedding
     env.add_template("base.html.jinja", include_str!("../templates/base.html.jinja"))
         .expect("Failed to add base template");
+
+    // Flamegraph gallery template
+    env.add_template(
+        "flamegraphs.html.jinja",
+        include_str!("../templates/flamegraphs.html.jinja"),
+    )
+    .expect("Failed to add flamegraphs template");
 
     // Components
     env.add_template(
@@ -408,6 +418,231 @@ fn generate_html(data: &ChartData) -> Result<String> {
     let html = template
         .render(context! { data => data })
         .map_err(|e| Error::Benchmark(format!("Template render failed: {}", e)))?;
+    Ok(html)
+}
+
+/// Flamegraph metadata for a single SVG file
+#[derive(Debug, Clone, Serialize)]
+struct FlamegraphMetadata {
+    /// Relative path to the SVG file from output directory
+    path: String,
+    /// Title for the flamegraph (framework-mode-fixture)
+    title: String,
+    /// Profiling mode (e.g., "sync", "async", "batch")
+    mode: Option<String>,
+    /// Fixture name (e.g., "sample.pdf")
+    fixture: Option<String>,
+}
+
+/// Flamegraphs grouped by framework
+#[derive(Debug, Clone, Serialize)]
+struct FrameworkFlamegraphs {
+    /// Framework name
+    name: String,
+    /// List of flamegraphs for this framework
+    flamegraphs: Vec<FlamegraphMetadata>,
+}
+
+/// Template context for flamegraph gallery
+#[derive(Debug, Clone, Serialize)]
+struct FlamegraphGalleryData {
+    /// Frameworks with their flamegraphs
+    frameworks: Vec<FrameworkFlamegraphs>,
+    /// When the HTML was generated
+    generated_at: String,
+    /// Total number of flamegraphs
+    total_flamegraphs: usize,
+    /// Number of frameworks
+    total_frameworks: usize,
+}
+
+/// Generate an HTML gallery index for flamegraphs
+///
+/// Recursively scans a flamegraphs directory for SVG files, groups them by framework,
+/// and generates an interactive HTML gallery for browsing and viewing flamegraphs.
+///
+/// Expected directory structure:
+/// ```text
+/// flamegraphs/
+/// ├── framework-name/
+/// │   ├── mode/
+/// │   │   └── fixture.svg
+/// │   └── another-mode/
+/// │       └── fixture.svg
+/// └── another-framework/
+///     └── mode/
+///         └── fixture.svg
+/// ```
+///
+/// # Arguments
+/// * `flamegraphs_dir` - Directory containing flamegraph SVG files
+/// * `output_file` - Path to output HTML file
+///
+/// # Errors
+/// * Returns I/O error if directory cannot be accessed
+/// * Returns error if template rendering fails
+/// * Gracefully handles missing directories (exits with Ok)
+pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> Result<()> {
+    // Create parent directory if needed
+    if let Some(parent) = output_file.parent() {
+        fs::create_dir_all(parent).map_err(Error::Io)?;
+    }
+
+    // Check if flamegraphs directory exists; if not, exit gracefully
+    if !flamegraphs_dir.exists() {
+        eprintln!("⚠ Flamegraphs directory not found: {}", flamegraphs_dir.display());
+        return Ok(());
+    }
+
+    // Walk the directory tree and collect SVG files
+    let mut frameworks: HashMap<String, Vec<FlamegraphMetadata>> = HashMap::new();
+
+    if let Ok(entries) = fs::read_dir(flamegraphs_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            // Skip non-directories (top level should only have framework directories)
+            if !path.is_dir() {
+                continue;
+            }
+
+            let framework_name = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            let mut flamegraphs = Vec::new();
+
+            // Walk through framework subdirectories
+            if let Ok(mode_entries) = fs::read_dir(&path) {
+                for mode_entry in mode_entries.flatten() {
+                    let mode_path = mode_entry.path();
+
+                    if mode_path.is_dir() {
+                        let mode_name = mode_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+
+                        // Find SVG files in this mode directory
+                        if let Ok(svg_entries) = fs::read_dir(&mode_path) {
+                            for svg_entry in svg_entries.flatten() {
+                                let svg_path = svg_entry.path();
+
+                                if svg_path.extension().and_then(|e| e.to_str()) == Some("svg") {
+                                    let fixture_name = svg_path
+                                        .file_stem()
+                                        .and_then(|n| n.to_str())
+                                        .unwrap_or("unknown")
+                                        .to_string();
+
+                                    // Build relative path for linking
+                                    let relative_path =
+                                        pathdiff::diff_paths(&svg_path, output_file.parent().unwrap_or(Path::new(".")))
+                                            .unwrap_or_else(|| svg_path.clone());
+
+                                    let relative_path_str = relative_path.to_string_lossy().to_string();
+
+                                    let title = format!("{} - {} ({})", framework_name, mode_name, fixture_name);
+
+                                    flamegraphs.push(FlamegraphMetadata {
+                                        path: relative_path_str,
+                                        title,
+                                        mode: Some(mode_name.clone()),
+                                        fixture: Some(fixture_name),
+                                    });
+                                }
+                            }
+                        }
+                    } else if mode_path.extension().and_then(|e| e.to_str()) == Some("svg") {
+                        // Handle SVG files directly in framework directory (flat structure)
+                        let fixture_name = mode_path
+                            .file_stem()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+
+                        let relative_path =
+                            pathdiff::diff_paths(&mode_path, output_file.parent().unwrap_or(Path::new(".")))
+                                .unwrap_or_else(|| mode_path.clone());
+
+                        let relative_path_str = relative_path.to_string_lossy().to_string();
+
+                        let title = format!("{} ({})", framework_name, fixture_name);
+
+                        flamegraphs.push(FlamegraphMetadata {
+                            path: relative_path_str,
+                            title,
+                            mode: None,
+                            fixture: Some(fixture_name),
+                        });
+                    }
+                }
+            }
+
+            // Sort flamegraphs by title for consistent display
+            flamegraphs.sort_by(|a, b| a.title.cmp(&b.title));
+
+            if !flamegraphs.is_empty() {
+                frameworks.insert(framework_name, flamegraphs);
+            }
+        }
+    }
+
+    // Build sorted list of frameworks
+    let mut framework_list: Vec<_> = frameworks
+        .into_iter()
+        .map(|(name, flamegraphs)| FrameworkFlamegraphs { name, flamegraphs })
+        .collect();
+
+    framework_list.sort_by(|a, b| a.name.cmp(&b.name));
+
+    // Calculate totals
+    let total_flamegraphs: usize = framework_list.iter().map(|f| f.flamegraphs.len()).sum();
+    let total_frameworks = framework_list.len();
+
+    // Build gallery data
+    let gallery_data = FlamegraphGalleryData {
+        frameworks: framework_list,
+        generated_at: chrono::Utc::now().to_rfc3339(),
+        total_flamegraphs,
+        total_frameworks,
+    };
+
+    // Render template
+    let html = render_flamegraph_gallery(&gallery_data)?;
+
+    // Write output
+    fs::write(output_file, html).map_err(Error::Io)?;
+
+    eprintln!(
+        "✓ Flamegraph index generated: {} ({} flamegraphs from {} frameworks)",
+        output_file.display(),
+        total_flamegraphs,
+        total_frameworks
+    );
+
+    Ok(())
+}
+
+/// Render the flamegraph gallery HTML
+fn render_flamegraph_gallery(data: &FlamegraphGalleryData) -> Result<String> {
+    let env = get_template_env();
+    let template = env
+        .get_template("flamegraphs.html.jinja")
+        .map_err(|e| Error::Benchmark(format!("Flamegraph template not found: {}", e)))?;
+
+    let html = template
+        .render(context! {
+            frameworks => &data.frameworks,
+            generated_at => &data.generated_at,
+            total_flamegraphs => data.total_flamegraphs,
+            total_frameworks => data.total_frameworks,
+        })
+        .map_err(|e| Error::Benchmark(format!("Flamegraph template render failed: {}", e)))?;
+
     Ok(html)
 }
 

@@ -320,6 +320,8 @@ pub struct PythonOcrBackend {
     name: String,
     /// Cached supported languages
     supported_languages: Vec<String>,
+    /// Cached async flag for process_image method
+    process_image_is_async: bool,
 }
 
 impl PythonOcrBackend {
@@ -358,10 +360,16 @@ impl PythonOcrBackend {
             ));
         }
 
+        let process_image_is_async = obj
+            .getattr("process_image")
+            .and_then(|m| m.hasattr("__await__"))
+            .unwrap_or(false);
+
         Ok(Self {
             python_obj,
             name,
             supported_languages,
+            process_image_is_async,
         })
     }
 }
@@ -418,14 +426,7 @@ impl OcrBackend for PythonOcrBackend {
         let language = config.language.clone();
         let backend_name = self.name.clone();
 
-        let is_async = Python::attach(|py| {
-            let obj = self.python_obj.bind(py);
-            obj.getattr("process_image")
-                .and_then(|method| method.hasattr("__await__"))
-                .unwrap_or(false)
-        });
-
-        if is_async {
+        if self.process_image_is_async {
             let python_obj = Python::attach(|py| self.python_obj.clone_ref(py));
 
             let result = Python::attach(|py| {
@@ -751,28 +752,33 @@ fn extract_tables(obj: &Bound<'_, PyAny>) -> Result<Vec<Table>> {
                 source: None,
             })?;
 
-        let mut cells: Vec<Vec<String>> = Vec::new();
-        for (row_idx, row_obj) in cells_list.iter().enumerate() {
-            let row_list = row_obj
-                .cast::<pyo3::types::PyList>()
-                .map_err(|_| KreuzbergError::Validation {
-                    message: format!("Table {} row {} must be a list", index, row_idx),
-                    source: None,
-                })?;
+        // Use iterator chains to eliminate intermediate Vec allocations
+        let cells: Vec<Vec<String>> = cells_list
+            .iter()
+            .enumerate()
+            .map(|(row_idx, row_obj)| {
+                let row_list = row_obj
+                    .cast::<pyo3::types::PyList>()
+                    .map_err(|_| KreuzbergError::Validation {
+                        message: format!("Table {} row {} must be a list", index, row_idx),
+                        source: None,
+                    })?;
 
-            let mut row: Vec<String> = Vec::new();
-            for (col_idx, cell_obj) in row_list.iter().enumerate() {
-                let cell_str: String = cell_obj.extract().map_err(|e| KreuzbergError::Validation {
-                    message: format!(
-                        "Table {} cell [{}, {}] must be a string: {}",
-                        index, row_idx, col_idx, e
-                    ),
-                    source: None,
-                })?;
-                row.push(cell_str);
-            }
-            cells.push(row);
-        }
+                row_list
+                    .iter()
+                    .enumerate()
+                    .map(|(col_idx, cell_obj)| {
+                        cell_obj.extract::<String>().map_err(|e| KreuzbergError::Validation {
+                            message: format!(
+                                "Table {} cell [{}, {}] must be a string: {}",
+                                index, row_idx, col_idx, e
+                            ),
+                            source: None,
+                        })
+                    })
+                    .collect::<Result<Vec<String>>>()
+            })
+            .collect::<Result<Vec<Vec<String>>>>()?;
 
         let markdown_val = table_dict
             .get_item("markdown")
@@ -1118,11 +1124,45 @@ fn extraction_result_to_dict(py: Python<'_>, result: &ExtractionResult) -> PyRes
 
     dict.set_item("mime_type", &result.mime_type)?;
 
-    let metadata_json = serde_json::to_value(&result.metadata).map_err(|e| {
-        pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to serialize metadata to JSON: {}", e))
-    })?;
-    let metadata_py = json_value_to_py(py, &metadata_json)?;
-    dict.set_item("metadata", metadata_py)?;
+    let metadata_dict = PyDict::new(py);
+
+    if let Some(title) = &result.metadata.title {
+        metadata_dict.set_item("title", title)?;
+    }
+    if let Some(subject) = &result.metadata.subject {
+        metadata_dict.set_item("subject", subject)?;
+    }
+    if let Some(authors) = &result.metadata.authors {
+        metadata_dict.set_item("authors", authors)?;
+    }
+    if let Some(keywords) = &result.metadata.keywords {
+        metadata_dict.set_item("keywords", keywords)?;
+    }
+    if let Some(language) = &result.metadata.language {
+        metadata_dict.set_item("language", language)?;
+    }
+    if let Some(created_at) = &result.metadata.created_at {
+        metadata_dict.set_item("created_at", created_at)?;
+    }
+    if let Some(modified_at) = &result.metadata.modified_at {
+        metadata_dict.set_item("modified_at", modified_at)?;
+    }
+    if let Some(created_by) = &result.metadata.created_by {
+        metadata_dict.set_item("created_by", created_by)?;
+    }
+    if let Some(modified_by) = &result.metadata.modified_by {
+        metadata_dict.set_item("modified_by", modified_by)?;
+    }
+    if let Some(date) = &result.metadata.date {
+        metadata_dict.set_item("date", date)?;
+    }
+
+    for (key, value) in &result.metadata.additional {
+        let py_value = json_value_to_py(py, value)?;
+        metadata_dict.set_item(key, py_value)?;
+    }
+
+    dict.set_item("metadata", metadata_dict)?;
 
     dict.set_item("tables", PyList::empty(py))?;
 

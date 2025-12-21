@@ -420,3 +420,25 @@ export class MissingDependencyError extends KreuzbergError {
 		Object.setPrototypeOf(this, MissingDependencyError.prototype);
 	}
 }
+
+// ============================================================================
+// Phase 2 FFI Error Classifications (exported from utils/errors.ts)
+// ============================================================================
+
+// Note: FFI error code constants, error classification utilities, and the
+// ErrorClassification type are exported from @kreuzberg/node/utils/errors.ts
+//
+// Import them using:
+// ```typescript
+// import {
+//   ErrorCode,
+//   getErrorCodeName,
+//   getErrorCodeDescription,
+//   classifyErrorMessage,
+//   isValidErrorCode,
+// } from '@kreuzberg/node';
+// ```
+//
+// The ErrorCode constant provides FFI-safe error code values that are
+// synchronized with the Rust FFI layer (kreuzberg-ffi), ensuring consistency
+// across all language bindings.

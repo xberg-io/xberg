@@ -30,7 +30,8 @@ else
 	echo "RUSTC_WRAPPER=" >>"$GITHUB_ENV"
 fi
 
-base="-D warnings"
+# Preserve existing RUSTFLAGS (e.g., -g for profiling) and append our flags
+base="${RUSTFLAGS:+$RUSTFLAGS }-D warnings"
 
 check_output=""
 if ! check_output="$(printf 'fn main() {}\n' | RUSTC_COLOR=never rustc -W unpredictable-function-pointer-comparisons - 2>&1)"; then
@@ -54,4 +55,5 @@ else
 	echo "Detected fn_ptr_eq lint support; appended suppression flags"
 fi
 
+echo "Setting RUSTFLAGS to: $base"
 echo "RUSTFLAGS=$base" >>"$GITHUB_ENV"

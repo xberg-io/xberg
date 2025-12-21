@@ -1,8 +1,144 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[cfg(feature = "pdf")]
 use crate::pdf::metadata::PdfMetadata;
+
+// ============================================================================
+// Serde module for Arc<T> transparent serialization
+// ============================================================================
+
+/// Module providing transparent serde support for Arc<T>.
+///
+/// Allows Arc-wrapped types to serialize/deserialize as if unwrapped,
+/// maintaining exact JSON format while preserving memory efficiency benefits.
+///
+/// # Arc Sharing Semantics
+///
+/// **Important**: Arc sharing semantics are **NOT** preserved across serialization.
+/// When deserializing, each Arc is independently created with `Arc::new()`.
+/// This means that if two Arcs referenced the same data before serialization,
+/// they will be separate Arcs after deserialization.
+///
+/// Example:
+/// ```ignore
+/// let shared = Arc::new(Table { /* ... */ });
+/// let tables = vec![Arc::clone(&shared), Arc::clone(&shared)];
+/// // Both in-memory Arcs point to the same Table
+///
+/// let json = serde_json::to_string(&tables)?;
+/// let deserialized: Vec<Arc<Table>> = serde_json::from_str(&json)?;
+/// // deserialized[0] and deserialized[1] are now independent Arcs,
+/// // even though they contain identical data
+/// ```
+///
+/// This design choice maintains:
+/// - Exact JSON format compatibility (no sharing metadata in JSON)
+/// - Predictable deserialization behavior
+/// - Zero additional serialization overhead
+///
+/// If in-memory sharing is required, callers must implement custom sharing logic
+/// or use a different data structure (like a HashMap of deduplicated values).
+#[allow(dead_code)]
+mod serde_arc {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::sync::Arc;
+
+    /// Serialize an Arc<T> by serializing the inner value directly.
+    ///
+    /// This makes Arc<T> serialize identically to T, maintaining API compatibility.
+    /// The outer Arc wrapper is transparent during serialization.
+    pub fn serialize<S, T>(arc_value: &Arc<T>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: serde::Serialize,
+    {
+        (**arc_value).serialize(serializer)
+    }
+
+    /// Deserialize a T and wrap it in Arc.
+    ///
+    /// This makes Arc<T> deserialize from the same format as T.
+    /// Each Arc is independently created during deserialization;
+    /// Arc sharing from before serialization is NOT preserved.
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Arc<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        T::deserialize(deserializer).map(Arc::new)
+    }
+}
+
+/// Module for serializing Vec<Arc<T>> with transparent Arc handling.
+///
+/// Serializes a Vec<Arc<T>> as Vec<T> for compatibility, while preserving
+/// Arc semantics for memory efficiency.
+///
+/// # Arc Sharing Semantics
+///
+/// **Important**: Arc sharing semantics are **NOT** preserved across serialization.
+/// When deserializing, each element's Arc is independently created with `Arc::new()`.
+/// This is important for `PageContent` where tables/images may be shared across pages.
+///
+/// Example with shared tables:
+/// ```ignore
+/// let shared_table = Arc::new(Table { /* ... */ });
+/// let page_contents = vec![
+///     PageContent { tables: vec![Arc::clone(&shared_table)], ... },
+///     PageContent { tables: vec![Arc::clone(&shared_table)], ... },
+/// ];
+/// // In-memory: both pages' tables point to the same Arc
+///
+/// let json = serde_json::to_string(&page_contents)?;
+/// let deserialized = serde_json::from_str::<Vec<PageContent>>(&json)?;
+/// // After deserialization: each page has independent Arc instances,
+/// // even though the table data is identical
+/// ```
+///
+/// Design rationale:
+/// - JSON has no mechanism to represent shared references
+/// - Preserving sharing would require complex metadata and deduplication
+/// - Current approach is simple, predictable, and maintains compatibility
+/// - In-memory sharing (via Arc) is an implementation detail for the Rust side
+///
+/// If in-memory sharing is required after deserialization, implement custom
+/// deduplication logic using hashing or content comparison.
+mod serde_vec_arc {
+    use serde::{Deserialize, Deserializer, Serializer};
+    use std::sync::Arc;
+
+    /// Serialize Vec<Arc<T>> by serializing each T directly.
+    ///
+    /// Each element is unwrapped from its Arc and serialized independently.
+    /// No sharing metadata is included in the serialized output.
+    pub fn serialize<S, T>(vec: &[Arc<T>], serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+        T: serde::Serialize,
+    {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(vec.len()))?;
+        for arc_item in vec {
+            seq.serialize_element(&**arc_item)?;
+        }
+        seq.end()
+    }
+
+    /// Deserialize Vec<T> and wrap each element in Arc.
+    ///
+    /// Each element is independently wrapped in a new Arc.
+    /// Sharing relationships from before serialization are lost.
+    pub fn deserialize<'de, D, T>(deserializer: D) -> Result<Vec<Arc<T>>, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Deserialize<'de>,
+    {
+        let vec: Vec<T> = Deserialize::deserialize(deserializer)?;
+        Ok(vec.into_iter().map(Arc::new).collect())
+    }
+}
 
 // ============================================================================
 // ============================================================================
@@ -228,6 +364,16 @@ pub struct PageInfo {
 ///
 /// When page extraction is enabled, documents are split into per-page content
 /// with associated tables and images mapped to each page.
+///
+/// # Performance
+///
+/// Uses Arc-wrapped tables and images for memory efficiency:
+/// - `Vec<Arc<Table>>` enables zero-copy sharing of table data
+/// - `Vec<Arc<ExtractedImage>>` enables zero-copy sharing of image data
+/// - Maintains exact JSON compatibility via custom Serialize/Deserialize
+///
+/// This reduces memory overhead for documents with shared tables/images
+/// by avoiding redundant copies during serialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageContent {
     /// Page number (1-indexed)
@@ -236,13 +382,19 @@ pub struct PageContent {
     /// Text content for this page
     pub content: String,
 
-    /// Tables found on this page
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub tables: Vec<Table>,
+    /// Tables found on this page (uses Arc for memory efficiency)
+    ///
+    /// Serializes as Vec<Table> for JSON compatibility while maintaining
+    /// Arc semantics in-memory for zero-copy sharing.
+    #[serde(skip_serializing_if = "Vec::is_empty", default, with = "serde_vec_arc")]
+    pub tables: Vec<Arc<Table>>,
 
-    /// Images found on this page
-    #[serde(skip_serializing_if = "Vec::is_empty", default)]
-    pub images: Vec<ExtractedImage>,
+    /// Images found on this page (uses Arc for memory efficiency)
+    ///
+    /// Serializes as Vec<ExtractedImage> for JSON compatibility while maintaining
+    /// Arc semantics in-memory for zero-copy sharing.
+    #[serde(skip_serializing_if = "Vec::is_empty", default, with = "serde_vec_arc")]
+    pub images: Vec<Arc<ExtractedImage>>,
 }
 
 /// Excel/spreadsheet metadata.
@@ -1051,5 +1203,227 @@ mod tests {
         assert_eq!(json.get("character_count").unwrap(), 13);
 
         assert_eq!(json.get("quality_score").unwrap(), 1.0);
+    }
+
+    // ========================================================================
+    // Arc serialization tests
+    // ========================================================================
+
+    #[test]
+    fn test_arc_table_serialization_format() {
+        let table = Table {
+            cells: vec![vec!["A".to_string(), "B".to_string()]],
+            markdown: "| A | B |\n|---|---|\n".to_string(),
+            page_number: 1,
+        };
+
+        let json = serde_json::to_value(&table).unwrap();
+
+        assert_eq!(json.get("cells").unwrap()[0][0], "A");
+        assert_eq!(json.get("markdown").unwrap(), "| A | B |\n|---|---|\n");
+        assert_eq!(json.get("page_number").unwrap(), 1);
+    }
+
+    #[test]
+    fn test_arc_table_roundtrip() {
+        let original = Table {
+            cells: vec![
+                vec!["X".to_string(), "Y".to_string()],
+                vec!["1".to_string(), "2".to_string()],
+            ],
+            markdown: "| X | Y |\n|---|---|\n| 1 | 2 |\n".to_string(),
+            page_number: 5,
+        };
+
+        let json = serde_json::to_string(&original).unwrap();
+        let deserialized: Table = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.cells, original.cells);
+        assert_eq!(deserialized.markdown, original.markdown);
+        assert_eq!(deserialized.page_number, original.page_number);
+    }
+
+    #[test]
+    fn test_arc_sharing_preserved_before_serialization() {
+        let shared_table = Arc::new(Table {
+            cells: vec![vec!["shared".to_string()]],
+            markdown: "| shared |".to_string(),
+            page_number: 1,
+        });
+
+        let tables_before = vec![Arc::clone(&shared_table), Arc::clone(&shared_table)];
+        assert_eq!(Arc::strong_count(&tables_before[0]), 3);
+        assert_eq!(Arc::strong_count(&tables_before[1]), 3);
+        assert!(Arc::ptr_eq(&tables_before[0], &tables_before[1]));
+    }
+
+    #[test]
+    fn test_vec_arc_table_serialization_format() {
+        let tables = vec![
+            Table {
+                cells: vec![vec!["A".to_string()]],
+                markdown: "| A |".to_string(),
+                page_number: 1,
+            },
+            Table {
+                cells: vec![vec!["B".to_string()]],
+                markdown: "| B |".to_string(),
+                page_number: 2,
+            },
+        ];
+
+        let json = serde_json::to_string(&tables).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+        assert!(parsed.is_array());
+        assert_eq!(parsed.as_array().unwrap().len(), 2);
+        assert_eq!(parsed[0]["cells"][0][0], "A");
+        assert_eq!(parsed[1]["cells"][0][0], "B");
+    }
+
+    #[test]
+    fn test_page_content_arc_tables_roundtrip() {
+        let page = PageContent {
+            page_number: 3,
+            content: "Page 3 content".to_string(),
+            tables: vec![
+                Arc::new(Table {
+                    cells: vec![vec!["Table1".to_string()]],
+                    markdown: "| Table1 |".to_string(),
+                    page_number: 3,
+                }),
+                Arc::new(Table {
+                    cells: vec![vec!["Table2".to_string()]],
+                    markdown: "| Table2 |".to_string(),
+                    page_number: 3,
+                }),
+            ],
+            images: Vec::new(),
+        };
+
+        let json = serde_json::to_string(&page).unwrap();
+        let deserialized: PageContent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.page_number, 3);
+        assert_eq!(deserialized.content, "Page 3 content");
+        assert_eq!(deserialized.tables.len(), 2);
+        assert_eq!(deserialized.tables[0].cells[0][0], "Table1");
+        assert_eq!(deserialized.tables[1].cells[0][0], "Table2");
+    }
+
+    #[test]
+    fn test_page_content_arc_images_roundtrip() {
+        let image1 = Arc::new(ExtractedImage {
+            data: vec![0xFF, 0xD8, 0xFF],
+            format: "jpeg".to_string(),
+            image_index: 0,
+            page_number: Some(1),
+            width: Some(100),
+            height: Some(200),
+            colorspace: Some("RGB".to_string()),
+            bits_per_component: Some(8),
+            is_mask: false,
+            description: Some("Image 1".to_string()),
+            ocr_result: None,
+        });
+
+        let image2 = Arc::new(ExtractedImage {
+            data: vec![0x89, 0x50, 0x4E],
+            format: "png".to_string(),
+            image_index: 1,
+            page_number: Some(1),
+            width: Some(300),
+            height: Some(400),
+            colorspace: Some("RGBA".to_string()),
+            bits_per_component: Some(8),
+            is_mask: false,
+            description: Some("Image 2".to_string()),
+            ocr_result: None,
+        });
+
+        let page = PageContent {
+            page_number: 1,
+            content: "Page with images".to_string(),
+            tables: Vec::new(),
+            images: vec![image1, image2],
+        };
+
+        let json = serde_json::to_string(&page).unwrap();
+        let deserialized: PageContent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.images.len(), 2);
+        assert_eq!(deserialized.images[0].format, "jpeg");
+        assert_eq!(deserialized.images[0].width, Some(100));
+        assert_eq!(deserialized.images[1].format, "png");
+        assert_eq!(deserialized.images[1].height, Some(400));
+    }
+
+    #[test]
+    fn test_arc_sharing_loss_with_page_content() {
+        let shared_table = Arc::new(Table {
+            cells: vec![vec!["shared across pages".to_string()]],
+            markdown: "| shared across pages |".to_string(),
+            page_number: 0,
+        });
+
+        let page1 = PageContent {
+            page_number: 1,
+            content: "Page 1".to_string(),
+            tables: vec![Arc::clone(&shared_table)],
+            images: Vec::new(),
+        };
+
+        let page2 = PageContent {
+            page_number: 2,
+            content: "Page 2".to_string(),
+            tables: vec![Arc::clone(&shared_table)],
+            images: Vec::new(),
+        };
+
+        assert!(Arc::ptr_eq(&page1.tables[0], &page2.tables[0]));
+
+        let pages = vec![page1, page2];
+        let json = serde_json::to_string(&pages).unwrap();
+        let deserialized: Vec<PageContent> = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.len(), 2);
+        assert_eq!(deserialized[0].tables[0].cells, deserialized[1].tables[0].cells);
+        assert!(!Arc::ptr_eq(&deserialized[0].tables[0], &deserialized[1].tables[0]));
+    }
+
+    #[test]
+    fn test_empty_page_content_arcs() {
+        let page = PageContent {
+            page_number: 5,
+            content: "No tables or images".to_string(),
+            tables: Vec::new(),
+            images: Vec::new(),
+        };
+
+        let json = serde_json::to_string(&page).unwrap();
+        let deserialized: PageContent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.page_number, 5);
+        assert_eq!(deserialized.tables.len(), 0);
+        assert_eq!(deserialized.images.len(), 0);
+    }
+
+    #[test]
+    fn test_serde_vec_arc_module_behavior() {
+        let table1 = Table {
+            cells: vec![vec!["A".to_string()]],
+            markdown: "| A |".to_string(),
+            page_number: 1,
+        };
+
+        let table2 = Table {
+            cells: vec![vec!["B".to_string()]],
+            markdown: "| B |".to_string(),
+            page_number: 2,
+        };
+
+        let json = serde_json::to_string(&vec![table1, table2]).unwrap();
+        assert!(json.contains("\"A\""));
+        assert!(json.contains("\"B\""));
     }
 }

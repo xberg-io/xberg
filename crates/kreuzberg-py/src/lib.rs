@@ -22,6 +22,7 @@ mod error;
 mod ffi;
 mod plugins;
 mod types;
+mod validation;
 
 /// Global Python event loop task locals for async handlers
 /// Initialized once at startup to avoid ~55µs overhead per call
@@ -117,6 +118,31 @@ fn _internal_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_extensions_for_mime, m)?)?;
     m.add_function(wrap_pyfunction!(get_last_error_code, m)?)?;
     m.add_function(wrap_pyfunction!(get_last_panic_context, m)?)?;
+
+    m.add_function(wrap_pyfunction!(validation::validate_binarization_method, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_ocr_backend, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_language_code, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_token_reduction_level, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_tesseract_psm, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_tesseract_oem, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_output_format, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_confidence, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_dpi, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::validate_chunking_params, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::get_valid_binarization_methods, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::get_valid_language_codes, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::get_valid_ocr_backends, m)?)?;
+    m.add_function(wrap_pyfunction!(validation::get_valid_token_reduction_levels, m)?)?;
+
+    // Config Phase 1 FFI functions
+    m.add_function(wrap_pyfunction!(config::config_to_json, m)?)?;
+    m.add_function(wrap_pyfunction!(config::config_get_field, m)?)?;
+    m.add_function(wrap_pyfunction!(config::config_merge, m)?)?;
+
+    // Error Phase 2 FFI functions
+    m.add_function(wrap_pyfunction!(ffi::get_error_details, m)?)?;
+    m.add_function(wrap_pyfunction!(ffi::classify_error, m)?)?;
+    m.add_function(wrap_pyfunction!(ffi::error_code_name, m)?)?;
 
     Ok(())
 }

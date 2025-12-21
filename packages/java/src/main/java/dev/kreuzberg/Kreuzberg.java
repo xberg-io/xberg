@@ -114,7 +114,8 @@ public final class Kreuzberg {
         }
 
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment dataSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, data);
+            MemorySegment dataSegment = arena.allocate((long) data.length, 1);
+            MemorySegment.copy(data, 0, dataSegment, ValueLayout.JAVA_BYTE, 0, data.length);
             MemorySegment mimeSegment = KreuzbergFFI.allocateCString(arena, mimeType);
             MemorySegment configSegment = config == null ? MemorySegment.NULL : encodeConfig(arena, config);
 
@@ -151,7 +152,7 @@ public final class Kreuzberg {
                 cStrings[i] = KreuzbergFFI.allocateCString(arena, paths.get(i));
             }
             MemorySegment arraySegment = arena.allocate(
-                ValueLayout.ADDRESS.byteSize() * paths.size(),
+                ValueLayout.ADDRESS.byteSize() * cStrings.length,
                 ValueLayout.ADDRESS.byteAlignment()
             );
             for (int i = 0; i < cStrings.length; i++) {
@@ -190,7 +191,8 @@ public final class Kreuzberg {
             for (int i = 0; i < items.size(); i++) {
                 BytesWithMime item = items.get(i);
                 MemorySegment element = bytesWithMimeArray.asSlice((long) i * structSize, structSize);
-                MemorySegment dataSeg = arena.allocateFrom(ValueLayout.JAVA_BYTE, item.data());
+                MemorySegment dataSeg = arena.allocate((long) item.data().length, 1);
+                MemorySegment.copy(item.data(), 0, dataSeg, ValueLayout.JAVA_BYTE, 0, item.data().length);
                 MemorySegment mimeSeg = KreuzbergFFI.allocateCString(arena, item.mimeType());
                 element.set(ValueLayout.ADDRESS, KreuzbergFFI.BYTES_DATA_OFFSET, dataSeg);
                 element.set(ValueLayout.JAVA_LONG, KreuzbergFFI.BYTES_LEN_OFFSET, item.data().length);
@@ -418,6 +420,11 @@ public final class Kreuzberg {
     /**
      * Register a post-processor with explicit priority and stage.
      *
+     * <p>Warning: The processor implementation must be thread-safe and hold references to any
+     * data it needs, as it may be invoked during extraction from multiple threads. The underlying
+     * Arena lifecycle is managed automatically by the garbage collector and will be cleaned up
+     * when the callback is no longer referenced.</p>
+     *
      * @param name unique processor name
      * @param processor processor implementation
      * @param priority order within the stage (higher runs first)
@@ -435,7 +442,7 @@ public final class Kreuzberg {
         ProcessingStage effectiveStage = stage == null ? ProcessingStage.MIDDLE : stage;
         String normalizedName = validatePluginName(name, "PostProcessor");
 
-        Arena arena = Arena.ofShared();
+        Arena arena = Arena.ofAuto();
         boolean registered = false;
         try {
             MemorySegment callback = createPostProcessorCallback(processor, arena);
@@ -550,6 +557,11 @@ public final class Kreuzberg {
     /**
      * Register a validator with explicit priority.
      *
+     * <p>Warning: The validator implementation must be thread-safe and hold references to any
+     * data it needs, as it may be invoked during extraction from multiple threads. The underlying
+     * Arena lifecycle is managed automatically by the garbage collector and will be cleaned up
+     * when the callback is no longer referenced.</p>
+     *
      * @param name validator name
      * @param validator validator implementation
      * @param priority order (higher runs earlier)
@@ -560,7 +572,7 @@ public final class Kreuzberg {
         Objects.requireNonNull(validator, "validator must not be null");
         String normalizedName = validatePluginName(name, "Validator");
 
-        Arena arena = Arena.ofShared();
+        Arena arena = Arena.ofAuto();
         boolean registered = false;
         try {
             MemorySegment callback = createValidatorCallback(validator, arena);
@@ -673,6 +685,11 @@ public final class Kreuzberg {
     /**
      * Register an OCR backend with optional language filtering.
      *
+     * <p>Warning: The backend implementation must be thread-safe and hold references to any
+     * data it needs, as it may be invoked during extraction from multiple threads. The underlying
+     * Arena lifecycle is managed automatically by the garbage collector and will be cleaned up
+     * when the callback is no longer referenced.</p>
+     *
      * @param name backend name
      * @param backend backend implementation
      * @param supportedLanguages languages supported by the backend (empty for all)
@@ -688,7 +705,7 @@ public final class Kreuzberg {
         String normalizedName = validatePluginName(name, "OCR backend");
         List<String> languages = supportedLanguages == null ? List.of() : supportedLanguages;
 
-        Arena arena = Arena.ofShared();
+        Arena arena = Arena.ofAuto();
         boolean registered = false;
         try {
             MemorySegment callback = createOcrCallback(backend, arena);
@@ -874,7 +891,8 @@ public final class Kreuzberg {
         }
 
         try (Arena arena = Arena.ofConfined()) {
-            MemorySegment dataSegment = arena.allocateFrom(ValueLayout.JAVA_BYTE, data);
+            MemorySegment dataSegment = arena.allocate((long) data.length, 1);
+            MemorySegment.copy(data, 0, dataSegment, ValueLayout.JAVA_BYTE, 0, data.length);
             MemorySegment mimePtr = (MemorySegment) KreuzbergFFI.KREUZBERG_DETECT_MIME_TYPE_FROM_BYTES.invoke(
                 dataSegment,
                 (long) data.length

@@ -2,8 +2,10 @@ name: CI Docker Build & Test
 
 on:
   push:
-    branches:
-      - main
+    branches-ignore:
+      - 'benchmarking-*'
+      - 'profiling-*'
+      - 'feat/profiling-flamegraphs'
     paths:
       - '.github/actions/**'
       - 'crates/kreuzberg/**'

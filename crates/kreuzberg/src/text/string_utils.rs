@@ -45,7 +45,10 @@ fn calculate_cache_key(data: &[u8]) -> String {
     let sample = if data.len() > 1024 { &data[..1024] } else { data };
     sample.hash(&mut hasher);
     data.len().hash(&mut hasher);
-    format!("{:x}", hasher.finish())
+    // Pre-allocate with capacity; hash format is typically 16 hex chars
+    let mut result = String::with_capacity(16);
+    result.push_str(&format!("{:x}", hasher.finish()));
+    result
 }
 
 pub fn safe_decode(byte_data: &[u8], encoding: Option<&str>) -> String {
@@ -57,7 +60,7 @@ pub fn safe_decode(byte_data: &[u8], encoding: Option<&str>) -> String {
         && let Some(enc) = Encoding::for_label(enc_name.as_bytes())
     {
         let (decoded, _, _) = enc.decode(byte_data);
-        return fix_mojibake_internal(&decoded);
+        return fix_mojibake_internal(&decoded).into_owned();
     }
 
     let cache_key = calculate_cache_key(byte_data);
@@ -66,7 +69,7 @@ pub fn safe_decode(byte_data: &[u8], encoding: Option<&str>) -> String {
         && let Some(&cached_encoding) = cache.get(&cache_key)
     {
         let (decoded, _, _) = cached_encoding.decode(byte_data);
-        return fix_mojibake_internal(&decoded);
+        return fix_mojibake_internal(&decoded).into_owned();
     }
 
     let mut detector = EncodingDetector::new();
@@ -93,17 +96,25 @@ pub fn safe_decode(byte_data: &[u8], encoding: Option<&str>) -> String {
             if let Some(enc) = Encoding::for_label(enc_name.as_bytes()) {
                 let (test_decoded, _, test_errors) = enc.decode(byte_data);
                 if !test_errors && calculate_text_confidence_internal(&test_decoded) > 0.5 {
-                    return fix_mojibake_internal(&test_decoded);
+                    return fix_mojibake_internal(&test_decoded).into_owned();
                 }
             }
         }
     }
 
-    fix_mojibake_internal(&decoded)
+    fix_mojibake_internal(&decoded).into_owned()
 }
 
 pub fn get_encoding_cache_key(data_hash: &str, size: usize) -> String {
-    format!("{}:{}", data_hash, size)
+    // Pre-allocate with reasonable capacity: hash (16 chars) + ':' + size (up to 20 chars)
+    let estimated_capacity = 16 + 1 + 20;
+    let mut result = String::with_capacity(estimated_capacity);
+    result.push_str(data_hash);
+    result.push(':');
+    // Manual formatting to avoid another allocation from format!
+    use std::fmt::Write;
+    let _ = write!(result, "{}", size);
+    result
 }
 
 pub fn calculate_text_confidence(text: &str) -> f64 {
@@ -141,12 +152,18 @@ fn calculate_text_confidence_internal(text: &str) -> f64 {
 }
 
 pub fn fix_mojibake(text: &str) -> String {
-    fix_mojibake_internal(text)
+    fix_mojibake_internal(text).into_owned()
 }
 
-fn fix_mojibake_internal(text: &str) -> String {
+// Zero-copy version: returns borrowed reference if no changes needed
+fn fix_mojibake_internal(text: &str) -> Cow<'_, str> {
     if text.is_empty() {
-        return text.to_string();
+        return Cow::Borrowed("");
+    }
+
+    // Quick check: if no patterns match, return borrowed reference (zero copy)
+    if !CONTROL_CHARS.is_match(text) && !REPLACEMENT_CHARS.is_match(text) && !ISOLATED_COMBINING.is_match(text) {
+        return Cow::Borrowed(text);
     }
 
     let replacements = [
@@ -155,7 +172,7 @@ fn fix_mojibake_internal(text: &str) -> String {
         (&*ISOLATED_COMBINING, ""),
     ];
 
-    chain_replacements(Cow::Borrowed(text), &replacements).into_owned()
+    chain_replacements(Cow::Borrowed(text), &replacements)
 }
 
 #[cfg(test)]

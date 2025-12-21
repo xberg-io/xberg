@@ -48,4 +48,8 @@ pub enum Error {
     /// Timeout error
     #[error("Timeout: {0}")]
     Timeout(String),
+
+    /// Profiling error
+    #[error("Profiling error: {0}")]
+    Profiling(String),
 }

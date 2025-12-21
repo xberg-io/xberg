@@ -1113,3 +1113,43 @@ export interface OcrBackendProtocol {
 	 */
 	shutdown?(): void | Promise<void>;
 }
+
+/**
+ * Result of error message classification into error codes.
+ *
+ * Provides classification details including the error code, name,
+ * description, and confidence score for the classification.
+ *
+ * @example
+ * ```typescript
+ * import { classifyError, ErrorCode } from '@kreuzberg/node';
+ *
+ * const result = classifyError("File not found in read operation");
+ * if (result.code === ErrorCode.IoError) {
+ *   console.error(`I/O Error: ${result.description}`);
+ *   console.log(`Confidence: ${result.confidence}`);
+ * }
+ * ```
+ */
+export interface ErrorClassification {
+	/**
+	 * The numeric error code (0-7) representing the error type.
+	 */
+	code: number;
+
+	/**
+	 * The human-readable name of the error code (e.g., "validation", "ocr").
+	 */
+	name: string;
+
+	/**
+	 * A brief description of the error type.
+	 */
+	description: string;
+
+	/**
+	 * Confidence score (0.0-1.0) indicating how certain the classification is.
+	 * Higher values indicate higher confidence in the classification.
+	 */
+	confidence: number;
+}

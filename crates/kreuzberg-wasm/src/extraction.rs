@@ -50,6 +50,8 @@ pub fn extract_bytes_sync_wasm(
     config: Option<JsValue>,
 ) -> Result<JsValue, JsValue> {
     let extraction_config = parse_config(config)?;
+    // Copy data: Uint8Array is a JS object reference. While synchronous calls
+    // keep it live, we copy to maintain safety and isolation from JS runtime state.
     let bytes = data.to_vec();
 
     extract_bytes_sync(&bytes, &mime_type, &extraction_config)
@@ -92,6 +94,8 @@ pub fn extract_bytes_sync_wasm(
 /// ```
 #[wasm_bindgen(js_name = extractBytes)]
 pub fn extract_bytes_wasm(data: Uint8Array, mime_type: String, config: Option<JsValue>) -> js_sys::Promise {
+    // Must copy: data is a JS object reference that crosses async boundary.
+    // JS garbage collector could invalidate the reference during async operations.
     let bytes = data.to_vec();
 
     wasm_bindgen_futures::future_to_promise(async move {
@@ -201,8 +205,10 @@ pub fn batch_extract_bytes_sync_wasm(
     }
 
     let extraction_config = parse_config(config)?;
-    let owned_data: Vec<Vec<u8>> = data_list.iter().map(|d| d.to_vec()).collect();
-
+    // Collect owned data directly without intermediate Vec<Vec<u8>> allocation.
+    // Each Uint8Array must be copied (JS reference has no guaranteed lifetime),
+    // but we construct borrowed pairs efficiently in a single pass.
+    let owned_data: Vec<Vec<u8>> = data_list.into_iter().map(|d| d.to_vec()).collect();
     let contents: Vec<(&[u8], &str)> = owned_data
         .iter()
         .zip(mime_types.iter())
@@ -265,6 +271,8 @@ pub fn batch_extract_bytes_wasm(
         }
 
         let extraction_config = parse_config(config)?;
+        // Must copy: data_list contains JS object references crossing async boundary.
+        // JS garbage collector could invalidate references during await points.
         let owned_data: Vec<Vec<u8>> = data_list.iter().map(|d| d.to_vec()).collect();
 
         let mut results = Vec::with_capacity(owned_data.len());

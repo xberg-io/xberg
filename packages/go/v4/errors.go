@@ -1,5 +1,15 @@
 package kreuzberg
 
+/*
+#include <stdint.h>
+
+// Phase 2 Error Classification FFI functions
+uint32_t kreuzberg_error_code_count(void);
+const char *kreuzberg_error_code_name(uint32_t code);
+const char *kreuzberg_error_code_description(uint32_t code);
+*/
+import "C"
+
 import (
 	"fmt"
 	"strings"
@@ -24,41 +34,47 @@ const (
 )
 
 // ErrorCode represents FFI error codes from kreuzberg-ffi.
-type ErrorCode int32
+// These codes map to the Rust ErrorCode enum and are the single source of truth.
+type ErrorCode uint32
 
 const (
-	ErrorCodeSuccess           ErrorCode = 0
-	ErrorCodeGenericError      ErrorCode = 1
-	ErrorCodePanic             ErrorCode = 2
-	ErrorCodeInvalidArgument   ErrorCode = 3
-	ErrorCodeIoError           ErrorCode = 4
-	ErrorCodeParsingError      ErrorCode = 5
-	ErrorCodeOcrError          ErrorCode = 6
-	ErrorCodeMissingDependency ErrorCode = 7
+	ErrorCodeValidation        ErrorCode = 0
+	ErrorCodeParsing           ErrorCode = 1
+	ErrorCodeOcr               ErrorCode = 2
+	ErrorCodeMissingDependency ErrorCode = 3
+	ErrorCodeIo                ErrorCode = 4
+	ErrorCodePlugin            ErrorCode = 5
+	ErrorCodeUnsupportedFormat ErrorCode = 6
+	ErrorCodeInternal          ErrorCode = 7
+)
+
+// Legacy error codes for backward compatibility (deprecated)
+const (
+	ErrorCodeSuccess         ErrorCode = 99
+	ErrorCodeGenericError    ErrorCode = 99
+	ErrorCodePanic           ErrorCode = 99
+	ErrorCodeInvalidArgument ErrorCode = 99
+	ErrorCodeIoError         ErrorCode = 99
+	ErrorCodeParsingError    ErrorCode = 99
+	ErrorCodeOcrError        ErrorCode = 99
 )
 
 // String returns the string representation of an ErrorCode.
 func (ec ErrorCode) String() string {
-	switch ec {
-	case ErrorCodeSuccess:
-		return "Success"
-	case ErrorCodeGenericError:
-		return "GenericError"
-	case ErrorCodePanic:
-		return "Panic"
-	case ErrorCodeInvalidArgument:
-		return "InvalidArgument"
-	case ErrorCodeIoError:
-		return "IoError"
-	case ErrorCodeParsingError:
-		return "ParsingError"
-	case ErrorCodeOcrError:
-		return "OcrError"
-	case ErrorCodeMissingDependency:
-		return "MissingDependency"
-	default:
+	namePtr := C.kreuzberg_error_code_name(C.uint32_t(ec))
+	if namePtr == nil {
 		return "Unknown"
 	}
+	return C.GoString(namePtr)
+}
+
+// Description returns a human-readable description of the error code.
+func (ec ErrorCode) Description() string {
+	descPtr := C.kreuzberg_error_code_description(C.uint32_t(ec))
+	if descPtr == nil {
+		return "Unknown error code"
+	}
+	return C.GoString(descPtr)
 }
 
 // PanicContext contains panic context information from kreuzberg-ffi.
@@ -313,51 +329,75 @@ func formatErrorMessage(message string) string {
 	return "kreuzberg: " + trimmed
 }
 
+// classifyNativeError converts a native error message and code into a typed Kreuzberg error.
+// Uses the FFI-provided error code to classify errors instead of string matching.
 func classifyNativeError(message string, code ErrorCode, panicCtx *PanicContext) error {
 	trimmed := strings.TrimSpace(message)
 	if trimmed == "" {
-		return newRuntimeErrorWithContext("unknown error", nil, code, panicCtx)
+		trimmed = "unknown error"
 	}
 
-	switch {
-	case strings.HasPrefix(trimmed, "Validation error:"):
+	// Route to appropriate error type based on FFI error code
+	switch code {
+	case ErrorCodeValidation:
 		return newValidationErrorWithContext(trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Parsing error:"):
+	case ErrorCodeParsing:
 		return newParsingErrorWithContext(trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "OCR error:"):
+	case ErrorCodeOcr:
 		return newOCRErrorWithContext(trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Cache error:"):
-		return newCacheErrorWithContext(trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Image processing error:"):
-		return newImageProcessingErrorWithContext(trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Serialization error:"):
-		return newSerializationErrorWithContext(trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Missing dependency:"):
-		dependency := strings.TrimSpace(trimmed[len("Missing dependency:"):])
+	case ErrorCodeMissingDependency:
+		// Extract dependency name from message if available
+		dependency := extractDependencyName(trimmed)
 		return newMissingDependencyErrorWithContext(dependency, trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Plugin error in "):
-		plugin := parsePluginName(trimmed)
-		return newPluginErrorWithContext(plugin, trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Unsupported format:"):
-		format := strings.TrimSpace(trimmed[len("Unsupported format:"):])
-		return newUnsupportedFormatErrorWithContext(format, trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "IO error:"):
+	case ErrorCodeIo:
 		return newIOErrorWithContext(trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Lock poisoned:"):
+	case ErrorCodePlugin:
+		// Extract plugin name from message if available
+		plugin := extractPluginName(trimmed)
+		return newPluginErrorWithContext(plugin, trimmed, nil, code, panicCtx)
+	case ErrorCodeUnsupportedFormat:
+		// Extract format name from message if available
+		format := extractFormatName(trimmed)
+		return newUnsupportedFormatErrorWithContext(format, trimmed, nil, code, panicCtx)
+	case ErrorCodeInternal:
 		return newRuntimeErrorWithContext(trimmed, nil, code, panicCtx)
-	case strings.HasPrefix(trimmed, "Unsupported operation:"):
+	default:
+		// Fallback for unknown codes
 		return newRuntimeErrorWithContext(trimmed, nil, code, panicCtx)
 	}
+}
 
-	lower := strings.ToLower(trimmed)
-	if strings.Contains(lower, "lock poisoned") {
-		return newRuntimeErrorWithContext(trimmed, nil, code, panicCtx)
+// extractDependencyName extracts the dependency name from an error message.
+func extractDependencyName(message string) string {
+	// Try to extract dependency name from message patterns like "Missing dependency: tesseract"
+	if idx := strings.Index(message, ":"); idx != -1 {
+		return strings.TrimSpace(message[idx+1:])
 	}
-	if strings.Contains(lower, "missing dependency") {
-		return newMissingDependencyErrorWithContext("", trimmed, nil, code, panicCtx)
-	}
+	return ""
+}
 
-	return newRuntimeErrorWithContext(trimmed, nil, code, panicCtx)
+// extractPluginName extracts the plugin name from an error message.
+func extractPluginName(message string) string {
+	// Try to extract plugin name from message patterns like "Plugin error in 'custom'"
+	start := strings.Index(message, "'")
+	if start == -1 {
+		return ""
+	}
+	rest := message[start+1:]
+	end := strings.Index(rest, "'")
+	if end == -1 {
+		return ""
+	}
+	return rest[:end]
+}
+
+// extractFormatName extracts the format name from an error message.
+func extractFormatName(message string) string {
+	// Try to extract format name from message patterns like "Unsupported format: docx"
+	if idx := strings.Index(message, ":"); idx != -1 {
+		return strings.TrimSpace(message[idx+1:])
+	}
+	return ""
 }
 
 func parsePluginName(message string) string {
@@ -371,4 +411,31 @@ func parsePluginName(message string) string {
 		return ""
 	}
 	return rest[:end]
+}
+
+// Phase 2 FFI Error Classification Wrappers
+
+// ErrorCodeCount returns the total number of valid error codes (8).
+func ErrorCodeCount() uint32 {
+	return uint32(C.kreuzberg_error_code_count())
+}
+
+// ErrorCodeName returns the name of an error code as a string.
+// Returns "unknown" for invalid codes.
+func ErrorCodeName(code uint32) string {
+	namePtr := C.kreuzberg_error_code_name(C.uint32_t(code))
+	if namePtr == nil {
+		return "unknown"
+	}
+	return C.GoString(namePtr)
+}
+
+// ErrorCodeDescription returns a human-readable description of an error code.
+// Returns "Unknown error code" for invalid codes.
+func ErrorCodeDescription(code uint32) string {
+	descPtr := C.kreuzberg_error_code_description(C.uint32_t(code))
+	if descPtr == nil {
+		return "Unknown error code"
+	}
+	return C.GoString(descPtr)
 }

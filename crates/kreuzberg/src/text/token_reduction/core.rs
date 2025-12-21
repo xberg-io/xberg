@@ -6,6 +6,7 @@ use crate::text::token_reduction::{
     semantic::SemanticAnalyzer,
     simd_text::{SimdTextProcessor, chunk_text_for_parallel},
 };
+use ahash::AHashMap;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use regex::Regex;
@@ -198,8 +199,13 @@ impl TokenReducer {
             return text.to_string();
         }
 
-        let mut word_freq = std::collections::HashMap::new();
-        let mut word_lengths = Vec::new();
+        // Pre-allocate capacity for word frequency map based on estimated unique words.
+        // Heuristic: ~70% of words are typically unique in moderate text.
+        let estimated_unique = (words.len() as f32 * 0.7).ceil() as usize;
+        let mut word_freq = AHashMap::with_capacity(estimated_unique);
+
+        // Pre-allocate word_lengths with capacity.
+        let mut word_lengths = Vec::with_capacity(words.len());
 
         for word in &words {
             let clean_word = if word.chars().all(|c| c.is_alphabetic()) {
@@ -225,6 +231,7 @@ impl TokenReducer {
 
         let original_count = words.len();
 
+        // Pre-allocate filtered_words to reduce reallocation during filtering.
         let filtered_words: Vec<String> = words
             .iter()
             .filter(|word| {
@@ -432,8 +439,12 @@ impl TokenReducer {
         score += (long_word_count as f32 / words.len() as f32) * LONG_WORD_WEIGHT;
         score += (punct_density as f32 / sentence.len() as f32) * PUNCTUATION_DENSITY_WEIGHT;
 
-        let unique_words: std::collections::HashSet<_> = words
+        // Pre-allocate AHashSet with expected unique words.
+        // Heuristic: ~60% unique in typical sentence.
+        let estimated_unique = (words.len() as f32 * 0.6).ceil() as usize;
+        let unique_words: ahash::AHashSet<_> = words
             .iter()
+            .take(estimated_unique.max(10))
             .map(|w| {
                 w.chars()
                     .filter(|c| c.is_alphabetic())
@@ -441,7 +452,24 @@ impl TokenReducer {
                     .to_lowercase()
             })
             .collect();
-        let diversity_ratio = unique_words.len() as f32 / words.len() as f32;
+
+        // Fall back to counting all words if we didn't collect enough unique words initially
+        let final_unique_count = if unique_words.len() >= estimated_unique {
+            unique_words.len()
+        } else {
+            words
+                .iter()
+                .map(|w| {
+                    w.chars()
+                        .filter(|c| c.is_alphabetic())
+                        .collect::<String>()
+                        .to_lowercase()
+                })
+                .collect::<ahash::AHashSet<_>>()
+                .len()
+        };
+
+        let diversity_ratio = final_unique_count as f32 / words.len() as f32;
         score += diversity_ratio * DIVERSITY_RATIO_WEIGHT;
 
         let char_entropy = self.calculate_char_entropy(sentence);
@@ -460,7 +488,11 @@ impl TokenReducer {
             return 0.0;
         }
 
-        let mut char_freq = std::collections::HashMap::new();
+        // Pre-allocate AHashMap with estimated unique character count.
+        // Heuristic: usually < 10% unique characters in typical text (ASCII alphabet ~26 chars).
+        let estimated_unique = (chars.len() as f32 * 0.1).ceil() as usize;
+        let mut char_freq = AHashMap::with_capacity(estimated_unique.max(26));
+
         for &ch in &chars {
             let lowercase_ch = ch
                 .to_lowercase()
