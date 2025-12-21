@@ -24,5 +24,5 @@ Deno.test("xml_plant_catalog", { permissions: { read: true } }, async () => {
 	}
 	assertions.assertExpectedMime(result, ["application/xml"]);
 	assertions.assertMinContentLength(result, 100);
-	assertions.assertMetadataExpectation(result, "element_count", { gte: 1 });
+	assertions.assertMetadataExpectation(result, "format.element_count", { gte: 1 });
 });
