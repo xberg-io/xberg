@@ -1,18 +1,13 @@
 // Auto-generated tests for smoke fixtures.
 // Run with: deno test --allow-read
 
-import {
-	assertions,
-	buildConfig,
-	ensureWasmInitialized,
-	extractBytes,
-	resolveDocument,
-	shouldSkipFixture,
-} from "./helpers.ts";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
 
+// Initialize WASM module once at module load time
+await initWasm();
+
 Deno.test("smoke_docx_basic", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("documents/fake.docx");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -37,7 +32,6 @@ Deno.test("smoke_docx_basic", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("smoke_html_basic", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("web/simple_table.html");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -58,7 +52,6 @@ Deno.test("smoke_html_basic", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("smoke_image_png", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("images/sample.png");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -78,7 +71,6 @@ Deno.test("smoke_image_png", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("smoke_json_basic", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("data_formats/simple.json");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -98,7 +90,6 @@ Deno.test("smoke_json_basic", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("smoke_pdf_basic", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/fake_memo.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -119,7 +110,6 @@ Deno.test("smoke_pdf_basic", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("smoke_txt_basic", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("text/report.txt");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -139,7 +129,6 @@ Deno.test("smoke_txt_basic", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("smoke_xlsx_basic", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("spreadsheets/stanley_cups.xlsx");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;

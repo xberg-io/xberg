@@ -1,18 +1,13 @@
 // Auto-generated tests for image fixtures.
 // Run with: deno test --allow-read
 
-import {
-	assertions,
-	buildConfig,
-	ensureWasmInitialized,
-	extractBytes,
-	resolveDocument,
-	shouldSkipFixture,
-} from "./helpers.ts";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
 
+// Initialize WASM module once at module load time
+await initWasm();
+
 Deno.test("image_metadata_only", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("images/example.jpg");
 	const config = buildConfig({ ocr: null });
 	let result: ExtractionResult | null = null;

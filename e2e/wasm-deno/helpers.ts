@@ -34,29 +34,7 @@ export type {
 
 export { extractBytes, initWasm };
 
-let wasmInitialized = false;
-
-/**
- * Ensure WASM is initialized before running tests.
- * Safe to call multiple times - only initializes once.
- */
-export async function ensureWasmInitialized(): Promise<void> {
-	if (!wasmInitialized) {
-		await initWasm();
-		wasmInitialized = true;
-	}
-}
-
-// Normalize path to handle Windows (remove leading slash on drive paths like /D:/)
-function normalizeUrlPath(pathname: string): string {
-	// On Windows, URL().pathname returns /D:/path/to/file, we need D:/path/to/file
-	if (pathname.match(/^\/[A-Za-z]:\//)) {
-		return pathname.slice(1);
-	}
-	return pathname;
-}
-
-const WORKSPACE_ROOT = normalizeUrlPath(new URL("../..", import.meta.url).pathname);
+const WORKSPACE_ROOT = new URL("../..", import.meta.url).pathname;
 const TEST_DOCUMENTS = `${WORKSPACE_ROOT}/test_documents`;
 
 type PlainRecord = Record<string, unknown>;
@@ -255,16 +233,13 @@ export function shouldSkipFixture(
 	const requirementHit = requirements.some((req) => lower.includes(req.toLowerCase()));
 	const missingDependency = lower.includes("missingdependencyerror") || lower.includes("missing dependency");
 	const unsupportedFormat = lower.includes("unsupported mime type") || lower.includes("unsupported format");
-	const pdfiumError = lower.includes("pdfium") || lower.includes("pdf extraction requires proper wasm");
 
-	if (missingDependency || unsupportedFormat || pdfiumError || requirementHit) {
+	if (missingDependency || unsupportedFormat || requirementHit) {
 		const reason = missingDependency
 			? "missing dependency"
 			: unsupportedFormat
 				? "unsupported format"
-				: pdfiumError
-					? "PDFium not available (non-browser environment)"
-					: requirements.join(", ");
+				: requirements.join(", ");
 		console.warn(`Skipping ${fixtureId}: ${reason}. ${message}`);
 		if (notes) {
 			console.warn(`Notes: ${notes}`);

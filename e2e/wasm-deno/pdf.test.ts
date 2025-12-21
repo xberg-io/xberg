@@ -1,18 +1,13 @@
 // Auto-generated tests for pdf fixtures.
 // Run with: deno test --allow-read
 
-import {
-	assertions,
-	buildConfig,
-	ensureWasmInitialized,
-	extractBytes,
-	resolveDocument,
-	shouldSkipFixture,
-} from "./helpers.ts";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
 
+// Initialize WASM module once at module load time
+await initWasm();
+
 Deno.test("pdf_assembly_technical", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/assembly_language_for_beginners_al4_b_en.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -34,7 +29,6 @@ Deno.test("pdf_assembly_technical", { permissions: { read: true } }, async () =>
 });
 
 Deno.test("pdf_bayesian_data_analysis", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/bayesian_data_analysis_third_edition_13th_feb_2020.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -56,7 +50,6 @@ Deno.test("pdf_bayesian_data_analysis", { permissions: { read: true } }, async (
 });
 
 Deno.test("pdf_code_and_formula", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/code_and_formula.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -76,7 +69,6 @@ Deno.test("pdf_code_and_formula", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_deep_learning", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/fundamentals_of_deep_learning_2014.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -98,7 +90,6 @@ Deno.test("pdf_deep_learning", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_embedded_images", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/embedded_images_tables.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -119,7 +110,6 @@ Deno.test("pdf_embedded_images", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_google_doc", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/google_doc_document.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -140,7 +130,6 @@ Deno.test("pdf_google_doc", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_large_ciml", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/a_course_in_machine_learning_ciml_v0_9_all.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -162,7 +151,6 @@ Deno.test("pdf_large_ciml", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_non_english_german", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/5_level_paging_and_5_level_ept_intel_revision_1_1_may_2017.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -184,7 +172,6 @@ Deno.test("pdf_non_english_german", { permissions: { read: true } }, async () =>
 });
 
 Deno.test("pdf_right_to_left", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/right_to_left_01.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -205,7 +192,6 @@ Deno.test("pdf_right_to_left", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_simple_text", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs/fake_memo.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -226,7 +212,6 @@ Deno.test("pdf_simple_text", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_tables_large", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs_with_tables/large.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -247,7 +232,6 @@ Deno.test("pdf_tables_large", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_tables_medium", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs_with_tables/medium.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -268,7 +252,6 @@ Deno.test("pdf_tables_medium", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_tables_small", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("pdfs_with_tables/tiny.pdf");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -297,7 +280,6 @@ Deno.test("pdf_tables_small", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("pdf_technical_stat_learning", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument(
 		"pdfs/an_introduction_to_statistical_learning_with_applications_in_r_islr_sixth_printing.pdf",
 	);

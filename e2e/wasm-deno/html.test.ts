@@ -1,18 +1,13 @@
 // Auto-generated tests for html fixtures.
 // Run with: deno test --allow-read
 
-import {
-	assertions,
-	buildConfig,
-	ensureWasmInitialized,
-	extractBytes,
-	resolveDocument,
-	shouldSkipFixture,
-} from "./helpers.ts";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
 
+// Initialize WASM module once at module load time
+await initWasm();
+
 Deno.test("html_complex_layout", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("web/taylor_swift.html");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -32,7 +27,6 @@ Deno.test("html_complex_layout", { permissions: { read: true } }, async () => {
 });
 
 Deno.test("html_simple_table", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("web/simple_table.html");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;

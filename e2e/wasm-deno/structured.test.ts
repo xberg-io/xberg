@@ -1,18 +1,13 @@
 // Auto-generated tests for structured fixtures.
 // Run with: deno test --allow-read
 
-import {
-	assertions,
-	buildConfig,
-	ensureWasmInitialized,
-	extractBytes,
-	resolveDocument,
-	shouldSkipFixture,
-} from "./helpers.ts";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
 
+// Initialize WASM module once at module load time
+await initWasm();
+
 Deno.test("structured_json_basic", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("json/sample_document.json");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -33,7 +28,6 @@ Deno.test("structured_json_basic", { permissions: { read: true } }, async () => 
 });
 
 Deno.test("structured_json_simple", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("data_formats/simple.json");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -54,7 +48,6 @@ Deno.test("structured_json_simple", { permissions: { read: true } }, async () =>
 });
 
 Deno.test("structured_yaml_simple", { permissions: { read: true } }, async () => {
-	await ensureWasmInitialized();
 	const documentBytes = await resolveDocument("data_formats/simple.yaml");
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
