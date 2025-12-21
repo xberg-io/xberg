@@ -58,6 +58,7 @@ env:
   RUST_MIN_STACK: 16777216
   PDFIUM_VERSION: "7578"
   PDFIUM_STATIC_VERSION: "7442b"
+  PDFIUM_WASM_VERSION: "7442b"
   MACOSX_DEPLOYMENT_TARGET: "14.0"
   WASM_RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory -C link-arg=--shared-memory -C link-arg=--max-memory=2147483648 -C link-arg=--import-memory -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base"
 

@@ -38,6 +38,42 @@ else
 	TARGET_SUBDIR=""
 fi
 
+if [ "$crate_name" = "kreuzberg-rb" ]; then
+	FFI_MANIFEST="packages/ruby/vendor/Cargo.toml"
+	if [ -f "$FFI_MANIFEST" ]; then
+		FFI_ARGS=("build" "--manifest-path" "$FFI_MANIFEST" "-p" "kreuzberg-ffi")
+	else
+		FFI_ARGS=("build" "--package" "kreuzberg-ffi")
+	fi
+
+	if [ "$build_profile" = "release" ]; then
+		FFI_ARGS+=("--release")
+	fi
+
+	if [ -n "$target" ]; then
+		FFI_ARGS+=("--target" "$target")
+	fi
+
+	echo "Build command: cargo ${FFI_ARGS[*]}"
+	cargo "${FFI_ARGS[@]}"
+
+	if [ -n "${CARGO_TARGET_DIR:-}" ]; then
+		FFI_TARGET_DIR="$CARGO_TARGET_DIR"
+	else
+		FFI_TARGET_DIR="target"
+	fi
+
+	FFI_LINK_DIR="${FFI_TARGET_DIR}/${TARGET_SUBDIR}${PROFILE_DIR}"
+	if [ -d "$FFI_LINK_DIR" ]; then
+		if [ -n "${RUSTFLAGS:-}" ]; then
+			export RUSTFLAGS="${RUSTFLAGS} -L ${FFI_LINK_DIR}"
+		else
+			export RUSTFLAGS="-L ${FFI_LINK_DIR}"
+		fi
+		echo "RUSTFLAGS: ${RUSTFLAGS}"
+	fi
+fi
+
 if [ "$verbose" = "true" ]; then
 	CARGO_ARGS+=("-vv")
 fi

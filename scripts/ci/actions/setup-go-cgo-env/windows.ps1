@@ -51,7 +51,13 @@ $msys2IncludePath = "$msys2RepoRoot/crates/kreuzberg-ffi/include"
 
 $cgoEnabled = "1"
 $cgoCflags = "-I$msys2IncludePath"
-$cgoLdflags = "-L$msys2FfiPath -lkreuzberg_ffi -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt"
+$importLibName = "libkreuzberg_ffi.dll.a"
+$importLibPath = Join-Path $ffiPath $importLibName
+if (Test-Path $importLibPath) {
+  $cgoLdflags = "-L$msys2FfiPath -l:$importLibName -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt"
+} else {
+  $cgoLdflags = "-L$msys2FfiPath -lkreuzberg_ffi -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt"
+}
 
 Add-Content -Path $env:GITHUB_ENV -Value "PATH=$env:PATH"
 Add-Content -Path $env:GITHUB_ENV -Value "PKG_CONFIG_PATH=$pkgConfigPath"
