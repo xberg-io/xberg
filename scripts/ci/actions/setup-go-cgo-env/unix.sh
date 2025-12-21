@@ -32,6 +32,7 @@ fi
 	echo "DYLD_FALLBACK_LIBRARY_PATH=${dyld_fallback_library_path}"
 	echo "CGO_ENABLED=${cgo_enabled}"
 	echo "CGO_CFLAGS=${cgo_cflags}"
+	echo "# CRITICAL: Replace CGO_LDFLAGS entirely, never append"
 	echo "CGO_LDFLAGS=${cgo_ldflags}"
 } >>"$GITHUB_ENV"
 

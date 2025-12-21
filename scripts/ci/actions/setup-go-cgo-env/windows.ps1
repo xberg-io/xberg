@@ -59,11 +59,19 @@ if (Test-Path $importLibPath) {
   $cgoLdflags = "-L$msys2FfiPath -lkreuzberg_ffi -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt"
 }
 
+# Add libraries to PATH for runtime discovery
 Add-Content -Path $env:GITHUB_ENV -Value "PATH=$env:PATH"
 Add-Content -Path $env:GITHUB_ENV -Value "PKG_CONFIG_PATH=$pkgConfigPath"
 Add-Content -Path $env:GITHUB_ENV -Value "CGO_ENABLED=$cgoEnabled"
 Add-Content -Path $env:GITHUB_ENV -Value "CGO_CFLAGS=$cgoCflags"
-Add-Content -Path $env:GITHUB_ENV -Value "CGO_LDFLAGS=$cgoLdflags"
+
+# CRITICAL: Replace CGO_LDFLAGS entirely, never append
+# This prevents duplication if the script is called multiple times
+# or if other scripts have already set CGO_LDFLAGS
+Write-Host "Setting CGO_LDFLAGS (replacing any existing value)"
+@"
+CGO_LDFLAGS=$cgoLdflags
+"@ | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding UTF8
 
 Write-Host "✓ Go cgo environment configured (Windows)"
 Write-Host "  FFI Library Path (Windows): $ffiPath"

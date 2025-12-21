@@ -154,9 +154,9 @@ setup_go_paths_windows() {
 # Exports:
 #   - PKG_CONFIG_PATH: path to kreuzberg-ffi .pc file
 #   - LD_LIBRARY_PATH/DYLD_LIBRARY_PATH/DYLD_FALLBACK_LIBRARY_PATH: runtime library paths
-#   - CGO_LDFLAGS: additional linker flags with rpath (platform-specific)
 #   - CGO_CFLAGS: C compiler flags for FFI header
 #   - CGO_ENABLED: always 1 for Go cgo builds
+# NOTE: CGO_LDFLAGS is set by setup-go-cgo-env action on Windows in CI, or by this script on Unix
 setup_go_paths() {
 	local repo_root="${1:-${REPO_ROOT:-}}"
 	[ -z "$repo_root" ] && return 0
@@ -213,20 +213,25 @@ EOF
 	Linux)
 		# Runtime library path for Linux
 		export LD_LIBRARY_PATH="${repo_root}/target/release:${LD_LIBRARY_PATH:-}"
-		# Linker flags with rpath for direct library discovery
+		# Linker flags with rpath for direct library discovery (only on Unix, Windows uses setup-go-cgo-env action)
 		export CGO_LDFLAGS="-L${repo_root}/target/release -lkreuzberg_ffi -Wl,-rpath,${repo_root}/target/release"
 		;;
 	macOS | Darwin)
 		# Runtime library paths for macOS (both variants for compatibility)
 		export DYLD_LIBRARY_PATH="${repo_root}/target/release:${DYLD_LIBRARY_PATH:-}"
 		export DYLD_FALLBACK_LIBRARY_PATH="${repo_root}/target/release:${DYLD_FALLBACK_LIBRARY_PATH:-}"
-		# Linker flags with rpath for direct library discovery
+		# Linker flags with rpath for direct library discovery (only on Unix, Windows uses setup-go-cgo-env action)
 		export CGO_LDFLAGS="-L${repo_root}/target/release -lkreuzberg_ffi -Wl,-rpath,${repo_root}/target/release"
 		;;
 	Windows | MINGW* | MSYS* | CYGWIN*)
-		# Windows doesn't use rpath; static linking flags ensure static CRT linkage
-		# Only use the x86_64-pc-windows-gnu target as it's the only valid target on Windows
-		export CGO_LDFLAGS="-L${repo_root}/target/x86_64-pc-windows-gnu/release -lkreuzberg_ffi -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt"
+		# CRITICAL: On Windows in GitHub Actions CI, CGO_LDFLAGS is set by the setup-go-cgo-env action
+		# to ensure proper MSYS2 path formatting and Windows-specific flags.
+		# This function only validates the environment is ready for Go compilation.
+		# Local development can set CGO_LDFLAGS explicitly if needed.
+		if [ -z "${CGO_LDFLAGS:-}" ] && [ -z "${GITHUB_ENV:-}" ]; then
+			# Only set if not in GitHub Actions and not already set
+			export CGO_LDFLAGS="-L${repo_root}/target/x86_64-pc-windows-gnu/release -lkreuzberg_ffi -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt"
+		fi
 		;;
 	esac
 

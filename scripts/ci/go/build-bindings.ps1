@@ -12,9 +12,8 @@ cd packages/go/v4
 $workspace = Resolve-Path "$PWD/../../.."
 
 if ($IsWindowsOS) {
-    Write-Host "=== Setting up Windows MinGW-w64 CGO environment ==="
+    Write-Host "=== Setting up Windows MinGW-w64 environment ==="
     $ffiPath = "$workspace/target/x86_64-pc-windows-gnu/release"
-    $devPcDir = "$workspace/crates/kreuzberg-ffi"
 
     # Validate FFI library exists before proceeding
     Write-Host "=== Pre-build validation ==="
@@ -30,32 +29,17 @@ if ($IsWindowsOS) {
     Write-Host "Verified FFI libraries: $($ffiLibraries.Count) file(s) found"
     $ffiLibraries | ForEach-Object { Write-Host "  - $($_.Name)" }
 
-    # MSYS2 UCRT64 toolchain is already available in PATH (verified by CI workflow)
-    $env:CC = "gcc"
-    $env:CXX = "g++"
-    $env:AR = "ar"
+    # MSYS2 UCRT64 toolchain is already available in PATH and CGO_LDFLAGS are
+    # already configured by the CI workflow. We only need to ensure the library
+    # path is in PATH for runtime discovery.
     $env:PATH = "$ffiPath;$env:PATH"
-    if ($env:PKG_CONFIG_PATH) {
-        $env:PKG_CONFIG_PATH = "$devPcDir;$env:PKG_CONFIG_PATH"
-    } else {
-        $env:PKG_CONFIG_PATH = "$devPcDir"
-    }
-    $env:CGO_CFLAGS = "-I$workspace/crates/kreuzberg-ffi -O2"
-    $env:CGO_LDFLAGS = "-L$ffiPath -lkreuzberg_ffi"
-    $env:CGO_CXXFLAGS = $env:CGO_CFLAGS
 
     Write-Host "=== Build Environment ==="
     Write-Host "FFI library path: $ffiPath"
     Write-Host "Libraries available:"
     Get-ChildItem -Force $ffiPath | findstr kreuzberg_ffi
-    Write-Host "PKG_CONFIG_PATH=$env:PKG_CONFIG_PATH"
     Write-Host "`nGCC version:"
     & gcc --version
-    Write-Host "`nCGO environment:"
-    Write-Host "CC=$env:CC"
-    Write-Host "CXX=$env:CXX"
-    Write-Host "CGO_CFLAGS=$env:CGO_CFLAGS"
-    Write-Host "CGO_LDFLAGS=$env:CGO_LDFLAGS"
     Write-Host "========================`n"
 } else {
     $ffiPath = "$workspace/target/release"
