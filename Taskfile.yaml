@@ -240,13 +240,13 @@ tasks:
     dir: packages/ruby
     cmds:
       - "{{.BUNDLE}} exec rubocop --config .rubocop.yml --autocorrect-all"
-      - "./bin/steep check"
+      - "{{.BUNDLE}} exec steep check"
   ruby:lint:check:
     desc: Lint Ruby code in check-only mode (rubocop + steep, no fixes)
     dir: packages/ruby
     cmds:
       - "{{.BUNDLE}} exec rubocop --config .rubocop.yml"
-      - "./bin/steep check"
+      - "{{.BUNDLE}} exec steep check"
   ruby:format:
     desc: Format Ruby code with modifications (rubocop)
     dir: packages/ruby
@@ -261,7 +261,7 @@ tasks:
     desc: Run steep type checking
     dir: packages/ruby
     cmds:
-      - "./bin/steep check"
+      - "{{.BUNDLE}} exec steep check"
   ruby:console:
     desc: Open Ruby console with Kreuzberg loaded
     dir: packages/ruby
