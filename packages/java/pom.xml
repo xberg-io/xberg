@@ -46,13 +46,13 @@
         <maven.compiler.release>25</maven.compiler.release>
         <junit.version>5.11.4</junit.version>
         <maven.version>4.0.0-rc-4</maven.version>
-        <maven-compiler-plugin.version>4.0.0-rc-1</maven-compiler-plugin.version>
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <maven-surefire-plugin.version>3.5.4</maven-surefire-plugin.version>
-        <maven-resources-plugin.version>4.0.0-rc-1</maven-resources-plugin.version>
-        <maven-clean-plugin.version>4.0.0-rc-1</maven-clean-plugin.version>
-        <maven-jar-plugin.version>4.0.0-rc-1</maven-jar-plugin.version>
-        <maven-install-plugin.version>4.0.0-rc-1</maven-install-plugin.version>
-        <maven-deploy-plugin.version>4.0.0-rc-1</maven-deploy-plugin.version>
+        <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
+        <maven-clean-plugin.version>3.3.2</maven-clean-plugin.version>
+        <maven-jar-plugin.version>3.3.0</maven-jar-plugin.version>
+        <maven-install-plugin.version>3.1.2</maven-install-plugin.version>
+        <maven-deploy-plugin.version>3.1.2</maven-deploy-plugin.version>
         <maven-site-plugin.version>4.0.0-M16</maven-site-plugin.version>
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <maven-pmd-plugin.version>3.28.0</maven-pmd-plugin.version>
