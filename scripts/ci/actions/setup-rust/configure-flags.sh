@@ -45,6 +45,17 @@ else
 fi
 
 check_output=""
+if ! check_output="$(printf 'fn main() {}\n' | RUSTC_COLOR=never rustc -W mismatched-lifetime-syntaxes - 2>&1)"; then
+	:
+fi
+if grep -qi "unknown lint" <<<"$check_output"; then
+	echo "mismatched-lifetime-syntaxes lint unavailable on $(rustc -V); skipping flag"
+else
+	base+=" -A mismatched-lifetime-syntaxes"
+	echo "Detected mismatched-lifetime-syntaxes lint support; appended suppression flag"
+fi
+
+check_output=""
 if ! check_output="$(printf 'fn main() {}\n' | RUSTC_COLOR=never rustc -W fn_ptr_eq - 2>&1)"; then
 	:
 fi

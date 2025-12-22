@@ -4,7 +4,6 @@ import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Utility functions for error handling and classification via FFI.
@@ -45,7 +44,9 @@ public final class ErrorUtils {
      * @since 4.0.0
      */
     public static int classifyError(String message) throws KreuzbergException {
-        Objects.requireNonNull(message, "message must not be null");
+        if (message == null) {
+            throw new IllegalArgumentException("message must not be null");
+        }
 
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment messageSeg = KreuzbergFFI.allocateCString(arena, message);
