@@ -29,9 +29,10 @@
 use once_cell::sync::Lazy;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[cfg(feature = "pool-metrics")]
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 
 /// A reference to an interned string stored in an Arc.
 ///
@@ -90,15 +91,30 @@ impl std::ops::Deref for InternedString {
 
 /// String pool for MIME types.
 ///
-/// Pre-initializes with all known MIME types from `kreuzberg::core::mime`.
+/// Lazily initializes with all known MIME types from `kreuzberg::core::mime`.
+/// Pre-interning is deferred until first access to reduce startup memory usage.
 struct MimeStringPool {
     pool: dashmap::DashMap<String, Arc<String>>,
+    initialized: AtomicBool,
 }
 
 impl MimeStringPool {
-    /// Create a new MIME string pool with pre-interned common types.
+    /// Create a new MIME string pool.
+    /// Pre-interning is deferred until first `get_or_intern()` call.
     fn new() -> Self {
-        let pool = dashmap::DashMap::new();
+        MimeStringPool {
+            pool: dashmap::DashMap::new(),
+            initialized: AtomicBool::new(false),
+        }
+    }
+
+    /// Ensure all known MIME types are pre-interned (one-time initialization).
+    #[inline]
+    fn ensure_initialized(&self) {
+        // Fast path: already initialized
+        if self.initialized.load(Ordering::Acquire) {
+            return;
+        }
 
         // Pre-intern all known MIME types
         let mime_types = vec![
@@ -192,14 +208,20 @@ impl MimeStringPool {
         ];
 
         for mime_type in mime_types {
-            pool.insert(mime_type.to_string(), Arc::new(mime_type.to_string()));
+            self.pool.insert(mime_type.to_string(), Arc::new(mime_type.to_string()));
         }
 
-        MimeStringPool { pool }
+        // Mark initialization complete using compare_exchange for thread-safe one-time execution
+        let _ = self
+            .initialized
+            .compare_exchange(false, true, Ordering::Release, Ordering::Relaxed);
     }
 
     /// Get or intern a MIME type string.
+    /// Ensures pre-interned MIME types are initialized on first call.
     fn get_or_intern(&self, mime_type: &str) -> Arc<String> {
+        self.ensure_initialized();
+
         if let Some(entry) = self.pool.get(mime_type) {
             Arc::clone(&*entry)
         } else {
@@ -212,15 +234,30 @@ impl MimeStringPool {
 
 /// String pool for language codes.
 ///
-/// Pre-initializes with common ISO 639 language codes.
+/// Lazily initializes with common ISO 639 language codes.
+/// Pre-interning is deferred until first access to reduce startup memory usage.
 struct LanguageStringPool {
     pool: dashmap::DashMap<String, Arc<String>>,
+    initialized: AtomicBool,
 }
 
 impl LanguageStringPool {
-    /// Create a new language string pool with pre-interned common codes.
+    /// Create a new language string pool.
+    /// Pre-interning is deferred until first `get_or_intern()` call.
     fn new() -> Self {
-        let pool = dashmap::DashMap::new();
+        LanguageStringPool {
+            pool: dashmap::DashMap::new(),
+            initialized: AtomicBool::new(false),
+        }
+    }
+
+    /// Ensure all known language codes are pre-interned (one-time initialization).
+    #[inline]
+    fn ensure_initialized(&self) {
+        // Fast path: already initialized
+        if self.initialized.load(Ordering::Acquire) {
+            return;
+        }
 
         // Pre-intern common ISO 639 language codes
         let lang_codes = vec![
@@ -231,14 +268,20 @@ impl LanguageStringPool {
         ];
 
         for code in lang_codes {
-            pool.insert(code.to_string(), Arc::new(code.to_string()));
+            self.pool.insert(code.to_string(), Arc::new(code.to_string()));
         }
 
-        LanguageStringPool { pool }
+        // Mark initialization complete using compare_exchange for thread-safe one-time execution
+        let _ = self
+            .initialized
+            .compare_exchange(false, true, Ordering::Release, Ordering::Relaxed);
     }
 
     /// Get or intern a language code string.
+    /// Ensures pre-interned language codes are initialized on first call.
     fn get_or_intern(&self, lang_code: &str) -> Arc<String> {
+        self.ensure_initialized();
+
         if let Some(entry) = self.pool.get(lang_code) {
             Arc::clone(&*entry)
         } else {
