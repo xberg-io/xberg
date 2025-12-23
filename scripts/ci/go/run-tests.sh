@@ -55,6 +55,11 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; t
 	echo "CGO_LDFLAGS: ${CGO_LDFLAGS:-<not set>}"
 	echo "CGO_ENABLED: ${CGO_ENABLED:-<not set>}"
 	echo
+	echo "FFI library contents (GNU target):"
+	ls -la "$REPO_ROOT/target/x86_64-pc-windows-gnu/release" || true
+	echo "FFI library contents (host release):"
+	ls -la "$REPO_ROOT/target/release" || true
+	echo
 
 	# Skip -race on Windows: mingw + static CRT regularly fails to link race runtime
 	extra_flags=()
