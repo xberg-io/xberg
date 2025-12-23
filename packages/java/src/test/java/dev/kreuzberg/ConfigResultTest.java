@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import dev.kreuzberg.config.ExtractionConfig;
 import dev.kreuzberg.config.OcrConfig;
 import dev.kreuzberg.config.ChunkingConfig;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -444,7 +445,14 @@ final class ConfigResultTest {
         return new ExtractionResult(
             "Sample content for testing",
             "text/plain",
-            null,
+            Map.of(
+                "title",
+                "Sample Title",
+                "author",
+                "Sample Author",
+                "subject",
+                "Sample Subject"
+            ),
             null,
             null,
             null,

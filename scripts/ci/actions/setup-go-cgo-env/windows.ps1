@@ -58,9 +58,9 @@ if ($env:KREUZBERG_GO_LINKER_VERBOSE -eq "1") {
   $linkerVerboseFlags = "-Wl,-v -Wl,--verbose"
 }
 if (Test-Path $importLibPath) {
-  $cgoLdflags = "-L$msys2FfiPath -l:$importLibName -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt $linkerVerboseFlags"
+  $cgoLdflags = "-L$msys2FfiPath -l:$importLibName -lws2_32 -luserenv -lbcrypt $linkerVerboseFlags"
 } else {
-  $cgoLdflags = "-L$msys2FfiPath -lkreuzberg_ffi -static-libgcc -static-libstdc++ -lws2_32 -luserenv -lbcrypt $linkerVerboseFlags"
+  $cgoLdflags = "-L$msys2FfiPath -lkreuzberg_ffi -lws2_32 -luserenv -lbcrypt $linkerVerboseFlags"
 }
 
 # Add libraries to PATH for runtime discovery
