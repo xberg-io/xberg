@@ -224,7 +224,7 @@ final class ConfigResultTest {
 
             ExtractionConfig override = ExtractionConfig.builder()
                 .ocr(OcrConfig.builder()
-                    .backend("paddle")
+                    .backend("paddleocr")
                     .language("deu")
                     .build())
                 .build();
@@ -235,7 +235,7 @@ final class ConfigResultTest {
                 .isNotNull();
             assertThat(merged.getOcr())
                 .isNotNull();
-            assertThat(merged.getOcr().getBackend()).isEqualTo("paddle");
+            assertThat(merged.getOcr().getBackend()).isEqualTo("paddleocr");
             assertThat(merged.getOcr().getLanguage()).isEqualTo("deu");
         }
 

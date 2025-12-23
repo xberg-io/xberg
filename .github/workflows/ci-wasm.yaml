@@ -520,6 +520,7 @@ jobs:
       - deno-tests
       - workers-tests
     steps:
+      - uses: actions/checkout@v4
       - name: Decide whether all checks passed
         env:
           LINT_AND_FORMAT: ${{ needs.lint-and-format.result }}

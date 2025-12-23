@@ -301,6 +301,11 @@ jobs:
         shell: bash
         run: scripts/ci/go/verify-cgo-config.sh
 
+      - name: Force Go buildmode=exe (Windows only)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "GOFLAGS=-buildmode=exe" >> "$GITHUB_ENV"
+
       - name: Run Go tests
         run: scripts/ci/go/run-tests.sh
         shell: bash
