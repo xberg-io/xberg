@@ -210,7 +210,7 @@ print_status INFO "pkg-config file: $REPO_ROOT/crates/kreuzberg-ffi/kreuzberg-ff
 if [ -f "$REPO_ROOT/crates/kreuzberg-ffi/kreuzberg-ffi.pc" ]; then
 	print_status OK "pkg-config file exists"
 	echo "    Contents:"
-	cat "$REPO_ROOT/crates/kreuzberg-ffi/kreuzberg-ffi.pc" | sed 's/^/    /'
+	sed 's/^/    /' "$REPO_ROOT/crates/kreuzberg-ffi/kreuzberg-ffi.pc"
 else
 	print_status WARN "pkg-config file not found (will be generated during Rust build)"
 fi
