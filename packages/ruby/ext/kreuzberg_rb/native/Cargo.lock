@@ -2540,7 +2540,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-rb"
-version = "4.0.0-rc.18"
+version = "4.0.0-rc.19"
 dependencies = [
  "async-trait",
  "html-to-markdown-rs",

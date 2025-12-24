@@ -242,6 +242,11 @@ jobs:
         env:
           KREUZBERG_BUILD_VERBOSE: '1'
 
+      - name: Copy FFI header (Unix)
+        if: matrix.os != 'windows-latest'
+        run: scripts/ci/go/copy-ffi-header.sh
+        shell: bash
+
       - name: Verify FFI build artifacts
         if: always()
         shell: bash

@@ -27,7 +27,7 @@ base64 = { workspace = true }
 once_cell = { workspace = true }
 html-to-markdown-rs = { version = "2.16.1", default-features = false }
 lazy_static = "1.5"
-num_cpus = "1.16"
+num_cpus = "1.17"
 
 [build-dependencies]
 napi-build = "2.3"
