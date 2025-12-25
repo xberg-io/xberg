@@ -33,9 +33,9 @@ pub struct PdfRenderer {
 
 impl PdfRenderer {
     pub fn new() -> Result<Self> {
-        let binding = bind_pdfium(PdfError::RenderingFailed, "page rendering")?;
+        bind_pdfium(PdfError::RenderingFailed, "page rendering")?;
 
-        let pdfium = Pdfium::new(binding);
+        let pdfium = Pdfium {};
         Ok(Self { pdfium })
     }
 
@@ -68,7 +68,7 @@ impl PdfRenderer {
 
         let page = document
             .pages()
-            .get(page_index as u16)
+            .get(page_index as i32)
             .map_err(|_| PdfError::PageNotFound(page_index))?;
 
         let width_points = page.width().value;

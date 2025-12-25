@@ -86,9 +86,9 @@ pub fn extract_metadata(pdf_bytes: &[u8]) -> Result<PdfMetadata> {
 ///
 /// Returns only PDF-specific metadata (version, producer, encryption status, dimensions).
 pub fn extract_metadata_with_password(pdf_bytes: &[u8], password: Option<&str>) -> Result<PdfMetadata> {
-    let bindings = bind_pdfium(PdfError::MetadataExtractionFailed, "metadata extraction")?;
+    bind_pdfium(PdfError::MetadataExtractionFailed, "metadata extraction")?;
 
-    let pdfium = Pdfium::new(bindings);
+    let pdfium = Pdfium {};
 
     let document = pdfium.load_pdf_from_byte_slice(pdf_bytes, password).map_err(|e| {
         let err_msg = e.to_string();
@@ -238,7 +238,7 @@ fn build_page_structure(document: &PdfDocument<'_>, boundaries: &[PageBoundary])
     for (index, boundary) in boundaries.iter().enumerate() {
         let page_number = boundary.page_number;
 
-        let dimensions = if let Ok(page_rect) = document.pages().page_size(index as u16) {
+        let dimensions = if let Ok(page_rect) = document.pages().page_size(index as i32) {
             Some((page_rect.width().value as f64, page_rect.height().value as f64))
         } else {
             None

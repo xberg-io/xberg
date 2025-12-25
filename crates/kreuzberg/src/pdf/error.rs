@@ -11,6 +11,7 @@ pub enum PdfError {
     RenderingFailed(String),
     MetadataExtractionFailed(String),
     ExtractionFailed(String),
+    FontLoadingFailed(String),
     IOError(String),
 }
 
@@ -30,6 +31,7 @@ impl fmt::Display for PdfError {
                 write!(f, "Metadata extraction failed: {}", msg)
             }
             PdfError::ExtractionFailed(msg) => write!(f, "Extraction failed: {}", msg),
+            PdfError::FontLoadingFailed(msg) => write!(f, "Font loading failed: {}", msg),
             PdfError::IOError(msg) => write!(f, "I/O error: {}", msg),
         }
     }
@@ -126,5 +128,11 @@ mod tests {
     fn test_extraction_failed_error() {
         let err = PdfError::ExtractionFailed("page data mismatch".to_string());
         assert_eq!(err.to_string(), "Extraction failed: page data mismatch");
+    }
+
+    #[test]
+    fn test_font_loading_failed_error() {
+        let err = PdfError::FontLoadingFailed("missing font file".to_string());
+        assert_eq!(err.to_string(), "Font loading failed: missing font file");
     }
 }

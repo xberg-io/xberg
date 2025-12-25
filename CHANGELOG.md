@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [4.0.0-rc.19] - 2025-12-24
+## [4.0.0-rc.19] - 2025-12-25
 
 ### Added
 
@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: Custom font provider now enabled by default (set `enabled = false` to disable)
 - **Default API size limit** - Increased to 100MB (configurable via `KREUZBERG_MAX_UPLOAD_SIZE_MB`)
 - **TypeScript serialization** - Replaced MessagePack + Base64 with direct JSON serialization
+- **PDF dependency** - Temporarily using `kreuzberg-pdfium-render` fork while awaiting upstream PR merge
 
 ### Performance
 

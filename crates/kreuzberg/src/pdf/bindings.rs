@@ -82,10 +82,7 @@ fn bind_pdfium_impl() -> Result<(Option<PathBuf>, Box<dyn PdfiumLibraryBindings>
 /// Instead of failing permanently, we recover by extracting the inner value from the
 /// poisoned lock and proceeding. This ensures PDF extraction can continue even if an
 /// earlier panic occurred, as long as the state is consistent.
-pub(crate) fn bind_pdfium(
-    map_err: fn(String) -> PdfError,
-    context: &'static str,
-) -> Result<Box<dyn PdfiumLibraryBindings>, PdfError> {
+pub(crate) fn bind_pdfium(map_err: fn(String) -> PdfError, context: &'static str) -> Result<(), PdfError> {
     let mut state = PDFIUM_STATE.lock().unwrap_or_else(|poisoned| {
         // SAFETY: Recovering from a poisoned lock is safe here because:
         // 1. The poisoned state still contains valid data (just a guard from a panicked thread)
@@ -97,7 +94,9 @@ pub(crate) fn bind_pdfium(
     // Initialize on first call
     match &*state {
         InitializationState::Uninitialized => match bind_pdfium_impl() {
-            Ok((lib_dir, _bindings)) => {
+            Ok((lib_dir, bindings)) => {
+                // Initialize Pdfium singleton with the bindings
+                let _ = Pdfium::new(bindings);
                 *state = InitializationState::Initialized { lib_dir };
             }
             Err(err) => {
@@ -112,40 +111,11 @@ pub(crate) fn bind_pdfium(
             )));
         }
         InitializationState::Initialized { .. } => {
-            // Already initialized, proceed to create bindings below
+            // Already initialized, nothing to do
         }
     }
 
-    // Create fresh bindings from cached state
-    #[cfg(all(feature = "pdf", feature = "bundled-pdfium", not(target_arch = "wasm32")))]
-    {
-        match &*state {
-            InitializationState::Initialized { lib_dir: Some(lib_dir) } => {
-                Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(lib_dir))
-                    .map_err(|e| map_err(format!("Failed to create Pdfium bindings ({}): {}", context, e)))
-            }
-            _ => {
-                // This should not happen as state is guaranteed to be Initialized here
-                Err(map_err(format!(
-                    "Internal error: Pdfium state not properly initialized ({})",
-                    context
-                )))
-            }
-        }
-    }
-
-    // For system pdfium or WASM, create fresh bindings
-    #[cfg(all(feature = "pdf", feature = "bundled-pdfium", target_arch = "wasm32"))]
-    {
-        Pdfium::bind_to_system_library()
-            .map_err(|e| map_err(format!("Failed to create Pdfium bindings ({}): {}", context, e)))
-    }
-
-    #[cfg(all(feature = "pdf", not(feature = "bundled-pdfium")))]
-    {
-        Pdfium::bind_to_system_library()
-            .map_err(|e| map_err(format!("Failed to create Pdfium bindings ({}): {}", context, e)))
-    }
+    Ok(())
 }
 
 #[cfg(test)]

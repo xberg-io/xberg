@@ -42,6 +42,8 @@ pub mod bundled;
 #[cfg(feature = "pdf")]
 pub mod error;
 #[cfg(feature = "pdf")]
+pub mod fonts;
+#[cfg(feature = "pdf")]
 pub mod images;
 #[cfg(feature = "pdf")]
 pub mod metadata;
@@ -56,6 +58,8 @@ pub mod text;
 pub use bundled::extract_bundled_pdfium;
 #[cfg(feature = "pdf")]
 pub use error::PdfError;
+#[cfg(feature = "pdf")]
+pub use fonts::{cached_font_count, get_font_descriptors, initialize_font_cache};
 #[cfg(feature = "pdf")]
 pub use images::{PdfImage, PdfImageExtractor, extract_images_from_pdf};
 #[cfg(feature = "pdf")]

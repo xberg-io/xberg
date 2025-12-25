@@ -19,9 +19,9 @@ pub struct PdfTextExtractor {
 
 impl PdfTextExtractor {
     pub fn new() -> Result<Self> {
-        let binding = bind_pdfium(PdfError::TextExtractionFailed, "text extraction")?;
+        bind_pdfium(PdfError::TextExtractionFailed, "text extraction")?;
 
-        let pdfium = Pdfium::new(binding);
+        let pdfium = Pdfium {};
         Ok(Self { pdfium })
     }
 
