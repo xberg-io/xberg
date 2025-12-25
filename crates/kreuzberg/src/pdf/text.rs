@@ -372,3 +372,53 @@ mod tests {
         assert!(result.is_err());
     }
 }
+
+#[cfg(test)]
+mod cache_regression_tests {
+    use super::*;
+    use std::time::Instant;
+
+    #[test]
+    fn test_no_global_cache_between_documents() {
+        let pdf_bytes = std::fs::read("../../test_documents/pdfs/fake_memo.pdf").expect("Failed to read PDF");
+
+        let extractor = PdfTextExtractor::new().expect("Failed to create extractor");
+
+        // Cold run
+        let start = Instant::now();
+        let text1 = extractor.extract_text(&pdf_bytes).expect("Failed to extract (cold)");
+        let cold = start.elapsed();
+
+        // Warm run 1
+        let start = Instant::now();
+        let text2 = extractor.extract_text(&pdf_bytes).expect("Failed to extract (warm1)");
+        let warm1 = start.elapsed();
+
+        // Warm run 2
+        let start = Instant::now();
+        let text3 = extractor.extract_text(&pdf_bytes).expect("Failed to extract (warm2)");
+        let warm2 = start.elapsed();
+
+        eprintln!("Cold:   {:?}", cold);
+        eprintln!("Warm 1: {:?}", warm1);
+        eprintln!("Warm 2: {:?}", warm2);
+
+        assert_eq!(text1, text2);
+        assert_eq!(text2, text3);
+
+        // Warm should not be 100x faster than cold (that would indicate PAGE_INDEX_CACHE bug)
+        let ratio1 = cold.as_micros() / warm1.as_micros().max(1);
+        let ratio2 = cold.as_micros() / warm2.as_micros().max(1);
+
+        assert!(
+            ratio1 < 10,
+            "Warm1 is suspiciously fast ({}x faster than cold) - indicates PAGE_INDEX_CACHE bug",
+            ratio1
+        );
+        assert!(
+            ratio2 < 10,
+            "Warm2 is suspiciously fast ({}x faster than cold) - indicates PAGE_INDEX_CACHE bug",
+            ratio2
+        );
+    }
+}
