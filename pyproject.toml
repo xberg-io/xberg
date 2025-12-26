@@ -38,7 +38,14 @@ doc = [
   "mkdocs-minify-plugin>=0.8.0",
   "mkdocstrings[python]>=1.0.0",
 ]
-benchmark = [ "docling>=2.64.1", "markitdown>=0.1.4", "unstructured>=0.18.21" ]
+benchmark = [
+  "docling>=2.64.1",
+  "markitdown>=0.1.4",
+  "mineru>=2.6.7",
+  "pdfplumber>=0.11.4",
+  "pymupdf4llm>=0.0.17",
+  "unstructured>=0.18.21",
+]
 
 [tool.uv]
 cache-keys = [

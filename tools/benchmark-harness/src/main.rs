@@ -424,8 +424,10 @@ async fn main() -> Result<()> {
             eprintln!("[adapter] Kreuzberg bindings: {}/13 available", kreuzberg_count);
 
             use benchmark_harness::adapters::external::{
-                create_docling_adapter, create_docling_batch_adapter, create_markitdown_adapter, create_pandoc_adapter,
-                create_tika_batch_adapter, create_tika_sync_adapter, create_unstructured_adapter,
+                create_docling_adapter, create_docling_batch_adapter, create_markitdown_adapter, create_mineru_adapter,
+                create_mineru_batch_adapter, create_pandoc_adapter, create_pdfplumber_adapter,
+                create_pdfplumber_batch_adapter, create_pymupdf4llm_adapter, create_tika_batch_adapter,
+                create_tika_sync_adapter, create_unstructured_adapter,
             };
 
             let mut external_count = 0;
@@ -507,8 +509,63 @@ async fn main() -> Result<()> {
                 eprintln!("[adapter] ✗ tika-batch (initialization failed)");
             }
 
+            if let Ok(adapter) = create_pymupdf4llm_adapter() {
+                if let Ok(()) = registry.register(Arc::new(adapter)) {
+                    eprintln!("[adapter] ✓ pymupdf4llm (registered)");
+                    external_count += 1;
+                } else {
+                    eprintln!("[adapter] ✗ pymupdf4llm (registration failed)");
+                }
+            } else {
+                eprintln!("[adapter] ✗ pymupdf4llm (initialization failed)");
+            }
+
+            if let Ok(adapter) = create_pdfplumber_adapter() {
+                if let Ok(()) = registry.register(Arc::new(adapter)) {
+                    eprintln!("[adapter] ✓ pdfplumber (registered)");
+                    external_count += 1;
+                } else {
+                    eprintln!("[adapter] ✗ pdfplumber (registration failed)");
+                }
+            } else {
+                eprintln!("[adapter] ✗ pdfplumber (initialization failed)");
+            }
+
+            if let Ok(adapter) = create_pdfplumber_batch_adapter() {
+                if let Ok(()) = registry.register(Arc::new(adapter)) {
+                    eprintln!("[adapter] ✓ pdfplumber-batch (registered)");
+                    external_count += 1;
+                } else {
+                    eprintln!("[adapter] ✗ pdfplumber-batch (registration failed)");
+                }
+            } else {
+                eprintln!("[adapter] ✗ pdfplumber-batch (initialization failed)");
+            }
+
+            if let Ok(adapter) = create_mineru_adapter() {
+                if let Ok(()) = registry.register(Arc::new(adapter)) {
+                    eprintln!("[adapter] ✓ mineru (registered)");
+                    external_count += 1;
+                } else {
+                    eprintln!("[adapter] ✗ mineru (registration failed)");
+                }
+            } else {
+                eprintln!("[adapter] ✗ mineru (initialization failed)");
+            }
+
+            if let Ok(adapter) = create_mineru_batch_adapter() {
+                if let Ok(()) = registry.register(Arc::new(adapter)) {
+                    eprintln!("[adapter] ✓ mineru-batch (registered)");
+                    external_count += 1;
+                } else {
+                    eprintln!("[adapter] ✗ mineru-batch (registration failed)");
+                }
+            } else {
+                eprintln!("[adapter] ✗ mineru-batch (initialization failed)");
+            }
+
             eprintln!(
-                "[adapter] Open source extraction frameworks: {}/7 available",
+                "[adapter] Open source extraction frameworks: {}/12 available",
                 external_count
             );
             eprintln!(

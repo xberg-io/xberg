@@ -194,6 +194,65 @@ pub fn create_tika_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
+/// Creates a subprocess adapter for PyMuPDF4LLM (open source extraction framework)
+pub fn create_pymupdf4llm_adapter() -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("pymupdf4llm_extract.py")?;
+    let (command, mut args) = find_python_with_framework("pymupdf4llm")?;
+    args.push(script_path.to_string_lossy().to_string());
+
+    Ok(SubprocessAdapter::new("pymupdf4llm", command, args, vec![]))
+}
+
+/// Creates a subprocess adapter for pdfplumber (open source extraction framework, single-file mode)
+pub fn create_pdfplumber_adapter() -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("pdfplumber_extract.py")?;
+    let (command, mut args) = find_python_with_framework("pdfplumber")?;
+    args.push(script_path.to_string_lossy().to_string());
+    args.push("sync".to_string());
+
+    Ok(SubprocessAdapter::new("pdfplumber", command, args, vec![]))
+}
+
+/// Creates a subprocess adapter for pdfplumber (open source extraction framework, batch mode)
+pub fn create_pdfplumber_batch_adapter() -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("pdfplumber_extract.py")?;
+    let (command, mut args) = find_python_with_framework("pdfplumber")?;
+    args.push(script_path.to_string_lossy().to_string());
+    args.push("batch".to_string());
+
+    Ok(SubprocessAdapter::with_batch_support(
+        "pdfplumber-batch",
+        command,
+        args,
+        vec![],
+    ))
+}
+
+/// Creates a subprocess adapter for MinerU (open source extraction framework, single-file mode)
+pub fn create_mineru_adapter() -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("mineru_extract.py")?;
+    let (command, mut args) = find_python_with_framework("mineru")?;
+    args.push(script_path.to_string_lossy().to_string());
+    args.push("sync".to_string());
+
+    Ok(SubprocessAdapter::new("mineru", command, args, vec![]))
+}
+
+/// Creates a subprocess adapter for MinerU (open source extraction framework, batch mode)
+pub fn create_mineru_batch_adapter() -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("mineru_extract.py")?;
+    let (command, mut args) = find_python_with_framework("mineru")?;
+    args.push(script_path.to_string_lossy().to_string());
+    args.push("batch".to_string());
+
+    Ok(SubprocessAdapter::with_batch_support(
+        "mineru-batch",
+        command,
+        args,
+        vec![],
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,5 +271,10 @@ mod tests {
         let _ = create_pandoc_adapter();
         let _ = create_tika_sync_adapter();
         let _ = create_tika_batch_adapter();
+        let _ = create_pymupdf4llm_adapter();
+        let _ = create_pdfplumber_adapter();
+        let _ = create_pdfplumber_batch_adapter();
+        let _ = create_mineru_adapter();
+        let _ = create_mineru_batch_adapter();
     }
 }
