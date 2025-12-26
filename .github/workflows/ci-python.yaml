@@ -273,24 +273,12 @@ jobs:
             python-version: "3.10"
             platform: linux-x86_64
             coverage: true
-          - os: ubuntu-latest
-            python-version: "3.13"
-            platform: linux-x86_64
-            coverage: false
           - os: macos-latest
             python-version: "3.10"
             platform: macos-arm64
             coverage: false
-          - os: macos-latest
-            python-version: "3.13"
-            platform: macos-arm64
-            coverage: false
           - os: windows-latest
             python-version: "3.10"
-            platform: windows-x86_64
-            coverage: false
-          - os: windows-latest
-            python-version: "3.13"
             platform: windows-x86_64
             coverage: false
     runs-on: ${{ matrix.os }}

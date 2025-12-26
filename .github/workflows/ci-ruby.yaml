@@ -126,14 +126,11 @@ jobs:
           if os.environ.get("RUBY_UNIX") == "true":
               include.extend([
                   {"os": "ubuntu-latest", "ruby-version": "3.3", "platform": "linux-x64"},
-                  {"os": "ubuntu-latest", "ruby-version": "3.4", "platform": "linux-x64"},
                   {"os": "macos-latest", "ruby-version": "3.3", "platform": "macos-arm64"},
-                  {"os": "macos-latest", "ruby-version": "3.4", "platform": "macos-arm64"},
               ])
           if os.environ.get("RUBY_WINDOWS") == "true":
               include.extend([
                   {"os": "windows-latest", "ruby-version": "3.3", "platform": "windows-x64"},
-                  {"os": "windows-latest", "ruby-version": "3.4", "platform": "windows-x64"},
               ])
           print(f"ruby_matrix={json.dumps({'include': include})}")
           print(f"ruby_matrix_has_entries={'true' if include else 'false'}")

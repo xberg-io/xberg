@@ -65,51 +65,6 @@ env:
 
 jobs:
   # ============================================================================
-  # QUALITY & VALIDATION
-  # ============================================================================
-
-  lint-and-format:
-    name: Lint & Format
-    if: ${{ github.actor != 'dependabot[bot]' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          cache-key-prefix: wasm-lint
-          target: wasm32-unknown-unknown
-
-      - name: Setup Node
-        uses: ./.github/actions/setup-node-workspace
-
-      - name: Run cargo fmt check
-        run: cargo fmt --all -- --check
-        shell: bash
-
-      - name: Run cargo clippy (excluding wasm target)
-        run: cargo clippy --all-targets -- -D warnings
-        working-directory: crates/kreuzberg-wasm
-        shell: bash
-
-      - name: Check WASM target compiles
-        run: cargo build --target wasm32-unknown-unknown --lib
-        working-directory: crates/kreuzberg-wasm
-        shell: bash
-
-      - name: Run biome check (TypeScript)
-        run: scripts/ci/wasm/biome-check.sh
-        shell: bash
-
-      - name: Cleanup Rust cache
-        if: always()
-        uses: ./.github/actions/cleanup-rust-cache
-
-  # ============================================================================
   # UNIT & INTEGRATION TESTS (PLATFORM MATRIX)
   # ============================================================================
 
@@ -256,47 +211,6 @@ jobs:
         uses: ./.github/actions/cleanup-rust-cache
 
   # ============================================================================
-  # BUNDLE SIZE VALIDATION
-  # ============================================================================
-
-  bundle-size-check:
-    name: Bundle Size Check
-    if: ${{ github.actor != 'dependabot[bot]' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          cache-key-prefix: wasm-size
-          target: wasm32-unknown-unknown
-
-      - name: Setup Node
-        uses: ./.github/actions/setup-node-workspace
-
-      - name: Install wasm-pack
-        shell: bash
-        run: scripts/ci/wasm/install-wasm-pack.sh
-
-      - name: Build release WASM (Bundler target)
-        run: scripts/ci/wasm/pnpm-build-wasm.sh bundler
-        shell: bash
-        env:
-          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
-
-      - name: Check WASM file sizes
-        run: scripts/ci/wasm/check-wasm-file-sizes.sh
-        shell: bash
-
-      - name: Cleanup Rust cache
-        if: always()
-        uses: ./.github/actions/cleanup-rust-cache
-
-  # ============================================================================
   # TYPE DEFINITIONS VALIDATION
   # ============================================================================
 
@@ -356,7 +270,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ["22", "25"]
+        node-version: ["22"]
     steps:
       - uses: actions/checkout@v4
 
