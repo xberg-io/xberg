@@ -17,6 +17,11 @@
  */
 typedef struct ExtractionConfig ExtractionConfig;
 
+/**
+ * Opaque type for extraction result.
+ * This is an opaque pointer type - callers should not access its internals.
+ */
+typedef struct ExtractionResult ExtractionResult;
 
 /**
  * C-compatible extraction result structure
@@ -1744,7 +1749,7 @@ uint32_t kreuzberg_classify_error(const char *error_message);
  * }
  * ```
  */
-int32_t kreuzberg_result_get_page_count(const CExtractionResult *result);
+int32_t kreuzberg_result_get_page_count(const ExtractionResult *result);
 
 /**
  * Get chunk count from extraction result.
@@ -1778,7 +1783,7 @@ int32_t kreuzberg_result_get_page_count(const CExtractionResult *result);
  * }
  * ```
  */
-int32_t kreuzberg_result_get_chunk_count(const CExtractionResult *result);
+int32_t kreuzberg_result_get_chunk_count(const ExtractionResult *result);
 
 /**
  * Get detected language from extraction result.
@@ -1817,7 +1822,7 @@ int32_t kreuzberg_result_get_chunk_count(const CExtractionResult *result);
  * }
  * ```
  */
-char *kreuzberg_result_get_detected_language(const CExtractionResult *result);
+char *kreuzberg_result_get_detected_language(const ExtractionResult *result);
 
 /**
  * Get a metadata field by name.
@@ -1866,7 +1871,7 @@ char *kreuzberg_result_get_detected_language(const CExtractionResult *result);
  * }
  * ```
  */
-struct CMetadataField kreuzberg_result_get_metadata_field(const CExtractionResult *result,
+struct CMetadataField kreuzberg_result_get_metadata_field(const ExtractionResult *result,
                                                           const char *field_name);
 
 /**
