@@ -1,6 +1,6 @@
 {
 	"name": "@kreuzberg/test-app-node",
-	"version": "4.0.0-rc.20",
+	"version": "4.0.0-rc.21",
 	"description": "Comprehensive test app for Kreuzberg Node.js bindings",
 	"type": "module",
 	"scripts": {
@@ -20,7 +20,7 @@
 		"node": ">=22"
 	},
 	"devDependencies": {
-		"@kreuzberg/node": "4.0.0-rc.20",
+		"@kreuzberg/node": "4.0.0-rc.21",
 		"@types/node": "^25.0.0",
 		"typescript": "^5.9.3",
 		"vitest": "^4.0.16"

@@ -2271,4 +2271,4 @@ export function classifyError(errorMessage: string): ErrorClassification {
 	return result as unknown as ErrorClassification;
 }
 
-export const __version__ = "4.0.0-rc.20";
+export const __version__ = "4.0.0-rc.21";

@@ -5,6 +5,30 @@ All notable changes to Kreuzberg will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0-rc.21] - 2025-12-26
+
+### Fixed
+
+- **PDF initialization race conditions** - Resolved segfaults, JVM crashes, and concurrency errors across all language bindings
+  - Fixed Pdfium singleton initialization pattern that caused test failures
+  - Rust E2E tests: Fixed segfaults by returning Pdfium instance from bind_pdfium()
+  - Java tests: Removed incompatible JVM flags (`-XX:-ClassUnloading`) causing crashes on macOS ARM64 with Java 25 FFI
+  - C# tests: Fixed concurrency errors (improved from 0/29 to 17/29 passing tests)
+  - Go tests: Applied consistent error message formatting to all PDF error paths
+- **Test app infrastructure** - Fixed published package validation test apps
+  - Go: Removed invalid local path replace directive from go.mod
+  - Ruby: Added proper gem installation step before running tests
+  - Rust: Added workspace exclusion to prevent cargo workspace errors
+- **EPUB metadata extraction** - Fixed incorrect field mapping (created_at → subject) in EPUB parser
+
+### Added
+
+- **CLI test app** - Comprehensive test suite for validating kreuzberg-cli published to crates.io
+  - Installation verification from crates.io
+  - Extraction tests (PDF, DOCX, XLSX with JSON/markdown output)
+  - HTTP API server tests (health endpoint, POST /extract)
+  - MCP server tests (startup and responsiveness)
+
 ## [4.0.0-rc.20] - 2025-12-25
 
 - **Font configuration API** - Configurable font provider with custom directory support and automatic path expansion

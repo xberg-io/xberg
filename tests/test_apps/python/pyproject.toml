@@ -1,6 +1,6 @@
 [project]
 name = "kreuzberg-test-app-python"
-version = "4.0.0rc.20"
+version = "4.0.0rc.21"
 description = "Comprehensive API coverage test for Kreuzberg 4.0.0-rc18 Python bindings"
 readme = "README.md"
 requires-python = ">=3.10"

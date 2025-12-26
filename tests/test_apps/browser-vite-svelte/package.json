@@ -1,7 +1,7 @@
 {
 	"name": "browser-vite-svelte",
 	"private": true,
-	"version": "4.0.0-rc.20",
+	"version": "4.0.0-rc.21",
 	"type": "module",
 	"scripts": {
 		"dev": "vite",

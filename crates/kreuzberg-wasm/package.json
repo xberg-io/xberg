@@ -1,6 +1,6 @@
 {
 	"name": "@kreuzberg/wasm",
-	"version": "4.0.0-rc.20",
+	"version": "4.0.0-rc.21",
 	"type": "module",
 	"packageManager": "pnpm@10.17.0",
 	"description": "Kreuzberg document intelligence - WebAssembly bindings",

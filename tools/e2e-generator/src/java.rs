@@ -386,9 +386,9 @@ const JAVA_POM_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
         <dependency>
             <groupId>dev.kreuzberg</groupId>
             <artifactId>kreuzberg</artifactId>
-            <version>4.0.0-rc.20</version>
+            <version>4.0.0-rc.21</version>
             <scope>system</scope>
-            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.0.0-rc.20.jar</systemPath>
+            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.0.0-rc.21.jar</systemPath>
         </dependency>
 
         <dependency>

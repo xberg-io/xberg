@@ -1,6 +1,6 @@
 [package]
 name = "kreuzberg-test-app-rust"
-version = "4.0.0-rc.20"
+version = "4.0.0-rc.21"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Kreuzberg Contributors"]
@@ -10,7 +10,7 @@ readme = "README.md"
 publish = false
 
 [dependencies]
-kreuzberg = "4.0.0-rc.20"
+kreuzberg = "4.0.0-rc.21"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
