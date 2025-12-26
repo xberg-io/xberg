@@ -86,9 +86,7 @@ pub fn extract_metadata(pdf_bytes: &[u8]) -> Result<PdfMetadata> {
 ///
 /// Returns only PDF-specific metadata (version, producer, encryption status, dimensions).
 pub fn extract_metadata_with_password(pdf_bytes: &[u8], password: Option<&str>) -> Result<PdfMetadata> {
-    bind_pdfium(PdfError::MetadataExtractionFailed, "metadata extraction")?;
-
-    let pdfium = Pdfium {};
+    let pdfium = bind_pdfium(PdfError::MetadataExtractionFailed, "metadata extraction")?;
 
     let document = pdfium.load_pdf_from_byte_slice(pdf_bytes, password).map_err(|e| {
         let err_msg = super::error::format_pdfium_error(e);

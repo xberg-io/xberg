@@ -82,7 +82,7 @@ fn bind_pdfium_impl() -> Result<(Option<PathBuf>, Box<dyn PdfiumLibraryBindings>
 /// Instead of failing permanently, we recover by extracting the inner value from the
 /// poisoned lock and proceeding. This ensures PDF extraction can continue even if an
 /// earlier panic occurred, as long as the state is consistent.
-pub(crate) fn bind_pdfium(map_err: fn(String) -> PdfError, context: &'static str) -> Result<(), PdfError> {
+pub(crate) fn bind_pdfium(map_err: fn(String) -> PdfError, context: &'static str) -> Result<Pdfium, PdfError> {
     let mut state = PDFIUM_STATE.lock().unwrap_or_else(|poisoned| {
         // SAFETY: Recovering from a poisoned lock is safe here because:
         // 1. The poisoned state still contains valid data (just a guard from a panicked thread)
@@ -95,27 +95,25 @@ pub(crate) fn bind_pdfium(map_err: fn(String) -> PdfError, context: &'static str
     match &*state {
         InitializationState::Uninitialized => match bind_pdfium_impl() {
             Ok((lib_dir, bindings)) => {
-                // Initialize Pdfium singleton with the bindings
-                let _ = Pdfium::new(bindings);
+                // Initialize Pdfium singleton with the bindings and return it
+                let pdfium = Pdfium::new(bindings);
                 *state = InitializationState::Initialized { lib_dir };
+                Ok(pdfium)
             }
             Err(err) => {
                 *state = InitializationState::Failed(err.clone());
-                return Err(map_err(format!("Pdfium initialization failed ({}): {}", context, err)));
+                Err(map_err(format!("Pdfium initialization failed ({}): {}", context, err)))
             }
         },
-        InitializationState::Failed(err) => {
-            return Err(map_err(format!(
-                "Pdfium initialization previously failed ({}): {}",
-                context, err
-            )));
-        }
+        InitializationState::Failed(err) => Err(map_err(format!(
+            "Pdfium initialization previously failed ({}): {}",
+            context, err
+        ))),
         InitializationState::Initialized { .. } => {
-            // Already initialized, nothing to do
+            // Already initialized, return a new accessor to the singleton
+            Ok(Pdfium)
         }
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -128,6 +126,9 @@ mod tests {
         // First call should initialize
         let result = bind_pdfium(PdfError::TextExtractionFailed, "test context");
         assert!(result.is_ok(), "First bind_pdfium call should succeed");
+        // Verify the returned Pdfium instance is usable
+        let pdfium = result.unwrap();
+        assert!(pdfium.is_pdfium_ready(), "Pdfium should be initialized");
     }
 
     #[test]
