@@ -152,7 +152,7 @@ for path in "$@"; do
 					fi
 
 					# Check for valid Node.js native module
-					if file "$artifact" | grep -qE "(shared object|shared library|Mach-O|DLL)"; then
+					if file "$artifact" 2>/dev/null | grep -qE "(shared object|shared library|Mach-O|DLL)"; then
 						info "✓ Valid Node.js module: $artifact ($SIZE)"
 						((VALID_COUNT++))
 					else
