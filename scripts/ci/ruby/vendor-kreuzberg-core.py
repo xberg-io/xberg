@@ -206,6 +206,7 @@ def main() -> None:
     # Clean up build artifacts
     artifact_dirs: list[str] = [".fastembed_cache", "target"]
     temp_patterns: list[str] = ["*.swp", "*.bak", "*.tmp", "*~"]
+    crate_names: list[str] = ["kreuzberg", "kreuzberg-ffi", "kreuzberg-tesseract", "rb-sys"]
 
     for crate_dir in crate_names:
         crate_path: Path = vendor_base / crate_dir

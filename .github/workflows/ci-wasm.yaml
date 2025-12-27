@@ -325,8 +325,6 @@ jobs:
       - name: Generate Deno E2E tests
         shell: bash
         run: task wasm:e2e:deno:generate
-        env:
-          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
 
       - name: Run Deno E2E tests
         shell: bash
@@ -378,8 +376,6 @@ jobs:
 
       - name: Generate Workers E2E tests
         run: task wasm:e2e:workers:generate
-        env:
-          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
 
       - name: Run Cloudflare Workers E2E tests
         run: task wasm:e2e:workers:test
