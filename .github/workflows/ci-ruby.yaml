@@ -190,6 +190,7 @@ jobs:
 
       - name: Install Ruby dependencies
         shell: bash
+        working-directory: packages/ruby
         run: |
           bundle install
 
@@ -422,6 +423,7 @@ jobs:
 
       - name: Install Ruby dependencies
         shell: bash
+        working-directory: packages/ruby
         run: |
           bundle install
 

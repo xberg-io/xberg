@@ -214,6 +214,9 @@ jobs:
         with:
           ort-version: ${{ env.ORT_VERSION }}
 
+      - name: Install Task
+        uses: ./.github/actions/install-task
+
       - name: Build or restore Node bindings from cache
         id: node
         uses: ./.github/actions/build-and-cache-binding
