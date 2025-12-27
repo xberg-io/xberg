@@ -992,7 +992,7 @@ type ImageMetadata struct {
 
 ### HTML Metadata
 
-Web page metadata including title, description, Open Graph tags, Twitter Card properties, and link relationships. Available when `format_type == "html"`.
+Rich web page metadata including SEO tags, Open Graph fields, Twitter Card properties, structured data, and resource links. Available when `format_type == "html"`.
 
 #### Rust
 
@@ -1000,25 +1000,19 @@ Web page metadata including title, description, Open Graph tags, Twitter Card pr
 pub struct HtmlMetadata {
     pub title: Option<String>,
     pub description: Option<String>,
-    pub keywords: Option<String>,
+    pub keywords: Vec<String>,  // Changed from Option<String>
     pub author: Option<String>,
-    pub canonical: Option<String>,
+    pub canonical_url: Option<String>,  // Renamed from canonical
     pub base_href: Option<String>,
-    pub og_title: Option<String>,
-    pub og_description: Option<String>,
-    pub og_image: Option<String>,
-    pub og_url: Option<String>,
-    pub og_type: Option<String>,
-    pub og_site_name: Option<String>,
-    pub twitter_card: Option<String>,
-    pub twitter_title: Option<String>,
-    pub twitter_description: Option<String>,
-    pub twitter_image: Option<String>,
-    pub twitter_site: Option<String>,
-    pub twitter_creator: Option<String>,
-    pub link_author: Option<String>,
-    pub link_license: Option<String>,
-    pub link_alternate: Option<String>,
+    pub language: Option<String>,  // New field
+    pub text_direction: Option<String>,  // New field
+    pub open_graph: BTreeMap<String, String>,  // Replaces og_* fields
+    pub twitter_card: BTreeMap<String, String>,  // Replaces twitter_* fields
+    pub headers: Option<Vec<String>>,  // New field
+    pub links: Option<Vec<(String, String)>>,  // New field (URL, text pairs)
+    pub images: Option<Vec<String>>,  // New field
+    pub structured_data: Option<Vec<serde_json::Value>>,  // New field
+    pub meta_tags: Option<BTreeMap<String, String>>,  // New field
 }
 ```
 
@@ -1028,25 +1022,19 @@ pub struct HtmlMetadata {
 class HtmlMetadata(TypedDict, total=False):
     title: str | None
     description: str | None
-    keywords: str | None
+    keywords: list[str]  # Changed from Optional[str]
     author: str | None
-    canonical: str | None
+    canonical_url: str | None  # Renamed from canonical
     base_href: str | None
-    og_title: str | None
-    og_description: str | None
-    og_image: str | None
-    og_url: str | None
-    og_type: str | None
-    og_site_name: str | None
-    twitter_card: str | None
-    twitter_title: str | None
-    twitter_description: str | None
-    twitter_image: str | None
-    twitter_site: str | None
-    twitter_creator: str | None
-    link_author: str | None
-    link_license: str | None
-    link_alternate: str | None
+    language: str | None  # New field
+    text_direction: str | None  # New field
+    open_graph: dict[str, str]  # Replaces og_* fields
+    twitter_card: dict[str, str]  # Replaces twitter_* fields
+    headers: list[str] | None  # New field
+    links: list[tuple[str, str]] | None  # New field (URL, text pairs)
+    images: list[str] | None  # New field
+    structured_data: list[dict[str, Any]] | None  # New field
+    meta_tags: dict[str, str] | None  # New field
 ```
 
 #### TypeScript
@@ -1055,25 +1043,19 @@ class HtmlMetadata(TypedDict, total=False):
 export interface HtmlMetadata {
     title?: string | null;
     description?: string | null;
-    keywords?: string | null;
+    keywords: string[];  // Changed from optional string
     author?: string | null;
-    canonical?: string | null;
+    canonicalUrl?: string | null;  // Renamed from canonical
     baseHref?: string | null;
-    ogTitle?: string | null;
-    ogDescription?: string | null;
-    ogImage?: string | null;
-    ogUrl?: string | null;
-    ogType?: string | null;
-    ogSiteName?: string | null;
-    twitterCard?: string | null;
-    twitterTitle?: string | null;
-    twitterDescription?: string | null;
-    twitterImage?: string | null;
-    twitterSite?: string | null;
-    twitterCreator?: string | null;
-    linkAuthor?: string | null;
-    linkLicense?: string | null;
-    linkAlternate?: string | null;
+    language?: string | null;  // New field
+    textDirection?: string | null;  // New field
+    openGraph: Record<string, string>;  // Replaces og* fields
+    twitterCard: Record<string, string>;  // Replaces twitter* fields
+    headers?: string[] | null;  // New field
+    links?: [string, string][] | null;  // New field (URL, text pairs)
+    images?: string[] | null;  // New field
+    structuredData?: Record<string, any>[] | null;  // New field
+    metaTags?: Record<string, string> | null;  // New field
 }
 ```
 
@@ -1083,25 +1065,19 @@ export interface HtmlMetadata {
 public record HtmlMetadata(
     Optional<String> title,
     Optional<String> description,
-    Optional<String> keywords,
+    List<String> keywords,  // Changed from Optional<String>
     Optional<String> author,
-    Optional<String> canonical,
+    Optional<String> canonicalUrl,  // Renamed from canonical
     Optional<String> baseHref,
-    Optional<String> ogTitle,
-    Optional<String> ogDescription,
-    Optional<String> ogImage,
-    Optional<String> ogUrl,
-    Optional<String> ogType,
-    Optional<String> ogSiteName,
-    Optional<String> twitterCard,
-    Optional<String> twitterTitle,
-    Optional<String> twitterDescription,
-    Optional<String> twitterImage,
-    Optional<String> twitterSite,
-    Optional<String> twitterCreator,
-    Optional<String> linkAuthor,
-    Optional<String> linkLicense,
-    Optional<String> linkAlternate
+    Optional<String> language,  // New field
+    Optional<String> textDirection,  // New field
+    Map<String, String> openGraph,  // Replaces og* fields
+    Map<String, String> twitterCard,  // Replaces twitter* fields
+    Optional<List<String>> headers,  // New field
+    Optional<List<String[]>> links,  // New field (URL, text pairs)
+    Optional<List<String>> images,  // New field
+    Optional<List<Map<String, Object>>> structuredData,  // New field
+    Optional<Map<String, String>> metaTags  // New field
 ) {}
 ```
 
@@ -1109,27 +1085,21 @@ public record HtmlMetadata(
 
 ```go title="html_metadata.go"
 type HtmlMetadata struct {
-    Title              *string `json:"title,omitempty"`
-    Description        *string `json:"description,omitempty"`
-    Keywords           *string `json:"keywords,omitempty"`
-    Author             *string `json:"author,omitempty"`
-    Canonical          *string `json:"canonical,omitempty"`
-    BaseHref           *string `json:"base_href,omitempty"`
-    OGTitle            *string `json:"og_title,omitempty"`
-    OGDescription      *string `json:"og_description,omitempty"`
-    OGImage            *string `json:"og_image,omitempty"`
-    OGURL              *string `json:"og_url,omitempty"`
-    OGType             *string `json:"og_type,omitempty"`
-    OGSiteName         *string `json:"og_site_name,omitempty"`
-    TwitterCard        *string `json:"twitter_card,omitempty"`
-    TwitterTitle       *string `json:"twitter_title,omitempty"`
-    TwitterDescription *string `json:"twitter_description,omitempty"`
-    TwitterImage       *string `json:"twitter_image,omitempty"`
-    TwitterSite        *string `json:"twitter_site,omitempty"`
-    TwitterCreator     *string `json:"twitter_creator,omitempty"`
-    LinkAuthor         *string `json:"link_author,omitempty"`
-    LinkLicense        *string `json:"link_license,omitempty"`
-    LinkAlternate      *string `json:"link_alternate,omitempty"`
+    Title           *string             `json:"title,omitempty"`
+    Description     *string             `json:"description,omitempty"`
+    Keywords        []string            `json:"keywords"`  // Changed from *string
+    Author          *string             `json:"author,omitempty"`
+    CanonicalURL    *string             `json:"canonical_url,omitempty"`  // Renamed from canonical
+    BaseHref        *string             `json:"base_href,omitempty"`
+    Language        *string             `json:"language,omitempty"`  // New field
+    TextDirection   *string             `json:"text_direction,omitempty"`  // New field
+    OpenGraph       map[string]string   `json:"open_graph"`  // Replaces og_* fields
+    TwitterCard     map[string]string   `json:"twitter_card"`  // Replaces twitter_* fields
+    Headers         []string            `json:"headers,omitempty"`  // New field
+    Links           [][2]string         `json:"links,omitempty"`  // New field (URL, text pairs)
+    Images          []string            `json:"images,omitempty"`  // New field
+    StructuredData  []json.RawMessage   `json:"structured_data,omitempty"`  // New field
+    MetaTags        map[string]string   `json:"meta_tags,omitempty"`  // New field
 }
 ```
 

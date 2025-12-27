@@ -394,7 +394,7 @@ Access format-specific metadata from extracted documents:
 
 Kreuzberg extracts format-specific metadata for:
 - **PDF**: page count, title, author, subject, keywords, dates
-- **HTML**: 21 fields including SEO meta tags, Open Graph, Twitter Card
+- **HTML**: Rich metadata including SEO tags, Open Graph, Twitter Card, structured data, headers, links, images
 - **Excel**: sheet count, sheet names
 - **Email**: from, to, CC, BCC, message ID, attachments
 - **PowerPoint**: title, author, description, fonts
@@ -402,6 +402,17 @@ Kreuzberg extracts format-specific metadata for:
 - **Archives**: format, file count, file list, sizes
 - **XML**: element count, unique elements
 - **Text/Markdown**: word count, line count, headers, links
+
+!!! info "HTML Metadata Structure (v4.0+)"
+
+    HTML metadata has been restructured for better organization:
+    - **keywords**: Now a `Vec<String>` array (was `Option<String>`)
+    - **canonical** → **canonical_url**: Renamed for clarity
+    - **Open Graph fields**: Consolidated into `open_graph: Map<String, String>` (replacing individual `og_*` fields)
+    - **Twitter Card fields**: Consolidated into `twitter_card: Map<String, String>` (replacing individual `twitter_*` fields)
+    - **New fields**: `headers`, `links`, `images`, `structured_data`, `language`, `text_direction`, `meta_tags`
+
+    See [Types Reference](../reference/types.md) for complete HTML metadata reference and examples.
 
 See [Types Reference](../reference/types.md) for complete metadata reference.
 
