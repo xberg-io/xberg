@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\EmbeddingConfig;
 
-// Example 1: Basic embedding generation
 echo "Example 1: Basic Embedding Generation\n";
 echo "=====================================\n";
 
@@ -26,7 +25,7 @@ $config1 = new ExtractionConfig(
         maxChunkSize: 512,
         chunkOverlap: 50
     ),
-    embedding: new EmbeddingConfig()  // Uses default model: 'all-MiniLM-L6-v2'
+    embedding: new EmbeddingConfig()  
 );
 
 $kreuzberg = new Kreuzberg($config1);
@@ -45,15 +44,13 @@ if ($result->chunks !== null) {
 
 echo "\n\n";
 
-// Example 2: Using different embedding models
 echo "Example 2: Different Embedding Models\n";
 echo "====================================\n";
 
-// Small, fast model (default)
 $config2a = new ExtractionConfig(
     chunking: new ChunkingConfig(maxChunkSize: 512),
     embedding: new EmbeddingConfig(
-        model: 'all-MiniLM-L6-v2',  // 384 dimensions, fast
+        model: 'all-MiniLM-L6-v2',  
         normalize: true,
         batchSize: 32
     )
@@ -64,13 +61,12 @@ echo "- Dimensions: 384\n";
 echo "- Speed: Very Fast\n";
 echo "- Use case: General purpose, quick retrieval\n\n";
 
-// Higher quality model
 $config2b = new ExtractionConfig(
     chunking: new ChunkingConfig(maxChunkSize: 512),
     embedding: new EmbeddingConfig(
-        model: 'all-mpnet-base-v2',  // 768 dimensions, better quality
+        model: 'all-mpnet-base-v2',  
         normalize: true,
-        batchSize: 16  // Smaller batch for larger model
+        batchSize: 16  
     )
 );
 
@@ -79,16 +75,14 @@ echo "- Dimensions: 768\n";
 echo "- Speed: Medium\n";
 echo "- Use case: Higher quality semantic search\n\n";
 
-// Example 3: Embedding normalization
 echo "Example 3: Normalized vs Non-Normalized Embeddings\n";
 echo "==================================================\n";
 
-// Normalized embeddings (recommended for cosine similarity)
 $config3a = new ExtractionConfig(
     chunking: new ChunkingConfig(maxChunkSize: 512),
     embedding: new EmbeddingConfig(
         model: 'all-MiniLM-L6-v2',
-        normalize: true  // Embeddings will be L2 normalized
+        normalize: true  
     )
 );
 
@@ -97,12 +91,11 @@ echo "- Better for cosine similarity\n";
 echo "- Values in range [-1, 1]\n";
 echo "- Faster similarity computation\n\n";
 
-// Non-normalized embeddings
 $config3b = new ExtractionConfig(
     chunking: new ChunkingConfig(maxChunkSize: 512),
     embedding: new EmbeddingConfig(
         model: 'all-MiniLM-L6-v2',
-        normalize: false  // Raw embeddings
+        normalize: false  
     )
 );
 
@@ -110,17 +103,15 @@ echo "Non-normalized embeddings:\n";
 echo "- Raw model output\n";
 echo "- Useful for specific distance metrics\n\n";
 
-// Example 4: Batch size optimization
 echo "Example 4: Batch Size Configuration\n";
 echo "===================================\n";
 
-// Small batch size (lower memory, slower)
 $config4a = new ExtractionConfig(
     chunking: new ChunkingConfig(maxChunkSize: 512),
     embedding: new EmbeddingConfig(
         model: 'all-MiniLM-L6-v2',
         normalize: true,
-        batchSize: 8  // Process 8 chunks at a time
+        batchSize: 8  
     )
 );
 
@@ -129,13 +120,12 @@ echo "- Lower memory usage\n";
 echo "- Slower processing\n";
 echo "- Good for limited resources\n\n";
 
-// Large batch size (higher memory, faster)
 $config4b = new ExtractionConfig(
     chunking: new ChunkingConfig(maxChunkSize: 512),
     embedding: new EmbeddingConfig(
         model: 'all-MiniLM-L6-v2',
         normalize: true,
-        batchSize: 64  // Process 64 chunks at a time
+        batchSize: 64  
     )
 );
 
@@ -144,7 +134,6 @@ echo "- Higher memory usage\n";
 echo "- Faster processing\n";
 echo "- Good for high-performance systems\n\n";
 
-// Example 5: Complete RAG pipeline configuration
 echo "Example 5: Complete RAG Pipeline\n";
 echo "================================\n";
 
@@ -166,7 +155,6 @@ $result5 = (new Kreuzberg($config5))->extractFile('document.pdf');
 if ($result5->chunks !== null) {
     echo "Processing " . count($result5->chunks) . " chunks with embeddings...\n\n";
 
-    // Prepare data for vector database
     $vectorDbData = [];
     foreach ($result5->chunks as $i => $chunk) {
         if ($chunk->embedding !== null) {

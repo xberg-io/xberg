@@ -10,31 +10,14 @@ declare(strict_types=1);
  * This snippet shows how to install the Kreuzberg extension using PIE.
  */
 
-// PIE (PHP Installer for Extensions) Installation
-// ==============================================
 
-// Step 1: Install PIE (if not already installed)
-// Run in terminal:
-// composer global require php/pie
 
-// Step 2: Verify PIE installation
-// pie --version
 
-// Step 3: Install Kreuzberg extension using PIE
-// pie install kreuzberg/kreuzberg-ext
 
-// Alternative: Install specific version
-// pie install kreuzberg/kreuzberg-ext:4.0.0
 
-// Step 4: Verify extension is installed
-// php -m | grep kreuzberg
 
-// Step 5: Check extension configuration
-// php --ri kreuzberg
 
-// ================================================
 
-// Verification script
 require_once __DIR__ . '/vendor/autoload.php';
 
 use Kreuzberg\Kreuzberg;
@@ -42,12 +25,10 @@ use Kreuzberg\Kreuzberg;
 echo "Kreuzberg Extension Installation Check\n";
 echo "========================================\n\n";
 
-// Check if extension is loaded
 if (extension_loaded('kreuzberg')) {
     echo "✓ Kreuzberg extension is loaded\n";
     echo "  Version: " . Kreuzberg::version() . "\n\n";
 
-    // Get extension information
     $info = [];
     ob_start();
     phpinfo(INFO_MODULES);
@@ -57,7 +38,6 @@ if (extension_loaded('kreuzberg')) {
         echo "✓ Extension info available via phpinfo()\n\n";
     }
 
-    // Test basic functionality
     try {
         $kreuzberg = new Kreuzberg();
         echo "✓ Kreuzberg client initialized successfully\n\n";

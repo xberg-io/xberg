@@ -109,11 +109,10 @@ final class ErrorHandlingTest extends TestCase
 
         $bytes = file_get_contents($filePath);
 
-        // Trying to extract PDF bytes as text should fail
         $this->expectException(KreuzbergException::class);
 
         $kreuzberg = new Kreuzberg();
-        $kreuzberg->extractBytes($bytes, 'application/vnd.ms-excel'); // Wrong MIME type
+        $kreuzberg->extractBytes($bytes, 'application/vnd.ms-excel');
     }
 
     #[Test]
@@ -121,7 +120,7 @@ final class ErrorHandlingTest extends TestCase
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'krz_test_');
         file_put_contents($tmpFile, 'test');
-        chmod($tmpFile, 0o000); // Make unreadable
+        chmod($tmpFile, 0o000);
 
         try {
             $this->expectException(KreuzbergException::class);
@@ -176,7 +175,7 @@ final class ErrorHandlingTest extends TestCase
             file_get_contents($filePath),
         ];
 
-        $mimeTypes = ['application/pdf']; // Only one MIME type for two files
+        $mimeTypes = ['application/pdf'];
 
         $this->expectException(KreuzbergException::class);
 
@@ -199,7 +198,6 @@ final class ErrorHandlingTest extends TestCase
     #[Test]
     public function it_handles_very_large_file_path(): void
     {
-        // Create an extremely long file path
         $longPath = str_repeat('/nonexistent', 1000) . '/file.pdf';
 
         $this->expectException(KreuzbergException::class);
@@ -284,7 +282,6 @@ final class ErrorHandlingTest extends TestCase
     #[Test]
     public function it_handles_null_bytes_in_file_path(): void
     {
-        // Null bytes in file paths can cause security issues
         $pathWithNull = "/tmp/file\0.pdf";
 
         $this->expectException(KreuzbergException::class);

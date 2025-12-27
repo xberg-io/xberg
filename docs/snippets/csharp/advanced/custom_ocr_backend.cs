@@ -17,7 +17,6 @@ class CloudOcrBackend : IOcrBackend
 
     public string Process(ReadOnlySpan<byte> imageBytes, OcrConfig? config)
     {
-        // Since we need async HTTP, we use Task.Run to bridge sync/async
         return Task.Run(async () =>
         {
             try

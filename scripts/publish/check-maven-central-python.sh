@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 
 # Check Maven Central for existing package version using Python
-#
 # Queries Maven Central REST API to check if a specific package version exists.
-#
-# Environment Variables:
 #   - VERSION: Package version to check (e.g., 4.0.0-rc.1)
 
 set -euo pipefail

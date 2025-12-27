@@ -8,13 +8,6 @@ if [ ! -d "$pkg_dir" ]; then
 	exit 1
 fi
 
-# `npm publish` is invoked with `--ignore-scripts` in CI, so `prepublishOnly`
-# won't run. In napi-rs projects, `prepublishOnly` typically runs
-# `napi prepublish` which also tries to create GitHub releases and republish
-# platform packages. In our workflow, we publish platform packages explicitly,
-# so we only need the *manifest* change: populate `optionalDependencies` on the
-# main package so npm can install the correct native binary package.
-
 npm_dir="$pkg_dir/npm"
 if [ ! -d "$npm_dir" ]; then
 	echo "Platform npm directory not found: $npm_dir" >&2

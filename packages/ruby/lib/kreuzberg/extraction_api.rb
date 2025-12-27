@@ -1,46 +1,19 @@
 # frozen_string_literal: true
 
 module Kreuzberg
-  # Provides extraction methods for documents and text.
-  #
-  # This module includes both synchronous and asynchronous methods for extracting
-  # content from files and byte data. Results are automatically cached based on
-  # configuration settings.
   module ExtractionAPI
-    # Synchronously extract content from a file.
-    #
-    # Performs document extraction including text, tables, metadata, and optionally
-    # images. Supports various file formats (PDF, DOCX, XLSX, images, HTML, etc.)
-    # based on the detected or specified MIME type.
-    #
     # @param path [String, Pathname] Path to the document file to extract
     # @param mime_type [String, nil] Optional MIME type for the file (e.g., 'application/pdf').
-    #   If omitted, type is detected from file extension.
     # @param config [Config::Extraction, Hash, nil] Extraction configuration controlling
-    #   OCR settings, chunking, image extraction, and more. Accepts either a {Config::Extraction}
-    #   object or a configuration hash.
-    #
     # @return [Result] Extraction result containing content, metadata, tables, and images
-    #
     # @raise [Errors::IOError] If the file cannot be read or access is denied
     # @raise [Errors::ParsingError] If document parsing fails
     # @raise [Errors::UnsupportedFormatError] If the file format is not supported
     # @raise [Errors::OCRError] If OCR is enabled and fails
     # @raise [Errors::MissingDependencyError] If a required dependency is missing
-    #
     # @example Extract a PDF file
-    #   result = Kreuzberg.extract_file_sync("document.pdf")
-    #   puts result.content
-    #
     # @example Extract with explicit MIME type
-    #   result = Kreuzberg.extract_file_sync("data.bin", mime_type: "application/pdf")
-    #
     # @example Extract with OCR enabled
-    #   config = Kreuzberg::Config::Extraction.new(
-    #     force_ocr: true,
-    #     ocr: Kreuzberg::Config::OCR.new(language: "eng")
-    #   )
-    #   result = Kreuzberg.extract_file_sync("scanned.pdf", config: config)
     def extract_file_sync(path, mime_type: nil, config: nil)
       opts = normalize_config(config)
       hash = if mime_type

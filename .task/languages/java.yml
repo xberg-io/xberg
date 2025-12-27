@@ -12,7 +12,6 @@ vars:
   JAVA_VERSION: "17"
 
 tasks:
-  # Installation
   install:
     desc: Install Java dependencies
     dir: packages/java
@@ -25,7 +24,6 @@ tasks:
     cmds:
       - task: java:install
 
-  # Build Tasks
   build:
     desc: Build Java package (depends on Rust FFI)
     dir: packages/java
@@ -55,7 +53,6 @@ tasks:
     cmds:
       - bash scripts/benchmarks/build-java-package.sh
 
-  # Test Tasks
   test:
     desc: Run Java tests
     dir: packages/java
@@ -76,7 +73,6 @@ tasks:
     cmds:
       - mvn test -X
 
-  # Linting Tasks
   lint:
     desc: Lint Java code for code quality issues (checkstyle + PMD static analysis)
     dir: packages/java
@@ -91,7 +87,6 @@ tasks:
       - mvn checkstyle:check
       - mvn pmd:check pmd:cpd-check
 
-  # Formatting Tasks
   format:
     desc: Format Java code with automatic style corrections (spotless)
     dir: packages/java
@@ -104,14 +99,12 @@ tasks:
     cmds:
       - mvn spotless:check
 
-  # Cleanup
   clean:
     desc: Clean Java build artifacts
     dir: packages/java
     cmds:
       - mvn clean
 
-  # Dependency Management
   update:
     desc: Update Java dependencies and plugins (including linters)
     dir: packages/java
@@ -125,7 +118,6 @@ tasks:
       - echo "Displaying final plugin updates..."
       - mvn -DallowSnapshots=false versions:display-plugin-updates
 
-  # E2E Tests
   e2e:generate:
     desc: Generate Java E2E tests from fixtures
     cmds:

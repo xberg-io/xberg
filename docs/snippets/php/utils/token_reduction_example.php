@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\TokenReductionConfig;
 
-// Configure token reduction
 $config = new ExtractionConfig(
     tokenReduction: new TokenReductionConfig(
         mode: 'moderate',
@@ -31,7 +30,6 @@ echo "Token Reduction Example:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Document: verbose_document.pdf\n\n";
 
-// Display reduction statistics
 if (isset($result->metadata['original_token_count'])) {
     $originalTokens = $result->metadata['original_token_count'];
     $reducedTokens = $result->metadata['token_count'];
@@ -44,7 +42,6 @@ if (isset($result->metadata['original_token_count'])) {
     echo sprintf("  Reduction: %.1f%%\n", $reductionRatio * 100);
     echo sprintf("  Saved:     %s tokens\n\n", number_format($originalTokens - $reducedTokens));
 
-    // Visualize reduction
     $beforeBar = str_repeat('█', (int)($originalTokens / 100));
     $afterBar = str_repeat('█', (int)($reducedTokens / 100));
 
@@ -53,13 +50,11 @@ if (isset($result->metadata['original_token_count'])) {
     echo "  After:  $afterBar\n\n";
 }
 
-// Content length comparison
 echo "Content Analysis:\n";
 echo str_repeat('-', 40) . "\n";
 echo "  Content length: " . strlen($result->content) . " characters\n";
 echo "  First 200 chars: " . substr($result->content, 0, 200) . "...\n\n";
 
-// Process multiple documents with different reduction settings
 $documents = [
     'long_article.pdf',
     'research_paper.pdf',
@@ -112,13 +107,11 @@ if ($totalOriginal > 0) {
     echo sprintf("  Overall saving: %.1f%%\n\n", $overallReduction);
 }
 
-// Fit document within token limit
 function fitWithinTokenLimit(
     string $filePath,
     int $maxTokens,
     Kreuzberg $kreuzberg
 ): ?array {
-    // Try different reduction modes until we fit
     $modes = ['light', 'moderate', 'aggressive'];
 
     foreach ($modes as $mode) {
@@ -144,7 +137,6 @@ function fitWithinTokenLimit(
         }
     }
 
-    // If still doesn't fit, return aggressive mode result
     $config = new ExtractionConfig(
         tokenReduction: new TokenReductionConfig(
             mode: 'aggressive',
@@ -164,7 +156,6 @@ function fitWithinTokenLimit(
     ];
 }
 
-// Example: Fit document within 8K token limit
 echo "Fitting Document to Token Limit:\n";
 echo str_repeat('=', 60) . "\n";
 
@@ -192,7 +183,6 @@ if (file_exists($testFile)) {
     echo "\n";
 }
 
-// Calculate cost savings from token reduction
 function calculateCostSavings(
     int $originalTokens,
     int $reducedTokens,
@@ -211,7 +201,6 @@ function calculateCostSavings(
     ];
 }
 
-// Example: Calculate savings
 if ($totalOriginal > 0 && $totalReduced > 0) {
     $savings = calculateCostSavings($totalOriginal, $totalReduced);
 
@@ -222,7 +211,6 @@ if ($totalOriginal > 0 && $totalReduced > 0) {
     echo sprintf("  Reduced cost:  $%.6f\n", $savings['reduced_cost']);
     echo sprintf("  Savings:       $%.6f (%.1f%%)\n\n", $savings['savings'], $savings['savings_percent']);
 
-    // Project annual savings
     $documentsPerDay = 100;
     $daysPerYear = 365;
     $annualSavings = $savings['savings'] * $documentsPerDay * $daysPerYear;

@@ -25,9 +25,6 @@ use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::ffi::{CStr, c_char};
 
-// KNOWN_FORMAT_FIELDS is imported from kreuzberg::core::formats::KNOWN_FORMATS
-// This is the single source of truth for format field names across all language bindings.
-// See crates/kreuzberg/src/core/formats.rs for the canonical list of 58 known format fields.
 static KNOWN_FORMAT_FIELDS: Lazy<HashSet<&'static str>> = Lazy::new(|| KNOWN_FORMATS.iter().copied().collect());
 
 #[allow(unused_extern_crates)]
@@ -62,7 +59,6 @@ unsafe extern "C" {
     /// Maps to kreuzberg_free_string() in the FFI library.
     pub fn kreuzberg_free_string(ptr: *mut c_char);
 
-    // Validation functions from kreuzberg_ffi
     pub fn kreuzberg_validate_binarization_method(method: *const c_char) -> i32;
     pub fn kreuzberg_validate_ocr_backend(backend: *const c_char) -> i32;
     pub fn kreuzberg_validate_language_code(code: *const c_char) -> i32;
@@ -74,20 +70,17 @@ unsafe extern "C" {
     pub fn kreuzberg_validate_dpi(dpi: i32) -> i32;
     pub fn kreuzberg_validate_chunking_params(max_chars: usize, max_overlap: usize) -> i32;
 
-    // List functions that return JSON arrays as C strings
     pub fn kreuzberg_get_valid_binarization_methods() -> *mut c_char;
     pub fn kreuzberg_get_valid_language_codes() -> *mut c_char;
     pub fn kreuzberg_get_valid_ocr_backends() -> *mut c_char;
     pub fn kreuzberg_get_valid_token_reduction_levels() -> *mut c_char;
 
-    // Phase 1 Config FFI functions
     pub fn kreuzberg_config_from_json(json_config: *const c_char) -> *mut ExtractionConfig;
     pub fn kreuzberg_config_free(config: *mut ExtractionConfig);
     pub fn kreuzberg_config_to_json(config: *const ExtractionConfig) -> *mut c_char;
     pub fn kreuzberg_config_get_field(config: *const ExtractionConfig, field_name: *const c_char) -> *mut c_char;
     pub fn kreuzberg_config_merge(base: *mut ExtractionConfig, override_config: *const ExtractionConfig) -> i32;
 
-    // Phase 1 Result FFI functions
     pub fn kreuzberg_result_get_page_count(result: *const RustExtractionResult) -> i32;
     pub fn kreuzberg_result_get_chunk_count(result: *const RustExtractionResult) -> i32;
     pub fn kreuzberg_result_get_detected_language(result: *const RustExtractionResult) -> *mut c_char;
@@ -96,7 +89,6 @@ unsafe extern "C" {
         field_name: *const c_char,
     ) -> CMetadataField;
 
-    // Phase 2 Error FFI functions - centralized error code definitions
     /// Get the name of an error code as a C string.
     /// Returns pointer to static string valid for program lifetime.
     /// Example: kreuzberg_error_code_name(0) -> "validation"
@@ -135,15 +127,6 @@ unsafe extern "C" {
     pub fn kreuzberg_error_code_count() -> u32;
 }
 
-// Global Tokio runtime for async operations in Node.js bindings.
-//
-// Worker thread count can be controlled via `KREUZBERG_WORKER_THREADS` environment variable.
-// If not set, defaults to the number of logical CPU cores (`num_cpus::get()`).
-//
-// Examples:
-// - Default (auto-detect): Uses all available CPU cores
-// - `KREUZBERG_WORKER_THREADS=4`: Forces 4 worker threads
-// - `KREUZBERG_WORKER_THREADS=16`: Uses 16 worker threads on 16+ core systems
 lazy_static! {
     static ref WORKER_POOL: tokio::runtime::Runtime = {
         let worker_count = std::env::var("KREUZBERG_WORKER_THREADS")
@@ -301,10 +284,6 @@ fn validate_plugin_object(obj: &Object, plugin_type: &str, required_methods: &[&
     Ok(())
 }
 
-// ============================================================================
-// Phase 2 Error Handling FFI Wrappers
-// ============================================================================
-
 /// Returns the human-readable name for an error code.
 ///
 /// Maps to FFI function kreuzberg_error_code_name().
@@ -417,7 +396,6 @@ pub struct ErrorClassification {
 pub fn classify_error(error_message: String) -> ErrorClassification {
     let lower = error_message.to_lowercase();
 
-    // Calculate confidence and determine error code based on keywords
     let (code, confidence) = if lower.contains("validation")
         || lower.contains("invalid_argument")
         || lower.contains("schema")
@@ -483,7 +461,6 @@ pub fn classify_error(error_message: String) -> ErrorClassification {
     {
         (7u32, 0.86)
     } else {
-        // Default to internal with low confidence
         (7u32, 0.1)
     };
 
@@ -2242,7 +2219,6 @@ impl RustPostProcessor for JsPostProcessor {
                 plugin_name: self.name.clone(),
             })?;
 
-        // JSON serialization only (faster, no Base64 overhead)
         let json_string = serde_json::to_string(&js_result).map_err(|e| kreuzberg::KreuzbergError::Plugin {
             message: format!("Failed to serialize result to JSON for JavaScript PostProcessor: {}", e),
             plugin_name: self.name.clone(),
@@ -2324,7 +2300,6 @@ impl RustPostProcessor for JsPostProcessor {
 pub fn register_post_processor(_env: Env, processor: Object) -> Result<()> {
     validate_plugin_object(&processor, "PostProcessor", &["name", "process"])?;
 
-    // Accept both value properties AND function properties for name
     let name: String = processor.get_named_property::<String>("name").or_else(|_| {
         let name_fn: Function<(), String> = processor.get_named_property("name")?;
         name_fn.call(())
@@ -2337,7 +2312,6 @@ pub fn register_post_processor(_env: Env, processor: Object) -> Result<()> {
         ));
     }
 
-    // Accept both value properties AND function properties for processingStage
     let stage = if let Ok(stage_str) = processor.get_named_property::<String>("processingStage") {
         match stage_str.to_lowercase().as_str() {
             "early" => ProcessingStage::Early,
@@ -2495,7 +2469,6 @@ impl RustValidator for JsValidator {
                 plugin_name: self.name.clone(),
             })?;
 
-        // JSON serialization only (faster, no Base64 overhead)
         let json_string = serde_json::to_string(&js_result).map_err(|e| kreuzberg::KreuzbergError::Plugin {
             message: format!("Failed to serialize result to JSON for JavaScript Validator: {}", e),
             plugin_name: self.name.clone(),
@@ -2581,7 +2554,6 @@ impl RustValidator for JsValidator {
 pub fn register_validator(_env: Env, validator: Object) -> Result<()> {
     validate_plugin_object(&validator, "Validator", &["name", "validate"])?;
 
-    // Accept both value properties AND function properties for name
     let name: String = validator.get_named_property::<String>("name").or_else(|_| {
         let name_fn: Function<(), String> = validator.get_named_property("name")?;
         name_fn.call(())
@@ -2594,7 +2566,6 @@ pub fn register_validator(_env: Env, validator: Object) -> Result<()> {
         ));
     }
 
-    // Accept both value properties AND function properties for priority
     let priority = if let Ok(priority_val) = validator.get_named_property::<i32>("priority") {
         priority_val
     } else if let Ok(priority_fn) = validator.get_named_property::<Function<(), i32>>("priority") {
@@ -2743,7 +2714,6 @@ impl RustOcrBackend for JsOcrBackend {
         let language = config.language.clone();
         let backend_name = self.name.clone();
 
-        // JSON serialization only (faster, no Base64 overhead)
         let output_json = self
             .process_image_fn
             .call_async((encoded, language))
@@ -2895,7 +2865,6 @@ impl RustOcrBackend for JsOcrBackend {
 pub fn register_ocr_backend(_env: Env, backend: Object) -> Result<()> {
     validate_plugin_object(&backend, "OCR Backend", &["name", "supportedLanguages", "processImage"])?;
 
-    // Accept both value properties AND function properties for name
     let name: String = backend.get_named_property::<String>("name").or_else(|_| {
         let name_fn: Function<(), String> = backend.get_named_property("name")?;
         name_fn.call(())
@@ -2908,7 +2877,6 @@ pub fn register_ocr_backend(_env: Env, backend: Object) -> Result<()> {
         ));
     }
 
-    // Accept both value properties AND function properties for supportedLanguages
     let supported_languages: Vec<String> = backend
         .get_named_property::<Vec<String>>("supportedLanguages")
         .or_else(|_| {
@@ -3394,10 +3362,6 @@ pub fn get_last_panic_context() -> Option<serde_json::Value> {
     get_panic_context()
 }
 
-// ============================================================================
-// Validation Functions
-// ============================================================================
-
 /// Validates a binarization method string.
 ///
 /// Valid methods: "otsu", "adaptive", "sauvola"
@@ -3881,10 +3845,6 @@ pub fn get_valid_token_reduction_levels() -> Result<Vec<String>> {
     Ok(parsed)
 }
 
-// ============================================================================
-// Phase 1 Config FFI Wrappers
-// ============================================================================
-
 /// Validate and normalize an ExtractionConfig JSON string via FFI.
 ///
 /// This validates the JSON and returns a normalized version, using the shared
@@ -4092,13 +4052,6 @@ pub fn config_merge_internal(base_json: String, override_json: String) -> Result
 
     Ok(result)
 }
-
-// ============================================================================
-// Phase 1 Result FFI Wrappers (Implemented via TypeScript wrappers)
-// ============================================================================
-// Result methods (getPageCount, getChunkCount, etc.) are implemented as
-// methods on the ExtractionResult type in the TypeScript SDK.
-// The Rust FFI functions are called from within those TypeScript method implementations.
 
 // #[cfg(all(
 // #[global_allocator]

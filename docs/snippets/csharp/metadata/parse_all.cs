@@ -10,7 +10,6 @@ var config = new ExtractionConfig
 
 var result = KreuzbergClient.ExtractFileSync("document.pdf", config);
 
-// Access PDF metadata
 if (result.Metadata?.Format.Pdf != null)
 {
     var pdfMeta = result.Metadata.Format.Pdf;
@@ -21,7 +20,6 @@ if (result.Metadata?.Format.Pdf != null)
     Console.WriteLine($"Created: {pdfMeta.CreatedDate:O}");
 }
 
-// Access HTML metadata
 var htmlResult = KreuzbergClient.ExtractFileSync("page.html", config);
 if (htmlResult.Metadata?.Format.Html != null)
 {

@@ -158,7 +158,6 @@ final class DocumentFormatsTest extends TestCase
         $this->assertIsInt($metadata->pageCount);
         $this->assertGreaterThan(0, $metadata->pageCount);
 
-        // Check for common metadata fields
         $this->assertObjectHasProperty('title', $metadata);
         $this->assertObjectHasProperty('authors', $metadata);
     }
@@ -177,8 +176,6 @@ final class DocumentFormatsTest extends TestCase
         $kreuzberg = new Kreuzberg();
         $result = $kreuzberg->extractFile($filePath);
 
-        // Extracted content should contain key parts of the original
-        // (may have formatting differences, but core content should be there)
         $this->assertGreaterThan(
             0,
             strlen($result->content),
@@ -211,7 +208,6 @@ final class DocumentFormatsTest extends TestCase
     #[Test]
     public function it_extracts_from_complex_pdf(): void
     {
-        // Use a more complex PDF with multiple pages
         $complexPdfs = glob($this->testDocumentsPath . '/pdfs/*.pdf');
 
         if (empty($complexPdfs)) {
@@ -275,7 +271,6 @@ final class DocumentFormatsTest extends TestCase
             'Unicode content should be extracted correctly',
         );
 
-        // Verify content is valid UTF-8
         $this->assertTrue(
             mb_check_encoding($result->content, 'UTF-8'),
             'Extracted content should be valid UTF-8',

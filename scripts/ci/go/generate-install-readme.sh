@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: generate-install-readme.sh <output-file>
-# Example: generate-install-readme.sh artifact-staging/kreuzberg-ffi/README.md
-#
-# Generates installation instructions README for FFI distribution tarball.
-
 OUTPUT_FILE="${1:-artifact-staging/kreuzberg-ffi/README.md}"
 
 cat >"${OUTPUT_FILE}" <<'EOF'

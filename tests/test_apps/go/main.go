@@ -18,63 +18,48 @@ func main() {
 
 	runner := NewTestRunner()
 
-	// Configuration Tests
 	runner.StartSection("Configuration Structs")
 	testConfigurationStructs(runner)
 
-	// Pointer Helper Tests
 	runner.StartSection("Pointer Helpers")
 	testPointerHelpers(runner)
 
-	// Config Functions Tests
 	runner.StartSection("Config Functions (JSON/File/Merge)")
 	testConfigFunctions(runner)
 
-	// MIME Type Tests
 	runner.StartSection("MIME Type Functions")
 	testMimeTypeFunctions(runner)
 
-	// Validation Tests
 	runner.StartSection("Validation Functions")
 	testValidationFunctions(runner)
 
-	// Error Handling Tests
 	runner.StartSection("Error Types and Handling")
 	testErrorTypes(runner)
 
-	// FFI Error Metadata Tests
 	runner.StartSection("FFI Error Code Functions")
 	testFFIErrorCodes(runner)
 
-	// Extraction Tests
 	runner.StartSection("Extraction Functions (Sync)")
 	testExtractionSync(runner)
 
-	// Context-aware Extraction Tests
 	runner.StartSection("Extraction Functions (Context)")
 	testExtractionContext(runner)
 
-	// Batch Extraction Tests
 	runner.StartSection("Batch Extraction")
 	testBatchExtraction(runner)
 
-	// Library Info Tests
 	runner.StartSection("Library Info")
 	testLibraryInfo(runner)
 
-	// Result Types Tests
 	runner.StartSection("Result Types and Accessors")
 	testResultTypes(runner)
 
-	// Plugin Registry Tests
 	runner.StartSection("Plugin Registry Functions")
 	testPluginRegistry(runner)
 
-	// Embedding Presets Tests
 	runner.StartSection("Embedding Preset Functions")
 	testEmbeddingPresets(runner)
 
-	// Summary
 	exitCode := runner.Summary()
 	os.Exit(exitCode)
 }
@@ -641,7 +626,6 @@ func testErrorTypes(tr *TestRunner) {
 	})
 
 	tr.Test("Error.Kind() returns ErrorKind", func() error {
-		// Test by calling a validation function to get an error with Kind populated
 		err := kb.ValidateBinarizationMethod("invalid_method")
 		if err == nil {
 			return errors.New("expected error from validation")

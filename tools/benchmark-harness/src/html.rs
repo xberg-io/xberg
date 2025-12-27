@@ -70,18 +70,15 @@ static TEMPLATE_ENV: OnceLock<Environment<'static>> = OnceLock::new();
 fn init_template_env() -> Environment<'static> {
     let mut env = Environment::new();
 
-    // Add all templates using include_str! for compile-time embedding
     env.add_template("base.html.jinja", include_str!("../templates/base.html.jinja"))
         .expect("Failed to add base template");
 
-    // Flamegraph gallery template
     env.add_template(
         "flamegraphs.html.jinja",
         include_str!("../templates/flamegraphs.html.jinja"),
     )
     .expect("Failed to add flamegraphs template");
 
-    // Components
     env.add_template(
         "components/header.html.jinja",
         include_str!("../templates/components/header.html.jinja"),
@@ -103,7 +100,6 @@ fn init_template_env() -> Environment<'static> {
     )
     .expect("Failed to add empty_state template");
 
-    // Charts - HTML
     env.add_template(
         "charts/duration.html.jinja",
         include_str!("../templates/charts/duration.html.jinja"),
@@ -130,7 +126,6 @@ fn init_template_env() -> Environment<'static> {
     )
     .expect("Failed to add success chart template");
 
-    // Charts - Scripts
     env.add_template(
         "charts/duration_script.js.jinja",
         include_str!("../templates/charts/duration_script.js.jinja"),
@@ -157,7 +152,6 @@ fn init_template_env() -> Environment<'static> {
     )
     .expect("Failed to add success script template");
 
-    // Styles
     env.add_template(
         "styles/variables.css.jinja",
         include_str!("../templates/styles/variables.css.jinja"),
@@ -179,7 +173,6 @@ fn init_template_env() -> Environment<'static> {
     )
     .expect("Failed to add charts CSS template");
 
-    // Enable auto-escaping for HTML and CSS files
     env.set_auto_escape_callback(|name| {
         if name.ends_with(".html.jinja") || name.ends_with(".css.jinja") {
             AutoEscape::Html
@@ -231,7 +224,6 @@ fn build_chart_data(results: &[BenchmarkResult], benchmark_date: Option<&str>) -
     let mut framework_results: HashMap<String, Vec<&BenchmarkResult>> = HashMap::new();
     let mut extension_results: HashMap<String, HashMap<String, Vec<&BenchmarkResult>>> = HashMap::new();
 
-    // Group results by framework and extension
     for result in results {
         if !frameworks.contains(&result.framework) {
             frameworks.push(result.framework.clone());
@@ -253,11 +245,9 @@ fn build_chart_data(results: &[BenchmarkResult], benchmark_date: Option<&str>) -
             .push(result);
     }
 
-    // Sort for consistent output
     frameworks.sort();
     extensions.sort();
 
-    // Calculate per-framework metrics
     let framework_metrics = framework_results
         .iter()
         .map(|(framework, results)| {
@@ -266,7 +256,6 @@ fn build_chart_data(results: &[BenchmarkResult], benchmark_date: Option<&str>) -
         })
         .collect();
 
-    // Calculate per-extension per-framework metrics
     let mut extension_metrics = HashMap::new();
     for (ext, frameworks) in extension_results {
         let framework_stats = frameworks
@@ -314,12 +303,10 @@ fn calculate_aggregated_metrics(results: &[&BenchmarkResult]) -> AggregatedMetri
     for result in results {
         durations_ms.push(duration_to_ms(result.duration));
 
-        // Extract percentiles from statistics if available
         if let Some(stats) = &result.statistics {
             p95_durations_ms.push(duration_to_ms(stats.p95));
             p99_durations_ms.push(duration_to_ms(stats.p99));
         } else {
-            // Fall back to mean duration
             p95_durations_ms.push(duration_to_ms(result.duration));
             p99_durations_ms.push(duration_to_ms(result.duration));
         }
@@ -382,7 +369,6 @@ fn calculate_median(values: &mut [f64]) -> f64 {
         return 0.0;
     }
 
-    // Filter out NaN values and log warning if any found
     let valid_values: Vec<f64> = values.iter().copied().filter(|v| !v.is_nan()).collect();
     if valid_values.len() < values.len() {
         eprintln!(
@@ -483,25 +469,21 @@ struct FlamegraphGalleryData {
 /// * Returns error if template rendering fails
 /// * Gracefully handles missing directories (exits with Ok)
 pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> Result<()> {
-    // Create parent directory if needed
     if let Some(parent) = output_file.parent() {
         fs::create_dir_all(parent).map_err(Error::Io)?;
     }
 
-    // Check if flamegraphs directory exists; if not, exit gracefully
     if !flamegraphs_dir.exists() {
         eprintln!("⚠ Flamegraphs directory not found: {}", flamegraphs_dir.display());
         return Ok(());
     }
 
-    // Walk the directory tree and collect SVG files
     let mut frameworks: HashMap<String, Vec<FlamegraphMetadata>> = HashMap::new();
 
     if let Ok(entries) = fs::read_dir(flamegraphs_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
 
-            // Skip non-directories (top level should only have framework directories)
             if !path.is_dir() {
                 continue;
             }
@@ -514,7 +496,6 @@ pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> 
 
             let mut flamegraphs = Vec::new();
 
-            // Walk through framework subdirectories
             if let Ok(mode_entries) = fs::read_dir(&path) {
                 for mode_entry in mode_entries.flatten() {
                     let mode_path = mode_entry.path();
@@ -526,7 +507,6 @@ pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> 
                             .unwrap_or("unknown")
                             .to_string();
 
-                        // Find SVG files in this mode directory
                         if let Ok(svg_entries) = fs::read_dir(&mode_path) {
                             for svg_entry in svg_entries.flatten() {
                                 let svg_path = svg_entry.path();
@@ -538,7 +518,6 @@ pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> 
                                         .unwrap_or("unknown")
                                         .to_string();
 
-                                    // Build relative path for linking
                                     let relative_path =
                                         pathdiff::diff_paths(&svg_path, output_file.parent().unwrap_or(Path::new(".")))
                                             .unwrap_or_else(|| svg_path.clone());
@@ -557,7 +536,6 @@ pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> 
                             }
                         }
                     } else if mode_path.extension().and_then(|e| e.to_str()) == Some("svg") {
-                        // Handle SVG files directly in framework directory (flat structure)
                         let fixture_name = mode_path
                             .file_stem()
                             .and_then(|n| n.to_str())
@@ -582,7 +560,6 @@ pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> 
                 }
             }
 
-            // Sort flamegraphs by title for consistent display
             flamegraphs.sort_by(|a, b| a.title.cmp(&b.title));
 
             if !flamegraphs.is_empty() {
@@ -591,7 +568,6 @@ pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> 
         }
     }
 
-    // Build sorted list of frameworks
     let mut framework_list: Vec<_> = frameworks
         .into_iter()
         .map(|(name, flamegraphs)| FrameworkFlamegraphs { name, flamegraphs })
@@ -599,11 +575,9 @@ pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> 
 
     framework_list.sort_by(|a, b| a.name.cmp(&b.name));
 
-    // Calculate totals
     let total_flamegraphs: usize = framework_list.iter().map(|f| f.flamegraphs.len()).sum();
     let total_frameworks = framework_list.len();
 
-    // Build gallery data
     let gallery_data = FlamegraphGalleryData {
         frameworks: framework_list,
         generated_at: chrono::Utc::now().to_rfc3339(),
@@ -611,10 +585,8 @@ pub fn generate_flamegraph_index(flamegraphs_dir: &Path, output_file: &Path) -> 
         total_frameworks,
     };
 
-    // Render template
     let html = render_flamegraph_gallery(&gallery_data)?;
 
-    // Write output
     fs::write(output_file, html).map_err(Error::Io)?;
 
     eprintln!(

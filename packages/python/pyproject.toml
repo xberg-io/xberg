@@ -84,15 +84,10 @@ scripts.kreuzberg = "kreuzberg.__main__:main"
 
 [tool.maturin]
 module-name = "kreuzberg._internal_bindings"
-# Point to the PyO3 bindings crate
 manifest-path = "../../crates/kreuzberg-py/Cargo.toml"
-# PDFium is now bundled directly in _internal_bindings.so via bundled-pdfium feature
-# No separate library files needed - they are embedded during compilation
 include = [
-  # Ensure IDE/type-checker discoverability for the extension module.
   { path = "kreuzberg/_internal_bindings.pyi", format = [ "sdist", "wheel" ] },
   { path = "kreuzberg/py.typed", format = [ "sdist", "wheel" ] },
-  # Include the CLI binary (must be built with --features all)
   { path = "kreuzberg/kreuzberg-cli", format = "wheel" },
   { path = "kreuzberg/kreuzberg-cli.exe", format = "wheel" },
 ]
@@ -107,5 +102,4 @@ markers = [
   "integration: marks tests as integration tests (requires running services)",
   "cli_features: marks tests that require CLI binary built with --features all (deselect with '-m \"not cli_features\"')",
 ]
-# Timeout exceptions are ignored by default, re-raise them
 timeout_func_only = true

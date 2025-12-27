@@ -51,7 +51,6 @@ public final class KreuzbergExtractJava {
 
         Path path = Path.of(args[1]);
         try {
-            // Execute WARMUP_ITERATIONS iterations without recording times
             for (int i = 0; i < WARMUP_ITERATIONS; i++) {
                 Kreuzberg.extractFile(path);
                 if (debug && i % 2 == 0) {
@@ -61,7 +60,6 @@ public final class KreuzbergExtractJava {
             if (debug) {
                 debugLog("Warmup phase complete", String.valueOf(WARMUP_ITERATIONS) + " iterations");
             }
-            // Output success marker
             System.out.println("{\"status\":\"warmup_complete\"}");
         } catch (KreuzbergException | RuntimeException | java.io.IOException e) {
             if (debug) {
@@ -100,7 +98,6 @@ public final class KreuzbergExtractJava {
                 debugLog("Batch extraction completed", String.valueOf(results.size()) + " results");
             }
 
-            // Output results
             if (results.size() == 1) {
                 String json = toJson(results.get(0), totalMs / results.size());
                 System.out.print(json);

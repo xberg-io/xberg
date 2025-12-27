@@ -117,61 +117,55 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 	 * @returns Array of ISO 639-1/2/3 language codes
 	 */
 	supportedLanguages(): string[] {
-		// Return cached list if already computed
 		if (this.supportedLangsCache) {
 			return this.supportedLangsCache;
 		}
 
-		// Comprehensive list of languages supported by tesseract-wasm
-		// Includes both 3-letter (ISO 639-2) and 2-letter (ISO 639-1) codes where applicable
 		this.supportedLangsCache = [
-			// Major languages
-			"eng", // English
-			"deu", // German
-			"fra", // French
-			"spa", // Spanish
-			"ita", // Italian
-			"por", // Portuguese
-			"nld", // Dutch
-			"rus", // Russian
-			"jpn", // Japanese
-			"kor", // Korean
-			"chi_sim", // Chinese (Simplified)
-			"chi_tra", // Chinese (Traditional)
+			"eng",
+			"deu",
+			"fra",
+			"spa",
+			"ita",
+			"por",
+			"nld",
+			"rus",
+			"jpn",
+			"kor",
+			"chi_sim",
+			"chi_tra",
 
-			// Additional European languages
-			"pol", // Polish
-			"tur", // Turkish
-			"swe", // Swedish
-			"dan", // Danish
-			"fin", // Finnish
-			"nor", // Norwegian
-			"ces", // Czech
-			"slk", // Slovak
-			"ron", // Romanian
-			"hun", // Hungarian
-			"hrv", // Croatian
-			"srp", // Serbian
-			"bul", // Bulgarian
-			"ukr", // Ukrainian
-			"ell", // Greek
+			"pol",
+			"tur",
+			"swe",
+			"dan",
+			"fin",
+			"nor",
+			"ces",
+			"slk",
+			"ron",
+			"hun",
+			"hrv",
+			"srp",
+			"bul",
+			"ukr",
+			"ell",
 
-			// Asian languages
-			"ara", // Arabic
-			"heb", // Hebrew
-			"hin", // Hindi
-			"tha", // Thai
-			"vie", // Vietnamese
-			"mkd", // Macedonian
-			"ben", // Bengali
-			"tam", // Tamil
-			"tel", // Telugu
-			"kan", // Kannada
-			"mal", // Malayalam
-			"mya", // Burmese
-			"khm", // Khmer
-			"lao", // Lao
-			"sin", // Sinhala
+			"ara",
+			"heb",
+			"hin",
+			"tha",
+			"vie",
+			"mkd",
+			"ben",
+			"tam",
+			"tel",
+			"kan",
+			"mal",
+			"mya",
+			"khm",
+			"lao",
+			"sin",
 		];
 
 		return this.supportedLangsCache;
@@ -200,11 +194,10 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 	 */
 	async initialize(): Promise<void> {
 		if (this.client) {
-			return; // Already initialized
+			return;
 		}
 
 		try {
-			// Dynamically import tesseract-wasm
 			const tesseractModule = await this.loadTesseractWasm();
 
 			// @ts-expect-error - tesseract-wasm types are not fully typed
@@ -212,11 +205,9 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 				throw new Error("tesseract-wasm OCRClient not found. Ensure tesseract-wasm is installed and available.");
 			}
 
-			// Create client instance
 			// @ts-expect-error - tesseract-wasm types are not fully typed
 			this.client = new tesseractModule.OCRClient();
 
-			// Initialize tracking
 			this.loadedLanguages.clear();
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -263,9 +254,7 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 			throw new Error("TesseractWasmBackend not initialized. Call initialize() first.");
 		}
 
-		// Validate language support
 		const supported = this.supportedLanguages();
-		// Normalize language code for comparison
 		const normalizedLang = language.toLowerCase();
 		const isSupported = supported.some((lang) => lang.toLowerCase() === normalizedLang);
 
@@ -274,33 +263,27 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 		}
 
 		try {
-			// Load language model if not already loaded
 			if (!this.loadedLanguages.has(normalizedLang)) {
-				this.reportProgress(10); // Progress: loading model
+				this.reportProgress(10);
 				await this.loadLanguageModel(normalizedLang);
 				this.loadedLanguages.add(normalizedLang);
-				this.reportProgress(30); // Progress: model loaded
+				this.reportProgress(30);
 			}
 
-			// Convert image bytes to ImageBitmap
-			this.reportProgress(40); // Progress: processing image
+			this.reportProgress(40);
 			const imageBitmap = await this.convertToImageBitmap(imageBytes);
 
-			// Load image into Tesseract
-			this.reportProgress(50); // Progress: loading image
+			this.reportProgress(50);
 			await this.client.loadImage(imageBitmap);
 
-			// Perform OCR
-			this.reportProgress(70); // Progress: performing OCR
+			this.reportProgress(70);
 			const text = await this.client.getText();
 
-			// Get confidence and metadata
 			const confidence = await this.getConfidenceScore();
 			const pageMetadata = await this.getPageMetadata();
 
-			this.reportProgress(90); // Progress: nearly complete
+			this.reportProgress(90);
 
-			// Return result in Kreuzberg format
 			return {
 				content: text,
 				mime_type: "text/plain",
@@ -309,13 +292,13 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 					confidence,
 					...pageMetadata,
 				},
-				tables: [], // Tesseract-wasm doesn't provide structured table detection
+				tables: [],
 			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			throw new Error(`OCR processing failed for language "${language}": ${message}`);
 		} finally {
-			this.reportProgress(100); // Progress: complete
+			this.reportProgress(100);
 		}
 	}
 
@@ -338,7 +321,6 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 	async shutdown(): Promise<void> {
 		try {
 			if (this.client) {
-				// Try both destroy and terminate for compatibility
 				if (typeof this.client.destroy === "function") {
 					this.client.destroy();
 				}
@@ -348,12 +330,10 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 				this.client = null;
 			}
 
-			// Clear cached state
 			this.loadedLanguages.clear();
 			this.supportedLangsCache = null;
 			this.progressCallback = null;
 		} catch (error) {
-			// Log error but don't throw - shutdown is best-effort
 			console.warn(
 				`Warning during TesseractWasmBackend shutdown: ${error instanceof Error ? error.message : String(error)}`,
 			);
@@ -397,7 +377,6 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 			throw new Error("Client not initialized");
 		}
 
-		// Construct model URL - models are named with their language code
 		const modelFilename = `${language}.traineddata`;
 		const modelUrl = `${this.CDN_BASE_URL}/${modelFilename}`;
 
@@ -422,16 +401,13 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 	 * @internal
 	 */
 	private async convertToImageBitmap(imageBytes: Uint8Array | string): Promise<ImageBitmap> {
-		// Check if createImageBitmap is available (browser only)
 		if (typeof createImageBitmap === "undefined") {
 			throw new Error("createImageBitmap is not available. TesseractWasmBackend requires a browser environment.");
 		}
 
 		try {
-			// Convert to Uint8Array if string (Base64)
 			let bytes = imageBytes;
 			if (typeof imageBytes === "string") {
-				// Decode Base64 to binary
 				const binaryString = atob(imageBytes);
 				bytes = new Uint8Array(binaryString.length);
 				for (let i = 0; i < binaryString.length; i++) {
@@ -439,10 +415,8 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 				}
 			}
 
-			// Create Blob from bytes
 			const blob = new Blob([bytes as Uint8Array] as BlobPart[]);
 
-			// Convert Blob to ImageBitmap
 			const imageBitmap = await createImageBitmap(blob);
 			return imageBitmap;
 		} catch (error) {
@@ -465,13 +439,10 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 		try {
 			if (this.client && typeof this.client.getConfidence === "function") {
 				const confidence = await this.client.getConfidence();
-				// Normalize to 0-1 range if needed (some versions return 0-100)
 				return confidence > 1 ? confidence / 100 : confidence;
 			}
-		} catch {
-			// Silently fail - confidence is optional
-		}
-		return 0.9; // Default reasonable confidence
+		} catch {}
+		return 0.9;
 	}
 
 	/**
@@ -488,9 +459,7 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 			if (this.client && typeof this.client.getPageMetadata === "function") {
 				return await this.client.getPageMetadata();
 			}
-		} catch {
-			// Silently fail - metadata is optional
-		}
+		} catch {}
 		return {};
 	}
 
@@ -507,9 +476,7 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 	 */
 	private async loadTesseractWasm(): Promise<unknown> {
 		try {
-			// Use dynamic import to handle both ESM and CJS
 			// @ts-expect-error - tesseract-wasm has package.json exports issues with TypeScript
-			// @vite-ignore - tesseract-wasm package resolution
 			const module = await import("tesseract-wasm");
 			return module;
 		} catch (error) {
@@ -533,9 +500,7 @@ export class TesseractWasmBackend implements OcrBackendProtocol {
 		if (this.progressCallback) {
 			try {
 				this.progressCallback(Math.min(100, Math.max(0, progress)));
-			} catch {
-				// Ignore callback errors to prevent blocking OCR processing
-			}
+			} catch {}
 		}
 	}
 }

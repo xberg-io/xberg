@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\TokenReductionConfig;
 
-// Basic token reduction configuration
 $config = new ExtractionConfig(
     tokenReduction: new TokenReductionConfig(
         mode: 'moderate',
@@ -31,7 +30,6 @@ echo "Token Reduction Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Content length: " . strlen($result->content) . " characters\n\n";
 
-// Display reduction statistics if available
 if (isset($result->metadata['original_token_count'])) {
     $originalTokens = $result->metadata['original_token_count'];
     $reducedTokens = $result->metadata['token_count'] ?? strlen($result->content);
@@ -45,7 +43,6 @@ if (isset($result->metadata['original_token_count'])) {
     echo "  Tokens saved: " . number_format($originalTokens - $reducedTokens) . "\n\n";
 }
 
-// Compare different reduction modes
 $modes = [
     'light' => 'Light reduction - minimal changes',
     'moderate' => 'Moderate reduction - balanced',
@@ -84,7 +81,6 @@ foreach ($modes as $mode => $description) {
     echo "  Preview: " . substr($result->content, 0, 80) . "...\n\n";
 }
 
-// Calculate savings
 if (count($comparisonResults) > 1) {
     $lightLength = $comparisonResults['light']['length'] ?? 0;
     $aggressiveLength = $comparisonResults['aggressive']['length'] ?? 0;
@@ -98,7 +94,6 @@ if (count($comparisonResults) > 1) {
     }
 }
 
-// Advanced token reduction with custom settings
 $advancedConfig = new ExtractionConfig(
     tokenReduction: new TokenReductionConfig(
         mode: 'moderate',
@@ -129,7 +124,6 @@ if (isset($result->metadata['token_reduction_ratio'])) {
 
 echo "\n";
 
-// Estimate token costs
 function estimateTokenCost(int $tokens, float $pricePerMillion = 0.50): float
 {
     return ($tokens / 1_000_000) * $pricePerMillion;
@@ -147,20 +141,18 @@ foreach ($comparisonResults as $mode => $data) {
     echo "  Estimated cost: $" . number_format($cost, 4) . "\n\n";
 }
 
-// Helper function to choose reduction mode based on requirements
 function chooseReductionMode(int $maxTokens, int $estimatedTokens): string
 {
     $ratio = $estimatedTokens / $maxTokens;
 
     return match(true) {
-        $ratio <= 1.0 => 'none',      // No reduction needed
-        $ratio <= 1.3 => 'light',     // Light reduction
-        $ratio <= 1.7 => 'moderate',  // Moderate reduction
-        default => 'aggressive',      // Aggressive reduction
+        $ratio <= 1.0 => 'none',      
+        $ratio <= 1.3 => 'light',     
+        $ratio <= 1.7 => 'moderate',  
+        default => 'aggressive',      
     };
 }
 
-// Example: Choose appropriate reduction mode
 $maxTokenLimit = 8000;
 $documentTokens = 12000;
 

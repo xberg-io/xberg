@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\ChunkingConfig;
 
-// Basic chunking with default settings
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChunkSize: 512,
@@ -32,7 +31,6 @@ echo str_repeat('=', 60) . "\n";
 echo "Total chunks: " . count($result->chunks ?? []) . "\n";
 echo "Total content length: " . strlen($result->content) . "\n\n";
 
-// Display each chunk
 foreach ($result->chunks ?? [] as $chunk) {
     echo "Chunk {$chunk->metadata->chunkIndex}:\n";
     echo str_repeat('-', 60) . "\n";
@@ -40,19 +38,18 @@ foreach ($result->chunks ?? [] as $chunk) {
     echo "Content: " . substr($chunk->content, 0, 100) . "...\n\n";
 }
 
-// Custom chunk sizes for different use cases
 $sizes = [
-    'Small (256)' => 256,   // For tight context windows
-    'Medium (512)' => 512,  // Balanced
-    'Large (1024)' => 1024, // For more context
-    'XLarge (2048)' => 2048, // Maximum context
+    'Small (256)' => 256,   
+    'Medium (512)' => 512,  
+    'Large (1024)' => 1024, 
+    'XLarge (2048)' => 2048, 
 ];
 
 foreach ($sizes as $name => $size) {
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(
             maxChunkSize: $size,
-            chunkOverlap: (int)($size * 0.1)  // 10% overlap
+            chunkOverlap: (int)($size * 0.1)  
         )
     );
 
@@ -69,12 +66,11 @@ foreach ($sizes as $name => $size) {
     ) . " chars\n\n";
 }
 
-// Chunking with sentence respect
 $sentenceConfig = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChunkSize: 512,
         chunkOverlap: 50,
-        respectSentences: true,  // Don't split mid-sentence
+        respectSentences: true,  
         respectParagraphs: false
     )
 );
@@ -86,20 +82,18 @@ echo "Sentence-respecting chunks:\n";
 echo str_repeat('=', 60) . "\n";
 
 foreach ($result->chunks ?? [] as $chunk) {
-    // Count sentences in chunk
     $sentences = preg_match_all('/[.!?]+/', $chunk->content);
     echo "Chunk {$chunk->metadata->chunkIndex}: $sentences sentences\n";
     echo "  Starts with: " . substr($chunk->content, 0, 50) . "...\n";
     echo "  Ends with: ..." . substr($chunk->content, -50) . "\n\n";
 }
 
-// Chunking with paragraph respect
 $paragraphConfig = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChunkSize: 1000,
         chunkOverlap: 100,
         respectSentences: true,
-        respectParagraphs: true  // Keep paragraphs together when possible
+        respectParagraphs: true  
     )
 );
 
@@ -115,7 +109,6 @@ foreach ($result->chunks ?? [] as $chunk) {
     echo "  " . strlen($chunk->content) . " characters\n\n";
 }
 
-// Process chunks for vector database insertion
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChunkSize: 512,
@@ -127,7 +120,6 @@ $config = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($config);
 $result = $kreuzberg->extractFile('knowledge_base.pdf');
 
-// Prepare chunks for database
 $chunksForDb = [];
 foreach ($result->chunks ?? [] as $chunk) {
     $chunksForDb[] = [
@@ -151,7 +143,6 @@ foreach (array_slice($chunksForDb, 0, 3) as $chunk) {
     echo "  Length: {$chunk['length']} chars\n\n";
 }
 
-// Save chunks to JSON file
 file_put_contents(
     'chunks.json',
     json_encode($chunksForDb, JSON_PRETTY_PRINT)

@@ -27,14 +27,10 @@ use Kreuzberg\Kreuzberg;
 use function Kreuzberg\batch_extract_bytes;
 use function Kreuzberg\batch_extract_files;
 
-// =============================================================================
-// Example 1: Simple Batch File Processing (OOP API)
-// =============================================================================
 
 echo "=== Example 1: Simple Batch File Processing (OOP API) ===\n\n";
 
 try {
-    // List of files to process
     $files = [
         __DIR__ . '/../sample-documents/document1.pdf',
         __DIR__ . '/../sample-documents/document2.docx',
@@ -42,13 +38,11 @@ try {
         __DIR__ . '/../sample-documents/document4.html',
     ];
 
-    // Extract all files in parallel
     $kreuzberg = new Kreuzberg();
     $results = $kreuzberg->batchExtractFiles($files);
 
     echo "Processed " . count($results) . " files\n\n";
 
-    // Process results
     foreach ($results as $i => $result) {
         $filename = basename($files[$i]);
         echo "{$filename}:\n";
@@ -63,9 +57,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 2: Batch Processing with Procedural API
-// =============================================================================
 
 echo "=== Example 2: Batch Processing with Procedural API ===\n\n";
 
@@ -76,10 +67,8 @@ try {
         __DIR__ . '/../sample-documents/doc3.pdf',
     ];
 
-    // Use procedural function
     $results = batch_extract_files($files);
 
-    // Calculate statistics
     $totalChars = array_reduce(
         $results,
         static fn (int $sum, $result) => $sum + strlen($result->content),
@@ -101,9 +90,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 3: Batch Processing with Configuration
-// =============================================================================
 
 echo "=== Example 3: Batch Processing with Configuration ===\n\n";
 
@@ -113,7 +99,6 @@ try {
         __DIR__ . '/../sample-documents/scanned2.pdf',
     ];
 
-    // Configure for OCR processing
     $config = new ExtractionConfig(
         ocr: new \Kreuzberg\Config\OcrConfig(
             backend: 'tesseract',
@@ -137,9 +122,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 4: Batch Extraction from Bytes
-// =============================================================================
 
 echo "=== Example 4: Batch Extraction from Bytes ===\n\n";
 
@@ -150,7 +132,6 @@ try {
         __DIR__ . '/../sample-documents/doc3.txt',
     ];
 
-    // Read all files into memory
     $dataList = [];
     $mimeTypes = [];
 
@@ -162,7 +143,6 @@ try {
 
         $dataList[] = $data;
 
-        // Determine MIME type from extension
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $mimeTypes[] = match ($extension) {
             'pdf' => 'application/pdf',
@@ -174,14 +154,12 @@ try {
         };
     }
 
-    // OOP API: Batch extract from bytes
     $kreuzberg = new Kreuzberg();
     $results = $kreuzberg->batchExtractBytes($dataList, $mimeTypes);
 
     echo "Batch extraction from bytes (OOP):\n";
     echo "  Processed: " . count($results) . " documents\n\n";
 
-    // Procedural API: Batch extract from bytes
     $results2 = batch_extract_bytes($dataList, $mimeTypes);
 
     echo "Batch extraction from bytes (Procedural):\n";
@@ -191,22 +169,17 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 5: Processing Directory Contents
-// =============================================================================
 
 echo "=== Example 5: Processing Directory Contents ===\n\n";
 
 try {
     $directory = __DIR__ . '/../sample-documents';
 
-    // Find all PDF files in directory
     $pdfFiles = glob($directory . '/*.pdf');
 
     if (empty($pdfFiles)) {
         echo "No PDF files found in directory\n\n";
     } else {
-        // Process up to 5 files
         $filesToProcess = array_slice($pdfFiles, 0, 5);
 
         $kreuzberg = new Kreuzberg();
@@ -226,14 +199,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 6: Mixed File Type Processing
-// =============================================================================
 
 echo "=== Example 6: Mixed File Type Processing ===\n\n";
 
 try {
-    // Mix of different file types
     $files = [
         __DIR__ . '/../sample-documents/document.pdf',
         __DIR__ . '/../sample-documents/spreadsheet.xlsx',
@@ -277,17 +246,13 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 7: Error Handling in Batch Processing
-// =============================================================================
 
 echo "=== Example 7: Error Handling in Batch Processing ===\n\n";
 
 try {
-    // Mix of valid and invalid files
     $files = [
         __DIR__ . '/../sample-documents/valid1.pdf',
-        __DIR__ . '/nonexistent.pdf',  // This file doesn't exist
+        __DIR__ . '/nonexistent.pdf',
         __DIR__ . '/../sample-documents/valid2.txt',
     ];
 
@@ -302,7 +267,6 @@ try {
     echo "\nNote: Batch operations fail fast on first error.\n";
     echo "For better error handling, process files individually:\n\n";
 
-    // Process files individually with error handling
     foreach ($files as $file) {
         $filename = basename($file);
         try {
@@ -317,20 +281,15 @@ try {
     echo "\n";
 }
 
-// =============================================================================
-// Example 8: Performance Optimization
-// =============================================================================
 
 echo "=== Example 8: Performance Optimization ===\n\n";
 
 try {
-    // Generate list of files
     $files = [];
     for ($i = 1; $i <= 10; $i++) {
         $files[] = __DIR__ . "/../sample-documents/doc{$i}.pdf";
     }
 
-    // Measure batch processing time
     $startTime = microtime(true);
 
     $kreuzberg = new Kreuzberg();
@@ -343,7 +302,6 @@ try {
     echo "  Time: " . round($batchTime, 3) . " seconds\n";
     echo "  Average per file: " . round($batchTime / count($results), 3) . " seconds\n";
 
-    // Compare with sequential processing
     $startTime = microtime(true);
 
     foreach (array_slice($files, 0, 3) as $file) {
@@ -362,9 +320,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 9: Batch Processing with Result Filtering
-// =============================================================================
 
 echo "=== Example 9: Batch Processing with Result Filtering ===\n\n";
 
@@ -378,7 +333,6 @@ try {
     $kreuzberg = new Kreuzberg();
     $results = $kreuzberg->batchExtractFiles($files);
 
-    // Filter results based on criteria
     $longDocuments = array_filter(
         $results,
         static fn ($result) => strlen($result->content) > 1000

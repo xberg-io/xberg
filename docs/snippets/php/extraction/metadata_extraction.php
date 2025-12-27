@@ -15,7 +15,6 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Kreuzberg\Kreuzberg;
 use function Kreuzberg\extract_file;
 
-// Basic metadata extraction
 $result = extract_file('document.pdf');
 $metadata = $result->metadata;
 
@@ -32,7 +31,6 @@ echo "Page Count: " . ($metadata->pageCount ?? 'N/A') . "\n";
 echo "Keywords: " . implode(', ', $metadata->keywords ?? []) . "\n";
 echo "Language: " . ($metadata->language ?? 'N/A') . "\n\n";
 
-// Extract metadata from multiple files
 $files = glob('documents/*.{pdf,docx,xlsx}', GLOB_BRACE);
 $metadataCollection = [];
 
@@ -59,7 +57,6 @@ foreach ($metadataCollection as $meta) {
     echo "  Size: " . number_format($meta['size'] / 1024, 2) . " KB\n\n";
 }
 
-// Search documents by metadata
 function searchByAuthor(array $collection, string $author): array
 {
     return array_filter($collection, function ($meta) use ($author) {
@@ -74,20 +71,17 @@ function searchByDateRange(array $collection, string $start, string $end): array
         if ($created === 'Unknown') {
             return false;
         }
-        // Extract just the date part (YYYY-MM-DD) from ISO 8601 format
         $dateOnly = substr($created, 0, 10);
         return $dateOnly >= $start && $dateOnly <= $end;
     });
 }
 
-// Example searches
 $johnDocs = searchByAuthor($metadataCollection, 'John');
 echo "Documents by John: " . count($johnDocs) . "\n";
 
 $recentDocs = searchByDateRange($metadataCollection, '2024-01-01', '2024-12-31');
 echo "Documents from 2024: " . count($recentDocs) . "\n\n";
 
-// Generate document catalog
 function generateCatalog(array $collection): string
 {
     $html = "<html><head><title>Document Catalog</title></head><body>\n";
@@ -113,15 +107,12 @@ $catalog = generateCatalog($metadataCollection);
 file_put_contents('catalog.html', $catalog);
 echo "Catalog saved to: catalog.html\n";
 
-// Export metadata to CSV
 function exportMetadataToCSV(array $collection, string $filename): void
 {
     $fp = fopen($filename, 'w');
 
-    // Headers
     fputcsv($fp, ['File', 'Title', 'Author', 'Created', 'Pages', 'Size (KB)']);
 
-    // Data
     foreach ($collection as $meta) {
         fputcsv($fp, [
             $meta['file'],
@@ -139,7 +130,6 @@ function exportMetadataToCSV(array $collection, string $filename): void
 exportMetadataToCSV($metadataCollection, 'metadata.csv');
 echo "Metadata exported to: metadata.csv\n";
 
-// Statistics from metadata
 $totalPages = array_sum(array_column($metadataCollection, 'pages'));
 $totalSize = array_sum(array_column($metadataCollection, 'size'));
 $authors = array_unique(array_column($metadataCollection, 'author'));
@@ -152,7 +142,6 @@ echo "Total size: " . number_format($totalSize / 1024 / 1024, 2) . " MB\n";
 echo "Unique authors: " . count($authors) . "\n";
 echo "Average pages per document: " . number_format($totalPages / count($metadataCollection), 1) . "\n";
 
-// Group by author
 $byAuthor = [];
 foreach ($metadataCollection as $meta) {
     $author = $meta['author'];
@@ -168,7 +157,6 @@ foreach ($byAuthor as $author => $docs) {
     echo "$author: " . count($docs) . " documents\n";
 }
 
-// Validate metadata completeness
 function validateMetadata(array $meta): array
 {
     $issues = [];

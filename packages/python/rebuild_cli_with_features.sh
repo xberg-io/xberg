@@ -1,6 +1,4 @@
 #!/bin/bash
-# Helper script to rebuild the Kreuzberg CLI with all features enabled
-# This is needed for the CLI server tests (serve and mcp commands)
 
 set -e
 
@@ -12,7 +10,6 @@ echo "Workspace: $WORKSPACE_ROOT"
 
 cd "$WORKSPACE_ROOT"
 
-# Build with all features (includes api and mcp)
 cargo build -p kreuzberg-cli --features all
 
 echo ""

@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-// Extract keywords using YAKE algorithm
 var config = new ExtractionConfig
 {
     Keywords = new KeywordConfig
@@ -30,7 +29,6 @@ else
     Console.WriteLine("  (No keywords extracted)");
 }
 
-// Extract keywords with TF-IDF
 var tfidfConfig = new ExtractionConfig
 {
     Keywords = new KeywordConfig
@@ -57,7 +55,6 @@ if (tfidfResult.Metadata.Keywords != null)
     }
 }
 
-// Summary
 Console.WriteLine($"\nKeyword Extraction Summary:");
 Console.WriteLine($"  - Algorithm: YAKE");
 Console.WriteLine($"  - Total Keywords: {result.Metadata.Keywords?.Count ?? 0}");

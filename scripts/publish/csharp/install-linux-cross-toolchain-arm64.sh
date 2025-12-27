@@ -2,7 +2,6 @@
 
 set -euo pipefail
 
-# Install cross-compilation toolchain (no multiarch needed)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 
@@ -76,8 +75,6 @@ echo "✓ All required binaries found"
 
 echo ""
 echo "Step 4: Creating pkg-config symlink for cross-compilation..."
-# Create symlink for aarch64-linux-gnu-pkg-config if it doesn't exist
-# This provides compatibility with build systems expecting arch-prefixed pkg-config
 if [[ -z "$pkg_config_bin" && -n "$pkg_config_host_bin" ]]; then
 	echo "  Creating symlink: /usr/bin/aarch64-linux-gnu-pkg-config -> $pkg_config_host_bin"
 	sudo ln -sf "$pkg_config_host_bin" /usr/bin/aarch64-linux-gnu-pkg-config

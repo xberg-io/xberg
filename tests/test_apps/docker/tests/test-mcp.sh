@@ -9,7 +9,6 @@ echo -e "${BLUE}================================"
 echo "MCP Protocol Tests"
 echo "================================${NC}"
 
-# Test 1: Core MCP mode available
 echo ""
 log_info "Test 1: Core MCP mode available"
 output=$(docker exec kreuzberg-core-test kreuzberg --help 2>&1 || true)
@@ -19,7 +18,6 @@ else
 	log_fail "Core MCP command not found in help"
 fi
 
-# Test 2: Full MCP mode available
 echo ""
 log_info "Test 2: Full MCP mode available"
 output=$(docker exec kreuzberg-full-test kreuzberg --help 2>&1 || true)
@@ -29,7 +27,6 @@ else
 	log_fail "Full MCP command not found in help"
 fi
 
-# Test 3: Core MCP help works
 echo ""
 log_info "Test 3: Core MCP help works"
 output=$(docker exec kreuzberg-core-test kreuzberg mcp --help 2>&1 || true)
@@ -39,7 +36,6 @@ else
 	log_fail "Core MCP help is empty"
 fi
 
-# Test 4: Full MCP help works
 echo ""
 log_info "Test 4: Full MCP help works"
 output=$(docker exec kreuzberg-full-test kreuzberg mcp --help 2>&1 || true)
@@ -49,21 +45,16 @@ else
 	log_fail "Full MCP help is empty"
 fi
 
-# Test 5: Core MCP stdio mode can start
 echo ""
 log_info "Test 5: Core MCP stdio mode can start (basic check)"
-# Simple timeout test to ensure the MCP process starts without immediate failure
 timeout 2 docker exec kreuzberg-core-test kreuzberg mcp stdio 2>&1 || true
 log_success "Core MCP stdio mode starts (may exit after timeout)"
 
-# Test 6: Full MCP stdio mode can start
 echo ""
 log_info "Test 6: Full MCP stdio mode can start (basic check)"
-# Simple timeout test to ensure the MCP process starts without immediate failure
 timeout 2 docker exec kreuzberg-full-test kreuzberg mcp stdio 2>&1 || true
 log_success "Full MCP stdio mode starts (may exit after timeout)"
 
-# Test 7: Core MCP server subcommand available
 echo ""
 log_info "Test 7: Core MCP modes available"
 output=$(docker exec kreuzberg-core-test kreuzberg mcp --help 2>&1 || true)
@@ -73,7 +64,6 @@ else
 	log_warn "Core MCP help output: $output"
 fi
 
-# Test 8: Full MCP server subcommand available
 echo ""
 log_info "Test 8: Full MCP modes available"
 output=$(docker exec kreuzberg-full-test kreuzberg mcp --help 2>&1 || true)

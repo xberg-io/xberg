@@ -39,13 +39,10 @@ const VALID_OCR_BACKENDS: &[&str] = &["tesseract", "easyocr", "paddleocr"];
 /// Common ISO 639-1 language codes (extended list).
 /// Covers most major languages and variants used in document processing.
 const VALID_LANGUAGE_CODES: &[&str] = &[
-    // Major languages
-    "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "zh", "ja", "ko", // Extended European
-    "bg", "cs", "da", "el", "et", "fi", "hu", "lt", "lv", "ro", "sk", "sl", "sv", "uk", // Extended Asian
-    "ar", "hi", "th", "tr", "vi", // Extended variants (some as 3-letter codes for compatibility)
-    "eng", "deu", "fra", "spa", "ita", "por", "nld", "pol", "rus", "zho", "jpn", "kor",
-    // Additional 3-letter codes for broader support
-    "ces", "dan", "ell", "est", "fin", "hun", "lit", "lav", "ron", "slk", "slv", "swe", "tur",
+    "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "zh", "ja", "ko", "bg", "cs", "da", "el", "et", "fi", "hu",
+    "lt", "lv", "ro", "sk", "sl", "sv", "uk", "ar", "hi", "th", "tr", "vi", "eng", "deu", "fra", "spa", "ita", "por",
+    "nld", "pol", "rus", "zho", "jpn", "kor", "ces", "dan", "ell", "est", "fin", "hun", "lit", "lav", "ron", "slk",
+    "slv", "swe", "tur",
 ];
 
 /// Valid tesseract PSM (Page Segmentation Mode) values.
@@ -189,12 +186,10 @@ pub fn validate_ocr_backend(backend: &str) -> Result<()> {
 pub fn validate_language_code(code: &str) -> Result<()> {
     let code_lower = code.to_lowercase();
 
-    // Check if it's in the predefined list
     if VALID_LANGUAGE_CODES.contains(&code_lower.as_str()) {
         return Ok(());
     }
 
-    // If not in the list, provide detailed feedback
     Err(KreuzbergError::Validation {
         message: format!(
             "Invalid language code '{}'. Use ISO 639-1 (2-letter, e.g., 'en', 'de') \
@@ -643,18 +638,15 @@ mod tests {
 
     #[test]
     fn test_error_messages_are_helpful() {
-        // Binarization error includes valid options
         let err = validate_binarization_method("bad").unwrap_err().to_string();
         assert!(err.contains("otsu"));
         assert!(err.contains("adaptive"));
         assert!(err.contains("sauvola"));
 
-        // Token reduction error includes valid options
         let err = validate_token_reduction_level("bad").unwrap_err().to_string();
         assert!(err.contains("off"));
         assert!(err.contains("moderate"));
 
-        // Language code error provides guidance
         let err = validate_language_code("bad").unwrap_err().to_string();
         assert!(err.contains("ISO 639"));
         assert!(err.contains("en"));

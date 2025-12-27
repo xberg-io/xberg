@@ -83,19 +83,11 @@ fn bind_pdfium_impl() -> Result<(Option<PathBuf>, Box<dyn PdfiumLibraryBindings>
 /// poisoned lock and proceeding. This ensures PDF extraction can continue even if an
 /// earlier panic occurred, as long as the state is consistent.
 pub(crate) fn bind_pdfium(map_err: fn(String) -> PdfError, context: &'static str) -> Result<Pdfium, PdfError> {
-    let mut state = PDFIUM_STATE.lock().unwrap_or_else(|poisoned| {
-        // SAFETY: Recovering from a poisoned lock is safe here because:
-        // 1. The poisoned state still contains valid data (just a guard from a panicked thread)
-        // 2. We assume the state was set to a valid value before the panic
-        // 3. The state is immutable after initialization, so poisoning cannot corrupt it
-        poisoned.into_inner()
-    });
+    let mut state = PDFIUM_STATE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    // Initialize on first call
     match &*state {
         InitializationState::Uninitialized => match bind_pdfium_impl() {
             Ok((lib_dir, bindings)) => {
-                // Initialize Pdfium singleton with the bindings and return it
                 let pdfium = Pdfium::new(bindings);
                 *state = InitializationState::Initialized { lib_dir };
                 Ok(pdfium)
@@ -109,10 +101,7 @@ pub(crate) fn bind_pdfium(map_err: fn(String) -> PdfError, context: &'static str
             "Pdfium initialization previously failed ({}): {}",
             context, err
         ))),
-        InitializationState::Initialized { .. } => {
-            // Already initialized, return a new accessor to the singleton
-            Ok(Pdfium)
-        }
+        InitializationState::Initialized { .. } => Ok(Pdfium),
     }
 }
 
@@ -123,30 +112,23 @@ mod tests {
 
     #[test]
     fn test_bind_pdfium_lazy_initialization() {
-        // First call should initialize and return Ok
         let result = bind_pdfium(PdfError::TextExtractionFailed, "test context");
         assert!(result.is_ok(), "First bind_pdfium call should succeed");
     }
 
     #[test]
     fn test_bind_pdfium_multiple_calls() {
-        // Call bind_pdfium multiple times; subsequent calls should reuse cached state
         let result1 = bind_pdfium(PdfError::TextExtractionFailed, "test 1");
         let result2 = bind_pdfium(PdfError::TextExtractionFailed, "test 2");
 
         assert!(result1.is_ok(), "First call should succeed");
         assert!(result2.is_ok(), "Second call should also succeed");
-        // Both calls succeeded, which indicates lazy initialization is working
-        // (first call initialized, second call reused cached state)
     }
 
     #[test]
     fn test_bind_pdfium_error_mapping() {
-        // Verify error mapping works correctly
         let map_err = |msg: String| PdfError::TextExtractionFailed(msg);
 
-        // This test just verifies that the error mapping closure works
-        // (actual initialization errors depend on system Pdfium availability)
         let test_error = map_err("test".to_string());
         match test_error {
             PdfError::TextExtractionFailed(msg) => {

@@ -413,7 +413,6 @@ pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
     clean_test_files(&output_dir)?;
     write_helpers(&output_dir)?;
 
-    // Filter fixtures for Deno WASM target
     let doc_fixtures: Vec<_> = fixtures
         .iter()
         .filter(|f| f.is_document_extraction() && crate::fixtures::should_include_for_wasm(f, WasmTarget::Deno))
@@ -421,7 +420,6 @@ pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
 
     let plugin_fixtures: Vec<_> = fixtures.iter().filter(|f| f.is_plugin_api()).collect();
 
-    // Group document fixtures by category
     let mut grouped = doc_fixtures
         .into_iter()
         .into_group_map_by(|fixture| fixture.category().to_string())
@@ -437,7 +435,6 @@ pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
         fs::write(&path, content).with_context(|| format!("Writing {}", path))?;
     }
 
-    // Generate plugin API tests if any exist
     if !plugin_fixtures.is_empty() {
         generate_plugin_api_tests(&plugin_fixtures, &output_dir)?;
     }
@@ -694,12 +691,10 @@ fn render_json_literal(value: &Value) -> String {
 }
 
 fn normalize_metadata_expectation(value: &Value) -> String {
-    // If the value is a plain string, number, or boolean, wrap it in { eq: value }
     match value {
         Value::String(_) | Value::Number(_) | Value::Bool(_) => {
             format!("{{ eq: {} }}", render_json_literal(value))
         }
-        // If it's already an object or array, use it as-is
         _ => render_json_literal(value),
     }
 }

@@ -1,5 +1,4 @@
 #!/bin/bash
-# Build script for kreuzberg-php extension
 
 set -e
 
@@ -7,7 +6,6 @@ echo "Building Kreuzberg PHP extension..."
 echo "===================================="
 echo ""
 
-# Check for required tools
 command -v cargo >/dev/null 2>&1 || {
 	echo "Error: cargo not found. Please install Rust from https://rustup.rs/"
 	exit 1
@@ -23,18 +21,15 @@ command -v clang >/dev/null 2>&1 || {
 	echo "Please install clang for your platform."
 }
 
-# Display versions
 echo "Tool versions:"
 echo "  Rust:  $(rustc --version)"
 echo "  Cargo: $(cargo --version)"
 echo "  PHP:   $(php --version | head -n1)"
 echo ""
 
-# Build in release mode
 echo "Compiling in release mode..."
 cargo build --release
 
-# Determine the library extension based on OS
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
 	EXT_FILE="libkreuzberg.so"
 	PHP_EXT="kreuzberg.so"
@@ -50,7 +45,6 @@ else
 	PHP_EXT="kreuzberg.so"
 fi
 
-# Find the built extension
 BUILT_LIB="../../target/release/$EXT_FILE"
 
 if [ ! -f "$BUILT_LIB" ]; then

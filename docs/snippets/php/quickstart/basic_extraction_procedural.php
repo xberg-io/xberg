@@ -14,15 +14,12 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use function Kreuzberg\extract_file;
 
-// Extract content directly using the procedural function
 $result = extract_file('document.pdf');
 
-// Display the extracted text
 echo "Extracted Text:\n";
 echo str_repeat('=', 50) . "\n";
 echo $result->content . "\n\n";
 
-// Display basic metadata
 echo "Document Information:\n";
 echo str_repeat('=', 50) . "\n";
 printf("Title:   %s\n", $result->metadata->title ?? 'Unknown');
@@ -30,7 +27,6 @@ printf("Authors: %s\n", isset($result->metadata->authors) ? implode(', ', $resul
 printf("Pages:   %d\n", $result->metadata->pageCount ?? 0);
 printf("Format:  %s\n", $result->mimeType);
 
-// Display character and word count
 $char_count = mb_strlen($result->content);
 $word_count = str_word_count($result->content);
 printf("\nStatistics:\n");

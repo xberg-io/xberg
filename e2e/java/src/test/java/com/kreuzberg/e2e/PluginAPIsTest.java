@@ -25,9 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 @DisplayName("Plugin API Tests")
 class PluginAPIsTest {
 
-    // Configuration Tests
 
-    // SKIPPED: config_discover - System.setProperty("user.dir") doesn't affect FFI working directory
 
     @Test
     @DisplayName("Load configuration from a TOML file")
@@ -50,7 +48,6 @@ enabled = false
         assertFalse(config.getLanguageDetection().isEnabled());
     }
 
-    // Document Extractor Management Tests
 
     @Test
     @DisplayName("Clear all document extractors and verify list is empty")
@@ -74,7 +71,6 @@ enabled = false
         assertDoesNotThrow(() -> Kreuzberg.unregisterDocumentExtractor("nonexistent-extractor-xyz"));
     }
 
-    // Mime Utilities Tests
 
     @Test
     @DisplayName("Detect MIME type from file bytes")
@@ -102,7 +98,6 @@ enabled = false
         assertTrue(result.contains("pdf"));
     }
 
-    // Ocr Backend Management Tests
 
     @Test
     @DisplayName("Clear all OCR backends and verify list is empty")
@@ -126,7 +121,6 @@ enabled = false
         assertDoesNotThrow(() -> Kreuzberg.unregisterOCRBackend("nonexistent-backend-xyz"));
     }
 
-    // Post Processor Management Tests
 
     @Test
     @DisplayName("Clear all post-processors and verify list is empty")
@@ -144,7 +138,6 @@ enabled = false
         assertTrue(result.stream().allMatch(item -> item instanceof String));
     }
 
-    // Validator Management Tests
 
     @Test
     @DisplayName("Clear all validators and verify list is empty")

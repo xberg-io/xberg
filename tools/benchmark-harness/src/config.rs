@@ -225,7 +225,6 @@ impl BenchmarkConfig {
             ));
         }
 
-        // Validate profiling configuration
         self.profiling.validate()?;
 
         Ok(())

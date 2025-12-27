@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\ChunkingConfig;
 
-// Parse CLI options
 $longOpts = [
     'file:',
     'output:',
@@ -53,7 +52,6 @@ if (isset($options['help']) || empty($options)) {
     exit(0);
 }
 
-// Get input file
 $inputFile = $options['file'] ?? $options['f'] ?? null;
 
 if ($inputFile === null || !file_exists($inputFile)) {
@@ -61,7 +59,6 @@ if ($inputFile === null || !file_exists($inputFile)) {
     exit(1);
 }
 
-// Build configuration
 $enableOcr = isset($options['ocr']);
 $ocrLang = $options['ocr-lang'] ?? 'eng';
 $extractTables = isset($options['tables']);
@@ -78,7 +75,6 @@ $config = new ExtractionConfig(
     outputFormat: $format === 'markdown' ? 'markdown' : null
 );
 
-// Extract document
 try {
     fwrite(STDERR, "Processing: $inputFile\n");
     fwrite(STDERR, "Options:\n");
@@ -95,7 +91,6 @@ try {
 
     fwrite(STDERR, "Extraction completed in " . number_format($elapsed, 3) . "s\n");
 
-    // Prepare output based on format
     $output = match ($format) {
         'json' => json_encode([
             'content' => $result->content,
@@ -117,7 +112,6 @@ try {
         default => $result->content,
     };
 
-    // Write output
     $outputFile = $options['output'] ?? $options['o'] ?? null;
     if ($outputFile) {
         file_put_contents($outputFile, $output);
@@ -126,7 +120,6 @@ try {
         echo $output;
     }
 
-    // Print statistics
     fwrite(STDERR, "\nStatistics:\n");
     fwrite(STDERR, "  Content: " . strlen($result->content) . " characters\n");
     fwrite(STDERR, "  Tables: " . count($result->tables) . "\n");

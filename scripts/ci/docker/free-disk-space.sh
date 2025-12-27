@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Free up disk space on the CI runner
-# Used by: ci-docker.yaml - Free up disk space step
-#
 
 set -euo pipefail
 

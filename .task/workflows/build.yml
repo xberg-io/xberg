@@ -1,7 +1,6 @@
 version: "3"
 
 tasks:
-  # All builds - orchestrates all language builds
   all:
     desc: Build all bindings across all languages
     cmds:
@@ -54,7 +53,6 @@ tasks:
       - task: ruby:build:ci
       - task: php:build:ci
 
-  # CLI-only builds
   cli-only:
     desc: Build Rust CLI only
     cmds:
@@ -70,7 +68,6 @@ tasks:
     cmds:
       - task: rust:cli:build:release
 
-  # FFI-only builds (for C bindings)
   ffi-only:
     desc: Build Rust FFI library only
     cmds:
@@ -86,7 +83,6 @@ tasks:
     cmds:
       - task: rust:ffi:build:release
 
-  # Core Rust + FFI (base for other bindings)
   core:
     desc: Build core Rust and FFI (foundation for C bindings)
     cmds:
@@ -105,7 +101,6 @@ tasks:
       - task: rust:build:release
       - task: rust:ffi:build:release
 
-  # JVM languages (Java, C#, Ruby, PHP - depend on FFI)
   jvm-bindings:
     desc: Build JVM-dependent bindings (Java, C#, Ruby, PHP)
     cmds:
@@ -133,7 +128,6 @@ tasks:
       - task: ruby:build:release
       - task: php:build:release
 
-  # JS ecosystem (Node, WASM)
   js-ecosystem:
     desc: Build JavaScript ecosystem bindings (Node.js, WASM)
     cmds:
@@ -152,7 +146,6 @@ tasks:
       - task: node:build:release
       - task: wasm:build:release
 
-  # Data Science stack (Python, Rust)
   datascience:
     desc: Build data science bindings (Python + Rust)
     cmds:
@@ -171,7 +164,6 @@ tasks:
       - task: rust:build:release
       - task: python:build:release
 
-  # Systems languages (Rust, Go, C#)
   systems:
     desc: Build systems languages (Rust, Go, C#)
     cmds:
@@ -193,7 +185,6 @@ tasks:
       - task: go:build:release
       - task: csharp:build:release
 
-  # Web focused (Node, WASM, Python)
   web:
     desc: Build web-focused bindings (Node.js, WASM, Python)
     cmds:

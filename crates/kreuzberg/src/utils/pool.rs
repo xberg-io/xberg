@@ -246,11 +246,6 @@ impl<T: Recyclable> std::ops::DerefMut for PoolGuard<T> {
 impl<T: Recyclable> Drop for PoolGuard<T> {
     fn drop(&mut self) {
         if let Some(object) = self.object.take() {
-            // Note: DO NOT reset here - reset happens only on acquire() when object is reused.
-            // This optimization saves one reset() call per reuse, improving pool efficiency.
-            // The object is either returned to the pool for reuse (reset on acquire),
-            // or dropped entirely when the pool is full.
-
             let mut objects = self.pool.objects.lock();
             if objects.len() < self.pool.max_size {
                 objects.push(object);
@@ -266,7 +261,6 @@ impl<T: Recyclable> Drop for PoolGuard<T> {
                             .store(current_size, Ordering::Relaxed);
                     }
                 }
-                // If pool is full, object is dropped and deallocated
             }
         }
     }
@@ -373,14 +367,12 @@ mod tests {
     fn test_pool_acquire_and_reuse() {
         let pool = Pool::new(String::new, 5);
 
-        // First acquire creates a new string
         {
             let mut s1 = pool.acquire().unwrap();
             s1.push_str("hello");
             assert_eq!(s1.len(), 5);
-        } // s1 returned to pool
+        }
 
-        // Second acquire should reuse the same buffer
         {
             let s2 = pool.acquire().unwrap();
             assert_eq!(s2.len(), 0, "string should be cleared when reused");
@@ -399,7 +391,6 @@ mod tests {
         drop(guard2);
         drop(guard3);
 
-        // Pool should contain at most 2 items
         assert!(pool.size() <= 2, "pool size should not exceed max_size");
     }
 
@@ -439,10 +430,8 @@ mod tests {
         let pool = Pool::new(String::new, 5);
         let mut guard = pool.acquire().unwrap();
 
-        // Test Deref
         let _len = guard.len();
 
-        // Test DerefMut
         guard.push_str("test");
         assert_eq!(&*guard, "test");
     }
@@ -470,7 +459,6 @@ mod tests {
             handle.join().unwrap();
         }
 
-        // All threads completed successfully
         assert!(pool.size() <= 10);
     }
 
@@ -479,25 +467,19 @@ mod tests {
     fn test_pool_metrics_tracking() {
         let pool = Pool::new(String::new, 5);
 
-        // First acquire creates a new object
         {
             let _s1 = pool.acquire().unwrap();
-            // Metrics: acquires=1, creations=1, hits=0
         }
 
-        // Second acquire should hit cache
         {
             let _s2 = pool.acquire().unwrap();
-            // Metrics: acquires=2, creations=1, hits=1
         }
 
-        // Check metrics
         let metrics = pool.metrics();
         assert_eq!(metrics.total_acquires.load(Ordering::Relaxed), 2);
         assert_eq!(metrics.total_cache_hits.load(Ordering::Relaxed), 1);
         assert_eq!(metrics.total_creations.load(Ordering::Relaxed), 1);
 
-        // Hit rate should be 50%
         let hit_rate = metrics.hit_rate();
         assert!(hit_rate > 49.0 && hit_rate < 51.0);
     }

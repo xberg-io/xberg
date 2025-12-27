@@ -77,14 +77,11 @@ pub struct CMetadataField {
     pub is_null: i32,
 }
 
-// These C ABI functions are provided by the kreuzberg-ffi crate
-// Linking is handled by build.rs to ensure static linking
 unsafe extern "C" {
     pub fn kreuzberg_last_error_code() -> i32;
     pub fn kreuzberg_last_panic_context() -> *mut c_char;
     pub fn kreuzberg_free_string(s: *mut c_char);
 
-    // Validation functions
     pub fn kreuzberg_validate_binarization_method(method: *const c_char) -> i32;
     pub fn kreuzberg_validate_ocr_backend(backend: *const c_char) -> i32;
     pub fn kreuzberg_validate_language_code(code: *const c_char) -> i32;
@@ -96,14 +93,12 @@ unsafe extern "C" {
     pub fn kreuzberg_validate_dpi(dpi: i32) -> i32;
     pub fn kreuzberg_validate_chunking_params(max_chars: usize, max_overlap: usize) -> i32;
 
-    // List functions that return JSON strings (caller must free)
     pub fn kreuzberg_get_valid_binarization_methods() -> *mut c_char;
     pub fn kreuzberg_get_valid_language_codes() -> *mut c_char;
     pub fn kreuzberg_get_valid_ocr_backends() -> *mut c_char;
     pub fn kreuzberg_get_valid_token_reduction_levels() -> *mut c_char;
     pub fn kreuzberg_get_last_error_message() -> *const c_char;
 
-    // Phase 1 FFI: Config serialization and field access
     pub fn kreuzberg_config_from_json(json_config: *const c_char) -> *mut std::ffi::c_void;
     pub fn kreuzberg_config_free(config: *mut std::ffi::c_void);
     pub fn kreuzberg_config_is_valid(json_config: *const c_char) -> i32;
@@ -111,7 +106,6 @@ unsafe extern "C" {
     pub fn kreuzberg_config_get_field(config: *const std::ffi::c_void, field_name: *const c_char) -> *mut c_char;
     pub fn kreuzberg_config_merge(base: *mut std::ffi::c_void, override_config: *const std::ffi::c_void) -> i32;
 
-    // Phase 1 FFI: Result field accessors
     pub fn kreuzberg_result_get_page_count(result: *const std::ffi::c_void) -> i32;
     pub fn kreuzberg_result_get_chunk_count(result: *const std::ffi::c_void) -> i32;
     pub fn kreuzberg_result_get_detected_language(result: *const std::ffi::c_void) -> *mut c_char;
@@ -120,7 +114,6 @@ unsafe extern "C" {
         field_name: *const c_char,
     ) -> CMetadataField;
 
-    // Phase 2 FFI: Error classification and details
     pub fn kreuzberg_get_error_details() -> CErrorDetails;
     pub fn kreuzberg_classify_error(error_message: *const c_char) -> u32;
     pub fn kreuzberg_error_code_name(code: u32) -> *const c_char;
@@ -1874,8 +1867,6 @@ fn extract_bytes_sync(args: &[Value]) -> Result<RHash, Error> {
 
     let config = parse_extraction_config(&ruby, opts)?;
 
-    // SAFETY: we hold `data` for the duration of the call and do not re-enter Ruby while
-    // borrowing its bytes, so Ruby cannot mutate/free this string during extraction.
     let bytes = unsafe { data.as_slice() };
     let result = kreuzberg::extract_bytes_sync(bytes, &mime_type, &config).map_err(kreuzberg_error)?;
 
@@ -1960,8 +1951,6 @@ fn extract_bytes(args: &[Value]) -> Result<RHash, Error> {
     let runtime =
         tokio::runtime::Runtime::new().map_err(|e| runtime_error(format!("Failed to create Tokio runtime: {}", e)))?;
 
-    // SAFETY: we hold `data` for the duration of the call and do not re-enter Ruby while
-    // borrowing its bytes, so Ruby cannot mutate/free this string during extraction.
     let bytes = unsafe { data.as_slice() };
     let result = runtime
         .block_on(async { kreuzberg::extract_bytes(bytes, &mime_type, &config).await })
@@ -2035,8 +2024,6 @@ fn batch_extract_bytes_sync(args: &[Value]) -> Result<RArray, Error> {
         )));
     }
 
-    // SAFETY: we hold `bytes_vec` for the duration of the call and do not re-enter Ruby while
-    // borrowing its bytes, so Ruby cannot mutate/free these strings during extraction.
     let contents: Vec<(&[u8], &str)> = bytes_vec
         .iter()
         .zip(mime_types.iter())
@@ -2082,8 +2069,6 @@ fn batch_extract_bytes(args: &[Value]) -> Result<RArray, Error> {
         )));
     }
 
-    // SAFETY: we hold `bytes_vec` for the duration of the call and do not re-enter Ruby while
-    // borrowing its bytes, so Ruby cannot mutate/free these strings during extraction.
     let contents: Vec<(&[u8], &str)> = bytes_vec
         .iter()
         .zip(mime_types.iter())
@@ -2974,10 +2959,6 @@ fn last_panic_context_json(ruby: &Ruby) -> Value {
     }
 }
 
-// ============================================================================
-// Validation FFI Wrappers
-// ============================================================================
-
 /// Validates a binarization method string
 ///
 /// @param method [String] The binarization method (e.g., "otsu", "adaptive", "sauvola")
@@ -3078,14 +3059,12 @@ fn get_valid_binarization_methods(_ruby: &Ruby) -> Result<String, Error> {
         return Err(runtime_error("Failed to get valid binarization methods"));
     }
 
-    // SAFETY: ptr comes from FFI and must be valid
     let c_str = unsafe { std::ffi::CStr::from_ptr(ptr) };
     let result = c_str
         .to_str()
         .map_err(|_| runtime_error("Invalid UTF-8 in binarization methods"))?
         .to_string();
 
-    // Free the allocated string
     unsafe {
         kreuzberg_free_string(ptr as *mut c_char);
     }
@@ -3102,14 +3081,12 @@ fn get_valid_language_codes(_ruby: &Ruby) -> Result<String, Error> {
         return Err(runtime_error("Failed to get valid language codes"));
     }
 
-    // SAFETY: ptr comes from FFI and must be valid
     let c_str = unsafe { std::ffi::CStr::from_ptr(ptr) };
     let result = c_str
         .to_str()
         .map_err(|_| runtime_error("Invalid UTF-8 in language codes"))?
         .to_string();
 
-    // Free the allocated string
     unsafe {
         kreuzberg_free_string(ptr as *mut c_char);
     }
@@ -3126,14 +3103,12 @@ fn get_valid_ocr_backends(_ruby: &Ruby) -> Result<String, Error> {
         return Err(runtime_error("Failed to get valid OCR backends"));
     }
 
-    // SAFETY: ptr comes from FFI and must be valid
     let c_str = unsafe { std::ffi::CStr::from_ptr(ptr) };
     let result = c_str
         .to_str()
         .map_err(|_| runtime_error("Invalid UTF-8 in OCR backends"))?
         .to_string();
 
-    // Free the allocated string
     unsafe {
         kreuzberg_free_string(ptr as *mut c_char);
     }
@@ -3150,22 +3125,18 @@ fn get_valid_token_reduction_levels(_ruby: &Ruby) -> Result<String, Error> {
         return Err(runtime_error("Failed to get valid token reduction levels"));
     }
 
-    // SAFETY: ptr comes from FFI and must be valid
     let c_str = unsafe { std::ffi::CStr::from_ptr(ptr) };
     let result = c_str
         .to_str()
         .map_err(|_| runtime_error("Invalid UTF-8 in token reduction levels"))?
         .to_string();
 
-    // Free the allocated string
     unsafe {
         kreuzberg_free_string(ptr as *mut c_char);
     }
 
     Ok(result)
 }
-
-// Phase 1 FFI Wrapper Functions
 
 /// Serialize a config to JSON string
 /// @param config_json [String] JSON string representing the config
@@ -3179,7 +3150,6 @@ fn config_to_json_wrapper(_ruby: &Ruby, config_json: String) -> Result<String, E
         return Err(runtime_error("Failed to parse config from JSON"));
     }
 
-    // SAFETY: config_ptr was just allocated by kreuzberg_config_from_json
     let json_ptr = unsafe { kreuzberg_config_to_json(config_ptr) };
     let result = if json_ptr.is_null() {
         Err(runtime_error("Failed to serialize config to JSON"))
@@ -3195,7 +3165,6 @@ fn config_to_json_wrapper(_ruby: &Ruby, config_json: String) -> Result<String, E
         Ok(json)
     };
 
-    // Free the config
     unsafe {
         kreuzberg_config_free(config_ptr);
     }
@@ -3217,7 +3186,6 @@ fn config_get_field_wrapper(ruby: &Ruby, config_json: String, field_name: String
         return Err(runtime_error("Failed to parse config from JSON"));
     }
 
-    // SAFETY: config_ptr was just allocated by kreuzberg_config_from_json
     let field_ptr = unsafe { kreuzberg_config_get_field(config_ptr, c_field.as_ptr()) };
     let result = if field_ptr.is_null() {
         Ok(ruby.qnil().as_value())
@@ -3234,7 +3202,6 @@ fn config_get_field_wrapper(ruby: &Ruby, config_json: String, field_name: String
         json_value_to_ruby(ruby, &json_value)
     };
 
-    // Free the config
     unsafe {
         kreuzberg_config_free(config_ptr);
     }
@@ -3264,13 +3231,11 @@ fn config_merge_wrapper(_ruby: &Ruby, base_json: String, override_json: String) 
         return Err(runtime_error("Failed to parse override config from JSON"));
     }
 
-    // Perform merge
     let merge_result = unsafe { kreuzberg_config_merge(base_ptr, override_ptr) };
 
     let result = if merge_result == 0 {
         Err(runtime_error("Failed to merge configs"))
     } else {
-        // Serialize merged config
         let json_ptr = unsafe { kreuzberg_config_to_json(base_ptr) };
         if json_ptr.is_null() {
             Err(runtime_error("Failed to serialize merged config"))
@@ -3287,7 +3252,6 @@ fn config_merge_wrapper(_ruby: &Ruby, base_json: String, override_json: String) 
         }
     };
 
-    // Free both configs
     unsafe {
         kreuzberg_config_free(base_ptr);
         kreuzberg_config_free(override_ptr);
@@ -3303,7 +3267,6 @@ fn result_page_count(_ruby: &Ruby, result_ptr: i64) -> Result<i32, Error> {
         return Err(runtime_error("Invalid result pointer"));
     }
 
-    // SAFETY: caller must ensure result_ptr is valid
     let page_count = unsafe { kreuzberg_result_get_page_count(result_ptr as *const std::ffi::c_void) };
 
     Ok(page_count)
@@ -3317,7 +3280,6 @@ fn result_chunk_count(_ruby: &Ruby, result_ptr: i64) -> Result<i32, Error> {
         return Err(runtime_error("Invalid result pointer"));
     }
 
-    // SAFETY: caller must ensure result_ptr is valid
     let chunk_count = unsafe { kreuzberg_result_get_chunk_count(result_ptr as *const std::ffi::c_void) };
 
     Ok(chunk_count)
@@ -3331,7 +3293,6 @@ fn result_detected_language(_ruby: &Ruby, result_ptr: i64) -> Result<Value, Erro
         return Err(runtime_error("Invalid result pointer"));
     }
 
-    // SAFETY: caller must ensure result_ptr is valid
     let lang_ptr = unsafe { kreuzberg_result_get_detected_language(result_ptr as *const std::ffi::c_void) };
 
     if lang_ptr.is_null() {
@@ -3344,7 +3305,6 @@ fn result_detected_language(_ruby: &Ruby, result_ptr: i64) -> Result<Value, Erro
         .map_err(|_| runtime_error("Invalid UTF-8 in detected language"))?
         .to_string();
 
-    // Free the string
     unsafe {
         kreuzberg_free_string(lang_ptr as *mut c_char);
     }
@@ -3364,7 +3324,6 @@ fn result_metadata_field(ruby: &Ruby, result_ptr: i64, field_name: String) -> Re
     let c_field =
         std::ffi::CString::new(field_name).map_err(|e| runtime_error(format!("Invalid field name: {}", e)))?;
 
-    // SAFETY: caller must ensure result_ptr is valid
     let field = unsafe { kreuzberg_result_get_metadata_field(result_ptr as *const std::ffi::c_void, c_field.as_ptr()) };
 
     if field.is_null != 0 {
@@ -3382,7 +3341,6 @@ fn result_metadata_field(ruby: &Ruby, result_ptr: i64, field_name: String) -> Re
     let json_value: serde_json::Value =
         serde_json::from_str(json_str).map_err(|e| runtime_error(format!("Failed to parse field value: {}", e)))?;
 
-    // Free the string
     unsafe {
         kreuzberg_free_string(field.json_value);
     }
@@ -3393,13 +3351,10 @@ fn result_metadata_field(ruby: &Ruby, result_ptr: i64, field_name: String) -> Re
 /// Get structured error details from FFI
 /// @return [Hash] Error details with keys: :message, :error_code, :error_type, :source_file, :source_function, :source_line, :context_info, :is_panic
 fn get_error_details_native(ruby: &Ruby) -> Result<Value, Error> {
-    // SAFETY: FFI function is thread-safe and returns a struct with allocated C strings
     let details = unsafe { kreuzberg_get_error_details() };
 
     let hash = ruby.hash_new();
 
-    // Convert C strings to Ruby strings, handling nulls safely
-    // SAFETY: All non-null pointers from FFI must be valid C strings
     unsafe {
         let message = if !details.message.is_null() {
             let c_str = std::ffi::CStr::from_ptr(details.message);
@@ -3446,7 +3401,6 @@ fn get_error_details_native(ruby: &Ruby) -> Result<Value, Error> {
             None
         };
 
-        // Populate the hash with symbol keys
         hash.aset(ruby.to_symbol("message"), ruby.str_new(&message).as_value())?;
         hash.aset(ruby.to_symbol("error_code"), details.error_code.into_value_with(ruby))?;
         hash.aset(ruby.to_symbol("error_type"), ruby.str_new(&error_type).as_value())?;
@@ -3487,7 +3441,6 @@ fn classify_error_native(ruby: &Ruby, message: String) -> Result<Value, Error> {
     let c_message =
         std::ffi::CString::new(message).map_err(|e| runtime_error(format!("Invalid error message: {}", e)))?;
 
-    // SAFETY: classify_error handles null pointers and validates the C string
     let code = unsafe { kreuzberg_classify_error(c_message.as_ptr()) };
 
     Ok(code.into_value_with(ruby))
@@ -3497,14 +3450,12 @@ fn classify_error_native(ruby: &Ruby, message: String) -> Result<Value, Error> {
 /// @param code [Integer] Numeric error code (0-7)
 /// @return [String] Human-readable error code name
 fn error_code_name_native(ruby: &Ruby, code: u32) -> Result<Value, Error> {
-    // SAFETY: error_code_name handles invalid codes and returns a static C string
     let name_ptr = unsafe { kreuzberg_error_code_name(code) };
 
     if name_ptr.is_null() {
         return Ok(ruby.str_new("unknown").as_value());
     }
 
-    // SAFETY: error_code_name always returns a valid C string pointer that doesn't need freeing
     let c_str = unsafe { std::ffi::CStr::from_ptr(name_ptr) };
     let name = c_str.to_str().unwrap_or("unknown").to_string();
 
@@ -3515,14 +3466,12 @@ fn error_code_name_native(ruby: &Ruby, code: u32) -> Result<Value, Error> {
 /// @param code [Integer] Numeric error code (0-7)
 /// @return [String] Description of the error code
 fn error_code_description_native(ruby: &Ruby, code: u32) -> Result<Value, Error> {
-    // SAFETY: error_code_description handles invalid codes and returns a static C string
     let desc_ptr = unsafe { kreuzberg_error_code_description(code) };
 
     if desc_ptr.is_null() {
         return Ok(ruby.str_new("Unknown error code").as_value());
     }
 
-    // SAFETY: error_code_description always returns a valid C string pointer that doesn't need freeing
     let c_str = unsafe { std::ffi::CStr::from_ptr(desc_ptr) };
     let desc = c_str.to_str().unwrap_or("Unknown error code").to_string();
 
@@ -3583,7 +3532,6 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_module_function("_last_error_code_native", function!(last_error_code, 0))?;
     module.define_module_function("_last_panic_context_json_native", function!(last_panic_context_json, 0))?;
 
-    // Validation functions
     module.define_module_function(
         "_validate_binarization_method_native",
         function!(validate_binarization_method, 1),
@@ -3617,7 +3565,6 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
         function!(get_valid_token_reduction_levels, 0),
     )?;
 
-    // Phase 1 FFI wrappers
     module.define_module_function("_config_to_json_native", function!(config_to_json_wrapper, 1))?;
     module.define_module_function("_config_get_field_native", function!(config_get_field_wrapper, 2))?;
     module.define_module_function("_config_merge_native", function!(config_merge_wrapper, 2))?;
@@ -3629,7 +3576,6 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     )?;
     module.define_module_function("_result_metadata_field_native", function!(result_metadata_field, 2))?;
 
-    // Phase 2 FFI: Error classification and details
     module.define_module_function("_get_error_details_native", function!(get_error_details_native, 0))?;
     module.define_module_function("_classify_error_native", function!(classify_error_native, 1))?;
     module.define_module_function("_error_code_name_native", function!(error_code_name_native, 1))?;

@@ -112,17 +112,14 @@ impl ProfileReport {
         let duration = result.duration;
         let sample_count = result.sample_count;
 
-        // Calculate effective frequency (samples per second)
         let effective_frequency = if duration.as_secs_f64() > 0.0 {
             sample_count as f64 / duration.as_secs_f64()
         } else {
             0.0
         };
 
-        // Extract top hotspots from report
         let top_hotspots = Self::extract_top_hotspots(&result.report, sample_count);
 
-        // Generate recommendations based on sample count
         let recommendations = Self::generate_recommendations(sample_count, framework_name);
 
         Self {
@@ -130,7 +127,7 @@ impl ProfileReport {
             duration,
             effective_frequency,
             top_hotspots,
-            memory_trajectory: Vec::new(), // Memory profiling not yet integrated
+            memory_trajectory: Vec::new(),
             recommendations,
         }
     }
@@ -156,24 +153,10 @@ impl ProfileReport {
     /// For now, we generate recommendations based on sample count which is meaningful.
     #[cfg(feature = "profiling")]
     fn extract_top_hotspots(_report: &pprof::Report, total_samples: usize) -> Vec<Hotspot> {
-        // The pprof library doesn't expose detailed sample information through its public API.
-        // The Report structure is primarily designed for flamegraph generation.
-        // To extract per-function statistics, we would need to either:
-        // 1. Parse the pprof protobuf output
-        // 2. Use pprof's internal APIs (which are not stable)
-        // 3. Generate intermediate formats like perf-compatible output
-        //
-        // For now, return an empty vector. Hotspot extraction can be enhanced
-        // by either extending pprof's API or writing profiles in different formats.
-
-        // Generate synthetic hotspot data based on sample count for demonstration
-        // In production, this would parse actual profile data
         if total_samples == 0 {
             return Vec::new();
         }
 
-        // Create placeholder hotspots showing the profile was collected
-        // Real hotspot extraction would parse the pprof Report protobuf data
         vec![Hotspot {
             function_name: "[profile data collected - hotspot extraction requires pprof API enhancement]".to_string(),
             samples: total_samples,
@@ -234,7 +217,6 @@ impl ProfileReport {
             );
         }
 
-        // Add framework-specific recommendations
         match framework_name {
             "kreuzberg" => {
                 recommendations.push(
@@ -379,7 +361,7 @@ impl ProfileReport {
             .iter()
             .enumerate()
             .map(|(idx, hotspot)| {
-                let bar_width = (hotspot.percentage * 3.0).min(300.0); // Scale for visual display
+                let bar_width = (hotspot.percentage * 3.0).min(300.0);
                 format!(
                     r#"<tr>
                     <td class="rank">{}</td>
@@ -874,8 +856,8 @@ mod tests {
 
         assert!(html.contains("<!DOCTYPE html>"));
         assert!(html.contains("CPU Profile Report"));
-        assert!(html.contains("0</td>")); // sample count
-        assert!(html.contains("Very Low</td>")); // quality
+        assert!(html.contains("0</td>"));
+        assert!(html.contains("Very Low</td>"));
         assert!(html.contains("No hotspots captured"));
     }
 
@@ -903,12 +885,12 @@ mod tests {
 
         let html = report.generate_html();
 
-        assert!(html.contains("1000</td>")); // sample count
+        assert!(html.contains("1000</td>"));
         assert!(html.contains("extraction_function"));
-        assert!(html.contains("500")); // samples
+        assert!(html.contains("500"));
         assert!(html.contains("50.0%"));
         assert!(html.contains("Good profile quality"));
-        assert!(html.contains("Excellent")); // quality label
+        assert!(html.contains("Excellent"));
     }
 
     #[test]

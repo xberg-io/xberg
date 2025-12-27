@@ -8,8 +8,6 @@ declare(strict_types=1);
  * This file is loaded before any tests run. It sets up the test environment,
  * loads the Composer autoloader, and checks for the Kreuzberg extension.
  */
-
-// Load Composer autoloader
 $autoloader = dirname(__DIR__) . '/vendor/autoload.php';
 
 if (!file_exists($autoloader)) {
@@ -22,7 +20,6 @@ if (!file_exists($autoloader)) {
 
 require_once $autoloader;
 
-// Check PHP version
 if (PHP_VERSION_ID < 80200) {
     fwrite(
         STDERR,
@@ -34,7 +31,6 @@ if (PHP_VERSION_ID < 80200) {
     exit(1);
 }
 
-// Display extension status
 if (extension_loaded('kreuzberg')) {
     fwrite(
         STDOUT,
@@ -50,11 +46,9 @@ if (extension_loaded('kreuzberg')) {
     );
 }
 
-// Set error reporting for tests
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
-// Set timezone to avoid warnings
 if (!ini_get('date.timezone')) {
     date_default_timezone_set('UTC');
 }

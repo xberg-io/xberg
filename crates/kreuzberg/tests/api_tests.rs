@@ -1011,7 +1011,7 @@ async fn test_size_limits_asymmetric() {
     use kreuzberg::api::{ApiSizeLimits, create_router_with_limits};
 
     let config = ExtractionConfig::default();
-    let limits = ApiSizeLimits::new(100 * 1024 * 1024, 50 * 1024 * 1024); // 100 MB total, 50 MB per file
+    let limits = ApiSizeLimits::new(100 * 1024 * 1024, 50 * 1024 * 1024);
     let _app = create_router_with_limits(config, limits);
 
     assert_eq!(limits.max_request_body_bytes, 100 * 1024 * 1024);
@@ -1025,7 +1025,6 @@ fn test_default_size_limits_100mb() {
 
     let limits = ApiSizeLimits::default();
 
-    // Default should be 100 MB
     assert_eq!(limits.max_request_body_bytes, 100 * 1024 * 1024);
     assert_eq!(limits.max_multipart_field_bytes, 100 * 1024 * 1024);
 }
@@ -1063,8 +1062,7 @@ async fn test_extract_file_larger_than_2mb() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    // Create a 3MB text file (larger than old 2MB Axum default limit)
-    let file_content = "A".repeat(3 * 1024 * 1024); // 3 MB
+    let file_content = "A".repeat(3 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\
@@ -1088,7 +1086,6 @@ async fn test_extract_file_larger_than_2mb() {
         .await
         .unwrap();
 
-    // Should succeed with HTTP 200, not 400 or 413
     assert_eq!(
         response.status(),
         StatusCode::OK,
@@ -1100,7 +1097,6 @@ async fn test_extract_file_larger_than_2mb() {
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0]["mime_type"], "text/plain");
-    // Content should be extracted successfully
     assert!(results[0]["content"].as_str().unwrap().contains("A"));
 }
 
@@ -1113,7 +1109,7 @@ async fn test_extract_2mb_file() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    let file_content = "X".repeat(2 * 1024 * 1024); // 2 MB
+    let file_content = "X".repeat(2 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\
@@ -1159,7 +1155,7 @@ async fn test_extract_5mb_file() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    let file_content = "B".repeat(5 * 1024 * 1024); // 5 MB
+    let file_content = "B".repeat(5 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\
@@ -1201,7 +1197,7 @@ async fn test_extract_10mb_file() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    let file_content = "C".repeat(10 * 1024 * 1024); // 10 MB
+    let file_content = "C".repeat(10 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\
@@ -1244,7 +1240,7 @@ async fn test_extract_50mb_file() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    let file_content = "D".repeat(50 * 1024 * 1024); // 50 MB
+    let file_content = "D".repeat(50 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\
@@ -1287,7 +1283,7 @@ async fn test_extract_90mb_file() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    let file_content = "E".repeat(90 * 1024 * 1024); // 90 MB
+    let file_content = "E".repeat(90 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\
@@ -1335,8 +1331,7 @@ async fn test_extract_file_over_default_limit() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    // Create a 101MB file (exceeds 100MB default limit)
-    let file_content = "F".repeat(101 * 1024 * 1024); // 101 MB
+    let file_content = "F".repeat(101 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\
@@ -1376,10 +1371,9 @@ async fn test_extract_multiple_large_files_within_limit() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    let file1_content = "G".repeat(25 * 1024 * 1024); // 25 MB
-    let file2_content = "H".repeat(25 * 1024 * 1024); // 25 MB
-    let file3_content = "I".repeat(25 * 1024 * 1024); // 25 MB
-    // Total: 75 MB (within 100 MB limit)
+    let file1_content = "G".repeat(25 * 1024 * 1024);
+    let file2_content = "H".repeat(25 * 1024 * 1024);
+    let file3_content = "I".repeat(25 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\
@@ -1426,7 +1420,6 @@ async fn test_extract_multiple_large_files_within_limit() {
     for result in &results {
         assert_eq!(result["mime_type"], "text/plain");
     }
-    // Verify each file was processed
     assert!(results[0]["content"].as_str().unwrap().contains("G"));
     assert!(results[1]["content"].as_str().unwrap().contains("H"));
     assert!(results[2]["content"].as_str().unwrap().contains("I"));
@@ -1441,9 +1434,8 @@ async fn test_extract_multiple_large_files_exceeding_limit() {
     let app = create_router(ExtractionConfig::default());
 
     let boundary = "----boundary";
-    let file1_content = "J".repeat(50 * 1024 * 1024); // 50 MB
-    let file2_content = "K".repeat(55 * 1024 * 1024); // 55 MB
-    // Total: 105 MB (exceeds 100 MB limit)
+    let file1_content = "J".repeat(50 * 1024 * 1024);
+    let file2_content = "K".repeat(55 * 1024 * 1024);
 
     let body_content = format!(
         "--{}\r\n\

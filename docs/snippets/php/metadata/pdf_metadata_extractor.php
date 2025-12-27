@@ -75,7 +75,6 @@ readonly class PdfMetadataExtractor implements PostProcessorInterface
     {
         $this->processedCount++;
 
-        // Add custom metadata flag
         if (!isset($result->metadata->custom)) {
             $result->metadata->custom = [];
         }
@@ -110,7 +109,6 @@ readonly class PdfMetadataExtractor implements PostProcessorInterface
     }
 }
 
-// Register the post-processor
 $processor = new PdfMetadataExtractor();
 Kreuzberg::registerPostProcessor($processor);
 ```

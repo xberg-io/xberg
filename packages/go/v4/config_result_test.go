@@ -372,7 +372,6 @@ func TestConfigMerge(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Make a copy to avoid modifying the original
 			var baseCopy *kreuzberg.ExtractionConfig
 			if tt.baseConfig != nil {
 				baseCopy = &kreuzberg.ExtractionConfig{}
@@ -403,7 +402,7 @@ func TestResultGetPageCount(t *testing.T) {
 			name:      "nil result",
 			result:    nil,
 			wantErr:   false,
-			wantCount: 0, // Calling method on nil should panic, but we handle it
+			wantCount: 0,
 		},
 		{
 			name: "result with no pages",
@@ -431,7 +430,6 @@ func TestResultGetPageCount(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.result == nil {
-				// Skip nil test since calling method on nil will panic
 				t.Skip("skipping nil result test")
 			}
 

@@ -1,5 +1,3 @@
-# Taplo Configuration for TOML Formatting
-# Project-wide TOML formatting rules
 
 [formatting]
 align_entries = false

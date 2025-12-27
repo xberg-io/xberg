@@ -27,10 +27,8 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlMetadata_HasCorrectProperties()
     {
-        // Arrange & Act
         var metadata = new HtmlMetadata();
 
-        // Assert - verify all expected properties exist and are initialized
         Assert.NotNull(metadata.Keywords);
         Assert.IsType<List<string>>(metadata.Keywords);
         Assert.Empty(metadata.Keywords);
@@ -63,7 +61,6 @@ public class MetadataTypesTests
         Assert.IsType<List<StructuredData>>(metadata.StructuredData);
         Assert.Empty(metadata.StructuredData);
 
-        // Verify optional string properties are null by default
         Assert.Null(metadata.Title);
         Assert.Null(metadata.Description);
         Assert.Null(metadata.Author);
@@ -76,14 +73,11 @@ public class MetadataTypesTests
     [Fact]
     public void Keywords_IsList_NotString()
     {
-        // Arrange
         var metadata = new HtmlMetadata();
 
-        // Act
         metadata.Keywords.Add("test");
         metadata.Keywords.Add("keywords");
 
-        // Assert
         Assert.IsType<List<string>>(metadata.Keywords);
         Assert.Equal(2, metadata.Keywords.Count);
         Assert.Contains("test", metadata.Keywords);
@@ -93,13 +87,10 @@ public class MetadataTypesTests
     [Fact]
     public void CanonicalUrl_Renamed_PropertyExists()
     {
-        // Arrange
         var metadata = new HtmlMetadata();
 
-        // Act
         metadata.CanonicalUrl = "https://example.com/canonical";
 
-        // Assert
         Assert.Equal("https://example.com/canonical", metadata.CanonicalUrl);
         Assert.NotNull(metadata.CanonicalUrl);
     }
@@ -107,15 +98,12 @@ public class MetadataTypesTests
     [Fact]
     public void OpenGraph_IsDictionary_StringToString()
     {
-        // Arrange
         var metadata = new HtmlMetadata();
 
-        // Act
         metadata.OpenGraph["og:title"] = "Test Title";
         metadata.OpenGraph["og:description"] = "Test Description";
         metadata.OpenGraph["og:image"] = "https://example.com/image.jpg";
 
-        // Assert
         Assert.IsType<Dictionary<string, string>>(metadata.OpenGraph);
         Assert.Equal(3, metadata.OpenGraph.Count);
         Assert.Equal("Test Title", metadata.OpenGraph["og:title"]);
@@ -126,15 +114,12 @@ public class MetadataTypesTests
     [Fact]
     public void TwitterCard_IsDictionary_StringToString()
     {
-        // Arrange
         var metadata = new HtmlMetadata();
 
-        // Act
         metadata.TwitterCard["twitter:card"] = "summary_large_image";
         metadata.TwitterCard["twitter:title"] = "Test Title";
         metadata.TwitterCard["twitter:description"] = "Test Description";
 
-        // Assert
         Assert.IsType<Dictionary<string, string>>(metadata.TwitterCard);
         Assert.Equal(3, metadata.TwitterCard.Count);
         Assert.Equal("summary_large_image", metadata.TwitterCard["twitter:card"]);
@@ -144,7 +129,6 @@ public class MetadataTypesTests
     [Fact]
     public void HeaderMetadata_HasCorrectProperties()
     {
-        // Arrange & Act
         var header = new HeaderMetadata
         {
             Level = 1,
@@ -154,7 +138,6 @@ public class MetadataTypesTests
             HtmlOffset = 100
         };
 
-        // Assert
         Assert.Equal(1, header.Level);
         Assert.Equal("Main Title", header.Text);
         Assert.Equal("main-title", header.Id);
@@ -165,7 +148,6 @@ public class MetadataTypesTests
     [Fact]
     public void LinkMetadata_HasCorrectProperties()
     {
-        // Arrange & Act
         var link = new LinkMetadata
         {
             Href = "https://example.com",
@@ -175,7 +157,6 @@ public class MetadataTypesTests
             Rel = new List<string> { "nofollow", "external" }
         };
 
-        // Assert
         Assert.Equal("https://example.com", link.Href);
         Assert.Equal("Example Link", link.Text);
         Assert.Equal("Example Website", link.Title);
@@ -187,14 +168,11 @@ public class MetadataTypesTests
     [Fact]
     public void LinkMetadata_Attributes_IsDictionary()
     {
-        // Arrange
         var link = new LinkMetadata { Href = "https://example.com" };
 
-        // Act
         link.Attributes["class"] = "external-link";
         link.Attributes["data-tracking"] = "123";
 
-        // Assert
         Assert.IsType<Dictionary<string, string>>(link.Attributes);
         Assert.Equal(2, link.Attributes.Count);
         Assert.Equal("external-link", link.Attributes["class"]);
@@ -203,7 +181,6 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlImageMetadata_HasCorrectProperties()
     {
-        // Arrange & Act
         var image = new HtmlImageMetadata
         {
             Src = "https://example.com/image.jpg",
@@ -213,7 +190,6 @@ public class MetadataTypesTests
             ImageType = "external"
         };
 
-        // Assert
         Assert.Equal("https://example.com/image.jpg", image.Src);
         Assert.Equal("Example image", image.Alt);
         Assert.Equal("Example", image.Title);
@@ -227,14 +203,11 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlImageMetadata_Attributes_IsDictionary()
     {
-        // Arrange
         var image = new HtmlImageMetadata { Src = "image.jpg" };
 
-        // Act
         image.Attributes["loading"] = "lazy";
         image.Attributes["data-src"] = "image-hd.jpg";
 
-        // Assert
         Assert.IsType<Dictionary<string, string>>(image.Attributes);
         Assert.Equal(2, image.Attributes.Count);
         Assert.Equal("lazy", image.Attributes["loading"]);
@@ -243,7 +216,6 @@ public class MetadataTypesTests
     [Fact]
     public void StructuredData_HasCorrectProperties()
     {
-        // Arrange & Act
         var structuredData = new StructuredData
         {
             DataType = "json_ld",
@@ -251,7 +223,6 @@ public class MetadataTypesTests
             SchemaType = "Article"
         };
 
-        // Assert
         Assert.Equal("json_ld", structuredData.DataType);
         Assert.NotEmpty(structuredData.RawJson);
         Assert.Equal("Article", structuredData.SchemaType);
@@ -264,7 +235,6 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlMetadata_SerializesCorrectly_WithJsonPropertyNames()
     {
-        // Arrange
         var metadata = new HtmlMetadata
         {
             Title = "Test Page",
@@ -286,10 +256,8 @@ public class MetadataTypesTests
             }
         };
 
-        // Act
         var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
 
-        // Assert
         Assert.NotEmpty(json);
         Assert.Contains("\"title\"", json);
         Assert.Contains("\"description\"", json);
@@ -303,7 +271,6 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlMetadata_DeserializesCorrectly_FromJson()
     {
-        // Arrange
         var json = @"{
             ""title"": ""Test Page"",
             ""description"": ""Test Description"",
@@ -323,11 +290,9 @@ public class MetadataTypesTests
             ""structured_data"": []
         }";
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var metadata = JsonSerializer.Deserialize<HtmlMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(metadata);
         Assert.Equal("Test Page", metadata.Title);
         Assert.Equal("Test Description", metadata.Description);
@@ -344,7 +309,6 @@ public class MetadataTypesTests
     [Fact]
     public void HeaderMetadata_JsonSerialization_RoundTrip()
     {
-        // Arrange
         var header = new HeaderMetadata
         {
             Level = 2,
@@ -354,12 +318,10 @@ public class MetadataTypesTests
             HtmlOffset = 250
         };
 
-        // Act
         var json = JsonSerializer.Serialize(header, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var deserialized = JsonSerializer.Deserialize<HeaderMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal(header.Level, deserialized.Level);
         Assert.Equal(header.Text, deserialized.Text);
@@ -371,7 +333,6 @@ public class MetadataTypesTests
     [Fact]
     public void LinkMetadata_JsonSerialization_RoundTrip()
     {
-        // Arrange
         var link = new LinkMetadata
         {
             Href = "https://example.com/page",
@@ -382,12 +343,10 @@ public class MetadataTypesTests
             Attributes = new Dictionary<string, string> { { "class", "nav-link" } }
         };
 
-        // Act
         var json = JsonSerializer.Serialize(link, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var deserialized = JsonSerializer.Deserialize<LinkMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal(link.Href, deserialized.Href);
         Assert.Equal(link.Text, deserialized.Text);
@@ -403,7 +362,6 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlImageMetadata_JsonSerialization_RoundTrip()
     {
-        // Arrange
         var image = new HtmlImageMetadata
         {
             Src = "images/photo.jpg",
@@ -414,12 +372,10 @@ public class MetadataTypesTests
             Attributes = new Dictionary<string, string> { { "srcset", "photo-small.jpg 800w" } }
         };
 
-        // Act
         var json = JsonSerializer.Serialize(image, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var deserialized = JsonSerializer.Deserialize<HtmlImageMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal(image.Src, deserialized.Src);
         Assert.Equal(image.Alt, deserialized.Alt);
@@ -435,7 +391,6 @@ public class MetadataTypesTests
     [Fact]
     public void StructuredData_JsonSerialization_RoundTrip()
     {
-        // Arrange
         var structuredData = new StructuredData
         {
             DataType = "json_ld",
@@ -443,12 +398,10 @@ public class MetadataTypesTests
             SchemaType = "NewsArticle"
         };
 
-        // Act
         var json = JsonSerializer.Serialize(structuredData, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var deserialized = JsonSerializer.Deserialize<StructuredData>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal(structuredData.DataType, deserialized.DataType);
         Assert.Equal(structuredData.RawJson, deserialized.RawJson);
@@ -458,17 +411,14 @@ public class MetadataTypesTests
     [Fact]
     public void MetaTags_SerializeCorrectly()
     {
-        // Arrange
         var metadata = new HtmlMetadata();
         metadata.MetaTags["viewport"] = "width=device-width, initial-scale=1";
         metadata.MetaTags["charset"] = "utf-8";
 
-        // Act
         var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var deserialized = JsonSerializer.Deserialize<HtmlMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.NotNull(deserialized.MetaTags);
         Assert.Equal(2, deserialized.MetaTags.Count);
@@ -483,17 +433,14 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_ReturnsMetadata_WithHtmlMetadataObject()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.True(result.Success);
         Assert.NotNull(result.Metadata);
@@ -505,39 +452,32 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_KeywordsAsList_NotString()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.NotNull(result.Metadata.Format.Html);
         var htmlMetadata = result.Metadata.Format.Html;
         Assert.IsType<List<string>>(htmlMetadata.Keywords);
-        // Keywords should be a list even if empty
         Assert.NotNull(htmlMetadata.Keywords);
     }
 
     [Fact]
     public void ExtractHtml_OpenGraphAsDictionary_StringToString()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.NotNull(result.Metadata.Format.Html);
         var htmlMetadata = result.Metadata.Format.Html;
@@ -548,17 +488,14 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_TwitterCardAsDictionary_StringToString()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.NotNull(result.Metadata.Format.Html);
         var htmlMetadata = result.Metadata.Format.Html;
@@ -569,24 +506,20 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_HeadersAsList_OfHeaderMetadata()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.NotNull(result.Metadata.Format.Html);
         var htmlMetadata = result.Metadata.Format.Html;
         Assert.IsType<List<HeaderMetadata>>(htmlMetadata.Headers);
         Assert.NotNull(htmlMetadata.Headers);
 
-        // If headers are present, verify they have correct structure
         foreach (var header in htmlMetadata.Headers)
         {
             Assert.IsType<HeaderMetadata>(header);
@@ -598,24 +531,20 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_LinksAsList_OfLinkMetadata()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.NotNull(result.Metadata.Format.Html);
         var htmlMetadata = result.Metadata.Format.Html;
         Assert.IsType<List<LinkMetadata>>(htmlMetadata.Links);
         Assert.NotNull(htmlMetadata.Links);
 
-        // If links are present, verify they have correct structure
         foreach (var link in htmlMetadata.Links)
         {
             Assert.IsType<LinkMetadata>(link);
@@ -628,24 +557,20 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_ImagesAsList_OfHtmlImageMetadata()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.NotNull(result.Metadata.Format.Html);
         var htmlMetadata = result.Metadata.Format.Html;
         Assert.IsType<List<HtmlImageMetadata>>(htmlMetadata.Images);
         Assert.NotNull(htmlMetadata.Images);
 
-        // If images are present, verify they have correct structure
         foreach (var image in htmlMetadata.Images)
         {
             Assert.IsType<HtmlImageMetadata>(image);
@@ -657,24 +582,20 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_StructuredDataAsList_OfStructuredData()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.NotNull(result.Metadata.Format.Html);
         var htmlMetadata = result.Metadata.Format.Html;
         Assert.IsType<List<StructuredData>>(htmlMetadata.StructuredData);
         Assert.NotNull(htmlMetadata.StructuredData);
 
-        // If structured data is present, verify it has correct structure
         foreach (var data in htmlMetadata.StructuredData)
         {
             Assert.IsType<StructuredData>(data);
@@ -690,10 +611,8 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlMetadata_DefaultConstructor_InitializesCollections()
     {
-        // Arrange & Act
         var metadata = new HtmlMetadata();
 
-        // Assert
         Assert.NotNull(metadata.Keywords);
         Assert.IsType<List<string>>(metadata.Keywords);
         Assert.Empty(metadata.Keywords);
@@ -730,10 +649,8 @@ public class MetadataTypesTests
     [Fact]
     public void HeaderMetadata_DefaultConstructor_InitializesDefaults()
     {
-        // Arrange & Act
         var header = new HeaderMetadata();
 
-        // Assert
         Assert.Equal(0, header.Level);
         Assert.Equal(string.Empty, header.Text);
         Assert.Null(header.Id);
@@ -744,10 +661,8 @@ public class MetadataTypesTests
     [Fact]
     public void LinkMetadata_DefaultConstructor_InitializesDefaults()
     {
-        // Arrange & Act
         var link = new LinkMetadata();
 
-        // Assert
         Assert.Equal(string.Empty, link.Href);
         Assert.Equal(string.Empty, link.Text);
         Assert.Null(link.Title);
@@ -761,10 +676,8 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlImageMetadata_DefaultConstructor_InitializesDefaults()
     {
-        // Arrange & Act
         var image = new HtmlImageMetadata();
 
-        // Assert
         Assert.Equal(string.Empty, image.Src);
         Assert.Null(image.Alt);
         Assert.Null(image.Title);
@@ -777,10 +690,8 @@ public class MetadataTypesTests
     [Fact]
     public void StructuredData_DefaultConstructor_InitializesDefaults()
     {
-        // Arrange & Act
         var data = new StructuredData();
 
-        // Assert
         Assert.Equal("json_ld", data.DataType);
         Assert.Equal(string.Empty, data.RawJson);
         Assert.Null(data.SchemaType);
@@ -789,7 +700,6 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlMetadata_OptionalFields_AreNullWhenMissing()
     {
-        // Arrange
         var json = @"{
             ""headers"": [],
             ""links"": [],
@@ -797,11 +707,9 @@ public class MetadataTypesTests
             ""structured_data"": []
         }";
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var metadata = JsonSerializer.Deserialize<HtmlMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(metadata);
         Assert.Null(metadata.Title);
         Assert.Null(metadata.Description);
@@ -810,7 +718,6 @@ public class MetadataTypesTests
         Assert.Null(metadata.BaseHref);
         Assert.Null(metadata.Language);
         Assert.Null(metadata.TextDirection);
-        // Collections should be initialized, not null
         Assert.NotNull(metadata.Keywords);
         Assert.NotNull(metadata.OpenGraph);
         Assert.NotNull(metadata.TwitterCard);
@@ -823,10 +730,8 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlMetadata_EmptyCollections_AreNotNull()
     {
-        // Arrange
         var metadata = new HtmlMetadata();
 
-        // Act & Assert - Collections should be initialized as empty, not null
         Assert.NotNull(metadata.Keywords);
         Assert.Empty(metadata.Keywords);
 
@@ -859,17 +764,14 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_FullMetadataExtraction_VerifiesAllFields()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
 
-        // Assert
         Assert.NotNull(result);
         Assert.True(result.Success);
         Assert.NotNull(result.Metadata);
@@ -880,7 +782,6 @@ public class MetadataTypesTests
 
         var htmlMetadata = result.Metadata.Format.Html;
 
-        // Verify all collection types are correct
         Assert.IsType<List<string>>(htmlMetadata.Keywords);
         Assert.IsType<Dictionary<string, string>>(htmlMetadata.OpenGraph);
         Assert.IsType<Dictionary<string, string>>(htmlMetadata.TwitterCard);
@@ -890,7 +791,6 @@ public class MetadataTypesTests
         Assert.IsType<List<HtmlImageMetadata>>(htmlMetadata.Images);
         Assert.IsType<List<StructuredData>>(htmlMetadata.StructuredData);
 
-        // Verify all collections are not null
         Assert.NotNull(htmlMetadata.Keywords);
         Assert.NotNull(htmlMetadata.OpenGraph);
         Assert.NotNull(htmlMetadata.TwitterCard);
@@ -904,14 +804,12 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_SerializeResult_AndDeserialize_MaintainsMetadata()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act
         var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
         var originalMetadata = result.Metadata.Format.Html;
 
@@ -923,12 +821,10 @@ public class MetadataTypesTests
         var json = JsonSerializer.Serialize(result, options);
         var deserializedResult = JsonSerializer.Deserialize<ExtractionResult>(json, options);
 
-        // Assert
         Assert.NotNull(deserializedResult);
         Assert.NotNull(deserializedResult.Metadata.Format.Html);
         var deserializedMetadata = deserializedResult.Metadata.Format.Html;
 
-        // Verify structure is preserved
         Assert.IsType<List<string>>(deserializedMetadata.Keywords);
         Assert.IsType<Dictionary<string, string>>(deserializedMetadata.OpenGraph);
         Assert.IsType<Dictionary<string, string>>(deserializedMetadata.TwitterCard);
@@ -937,7 +833,6 @@ public class MetadataTypesTests
         Assert.IsType<List<HtmlImageMetadata>>(deserializedMetadata.Images);
         Assert.IsType<List<StructuredData>>(deserializedMetadata.StructuredData);
 
-        // Verify collections have same count
         Assert.NotNull(deserializedMetadata);
         Assert.Equal(originalMetadata.Keywords.Count, deserializedMetadata!.Keywords.Count);
         Assert.Equal(originalMetadata.OpenGraph.Count, deserializedMetadata.OpenGraph.Count);
@@ -951,7 +846,6 @@ public class MetadataTypesTests
     [Fact]
     public void LinkMetadata_With_MultipleRelValues_PreservesAll()
     {
-        // Arrange
         var link = new LinkMetadata
         {
             Href = "https://example.com",
@@ -959,12 +853,10 @@ public class MetadataTypesTests
             Rel = new List<string> { "nofollow", "external", "noopener" }
         };
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var json = JsonSerializer.Serialize(link, options);
         var deserialized = JsonSerializer.Deserialize<LinkMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal(3, deserialized.Rel.Count);
         Assert.Contains("nofollow", deserialized.Rel);
@@ -975,7 +867,6 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlImageMetadata_With_ComplexAttributes_PreservesAll()
     {
-        // Arrange
         var image = new HtmlImageMetadata
         {
             Src = "image.jpg",
@@ -989,12 +880,10 @@ public class MetadataTypesTests
             }
         };
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var json = JsonSerializer.Serialize(image, options);
         var deserialized = JsonSerializer.Deserialize<HtmlImageMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal(4, deserialized.Attributes.Count);
         Assert.Equal("responsive-image", deserialized.Attributes["class"]);
@@ -1006,7 +895,6 @@ public class MetadataTypesTests
     [Fact]
     public void StructuredData_With_ComplexJson_PreservesRawJson()
     {
-        // Arrange
         var complexJson = @"{
             ""@context"": ""https://schema.org"",
             ""@type"": ""NewsArticle"",
@@ -1028,12 +916,10 @@ public class MetadataTypesTests
             SchemaType = "NewsArticle"
         };
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var json = JsonSerializer.Serialize(data, options);
         var deserialized = JsonSerializer.Deserialize<StructuredData>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal("json_ld", deserialized.DataType);
         Assert.Equal("NewsArticle", deserialized.SchemaType);
@@ -1048,7 +934,6 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlMetadata_With_SpecialCharactersInStrings_SerializesCorrectly()
     {
-        // Arrange
         var metadata = new HtmlMetadata
         {
             Title = "Test & \"Special\" <Characters>",
@@ -1056,12 +941,10 @@ public class MetadataTypesTests
             Author = "Author & Co."
         };
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var json = JsonSerializer.Serialize(metadata, options);
         var deserialized = JsonSerializer.Deserialize<HtmlMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal(metadata.Title, deserialized.Title);
         Assert.Equal(metadata.Description, deserialized.Description);
@@ -1071,19 +954,16 @@ public class MetadataTypesTests
     [Fact]
     public void HtmlImageMetadata_With_NullDimensions_HandlesCorrectly()
     {
-        // Arrange
         var image = new HtmlImageMetadata
         {
             Src = "image.jpg",
             Dimensions = null
         };
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var json = JsonSerializer.Serialize(image, options);
         var deserialized = JsonSerializer.Deserialize<HtmlImageMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Null(deserialized.Dimensions!);
     }
@@ -1091,7 +971,6 @@ public class MetadataTypesTests
     [Fact]
     public void HeaderMetadata_With_ZeroValues_SerializesCorrectly()
     {
-        // Arrange
         var header = new HeaderMetadata
         {
             Level = 0,
@@ -1100,12 +979,10 @@ public class MetadataTypesTests
             HtmlOffset = 0
         };
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var json = JsonSerializer.Serialize(header, options);
         var deserialized = JsonSerializer.Deserialize<HeaderMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal(0, deserialized.Level);
         Assert.Equal(0, deserialized.Depth);
@@ -1115,7 +992,6 @@ public class MetadataTypesTests
     [Fact]
     public void LinkMetadata_With_EmptyStringValues_SerializesCorrectly()
     {
-        // Arrange
         var link = new LinkMetadata
         {
             Href = "",
@@ -1123,12 +999,10 @@ public class MetadataTypesTests
             LinkType = ""
         };
 
-        // Act
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
         var json = JsonSerializer.Serialize(link, options);
         var deserialized = JsonSerializer.Deserialize<LinkMetadata>(json, options);
 
-        // Assert
         Assert.NotNull(deserialized);
         Assert.Equal("", deserialized.Href);
         Assert.Equal("", deserialized.Text);
@@ -1146,17 +1020,14 @@ public class MetadataTypesTests
     [Fact]
     public async Task ExtractHtml_AsyncExtraction_CompletesSuccessfully()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Act - Run extraction asynchronously using Task.Run
         var result = await Task.Run(() => KreuzbergClient.ExtractFileSync(htmlPath, config));
 
-        // Assert
         Assert.NotNull(result);
         Assert.True(result.Success);
         Assert.NotNull(result.Metadata);
@@ -1164,7 +1035,6 @@ public class MetadataTypesTests
         Assert.NotNull(result.Metadata.Format.Html);
         Assert.IsType<HtmlMetadata>(result.Metadata.Format.Html);
 
-        // Verify metadata collections are properly initialized
         Assert.NotNull(result.Metadata.Format.Html.Keywords);
         Assert.NotNull(result.Metadata.Format.Html.OpenGraph);
         Assert.NotNull(result.Metadata.Format.Html.TwitterCard);
@@ -1182,45 +1052,37 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_LargeDocument_PerformanceAcceptable()
     {
-        // Arrange - Create a large HTML document with 10,000+ elements
         var largeHtml = BuildLargeHtmlDocument(10000);
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Temporarily write to file for extraction
         var tempPath = Path.GetTempFileName();
         try
         {
             File.WriteAllText(tempPath, largeHtml);
 
-            // Act - Measure extraction time for large document
             var stopwatch = Stopwatch.StartNew();
             var result = KreuzbergClient.ExtractFileSync(tempPath, config);
             stopwatch.Stop();
 
-            // Assert - Verify extraction succeeds
             Assert.NotNull(result);
             Assert.True(result.Success);
             Assert.NotNull(result.Metadata.Format.Html);
 
-            // Performance assertion: extraction should complete within 30 seconds for large document
             Assert.True(stopwatch.ElapsedMilliseconds < 30000,
                 $"Extraction took {stopwatch.ElapsedMilliseconds}ms, expected < 30000ms");
 
-            // Verify metadata was extracted
             Assert.NotNull(result.Metadata.Format.Html.Keywords);
             Assert.NotNull(result.Metadata.Format.Html.Headers);
             Assert.NotNull(result.Metadata.Format.Html.Links);
             Assert.NotNull(result.Metadata.Format.Html.Images);
 
-            // Content should be present from large document
             Assert.NotEmpty(result.Content);
         }
         finally
         {
-            // Cleanup
             if (File.Exists(tempPath))
             {
                 File.Delete(tempPath);
@@ -1236,19 +1098,16 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_ConcurrentExtraction_ThreadSafe()
     {
-        // Arrange
         var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Create results array to store concurrent extraction results
         var results = new ExtractionResult[Environment.ProcessorCount * 2];
         var exceptions = new List<Exception>();
         var lockObj = new object();
 
-        // Act - Perform concurrent extractions
         Parallel.ForEach(
             Enumerable.Range(0, results.Length),
             new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
@@ -1268,10 +1127,8 @@ public class MetadataTypesTests
                 }
             });
 
-        // Assert - Verify no exceptions occurred during concurrent extraction
         Assert.Empty(exceptions);
 
-        // All extraction results should be successful
         foreach (var result in results)
         {
             Assert.NotNull(result);
@@ -1280,7 +1137,6 @@ public class MetadataTypesTests
             Assert.NotNull(result.Metadata.Format.Html);
         }
 
-        // Verify all results have consistent metadata structure
         var firstMetadata = results[0].Metadata.Format.Html;
         foreach (var result in results.Skip(1))
         {
@@ -1309,17 +1165,13 @@ public class MetadataTypesTests
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Test 1: Empty file handling
         var emptyPath = Path.GetTempFileName();
         try
         {
             File.WriteAllText(emptyPath, string.Empty);
 
-            // Should handle empty file gracefully
             var result = KreuzbergClient.ExtractFileSync(emptyPath, config);
             Assert.NotNull(result);
-            // Empty file may or may not be successful depending on implementation
-            // The key is it doesn't crash
             Assert.NotNull(result.Metadata);
         }
         finally
@@ -1330,7 +1182,6 @@ public class MetadataTypesTests
             }
         }
 
-        // Test 2: Minimal HTML handling
         var minimalPath = Path.GetTempFileName();
         try
         {
@@ -1350,17 +1201,14 @@ public class MetadataTypesTests
             }
         }
 
-        // Test 3: Malformed HTML handling
         var malformedPath = Path.GetTempFileName();
         try
         {
             File.WriteAllText(malformedPath, "<html><body><div unclosed><p>test");
 
-            // Should handle malformed HTML gracefully
             var result = KreuzbergClient.ExtractFileSync(malformedPath, config);
             Assert.NotNull(result);
             Assert.NotNull(result.Metadata);
-            // Malformed HTML should still parse without crashing
         }
         finally
         {
@@ -1370,19 +1218,15 @@ public class MetadataTypesTests
             }
         }
 
-        // Test 4: Very large HTML handling (50MB)
         var veryLargePath = Path.GetTempFileName();
         try
         {
-            // Create a 50MB HTML document
             var largeHtml = BuildLargeHtmlDocument(500000);
             File.WriteAllText(veryLargePath, largeHtml);
 
-            // Should handle very large documents without running out of memory or crashing
             var result = KreuzbergClient.ExtractFileSync(veryLargePath, config);
             Assert.NotNull(result);
             Assert.NotNull(result.Metadata);
-            // Verify structure is intact
             Assert.NotNull(result.Metadata.Format.Html);
         }
         finally
@@ -1402,18 +1246,15 @@ public class MetadataTypesTests
     [Fact]
     public void ExtractHtml_LargeExtraction_ReleasesMemory()
     {
-        // Arrange
         var config = new ExtractionConfig
         {
             HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
         };
 
-        // Capture initial memory
         GC.Collect();
         GC.WaitForPendingFinalizers();
         var initialMemory = GC.GetTotalMemory(false);
 
-        // Act - Perform extraction with large HTML
         var largeHtml = BuildLargeHtmlDocument(50000);
         var tempPath = Path.GetTempFileName();
         try
@@ -1422,23 +1263,18 @@ public class MetadataTypesTests
 
             var result = KreuzbergClient.ExtractFileSync(tempPath, config);
 
-            // Verify extraction succeeded
             Assert.NotNull(result);
             Assert.True(result.Success);
             Assert.NotNull(result.Metadata.Format.Html);
 
-            // Capture memory after successful extraction
             var afterExtractionMemory = GC.GetTotalMemory(false);
 
-            // Force garbage collection to reclaim memory
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
 
             var finalMemory = GC.GetTotalMemory(false);
 
-            // Verify memory was released after cleanup
-            // Allow for some memory overhead (20% tolerance for runtime overhead)
             var memoryGrowth = finalMemory - initialMemory;
             var allowedGrowth = initialMemory * 0.20;
 
@@ -1446,7 +1282,6 @@ public class MetadataTypesTests
                 memoryGrowth <= allowedGrowth,
                 $"Memory growth ({memoryGrowth} bytes) exceeds allowance ({allowedGrowth} bytes)");
 
-            // Verify metadata structure is intact
             Assert.NotNull(result.Metadata.Format.Html.Keywords);
             Assert.NotNull(result.Metadata.Format.Html.Headers);
             Assert.NotNull(result.Metadata.Format.Html.Links);
@@ -1454,7 +1289,6 @@ public class MetadataTypesTests
         }
         finally
         {
-            // Cleanup
             if (File.Exists(tempPath))
             {
                 File.Delete(tempPath);
@@ -1485,7 +1319,6 @@ public class MetadataTypesTests
         sb.AppendLine("<body>");
         sb.AppendLine("<h1>Large Document Test</h1>");
 
-        // Generate specified number of elements
         for (int i = 0; i < elementCount; i++)
         {
             sb.AppendLine($"<div class=\"item-{i % 100}\">");

@@ -6,7 +6,6 @@
  */
 
 // ============================================================================
-// OCR Configuration
 // ============================================================================
 
 export interface TesseractConfig {
@@ -21,10 +20,6 @@ export interface OcrConfig {
 	tesseractConfig?: TesseractConfig;
 }
 
-// ============================================================================
-// Chunking Configuration
-// ============================================================================
-
 export interface ChunkingConfig {
 	maxChars?: number;
 	maxOverlap?: number;
@@ -34,10 +29,6 @@ export interface ChunkingConfig {
 	embedding?: Record<string, unknown>;
 	enabled?: boolean;
 }
-
-// ============================================================================
-// Language and Token Configuration
-// ============================================================================
 
 export interface LanguageDetectionConfig {
 	enabled?: boolean;
@@ -49,10 +40,6 @@ export interface TokenReductionConfig {
 	mode?: string;
 	preserveImportantWords?: boolean;
 }
-
-// ============================================================================
-// Document Format Configuration
-// ============================================================================
 
 export interface FontConfig {
 	enabled?: boolean;
@@ -75,19 +62,11 @@ export interface ImageExtractionConfig {
 	maxDpi?: number;
 }
 
-// ============================================================================
-// Post-Processing Configuration
-// ============================================================================
-
 export interface PostProcessorConfig {
 	enabled?: boolean;
 	enabledProcessors?: string[];
 	disabledProcessors?: string[];
 }
-
-// ============================================================================
-// HTML Processing Configuration
-// ============================================================================
 
 export interface HtmlPreprocessingOptions {
 	enabled?: boolean;
@@ -130,10 +109,6 @@ export interface HtmlConversionOptions {
 	preprocessing?: HtmlPreprocessingOptions;
 }
 
-// ============================================================================
-// Keyword Extraction Configuration
-// ============================================================================
-
 export type KeywordAlgorithm = "yake" | "rake";
 
 export interface YakeParams {
@@ -154,10 +129,6 @@ export interface KeywordConfig {
 	yakeParams?: YakeParams;
 	rakeParams?: RakeParams;
 }
-
-// ============================================================================
-// Main Extraction Configuration
-// ============================================================================
 
 export interface ExtractionConfig {
 	useCache?: boolean;

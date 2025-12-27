@@ -229,8 +229,6 @@ pub trait DocumentExtractor: Plugin {
         #[cfg(not(feature = "tokio-runtime"))]
         {
             let _ = (path, mime_type, config);
-            // For WASM and non-tokio environments, file extraction is not supported
-            // through the default implementation. Implementations must provide their own.
             Err(KreuzbergError::Other(
                 "File-based extraction requires the tokio-runtime feature".to_string(),
             ))

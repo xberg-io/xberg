@@ -32,7 +32,6 @@ use tower::ServiceExt;
 async fn test_extract_minimal_valid_pdf() {
     let router = create_router_with_limits(ExtractionConfig::default(), ApiSizeLimits::from_mb(10, 10));
 
-    // Minimal but complete PDF
     let pdf_content = b"%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -89,7 +88,6 @@ startxref
         response.status()
     );
 
-    // Try to parse response to get error details
     let body = to_bytes(response.into_body(), 1_000_000)
         .await
         .expect("Failed to read response body");
@@ -107,7 +105,7 @@ async fn test_extract_1mb_text_file() {
     let router = create_router_with_limits(ExtractionConfig::default(), ApiSizeLimits::from_mb(10, 10));
 
     let boundary = "----large-text";
-    let large_text = "This is test content. ".repeat(50000); // ~1MB of text
+    let large_text = "This is test content. ".repeat(50000);
 
     let mut body = Vec::new();
     body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
@@ -184,7 +182,6 @@ async fn test_find_size_breaking_point() {
         if response.status() != StatusCode::OK {
             eprintln!("Extraction failed at size: {}", label);
 
-            // Try to get error response
             let body = to_bytes(response.into_body(), 1_000_000)
                 .await
                 .expect("Failed to read response body");
@@ -195,7 +192,7 @@ async fn test_find_size_breaking_point() {
                 eprintln!("Response body (not JSON): {}", String::from_utf8_lossy(&body));
             }
 
-            return; // Stop at first failure
+            return;
         }
     }
 }
@@ -206,7 +203,6 @@ async fn test_find_size_breaking_point() {
 /// and documents what the default limit actually is.
 #[tokio::test]
 async fn test_default_size_limits() {
-    // Default limits should be 100MB
     let default_limits = ApiSizeLimits::default();
     assert_eq!(default_limits.max_request_body_bytes, 100 * 1024 * 1024);
     assert_eq!(default_limits.max_multipart_field_bytes, 100 * 1024 * 1024);
@@ -222,11 +218,9 @@ async fn test_default_size_limits() {
 /// Creates a router and verifies that size limit enforcement is active.
 #[tokio::test]
 async fn test_request_body_limit_layer_applied() {
-    // Create a router with small 1MB limits
     let small_limits = ApiSizeLimits::from_mb(1, 1);
     let router = create_router_with_limits(ExtractionConfig::default(), small_limits);
 
-    // Create a 2MB file that should exceed limits
     let boundary = "----exceed-limits";
     let large_content = "X".repeat(2 * 1024 * 1024);
 
@@ -265,26 +259,19 @@ async fn test_multipart_proper_crlf_formatting() {
 
     let content = "Test PDF content that is at least somewhat large for testing purposes.";
 
-    // Build request body with strict CRLF formatting
     let mut body = Vec::new();
 
-    // Boundary
     body.extend_from_slice(b"--BOUNDARY123456\r\n");
 
-    // Headers
     body.extend_from_slice(b"Content-Disposition: form-data; name=\"files\"; filename=\"test.pdf\"\r\n");
     body.extend_from_slice(b"Content-Type: application/pdf\r\n");
 
-    // Blank line before content
     body.extend_from_slice(b"\r\n");
 
-    // Content
     body.extend_from_slice(content.as_bytes());
 
-    // CRLF before closing boundary
     body.extend_from_slice(b"\r\n");
 
-    // Closing boundary
     body.extend_from_slice(b"--BOUNDARY123456--\r\n");
 
     let request = Request::builder()

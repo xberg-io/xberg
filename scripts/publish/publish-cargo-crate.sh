@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
 
-# Publish a Rust crate to crates.io
-#
-# Publishes a single crate and handles idempotent publishing.
-# Includes handling for "already uploaded" case.
-#
-# Environment Variables:
-#   - CARGO_REGISTRY_TOKEN: crates.io registry token (required)
-#
-# Arguments:
-#   $1: Crate package name (e.g., kreuzberg-tesseract)
-#   $2: Optional timeout in seconds for waiting before publishing
-
 set -euo pipefail
 
 crate="${1:?Crate name argument required}"

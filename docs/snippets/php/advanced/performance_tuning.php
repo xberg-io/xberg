@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use function Kreuzberg\extract_file;
 use function Kreuzberg\batch_extract_files;
 
-// Benchmark basic extraction
 function benchmark(callable $fn, string $label): void
 {
     $startTime = microtime(true);
@@ -34,7 +33,6 @@ function benchmark(callable $fn, string $label): void
     echo "  Peak memory: " . number_format(memory_get_peak_usage() / 1024 / 1024, 2) . " MB\n\n";
 }
 
-// Compare single vs batch processing
 $files = array_filter(
     ['doc1.pdf', 'doc2.pdf', 'doc3.pdf', 'doc4.pdf', 'doc5.pdf'],
     'file_exists'
@@ -44,7 +42,6 @@ if (!empty($files)) {
     echo "Performance Comparison:\n";
     echo str_repeat('=', 60) . "\n\n";
 
-    // Single file processing
     benchmark(function () use ($files) {
         $results = [];
         foreach ($files as $file) {
@@ -53,17 +50,15 @@ if (!empty($files)) {
         return $results;
     }, "Single file processing");
 
-    // Batch processing
     benchmark(function () use ($files) {
         return batch_extract_files($files);
     }, "Batch processing (parallel)");
 }
 
-// Optimize for speed: disable expensive features
 $fastConfig = new ExtractionConfig(
-    extractImages: false,     // Skip image extraction
-    extractTables: false,     // Skip table detection
-    preserveFormatting: false // Skip formatting
+    extractImages: false,     
+    extractTables: false,     
+    preserveFormatting: false 
 );
 
 $standardConfig = new ExtractionConfig(
@@ -88,14 +83,13 @@ if (file_exists($testFile)) {
     }, "Standard config (all features)");
 }
 
-// Memory-efficient processing for large files
 function processLargeDocumentEfficiently(string $filePath): void
 {
     $config = new ExtractionConfig(
         page: new \Kreuzberg\Config\PageConfig(
-            extractPages: true  // Process page by page
+            extractPages: true  
         ),
-        extractImages: false    // Skip images to save memory
+        extractImages: false    
     );
 
     $kreuzberg = new Kreuzberg($config);
@@ -103,19 +97,14 @@ function processLargeDocumentEfficiently(string $filePath): void
 
     echo "Processing large document page by page:\n";
 
-    // Process pages one at a time
     foreach ($result->pages ?? [] as $page) {
-        // Process page content
         $pageContent = $page->content;
 
-        // Do something with the page (e.g., save to database)
-        // Then free memory
         unset($pageContent);
 
         echo "  Processed page {$page->pageNumber}\n";
     }
 
-    // Free result memory
     unset($result);
     gc_collect_cycles();
 }
@@ -124,7 +113,6 @@ if (file_exists('huge_document.pdf')) {
     processLargeDocumentEfficiently('huge_document.pdf');
 }
 
-// Optimize batch sizes
 function findOptimalBatchSize(array $files): int
 {
     $batchSizes = [1, 5, 10, 20, 50];
@@ -157,7 +145,6 @@ if (!empty($files) && count($files) >= 5) {
     echo "\nOptimal batch size: $optimalSize\n\n";
 }
 
-// Resource monitoring
 class ResourceMonitor
 {
     private float $startTime;
@@ -207,7 +194,6 @@ $monitor->checkpoint("Kreuzberg initialized");
 $result = $kreuzberg->extractFile('document.pdf');
 $monitor->checkpoint("Document extracted");
 
-// Process content
 $words = str_word_count($result->content);
 $monitor->checkpoint("Word count completed");
 
@@ -217,16 +203,12 @@ $monitor->checkpoint("Memory freed");
 
 $monitor->report();
 
-// Concurrent processing with multiple workers (using pcntl or parallel extension)
 function processConcurrently(array $files, int $workers = 4): array
 {
-    // Note: This is a simplified example
-    // In production, use amphp/parallel or similar
     $chunks = array_chunk($files, ceil(count($files) / $workers));
     $results = [];
 
     foreach ($chunks as $chunk) {
-        // Process each chunk (would be in separate process/thread)
         $chunkResults = batch_extract_files($chunk);
         $results = array_merge($results, $chunkResults);
     }
@@ -234,7 +216,6 @@ function processConcurrently(array $files, int $workers = 4): array
     return $results;
 }
 
-// Cache frequently accessed documents
 class CachedKreuzberg
 {
     private array $cache = [];
@@ -257,9 +238,8 @@ class CachedKreuzberg
 
         $result = $this->kreuzberg->extractFile($filePath);
 
-        // Manage cache size
         if (count($this->cache) >= $this->maxCacheSize) {
-            array_shift($this->cache); // Remove oldest
+            array_shift($this->cache); 
         }
 
         $this->cache[$cacheKey] = $result;
@@ -288,7 +268,6 @@ if (file_exists($file)) {
     }, "Second extraction (cached)");
 }
 
-// Tips for production use
 echo "\nPerformance Tips:\n";
 echo str_repeat('=', 60) . "\n";
 echo "1. Use batch processing for multiple files\n";

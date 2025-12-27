@@ -1,29 +1,5 @@
 #!/usr/bin/env bash
 
-# Validate release tag and compute release metadata
-#
-# This script handles release metadata computation from different GitHub event types:
-# - workflow_dispatch: Uses inputs.tag, inputs.dry_run, inputs.ref, inputs.targets
-# - release: Uses github.event.release.tag_name
-# - repository_dispatch: Uses github.event.client_payload
-# - Other: Uses GITHUB_REF_NAME as fallback
-#
-# Environment Variables:
-#   - GITHUB_EVENT_NAME: Type of GitHub event
-#   - GITHUB_REF_NAME: Current ref name (for fallback)
-#
-# Inputs (via environment):
-#   - INPUT_TAG: Release tag (e.g., v4.0.0-rc.1)
-#   - INPUT_DRY_RUN: Prepare artifacts without publishing (optional, default: false)
-#   - INPUT_REF: Git ref to build (optional, defaults to tag)
-#   - INPUT_TARGETS: Comma-separated list of release targets (optional)
-#   - EVENT_RELEASE_TAG: Tag from release event
-#   - EVENT_RELEASE_DRY_RUN: Dry run from release event
-#   - EVENT_DISPATCH_TAG: Tag from repository_dispatch
-#   - EVENT_DISPATCH_DRY_RUN: Dry run from repository_dispatch
-#   - EVENT_DISPATCH_REF: Ref from repository_dispatch
-#   - EVENT_DISPATCH_TARGETS: Targets from repository_dispatch
-
 set -euo pipefail
 
 event="${GITHUB_EVENT_NAME:-${1:-}}"
@@ -32,7 +8,6 @@ dry_run_input="false"
 ref_input=""
 targets_input=""
 
-# Determine source of inputs based on event type
 if [[ "$event" == "workflow_dispatch" ]]; then
 	tag="${INPUT_TAG:-}"
 	dry_run_input="${INPUT_DRY_RUN:-false}"
@@ -58,7 +33,6 @@ else
 	fi
 fi
 
-# Validate tag
 if [[ -z "$tag" ]]; then
 	echo "Release tag could not be determined" >&2
 	exit 1
@@ -69,14 +43,9 @@ if [[ "$tag" != v* ]]; then
 	exit 1
 fi
 
-# Extract version from tag
 version="${tag#v}"
 
-# Determine ref to checkout
 if [[ -n "$ref_input" ]]; then
-	# Accept tags passed as plain names in workflow_dispatch (e.g. "v4.0.0-rc.1")
-	# and normalize them to an explicit tag ref so checkout doesn't try to treat them
-	# as branches.
 	if [[ "$ref_input" == "$tag" ]]; then
 		ref="refs/tags/${tag}"
 	elif [[ "$ref_input" =~ ^v[0-9] ]]; then
@@ -88,7 +57,6 @@ else
 	ref="refs/tags/${tag}"
 fi
 
-# Determine checkout_ref and target_sha for git operations
 if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
 	checkout_ref="refs/heads/main"
 	target_sha="$ref"
@@ -100,7 +68,6 @@ else
 	target_sha=""
 fi
 
-# Determine matrix_ref (for matrix builds)
 if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
 	matrix_ref="main"
 elif [[ "$ref" =~ ^refs/heads/(.+)$ ]]; then
@@ -111,14 +78,12 @@ else
 	matrix_ref="$ref"
 fi
 
-# Determine if this is a tag
 if [[ "$ref" =~ ^refs/tags/ ]]; then
 	is_tag="true"
 else
 	is_tag="false"
 fi
 
-# Normalize target list
 normalize_target_list() {
 	local raw="$1"
 	raw="${raw:-all}"
@@ -131,7 +96,6 @@ normalize_target_list() {
 
 targets_value=$(normalize_target_list "$targets_input")
 
-# Initialize all release flags
 release_python=false
 release_node=false
 release_ruby=false
@@ -145,7 +109,6 @@ release_go=false
 release_wasm=false
 release_php=false
 
-# Helper function to set all targets
 set_all_targets() {
 	release_python=true
 	release_node=true
@@ -161,7 +124,6 @@ set_all_targets() {
 	release_php=true
 }
 
-# Parse requested targets
 mapfile -t requested_targets < <(echo "$targets_value" | tr ',' '\n')
 
 processed_any=false
@@ -233,17 +195,14 @@ for raw_target in "${requested_targets[@]}"; do
 	esac
 done
 
-# Homebrew requires CLI
 if [[ "$release_homebrew" == "true" ]]; then
 	release_cli=true
 fi
 
-# If no targets were processed, default to all
 if [[ "$processed_any" == "false" ]]; then
 	set_all_targets
 fi
 
-# Build enabled targets list
 enabled_targets=()
 if [[ "$release_python" == "true" ]]; then enabled_targets+=("python"); fi
 if [[ "$release_node" == "true" ]]; then enabled_targets+=("node"); fi
@@ -258,7 +217,6 @@ if [[ "$release_go" == "true" ]]; then enabled_targets+=("go"); fi
 if [[ "$release_wasm" == "true" ]]; then enabled_targets+=("wasm"); fi
 if [[ "$release_php" == "true" ]]; then enabled_targets+=("php"); fi
 
-# Summarize targets
 if [[ ${#enabled_targets[@]} -eq 12 ]]; then
 	release_targets_summary="all"
 elif [[ ${#enabled_targets[@]} -eq 0 ]]; then
@@ -270,14 +228,11 @@ else
 	)
 fi
 
-# Determine if any release is enabled
 release_any="false"
 if [[ ${#enabled_targets[@]} -gt 0 ]]; then
 	release_any="true"
 fi
 
-# Determine npm dist-tag based on version
-# CRITICAL: Pre-release versions must NOT be tagged as 'latest'
 determine_npm_tag() {
 	local ver="$1"
 	if [[ "$ver" == *-rc* ]] || [[ "$ver" == *-alpha* ]] || [[ "$ver" == *-beta* ]] || [[ "$ver" == *-pre* ]]; then
@@ -289,7 +244,6 @@ determine_npm_tag() {
 
 npm_tag=$(determine_npm_tag "$version")
 
-# Output results
 cat <<JSON
 {
   "tag": "$tag",

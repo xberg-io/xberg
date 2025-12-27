@@ -88,7 +88,7 @@ impl ExtractionConfig {
             language_detection: self.language_detection.as_ref().map(|c| c.to_rust()),
             keywords: self.keywords.as_ref().map(|c| c.to_rust()),
             postprocessor: self.postprocessor.as_ref().map(|c| c.to_rust()),
-            html_options: None, // Not exposed in PHP bindings yet
+            html_options: None,
             max_concurrent_extractions: self.max_concurrent_extractions,
             pages: self.pages.as_ref().map(|c| c.to_rust()),
         }
@@ -202,12 +202,10 @@ pub fn kreuzberg_config_merge(
     let mut base_rust = base.to_rust();
     let override_rust = override_config.to_rust();
 
-    // Merge simple fields
     base_rust.use_cache = override_rust.use_cache;
     base_rust.enable_quality_processing = override_rust.enable_quality_processing;
     base_rust.force_ocr = override_rust.force_ocr;
 
-    // Merge optional fields (override takes precedence if Some)
     if override_rust.ocr.is_some() {
         base_rust.ocr = override_rust.ocr;
     }

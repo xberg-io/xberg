@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#
-# Save Docker image as tar.gz artifact
-# Used by: ci-docker.yaml - Save Docker image as artifact step
-# Arguments: VARIANT (core|full), OUTPUT_DIR (optional, defaults to /tmp)
-#
 
 set -euo pipefail
 

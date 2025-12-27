@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\ImagePreprocessingConfig;
 
-// Example 1: Default preprocessing
 echo "Example 1: Default Image Preprocessing\n";
 echo "======================================\n";
 
@@ -34,7 +33,6 @@ echo "- Target DPI: 300 (standard for OCR)\n";
 echo "- Auto-rotate: Enabled\n";
 echo "- Denoise: Disabled\n\n";
 
-// Example 2: High DPI for better quality
 echo "Example 2: High DPI Configuration\n";
 echo "=================================\n";
 
@@ -43,7 +41,7 @@ $config2 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            targetDpi: 600  // Higher DPI for small text
+            targetDpi: 600  
         )
     )
 );
@@ -55,7 +53,6 @@ echo "- High-quality scans\n";
 echo "- Documents with fine details\n";
 echo "Note: Higher DPI = slower processing, more memory\n\n";
 
-// Example 3: Lower DPI for faster processing
 echo "Example 3: Lower DPI for Speed\n";
 echo "==============================\n";
 
@@ -64,7 +61,7 @@ $config3 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            targetDpi: 150  // Lower DPI for speed
+            targetDpi: 150  
         )
     )
 );
@@ -76,7 +73,6 @@ echo "- Low-resolution images\n";
 echo "- Fast processing needed\n";
 echo "Note: May reduce accuracy for small text\n\n";
 
-// Example 4: Disable auto-rotation
 echo "Example 4: Manual Rotation Control\n";
 echo "==================================\n";
 
@@ -85,7 +81,7 @@ $config4 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            autoRotate: false  // Disable automatic rotation
+            autoRotate: false  
         )
     )
 );
@@ -96,7 +92,6 @@ echo "- Images are already correctly oriented\n";
 echo "- Auto-rotation causes issues\n";
 echo "- Processing time is critical\n\n";
 
-// Example 5: Enable denoising
 echo "Example 5: Denoising for Poor Quality Scans\n";
 echo "===========================================\n";
 
@@ -107,7 +102,7 @@ $config5 = new ExtractionConfig(
         imagePreprocessing: new ImagePreprocessingConfig(
             targetDpi: 300,
             autoRotate: true,
-            denoise: true  // Enable noise reduction
+            denoise: true  
         )
     )
 );
@@ -123,7 +118,6 @@ echo "- Images with background noise\n";
 echo "- Old or damaged documents\n";
 echo "\nExtracted text length: " . strlen($result->content) . " characters\n\n";
 
-// Example 6: Complete preprocessing for poor quality documents
 echo "Example 6: Maximum Quality Configuration\n";
 echo "========================================\n";
 
@@ -132,9 +126,9 @@ $config6 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            targetDpi: 600,     // High DPI
-            autoRotate: true,   // Auto-fix orientation
-            denoise: true       // Remove noise
+            targetDpi: 600,     
+            autoRotate: true,   
+            denoise: true       
         )
     )
 );
@@ -149,7 +143,6 @@ echo "- Historical documents\n";
 echo "- Faded or damaged text\n";
 echo "- Critical accuracy requirements\n\n";
 
-// Example 7: Fast processing configuration
 echo "Example 7: Fast Processing Configuration\n";
 echo "========================================\n";
 
@@ -158,9 +151,9 @@ $config7 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            targetDpi: 200,     // Lower DPI
-            autoRotate: false,  // Skip rotation
-            denoise: false      // Skip denoising
+            targetDpi: 200,     
+            autoRotate: false,  
+            denoise: false      
         )
     )
 );
@@ -174,38 +167,30 @@ echo "- High-volume processing\n";
 echo "- Good quality source images\n";
 echo "- Performance-critical applications\n\n";
 
-// Example 8: DPI recommendations by document type
 echo "Example 8: DPI Recommendations by Document Type\n";
 echo "===============================================\n";
 
-// Standard documents
 $standardConfig = new ImagePreprocessingConfig(targetDpi: 300);
 echo "Standard documents (letters, reports): 300 DPI\n";
 
-// Newspapers and magazines
 $newspaperConfig = new ImagePreprocessingConfig(targetDpi: 400);
 echo "Newspapers and magazines: 400 DPI\n";
 
-// Books with small text
 $bookConfig = new ImagePreprocessingConfig(targetDpi: 600);
 echo "Books with small text: 600 DPI\n";
 
-// Receipts and forms
 $receiptConfig = new ImagePreprocessingConfig(targetDpi: 300);
 echo "Receipts and forms: 300 DPI\n";
 
-// Business cards
 $businessCardConfig = new ImagePreprocessingConfig(targetDpi: 400);
 echo "Business cards: 400 DPI\n";
 
-// Faxes
 $faxConfig = new ImagePreprocessingConfig(
     targetDpi: 300,
-    denoise: true  // Faxes are often noisy
+    denoise: true  
 );
 echo "Faxes: 300 DPI + denoising\n\n";
 
-// Example 9: Processing different image qualities
 echo "Example 9: Adaptive Configuration by Image Quality\n";
 echo "==================================================\n";
 
@@ -254,7 +239,6 @@ echo "Poor Quality:\n";
 echo "- DPI: 600, Auto-rotate: Yes, Denoise: Yes\n";
 echo "- Significant quality problems\n\n";
 
-// Example 10: Complete pipeline with preprocessing
 echo "Example 10: Complete OCR Pipeline with Preprocessing\n";
 echo "===================================================\n";
 

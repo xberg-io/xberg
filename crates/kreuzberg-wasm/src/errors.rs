@@ -60,7 +60,6 @@ pub fn convert_error(err: KreuzbergError) -> JsValue {
         KreuzbergError::Other(msg) => ("Error", msg),
     };
 
-    // Create a JavaScript error object
     let error_constructor = js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("Error"))
         .ok()
         .and_then(|f| {

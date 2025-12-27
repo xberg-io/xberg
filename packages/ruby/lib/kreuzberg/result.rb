@@ -7,39 +7,24 @@ rescue LoadError
 end
 
 module Kreuzberg
-  # Extraction result wrapper
-  #
-  # Provides structured access to extraction results from the native extension.
-  #
   # @example
-  #   result = Kreuzberg.extract_file_sync("document.pdf")
-  #   puts result.content
-  #   puts "MIME type: #{result.mime_type}"
-  #   puts "Metadata: #{result.metadata.inspect}"
-  #   result.tables.each { |table| puts table.inspect }
-  #
   # rubocop:disable Metrics/ClassLength
   class Result
     attr_reader :content, :mime_type, :metadata, :metadata_json, :tables,
                 :detected_languages, :chunks, :images, :pages
 
-    # Table structure
-    #
     # @!attribute [r] cells
     #   @return [Array<Array<String>>] Table cells (2D array)
     # @!attribute [r] markdown
     #   @return [String] Markdown representation
     # @!attribute [r] page_number
     #   @return [Integer] Page number where table was found
-    #
     Table = Struct.new(:cells, :markdown, :page_number, keyword_init: true) do
       def to_h
         { cells: cells, markdown: markdown, page_number: page_number }
       end
     end
 
-    # Text chunk
-    #
     # @!attribute [r] content
     #   @return [String] Chunk content
     # @!attribute [r] byte_start
@@ -52,7 +37,6 @@ module Kreuzberg
     #   @return [Integer, nil] First page number (1-indexed)
     # @!attribute [r] last_page
     #   @return [Integer, nil] Last page number (1-indexed)
-    #
     Chunk = Struct.new(
       :content,
       :byte_start,
@@ -111,8 +95,6 @@ module Kreuzberg
       end
     end
 
-    # Per-page content
-    #
     # @!attribute [r] page_number
     #   @return [Integer] Page number (1-indexed)
     # @!attribute [r] content
@@ -121,7 +103,6 @@ module Kreuzberg
     #   @return [Array<Table>] Tables on this page
     # @!attribute [r] images
     #   @return [Array<Image>] Images on this page
-    #
     PageContent = Struct.new(:page_number, :content, :tables, :images, keyword_init: true) do
       def to_h
         {
@@ -138,7 +119,6 @@ module Kreuzberg
     # @param hash [Hash] Hash returned from native extension
     #
     def initialize(hash)
-      # Handle both string and symbol keys for flexibility
       @content = get_value(hash, 'content', '')
       @mime_type = get_value(hash, 'mime_type', '')
       @metadata_json = get_value(hash, 'metadata_json', '{}')
@@ -184,8 +164,6 @@ module Kreuzberg
     #   puts "Document has #{result.page_count} pages"
     #
     def page_count
-      # This is a placeholder that would use FFI in the actual implementation
-      # For now, derive from metadata
       if @metadata.is_a?(Hash) && @metadata['pages'].is_a?(Hash)
         @metadata['pages']['total_count'] || 0
       else
@@ -296,7 +274,6 @@ module Kreuzberg
     def parse_detected_languages(langs_data)
       return nil if langs_data.nil?
 
-      # Detected languages is now just an array of strings
       langs_data.is_a?(Array) ? langs_data : []
     end
 

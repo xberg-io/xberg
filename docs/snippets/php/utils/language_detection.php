@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\LanguageDetectionConfig;
 
-// Configure language detection
 $config = new ExtractionConfig(
     languageDetection: new LanguageDetectionConfig(
         enabled: true,
@@ -33,17 +32,14 @@ echo str_repeat('=', 60) . "\n";
 echo "Document: document.pdf\n";
 echo "Content length: " . strlen($result->content) . " characters\n\n";
 
-// Display detected languages
 $detectedLanguages = $result->detectedLanguages ?? [];
 
 if (!empty($detectedLanguages)) {
     echo "Detected languages: " . implode(', ', $detectedLanguages) . "\n";
 
-    // Primary language is the first one
     $primaryLanguage = $detectedLanguages[0];
     echo "Primary language: $primaryLanguage\n\n";
 
-    // Check metadata for confidence scores
     if (isset($result->metadata['language_confidence'])) {
         echo "Language confidence scores:\n";
         foreach ($result->metadata['language_confidence'] as $lang => $confidence) {
@@ -56,7 +52,6 @@ if (!empty($detectedLanguages)) {
     echo "Try lowering minConfidence threshold.\n\n";
 }
 
-// Process based on detected language
 if (!empty($detectedLanguages)) {
     $primaryLanguage = $detectedLanguages[0];
 
@@ -70,7 +65,6 @@ if (!empty($detectedLanguages)) {
     };
 }
 
-// Language detection with different confidence thresholds
 echo "\n" . str_repeat('=', 60) . "\n";
 echo "Testing Different Confidence Thresholds:\n";
 echo str_repeat('=', 60) . "\n";
@@ -99,7 +93,6 @@ foreach ($thresholds as $threshold) {
     }
 }
 
-// Helper function to get language name
 function getLanguageName(string $code): string
 {
     $languageNames = [
@@ -123,7 +116,6 @@ function getLanguageName(string $code): string
     return $languageNames[$code] ?? ucfirst($code);
 }
 
-// Display language names
 echo "\n" . str_repeat('=', 60) . "\n";
 echo "Detected Languages (Full Names):\n";
 echo str_repeat('=', 60) . "\n";
@@ -136,7 +128,6 @@ if (!empty($detectedLanguages)) {
     echo "No languages detected.\n";
 }
 
-// Batch language detection
 $documents = [
     'english_doc.pdf',
     'spanish_doc.pdf',
@@ -151,7 +142,7 @@ $detectionConfig = new ExtractionConfig(
     languageDetection: new LanguageDetectionConfig(
         enabled: true,
         minConfidence: 0.8,
-        detectMultiple: false  // Only primary language
+        detectMultiple: false  
     )
 );
 
@@ -176,7 +167,6 @@ foreach ($documents as $document) {
     }
 }
 
-// Language-based routing example
 function routeDocumentByLanguage(string $filePath, array $detectedLanguages): string
 {
     if (empty($detectedLanguages)) {

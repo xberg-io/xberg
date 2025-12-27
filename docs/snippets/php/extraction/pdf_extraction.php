@@ -15,7 +15,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\PdfConfig;
 
-// Simple PDF extraction
 $kreuzberg = new Kreuzberg();
 $result = $kreuzberg->extractFile('document.pdf');
 
@@ -25,7 +24,6 @@ echo "Content length: " . strlen($result->content) . " characters\n";
 echo "Tables found: " . count($result->tables) . "\n";
 echo "Pages: " . ($result->metadata->pageCount ?? 'unknown') . "\n\n";
 
-// Extract with tables and images
 $config = new ExtractionConfig(
     extractImages: true,
     extractTables: true,
@@ -38,7 +36,6 @@ $config = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($config);
 $result = $kreuzberg->extractFile('report.pdf');
 
-// Process extracted tables
 echo "Extracted Tables:\n";
 echo str_repeat('=', 60) . "\n";
 foreach ($result->tables as $index => $table) {
@@ -46,11 +43,9 @@ foreach ($result->tables as $index => $table) {
     echo "Rows: " . count($table->cells) . "\n";
     echo "Columns: " . (count($table->cells[0] ?? []) ?? 0) . "\n\n";
 
-    // Export as Markdown
     echo "Markdown format:\n";
     echo $table->markdown . "\n\n";
 
-    // Export as CSV
     $csvFile = "table_{$index}.csv";
     $fp = fopen($csvFile, 'w');
     foreach ($table->cells as $row) {
@@ -60,7 +55,6 @@ foreach ($result->tables as $index => $table) {
     echo "Saved to: $csvFile\n\n";
 }
 
-// Extract and save images
 echo "Extracted Images:\n";
 echo str_repeat('=', 60) . "\n";
 foreach ($result->images ?? [] as $image) {
@@ -78,7 +72,6 @@ foreach ($result->images ?? [] as $image) {
     echo "  Data size: " . strlen($image->data) . " bytes\n\n";
 }
 
-// Extract with formatting preserved
 $formattedConfig = new ExtractionConfig(
     preserveFormatting: true,
     outputFormat: 'markdown'
@@ -87,22 +80,18 @@ $formattedConfig = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($formattedConfig);
 $result = $kreuzberg->extractFile('formatted.pdf');
 
-// Save formatted output
 file_put_contents('output.md', $result->content);
 echo "Saved formatted output to: output.md\n";
 
-// Extract specific sections by analyzing content
 $result = $kreuzberg->extractFile('document.pdf');
 $content = $result->content;
 
-// Find sections (assuming headers are marked)
 $sections = [];
 $lines = explode("\n", $content);
 $currentSection = null;
 $currentContent = [];
 
 foreach ($lines as $line) {
-    // Detect headers (customize pattern for your documents)
     if (preg_match('/^#+\s+(.+)$/', $line, $matches)) {
         if ($currentSection !== null) {
             $sections[$currentSection] = implode("\n", $currentContent);

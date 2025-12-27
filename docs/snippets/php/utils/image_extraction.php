@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\PdfConfig;
 use Kreuzberg\Result\ExtractedImage;
 
-// Configure extraction with image support
 $config = new ExtractionConfig(
     extractImages: true,
     pdf: new PdfConfig(
@@ -33,18 +32,15 @@ echo "Image Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Total images extracted: " . count($result->images ?? []) . "\n\n";
 
-// Create output directory for images
 $outputDir = './extracted_images';
 if (!is_dir($outputDir)) {
     mkdir($outputDir, 0755, true);
 }
 
-// Process and save each image
 foreach ($result->images ?? [] as $index => $image) {
     echo "Image " . ($index + 1) . ":\n";
     echo str_repeat('-', 40) . "\n";
 
-    // Generate filename
     $filename = sprintf(
         'page_%d_image_%d.%s',
         $image->pageNumber ?? 0,
@@ -53,7 +49,6 @@ foreach ($result->images ?? [] as $index => $image) {
     );
     $filepath = $outputDir . '/' . $filename;
 
-    // Save image data
     $bytesWritten = file_put_contents($filepath, $image->data);
 
     if ($bytesWritten !== false) {
@@ -63,12 +58,10 @@ foreach ($result->images ?? [] as $index => $image) {
         echo "  File size: " . number_format($bytesWritten) . " bytes\n";
         echo "  Page: " . ($image->pageNumber ?? 'N/A') . "\n";
 
-        // Calculate aspect ratio
         if ($image->width > 0 && $image->height > 0) {
             $aspectRatio = $image->width / $image->height;
             echo "  Aspect ratio: " . number_format($aspectRatio, 2) . ":1\n";
 
-            // Determine orientation
             $orientation = $image->width > $image->height ? 'Landscape' : 'Portrait';
             if (abs($image->width - $image->height) < 10) {
                 $orientation = 'Square';
@@ -82,12 +75,10 @@ foreach ($result->images ?? [] as $index => $image) {
     }
 }
 
-// Image analysis and filtering
 echo "Image Analysis:\n";
 echo str_repeat('=', 60) . "\n";
 
 if (!empty($result->images)) {
-    // Filter large images
     $largeImages = array_filter(
         $result->images,
         fn(ExtractedImage $img) => $img->width > 800 || $img->height > 800
@@ -95,14 +86,12 @@ if (!empty($result->images)) {
 
     echo "Large images (>800px): " . count($largeImages) . "\n";
 
-    // Calculate total size
     $totalBytes = array_sum(
         array_map(fn(ExtractedImage $img) => strlen($img->data), $result->images)
     );
 
     echo "Total image data: " . number_format($totalBytes / 1024, 2) . " KB\n";
 
-    // Group by format
     $formatCounts = [];
     foreach ($result->images as $image) {
         $format = $image->format ?? 'unknown';
@@ -114,7 +103,6 @@ if (!empty($result->images)) {
         echo "  $format: $count\n";
     }
 
-    // Calculate average dimensions
     $totalWidth = array_sum(array_map(fn($img) => $img->width, $result->images));
     $totalHeight = array_sum(array_map(fn($img) => $img->height, $result->images));
     $imageCount = count($result->images);
@@ -124,12 +112,10 @@ if (!empty($result->images)) {
         round($totalHeight / $imageCount) . " pixels\n";
 }
 
-// Create thumbnail function
 function createThumbnail(ExtractedImage $image, int $maxWidth = 200): ?string
 {
-    // This is a conceptual example - you would use GD or Imagick in practice
     if ($image->width <= $maxWidth) {
-        return null; // No need for thumbnail
+        return null; 
     }
 
     $scale = $maxWidth / $image->width;
@@ -138,7 +124,6 @@ function createThumbnail(ExtractedImage $image, int $maxWidth = 200): ?string
     return "Thumbnail would be: {$maxWidth}x{$newHeight}";
 }
 
-// Generate thumbnails for large images
 echo "\nThumbnail recommendations:\n";
 foreach ($result->images ?? [] as $index => $image) {
     $thumbInfo = createThumbnail($image, 200);

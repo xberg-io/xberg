@@ -39,8 +39,6 @@
  * const result = await wasm.extract_from_bytes(pdfBytes, config);
  */
 export function initializePdfiumWasm(pdfiumModule, wasmModule, debug = false) {
-	// pdfium-render exports initialize_pdfium_render as a global function
-	// when compiled as part of our WASM module
 	if (typeof wasmModule.initialize_pdfium_render === "function") {
 		try {
 			return wasmModule.initialize_pdfium_render(pdfiumModule, wasmModule, debug);
@@ -50,7 +48,6 @@ export function initializePdfiumWasm(pdfiumModule, wasmModule, debug = false) {
 		}
 	}
 
-	// Fallback: Try to find it in global scope (legacy behavior)
 	if (typeof initialize_pdfium_render === "function") {
 		try {
 			return initialize_pdfium_render(pdfiumModule, wasmModule, debug);
@@ -72,10 +69,8 @@ export function initializePdfiumWasm(pdfiumModule, wasmModule, debug = false) {
  * @returns {Promise<Object>} Loaded PDFium module
  */
 export async function loadPdfiumModule(pdfiumJsUrl) {
-	// Dynamic import of PDFium module
 	const pdfiumLoader = await import(pdfiumJsUrl);
 
-	// PDFium uses Emscripten module pattern
 	const pdfiumModule = await pdfiumLoader.default();
 
 	return pdfiumModule;

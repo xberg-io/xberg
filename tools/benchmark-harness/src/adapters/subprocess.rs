@@ -90,7 +90,6 @@ impl SubprocessAdapter {
     async fn execute_subprocess(&self, file_path: &Path, timeout: Duration) -> Result<(String, String, Duration)> {
         let start = Instant::now();
 
-        // Convert relative paths to absolute to ensure proper working directory handling
         let absolute_path = if file_path.is_absolute() {
             file_path.to_path_buf()
         } else {
@@ -137,7 +136,6 @@ impl SubprocessAdapter {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
         if !output.status.success() {
-            // Include more diagnostic information in the error message
             let mut error_msg = format!("Subprocess failed with exit code {:?}", output.status.code());
             if !stderr.is_empty() {
                 error_msg.push_str(&format!("\nstderr: {}", stderr));
@@ -165,7 +163,6 @@ impl SubprocessAdapter {
         }
         cmd.args(&self.args);
 
-        // Convert all relative paths to absolute for proper working directory handling
         let cwd = std::env::current_dir().map_err(Error::Io)?;
         for path in file_paths {
             let absolute_path = if path.is_absolute() {

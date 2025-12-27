@@ -84,10 +84,6 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
-// ========================================================================
-// POST-PROCESSOR PLUGIN FUNCTIONS
-// ========================================================================
-
 /// Register a PHP post-processor callback.
 ///
 /// Post-processors are called manually after extraction to enrich the result with additional
@@ -132,12 +128,10 @@ thread_local! {
 /// ```
 #[php_function]
 pub fn kreuzberg_register_post_processor(name: String, callback: &Zval) -> PhpResult<()> {
-    // Validate name
     if name.is_empty() {
         return Err(PhpException::default("Post-processor name cannot be empty".to_string()));
     }
 
-    // Validate callback is callable
     if !callback.is_callable() {
         return Err(PhpException::default(format!(
             "Post-processor '{}': callback must be callable",
@@ -145,7 +139,6 @@ pub fn kreuzberg_register_post_processor(name: String, callback: &Zval) -> PhpRe
         )));
     }
 
-    // Store callback in PHP registry
     POST_PROCESSOR_REGISTRY.with(|registry| {
         let mut registry = registry.borrow_mut();
 
@@ -280,22 +273,17 @@ pub fn kreuzberg_run_post_processors(result: &mut ExtractionResult) -> PhpResult
     POST_PROCESSOR_REGISTRY.with(|registry| {
         let registry = registry.borrow();
 
-        // If no post-processors registered, return immediately
         if registry.is_empty() {
             return Ok(());
         }
 
-        // Run each post-processor in order
         for (name, callback) in registry.iter() {
-            // Call the post-processor callback with the result
             let args = vec![result as &dyn IntoZvalDyn];
             let modified = callback
                 .try_call(args)
                 .map_err(|e| PhpException::default(format!("Post-processor '{}' failed to execute: {}", name, e)))?;
 
-            // Update result with the modified version returned by callback
             if let Some(modified_result) = modified.extract::<&ExtractionResult>() {
-                // Copy modified fields back to original result
                 *result = modified_result.clone();
             }
         }
@@ -348,12 +336,10 @@ pub fn kreuzberg_run_post_processors(result: &mut ExtractionResult) -> PhpResult
 /// ```
 #[php_function]
 pub fn kreuzberg_register_validator(name: String, callback: &Zval) -> PhpResult<()> {
-    // Validate name
     if name.is_empty() {
         return Err(PhpException::default("Validator name cannot be empty".to_string()));
     }
 
-    // Validate callback is callable
     if !callback.is_callable() {
         return Err(PhpException::default(format!(
             "Validator '{}': callback must be callable",
@@ -361,7 +347,6 @@ pub fn kreuzberg_register_validator(name: String, callback: &Zval) -> PhpResult<
         )));
     }
 
-    // Register validator
     VALIDATOR_REGISTRY.with(|registry| {
         let mut registry = registry.borrow_mut();
 
@@ -473,20 +458,16 @@ pub fn kreuzberg_run_validators(result: &mut Zval) -> PhpResult<()> {
     VALIDATOR_REGISTRY.with(|registry| {
         let registry = registry.borrow();
 
-        // If no validators registered, pass immediately
         if registry.is_empty() {
             return Ok(());
         }
 
-        // Run each validator
         for (name, callback) in registry.iter() {
-            // Call the validator callback with the result
             let args = vec![result as &dyn IntoZvalDyn];
             let validation_result = callback
                 .try_call(args)
                 .map_err(|e| PhpException::default(format!("Validator '{}' failed to execute: {}", name, e)))?;
 
-            // Check if validator returned false (invalid)
             if let Some(is_valid) = validation_result.extract::<bool>()
                 && !is_valid
             {
@@ -495,17 +476,11 @@ pub fn kreuzberg_run_validators(result: &mut Zval) -> PhpResult<()> {
                     name
                 )));
             }
-
-            // If validator returned non-boolean, we assume it passed (threw exception if failed)
         }
 
         Ok(())
     })
 }
-
-// ========================================================================
-// CUSTOM EXTRACTOR PLUGIN FUNCTIONS
-// ========================================================================
 
 /// Register a custom extractor for a specific MIME type.
 ///

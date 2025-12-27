@@ -48,21 +48,17 @@ use once_cell::sync::Lazy;
 /// - Images: width, height, format
 /// - Archives: file_count, file_list, total_size, etc.
 pub const KNOWN_FORMATS: &[&str] = &[
-    // Basic document properties
     "format_type",
     "title",
     "author",
     "keywords",
     "creator",
     "producer",
-    // Dates
     "creation_date",
     "modification_date",
-    // Pagination
     "page_count",
     "sheet_count",
     "sheet_names",
-    // Email metadata
     "from_email",
     "from_name",
     "to_emails",
@@ -70,55 +66,43 @@ pub const KNOWN_FORMATS: &[&str] = &[
     "bcc_emails",
     "message_id",
     "attachments",
-    // Content descriptions
     "description",
     "summary",
-    // Typography
     "fonts",
-    // Archive/compression metadata
     "format",
     "file_count",
     "file_list",
     "total_size",
     "compressed_size",
-    // Image dimensions
     "width",
     "height",
-    // Content structure metrics
     "element_count",
     "unique_elements",
     "line_count",
     "word_count",
     "character_count",
-    // HTML content structure
     "headers",
     "links",
     "code_blocks",
-    // HTML meta tags
     "canonical",
     "base_href",
-    // Open Graph meta tags
     "og_title",
     "og_description",
     "og_image",
     "og_url",
     "og_type",
     "og_site_name",
-    // Twitter meta tags
     "twitter_card",
     "twitter_title",
     "twitter_description",
     "twitter_image",
     "twitter_site",
     "twitter_creator",
-    // Link relations
     "link_author",
     "link_license",
     "link_alternate",
-    // OCR-specific fields
     "psm",
     "output_format",
-    // Table extraction metrics
     "table_count",
     "table_rows",
     "table_cols",

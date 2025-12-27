@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
-#
-# Check if Ruby gem exists on RubyGems registry
-#
-# Arguments:
 #   $1: Package version (required)
-#
-# Environment variables:
-#   - GITHUB_OUTPUT: Path to GitHub Actions output file
-#
-# Usage:
-#   ./check_rubygems.sh "1.0.0"
-#
 
 set -euo pipefail
 
@@ -71,7 +60,6 @@ while [ $attempt -le $max_attempts ]; do
 done
 
 if [ "$http_code" = "200" ]; then
-	# Check if the specific version exists in the response
 	found=false
 	found_version=""
 	for candidate in "${version_candidates[@]}"; do
@@ -90,7 +78,6 @@ if [ "$http_code" = "200" ]; then
 		echo "::notice::Ruby gem ${package_name} not found on RubyGems for versions: ${version_candidates[*]} (will build/publish)" >&2
 	fi
 elif [ "$http_code" = "404" ]; then
-	# Package doesn't exist yet (first publish)
 	echo "exists=false"
 	echo "::notice::Ruby gem ${package_name} not found on RubyGems (first publish), will build and publish" >&2
 else

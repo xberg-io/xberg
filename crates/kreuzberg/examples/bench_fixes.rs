@@ -28,14 +28,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("=== {} ===", description);
         println!("File: {}\n", file);
 
-        // Cold start
         let start = Instant::now();
         let result = extract_file_sync(&path, None, &config)?;
         let cold = start.elapsed();
         println!("Cold start:  {:>8.2} ms", cold.as_secs_f64() * 1000.0);
         println!("Text length: {} chars\n", result.content.len());
 
-        // Warm iterations
         let mut warm_times = Vec::new();
         for i in 1..=5 {
             let start = Instant::now();
@@ -51,7 +49,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
 
-        // Statistics
         let avg_warm = warm_times.iter().sum::<std::time::Duration>() / warm_times.len() as u32;
         let avg_speedup = cold.as_micros() as f64 / avg_warm.as_micros() as f64;
         println!(

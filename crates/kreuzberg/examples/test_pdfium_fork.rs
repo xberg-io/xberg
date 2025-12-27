@@ -10,7 +10,6 @@ async fn main() {
 
     println!("Testing PDF extraction with cleaned pdfium-render fork...\n");
 
-    // Test 1: Simple extraction
     println!("Test 1: fake_memo.pdf");
     let start = Instant::now();
     match extract_file("test_documents/pdfs/fake_memo.pdf", None, &config).await {
@@ -25,7 +24,6 @@ async fn main() {
         }
     }
 
-    // Test 2: Warm iteration
     println!("\nTest 2: Warm iteration");
     let start = Instant::now();
     match extract_file("test_documents/pdfs/fake_memo.pdf", None, &config).await {
@@ -40,7 +38,6 @@ async fn main() {
         }
     }
 
-    // Test 3: Academic Paper (font-heavy)
     println!("\nTest 3: Academic Paper (18 fonts)");
     let start = Instant::now();
     match extract_file(

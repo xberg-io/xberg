@@ -62,11 +62,9 @@ final class ExtractorRegistry
             throw new \InvalidArgumentException('MIME type cannot be empty');
         }
 
-        // Convert ExtractorInterface to callable
         if ($extractor instanceof ExtractorInterface) {
             $callback = [$extractor, 'extract'];
         } else {
-            // At this point, $extractor is guaranteed to be callable due to union type
             $callback = $extractor;
         }
 

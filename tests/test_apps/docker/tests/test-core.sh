@@ -9,7 +9,6 @@ echo -e "${BLUE}================================"
 echo "Core Image Specific Tests"
 echo "================================${NC}"
 
-# Test 1: LibreOffice is NOT available in core image
 echo ""
 log_info "Test 1: LibreOffice should NOT be available"
 if docker exec kreuzberg-core-test which libreoffice >/dev/null 2>&1; then
@@ -18,7 +17,6 @@ else
 	log_success "LibreOffice correctly not installed in core image"
 fi
 
-# Test 2: Tesseract is available
 echo ""
 log_info "Test 2: Tesseract OCR is available"
 if docker exec kreuzberg-core-test which tesseract >/dev/null 2>&1; then
@@ -27,7 +25,6 @@ else
 	log_fail "Tesseract not found in core image"
 fi
 
-# Test 3: Text extraction works
 echo ""
 log_info "Test 3: Text extraction works"
 if [ -f "/Users/naamanhirschfeld/workspace/kreuzberg-dev/test_apps/docker/fixtures/sample.txt" ]; then
@@ -41,7 +38,6 @@ else
 	log_skip "Text extraction test - fixture not found"
 fi
 
-# Test 4: PDF text extraction capability
 echo ""
 log_info "Test 4: PDF extraction capability available"
 output=$(docker exec kreuzberg-core-test kreuzberg extract --help 2>&1 || true)
@@ -51,7 +47,6 @@ else
 	log_warn "PDF extraction not clearly advertised in help"
 fi
 
-# Test 5: Embeddings capability
 echo ""
 log_info "Test 5: ONNX Runtime embeddings available"
 result=""
@@ -62,7 +57,6 @@ else
 	log_warn "ONNX Runtime not clearly visible (may still be available)"
 fi
 
-# Test 6: Memory constraints are reasonable
 echo ""
 log_info "Test 6: Core container memory check"
 memory=""
@@ -70,7 +64,6 @@ memory=$(docker stats --no-stream kreuzberg-core-test 2>/dev/null | tail -1 | aw
 log_info "Core container using: $memory of memory"
 log_success "Memory check completed"
 
-# Test 7: File system is mounted correctly
 echo ""
 log_info "Test 7: Fixtures directory mounted"
 if docker exec kreuzberg-core-test [ -d "/fixtures" ]; then
@@ -79,7 +72,6 @@ else
 	log_fail "Fixtures directory not mounted in core container"
 fi
 
-# Test 8: Cache directory is writable
 echo ""
 log_info "Test 8: Cache directory is writable"
 if docker exec kreuzberg-core-test touch /app/.kreuzberg/test_write 2>/dev/null &&
@@ -89,7 +81,6 @@ else
 	log_fail "Cache directory is not writable"
 fi
 
-# Test 9: Core can extract PDF via API
 echo ""
 log_info "Test 9: Core can extract PDF via API"
 CORE_API="http://localhost:8000"
@@ -102,7 +93,6 @@ else
 	log_warn "Core API PDF response: $response"
 fi
 
-# Test 10: Core can extract text files via API
 echo ""
 log_info "Test 10: Core can extract text files via API"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -114,7 +104,6 @@ else
 	log_warn "Core API text response: $response"
 fi
 
-# Test 11: Core can extract Markdown via API
 echo ""
 log_info "Test 11: Core can extract Markdown via API"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -126,7 +115,6 @@ else
 	log_warn "Core API Markdown response: $response"
 fi
 
-# Test 12: Core can extract ODT files via API
 echo ""
 log_info "Test 12: Core can extract ODT files via API"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -138,7 +126,6 @@ else
 	log_warn "Core API ODT response: $response"
 fi
 
-# Test 13: Core OCR capability on images
 echo ""
 log_info "Test 13: Core can process images with OCR"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -150,10 +137,8 @@ else
 	log_warn "Core API OCR response: $response"
 fi
 
-# Test 14: Core does NOT have LibreOffice conversion feature
 echo ""
 log_info "Test 14: Core correctly lacks LibreOffice (.doc/.xlsx support)"
-# Try extracting a .docx file - should fail or return no content without LibreOffice
 response=$(curl -s -X POST "$CORE_API/extract" \
 	-H "Content-Type: application/json" \
 	-d '{"path":"/fixtures/lorem_ipsum.docx"}' 2>/dev/null)
@@ -165,7 +150,6 @@ else
 	log_info "Core response for .docx: $response"
 fi
 
-# Test 15: Core has Tesseract data files
 echo ""
 log_info "Test 15: Tesseract data files are available"
 if docker exec kreuzberg-core-test [ -d "/usr/share/tesseract-ocr" ]; then
@@ -174,12 +158,10 @@ else
 	log_warn "Tesseract data directory not found (may be in alternative location)"
 fi
 
-# Test 16: Core API health check
 echo ""
 log_info "Test 16: Core API health check"
 assert_http_status "$CORE_API/health" 200 "Core /health endpoint working"
 
-# Test 17: Core embeddings capability
 echo ""
 log_info "Test 17: Core can generate embeddings"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -191,7 +173,6 @@ else
 	log_warn "Core embeddings response: $response"
 fi
 
-# Test 18: Core image has reasonable size
 echo ""
 log_info "Test 18: Core image size efficiency"
 size=""

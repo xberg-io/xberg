@@ -92,7 +92,7 @@ class PluginApisTest extends TestCase
     public function test_extractors_unregister(): void
     {
         Kreuzberg::unregisterdocumentextractor('nonexistent-extractor-xyz');
-        $this->assertTrue(true); // Should not throw
+        $this->assertTrue(true);
     }
 
     /**
@@ -159,7 +159,7 @@ class PluginApisTest extends TestCase
     public function test_ocr_backends_unregister(): void
     {
         Kreuzberg::unregisterocrbackend('nonexistent-backend-xyz');
-        $this->assertTrue(true); // Should not throw
+        $this->assertTrue(true);
     }
 
     /**

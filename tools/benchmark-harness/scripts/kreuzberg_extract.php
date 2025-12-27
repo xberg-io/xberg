@@ -10,8 +10,6 @@
 
 declare(strict_types=1);
 
-// Determine the path to autoload.php
-// Try workspace location first, then global composer
 $autoloadPaths = [
     __DIR__ . '/../../../packages/php/vendor/autoload.php',
     __DIR__ . '/../../../../packages/php/vendor/autoload.php',
@@ -33,7 +31,6 @@ if (!$autoloaded) {
 
 use Kreuzberg\Exceptions\KreuzbergException;
 
-// Enable debug logging if environment variable is set
 define('DEBUG', getenv('KREUZBERG_BENCHMARK_DEBUG') === 'true');
 
 /**
@@ -188,13 +185,11 @@ function main(): void
 
                 $results = extract_batch($filePaths);
 
-                // For single file in batch mode, return single result
                 if (count($filePaths) === 1) {
                     $output = json_encode($results[0], JSON_THROW_ON_ERROR);
                     debug_log("Output JSON (single file): {$output}");
                     echo $output;
                 } else {
-                    // For multiple files, return array
                     $output = json_encode($results, JSON_THROW_ON_ERROR);
                     if (strlen($output) > 200) {
                         debug_log("Output JSON (multiple files): " . substr($output, 0, 200) . "...");

@@ -212,8 +212,7 @@ public class ErrorHandlingTests
     public void ExtractFileSync_WithPartiallyDownloadedFile_HandlesGracefully()
     {
         var tempPath = Path.Combine(Path.GetTempPath(), $"partial-{Guid.NewGuid():N}.pdf");
-        // Write PDF header but incomplete file
-        File.WriteAllBytes(tempPath, new byte[] { 0x25, 0x50, 0x44, 0x46 }); // %PDF
+        File.WriteAllBytes(tempPath, new byte[] { 0x25, 0x50, 0x44, 0x46 });
 
         try
         {
@@ -246,7 +245,6 @@ public class ErrorHandlingTests
             }
         };
 
-        // Should either work or throw validation error
         var result = KreuzbergClient.ExtractFileSync(pdfPath, config);
         Assert.NotNull(result);
     }
@@ -259,12 +257,11 @@ public class ErrorHandlingTests
         {
             Chunking = new ChunkingConfig
             {
-                ChunkSize = -1, // Invalid negative size
+                ChunkSize = -1,
                 ChunkOverlap = -100
             }
         };
 
-        // Should either handle or throw error
         var result = KreuzbergClient.ExtractFileSync(pdfPath, config);
         Assert.NotNull(result);
     }
@@ -348,7 +345,6 @@ public class ErrorHandlingTests
     [Fact]
     public void BatchExtractBytesSync_WithNullMimeTypeInItem_ThrowsValidationException()
     {
-        // ArgumentNullException is thrown during BytesWithMime construction, not during batch extract
         var ex = Assert.Throws<ArgumentNullException>(() =>
             new BytesWithMime(new byte[] { 4, 5, 6 }, null!)
         );
@@ -630,7 +626,6 @@ public class ErrorHandlingTests
 
         try
         {
-            // Change permissions (platform-specific)
             if (OperatingSystem.IsWindows())
             {
                 using var stream = new FileStream(tempPath, FileMode.Open, FileAccess.Read, FileShare.None);
@@ -638,13 +633,11 @@ public class ErrorHandlingTests
             }
             else
             {
-                // Unix-like systems
                 System.Diagnostics.Process.Start("chmod", $"000 {tempPath}").WaitForExit();
 
                 var ex = Assert.Throws<KreuzbergIOException>(() => KreuzbergClient.ExtractFileSync(tempPath));
                 Assert.NotNull(ex);
 
-                // Restore permissions for cleanup
                 System.Diagnostics.Process.Start("chmod", $"644 {tempPath}").WaitForExit();
             }
         }
@@ -658,7 +651,6 @@ public class ErrorHandlingTests
                 }
                 catch
                 {
-                    // Ignore cleanup errors
                 }
             }
         }
@@ -720,7 +712,6 @@ public class ErrorHandlingTests
 
         public void Validate(ExtractionResult result)
         {
-            // No validation for test
         }
     }
 

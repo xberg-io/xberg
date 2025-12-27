@@ -11,7 +11,6 @@
  * - Error types and error codes
  */
 
-// Re-export configuration types
 export type {
 	ChunkingConfig,
 	ExtractionConfig,
@@ -31,7 +30,6 @@ export type {
 	YakeParams,
 } from "./config.js";
 
-// Re-export result types
 export type {
 	Chunk,
 	ChunkMetadata,
@@ -40,7 +38,6 @@ export type {
 	Table,
 } from "./results.js";
 
-// Re-export metadata types
 export type {
 	ArchiveMetadata,
 	EmailMetadata,
@@ -57,7 +54,6 @@ export type {
 	XmlMetadata,
 } from "./metadata.js";
 
-// Re-export protocol types
 export type {
 	OcrBackendProtocol,
 	PostProcessorProtocol,
@@ -66,7 +62,6 @@ export type {
 
 export type { ProcessingStage } from "./protocols.js";
 
-// Re-export error types
 export {
 	CacheError,
 	ErrorCode,

@@ -73,7 +73,6 @@ final class ExtractionTest extends TestCase
     {
         $kreuzberg = new Kreuzberg();
 
-        // Should not throw - config is optional
         $this->assertInstanceOf(Kreuzberg::class, $kreuzberg);
     }
 
@@ -138,22 +137,18 @@ final class ExtractionTest extends TestCase
     {
         $reflection = new \ReflectionClass(Kreuzberg::class);
 
-        // Check extractFile signature
         $extractFile = $reflection->getMethod('extractFile');
         $this->assertSame(3, $extractFile->getNumberOfParameters());
         $this->assertSame(1, $extractFile->getNumberOfRequiredParameters());
 
-        // Check extractBytes signature
         $extractBytes = $reflection->getMethod('extractBytes');
         $this->assertSame(3, $extractBytes->getNumberOfParameters());
         $this->assertSame(2, $extractBytes->getNumberOfRequiredParameters());
 
-        // Check batchExtractFiles signature
         $batchExtractFiles = $reflection->getMethod('batchExtractFiles');
         $this->assertSame(2, $batchExtractFiles->getNumberOfParameters());
         $this->assertSame(1, $batchExtractFiles->getNumberOfRequiredParameters());
 
-        // Check batchExtractBytes signature
         $batchExtractBytes = $reflection->getMethod('batchExtractBytes');
         $this->assertSame(3, $batchExtractBytes->getNumberOfParameters());
         $this->assertSame(2, $batchExtractBytes->getNumberOfRequiredParameters());

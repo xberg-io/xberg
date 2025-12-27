@@ -24,7 +24,6 @@ RSpec.describe 'Validator Plugin System' do
 
     it 'allows extraction to proceed when validator passes' do
       validator = lambda do |result|
-        # Validation passes - do nothing
       end
 
       Kreuzberg.register_validator('pass_validator', validator)

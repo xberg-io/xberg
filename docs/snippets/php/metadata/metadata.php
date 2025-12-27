@@ -14,10 +14,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use function Kreuzberg\extract_file;
 
-// Extract PDF metadata
 $result = extract_file('document.pdf');
 
-// Access PDF-specific metadata
 if (isset($result->metadata->pdf)) {
     $pdfMeta = $result->metadata->pdf;
     echo "Pages: " . ($pdfMeta['page_count'] ?? 'N/A') . "\n";
@@ -25,10 +23,8 @@ if (isset($result->metadata->pdf)) {
     echo "Title: " . ($pdfMeta['title'] ?? 'N/A') . "\n";
 }
 
-// Extract HTML metadata
 $htmlResult = extract_file('page.html');
 
-// Access HTML-specific metadata
 if (isset($htmlResult->metadata->html)) {
     $htmlMeta = $htmlResult->metadata->html;
     echo "Title: " . ($htmlMeta['title'] ?? 'N/A') . "\n";

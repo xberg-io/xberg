@@ -82,10 +82,8 @@ pub use types::*;
 pub use core::extractor::{batch_extract_bytes, batch_extract_file};
 pub use core::extractor::{extract_bytes, extract_file};
 
-// Available in WASM (bytes-based)
 pub use core::extractor::{batch_extract_bytes_sync, extract_bytes_sync};
 
-// Only available with filesystem access
 #[cfg(feature = "tokio-runtime")]
 pub use core::extractor::{batch_extract_file_sync, extract_file_sync};
 

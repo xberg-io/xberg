@@ -9,7 +9,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Exceptions\KreuzbergException;
 
-// Example 1: Simple extraction
 echo "=== Simple Extraction ===\n";
 try {
     $kreuzberg = new Kreuzberg();
@@ -24,7 +23,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// Example 2: OCR extraction
 echo "=== OCR Extraction ===\n";
 try {
     $config = new ExtractionConfig(
@@ -44,7 +42,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// Example 3: Table extraction
 echo "=== Table Extraction ===\n";
 try {
     $kreuzberg = new Kreuzberg();
@@ -60,7 +57,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// Example 4: Batch processing
 echo "=== Batch Processing ===\n";
 try {
     $files = [

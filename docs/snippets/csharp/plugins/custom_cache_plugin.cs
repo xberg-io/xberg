@@ -4,7 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 
 // NOTE: ICacheBackend interface is not available in C# bindings
-// This example shows a custom caching pattern using a wrapper
 
 class CustomCacheWrapper
 {
@@ -61,7 +60,6 @@ class CustomCacheWrapper
     {
         var cacheKey = GenerateKey(filePath, config);
 
-        // Check cache first
         var cached = Get(cacheKey);
         if (cached != null)
         {
@@ -69,7 +67,6 @@ class CustomCacheWrapper
             return cached;
         }
 
-        // Extract and cache
         var result = KreuzbergClient.ExtractFileSync(filePath, config);
         Set(cacheKey, result);
         Console.WriteLine("Extracted and cached");
@@ -89,15 +86,12 @@ class Program
             var config = new ExtractionConfig { UseCache = true };
             var filePath = "document.pdf";
 
-            // First extraction - will be cached
             var result1 = cache.GetOrExtract(filePath, config);
             Console.WriteLine($"First extraction: {result1.Content.Length} chars");
 
-            // Second extraction - retrieved from cache
             var result2 = cache.GetOrExtract(filePath, config);
             Console.WriteLine($"Second extraction: {result2.Content.Length} chars");
 
-            // Clear cache
             cache.Clear();
             Console.WriteLine("Cache cleared");
         }

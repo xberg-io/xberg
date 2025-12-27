@@ -17,11 +17,10 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\ImageExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 
-// Basic image extraction
 $config = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
-        minWidth: 100,      // Skip small images
+        minWidth: 100,      
         minHeight: 100
     ),
     extractImages: true
@@ -34,7 +33,6 @@ echo "Image Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Images found: " . count($result->images ?? []) . "\n\n";
 
-// Save all extracted images
 foreach ($result->images ?? [] as $image) {
     $filename = sprintf(
         'extracted_p%d_i%d_%dx%d.%s',
@@ -52,7 +50,6 @@ foreach ($result->images ?? [] as $image) {
     echo "  Data: " . number_format(strlen($image->data)) . " bytes\n\n";
 }
 
-// Extract images with OCR
 $ocrConfig = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
@@ -84,11 +81,10 @@ foreach ($result->images ?? [] as $image) {
     echo "\n";
 }
 
-// Filter images by size and save only large ones
 $largeImageConfig = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
-        minWidth: 500,      // Only extract large images
+        minWidth: 500,      
         minHeight: 500
     ),
     extractImages: true
@@ -104,7 +100,6 @@ foreach ($result->images ?? [] as $image) {
     echo "Saved: $filename ({$image->width}x{$image->height})\n";
 }
 
-// Extract and categorize images by type
 $result = $kreuzberg->extractFile('document.pdf');
 
 $imageTypes = [];
@@ -119,7 +114,6 @@ echo "\nImages by format:\n";
 foreach ($imageTypes as $format => $images) {
     echo "  $format: " . count($images) . " images\n";
 
-    // Save each format to its own directory
     $dir = "images_$format";
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
@@ -132,15 +126,12 @@ foreach ($imageTypes as $format => $images) {
     echo "    Saved to: $dir/\n";
 }
 
-// Generate image thumbnails (requires GD extension)
 if (extension_loaded('gd')) {
     foreach ($result->images ?? [] as $image) {
         if ($image->format === 'png' || $image->format === 'jpg') {
-            // Create image from data
             $gdImage = imagecreatefromstring($image->data);
 
             if ($gdImage !== false) {
-                // Create thumbnail (200px wide)
                 $width = imagesx($gdImage);
                 $height = imagesy($gdImage);
                 $thumbWidth = 200;

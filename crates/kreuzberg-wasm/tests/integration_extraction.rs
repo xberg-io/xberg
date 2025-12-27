@@ -16,7 +16,6 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-// Test data with static lifetime
 const VALID_PDF: &[u8] = b"%PDF-1.4\n\
 1 0 obj\n\
 << /Type /Catalog /Pages 2 0 R >>\n\
@@ -89,7 +88,6 @@ fn test_extract_bytes_sync_returns_object() {
 /// Test synchronous extraction with different MIME types
 #[wasm_bindgen_test]
 fn test_extract_bytes_sync_multiple_mime_types() {
-    // Test with PDF
     let pdf_data = unsafe { Uint8Array::view(VALID_PDF) };
     let pdf_result = extract_bytes_sync_wasm(pdf_data, "application/pdf".to_string(), None);
     assert!(
@@ -97,7 +95,6 @@ fn test_extract_bytes_sync_multiple_mime_types() {
         "PDF handling should complete"
     );
 
-    // Test with text/plain
     let text_data = unsafe { Uint8Array::view(TEXT_DATA) };
     let text_result = extract_bytes_sync_wasm(text_data, "text/plain".to_string(), None);
     assert!(
@@ -116,7 +113,6 @@ fn test_extract_bytes_sync_none_config_uses_defaults() {
     let result_default_config =
         extract_bytes_sync_wasm(data2, "application/pdf".to_string(), Some(wasm_bindgen::JsValue::NULL));
 
-    // Both should have same outcome (both ok or both error)
     assert_eq!(
         result_no_config.is_ok(),
         result_default_config.is_ok(),
@@ -284,7 +280,6 @@ fn test_extract_sync_deterministic_results() {
     let data2 = unsafe { Uint8Array::view(VALID_PDF) };
     let result2 = extract_bytes_sync_wasm(data2, "application/pdf".to_string(), None);
 
-    // Both should succeed or both should fail
     assert_eq!(result1.is_ok(), result2.is_ok(), "Extraction should be deterministic");
 }
 
@@ -299,7 +294,6 @@ fn test_extract_sync_no_state_leakage() {
     let result2 = extract_bytes_sync_wasm(invalid, "application/pdf".to_string(), None);
     let result3 = extract_bytes_sync_wasm(valid2, "application/pdf".to_string(), None);
 
-    // Valid and valid2 should have same outcome, invalid should differ
     assert_eq!(result1.is_ok(), result3.is_ok(), "Valid PDFs should have same outcome");
     assert_ne!(result1.is_ok(), result2.is_ok(), "Invalid PDF should differ from valid");
 }
@@ -327,7 +321,6 @@ fn test_extract_sync_mime_type_case_handling() {
     let data2 = unsafe { Uint8Array::view(VALID_PDF) };
     let result_upper = extract_bytes_sync_wasm(data2, "APPLICATION/PDF".to_string(), None);
 
-    // Results may differ based on implementation but shouldn't panic
     assert!(
         result_lower.is_ok() || result_lower.is_err(),
         "Lowercase MIME should handle gracefully"
@@ -344,7 +337,6 @@ fn test_extract_sync_mime_type_with_charset() {
     let data = unsafe { Uint8Array::view(VALID_PDF) };
     let result = extract_bytes_sync_wasm(data, "application/pdf; charset=utf-8".to_string(), None);
 
-    // Should handle gracefully (either parse or error appropriately)
     assert!(
         result.is_ok() || result.is_err(),
         "MIME with charset should handle gracefully"
@@ -365,7 +357,6 @@ fn test_batch_extract_sync_mixed_types() {
         "application/octet-stream".to_string(),
     ];
 
-    // Batch should process all or return error for the invalid one
     let result = batch_extract_bytes_sync_wasm(data_list, mime_types, None);
     assert!(
         result.is_ok() || result.is_err(),
@@ -383,7 +374,6 @@ fn test_extract_sync_config_parameter_passed() {
     let data2 = unsafe { Uint8Array::view(VALID_PDF) };
     let result2 = extract_bytes_sync_wasm(data2, "application/pdf".to_string(), None);
 
-    // Results should be consistent when config is null
     assert_eq!(result1.is_ok(), result2.is_ok(), "Null config should match no config");
 }
 
@@ -393,7 +383,6 @@ fn test_batch_extract_sync_large_batch() {
     let mut data_list = Vec::new();
     let mut mime_types = Vec::new();
 
-    // Create 10 document batch
     for _i in 0..10 {
         let data = unsafe { Uint8Array::view(TEXT_DATA) };
         data_list.push(data);
@@ -416,7 +405,6 @@ fn test_extract_async_non_blocking() {
     let data2 = unsafe { Uint8Array::view(TEXT_DATA) };
     let promise2 = extract_bytes_wasm(data2, "text/plain".to_string(), None);
 
-    // Both promises should be created immediately
     assert!(
         !promise1.is_null() && !promise2.is_null(),
         "Multiple async calls should all return Promise"

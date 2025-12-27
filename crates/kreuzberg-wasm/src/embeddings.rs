@@ -109,7 +109,6 @@ pub fn list_embedding_presets() -> Array {
 pub fn get_embedding_preset(name: String) -> Option<JsValue> {
     let preset = kreuzberg::get_preset(&name)?;
 
-    // Create a JavaScript object with preset information
     let obj = js_sys::Object::new();
 
     js_sys::Reflect::set(&obj, &"name".into(), &preset.name.into()).ok()?;
@@ -117,7 +116,6 @@ pub fn get_embedding_preset(name: String) -> Option<JsValue> {
     js_sys::Reflect::set(&obj, &"overlap".into(), &preset.overlap.into()).ok()?;
     js_sys::Reflect::set(&obj, &"dimensions".into(), &preset.dimensions.into()).ok()?;
 
-    // Set model name (format the model enum as a string)
     let model_name = format!("{:?}", preset.model);
     js_sys::Reflect::set(&obj, &"modelName".into(), &model_name.into()).ok()?;
 

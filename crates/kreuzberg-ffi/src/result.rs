@@ -51,7 +51,6 @@ pub unsafe extern "C" fn kreuzberg_result_get_page_count(result: *const Extracti
 
     clear_last_error();
 
-    // SAFETY: We've verified result is not null and it must be a valid ExtractionResult.
     let result_ref = unsafe { &*result };
 
     if let Some(metadata) = &result_ref.metadata.pages {
@@ -100,7 +99,6 @@ pub unsafe extern "C" fn kreuzberg_result_get_chunk_count(result: *const Extract
 
     clear_last_error();
 
-    // SAFETY: We've verified result is not null and it must be a valid ExtractionResult.
     let result_ref = unsafe { &*result };
 
     if let Some(chunks) = &result_ref.chunks {
@@ -154,10 +152,8 @@ pub unsafe extern "C" fn kreuzberg_result_get_detected_language(result: *const E
 
     clear_last_error();
 
-    // SAFETY: We've verified result is not null and it must be a valid ExtractionResult.
     let result_ref = unsafe { &*result };
 
-    // Get primary language: first from metadata.language, then from detected_languages
     let language = if let Some(lang) = &result_ref.metadata.language {
         lang.clone()
     } else if let Some(langs) = &result_ref.detected_languages {
@@ -270,7 +266,6 @@ pub unsafe extern "C" fn kreuzberg_result_get_metadata_field(
 
     clear_last_error();
 
-    // SAFETY: We've verified field_name is not null and it must be a valid C string.
     let field_str = match unsafe { std::ffi::CStr::from_ptr(field_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
@@ -283,10 +278,8 @@ pub unsafe extern "C" fn kreuzberg_result_get_metadata_field(
         }
     };
 
-    // SAFETY: We've verified result is not null.
     let result_ref = unsafe { &*result };
 
-    // Serialize metadata to JSON for field extraction
     let metadata_json = match serde_json::to_value(&result_ref.metadata) {
         Ok(val) => val,
         Err(e) => {
@@ -299,7 +292,6 @@ pub unsafe extern "C" fn kreuzberg_result_get_metadata_field(
         }
     };
 
-    // Navigate the JSON path using dot notation
     let mut current = &metadata_json;
     for part in field_str.split('.') {
         if let Some(obj) = current.as_object() {
@@ -322,7 +314,6 @@ pub unsafe extern "C" fn kreuzberg_result_get_metadata_field(
         }
     }
 
-    // Serialize the field value to JSON string
     match serde_json::to_string(current) {
         Ok(json) => match CString::new(json) {
             Ok(c_string) => CMetadataField {

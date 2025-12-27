@@ -158,8 +158,6 @@ fn extract_tables_from_document(
 
     let mut all_tables = Vec::new();
 
-    // Iterate through all pages, extracting words and reconstructing tables
-    // from spatial positions. The document is borrowed immutably for all reads.
     for (page_index, page) in document.pages().iter().enumerate() {
         let words = extract_words_from_page(&page, 0.0)?;
 
@@ -214,7 +212,6 @@ fn assign_tables_and_images_to_pages(
 
     let mut updated_pages = pages;
 
-    // Use Arc to wrap tables for zero-copy sharing of table data across pages.
     for table in tables {
         if let Some(page) = updated_pages.iter_mut().find(|p| p.page_number == table.page_number) {
             page.tables.push(std::sync::Arc::new(table.clone()));
@@ -273,14 +270,9 @@ impl PdfExtractor {
         document: &PdfDocument,
         config: &ExtractionConfig,
     ) -> Result<PdfExtractionPhaseResult> {
-        // Unified extraction: text and metadata in single pass for 10-15% performance gain.
-        // The document is borrowed immutably and safely used for read operations only.
-        // This avoids redundant document tree traversal compared to separate text/metadata extraction.
         let (native_text, _boundaries, page_contents, pdf_metadata) =
             crate::pdf::text::extract_text_and_metadata_from_pdf_document(document, config.pages.as_ref())?;
 
-        // Phase 2: Extract tables using the same document instance.
-        // Both functions perform read-only operations on the shared document reference.
         let tables = extract_tables_from_document(document, &pdf_metadata)?;
 
         Ok((pdf_metadata, native_text, tables, page_contents))
@@ -386,15 +378,10 @@ impl DocumentExtractor for PdfExtractor {
     ) -> Result<ExtractionResult> {
         #[cfg(feature = "pdf")]
         let (pdf_metadata, native_text, tables, page_contents) = {
-            // WASM target: always synchronous (no tokio::task::spawn_blocking)
-            // Other targets: use spawn_blocking in batch mode for better parallelism
             #[cfg(target_arch = "wasm32")]
             {
-                // For WASM targets, PDFium must be properly initialized in the environment.
-                // The error message will direct users to the documentation for setup requirements.
                 let pdfium = crate::pdf::bindings::bind_pdfium(PdfError::MetadataExtractionFailed, "initialize Pdfium")
                     .map_err(|pdf_err| {
-                        // Provide context-specific error for WASM PDF failures
                         if pdf_err.to_string().contains("WASM") || pdf_err.to_string().contains("Module") {
                             crate::error::KreuzbergError::Parsing {
                                 message: "PDF extraction requires proper WASM module initialization. \
@@ -417,7 +404,6 @@ impl DocumentExtractor for PdfExtractor {
                     }
                 })?;
 
-                // Single document instance reused for all extraction phases
                 Self::extract_all_from_document(&document, config)?
             }
             #[cfg(all(not(target_arch = "wasm32"), feature = "tokio-runtime"))]
@@ -472,7 +458,6 @@ impl DocumentExtractor for PdfExtractor {
                         }
                     })?;
 
-                    // Single document instance reused for all extraction phases
                     Self::extract_all_from_document(&document, config)?
                 }
             }
@@ -490,7 +475,6 @@ impl DocumentExtractor for PdfExtractor {
                     }
                 })?;
 
-                // Single document instance reused for all extraction phases
                 Self::extract_all_from_document(&document, config)?
             }
         };
@@ -545,9 +529,6 @@ impl DocumentExtractor for PdfExtractor {
             }
         }
 
-        // Early exit: skip image extraction when neither OCR nor image extraction is needed
-        // This optimization avoids wasteful image decompression/extraction for text-only workloads
-        // Expected improvement: 5-10% CPU reduction on non-OCR, non-image-extraction configurations
         let images = if config.needs_image_processing() {
             if config.images.is_some() {
                 match crate::pdf::images::extract_images_from_pdf(content) {

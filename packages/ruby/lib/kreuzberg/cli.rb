@@ -1,16 +1,8 @@
 # frozen_string_literal: true
 
 module Kreuzberg
-  # Command-line interface wrapper
-  #
-  # Provides a Ruby API for the Kreuzberg CLI commands.
-  #
   # @example Extract a file
-  #   Kreuzberg::CLI.extract('document.pdf', output: 'text')
-  #
   # @example Detect file type
-  #   mime_type = Kreuzberg::CLI.detect('document.pdf')
-  #
   module CLI
     module_function
 

@@ -207,7 +207,7 @@ final class TableExtractionTest extends TestCase
                     );
                 }
 
-                break; // Found a file with tables, test passed
+                break;
             }
         }
     }
@@ -228,7 +228,6 @@ final class TableExtractionTest extends TestCase
         if (!empty($result->tables)) {
             $table = $result->tables[0];
 
-            // Tables should have structured data
             $this->assertObjectHasProperty(
                 'data',
                 $table,
@@ -258,7 +257,6 @@ final class TableExtractionTest extends TestCase
             $result->tables,
             'Documents without tables should have empty tables array',
         );
-        // Don't assert empty, as markdown might have table syntax
     }
 
     #[Test]
@@ -306,12 +304,10 @@ final class TableExtractionTest extends TestCase
         if (!empty($result->tables)) {
             $table = $result->tables[0];
 
-            // Validate table has all expected properties
             $this->assertObjectHasProperty('data', $table);
             $this->assertObjectHasProperty('markdown', $table);
             $this->assertObjectHasProperty('pageNumber', $table);
 
-            // Validate data is properly structured
             if (!empty($table->data)) {
                 $this->assertIsArray($table->data);
 
@@ -341,7 +337,6 @@ final class TableExtractionTest extends TestCase
         if (!empty($result->tables)) {
             $markdown = $result->tables[0]->markdown;
 
-            // Markdown tables should have pipe separators
             $this->assertStringContainsString(
                 '|',
                 $markdown,

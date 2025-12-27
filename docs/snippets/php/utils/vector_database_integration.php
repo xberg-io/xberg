@@ -18,7 +18,6 @@ use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\EmbeddingConfig;
 use Kreuzberg\Enums\EmbeddingModelType;
 
-// Configure for vector database integration
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChars: 512,
@@ -38,7 +37,6 @@ echo str_repeat('=', 60) . "\n";
 echo "Document: document.pdf\n";
 echo "Total chunks: " . count($result->chunks ?? []) . "\n\n";
 
-// Prepare records for vector database
 $vectorRecords = [];
 
 foreach ($result->chunks ?? [] as $index => $chunk) {
@@ -46,14 +44,12 @@ foreach ($result->chunks ?? [] as $index => $chunk) {
         continue;
     }
 
-    // Generate unique ID for the chunk
     $chunkId = sprintf(
         'doc_%s_chunk_%d',
         md5('document.pdf'),
         $index
     );
 
-    // Prepare vector record
     $vectorRecords[] = [
         'id' => $chunkId,
         'content' => $chunk->content,
@@ -70,7 +66,6 @@ foreach ($result->chunks ?? [] as $index => $chunk) {
 
 echo "Prepared " . count($vectorRecords) . " records for vector database\n\n";
 
-// Display sample record structure
 if (!empty($vectorRecords)) {
     echo "Sample Vector Record Structure:\n";
     echo str_repeat('-', 40) . "\n";
@@ -82,16 +77,13 @@ if (!empty($vectorRecords)) {
     echo "Metadata keys: " . implode(', ', array_keys($sample['metadata'])) . "\n\n";
 }
 
-// Example: Insert into Pinecone (pseudo-code)
 function insertIntoPinecone(array $records, string $namespace = 'default'): void
 {
-    // This is a pseudo-code example
-    // In practice, use Pinecone SDK: composer require pinecone-io/pinecone-php-client
 
     echo "Inserting into Pinecone:\n";
     echo str_repeat('-', 40) . "\n";
 
-    $batches = array_chunk($records, 100); // Pinecone batch limit
+    $batches = array_chunk($records, 100); 
 
     foreach ($batches as $batchIndex => $batch) {
         echo sprintf(
@@ -101,18 +93,13 @@ function insertIntoPinecone(array $records, string $namespace = 'default'): void
             $namespace
         );
 
-        // Pseudo-code for Pinecone upsert
-        // $pinecone->upsert($namespace, $batch);
     }
 
     echo "Completed inserting " . count($records) . " vectors\n\n";
 }
 
-// Example: Insert into Weaviate (pseudo-code)
 function insertIntoWeaviate(array $records, string $className = 'Document'): void
 {
-    // This is a pseudo-code example
-    // In practice, use Weaviate SDK
 
     echo "Inserting into Weaviate:\n";
     echo str_repeat('-', 40) . "\n";
@@ -129,8 +116,6 @@ function insertIntoWeaviate(array $records, string $className = 'Document'): voi
             'vector' => $record['embedding'],
         ];
 
-        // Pseudo-code for Weaviate insert
-        // $weaviate->data()->create($object);
 
         if (($index + 1) % 10 === 0) {
             echo sprintf("Inserted %d/%d objects\n", $index + 1, count($records));
@@ -140,13 +125,10 @@ function insertIntoWeaviate(array $records, string $className = 'Document'): voi
     echo "Completed inserting " . count($records) . " objects\n\n";
 }
 
-// Example: Insert into Qdrant (pseudo-code)
 function insertIntoQdrant(
     array $records,
     string $collectionName = 'documents'
 ): void {
-    // This is a pseudo-code example
-    // In practice, use Qdrant client
 
     echo "Inserting into Qdrant:\n";
     echo str_repeat('-', 40) . "\n";
@@ -170,26 +152,19 @@ function insertIntoQdrant(
         $collectionName
     );
 
-    // Pseudo-code for Qdrant upsert
-    // $qdrant->upsert($collectionName, $points);
 
     echo "Completed\n\n";
 }
 
-// Demonstrate vector database integration (pseudo-code)
 echo "Vector Database Integration Examples:\n";
 echo str_repeat('=', 60) . "\n\n";
 
-// Pinecone integration
 insertIntoPinecone($vectorRecords, 'documents');
 
-// Weaviate integration
 insertIntoWeaviate($vectorRecords, 'DocumentChunk');
 
-// Qdrant integration
 insertIntoQdrant($vectorRecords, 'document_chunks');
 
-// Batch processing multiple documents
 $documents = [
     'doc1.pdf',
     'doc2.pdf',
@@ -253,21 +228,14 @@ foreach ($documents as $document) {
 
 echo "\nTotal records prepared: " . count($allVectorRecords) . "\n\n";
 
-// Example: Semantic search simulation
 function simulateSemanticSearch(string $query, array $records, int $topK = 5): array
 {
-    // This is a simplified simulation
-    // In practice, the vector database handles similarity search
 
     echo "Simulating semantic search:\n";
     echo "  Query: \"$query\"\n";
     echo "  Searching " . count($records) . " vectors...\n";
     echo "  Top $topK results:\n\n";
 
-    // In a real implementation, you would:
-    // 1. Generate embedding for the query
-    // 2. Compute similarity with all vectors
-    // 3. Return top K results
 
     $results = array_slice($records, 0, $topK);
 
@@ -276,7 +244,7 @@ function simulateSemanticSearch(string $query, array $records, int $topK = 5): a
             "  %d. %s (score: %.3f)\n",
             $index + 1,
             substr($result['content'], 0, 60) . '...',
-            0.9 - ($index * 0.05) // Simulated score
+            0.9 - ($index * 0.05) 
         );
         echo sprintf("     Source: %s\n", $result['metadata']['source_file']);
         echo "\n";
@@ -285,7 +253,6 @@ function simulateSemanticSearch(string $query, array $records, int $topK = 5): a
     return $results;
 }
 
-// Simulate search
 if (!empty($allVectorRecords)) {
     echo "Semantic Search Example:\n";
     echo str_repeat('=', 60) . "\n";
@@ -297,7 +264,6 @@ if (!empty($allVectorRecords)) {
     );
 }
 
-// Helper: Export vector records to JSON
 function exportVectorRecordsToJson(array $records, string $filename): void
 {
     $data = [
@@ -313,7 +279,6 @@ function exportVectorRecordsToJson(array $records, string $filename): void
     echo "Exported " . count($records) . " vector records to: $filename\n";
 }
 
-// Export records
 if (!empty($allVectorRecords)) {
     exportVectorRecordsToJson($allVectorRecords, 'vector_records.json');
 }

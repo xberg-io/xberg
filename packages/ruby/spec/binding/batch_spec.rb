@@ -98,17 +98,14 @@ RSpec.describe Kreuzberg do
       paths = []
       temp_dir = Dir.mktmpdir
 
-      # Text file
       txt_file = File.join(temp_dir, 'test.txt')
       File.write(txt_file, 'Text content')
       paths << txt_file
 
-      # CSV file
       csv_file = File.join(temp_dir, 'test.csv')
       File.write(csv_file, "Name,Value\nAlice,1\nBob,2")
       paths << csv_file
 
-      # JSON file
       json_file = File.join(temp_dir, 'test.json')
       File.write(json_file, '{"key": "value"}')
       paths << json_file
@@ -251,7 +248,6 @@ RSpec.describe Kreuzberg do
       paths = []
       file_count = 5
 
-      # Create test files
       temp_dir = Dir.mktmpdir
       file_count.times do |i|
         file_path = File.join(temp_dir, "perf_test_#{i}.txt")
@@ -259,7 +255,6 @@ RSpec.describe Kreuzberg do
         paths << file_path
       end
 
-      # Measure batch operation time
       start_time = Time.now
       results = described_class.batch_extract_files_sync(paths)
       batch_duration = Time.now - start_time
@@ -267,9 +262,7 @@ RSpec.describe Kreuzberg do
       expect(results.length).to eq(file_count)
       expect(results).to all(be_a(Kreuzberg::Result))
 
-      # Batch should complete in reasonable time
-      # (This is a loose check - exact timing depends on system)
-      expect(batch_duration).to be < 60 # 60 second upper bound for 5 files
+      expect(batch_duration).to be < 60
 
       puts "Batch extraction time for #{file_count} files: #{batch_duration.round(3)}s"
     ensure
@@ -286,13 +279,10 @@ RSpec.describe Kreuzberg do
         paths << file_path
       end
 
-      # Get batch results
       batch_results = described_class.batch_extract_files_sync(paths)
 
-      # Get sequential results
       sequential_results = paths.map { |p| described_class.extract_file_sync(p) }
 
-      # Compare
       expect(batch_results.length).to eq(sequential_results.length)
       batch_results.each_with_index do |batch_result, idx|
         seq_result = sequential_results[idx]
@@ -311,7 +301,6 @@ RSpec.describe Kreuzberg do
         '/nonexistent/file2.txt'
       ]
 
-      # Batch operation should not raise, but may return errors in results
       expect do
         described_class.batch_extract_files_sync(paths)
       end.not_to raise_error
@@ -321,15 +310,12 @@ RSpec.describe Kreuzberg do
       paths = []
       temp_dir = Dir.mktmpdir
 
-      # Add valid file
       valid_path = File.join(temp_dir, 'valid.txt')
       File.write(valid_path, 'Valid content')
       paths << valid_path
 
-      # Add invalid path
       paths << '/nonexistent/invalid.txt'
 
-      # Should return results (some may be failures)
       results = described_class.batch_extract_files_sync(paths)
       expect(results).to be_a(Array)
     ensure
@@ -340,7 +326,6 @@ RSpec.describe Kreuzberg do
       data = ['Content']
       mime_types = ['invalid/mime/type']
 
-      # Should handle invalid MIME types gracefully
       expect do
         described_class.batch_extract_bytes_sync(data, mime_types)
       end.not_to raise_error

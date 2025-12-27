@@ -1,21 +1,16 @@
 #!/usr/bin/env bash
 
-# Test script for bottle extraction and formula update logic
-# This validates the bottle building and formula update process
-
 set -euo pipefail
 
 echo "=== Homebrew Bottle Building Test Suite ==="
 echo ""
 
-# Create a test directory
 test_dir=$(mktemp -d)
 trap 'rm -rf "$test_dir"' EXIT
 
 echo "Test 1: Validate bottle filename parsing"
 echo "=========================================="
 
-# Test bottle filename patterns
 test_bottles=(
 	"kreuzberg--4.0.0.arm64_sequoia.bottle.tar.gz"
 	"kreuzberg--4.0.0-rc.1.arm64_sequoia.bottle.tar.gz"
@@ -23,12 +18,10 @@ test_bottles=(
 )
 
 for bottle in "${test_bottles[@]}"; do
-	# Extract bottle tag using the same approach as the script
 	without_suffix="${bottle%.bottle.tar.gz}"
 	bottle_tag="${without_suffix##*.}"
 	echo "  $bottle -> $bottle_tag"
 
-	# Validate the extraction
 	case "$bottle" in
 	*arm64_sequoia*)
 		[ "$bottle_tag" = "arm64_sequoia" ] || {
@@ -51,7 +44,6 @@ echo ""
 echo "Test 2: Validate SHA256 calculation"
 echo "===================================="
 
-# Create a test bottle file
 test_bottle="$test_dir/kreuzberg--4.0.0.arm64_sequoia.bottle.tar.gz"
 echo "test content" | gzip >"$test_bottle"
 
@@ -68,7 +60,6 @@ echo ""
 echo "Test 3: Validate formula file update logic"
 echo "=========================================="
 
-# Create a test formula
 test_formula="$test_dir/kreuzberg.rb"
 cat >"$test_formula" <<'EOF'
 class Kreuzberg < Formula
@@ -92,7 +83,6 @@ class Kreuzberg < Formula
 end
 EOF
 
-# Test URL replacement
 updated=$(sed 's|url "https://github.com/kreuzberg-dev/kreuzberg/archive/.*\.tar\.gz"|url "https://github.com/kreuzberg-dev/kreuzberg/archive/v4.0.0-rc.18.tar.gz"|' "$test_formula")
 
 if echo "$updated" | grep -q "v4.0.0-rc.18.tar.gz"; then
@@ -102,7 +92,6 @@ else
 	exit 1
 fi
 
-# Test bottle block removal
 test_without_bottles=$(echo "$updated" | sed '/# bottle do/,/# end/d')
 
 if ! echo "$test_without_bottles" | grep -q "# bottle do"; then
@@ -117,7 +106,6 @@ echo ""
 echo "Test 4: Validate GitHub artifact naming conventions"
 echo "===================================================="
 
-# Test artifact naming for download-artifact
 patterns=(
 	"homebrew-bottle-arm64_sequoia"
 	"homebrew-bottle-ventura"

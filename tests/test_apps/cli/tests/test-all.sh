@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -32,13 +31,11 @@ run_test() {
 	echo
 }
 
-# Run all tests
 run_test "Installation Test" "install.sh"
 run_test "Extraction Test" "test-extract.sh"
 run_test "HTTP API Server Test" "test-serve.sh"
 run_test "MCP Server Test" "test-mcp.sh"
 
-# Summary
 echo -e "${BLUE}========================================${NC}"
 echo -e "${BLUE}  Test Suite Summary${NC}"
 echo -e "${BLUE}========================================${NC}"

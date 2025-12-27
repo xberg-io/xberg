@@ -14,17 +14,11 @@ keywords = ["ffi", "bindings", "document", "extraction", "api"]
 categories = ["development-tools::ffi", "text-processing"]
 
 [lib]
-# cdylib: Required by Java (FFM API) and Go (cgo dynamic linking)
-# staticlib: Required by Python (PyO3 static linking) to avoid dylib install_name issues on macOS
-# rlib: Standard Rust library format for workspace dependencies
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [features]
-# Mirror embeddings feature availability from kreuzberg dependency
 embeddings = []
-# Optional rayon for parallel batch processing
 rayon = ["dep:rayon"]
-# Re-export kreuzberg features for downstream conditional compilation
 pdf = []
 keywords-yake = []
 keywords-rake = []
@@ -37,8 +31,6 @@ tokio = { workspace = true }
 html-to-markdown-rs = { version = "2.16.1", default-features = false }
 rayon = { version = "1.11", optional = true }
 
-# On Windows MinGW, disable embeddings/ort since ONNX Runtime is not available
-# in MinGW-compatible form. Use all other features but exclude embeddings.
 [target.'cfg(all(windows, target_env = "gnu"))'.dependencies]
 kreuzberg = { path = "../kreuzberg", features = [
     "pdf",

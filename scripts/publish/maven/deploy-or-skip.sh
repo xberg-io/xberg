@@ -18,9 +18,6 @@ already_exists() {
 	local log_file="$1"
 	local version="$2"
 
-	# Sonatype Central publishing can reject duplicate deployments even if the
-	# artifact is not yet searchable via search.maven.org. Treat this as success
-	# to make the release workflow idempotent.
 	grep -Eq "Component with package url: 'pkg:maven/dev\\.kreuzberg/kreuzberg@${version}'.*already exists" "$log_file" ||
 		grep -Eq "pkg:maven/dev\\.kreuzberg/kreuzberg@${version}.*already exists" "$log_file"
 }

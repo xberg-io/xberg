@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 
-# Import after ensuring module is available
 try:
     from kreuzberg import batch_extract_files, extract_file
 except ImportError:
@@ -38,10 +37,8 @@ def test_single_file_async_equals_sync():
     if not fixture.exists():
         pytest.skip(f"Test fixture not found: {fixture}")
 
-    # Warm up
     asyncio.run(extract_file(str(fixture)))
 
-    # Time async
     start_async = time.monotonic()
     for _ in range(3):
         result_async = asyncio.run(extract_file(str(fixture)))
@@ -66,7 +63,6 @@ def test_batch_api_concurrent_processing():
         ]
     ]
 
-    # Filter to only existing files
     fixtures = [f for f in fixtures if f.exists()]
 
     if len(fixtures) < 2:
@@ -74,18 +70,12 @@ def test_batch_api_concurrent_processing():
 
     paths = [str(f) for f in fixtures]
 
-    # Time batch execution (includes warm up overhead)
     start_batch = time.monotonic()
     results = asyncio.run(batch_extract_files(paths))
     batch_time = time.monotonic() - start_batch
 
     assert len(results) == len(fixtures), "All files should be extracted"
 
-    # For 2 files:
-    # - Sequential would be ~70ms (2 x 35ms each)
-    # - Concurrent should be ~35ms + small overhead
-    # This test just verifies it completes successfully without errors
-    # More detailed concurrency timing would require instrumenting subprocess calls
     assert batch_time > 0, "Batch processing should complete"
     assert all(len(r.content) > 0 for r in results), "All results should have content"
 
@@ -107,16 +97,12 @@ def test_async_gather_concurrent_extraction():
         pytest.skip(f"Test fixture not found: {fixture}")
 
     async def test_concurrent():
-        # Gather 2 concurrent extractions (same file twice)
         return await asyncio.gather(*[extract_file(str(fixture)) for _ in range(2)])
 
-    # Execute concurrent
     results = asyncio.run(test_concurrent())
 
-    # Verify results
     assert len(results) == 2, "Should extract 2 results"
     assert all(len(r.content) > 0 for r in results), "All results should have content"
-    # Results should be identical since same file
     assert results[0].content == results[1].content, "Same file should produce same content"
 
 
@@ -141,10 +127,8 @@ def test_batch_versus_sequential_async():
 
     paths = [str(f) for f in fixtures]
 
-    # Method 1: Batch API (uses concurrency)
     results_batch = asyncio.run(batch_extract_files(paths))
 
-    # Method 2: Sequential async (no concurrency - for reference)
     async def sequential():
         results = []
         for p in paths:
@@ -154,16 +138,13 @@ def test_batch_versus_sequential_async():
 
     results_seq = asyncio.run(sequential())
 
-    # Both should extract same number of files
     assert len(results_batch) == len(paths), "Batch should extract all files"
     assert len(results_seq) == len(paths), "Sequential should extract all files"
 
-    # Results should be identical
     assert len(results_batch) == len(results_seq), "Same number of results"
     for r_batch, r_seq in zip(results_batch, results_seq, strict=False):
         assert r_batch.content == r_seq.content, "Content should match"
 
 
 if __name__ == "__main__":
-    # Run tests
     pytest.main([__file__, "-v", "-s"])

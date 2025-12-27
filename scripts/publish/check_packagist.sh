@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
-#
 # Check if PHP package version exists on Packagist
-#
-# Arguments:
 #   $1: Package version (required)
-#
-# Environment variables:
-#   - GITHUB_OUTPUT: Path to GitHub Actions output file
-#
-# Usage:
-#   ./check_packagist.sh "1.0.0"
-#
 
 set -euo pipefail
 
@@ -28,7 +18,6 @@ exists="false"
 while [ $attempt -le $max_attempts ]; do
 	echo "::debug::Checking Packagist for kreuzberg/kreuzberg:${version} (attempt ${attempt}/${max_attempts})"
 
-	# Fetch the package metadata from Packagist
 	response=$(curl \
 		--silent \
 		--show-error \
@@ -38,12 +27,10 @@ while [ $attempt -le $max_attempts ]; do
 		--max-time 60 \
 		"$url" 2>/dev/null || echo "{}")
 
-	# Check if the version exists in the packages array
 	if echo "$response" | jq -e ".packages[\"kreuzberg/kreuzberg\"] | any(.version == \"${version}\")" >/dev/null 2>&1; then
 		exists="true"
 		break
 	elif echo "$response" | jq -e '.packages' >/dev/null 2>&1; then
-		# Valid response but version not found
 		exists="false"
 		break
 	fi

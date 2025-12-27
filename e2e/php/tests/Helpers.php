@@ -308,7 +308,6 @@ class Helpers
 
         foreach ($segments as $segment) {
             if (!is_array($current) || !isset($current[$segment])) {
-                // Try format metadata fallback
                 if (isset($metadata['format']) && is_array($metadata['format'])) {
                     $current = $metadata['format'];
                     foreach ($segments as $seg) {

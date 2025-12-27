@@ -94,7 +94,6 @@ final class DocumentExtractionTest extends TestCase
 
         $result = $kreuzberg->extractFile($this->testDocumentsPath . '/pdfs/code_and_formula.pdf');
 
-        // With extractTables: false, the tables array should be empty
         $this->assertEmpty($result->tables, 'Tables should not be extracted when config disables them');
     }
 
@@ -110,8 +109,6 @@ final class DocumentExtractionTest extends TestCase
             config: $overrideConfig,
         );
 
-        // Method config should override default - but we can't test the internal behavior,
-        // we just verify extraction works with override
         $this->assertNotNull($result->content);
     }
 
@@ -197,7 +194,6 @@ final class DocumentExtractionTest extends TestCase
         $kreuzberg = new Kreuzberg();
         $result = $kreuzberg->extractFile($this->testDocumentsPath . '/pdfs/code_and_formula.pdf');
 
-        // Without config, should still extract content with default settings
         $this->assertNotEmpty($result->content);
         $this->assertIsArray($result->tables);
     }
@@ -218,7 +214,6 @@ final class DocumentExtractionTest extends TestCase
         $result = $kreuzberg->extractFile($this->testDocumentsPath . '/extraction_test.md');
 
         $this->assertIsArray($result->tables);
-        // Markdown files typically don't have structured tables in extraction
     }
 
     #[Test]
@@ -227,7 +222,6 @@ final class DocumentExtractionTest extends TestCase
         $kreuzberg = new Kreuzberg();
         $result = $kreuzberg->extractFile($this->testDocumentsPath . '/pdfs/code_and_formula.pdf');
 
-        // Verify readonly properties by checking reflection
         $reflection = new \ReflectionClass($result);
         $this->assertTrue(
             $reflection->isReadOnly(),

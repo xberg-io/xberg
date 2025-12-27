@@ -1,31 +1,17 @@
 #!/usr/bin/env bash
-#
-# Install PDFium system-wide on macOS with pkg-config support
-#
-# Usage:
 #   ./scripts/install-system-pdfium-macos.sh                    # uses defaults: version=7529, prefix=/usr/local
 #   PDFIUM_VERSION=7530 ./scripts/install-system-pdfium-macos.sh
-#   PREFIX=/opt/homebrew ./scripts/install-system-pdfium-macos.sh
-#
-# Requirements:
-#   - macOS (Darwin)
-#   - curl
-#   - pkg-config (optional, but recommended)
-#   - sudo access (to write to system directories)
 
 set -euo pipefail
 
-# Configuration
 readonly PDFIUM_VERSION="${PDFIUM_VERSION:-7529}"
 readonly PREFIX="${PREFIX:-/usr/local}"
 
-# Colors for output
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
-readonly NC='\033[0m' # No Color
+readonly NC='\033[0m'
 
-# Utility functions
 log_info() {
 	echo -e "${GREEN}[INFO]${NC} $*" >&2
 }
@@ -38,7 +24,6 @@ log_error() {
 	echo -e "${RED}[ERROR]${NC} $*" >&2
 }
 
-# Verify platform is macOS
 verify_platform() {
 	local platform
 	platform="$(uname -s)"
@@ -49,7 +34,6 @@ verify_platform() {
 	log_info "Platform: macOS"
 }
 
-# Detect architecture
 detect_arch() {
 	local arch
 	arch="$(uname -m)"
@@ -67,7 +51,6 @@ detect_arch() {
 	esac
 }
 
-# Download and extract PDFium
 download_pdfium() {
 	local version="$1"
 	local arch="$2"
@@ -98,12 +81,10 @@ download_pdfium() {
 	echo "$extract_dir"
 }
 
-# Create directory structure
 setup_directories() {
 	local prefix="$1"
 	log_info "Setting up directories in $prefix..."
 
-	# Use sudo if we're not already root
 	local sudo_prefix=""
 	if [[ "$EUID" -ne 0 ]]; then
 		sudo_prefix="sudo"
@@ -113,7 +94,6 @@ setup_directories() {
 	$sudo_prefix mkdir -p "$prefix/include/pdfium"
 }
 
-# Install library
 install_library() {
 	local src_dir="$1"
 	local prefix="$2"
@@ -132,7 +112,6 @@ install_library() {
 		sudo_prefix="sudo"
 	fi
 
-	# Copy library files
 	for lib_file in "$lib_src"/*.dylib*; do
 		if [[ -f "$lib_file" ]]; then
 			log_info "  Installing $(basename "$lib_file")"
@@ -144,7 +123,6 @@ install_library() {
 	log_info "Library installation complete"
 }
 
-# Install headers
 install_headers() {
 	local src_dir="$1"
 	local prefix="$2"
@@ -163,13 +141,11 @@ install_headers() {
 		sudo_prefix="sudo"
 	fi
 
-	# Copy header files recursively
 	$sudo_prefix cp -r "$headers_src"/* "$prefix/include/pdfium/" 2>/dev/null || true
 
 	log_info "Header installation complete"
 }
 
-# Create pkg-config file
 create_pkgconfig() {
 	local prefix="$1"
 	local version="$2"
@@ -200,14 +176,12 @@ Cflags: -I\${includedir}
 	log_info "pkg-config file created"
 }
 
-# Verify installation
 verify_installation() {
 	local prefix="$1"
 	local version="$2"
 
 	log_info "Verifying installation..."
 
-	# Check if libraries exist
 	if [[ ! -f "$prefix/lib/libpdfium.dylib" ]]; then
 		log_warn "libpdfium.dylib not found at $prefix/lib/"
 		log_warn "This might be normal if PDFium uses a different naming scheme"
@@ -215,21 +189,18 @@ verify_installation() {
 		log_info "✓ libpdfium.dylib found"
 	fi
 
-	# Check if headers exist
 	if [[ ! -d "$prefix/include/pdfium" ]] || [[ -z "$(find "$prefix/include/pdfium" -type f 2>/dev/null | head -1)" ]]; then
 		log_warn "PDFium headers not found in $prefix/include/pdfium/"
 	else
 		log_info "✓ PDFium headers found"
 	fi
 
-	# Check if pkg-config file exists
 	if [[ ! -f "$prefix/lib/pkgconfig/pdfium.pc" ]]; then
 		log_error "pkg-config file not found at $prefix/lib/pkgconfig/pdfium.pc"
 		return 1
 	fi
 	log_info "✓ pkg-config file found"
 
-	# Try to verify with pkg-config if available
 	if command -v pkg-config &>/dev/null; then
 		log_info "Verifying with pkg-config..."
 		if PKG_CONFIG_PATH="$prefix/lib/pkgconfig:$PKG_CONFIG_PATH" pkg-config --modversion pdfium 2>/dev/null; then
@@ -243,7 +214,6 @@ verify_installation() {
 	fi
 }
 
-# Print summary
 print_summary() {
 	local prefix="$1"
 	local version="$2"
@@ -270,24 +240,19 @@ print_summary() {
 	echo
 }
 
-# Main function
 main() {
 	log_info "PDFium System Installation Script for macOS"
 	log_info "============================================"
 	echo
 
-	# Verify we're on macOS
 	verify_platform
 
-	# Detect architecture
 	local arch
 	arch="$(detect_arch)"
 	log_info "Architecture: $arch"
 
-	# Create necessary directories
 	setup_directories "$PREFIX"
 
-	# Download and extract PDFium
 	local tmpdir
 	tmpdir="$(mktemp -d)"
 	trap '[[ -n "${tmpdir-}" ]] && rm -rf "${tmpdir-}"' EXIT
@@ -295,17 +260,13 @@ main() {
 	local extract_dir
 	extract_dir="$(download_pdfium "$PDFIUM_VERSION" "$arch" "$tmpdir")"
 
-	# Install components
 	install_library "$extract_dir" "$PREFIX"
 	install_headers "$extract_dir" "$PREFIX"
 	create_pkgconfig "$PREFIX" "$PDFIUM_VERSION"
 
-	# Verify installation
 	verify_installation "$PREFIX" "$PDFIUM_VERSION"
 
-	# Print summary
 	print_summary "$PREFIX" "$PDFIUM_VERSION" "$arch"
 }
 
-# Run main function
 main "$@"

@@ -13,7 +13,6 @@
 use pyo3::prelude::*;
 use std::ffi::{CStr, CString};
 
-// Import FFI types and functions directly from kreuzberg-ffi crate
 use kreuzberg_ffi::{kreuzberg_classify_error, kreuzberg_error_code_name, kreuzberg_get_error_details};
 
 /// Error details from kreuzberg-ffi.
@@ -33,14 +32,10 @@ use kreuzberg_ffi::{kreuzberg_classify_error, kreuzberg_error_code_name, kreuzbe
 ///     dict: Structured error details
 #[pyfunction]
 pub fn get_error_details(py: Python<'_>) -> PyResult<pyo3::Bound<'_, pyo3::types::PyDict>> {
-    // SAFETY: This FFI function is thread-safe and returns a struct with
-    // allocated C strings. We immediately convert them to owned Rust strings.
     let details = kreuzberg_get_error_details();
 
     let result = pyo3::types::PyDict::new(py);
 
-    // Convert C strings to Python strings
-    // SAFETY: All non-null pointers must be valid C strings from kreuzberg-ffi
     unsafe {
         let message = if !details.message.is_null() {
             CStr::from_ptr(details.message).to_string_lossy().into_owned()
@@ -72,7 +67,6 @@ pub fn get_error_details(py: Python<'_>) -> PyResult<pyo3::Bound<'_, pyo3::types
             None
         };
 
-        // Populate the dictionary
         result.set_item("message", message)?;
         result.set_item("error_code", details.error_code)?;
         result.set_item("error_type", error_type)?;
@@ -110,7 +104,6 @@ pub fn classify_error(message: &str) -> PyResult<u32> {
     let c_message =
         CString::new(message).map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
 
-    // SAFETY: classify_error handles null pointers and validates the C string
     let code = unsafe { kreuzberg_classify_error(c_message.as_ptr()) };
 
     Ok(code)
@@ -127,14 +120,12 @@ pub fn classify_error(message: &str) -> PyResult<u32> {
 /// Returns "unknown" for codes outside the valid range.
 #[pyfunction]
 pub fn error_code_name(code: u32) -> PyResult<String> {
-    // SAFETY: error_code_name handles invalid codes and returns a static C string
     let name_ptr = kreuzberg_error_code_name(code);
 
     if name_ptr.is_null() {
         return Ok("unknown".to_string());
     }
 
-    // SAFETY: error_code_name always returns a valid C string pointer
     let name = unsafe { CStr::from_ptr(name_ptr).to_string_lossy().into_owned() };
 
     Ok(name)

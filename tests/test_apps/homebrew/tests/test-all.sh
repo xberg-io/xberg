@@ -1,24 +1,20 @@
 #!/bin/bash
 
-# Colors for output
 export RED='\033[0;31m'
 export GREEN='\033[0;32m'
 export YELLOW='\033[1;33m'
 export BLUE='\033[0;34m'
-export NC='\033[0m' # No Color
+export NC='\033[0m'
 
-# Configuration
 VERBOSE=${VERBOSE:-0}
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT_FILE="${TEST_DIR%/tests}/../test_report.txt"
 
-# Test tracking
 TESTS_PASSED=0
 TESTS_FAILED=0
 TESTS_SKIPPED=0
 TOTAL_TIME=0
 
-# Helper functions
 log_info() {
 	echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -61,7 +57,6 @@ run_test() {
 		chmod +x "$test_script"
 	fi
 
-	# Run the test script
 	if bash "$test_script"; then
 		end_time=$(date +%s)
 		duration=$((end_time - start_time))
@@ -83,14 +78,12 @@ run_test() {
 	fi
 }
 
-# Script start
 echo ""
 echo "=============================================="
 log_info "Kreuzberg Homebrew Test Suite"
 echo "=============================================="
 echo ""
 
-# Initialize report file
 cat >"$REPORT_FILE" <<EOF
 Kreuzberg Homebrew Test Report
 Generated: $(date)
@@ -102,10 +95,8 @@ log_info "Report file: $REPORT_FILE"
 log_info "Verbose mode: $VERBOSE"
 echo ""
 
-# Test 1: Installation
 log_info "Phase 1: Installation"
 if run_test "Install from Homebrew" "${TEST_DIR}/install.sh"; then
-	# Continue to next tests
 	:
 else
 	log_error "Installation test failed. Remaining tests cannot continue."
@@ -129,39 +120,33 @@ EOF
 	exit 1
 fi
 
-# Test 2: CLI functionality
 log_info "Phase 2: CLI Functionality"
 run_test "CLI Commands and Extraction" "${TEST_DIR}/test-cli.sh" || {
 	log_warning "CLI test failed, but continuing with remaining tests..."
 }
 
-# Test 3: API Server
 log_info "Phase 3: API Server"
 run_test "API Server and HTTP Endpoints" "${TEST_DIR}/test-api.sh" || {
 	log_warning "API test failed, but continuing with remaining tests..."
 }
 
-# Test 4: MCP Server
 log_info "Phase 4: MCP Server"
 run_test "MCP Server Protocol" "${TEST_DIR}/test-mcp.sh" || {
 	log_warning "MCP test failed, but continuing with remaining tests..."
 }
 
-# Generate summary
 echo ""
 echo "=============================================="
 log_info "Test Suite Complete"
 echo "=============================================="
 echo ""
 
-# Calculate totals
 TOTAL_TESTS=$((TESTS_PASSED + TESTS_FAILED + TESTS_SKIPPED))
 PASS_RATE=0
 if [ $TOTAL_TESTS -gt 0 ]; then
 	PASS_RATE=$((TESTS_PASSED * 100 / TOTAL_TESTS))
 fi
 
-# Display summary
 log_info "Test Summary:"
 echo "  Total Tests:    $TOTAL_TESTS"
 echo "  Passed:         $TESTS_PASSED"
@@ -171,7 +156,6 @@ echo "  Pass Rate:      ${PASS_RATE}%"
 echo "  Total Time:     ${TOTAL_TIME}s"
 echo ""
 
-# Append summary to report file
 cat >>"$REPORT_FILE" <<EOF
 
 SUMMARY
@@ -185,7 +169,6 @@ Total Time: ${TOTAL_TIME}s
 
 EOF
 
-# Determine overall result
 if [ "$TESTS_FAILED" -eq 0 ]; then
 	if [ "$TOTAL_TESTS" -gt 0 ]; then
 		log_success "All tests passed!"

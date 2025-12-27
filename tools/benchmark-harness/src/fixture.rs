@@ -183,7 +183,6 @@ impl FixtureManager {
             return Err(Error::FixtureNotFound(dir.to_path_buf()));
         }
 
-        // Count all fixtures before filtering
         let mut all_fixtures: Vec<PathBuf> = Vec::new();
 
         for entry in std::fs::read_dir(dir)? {
@@ -191,7 +190,6 @@ impl FixtureManager {
             let path = entry.path();
 
             if path.is_dir() {
-                // Recursively collect all fixtures from subdirectories (without applying filter yet)
                 let mut temp_manager = FixtureManager::new();
                 temp_manager.load_fixtures_from_dir_internal(&path, false)?;
                 for (fixture_path, _) in temp_manager.fixtures {
@@ -204,7 +202,6 @@ impl FixtureManager {
 
         let total_fixtures = all_fixtures.len();
 
-        // Load fixtures, applying profiling filter if needed (and requested)
         if apply_filter {
             if let Some(profiling_set) = Self::get_profiling_fixtures() {
                 let mut loaded_count = 0;
@@ -234,19 +231,16 @@ impl FixtureManager {
                         Loading all {} fixtures.",
                         total_fixtures
                     );
-                    // Load all fixtures as fallback
                     for fixture_path in all_fixtures {
                         let _ = self.load_fixture(&fixture_path);
                     }
                 }
             } else {
-                // Load all fixtures normally
                 for fixture_path in all_fixtures {
                     let _ = self.load_fixture(&fixture_path);
                 }
             }
         } else {
-            // Load all fixtures without filtering
             for fixture_path in all_fixtures {
                 let _ = self.load_fixture(&fixture_path);
             }
@@ -292,7 +286,6 @@ mod tests {
     use std::sync::Mutex;
     use tempfile::TempDir;
 
-    // Lock for serializing environment variable access in tests
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
@@ -354,7 +347,6 @@ mod tests {
         let _lock = ENV_LOCK.lock().unwrap();
         let temp_dir = TempDir::new().unwrap();
 
-        // Create multiple fixtures
         let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple", "html_simple"];
         for fixture_name in &fixtures {
             let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
@@ -369,9 +361,6 @@ mod tests {
             std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
         }
 
-        // Test with profiling filter
-        // SAFETY: We are in a test environment where mutating the environment is acceptable.
-        // The ENV_LOCK ensures test isolation.
         unsafe {
             std::env::set_var("PROFILING_FIXTURES", "pdf_small,docx_simple");
         }
@@ -379,10 +368,8 @@ mod tests {
         let mut manager = FixtureManager::new();
         manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
 
-        // Should only load 2 fixtures
         assert_eq!(manager.len(), 2);
 
-        // Verify the correct fixtures were loaded
         let loaded_names: Vec<String> = manager
             .fixtures()
             .iter()
@@ -394,8 +381,6 @@ mod tests {
         assert!(!loaded_names.contains(&"pdf_medium".to_string()));
         assert!(!loaded_names.contains(&"html_simple".to_string()));
 
-        // Clean up
-        // SAFETY: We are in a test environment where mutating the environment is acceptable.
         unsafe {
             std::env::remove_var("PROFILING_FIXTURES");
         }
@@ -406,7 +391,6 @@ mod tests {
         let _lock = ENV_LOCK.lock().unwrap();
         let temp_dir = TempDir::new().unwrap();
 
-        // Create multiple fixtures
         let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple"];
         for fixture_name in &fixtures {
             let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
@@ -421,9 +405,6 @@ mod tests {
             std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
         }
 
-        // Ensure env var is not set
-        // SAFETY: We are in a test environment where mutating the environment is acceptable.
-        // The ENV_LOCK ensures test isolation.
         unsafe {
             std::env::remove_var("PROFILING_FIXTURES");
         }
@@ -431,7 +412,6 @@ mod tests {
         let mut manager = FixtureManager::new();
         manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
 
-        // Should load all 3 fixtures when env var not set
         assert_eq!(manager.len(), 3);
     }
 
@@ -440,7 +420,6 @@ mod tests {
         let _lock = ENV_LOCK.lock().unwrap();
         let temp_dir = TempDir::new().unwrap();
 
-        // Create fixtures
         let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple"];
         for fixture_name in &fixtures {
             let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
@@ -455,9 +434,6 @@ mod tests {
             std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
         }
 
-        // Test with whitespace in env var
-        // SAFETY: We are in a test environment where mutating the environment is acceptable.
-        // The ENV_LOCK ensures test isolation.
         unsafe {
             std::env::set_var("PROFILING_FIXTURES", "pdf_small , pdf_medium , docx_simple");
         }
@@ -465,11 +441,8 @@ mod tests {
         let mut manager = FixtureManager::new();
         manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
 
-        // Should handle whitespace and load all 3 fixtures
         assert_eq!(manager.len(), 3);
 
-        // Clean up
-        // SAFETY: We are in a test environment where mutating the environment is acceptable.
         unsafe {
             std::env::remove_var("PROFILING_FIXTURES");
         }
@@ -480,7 +453,6 @@ mod tests {
         let _lock = ENV_LOCK.lock().unwrap();
         let temp_dir = TempDir::new().unwrap();
 
-        // Create fixtures
         let fixtures = vec!["pdf_small", "pdf_medium", "docx_simple"];
         for fixture_name in &fixtures {
             let fixture_path = temp_dir.path().join(format!("{}.json", fixture_name));
@@ -495,9 +467,6 @@ mod tests {
             std::fs::write(&fixture_path, serde_json::to_string(&fixture).unwrap()).unwrap();
         }
 
-        // Test with some non-existent fixtures (should not fail, just load matching ones)
-        // SAFETY: We are in a test environment where mutating the environment is acceptable.
-        // The ENV_LOCK ensures test isolation.
         unsafe {
             std::env::set_var("PROFILING_FIXTURES", "pdf_small,nonexistent_fixture");
         }
@@ -505,9 +474,6 @@ mod tests {
         let mut manager = FixtureManager::new();
         manager.load_fixtures_from_dir(temp_dir.path()).unwrap();
 
-        // Should load only the matching fixtures (2 instead of 1 because docx_simple is already from
-        // a previous test environment). Actually, this should only load pdf_small since we're setting
-        // the env var explicitly.
         assert_eq!(manager.len(), 1);
 
         let loaded_names: Vec<String> = manager
@@ -518,8 +484,6 @@ mod tests {
 
         assert!(loaded_names.contains(&"pdf_small".to_string()));
 
-        // Clean up
-        // SAFETY: We are in a test environment where mutating the environment is acceptable.
         unsafe {
             std::env::remove_var("PROFILING_FIXTURES");
         }

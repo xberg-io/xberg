@@ -95,7 +95,6 @@ impl PoolMetricsReport {
             self.average_hit_rate, self.min_hit_rate, self.max_hit_rate
         );
 
-        // Group by hit rate ranges
         let mut ranges = HashMap::new();
         for file in &self.files {
             let range = if file.string_pool_hit_rate < 25.0 {

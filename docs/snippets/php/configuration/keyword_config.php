@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\KeywordConfig;
 
-// Basic keyword extraction
 $config = new ExtractionConfig(
     keyword: new KeywordConfig(
         maxKeywords: 10,
@@ -35,7 +34,6 @@ foreach ($result->metadata->keywords ?? [] as $keyword) {
 }
 echo "\n";
 
-// Extract more keywords for detailed analysis
 $detailedConfig = new ExtractionConfig(
     keyword: new KeywordConfig(
         maxKeywords: 25,
@@ -51,7 +49,6 @@ echo "Detailed keyword analysis:\n";
 echo "Total keywords: " . count($result->metadata->keywords ?? []) . "\n";
 
 if (!empty($result->metadata->keywords)) {
-    // Group keywords by first letter for organization
     $grouped = [];
     foreach ($result->metadata->keywords as $keyword) {
         $first = strtoupper($keyword[0]);
@@ -69,7 +66,6 @@ if (!empty($result->metadata->keywords)) {
     }
 }
 
-// Process multiple documents and find common keywords
 $files = ['doc1.pdf', 'doc2.pdf', 'doc3.pdf'];
 $allKeywords = [];
 
@@ -85,7 +81,6 @@ foreach ($files as $file) {
     }
 }
 
-// Find most common keywords across documents
 arsort($allKeywords);
 echo "\n\nMost common keywords across documents:\n";
 $count = 0;
@@ -95,7 +90,6 @@ foreach ($allKeywords as $keyword => $frequency) {
         $count, $keyword, $frequency);
 }
 
-// Use keywords for document categorization
 $categoryKeywords = [
     'technology' => ['software', 'computer', 'algorithm', 'data', 'system'],
     'business' => ['market', 'revenue', 'sales', 'customer', 'profit'],

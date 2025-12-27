@@ -317,7 +317,6 @@ public class ConcurrencyTests
         var registered = KreuzbergClient.ListPostProcessors();
         Assert.NotNull(registered);
 
-        // Cleanup
         foreach (var processor in processors)
         {
             try
@@ -326,7 +325,6 @@ public class ConcurrencyTests
             }
             catch
             {
-                // Ignore cleanup errors
             }
         }
     }
@@ -338,13 +336,11 @@ public class ConcurrencyTests
             .Select(i => $"concurrent-pp-cleanup-{i}")
             .ToList();
 
-        // Register all
         foreach (var name in names)
         {
             KreuzbergClient.RegisterPostProcessor(new ConcurrentTestPostProcessor(name, 0));
         }
 
-        // Concurrent unregistration
         var tasks = names.Select(name => Task.Run(() =>
         {
             KreuzbergClient.UnregisterPostProcessor(name);
@@ -379,7 +375,6 @@ public class ConcurrencyTests
         var registered = KreuzbergClient.ListValidators();
         Assert.NotNull(registered);
 
-        // Cleanup
         foreach (var validator in validators)
         {
             try
@@ -388,7 +383,6 @@ public class ConcurrencyTests
             }
             catch
             {
-                // Ignore cleanup errors
             }
         }
     }
@@ -416,7 +410,6 @@ public class ConcurrencyTests
         var registered = KreuzbergClient.ListOcrBackends();
         Assert.NotNull(registered);
 
-        // Cleanup
         foreach (var backend in backends)
         {
             try
@@ -425,7 +418,6 @@ public class ConcurrencyTests
             }
             catch
             {
-                // Ignore cleanup errors
             }
         }
     }
@@ -499,10 +491,8 @@ public class ConcurrencyTests
 
         await Task.WhenAll(tasks.ToArray());
 
-        // All registrations should succeed or handle gracefully
         Assert.NotEmpty(results);
 
-        // Cleanup
         foreach (var processor in processors)
         {
             try
@@ -533,7 +523,6 @@ public class ConcurrencyTests
         }
 
         Assert.NotEmpty(results);
-        // All results should be the same (same file extracted multiple times)
         var uniqueContents = results.Distinct().ToList();
         Assert.Single(uniqueContents);
     }
@@ -559,7 +548,6 @@ public class ConcurrencyTests
         await Task.WhenAll(tasks);
 
         Assert.Equal(10, results.Count);
-        // All results should be identical
         Assert.All(results, r => Assert.NotEmpty(r));
     }
 
@@ -623,7 +611,6 @@ public class ConcurrencyTests
 
         var task = KreuzbergClient.ExtractFileAsync(pdfPath, cancellationToken: cts.Token);
 
-        // Don't cancel immediately to let it complete naturally
         var result = await task;
 
         Assert.NotNull(result);
@@ -660,7 +647,6 @@ public class ConcurrencyTests
             tasks[i] = Task.Run(() => KreuzbergClient.ExtractFileSync(pdfPath));
         }
 
-        // Wait with timeout to detect deadlock
         using (var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5)))
         {
             try
@@ -716,7 +702,6 @@ public class ConcurrencyTests
 
         public ExtractionResult Process(ExtractionResult result)
         {
-            // Simulate some work
             Thread.Sleep(10);
             return result;
         }
@@ -735,7 +720,6 @@ public class ConcurrencyTests
 
         public void Validate(ExtractionResult result)
         {
-            // Simulate validation work
             Thread.Sleep(5);
         }
     }
@@ -751,7 +735,6 @@ public class ConcurrencyTests
 
         public string Process(ReadOnlySpan<byte> imageBytes, OcrConfig? config)
         {
-            // Simulate OCR work
             Thread.Sleep(10);
             return "{}";
         }

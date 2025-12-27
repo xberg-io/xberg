@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 
 # Check crates.io for existing crate versions using Python
-#
 # Queries crates.io API to check if specific crate versions exist.
-#
-# Environment Variables:
 #   - VERSION: Package version to check (e.g., 4.0.0-rc.1)
 
 set -euo pipefail

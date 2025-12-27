@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Find the last successful benchmark workflow run.
 run_id="$(
 	gh run list \
 		--workflow=benchmarks.yaml \

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Download and inspect profiling artifacts from a GitHub Actions run
 
 set -euo pipefail
 
@@ -16,12 +15,10 @@ mkdir -p "$OUTPUT_DIR"
 
 echo "📥 Downloading artifacts from run $RUN_ID..."
 
-# Download profiling results
 gh run download "$RUN_ID" \
 	--pattern "profiling-results-*" \
 	--dir "$OUTPUT_DIR" 2>/dev/null || echo "No profiling-results artifacts"
 
-# Download flamegraphs
 gh run download "$RUN_ID" \
 	--pattern "flamegraphs-*" \
 	--dir "$OUTPUT_DIR" 2>/dev/null || echo "No flamegraphs artifacts"
@@ -32,7 +29,6 @@ echo ""
 echo "📊 Artifact structure:"
 tree "$OUTPUT_DIR" -L 2 2>/dev/null || find "$OUTPUT_DIR" -type f | head -20
 
-# Validation
 echo ""
 echo "🔍 Validation:"
 EMPTY_SVGS=$(find "$OUTPUT_DIR" -name "*.svg" -size 0 2>/dev/null | wc -l | tr -d ' ')
@@ -45,7 +41,6 @@ fi
 RESULT_FILES=$(find "$OUTPUT_DIR" -name "results.json" 2>/dev/null | wc -l | tr -d ' ')
 echo "✅ Found $RESULT_FILES results.json files"
 
-# Sample data inspection
 if [ "$RESULT_FILES" -gt 0 ]; then
 	FIRST_RESULT=$(find "$OUTPUT_DIR" -name "results.json" | head -1)
 	echo ""

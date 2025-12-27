@@ -1,4 +1,3 @@
-# Rust formatting configuration
 edition = "2021"
 max_width = 120
 hard_tabs = false

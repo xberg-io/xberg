@@ -522,7 +522,6 @@ func TestErrorHandlingProperWrapping(t *testing.T) {
 func TestContextSupport(t *testing.T) {
 	pdfPath := getTestDocumentPath(t, "pdfs_with_tables", "tiny.pdf")
 
-	// Test with background context
 	result, err := kreuzberg.ExtractFileSync(pdfPath, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -535,7 +534,6 @@ func TestContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// Sync operations don't actually use context, but test that they still work
 	result, err := kreuzberg.ExtractFileSync(pdfPath, nil)
 	if err == nil {
 		assert.NotNil(t, result, "should still extract even with cancelled context for sync operations")
@@ -550,7 +548,6 @@ func TestContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Sync operations don't actually use context, but test that they still work
 	result, err := kreuzberg.ExtractFileSync(pdfPath, nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
@@ -812,11 +809,9 @@ func getTestDocumentPath(t *testing.T, subdir string, filename string) string {
 	var repoRoot string
 	currentDir := wd
 	for {
-		// Look for kreuzberg/test_documents (skip test_apps/go/test_documents)
 		testDocsPath := filepath.Join(currentDir, "test_documents")
 		kreuzbergPath := filepath.Join(currentDir, "kreuzberg")
 
-		// If we're at kreuzberg-dev, check if kreuzberg/test_documents exists
 		if _, err := os.Stat(kreuzbergPath); err == nil {
 			if _, err := os.Stat(filepath.Join(kreuzbergPath, "test_documents")); err == nil {
 				repoRoot = kreuzbergPath
@@ -824,9 +819,7 @@ func getTestDocumentPath(t *testing.T, subdir string, filename string) string {
 			}
 		}
 
-		// Also check current directory (for kreuzberg root)
 		if _, err := os.Stat(testDocsPath); err == nil {
-			// Verify this is the full test_documents by checking for subdirectories
 			if _, err := os.Stat(filepath.Join(testDocsPath, "pdfs_with_tables")); err == nil {
 				repoRoot = currentDir
 				break

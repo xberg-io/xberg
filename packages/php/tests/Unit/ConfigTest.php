@@ -253,11 +253,8 @@ final class ConfigTest extends TestCase
     {
         $config = new ExtractionConfig(extractImages: true);
 
-        // Verify readonly property - this should work
         $this->assertTrue($config->extractImages);
 
-        // Attempting to modify would cause a fatal error in PHP 8.1+
-        // but we can verify the readonly class declaration is present
         $reflection = new \ReflectionClass($config);
         $this->assertTrue($reflection->isReadOnly());
     }

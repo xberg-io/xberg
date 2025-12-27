@@ -310,7 +310,6 @@ public class ExtractionTests
     [Fact]
     public void DetectMimeTypeFromBytes_WithZipSignature_ReturnsZipMime()
     {
-        // ZIP file signature: PK\x03\x04
         var zipSignature = new byte[] { 0x50, 0x4B, 0x03, 0x04 };
         var mime = KreuzbergClient.DetectMimeType(zipSignature);
 
@@ -321,7 +320,6 @@ public class ExtractionTests
     [Fact]
     public void DetectMimeTypeFromBytes_WithJpegSignature_ReturnsImageMime()
     {
-        // JPEG signature: FF D8 FF
         var jpegSignature = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 };
         var mime = KreuzbergClient.DetectMimeType(jpegSignature);
 
@@ -544,7 +542,6 @@ public class ExtractionTests
 
             var result = KreuzbergClient.ExtractFileSync(tempPath, config);
             Assert.NotNull(result);
-            // The native library only returns detected languages when non-empty.
             Assert.True(result.DetectedLanguages == null || result.DetectedLanguages.Count > 0);
         }
         finally
@@ -652,8 +649,6 @@ public class ExtractionTests
     {
         var config = KreuzbergClient.DiscoverExtractionConfig();
 
-        // Config may or may not exist depending on workspace setup
-        // Just verify the call succeeds
         Assert.True(config == null || config is ExtractionConfig);
     }
 
@@ -790,7 +785,6 @@ public class ExtractionTests
         var pdfPath = NativeTestHelper.GetDocumentPath("pdf/simple.pdf");
         var bytes = File.ReadAllBytes(pdfPath);
 
-        // Verify it can handle the bytes
         var result = KreuzbergClient.ExtractBytesSync(bytes, "application/pdf");
         Assert.NotNull(result);
     }

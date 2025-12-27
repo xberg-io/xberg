@@ -1,13 +1,4 @@
 #!/bin/bash
-# Example script to run PHP benchmarks
-#
-# This script demonstrates how to run PHP benchmarks once the PHP extension is built.
-#
-# Prerequisites:
-# 1. PHP 8.2+ installed
-# 2. PHP extension built (cd crates/kreuzberg-php && bash build.sh)
-# 3. Composer dependencies installed (cd packages/php && composer install)
-# 4. Benchmark harness built (cargo build --release -p benchmark-harness)
 
 set -e
 
@@ -24,7 +15,6 @@ echo "Fixtures: $FIXTURES_DIR"
 echo "Output: $OUTPUT_DIR"
 echo ""
 
-# Check prerequisites
 echo "Checking prerequisites..."
 
 if ! command -v php &>/dev/null; then
@@ -55,7 +45,6 @@ if [ ! -d "$REPO_ROOT/packages/php/vendor" ]; then
 fi
 echo "✓ Composer dependencies installed"
 
-# Check if PHP extension is loaded
 if ! php -r 'if (!function_exists("kreuzberg_extract_file")) exit(1);' 2>/dev/null; then
 	echo "WARNING: Kreuzberg PHP extension not loaded"
 	echo "The benchmarks will fail until the extension is built and loaded."
@@ -80,10 +69,8 @@ echo ""
 echo "=== Running PHP Benchmarks ==="
 echo ""
 
-# Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-# Example 1: Run PHP sync adapter on small PDF fixtures
 echo "Example 1: PHP sync adapter on small PDFs"
 "$BENCHMARK_BIN" run \
 	--fixtures "$FIXTURES_DIR/pdf_small.json" \
@@ -97,7 +84,6 @@ echo ""
 echo "Results: $OUTPUT_DIR/sync-small-pdf/"
 echo ""
 
-# Example 2: Run PHP batch adapter on multiple fixtures
 echo "Example 2: PHP batch adapter on multiple document types"
 "$BENCHMARK_BIN" run \
 	--fixtures "$FIXTURES_DIR" \
@@ -111,7 +97,6 @@ echo ""
 echo "Results: $OUTPUT_DIR/batch-all-types/"
 echo ""
 
-# Example 3: Compare PHP with other bindings
 echo "Example 3: Compare PHP with Python, Ruby, and Node"
 "$BENCHMARK_BIN" run \
 	--fixtures "$FIXTURES_DIR/pdf_medium.json" \

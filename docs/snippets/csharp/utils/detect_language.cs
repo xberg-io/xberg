@@ -3,7 +3,6 @@ using Kreuzberg;
 using System;
 using System.Collections.Generic;
 
-// Single language detection
 var config = new ExtractionConfig
 {
     LanguageDetection = new LanguageDetectionConfig
@@ -22,7 +21,6 @@ foreach (var lang in result.DetectedLanguages)
     Console.WriteLine($"  - {lang}");
 }
 
-// Multiple language detection
 var multiLangConfig = new ExtractionConfig
 {
     LanguageDetection = new LanguageDetectionConfig
@@ -41,7 +39,6 @@ foreach (var lang in multiResult.DetectedLanguages)
     Console.WriteLine($"  - {lang}");
 }
 
-// Language detection with metadata
 Console.WriteLine($"\nLanguage Detection Summary:");
 Console.WriteLine($"  - Content: {multiResult.Content.Substring(0, 100)}...");
 Console.WriteLine($"  - Languages: {string.Join(", ", multiResult.DetectedLanguages)}");

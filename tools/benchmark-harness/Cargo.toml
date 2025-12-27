@@ -17,23 +17,18 @@ name = "benchmark_harness"
 path = "src/lib.rs"
 
 [dependencies]
-# Core dependencies
 kreuzberg = { path = "../../crates/kreuzberg", features = ["full", "bundled-pdfium"] }
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
-# CLI dependencies
 clap = { workspace = true }
 
-# Async traits
 async-trait = { workspace = true }
 
-# Monitoring dependencies
 sysinfo = "0.37"
 
-# Utilities
 ahash = { workspace = true }
 num_cpus = { workspace = true }
 which = "8"
@@ -41,7 +36,6 @@ chrono = "0.4"
 minijinja = { version = "2.14", features = ["json"] }
 pathdiff = "0.2"
 
-# Profiling
 pprof = { version = "0.15", features = ["flamegraph", "criterion"], optional = true }
 tikv-jemallocator = { version = "0.6", optional = true }
 tikv-jemalloc-ctl = { version = "0.6", features = ["stats"], optional = true }

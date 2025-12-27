@@ -12,7 +12,6 @@ vars:
   DOTNET_VERSION: "8.0"
 
 tasks:
-  # Installation
   install:
     desc: Restore C# dependencies
     dir: packages/csharp
@@ -21,7 +20,6 @@ tasks:
       - dotnet restore Kreuzberg.Tests/Kreuzberg.Tests.csproj
       - dotnet restore Benchmark/Benchmark.csproj
 
-  # Build Tasks
   build:
     desc: Build C# binding and benchmarks (depends on Rust FFI)
     dir: packages/csharp
@@ -62,7 +60,6 @@ tasks:
     cmds:
       - bash scripts/benchmarks/build-csharp-benchmark.sh
 
-  # Test Tasks
   test:
     desc: Run C# tests
     cmds:
@@ -87,7 +84,6 @@ tasks:
     cmds:
       - dotnet test Kreuzberg.Tests/Kreuzberg.Tests.csproj -c Release --verbosity detailed
 
-  # Linting Tasks
   lint:
     desc: Lint C# code for style violations with auto-fix (dotnet format)
     dir: packages/csharp
@@ -104,7 +100,6 @@ tasks:
       - dotnet format Kreuzberg.Tests/Kreuzberg.Tests.csproj --verify-no-changes
       - dotnet format Benchmark/Benchmark.csproj --verify-no-changes
 
-  # Formatting Tasks
   format:
     desc: Format C# code with automatic style corrections (dotnet format)
     dir: packages/csharp
@@ -121,7 +116,6 @@ tasks:
       - dotnet format Kreuzberg.Tests/Kreuzberg.Tests.csproj --verify-no-changes
       - dotnet format Benchmark/Benchmark.csproj --verify-no-changes
 
-  # Cleanup
   clean:
     desc: Clean C# build artifacts
     dir: packages/csharp
@@ -129,7 +123,6 @@ tasks:
       - python -c "import shutil; [shutil.rmtree(d, ignore_errors=True) for d in ['bin', 'obj', '.vs']]"
       - dotnet clean
 
-  # Dependency Management
   update:
     desc: Update/restore C# dependencies
     dir: packages/csharp
@@ -139,7 +132,6 @@ tasks:
       - dotnet restore Kreuzberg.Tests/Kreuzberg.Tests.csproj
       - dotnet restore Benchmark/Benchmark.csproj
 
-  # E2E Tests
   e2e:generate:
     desc: Generate C# E2E tests from fixtures
     cmds:

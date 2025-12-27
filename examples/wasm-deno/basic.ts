@@ -38,21 +38,18 @@ function formatSize(bytes: number): string {
  * Main example function
  */
 async function main() {
-	// Initialize the WASM module
 	await init();
 
 	console.log("=".repeat(60));
 	console.log("Kreuzberg WASM Extraction Examples");
 	console.log("=".repeat(60));
 
-	// Example 1: Basic extraction with async
 	console.log("\n--- Example 1: Basic Async Extraction ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
 
 		if (sampleData.length === 0) {
 			console.log("Sample PDF not found in fixtures/. Creating demo with text content...");
-			// Create a simple demo by simulating extraction
 			const demoResult = {
 				content: "Sample extracted content\nThis is a demonstration of the extraction API.",
 				mimeType: "application/pdf",
@@ -71,7 +68,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 2: Extraction with configuration
 	console.log("\n--- Example 2: Extraction with Configuration ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -95,7 +91,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 3: MIME type detection
 	console.log("\n--- Example 3: MIME Type Detection ---");
 	const mimeExamples = [
 		{ type: "application/pdf", description: "PDF Document" },
@@ -118,10 +113,9 @@ async function main() {
 		console.log(`  - ${example.description}: ${example.type}`);
 	});
 
-	// Example 4: Error handling
 	console.log("\n--- Example 4: Error Handling ---");
 	try {
-		const invalidData = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]); // Partial JPEG header
+		const invalidData = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
 		console.log("Attempting to extract from invalid/incomplete data...");
 		const result = await extractBytes(invalidData, "image/jpeg");
 		console.log(`Extraction completed: ${result.content.length} characters`);
@@ -131,7 +125,6 @@ async function main() {
 		}
 	}
 
-	// Example 5: Metadata access
 	console.log("\n--- Example 5: Metadata Access ---");
 	console.log("ExtractionResult includes metadata such as:");
 	console.log("  - mimeType: Detected document type");
@@ -139,7 +132,6 @@ async function main() {
 	console.log("  - metadata.ocr?: OCR metadata (language, confidence)");
 	console.log("  - metadata.format_type?: Document format type");
 
-	// Example 6: Working with results
 	console.log("\n--- Example 6: Processing Results ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -147,7 +139,6 @@ async function main() {
 		if (sampleData.length > 0) {
 			const result = await extractBytes(sampleData, "application/pdf");
 
-			// Print statistics
 			const lines = result.content.split("\n").length;
 			const words = result.content.split(/\s+/).length;
 			const chars = result.content.length;
@@ -162,7 +153,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 7: Configuration best practices
 	console.log("\n--- Example 7: Configuration Best Practices ---");
 	const configs: Record<string, ExtractionConfig> = {
 		default: {},
@@ -200,7 +190,6 @@ async function main() {
 	console.log("=".repeat(60));
 }
 
-// Run main function
 main().catch((error) => {
 	console.error("Fatal error:", error);
 	Deno.exit(1);

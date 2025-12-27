@@ -97,7 +97,6 @@ class Benchmark
 
 $benchmark = new Benchmark();
 
-// Benchmark 1: Simple PDF extraction
 $testFile = 'test_document.pdf';
 if (file_exists($testFile)) {
     $benchmark->run('Simple PDF extraction', function () use ($testFile) {
@@ -105,7 +104,6 @@ if (file_exists($testFile)) {
     }, 5);
 }
 
-// Benchmark 2: PDF with tables
 if (file_exists($testFile)) {
     $benchmark->run('PDF with table extraction', function () use ($testFile) {
         $config = new ExtractionConfig(extractTables: true);
@@ -114,7 +112,6 @@ if (file_exists($testFile)) {
     }, 5);
 }
 
-// Benchmark 3: PDF with OCR
 if (file_exists($testFile)) {
     $benchmark->run('PDF with OCR', function () use ($testFile) {
         $config = new ExtractionConfig(
@@ -125,7 +122,6 @@ if (file_exists($testFile)) {
     }, 3);
 }
 
-// Benchmark 4: Batch processing
 $files = array_filter(['doc1.pdf', 'doc2.pdf', 'doc3.pdf'], 'file_exists');
 if (count($files) >= 3) {
     $benchmark->run('Batch processing (3 files)', function () use ($files) {
@@ -139,7 +135,6 @@ if (count($files) >= 3) {
     }, 3);
 }
 
-// Benchmark different file types
 $fileTypes = [
     'PDF' => 'sample.pdf',
     'DOCX' => 'sample.docx',
@@ -155,7 +150,6 @@ foreach ($fileTypes as $type => $file) {
     }
 }
 
-// Benchmark different configurations
 $configs = [
     'Minimal' => new ExtractionConfig(
         extractTables: false,
@@ -181,11 +175,9 @@ foreach ($configs as $name => $config) {
     }
 }
 
-// Display results
 $benchmark->report();
 $benchmark->compare();
 
-// Throughput test
 echo "\nThroughput Test:\n";
 echo str_repeat('=', 80) . "\n";
 
@@ -205,7 +197,6 @@ if (!empty($files)) {
     echo "Throughput: " . number_format($throughput, 2) . " files/second\n";
 }
 
-// Memory stress test
 echo "\nMemory Stress Test:\n";
 echo str_repeat('=', 80) . "\n";
 

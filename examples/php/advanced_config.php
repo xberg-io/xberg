@@ -34,21 +34,17 @@ use Kreuzberg\Config\TesseractConfig;
 use Kreuzberg\Exceptions\KreuzbergException;
 use Kreuzberg\Kreuzberg;
 
-// =============================================================================
-// Example 1: PDF-Specific Configuration
-// =============================================================================
 
 echo "=== Example 1: PDF-Specific Configuration ===\n\n";
 
 try {
-    // Configure PDF extraction with page range and image extraction
     $config = new ExtractionConfig(
         pdf: new PdfConfig(
             extractImages: true,
             extractMetadata: true,
             ocrFallback: false,
-            startPage: 1,        // Start from page 1 (0-indexed)
-            endPage: 5,          // Extract only first 5 pages
+            startPage: 1,
+            endPage: 5,
         ),
     );
 
@@ -64,25 +60,21 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 2: Advanced OCR Configuration
-// =============================================================================
 
 echo "=== Example 2: Advanced OCR Configuration ===\n\n";
 
 try {
-    // Configure OCR with Tesseract-specific options
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
-            language: 'eng+deu',  // Support English and German
+            language: 'eng+deu',
             tesseractConfig: new TesseractConfig(
-                psm: 6,                      // Assume uniform block of text
-                enableTableDetection: true,  // Detect tables in scanned documents
+                psm: 6,
+                enableTableDetection: true,
             ),
         ),
         pdf: new PdfConfig(
-            ocrFallback: true,  // Use OCR if text extraction fails
+            ocrFallback: true,
         ),
     );
 
@@ -97,20 +89,16 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 3: Image Extraction with OCR
-// =============================================================================
 
 echo "=== Example 3: Image Extraction with OCR ===\n\n";
 
 try {
-    // Configure image extraction with size filters and OCR
     $config = new ExtractionConfig(
         imageExtraction: new ImageExtractionConfig(
             extractImages: true,
             performOcr: true,
-            minWidth: 100,   // Minimum width in pixels
-            minHeight: 100,  // Minimum height in pixels
+            minWidth: 100,
+            minHeight: 100,
         ),
         ocr: new OcrConfig(
             backend: 'tesseract',
@@ -144,14 +132,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 4: Page Extraction with Markers
-// =============================================================================
 
 echo "=== Example 4: Page Extraction with Markers ===\n\n";
 
 try {
-    // Configure page-by-page extraction with custom markers
     $config = new ExtractionConfig(
         page: new PageConfig(
             extractPages: true,
@@ -177,7 +161,6 @@ try {
         }
     }
 
-    // The full content also has page markers
     echo "\n--- Content with page markers ---\n";
     echo substr($result->content, 0, 500) . "...\n\n";
 
@@ -185,19 +168,15 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 5: Language Detection
-// =============================================================================
 
 echo "=== Example 5: Language Detection ===\n\n";
 
 try {
-    // Configure language detection
     $config = new ExtractionConfig(
         languageDetection: new LanguageDetectionConfig(
             enabled: true,
-            maxLanguages: 3,           // Detect up to 3 languages
-            confidenceThreshold: 0.8,  // Minimum confidence level
+            maxLanguages: 3,
+            confidenceThreshold: 0.8,
         ),
     );
 
@@ -216,19 +195,15 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 6: Keyword Extraction
-// =============================================================================
 
 echo "=== Example 6: Keyword Extraction ===\n\n";
 
 try {
-    // Configure keyword extraction
     $config = new ExtractionConfig(
         keyword: new KeywordConfig(
-            maxKeywords: 10,    // Extract top 10 keywords
-            minScore: 0.0,      // Minimum score threshold
-            language: 'en'      // Language for keyword extraction
+            maxKeywords: 10,
+            minScore: 0.0,
+            language: 'en'
         ),
     );
 
@@ -247,16 +222,11 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 7: Comprehensive Configuration (All Options)
-// =============================================================================
 
 echo "=== Example 7: Comprehensive Configuration (All Options) ===\n\n";
 
 try {
-    // Create a configuration using ALL available options
     $config = new ExtractionConfig(
-        // OCR configuration
         ocr: new OcrConfig(
             backend: 'tesseract',
             language: 'eng',
@@ -266,14 +236,12 @@ try {
             ),
         ),
 
-        // PDF-specific settings
         pdf: new PdfConfig(
             extractImages: true,
             extractMetadata: true,
             ocrFallback: true,
         ),
 
-        // Text chunking
         chunking: new ChunkingConfig(
             maxChunkSize: 512,
             chunkOverlap: 50,
@@ -281,14 +249,12 @@ try {
             respectParagraphs: true,
         ),
 
-        // Embedding generation
         embedding: new EmbeddingConfig(
             model: 'all-MiniLM-L6-v2',
             normalize: true,
             batchSize: 32,
         ),
 
-        // Image extraction
         imageExtraction: new ImageExtractionConfig(
             extractImages: true,
             performOcr: true,
@@ -296,28 +262,24 @@ try {
             minHeight: 100,
         ),
 
-        // Page extraction
         page: new PageConfig(
             extractPages: true,
             insertPageMarkers: true,
             markerFormat: '=== Page {page_number} ===',
         ),
 
-        // Language detection
         languageDetection: new LanguageDetectionConfig(
             enabled: true,
             maxLanguages: 3,
             confidenceThreshold: 0.8,
         ),
 
-        // Keyword extraction
         keyword: new KeywordConfig(
             maxKeywords: 10,
             minScore: 0.0,
             language: 'en',
         ),
 
-        // General extraction options
         extractImages: true,
         extractTables: true,
         preserveFormatting: false,
@@ -349,20 +311,15 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 8: Dynamic Configuration Based on File Type
-// =============================================================================
 
 echo "=== Example 8: Dynamic Configuration Based on File Type ===\n\n";
 
 try {
     $filePath = __DIR__ . '/../sample-documents/sample.pdf';
 
-    // Detect MIME type first
     $mimeType = \Kreuzberg\detect_mime_type_from_path($filePath);
     echo "Detected MIME type: {$mimeType}\n";
 
-    // Configure based on file type
     $config = match (true) {
         str_contains($mimeType, 'pdf') => new ExtractionConfig(
             pdf: new PdfConfig(extractImages: true),

@@ -22,7 +22,7 @@ internal class ByteArrayConverter : JsonConverter<byte[]>
     /// <summary>
     /// Initial capacity guess for ArrayPool rental. Most images are smaller than 256KB.
     /// </summary>
-    private const int DefaultArrayPoolCapacity = 262144; // 256KB
+    private const int DefaultArrayPoolCapacity = 262144;
 
     public override byte[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
@@ -50,7 +50,6 @@ internal class ByteArrayConverter : JsonConverter<byte[]>
     /// </summary>
     private static byte[] ReadArrayAsBytes(ref Utf8JsonReader reader)
     {
-        // Rent a buffer from the pool (will request at least the size we ask for)
         byte[] pooledBuffer = ArrayPool<byte>.Shared.Rent(DefaultArrayPoolCapacity);
 
         try
@@ -66,7 +65,6 @@ internal class ByteArrayConverter : JsonConverter<byte[]>
 
                 if (reader.TokenType == JsonTokenType.Number)
                 {
-                    // Expand buffer if needed
                     if (count >= pooledBuffer.Length)
                     {
                         byte[] newBuffer = ArrayPool<byte>.Shared.Rent(pooledBuffer.Length * 2);
@@ -79,14 +77,12 @@ internal class ByteArrayConverter : JsonConverter<byte[]>
                 }
             }
 
-            // Copy to final-sized array and return pooled buffer
             byte[] result = new byte[count];
             Array.Copy(pooledBuffer, result, count);
             return result;
         }
         finally
         {
-            // Always return the rented buffer to the pool
             ArrayPool<byte>.Shared.Return(pooledBuffer);
         }
     }
@@ -114,20 +110,16 @@ internal static class Serialization
     internal static JsonSerializerOptions GetJsonSerializerOptions()
     {
 #if NET7_0_OR_GREATER
-        // Use source-generated options on .NET 7+
-        // This eliminates reflection overhead (100-150ms per operation)
         var options = new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = false,
             Converters = { new ByteArrayConverter() },
-            // Register source-generated context for .NET 7+
             TypeInfoResolver = KreuzbergJsonContext.Default
         };
         return options;
 #else
-        // Fall back to reflection-based options on older frameworks
         return Options;
 #endif
     }
@@ -194,7 +186,6 @@ internal static class Serialization
     /// </summary>
     internal static ExtractionResult ParseResult(string json)
     {
-        // Use JsonDocument for reliable parsing, but cache the root element access
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
 
@@ -205,7 +196,6 @@ internal static class Serialization
             Success = root.GetPropertyOrDefault("success", true),
         };
 
-        // Parse complex fields efficiently using cached parsing
         if (root.TryGetProperty("tables", out var tables))
         {
             result.Tables = DeserializeElement<List<Table>>(tables) ?? new List<Table>();
@@ -241,7 +231,6 @@ internal static class Serialization
     internal static ExtractionConfig ParseConfig(string json)
     {
 #if NET7_0_OR_GREATER
-        // Use source-generated context for better performance
         return JsonSerializer.Deserialize<ExtractionConfig>(json, GetJsonSerializerOptions()) ?? new ExtractionConfig();
 #else
         return JsonSerializer.Deserialize<ExtractionConfig>(json, Options) ?? new ExtractionConfig();

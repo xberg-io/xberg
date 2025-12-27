@@ -1,35 +1,22 @@
-# Cargo configuration for Kreuzberg workspace
-# This file configures build caching and compilation settings
 
 [build]
-# Enable incremental builds locally for faster iterations.
-# CI disables sccache; set RUSTC_WRAPPER manually if you want it.
 incremental = true
 
 [target.x86_64-unknown-linux-gnu]
-# Linux-specific linker settings (if needed)
 
 [target.x86_64-apple-darwin]
-# macOS x86_64 specific settings
-# Allow undefined symbols for PHP extension - resolved at runtime when loaded into PHP
 rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
 
 [target.aarch64-apple-darwin]
-# macOS ARM64 specific settings
-# Allow undefined symbols for PHP extension - resolved at runtime when loaded into PHP
 rustflags = ["-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup"]
 
 [target.aarch64-unknown-linux-gnu]
-# Cross-compilation for Linux ARM64
 linker = "aarch64-linux-gnu-gcc"
 ar = "aarch64-linux-gnu-ar"
 
 [target.x86_64-pc-windows-msvc]
-# Windows MSVC specific settings
 
 [target.x86_64-pc-windows-gnu]
-# Use MSYS2 UCRT64 toolchain for MinGW builds
-# Note: These are fallback paths. Environment variables (CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER, TARGET_AR, etc.) take precedence
 linker = "x86_64-w64-mingw32-gcc"
 ar = "ar"
 
@@ -39,10 +26,8 @@ rustflags = ["-C", "target-feature=+bulk-memory"]
 [unstable]
 build-std = ["panic_abort", "std"]
 
-# Network settings for faster crate downloads
 [net]
 git-fetch-with-cli = false
 
-# Registry settings
 [registries.crates-io]
 protocol = "sparse"

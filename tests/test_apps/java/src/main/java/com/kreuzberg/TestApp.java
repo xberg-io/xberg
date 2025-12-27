@@ -766,7 +766,6 @@ public final class TestApp {
         });
     }
 
-    // ============ Helper Test Methods ============
 
     private static void test(String name, TestFn fn) {
         try {
@@ -862,7 +861,6 @@ public final class TestApp {
         System.exit(0);
     }
 
-    // ============ Helper Types ============
 
     @FunctionalInterface
     private interface TestFn {

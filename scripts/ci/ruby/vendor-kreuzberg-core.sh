@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Vendor kreuzberg core crate into Ruby package
-# Used by: ci-ruby.yaml - Vendor kreuzberg core crate step
-#
 
 set -euo pipefail
 
@@ -15,22 +11,17 @@ validate_repo_root "$REPO_ROOT" || exit 1
 
 echo "=== Vendoring kreuzberg core crate ==="
 
-# Remove existing vendor directory completely for full cleanup
 rm -rf "$REPO_ROOT/packages/ruby/vendor"
 mkdir -p "$REPO_ROOT/packages/ruby/vendor"
 
-# Copy core crate and rb-sys (patched for Windows compatibility)
-# Note: kreuzberg-ffi IS needed for linking
 cp -R "$REPO_ROOT/crates/kreuzberg" "$REPO_ROOT/packages/ruby/vendor/kreuzberg"
 cp -R "$REPO_ROOT/crates/kreuzberg-tesseract" "$REPO_ROOT/packages/ruby/vendor/kreuzberg-tesseract"
 cp -R "$REPO_ROOT/crates/kreuzberg-ffi" "$REPO_ROOT/packages/ruby/vendor/kreuzberg-ffi"
 
-# Only copy rb-sys if it exists in the root vendor directory
 if [ -d "$REPO_ROOT/vendor/rb-sys" ]; then
 	cp -R "$REPO_ROOT/vendor/rb-sys" "$REPO_ROOT/packages/ruby/vendor/rb-sys"
 fi
 
-# Clean up build artifacts
 rm -rf "$REPO_ROOT/packages/ruby/vendor/kreuzberg/.fastembed_cache"
 rm -rf "$REPO_ROOT/packages/ruby/vendor/kreuzberg/target"
 rm -rf "$REPO_ROOT/packages/ruby/vendor/kreuzberg-tesseract/target"
@@ -52,10 +43,8 @@ if [ -d "$REPO_ROOT/packages/ruby/vendor/rb-sys" ]; then
 	find "$REPO_ROOT/packages/ruby/vendor/rb-sys" -name '*~' -delete
 fi
 
-# Extract core version from workspace Cargo.toml
 core_version=$(awk -F '"' '/^\[workspace.package\]/,/^version =/ {if ($0 ~ /^version =/) {print $2; exit}}' "$REPO_ROOT/Cargo.toml")
 
-# Make vendored core crates installable without workspace context
 for crate_dir in kreuzberg kreuzberg-tesseract; do
 	sed -i.bak "s/^version\.workspace = true/version = \"${core_version}\"/" "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^edition\.workspace = true/edition = "2024"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
@@ -64,7 +53,6 @@ for crate_dir in kreuzberg kreuzberg-tesseract; do
 	sed -i.bak 's/^license\.workspace = true/license = "MIT"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 done
 
-# Inline workspace dependencies (without workspace = true references)
 for crate_dir in kreuzberg kreuzberg-tesseract; do
 	sed -i.bak 's/^ahash = { workspace = true }/ahash = "0.8.12"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^async-trait = { workspace = true }/async-trait = "0.1.89"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
@@ -80,14 +68,12 @@ for crate_dir in kreuzberg kreuzberg-tesseract; do
 	sed -i.bak 's/^tracing = { workspace = true }/tracing = "0.1"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^anyhow = { workspace = true }/anyhow = "1.0"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^reqwest = { workspace = true, /reqwest = { version = "0.12.25", /' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
-	# Replace both base and dev image entries
 	sed -i.bak 's/^image = { workspace = true, /image = { version = "0.25.9", /' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^html-to-markdown-rs = { workspace = true/html-to-markdown-rs = { version = "2.14.11", default-features = false/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^once_cell = { workspace = true }/once_cell = "1.21.3"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^lzma-rust2 = { workspace = true, optional = true }/lzma-rust2 = { version = "0.15.4", optional = true }/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^parking_lot = { workspace = true }/parking_lot = "0.12.3"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 
-	# Inline dev-dependencies
 	sed -i.bak 's/^tempfile = { workspace = true }/tempfile = "3.23.0"/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 	sed -i.bak 's/^criterion = { workspace = true }/criterion = { version = "0.8", features = ["html_reports"] }/' "$REPO_ROOT/packages/ruby/vendor/$crate_dir/Cargo.toml"
 

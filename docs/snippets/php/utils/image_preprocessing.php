@@ -18,7 +18,6 @@ use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\TesseractConfig;
 use Kreuzberg\Config\ImagePreprocessingConfig;
 
-// Basic image preprocessing
 $config = new ExtractionConfig(
     ocr: new OcrConfig(
         tesseractConfig: new TesseractConfig(
@@ -41,20 +40,19 @@ echo str_repeat('=', 60) . "\n";
 echo "Content extracted: " . strlen($result->content) . " characters\n";
 echo "Preview: " . substr($result->content, 0, 100) . "...\n\n";
 
-// Advanced preprocessing for poor quality scans
 $advancedConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
             preprocessing: new ImagePreprocessingConfig(
-                targetDpi: 600,          // Higher DPI for better quality
-                denoise: true,           // Remove noise from scan
-                deskew: true,            // Correct page rotation
-                contrastEnhance: true,   // Enhance text contrast
-                binarizationMethod: 'adaptive', // Adaptive thresholding
-                sharpen: true,           // Sharpen text edges
-                removeBackground: true   // Remove background patterns
+                targetDpi: 600,          
+                denoise: true,           
+                deskew: true,            
+                contrastEnhance: true,   
+                binarizationMethod: 'adaptive', 
+                sharpen: true,           
+                removeBackground: true   
             ),
             pageSegmentationMode: 3,
             engineMode: 3
@@ -69,7 +67,6 @@ echo "Advanced Preprocessing Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Content length: " . strlen($result->content) . " characters\n";
 
-// Check quality indicators in metadata
 if (isset($result->metadata)) {
     $qualityScore = $result->metadata['quality_score'] ?? null;
     $confidence = $result->metadata['ocr_confidence'] ?? null;
@@ -93,7 +90,6 @@ if (isset($result->metadata)) {
 
 echo "\n";
 
-// Comparison: Different preprocessing settings
 $preprocessingProfiles = [
     'basic' => new ImagePreprocessingConfig(
         targetDpi: 300,
@@ -148,7 +144,6 @@ foreach ($preprocessingProfiles as $profileName => $preprocessing) {
     echo "\n";
 }
 
-// Helper function to recommend preprocessing settings
 function recommendPreprocessingSettings(string $documentType): ImagePreprocessingConfig
 {
     return match ($documentType) {

@@ -3,30 +3,10 @@
 require 'json'
 
 module Kreuzberg
-  # ErrorContext module provides access to FFI error introspection functions.
-  #
-  # This module retrieves detailed error and panic context information from the native
-  # Rust core. It allows inspection of the last error that occurred during extraction,
-  # including panic information with file, line, function, and timestamp details.
   module ErrorContext
     class << self
-      # Get the error code of the last operation.
-      #
-      # Returns the error code from the last FFI call. Returns 0 (SUCCESS) if no error
-      # occurred or if introspection fails.
-      #
       # @return [Integer] Error code constant (ERROR_CODE_* values), or 0 on success
-      #
       # @example Check last error
-      #   code = Kreuzberg::ErrorContext.last_error_code
-      #   case code
-      #   when Kreuzberg::ERROR_CODE_IO
-      #     puts "I/O error occurred"
-      #   when Kreuzberg::ERROR_CODE_PARSING
-      #     puts "Parsing error occurred"
-      #   else
-      #     puts "Success or unknown error"
-      #   end
       def last_error_code
         Kreuzberg._last_error_code_native
       rescue StandardError
@@ -121,7 +101,7 @@ module Kreuzberg
       def classify_error(message)
         Kreuzberg._classify_error_native(message)
       rescue StandardError
-        7 # Internal error
+        7
       end
 
       # Get the human-readable name of an error code.

@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
-#
-# Check if Node package exists on npm registry
-#
-# Arguments:
 #   $1: Package version (required)
-#
-# Environment variables:
-#   - GITHUB_OUTPUT: Path to GitHub Actions output file
-#
-# Usage:
-#   ./check_npm.sh "1.0.0"
-#
 
 set -euo pipefail
 

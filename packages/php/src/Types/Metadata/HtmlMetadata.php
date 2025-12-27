@@ -85,7 +85,6 @@ class HtmlMetadata
      */
     public static function fromArray(array $data): self
     {
-        // Extract and validate fields
         /** @var string[] */
         $keywords = $data['keywords'] ?? [];
         if (!is_array($keywords)) {
@@ -119,7 +118,6 @@ class HtmlMetadata
             $metaTags = [];
         }
 
-        // Convert headers
         /** @var HeaderMetadata[] */
         $headers = [];
         if (isset($data['headers']) && is_array($data['headers'])) {
@@ -136,7 +134,6 @@ class HtmlMetadata
             }
         }
 
-        // Convert links
         /** @var LinkMetadata[] */
         $links = [];
         if (isset($data['links']) && is_array($data['links'])) {
@@ -154,7 +151,6 @@ class HtmlMetadata
             }
         }
 
-        // Convert images
         /** @var ImageMetadata[] */
         $images = [];
         if (isset($data['images']) && is_array($data['images'])) {
@@ -172,7 +168,6 @@ class HtmlMetadata
             }
         }
 
-        // Convert structured data
         /** @var StructuredData[] */
         $structuredData = [];
         if (isset($data['structured_data']) && is_array($data['structured_data'])) {

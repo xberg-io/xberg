@@ -78,7 +78,6 @@ impl PostProcessor for LanguageDetector {
 
     fn estimated_duration_ms(&self, result: &ExtractionResult) -> u64 {
         let text_length = result.content.len();
-        // Language detection is relatively fast: ~1ms per 1KB
         (text_length / 1024).max(1) as u64
     }
 }

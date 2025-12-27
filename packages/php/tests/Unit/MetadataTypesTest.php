@@ -32,16 +32,11 @@ use PHPUnit\Framework\TestCase;
 #[CoversClass(StructuredData::class)]
 final class MetadataTypesTest extends TestCase
 {
-    // ========================================
-    // Class Structure Tests
-    // ========================================
-
     #[Test]
     public function testHtmlMetadataStructure(): void
     {
         $metadata = new HtmlMetadata();
 
-        // Verify all properties exist and have correct types
         $this->assertIsArray($metadata->keywords);
         $this->assertNull($metadata->canonicalUrl);
         $this->assertIsArray($metadata->openGraph);
@@ -54,7 +49,6 @@ final class MetadataTypesTest extends TestCase
         $this->assertIsArray($metadata->images);
         $this->assertIsArray($metadata->structuredData);
 
-        // Verify all arrays are empty by default
         $this->assertEmpty($metadata->keywords);
         $this->assertEmpty($metadata->openGraph);
         $this->assertEmpty($metadata->twitterCard);
@@ -68,7 +62,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testKeywordsIsArray(): void
     {
-        // Verify keywords is an array of strings, not a string
         $keywords = ['seo', 'metadata', 'html'];
         $metadata = new HtmlMetadata(keywords: $keywords);
 
@@ -82,7 +75,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testCanonicalUrlRenamed(): void
     {
-        // Verify canonicalUrl property exists (not canonical)
         $canonicalUrl = 'https://example.com/page';
         $metadata = new HtmlMetadata(canonicalUrl: $canonicalUrl);
 
@@ -93,7 +85,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testOpenGraphIsArray(): void
     {
-        // Verify openGraph is array<string, string>
         $openGraph = [
             'og:title' => 'Page Title',
             'og:description' => 'Page Description',
@@ -111,7 +102,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testTwitterCardIsArray(): void
     {
-        // Verify twitterCard is array<string, string>
         $twitterCard = [
             'twitter:card' => 'summary_large_image',
             'twitter:title' => 'Tweet Title',
@@ -125,9 +115,6 @@ final class MetadataTypesTest extends TestCase
         $this->assertSame('Tweet Title', $metadata->twitterCard['twitter:title']);
     }
 
-    // ========================================
-    // Object Creation Tests
-    // ========================================
 
     #[Test]
     public function testHeaderMetadataCreation(): void
@@ -265,9 +252,6 @@ final class MetadataTypesTest extends TestCase
         $this->assertNull($structuredData->schemaType);
     }
 
-    // ========================================
-    // Deserialization Tests
-    // ========================================
 
     #[Test]
     public function testHtmlMetadataFromArray(): void
@@ -442,9 +426,6 @@ final class MetadataTypesTest extends TestCase
         $this->assertNull($metadata->structuredData[1]->schemaType);
     }
 
-    // ========================================
-    // Comprehensive Integration Tests
-    // ========================================
 
     #[Test]
     public function testCompleteHtmlMetadataWithAllFields(): void
@@ -501,7 +482,6 @@ final class MetadataTypesTest extends TestCase
 
         $metadata = HtmlMetadata::fromArray($data);
 
-        // Verify all fields are correctly deserialized
         $this->assertCount(3, $metadata->keywords);
         $this->assertSame('https://example.com/post/123', $metadata->canonicalUrl);
         $this->assertCount(4, $metadata->openGraph);
@@ -526,7 +506,6 @@ final class MetadataTypesTest extends TestCase
 
         $metadata = HtmlMetadata::fromArray($data);
 
-        // All fields should have sensible defaults
         $this->assertEmpty($metadata->keywords);
         $this->assertNull($metadata->canonicalUrl);
         $this->assertEmpty($metadata->openGraph);
@@ -545,7 +524,6 @@ final class MetadataTypesTest extends TestCase
 
         $metadata = HtmlMetadata::fromArray($data);
 
-        // Should handle missing fields gracefully
         $this->assertEmpty($metadata->keywords);
         $this->assertNull($metadata->canonicalUrl);
         $this->assertEmpty($metadata->openGraph);
@@ -559,9 +537,6 @@ final class MetadataTypesTest extends TestCase
         $this->assertEmpty($metadata->structuredData);
     }
 
-    // ========================================
-    // Edge Cases and Validation Tests
-    // ========================================
 
     #[Test]
     public function testMetadataEmptyHtml(): void
@@ -579,7 +554,6 @@ final class MetadataTypesTest extends TestCase
 
         $metadata = HtmlMetadata::fromArray($data);
 
-        // All collections should be empty
         $this->assertEmpty($metadata->keywords);
         $this->assertEmpty($metadata->openGraph);
         $this->assertEmpty($metadata->twitterCard);
@@ -601,7 +575,6 @@ final class MetadataTypesTest extends TestCase
 
         $metadata = HtmlMetadata::fromArray($data);
 
-        // Optional fields should be null
         $this->assertNull($metadata->canonicalUrl);
         $this->assertNull($metadata->language);
         $this->assertNull($metadata->textDirection);
@@ -610,7 +583,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testMetadataEmptyCollections(): void
     {
-        // Test handling of empty arrays that should remain empty
         $metadata = new HtmlMetadata(
             keywords: [],
             openGraph: [],
@@ -622,7 +594,6 @@ final class MetadataTypesTest extends TestCase
             structuredData: [],
         );
 
-        // All should be empty arrays, not null
         $this->assertIsArray($metadata->keywords);
         $this->assertEmpty($metadata->keywords);
         $this->assertIsArray($metadata->openGraph);
@@ -644,17 +615,15 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testInvalidTypeHandlingInDeserialization(): void
     {
-        // Test that fromArray handles non-array types gracefully
         $data = [
-            'keywords' => 'not-an-array',  // Should be converted to empty array
-            'open_graph' => 'string-value',  // Should be converted to empty array
-            'twitter_card' => 123,  // Should be converted to empty array
-            'meta_tags' => false,  // Should be converted to empty array
+            'keywords' => 'not-an-array',
+            'open_graph' => 'string-value',
+            'twitter_card' => 123,
+            'meta_tags' => false,
         ];
 
         $metadata = HtmlMetadata::fromArray($data);
 
-        // Invalid types should be converted to empty arrays
         $this->assertIsArray($metadata->keywords);
         $this->assertEmpty($metadata->keywords);
         $this->assertIsArray($metadata->openGraph);
@@ -668,7 +637,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testNestedMetadataInvalidTypeHandling(): void
     {
-        // Test handling of invalid nested data
         $data = [
             'headers' => 'not-an-array',
             'links' => 123,
@@ -678,7 +646,6 @@ final class MetadataTypesTest extends TestCase
 
         $metadata = HtmlMetadata::fromArray($data);
 
-        // Invalid nested types should result in empty arrays
         $this->assertIsArray($metadata->headers);
         $this->assertEmpty($metadata->headers);
         $this->assertIsArray($metadata->links);
@@ -742,7 +709,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testStructuredDataVariousFormats(): void
     {
-        // Test different structured data formats
         $jsonLd = new StructuredData(
             dataType: 'application/ld+json',
             rawJson: '{"@context":"https://schema.org"}',
@@ -795,7 +761,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testOpenGraphMinimalSet(): void
     {
-        // Test with minimal OG tags
         $data = [
             'open_graph' => [
                 'og:title' => 'Title',
@@ -813,7 +778,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testTwitterCardMinimalSet(): void
     {
-        // Test with minimal Twitter Card tags
         $data = [
             'twitter_card' => [
                 'twitter:card' => 'summary',
@@ -872,14 +836,13 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testStringConversionForMissingIntFields(): void
     {
-        // Test that fromArray properly converts string to int for integer fields
         $data = [
             'headers' => [
                 [
-                    'level' => '2',  // String that should be converted to int
+                    'level' => '2',
                     'text' => 'Section',
-                    'depth' => '1',  // String that should be converted to int
-                    'html_offset' => '50',  // String that should be converted to int
+                    'depth' => '1',
+                    'html_offset' => '50',
                 ],
             ],
         ];
@@ -897,7 +860,6 @@ final class MetadataTypesTest extends TestCase
     #[Test]
     public function testArrayValuesPreservedInAttributes(): void
     {
-        // Verify that complex attribute values are preserved correctly
         $attributes = [
             'data-config' => 'value1',
             'data-options' => 'value2',
@@ -914,15 +876,11 @@ final class MetadataTypesTest extends TestCase
         }
     }
 
-    // ========================================
-    // Integration Tests - Real HTML Extraction
-    // ========================================
 
     #[Test]
     #[RequiresPhpExtension('kreuzberg')]
     public function testExtractHtmlReturnsMetadataObject(): void
     {
-        // Test with actual Kreuzberg\extract_bytes() function
         if (!extension_loaded('kreuzberg')) {
             $this->markTestSkipped('Kreuzberg extension is not loaded');
         }
@@ -955,10 +913,8 @@ final class MetadataTypesTest extends TestCase
         $kreuzberg = new Kreuzberg();
         $result = $kreuzberg->extractBytes($htmlContent, 'text/html');
 
-        // Verify extraction was successful
         $this->assertIsString($result->content);
 
-        // Verify metadata contains HtmlMetadata in custom field
         if ($result->metadata->hasCustom('html_metadata')) {
             $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
             $this->assertIsArray($htmlMetadataArray);
@@ -966,7 +922,6 @@ final class MetadataTypesTest extends TestCase
             $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
             $this->assertInstanceOf(HtmlMetadata::class, $htmlMetadata);
 
-            // Verify basic structure
             $this->assertIsArray($htmlMetadata->keywords);
             $this->assertIsArray($htmlMetadata->openGraph);
             $this->assertIsArray($htmlMetadata->headers);
@@ -979,7 +934,6 @@ final class MetadataTypesTest extends TestCase
     #[RequiresPhpExtension('kreuzberg')]
     public function testExtractComplexHtmlAllFields(): void
     {
-        // Test with comprehensive real-world HTML containing all metadata fields
         if (!extension_loaded('kreuzberg')) {
             $this->markTestSkipped('Kreuzberg extension is not loaded');
         }
@@ -1074,60 +1028,49 @@ final class MetadataTypesTest extends TestCase
         $kreuzberg = new Kreuzberg();
         $result = $kreuzberg->extractBytes($htmlContent, 'text/html');
 
-        // Verify content extraction
         $this->assertIsString($result->content);
         $this->assertNotEmpty($result->content);
 
-        // Verify metadata structure
         if ($result->metadata->hasCustom('html_metadata')) {
             $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
             $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
 
-            // Verify all fields are properly extracted
             $this->assertIsArray($htmlMetadata->keywords);
             $this->assertNotEmpty($htmlMetadata->keywords);
 
             $this->assertIsNotNull($htmlMetadata->canonicalUrl);
             $this->assertStringContainsString('example.com', $htmlMetadata->canonicalUrl);
 
-            // Verify Open Graph
             $this->assertIsArray($htmlMetadata->openGraph);
             $this->assertNotEmpty($htmlMetadata->openGraph);
             $this->assertArrayHasKey('og:title', $htmlMetadata->openGraph);
             $this->assertArrayHasKey('og:type', $htmlMetadata->openGraph);
 
-            // Verify Twitter Card
             $this->assertIsArray($htmlMetadata->twitterCard);
             $this->assertNotEmpty($htmlMetadata->twitterCard);
             $this->assertArrayHasKey('twitter:card', $htmlMetadata->twitterCard);
 
-            // Verify language and direction
             $this->assertSame('en', $htmlMetadata->language);
             $this->assertSame('ltr', $htmlMetadata->textDirection);
 
-            // Verify meta tags
             $this->assertIsArray($htmlMetadata->metaTags);
 
-            // Verify headers were extracted
             $this->assertIsArray($htmlMetadata->headers);
             $this->assertNotEmpty($htmlMetadata->headers);
             $this->assertInstanceOf(HeaderMetadata::class, $htmlMetadata->headers[0]);
 
-            // Verify links were extracted
             $this->assertIsArray($htmlMetadata->links);
             $this->assertNotEmpty($htmlMetadata->links);
             foreach ($htmlMetadata->links as $link) {
                 $this->assertInstanceOf(LinkMetadata::class, $link);
             }
 
-            // Verify images were extracted
             $this->assertIsArray($htmlMetadata->images);
             $this->assertNotEmpty($htmlMetadata->images);
             foreach ($htmlMetadata->images as $image) {
                 $this->assertInstanceOf(ImageMetadata::class, $image);
             }
 
-            // Verify structured data
             $this->assertIsArray($htmlMetadata->structuredData);
             $this->assertNotEmpty($htmlMetadata->structuredData);
             foreach ($htmlMetadata->structuredData as $sd) {
@@ -1140,19 +1083,16 @@ final class MetadataTypesTest extends TestCase
     #[RequiresPhpExtension('kreuzberg')]
     public function testExtractInvalidHtmlHandlesGracefully(): void
     {
-        // Test error handling with invalid/edge case HTML
         if (!extension_loaded('kreuzberg')) {
             $this->markTestSkipped('Kreuzberg extension is not loaded');
         }
 
         $kreuzberg = new Kreuzberg();
 
-        // Test 1: Empty HTML
         $emptyHtml = '';
         $result = $kreuzberg->extractBytes($emptyHtml, 'text/html');
         $this->assertIsString($result->content);
 
-        // Test 2: Malformed HTML (unclosed tags)
         $malformedHtml = <<<'HTML'
             <!DOCTYPE html>
             <html>
@@ -1169,14 +1109,12 @@ final class MetadataTypesTest extends TestCase
         $result = $kreuzberg->extractBytes($malformedHtml, 'text/html');
         $this->assertIsString($result->content);
 
-        // Verify metadata handling is graceful
         if ($result->metadata->hasCustom('html_metadata')) {
             $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
             $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
             $this->assertInstanceOf(HtmlMetadata::class, $htmlMetadata);
         }
 
-        // Test 3: Large HTML with many elements
         $largeHtml = '<!DOCTYPE html><html><head><title>Large Doc</title></head><body>';
         for ($i = 0; $i < 1000; $i++) {
             $largeHtml .= '<p>Paragraph ' . $i . '</p>';
@@ -1200,7 +1138,6 @@ final class MetadataTypesTest extends TestCase
     #[RequiresPhpExtension('kreuzberg')]
     public function testExtractSpecialCharactersInMetadata(): void
     {
-        // Test Unicode and special characters in metadata extraction
         if (!extension_loaded('kreuzberg')) {
             $this->markTestSkipped('Kreuzberg extension is not loaded');
         }
@@ -1232,30 +1169,23 @@ final class MetadataTypesTest extends TestCase
         $kreuzberg = new Kreuzberg();
         $result = $kreuzberg->extractBytes($htmlContent, 'text/html');
 
-        // Verify extraction completed
         $this->assertIsString($result->content);
 
         if ($result->metadata->hasCustom('html_metadata')) {
             $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
             $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
 
-            // Verify special characters are preserved in keywords
             $this->assertIsArray($htmlMetadata->keywords);
 
-            // Verify special characters in Open Graph
             $this->assertIsArray($htmlMetadata->openGraph);
 
-            // Verify headers with Unicode are extracted
             $this->assertIsArray($htmlMetadata->headers);
 
-            // Verify links with special characters
             $this->assertIsArray($htmlMetadata->links);
 
-            // Verify images with special character descriptions
             $this->assertIsArray($htmlMetadata->images);
             foreach ($htmlMetadata->images as $image) {
                 $this->assertInstanceOf(ImageMetadata::class, $image);
-                // Verify alt text is preserved (may contain special chars)
                 if ($image->alt) {
                     $this->assertIsString($image->alt);
                 }
@@ -1267,12 +1197,10 @@ final class MetadataTypesTest extends TestCase
     #[RequiresPhpExtension('kreuzberg')]
     public function testExtractLargeHtmlPerformance(): void
     {
-        // Test performance with large HTML document
         if (!extension_loaded('kreuzberg')) {
             $this->markTestSkipped('Kreuzberg extension is not loaded');
         }
 
-        // Generate a large HTML document
         $htmlContent = <<<'HTML'
             <!DOCTYPE html>
             <html lang="en">
@@ -1285,19 +1213,16 @@ final class MetadataTypesTest extends TestCase
             <body>
             HTML;
 
-        // Add many headers
         for ($i = 1; $i <= 500; $i++) {
             $level = ($i % 6) + 1;
             $htmlContent .= '<h' . $level . '>Header ' . $i . '</h' . $level . '>';
         }
 
-        // Add many paragraphs with links
         for ($i = 1; $i <= 2000; $i++) {
             $htmlContent .= '<p>Paragraph ' . $i . ' with <a href="/link-' . $i . '">link</a> and ';
             $htmlContent .= 'some <strong>bold</strong> content.</p>';
         }
 
-        // Add many images
         for ($i = 1; $i <= 500; $i++) {
             $htmlContent .= '<img src="image-' . $i . '.jpg" alt="Image ' . $i . '" loading="lazy">';
         }
@@ -1309,28 +1234,22 @@ final class MetadataTypesTest extends TestCase
         $result = $kreuzberg->extractBytes($htmlContent, 'text/html');
         $endTime = microtime(true);
 
-        // Verify extraction completed
         $this->assertIsString($result->content);
         $this->assertNotEmpty($result->content);
 
-        // Verify execution time is reasonable (< 30 seconds)
         $duration = $endTime - $startTime;
         $this->assertLessThan(30, $duration, 'Large HTML extraction took too long: ' . $duration . 's');
 
-        // Verify metadata extraction succeeded
         if ($result->metadata->hasCustom('html_metadata')) {
             $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
             $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
 
-            // Verify headers were extracted
             $this->assertIsArray($htmlMetadata->headers);
             $this->assertGreaterThan(0, count($htmlMetadata->headers));
 
-            // Verify links were extracted
             $this->assertIsArray($htmlMetadata->links);
             $this->assertGreaterThan(0, count($htmlMetadata->links));
 
-            // Verify images were extracted
             $this->assertIsArray($htmlMetadata->images);
             $this->assertGreaterThan(0, count($htmlMetadata->images));
         }

@@ -119,7 +119,6 @@ export function configToJS(config: ExtractionConfig | null): Record<string, unkn
 
 	const normalized: Record<string, unknown> = {};
 
-	// Recursively normalize nested objects
 	const normalizeValue = (value: unknown): unknown => {
 		if (value === null || value === undefined) {
 			return null;
@@ -181,7 +180,6 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 				? result.mime_type
 				: null;
 
-	// Validate required fields
 	if (typeof result.content !== "string") {
 		throw new Error("Invalid extraction result: missing or invalid content");
 	}
@@ -192,13 +190,11 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 		throw new Error("Invalid extraction result: missing or invalid metadata");
 	}
 
-	// Parse tables
 	const tables: Table[] = [];
 	if (Array.isArray(result.tables)) {
 		for (const table of result.tables) {
 			if (table && typeof table === "object") {
 				const t = table as Record<string, unknown>;
-				// Validate table structure before type casting
 				if (
 					Array.isArray(t.cells) &&
 					t.cells.every((row) => Array.isArray(row) && row.every((cell) => typeof cell === "string")) &&
@@ -215,7 +211,6 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 		}
 	}
 
-	// Parse chunks
 	const chunks: Chunk[] | null = Array.isArray(result.chunks)
 		? result.chunks.map((chunk) => {
 				if (!chunk || typeof chunk !== "object") {
@@ -230,7 +225,6 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 				}
 				const metadata = c.metadata as Record<string, unknown>;
 
-				// Validate embedding array contains only numbers
 				let embedding: number[] | null = null;
 				if (Array.isArray(c.embedding)) {
 					if (!c.embedding.every((item) => typeof item === "number")) {
@@ -239,7 +233,6 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 					embedding = c.embedding;
 				}
 
-				// Validate metadata fields
 				if (typeof metadata.charStart !== "number") {
 					throw new Error("Invalid chunk metadata: charStart must be a number");
 				}
@@ -270,7 +263,6 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 			})
 		: null;
 
-	// Parse images
 	const images: ExtractedImage[] | null = Array.isArray(result.images)
 		? result.images.map((image) => {
 				if (!image || typeof image !== "object") {
@@ -284,7 +276,6 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 					throw new Error("Invalid image: missing format");
 				}
 
-				// Validate numeric fields
 				if (typeof img.imageIndex !== "number") {
 					throw new Error("Invalid image: imageIndex must be a number");
 				}
@@ -301,12 +292,10 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 					throw new Error("Invalid image: bitsPerComponent must be a number or null");
 				}
 
-				// Validate boolean field
 				if (!isBoolean(img.isMask)) {
 					throw new Error("Invalid image: isMask must be a boolean");
 				}
 
-				// Validate string fields
 				if (!isStringOrNull(img.colorspace)) {
 					throw new Error("Invalid image: colorspace must be a string or null");
 				}
@@ -330,7 +319,6 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 			})
 		: null;
 
-	// Validate detectedLanguages array
 	let detectedLanguages: string[] | null = null;
 	const detectedLanguagesRaw = Array.isArray(result.detectedLanguages)
 		? result.detectedLanguages

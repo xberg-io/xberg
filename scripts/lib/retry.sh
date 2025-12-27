@@ -1,18 +1,7 @@
 #!/usr/bin/env bash
-#
-# Retry + timeout helpers for CI scripts.
-#
-# Usage:
-#   source "$REPO_ROOT/scripts/lib/retry.sh"
-#   retry_with_backoff cmd args...
-#   run_with_timeout 30 cmd args...
-#   retry_with_backoff_timeout 300 cmd args...
-#
 
 set -euo pipefail
 
-# Run a command with a timeout.
-# - Returns 124 on timeout (GNU timeout convention).
 run_with_timeout() {
 	local seconds="$1"
 	shift
@@ -45,7 +34,6 @@ PY
 	"$@"
 }
 
-# Retry a command with exponential backoff.
 retry_with_backoff() {
 	local max_attempts=3
 	local attempt=1
@@ -67,8 +55,6 @@ retry_with_backoff() {
 	return 1
 }
 
-# Retry a command with exponential backoff, enforcing a timeout per attempt.
-# - Returns 124 if the final attempt timed out.
 retry_with_backoff_timeout() {
 	local seconds="$1"
 	shift

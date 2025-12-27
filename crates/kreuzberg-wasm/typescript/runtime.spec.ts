@@ -233,7 +233,6 @@ describe("Runtime Detection", () => {
 
 			it("should return true in modern environments", () => {
 				const result = hasBigInt();
-				// BigInt is available in Node 10.4+, modern browsers
 				expect(typeof result).toBe("boolean");
 			});
 		});
@@ -337,8 +336,6 @@ describe("Runtime Detection", () => {
 			const info = getRuntimeInfo();
 
 			expect(typeof info.userAgent).toBe("string");
-			// In jsdom test environment, userAgent may be present
-			// In Node.js, it should be "N/A"
 		});
 
 		it("should include runtimeVersion if available", () => {
@@ -367,7 +364,6 @@ describe("Runtime Detection", () => {
 			const isWeb = isWebEnvironment();
 			const isServer = isServerEnvironment();
 
-			// Browser is web, others are server
 			if (isWeb) {
 				expect(isServer).toBe(false);
 			}
@@ -376,7 +372,6 @@ describe("Runtime Detection", () => {
 		it("feature detection should match runtime", () => {
 			const caps = getWasmCapabilities();
 
-			// Browser should have File API
 			if (caps.runtime === "browser" && caps.hasFileApi) {
 				expect(hasFileApi()).toBe(true);
 			}

@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
 
-# Upload CLI binaries to GitHub Release
-#
-# Uploads all CLI artifacts matching the pattern cli-* to the specified release.
-# Uses gh release upload with --clobber for idempotent uploads.
-#
-# Environment Variables:
-#   - GH_TOKEN: GitHub API token (required for gh command)
-#   - ARTIFACTS_DIR: Directory containing CLI artifacts (default: dist/cli)
-#
-# Arguments:
-#   $1: Release tag (e.g., v4.0.0-rc.1)
-
 set -euo pipefail
 
 tag="${1:?Release tag argument required}"

@@ -287,15 +287,10 @@ pub fn kreuzberg_get_valid_binarization_methods() -> Vec<String> {
 #[php_function]
 pub fn kreuzberg_get_valid_language_codes() -> Vec<String> {
     vec![
-        // Major languages (2-letter)
-        "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "zh", "ja", "ko",
-        // Extended European (2-letter)
-        "bg", "cs", "da", "el", "et", "fi", "hu", "lt", "lv", "ro", "sk", "sl", "sv", "uk",
-        // Extended Asian & other (2-letter)
-        "ar", "hi", "th", "tr", "vi", // Major languages (3-letter)
-        "eng", "deu", "fra", "spa", "ita", "por", "nld", "pol", "rus", "zho", "jpn", "kor",
-        // Additional 3-letter codes
-        "ces", "dan", "ell", "est", "fin", "hun", "lit", "lav", "ron", "slk", "slv", "swe", "tur",
+        "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "zh", "ja", "ko", "bg", "cs", "da", "el", "et", "fi",
+        "hu", "lt", "lv", "ro", "sk", "sl", "sv", "uk", "ar", "hi", "th", "tr", "vi", "eng", "deu", "fra", "spa",
+        "ita", "por", "nld", "pol", "rus", "zho", "jpn", "kor", "ces", "dan", "ell", "est", "fin", "hun", "lit", "lav",
+        "ron", "slk", "slv", "swe", "tur",
     ]
     .iter()
     .map(|s| s.to_string())

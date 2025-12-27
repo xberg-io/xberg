@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#
-# Print test summary
-# Used by: ci-docker.yaml - Summary step
-# Arguments: VARIANT (core|full), RESULTS_FILE (optional, defaults to /tmp/kreuzberg-docker-test-results.json)
-#
 
 set -euo pipefail
 

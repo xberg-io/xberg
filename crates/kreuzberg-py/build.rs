@@ -10,24 +10,16 @@ fn main() {
     };
 
     if target.contains("apple-darwin") {
-        // Ensure Python symbols resolve at runtime on macOS without hard-linking libpython.
         println!("cargo:rustc-cdylib-link-arg=-Wl,-undefined,dynamic_lookup");
     }
 
-    // Try to locate kreuzberg-ffi library built alongside this crate
     let cargo_manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let manifest_path = PathBuf::from(&cargo_manifest_dir);
 
-    // Prefer host target layout, but include target-triple layout for cross builds.
-    // IMPORTANT: Only search lib directories, NOT deps directories.
-    // The deps/ directories may contain dylibs with hardcoded install_name paths,
-    // which causes ImportError on macOS when users install the wheel.
     if let Some(workspace_root) = manifest_path.parent().and_then(|p| p.parent()) {
         let host_lib_dir = workspace_root.join("target").join(profile_dir);
         let target_lib_dir = workspace_root.join("target").join(&target).join(profile_dir);
 
-        // Try to find the static library and link it directly on Unix-like systems
-        // to avoid the linker preferring dylib over static lib.
         if !target.contains("windows") {
             let static_lib_name = if target.contains("windows") {
                 "kreuzberg_ffi.lib"
@@ -35,14 +27,10 @@ fn main() {
                 "libkreuzberg_ffi.a"
             };
 
-            // Check both host and target lib directories for the static library
             for lib_dir in [&host_lib_dir, &target_lib_dir] {
                 let static_lib = lib_dir.join(static_lib_name);
                 if static_lib.exists() {
-                    // Found static library, link it directly by passing the full path
                     println!("cargo:rustc-link-arg={}", static_lib.display());
-                    // Don't add the library search path or -l flag
-                    // Jump to rpath configuration
                     if target.contains("darwin") {
                         println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
                     } else if target.contains("linux") {
@@ -54,7 +42,6 @@ fn main() {
             }
         }
 
-        // Fallback: Add search paths and link only if a static library exists.
         let static_lib_name = if target.contains("windows") {
             "kreuzberg_ffi.lib"
         } else {

@@ -12,7 +12,6 @@ vars:
   BUNDLE: /opt/homebrew/bin/bundle
 
 tasks:
-  # Installation
   install:
     desc: Install Ruby dependencies
     dir: packages/ruby
@@ -25,7 +24,6 @@ tasks:
     cmds:
       - task: ruby:install
 
-  # Build Tasks
   build:
     desc: Build Ruby native extension (uses {{.BUILD_PROFILE}})
     dir: packages/ruby
@@ -60,7 +58,6 @@ tasks:
     cmds:
       - bash scripts/benchmarks/build-ruby-gem.sh
 
-  # Test Tasks
   test:
     desc: Run Ruby tests
     dir: packages/ruby
@@ -79,7 +76,6 @@ tasks:
     cmds:
       - "{{.BUNDLE}} exec rspec --format documentation --color"
 
-  # Linting Tasks
   lint:
     desc: Auto-fix Ruby code linting (rubocop + steep)
     dir: packages/ruby
@@ -94,7 +90,6 @@ tasks:
       - "{{.BUNDLE}} exec rubocop --config .rubocop.yml"
       - "{{.BUNDLE}} exec steep check"
 
-  # Formatting Tasks
   format:
     desc: Format Ruby code with modifications (rubocop)
     dir: packages/ruby
@@ -107,21 +102,18 @@ tasks:
     cmds:
       - "{{.BUNDLE}} exec rubocop --config .rubocop.yml"
 
-  # Type checking
   typecheck:
     desc: Run steep type checking
     dir: packages/ruby
     cmds:
       - "{{.BUNDLE}} exec steep check"
 
-  # REPL
   console:
     desc: Open Ruby console with Kreuzberg loaded
     dir: packages/ruby
     cmds:
       - "{{.BUNDLE}} exec pry -r ./lib/kreuzberg"
 
-  # Cleanup
   clean:
     desc: Clean Ruby build artifacts
     dir: packages/ruby
@@ -129,7 +121,6 @@ tasks:
       - python -c "import shutil, glob, os; shutil.rmtree('tmp', ignore_errors=True); [os.remove(f) for f in glob.glob('ext/kreuzberg/*.o') + glob.glob('ext/kreuzberg/*.so')]"
       - python -c "import shutil, os; [shutil.rmtree(os.path.join(r, d), ignore_errors=True) for r, dirs, _ in os.walk('.') for d in dirs if d == '.steep']"
 
-  # Dependency Management
   update:
     desc: Update Ruby dependencies
     dir: packages/ruby
@@ -137,7 +128,6 @@ tasks:
       - echo "Updating Ruby dependencies..."
       - "{{.BUNDLE}} update --all"
 
-  # E2E Tests
   e2e:generate:
     desc: Generate Ruby E2E tests from fixtures
     cmds:

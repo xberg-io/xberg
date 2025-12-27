@@ -87,22 +87,18 @@ export interface WasmCapabilities {
  * ```
  */
 export function detectRuntime(): RuntimeType {
-	// Check for Deno
 	if (typeof (globalThis as unknown as Record<string, unknown>).Deno !== "undefined") {
 		return "deno";
 	}
 
-	// Check for Bun
 	if (typeof (globalThis as unknown as Record<string, unknown>).Bun !== "undefined") {
 		return "bun";
 	}
 
-	// Check for Node.js
 	if (typeof process !== "undefined" && process.versions && process.versions.node) {
 		return "node";
 	}
 
-	// Check for browser
 	if (typeof window !== "undefined" && typeof document !== "undefined") {
 		return "browser";
 	}
@@ -231,14 +227,11 @@ export function hasModuleWorkers(): boolean {
 	}
 
 	try {
-		// Try to detect module worker support
 		const blob = new Blob(['console.log("test")'], {
 			type: "application/javascript",
 		});
 		const workerUrl = URL.createObjectURL(blob);
 		try {
-			// Module workers require type: 'module' option
-			// We can't actually instantiate without issues, so we check the API exists
 			return true;
 		} finally {
 			URL.revokeObjectURL(workerUrl);
@@ -298,7 +291,7 @@ export function getRuntimeVersion(): string | undefined {
 
 	switch (runtime) {
 		case "node":
-			return process.version?.substring(1); // Remove 'v' prefix
+			return process.version?.substring(1);
 		case "deno": {
 			const deno = (globalThis as unknown as Record<string, unknown>).Deno as Record<string, unknown> | undefined;
 			const version = deno?.version as Record<string, unknown> | undefined;

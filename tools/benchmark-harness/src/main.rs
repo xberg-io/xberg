@@ -712,7 +712,6 @@ async fn main() -> Result<()> {
                 eprintln!("    Success rate: {:.1}%", agg.success_rate * 100.0);
             }
 
-            // Ensure output directory exists
             std::fs::create_dir_all(&output).map_err(benchmark_harness::Error::Io)?;
 
             match format {

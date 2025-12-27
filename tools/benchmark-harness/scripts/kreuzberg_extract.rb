@@ -1,13 +1,6 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Kreuzberg Ruby extraction wrapper for benchmark harness.
-#
-# Supports two modes:
-# - sync: extract_file - synchronous extraction (default)
-# - batch: batch_extract_file - batch extraction for multiple files
-#
-# Debug output is written to stderr to avoid interfering with JSON output on stdout.
 
 require 'json'
 
@@ -18,7 +11,6 @@ def debug_log(message)
   warn "[DEBUG] #{Time.now.iso8601(3)} - #{message}"
 end
 
-# Log library paths before loading gem (crucial for diagnosis)
 debug_log "=== Gem Initialization Debug Info ==="
 debug_log "RUBY_PLATFORM: #{RUBY_PLATFORM}"
 debug_log "RUBY_VERSION: #{RUBY_VERSION}"
@@ -32,7 +24,6 @@ end
   debug_log "  [MISSING] #{dir}"
 end
 
-# Load the gem and catch initialization errors with detailed diagnostics
 begin
   debug_log "Loading kreuzberg gem..."
   require 'kreuzberg'
@@ -41,7 +32,6 @@ rescue LoadError => e
   debug_log "FAILED to load kreuzberg gem: #{e.class} - #{e.message}"
   debug_log "Backtrace:\n#{e.backtrace.join("\n")}"
 
-  # Try to diagnose the issue
   debug_log "Attempting to find kreuzberg library files:"
   require 'rbconfig'
   gem_root = Gem.loaded_specs['kreuzberg_rb']&.gem_root
@@ -186,13 +176,11 @@ def main
 
     results = extract_batch(file_paths)
 
-    # For single file in batch mode, return single result
     if file_paths.length == 1
       output = JSON.generate(results[0])
       debug_log "Output JSON (single file): #{output}"
       puts output
     else
-      # For multiple files, return array
       output = JSON.generate(results)
       debug_log "Output JSON (multiple files): #{output[0..200]}..." if output.length > 200
       puts output

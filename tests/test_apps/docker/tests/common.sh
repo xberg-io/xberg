@@ -1,20 +1,15 @@
 #!/bin/bash
 
-# Common test utilities and color definitions
-
-# Color codes for output
 export RED='\033[0;31m'
 export GREEN='\033[0;32m'
 export YELLOW='\033[1;33m'
 export BLUE='\033[0;34m'
-export NC='\033[0m' # No Color
+export NC='\033[0m'
 
-# Test counters
 TESTS_PASSED=0
 TESTS_FAILED=0
 TESTS_SKIPPED=0
 
-# Logging functions
 log_info() {
 	echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -38,7 +33,6 @@ log_warn() {
 	echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-# Test assertion functions
 assert_exit_code() {
 	local actual=$1
 	local expected=${2:-0}
@@ -97,7 +91,6 @@ assert_http_status() {
 	fi
 }
 
-# Container health check
 wait_for_container() {
 	local container=$1
 	local timeout=${2:-60}
@@ -122,7 +115,6 @@ wait_for_container() {
 	return 1
 }
 
-# Print test summary
 print_summary() {
 	local total=$((TESTS_PASSED + TESTS_FAILED + TESTS_SKIPPED))
 
@@ -145,7 +137,6 @@ print_summary() {
 	fi
 }
 
-# Container utility functions
 container_exists() {
 	local container=$1
 	docker inspect "$container" >/dev/null 2>&1
@@ -156,7 +147,6 @@ container_is_running() {
 	[ "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null)" = "true" ]
 }
 
-# API testing helper
 call_api() {
 	local endpoint=$1
 	local base_url=${2:-"http://localhost:8000"}
@@ -173,13 +163,11 @@ call_api() {
 	fi
 }
 
-# Get container IP
 get_container_ip() {
 	local container=$1
 	docker inspect --format='{{.NetworkSettings.IPAddress}}' "$container" 2>/dev/null
 }
 
-# Export functions
 export -f log_info log_success log_fail log_skip log_warn
 export -f assert_exit_code assert_contains assert_equals assert_http_status
 export -f wait_for_container print_summary container_exists container_is_running

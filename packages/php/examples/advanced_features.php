@@ -14,7 +14,6 @@ use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\PageConfig;
 use function Kreuzberg\extract_file;
 
-// Example 1: Text chunking with embeddings
 echo "=== Text Chunking & Embeddings ===\n";
 
 $config = new ExtractionConfig(
@@ -48,7 +47,6 @@ if ($result->chunks !== null) {
 
 echo "\n";
 
-// Example 2: Image extraction with OCR
 echo "=== Image Extraction ===\n";
 
 $config = new ExtractionConfig(
@@ -80,7 +78,6 @@ if ($result->images !== null) {
 
 echo "\n";
 
-// Example 3: Page extraction
 echo "=== Page Extraction ===\n";
 
 $config = new ExtractionConfig(
@@ -107,7 +104,6 @@ if ($result->pages !== null) {
 
 echo "\n";
 
-// Example 4: Language detection and keyword extraction
 echo "=== Language Detection & Keywords ===\n";
 
 $config = new ExtractionConfig(

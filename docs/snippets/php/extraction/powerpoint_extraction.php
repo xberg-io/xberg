@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\ImageExtractionConfig;
 use Kreuzberg\Config\PageConfig;
 
-// Example 1: Basic PowerPoint extraction
 echo "Example 1: Basic PowerPoint Extraction\n";
 echo "======================================\n";
 
@@ -32,14 +31,13 @@ echo "- Title: " . ($result->metadata->title ?? 'N/A') . "\n";
 echo "- Author: " . (isset($result->metadata->authors) ? implode(', ', $result->metadata->authors) : 'N/A') . "\n";
 echo "- Slide Count: " . ($result->metadata->pageCount ?? 'N/A') . "\n\n";
 
-// Example 2: Extract individual slides
 echo "Example 2: Extract Per-Slide Content\n";
 echo "====================================\n";
 
 $config2 = new ExtractionConfig(
     page: new PageConfig(
-        extractPages: true,           // Extract each slide separately
-        insertPageMarkers: true,      // Insert slide markers
+        extractPages: true,           
+        insertPageMarkers: true,      
         markerFormat: '--- Slide {page_number} ---'
     )
 );
@@ -58,7 +56,6 @@ if ($result2->pages !== null) {
     }
 }
 
-// Example 3: Extract images from presentation
 echo "Example 3: Extract Images from Slides\n";
 echo "=====================================\n";
 
@@ -81,14 +78,12 @@ if ($result3->images !== null) {
         echo "- Size: {$image->width}x{$image->height}\n";
         echo "- Slide: {$image->pageNumber}\n";
 
-        // Save image
         $filename = "slide_{$image->pageNumber}_image_{$i}.{$image->format}";
         file_put_contents($filename, base64_decode($image->data));
         echo "- Saved: {$filename}\n\n";
     }
 }
 
-// Example 4: Extract tables from slides
 echo "Example 4: Extract Tables from Slides\n";
 echo "=====================================\n";
 
@@ -107,7 +102,6 @@ if (count($result4->tables) > 0) {
     }
 }
 
-// Example 5: Convert PowerPoint to Markdown
 echo "Example 5: Convert PowerPoint to Markdown\n";
 echo "=========================================\n";
 
@@ -130,7 +124,6 @@ echo "Saved as: presentation.md\n";
 echo "Content preview:\n";
 echo substr($markdownContent, 0, 500) . "...\n\n";
 
-// Example 6: Generate presentation summary
 echo "Example 6: Generate Presentation Summary\n";
 echo "========================================\n";
 
@@ -158,7 +151,6 @@ if ($result6->pages !== null) {
 
 echo "\n";
 
-// Example 7: Search for specific content in slides
 echo "Example 7: Search Content in Slides\n";
 echo "===================================\n";
 
@@ -177,7 +169,6 @@ if ($result7->pages !== null) {
         if (stripos($page->content, $searchTerm) !== false) {
             echo "Found in Slide {$page->pageNumber}:\n";
 
-            // Show context around the search term
             $pos = stripos($page->content, $searchTerm);
             $context = substr($page->content, max(0, $pos - 50), 150);
             echo "- Context: ...{$context}...\n\n";

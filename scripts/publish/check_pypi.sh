@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
-#
 # Check if Python package version exists on PyPI
-#
-# Arguments:
 #   $1: Package version (required)
-#
-# Environment variables:
-#   - GITHUB_OUTPUT: Path to GitHub Actions output file
-#
-# Usage:
-#   ./check_pypi.sh "1.0.0"
-#
 
 set -euo pipefail
 

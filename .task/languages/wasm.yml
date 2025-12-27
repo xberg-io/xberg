@@ -12,7 +12,6 @@ vars:
   WASM_DIR: "{{.ROOT}}/crates/kreuzberg-wasm"
 
 tasks:
-  # Installation
   install:
     desc: Install WASM dependencies (pnpm)
     dir: crates/kreuzberg-wasm
@@ -25,14 +24,10 @@ tasks:
     cmds:
       - pnpm install
 
-  # Build Tasks
   build:
     desc: Build WASM bindings for Node.js target (uses {{.BUILD_PROFILE}})
     dir: crates/kreuzberg-wasm
     env:
-      # WASM builds use their own rustflags from .cargo/config.toml for the wasm32-unknown-unknown target.
-      # Unsetting RUSTFLAGS prevents flags from parent environment (e.g., profiling flags) from interfering
-      # with WASM compilation or leaking to subsequent non-WASM builds.
       RUSTFLAGS:
     cmds:
       - pnpm run build
@@ -106,12 +101,10 @@ tasks:
   build:bindings:
     desc: Build WASM bindings for benchmarking
     env:
-      # Ensure RUSTFLAGS is unset for benchmarking build to isolate WASM-specific flags
       RUSTFLAGS:
     cmds:
       - bash scripts/benchmarks/build-wasm-bindings.sh
 
-  # Test Tasks
   test:
     desc: Run WASM unit tests with Vitest
     dir: crates/kreuzberg-wasm
@@ -148,7 +141,6 @@ tasks:
     cmds:
       - pnpm test
 
-  # Linting Tasks
   lint:
     desc: Lint WASM TypeScript code with auto-fix (biome + oxlint)
     dir: crates/kreuzberg-wasm
@@ -161,7 +153,6 @@ tasks:
     cmds:
       - pnpm run lint
 
-  # Formatting Tasks
   format:
     desc: Format WASM TypeScript code with modifications (biome)
     dir: crates/kreuzberg-wasm
@@ -174,14 +165,12 @@ tasks:
     cmds:
       - pnpm exec biome format typescript --check
 
-  # Type checking
   typecheck:
     desc: Type-check WASM TypeScript code
     dir: crates/kreuzberg-wasm
     cmds:
       - pnpm run typecheck
 
-  # Cleanup
   clean:
     desc: Clean WASM build artifacts
     cmds:
@@ -192,14 +181,12 @@ tasks:
       - cmd: cd crates/kreuzberg-wasm && pnpm run clean
         ignore_error: true
 
-  # Dependency Management
   update:
     desc: Update WASM dependencies
     dir: crates/kreuzberg-wasm
     cmds:
       - pnpm up --latest
 
-  # E2E Tests - Deno
   e2e:deno:generate:
     desc: Generate Deno WASM E2E tests from fixtures
     cmds:
@@ -227,7 +214,6 @@ tasks:
       - task: e2e:deno:generate
       - task: e2e:deno:test
 
-  # E2E Tests - Cloudflare Workers
   e2e:workers:generate:
     desc: Generate Cloudflare Workers WASM E2E tests from fixtures
     cmds:
@@ -255,7 +241,6 @@ tasks:
       - task: e2e:workers:generate
       - task: e2e:workers:test
 
-  # E2E Tests - All
   e2e:verify:
     desc: Verify all WASM test suites (Deno + Workers)
     cmds:

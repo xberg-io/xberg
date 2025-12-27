@@ -42,7 +42,6 @@ const ocrBackendRegistry = new Map<string, OcrBackendProtocol>();
  * ```
  */
 export function registerOcrBackend(backend: OcrBackendProtocol): void {
-	// Validate backend
 	if (!backend) {
 		throw new Error("Backend cannot be null or undefined");
 	}
@@ -65,12 +64,10 @@ export function registerOcrBackend(backend: OcrBackendProtocol): void {
 		throw new Error("Backend name must be a non-empty string");
 	}
 
-	// Check for duplicate registration (allow overwriting with warning)
 	if (ocrBackendRegistry.has(backendName)) {
 		console.warn(`OCR backend "${backendName}" is already registered and will be replaced`);
 	}
 
-	// Register the backend
 	ocrBackendRegistry.set(backendName, backend);
 }
 
@@ -133,7 +130,6 @@ export async function unregisterOcrBackend(name: string): Promise<void> {
 		);
 	}
 
-	// Call shutdown if available
 	if (typeof backend.shutdown === "function") {
 		try {
 			await backend.shutdown();

@@ -28,25 +28,18 @@ use function Kreuzberg\detect_mime_type_from_path;
 use function Kreuzberg\extract_bytes;
 use function Kreuzberg\extract_file;
 
-// =============================================================================
-// Example 1: Simple File Extraction (OOP API)
-// =============================================================================
 
 echo "=== Example 1: Simple File Extraction (OOP API) ===\n\n";
 
 try {
-    // Create Kreuzberg instance with default configuration
     $kreuzberg = new Kreuzberg();
 
-    // Extract content from a PDF file
     $result = $kreuzberg->extractFile(__DIR__ . '/../sample-documents/sample.pdf');
 
-    // Access extracted content
     echo "Content length: " . strlen($result->content) . " characters\n";
     echo "MIME type: {$result->mimeType}\n";
     echo "Page count: {$result->metadata->pageCount}\n";
 
-    // Display first 200 characters of content
     echo "\nFirst 200 characters:\n";
     echo substr($result->content, 0, 200) . "...\n\n";
 
@@ -54,14 +47,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 2: Simple File Extraction (Procedural API)
-// =============================================================================
 
 echo "=== Example 2: Simple File Extraction (Procedural API) ===\n\n";
 
 try {
-    // Extract using procedural function
     $result = extract_file(__DIR__ . '/../sample-documents/sample.pdf');
 
     echo "Content length: " . strlen($result->content) . " characters\n";
@@ -71,27 +60,21 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 3: Extraction with Configuration
-// =============================================================================
 
 echo "=== Example 3: Extraction with Configuration ===\n\n";
 
 try {
-    // Create extraction configuration
     $config = new ExtractionConfig(
         extractTables: true,
         extractImages: true,
     );
 
-    // OOP API: Pass config to constructor
     $kreuzberg = new Kreuzberg($config);
     $result = $kreuzberg->extractFile(__DIR__ . '/../sample-documents/sample.pdf');
 
     echo "Extracted with tables and images: " . strlen($result->content) . " characters\n";
     echo "Tables found: " . count($result->tables) . "\n";
 
-    // OOP API: Override config for specific extraction
     $specificConfig = new ExtractionConfig(
         extractTables: false,
         extractImages: false,
@@ -103,7 +86,6 @@ try {
 
     echo "Extracted without quality processing: " . strlen($result2->content) . " characters\n";
 
-    // Procedural API with config
     $result3 = extract_file(
         __DIR__ . '/../sample-documents/sample.pdf',
         config: $config
@@ -115,27 +97,21 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 4: Extract from Bytes
-// =============================================================================
 
 echo "=== Example 4: Extract from Bytes ===\n\n";
 
 try {
-    // Read file content into memory
     $data = file_get_contents(__DIR__ . '/../sample-documents/sample.pdf');
 
     if ($data === false) {
         throw new RuntimeException('Failed to read file');
     }
 
-    // OOP API: Extract from bytes
     $kreuzberg = new Kreuzberg();
     $result = $kreuzberg->extractBytes($data, 'application/pdf');
 
     echo "OOP API - Extracted from bytes: " . strlen($result->content) . " characters\n";
 
-    // Procedural API: Extract from bytes
     $result2 = extract_bytes($data, 'application/pdf');
 
     echo "Procedural API - Extracted from bytes: " . strlen($result2->content) . " characters\n\n";
@@ -144,18 +120,13 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 5: MIME Type Detection
-// =============================================================================
 
 echo "=== Example 5: MIME Type Detection ===\n\n";
 
 try {
-    // Detect MIME type from file path
     $mimeType = detect_mime_type_from_path(__DIR__ . '/../sample-documents/sample.pdf');
     echo "Detected MIME type from path: {$mimeType}\n";
 
-    // Detect MIME type from bytes
     $data = file_get_contents(__DIR__ . '/../sample-documents/sample.pdf');
 
     if ($data === false) {
@@ -169,9 +140,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 6: Accessing Metadata
-// =============================================================================
 
 echo "=== Example 6: Accessing Metadata ===\n\n";
 
@@ -195,7 +163,6 @@ try {
     echo "  Language: " . ($result->metadata->language ?? 'N/A') . "\n";
     echo "  Format type: " . ($result->metadata->formatType ?? 'N/A') . "\n";
 
-    // Access custom metadata fields (if any)
     if (!empty($result->metadata->custom)) {
         echo "\nCustom Metadata:\n";
         foreach ($result->metadata->custom as $key => $value) {
@@ -209,9 +176,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 7: Accessing Tables
-// =============================================================================
 
 echo "=== Example 7: Accessing Tables ===\n\n";
 
@@ -229,7 +193,6 @@ try {
         echo "\n  Markdown:\n";
         echo "  " . str_replace("\n", "\n  ", $table->markdown) . "\n";
 
-        // Access table data as 2D array
         if ($table->data !== null) {
             echo "\n  First row (array format):\n";
             echo "  " . print_r($table->data[0] ?? [], true);
@@ -242,9 +205,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 8: Error Handling
-// =============================================================================
 
 echo "=== Example 8: Error Handling ===\n\n";
 

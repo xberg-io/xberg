@@ -52,7 +52,6 @@ class DiskCache
             return null;
         }
 
-        // Check if cache is expired
         if (time() - filemtime($cachePath) > $this->ttl) {
             unlink($cachePath);
             return null;
@@ -104,7 +103,6 @@ class DiskCache
     }
 }
 
-// Usage example
 $cache = new DiskCache();
 $kreuzberg = new Kreuzberg();
 $config = new ExtractionConfig();
@@ -114,11 +112,9 @@ $file = 'document.pdf';
 echo "First extraction (will be cached)...\n";
 $start = microtime(true);
 
-// Try to get from cache
 $result = $cache->get($file, $config);
 
 if ($result === null) {
-    // Not in cache, extract and cache it
     $result = $kreuzberg->extractFile($file, config: $config);
     $cache->set($file, $config, $result);
     echo "  Status: Extracted and cached\n";
@@ -147,7 +143,6 @@ $elapsed = microtime(true) - $start;
 echo "  Time: " . number_format($elapsed, 4) . "s\n";
 echo "  Content length: " . strlen($result->content) . " chars\n\n";
 
-// Cache statistics
 $stats = $cache->getStats();
 echo "Cache Statistics:\n";
 echo str_repeat('=', 60) . "\n";
@@ -155,7 +150,6 @@ echo "Total entries: {$stats['total_entries']}\n";
 echo "Cache size: " . number_format($stats['cache_size_bytes'] / 1024 / 1024, 2) . " MB\n";
 echo "Cache directory: {$stats['cache_dir']}\n\n";
 
-// Caching wrapper class
 class CachedKreuzberg
 {
     public function __construct(
@@ -170,11 +164,9 @@ class CachedKreuzberg
     ): ExtractionResult {
         $config = $config ?? new ExtractionConfig();
 
-        // Try cache first
         $result = $this->cache->get($filePath, $config);
 
         if ($result === null) {
-            // Not cached, extract and cache
             $result = $this->kreuzberg->extractFile($filePath, $mimeType, $config);
             $this->cache->set($filePath, $config, $result);
         }
@@ -193,7 +185,6 @@ class CachedKreuzberg
     }
 }
 
-// Use the caching wrapper
 $cachedKreuzberg = new CachedKreuzberg(
     new Kreuzberg(),
     new DiskCache()
@@ -217,7 +208,6 @@ echo "\nCache stats:\n";
 $stats = $cachedKreuzberg->getCacheStats();
 print_r($stats);
 
-// Clean up old cache entries
 function cleanupCache(DiskCache $cache, int $maxAge = 7 * 86400): int
 {
     $cacheDir = $cache->getStats()['cache_dir'];

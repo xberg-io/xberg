@@ -15,7 +15,6 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 
-// Example 1: Basic Excel extraction
 echo "Example 1: Basic Excel Extraction\n";
 echo "=================================\n";
 
@@ -31,12 +30,11 @@ echo "- Author: " . (isset($result->metadata->authors) ? implode(', ', $result->
 echo "- Created: " . ($result->metadata->createdAt ?? 'N/A') . "\n";
 echo "- Modified: " . ($result->metadata->modifiedAt ?? 'N/A') . "\n\n";
 
-// Example 2: Extract tables from Excel
 echo "Example 2: Extract Excel Tables\n";
 echo "===============================\n";
 
 $config2 = new ExtractionConfig(
-    extractTables: true  // Enabled by default
+    extractTables: true  
 );
 
 $result2 = (new Kreuzberg($config2))->extractFile('data.xlsx');
@@ -48,14 +46,12 @@ if (count($result2->tables) > 0) {
         echo "Table " . ($i + 1) . " (Sheet/Page {$table->pageNumber}):\n";
         echo $table->markdown . "\n\n";
 
-        // Access raw cell data
         echo "Raw data:\n";
         echo "Rows: " . count($table->cells) . "\n";
         echo "Columns: " . (count($table->cells) > 0 ? count($table->cells[0]) : 0) . "\n\n";
     }
 }
 
-// Example 3: Convert Excel to CSV
 echo "Example 3: Convert Excel to CSV\n";
 echo "===============================\n";
 
@@ -75,7 +71,6 @@ foreach ($result3->tables as $i => $table) {
 
 echo "\n";
 
-// Example 4: Convert Excel to JSON
 echo "Example 4: Convert Excel to JSON\n";
 echo "================================\n";
 
@@ -84,7 +79,6 @@ $result4 = $kreuzberg->extractFile('data.xlsx');
 foreach ($result4->tables as $i => $table) {
     $jsonData = [];
 
-    // Use first row as headers
     if (count($table->cells) > 0) {
         $headers = $table->cells[0];
 
@@ -109,7 +103,6 @@ foreach ($result4->tables as $i => $table) {
 
 echo "\n";
 
-// Example 5: Process multiple sheets
 echo "Example 5: Process Multiple Sheets\n";
 echo "==================================\n";
 
@@ -122,11 +115,9 @@ foreach ($result5->tables as $i => $table) {
     echo "- Rows: " . count($table->cells) . "\n";
     echo "- Columns: " . (count($table->cells) > 0 ? count($table->cells[0]) : 0) . "\n";
 
-    // Calculate statistics
-    if (count($table->cells) > 1) {  // Skip if only headers
+    if (count($table->cells) > 1) {  
         $numericColumns = [];
 
-        // Detect numeric columns (skip header row)
         for ($col = 0; $col < count($table->cells[0]); $col++) {
             $isNumeric = true;
 
@@ -146,7 +137,6 @@ foreach ($result5->tables as $i => $table) {
         if (!empty($numericColumns)) {
             echo "- Numeric columns: " . count($numericColumns) . "\n";
 
-            // Calculate sum for first numeric column
             $col = $numericColumns[0];
             $sum = 0;
             for ($row = 1; $row < count($table->cells); $row++) {
@@ -162,7 +152,6 @@ foreach ($result5->tables as $i => $table) {
     echo "\n";
 }
 
-// Example 6: Extract specific cell ranges
 echo "Example 6: Extract Specific Data\n";
 echo "================================\n";
 
@@ -171,7 +160,6 @@ $result6 = $kreuzberg->extractFile('budget.xlsx');
 if (count($result6->tables) > 0) {
     $table = $result6->tables[0];
 
-    // Extract specific rows/columns
     echo "Header row:\n";
     if (count($table->cells) > 0) {
         print_r($table->cells[0]);
@@ -182,16 +170,14 @@ if (count($result6->tables) > 0) {
         print_r($table->cells[1]);
     }
 
-    // Extract a specific cell
     if (count($table->cells) > 1 && count($table->cells[1]) > 2) {
-        $cellValue = $table->cells[1][2];  // Row 1, Column 2 (0-indexed)
+        $cellValue = $table->cells[1][2];  
         echo "\nCell [1][2]: {$cellValue}\n";
     }
 }
 
 echo "\n";
 
-// Example 7: Batch process Excel files
 echo "Example 7: Batch Process Excel Files\n";
 echo "====================================\n";
 
@@ -215,7 +201,6 @@ foreach ($results as $i => $result) {
 
 echo "Total sheets across all files: {$totalSheets}\n\n";
 
-// Example 8: Convert Excel to HTML table
 echo "Example 8: Convert Excel to HTML\n";
 echo "================================\n";
 
@@ -227,7 +212,7 @@ foreach ($result8->tables as $i => $table) {
     foreach ($table->cells as $rowIndex => $row) {
         $html .= "  <tr>\n";
 
-        $tag = $rowIndex === 0 ? 'th' : 'td';  // Header or data cell
+        $tag = $rowIndex === 0 ? 'th' : 'td';  
 
         foreach ($row as $cell) {
             $escapedCell = htmlspecialchars($cell);
@@ -246,7 +231,6 @@ foreach ($result8->tables as $i => $table) {
 
 echo "\n";
 
-// Example 9: Excel metadata extraction
 echo "Example 9: Excel Metadata Extraction\n";
 echo "====================================\n";
 
@@ -261,7 +245,6 @@ echo "- Modified: " . ($result9->metadata->modifiedAt ?? 'N/A') . "\n";
 echo "- Created By: " . ($result9->metadata->createdBy ?? 'N/A') . "\n";
 echo "- Keywords: " . (isset($result9->metadata->keywords) ? implode(', ', $result9->metadata->keywords) : 'N/A') . "\n";
 
-// Custom metadata
 if (!empty($result9->metadata->custom)) {
     echo "\nCustom Properties:\n";
     foreach ($result9->metadata->custom as $key => $value) {
@@ -271,7 +254,6 @@ if (!empty($result9->metadata->custom)) {
 
 echo "\n";
 
-// Example 10: Error handling for Excel files
 echo "Example 10: Error Handling\n";
 echo "=========================\n";
 

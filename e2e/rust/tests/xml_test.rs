@@ -5,8 +5,6 @@ use kreuzberg::core::config::ExtractionConfig;
 
 #[test]
 fn test_xml_plant_catalog() {
-    // XML plant catalog to validate streaming XML extraction.
-
     let document_path = resolve_document("xml/plant_catalog.xml");
     if !document_path.exists() {
         println!(

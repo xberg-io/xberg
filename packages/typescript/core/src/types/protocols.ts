@@ -9,15 +9,7 @@
 
 import type { ExtractionResult } from "./results.js";
 
-// ============================================================================
-// Processing Stage Type
-// ============================================================================
-
 export type ProcessingStage = "early" | "middle" | "late";
-
-// ============================================================================
-// Post-Processor Protocol
-// ============================================================================
 
 export interface PostProcessorProtocol {
 	/**
@@ -54,10 +46,6 @@ export interface PostProcessorProtocol {
 	 */
 	shutdown?(): void | Promise<void>;
 }
-
-// ============================================================================
-// Validator Protocol
-// ============================================================================
 
 export interface ValidatorProtocol {
 	/**
@@ -109,10 +97,6 @@ export interface ValidatorProtocol {
 	 */
 	shutdown?(): void | Promise<void>;
 }
-
-// ============================================================================
-// OCR Backend Protocol
-// ============================================================================
 
 /**
  * OCR backend protocol for implementing custom OCR engines.

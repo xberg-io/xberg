@@ -233,7 +233,6 @@ impl ExtractionResult {
     /// Target: 15-20% improvement (232ms -> 195-200ms)
     /// Expected gains from this function: ~10-15ms reduction
     pub fn from_rust(result: kreuzberg::ExtractionResult, py: Python) -> PyResult<Self> {
-        // Convert metadata fields to dict directly without JSON round-trip
         let metadata_dict = PyDict::new(py);
 
         if let Some(title) = &result.metadata.title {
@@ -297,13 +296,11 @@ impl ExtractionResult {
             let img_list = PyList::empty(py);
             for img in imgs {
                 let img_dict = PyDict::new(py);
-                // Batch set core fields (required for all images)
                 img_dict.set_item("data", pyo3::types::PyBytes::new(py, &img.data))?;
                 img_dict.set_item("format", &img.format)?;
                 img_dict.set_item("image_index", img.image_index)?;
                 img_dict.set_item("is_mask", img.is_mask)?;
 
-                // Batch set optional fields (avoid individual checks where possible)
                 if let Some(page) = img.page_number {
                     img_dict.set_item("page_number", page)?;
                 }
@@ -348,7 +345,6 @@ impl ExtractionResult {
                     chunk_dict.set_item("embedding", py.None())?;
                 }
 
-                // Construct chunk metadata dict with all fields (no JSON round-trip)
                 let chunk_metadata_dict = PyDict::new(py);
                 chunk_metadata_dict.set_item("byte_start", chunk.metadata.byte_start)?;
                 chunk_metadata_dict.set_item("byte_end", chunk.metadata.byte_end)?;
@@ -389,13 +385,11 @@ impl ExtractionResult {
                 let page_images = PyList::empty(py);
                 for img in page.images {
                     let img_dict = PyDict::new(py);
-                    // Batch set core fields (required for all images)
                     img_dict.set_item("data", pyo3::types::PyBytes::new(py, &img.data))?;
                     img_dict.set_item("format", &img.format)?;
                     img_dict.set_item("image_index", img.image_index)?;
                     img_dict.set_item("is_mask", img.is_mask)?;
 
-                    // Batch set optional fields (avoid individual checks where possible)
                     if let Some(page_num) = img.page_number {
                         img_dict.set_item("page_number", page_num)?;
                     }

@@ -5,8 +5,6 @@ use kreuzberg::core::config::ExtractionConfig;
 
 #[test]
 fn test_email_sample_eml() {
-    // Sample EML email file to verify email parsing.
-
     let document_path = resolve_document("email/sample_email.eml");
     if !document_path.exists() {
         println!(

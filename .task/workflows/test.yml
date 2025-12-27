@@ -1,7 +1,6 @@
 version: "3"
 
 tasks:
-  # All tests - runs all language test suites
   all:
     desc: Run all tests across all languages
     cmds:
@@ -15,7 +14,6 @@ tasks:
       - task: ruby:test
       - task: php:test
 
-  # Parallel test execution - same as all but explicit
   all:parallel:
     desc: Run all tests in parallel (using deps)
     cmds:
@@ -29,7 +27,6 @@ tasks:
       - task: ruby:test
       - task: php:test
 
-  # CI-specific testing
   all:ci:
     desc: Run all tests in CI mode (with extra diagnostics)
     cmds:
@@ -43,7 +40,6 @@ tasks:
       - task: ruby:test
       - task: php:test
 
-  # Quick subset - fastest running tests
   quick:
     desc: Run quick test subset (Rust + Python only)
     cmds:
@@ -56,7 +52,6 @@ tasks:
       - task: rust:test:quick
       - task: python:test:ci
 
-  # Core tests (Rust only)
   core:
     desc: Run core Rust tests
     cmds:
@@ -67,7 +62,6 @@ tasks:
     cmds:
       - task: rust:test:ci
 
-  # Data science stack (Python + Rust)
   datascience:
     desc: Test data science bindings (Rust + Python)
     cmds:
@@ -80,7 +74,6 @@ tasks:
       - task: rust:test:ci
       - task: python:test:ci
 
-  # JS ecosystem (Node + WASM)
   js-ecosystem:
     desc: Test JavaScript ecosystem (Node.js + WASM)
     cmds:
@@ -93,7 +86,6 @@ tasks:
       - task: node:test:ci
       - task: wasm:test
 
-  # Systems languages (Rust + Go + C#)
   systems:
     desc: Test systems languages (Rust, Go, C#)
     cmds:
@@ -108,7 +100,6 @@ tasks:
       - task: go:test:ci
       - task: csharp:test:ci
 
-  # JVM ecosystem (Java, C#, Ruby, PHP)
   jvm-bindings:
     desc: Test JVM-dependent bindings (Java, C#, Ruby, PHP)
     cmds:
@@ -125,7 +116,6 @@ tasks:
       - task: ruby:test
       - task: php:test
 
-  # Web-focused (Node + WASM + Python)
   web:
     desc: Test web-focused bindings (Node.js, WASM, Python)
     cmds:
@@ -140,7 +130,6 @@ tasks:
       - task: wasm:test
       - task: python:test:ci
 
-  # Verbose output for debugging
   verbose:
     desc: Run all tests with verbose output
     cmds:

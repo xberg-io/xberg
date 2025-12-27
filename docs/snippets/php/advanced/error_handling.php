@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Exceptions\KreuzbergException;
 use function Kreuzberg\extract_file;
 
-// Basic error handling
 try {
     $result = extract_file('document.pdf');
     echo "Extraction successful!\n";
@@ -28,7 +27,6 @@ try {
     error_log("Kreuzberg extraction failed: " . $e->getMessage());
 }
 
-// Handle missing files
 function safeExtract(string $filePath): ?string
 {
     if (!file_exists($filePath)) {
@@ -57,7 +55,6 @@ if ($content !== null) {
     echo "Failed to extract document\n";
 }
 
-// Retry logic with exponential backoff
 function extractWithRetry(
     string $filePath,
     int $maxRetries = 3,
@@ -79,7 +76,7 @@ function extractWithRetry(
 
             echo "Attempt $attempt failed, retrying in {$delay}ms...\n";
             usleep($delay * 1000);
-            $delay *= 2; // Exponential backoff
+            $delay *= 2; 
         }
     }
 
@@ -91,26 +88,22 @@ if ($content !== null) {
     echo "Document extracted after retry\n";
 }
 
-// Validate extraction results
 function validateExtractionResult(string $filePath): bool
 {
     try {
         $result = extract_file($filePath);
 
-        // Check if content was extracted
         if (empty($result->content)) {
             error_log("Empty content extracted from $filePath");
             return false;
         }
 
-        // Check if content is suspiciously short
         $minExpectedChars = 100;
         if (strlen($result->content) < $minExpectedChars) {
             error_log("Content too short from $filePath: " . strlen($result->content) . " chars");
             return false;
         }
 
-        // Check for garbage/binary data
         $nonPrintableRatio = (strlen($result->content) - strlen(preg_replace('/[^\x20-\x7E\x0A\x0D]/', '', $result->content))) / strlen($result->content);
         if ($nonPrintableRatio > 0.5) {
             error_log("High non-printable character ratio in $filePath");
@@ -130,7 +123,6 @@ if (validateExtractionResult('document.pdf')) {
     echo "Extraction result validation failed\n";
 }
 
-// Batch processing with error handling
 $files = glob('documents/*.pdf');
 $successful = [];
 $failed = [];
@@ -164,10 +156,8 @@ if (!empty($failed)) {
     }
 }
 
-// Fallback extraction strategies
 function extractWithFallback(string $filePath): ?string
 {
-    // Strategy 1: Try normal extraction
     try {
         $result = extract_file($filePath);
         if (!empty($result->content)) {
@@ -177,7 +167,6 @@ function extractWithFallback(string $filePath): ?string
         echo "Normal extraction failed, trying fallback strategies...\n";
     }
 
-    // Strategy 2: Try with OCR enabled
     try {
         $config = new ExtractionConfig(
             ocr: new \Kreuzberg\Config\OcrConfig(
@@ -195,7 +184,6 @@ function extractWithFallback(string $filePath): ?string
         echo "OCR fallback failed: " . $e->getMessage() . "\n";
     }
 
-    // Strategy 3: Try as plain text
     try {
         $content = file_get_contents($filePath);
         if (!empty($content)) {
@@ -214,14 +202,11 @@ if ($content !== null) {
     echo "Successfully extracted with fallback\n";
 }
 
-// Timeout handling
 function extractWithTimeout(string $filePath, int $timeoutSeconds = 30): ?string
 {
     $startTime = time();
 
     try {
-        // Note: PHP doesn't have built-in timeout for sync operations
-        // This is a simplified example
         set_time_limit($timeoutSeconds);
 
         $result = extract_file($filePath);
@@ -237,11 +222,10 @@ function extractWithTimeout(string $filePath, int $timeoutSeconds = 30): ?string
         error_log("Extraction error: " . $e->getMessage());
         return null;
     } finally {
-        set_time_limit(0); // Reset timeout
+        set_time_limit(0); 
     }
 }
 
-// Custom exception handling
 class DocumentExtractionException extends \Exception
 {
     public function __construct(
@@ -288,7 +272,6 @@ try {
     }
 }
 
-// Logging wrapper
 class LoggingKreuzberg
 {
     public function __construct(

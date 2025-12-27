@@ -37,7 +37,6 @@ impl ExcelExtractor {
                 continue;
             }
 
-            // Use pre-extracted cells instead of parsing markdown
             if let Some(cells) = &sheet.table_cells
                 && !cells.is_empty()
             {

@@ -57,7 +57,6 @@ class McpClient
     }
 }
 
-// Usage
 var client = new McpClient();
 await client.StartAsync();
 var content = await client.ExtractFileAsync("document.pdf");

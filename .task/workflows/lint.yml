@@ -1,7 +1,6 @@
 version: "3"
 
 tasks:
-  # All linting with auto-fix - runs all linters with modifications
   all:
     desc: Run all linters with auto-fix across all languages
     cmds:
@@ -15,7 +14,6 @@ tasks:
       - task: ruby:lint
       - task: php:lint
 
-  # Check mode - no modifications
   check:
     desc: Run all linters in check-only mode (no modifications)
     cmds:
@@ -29,7 +27,6 @@ tasks:
       - task: ruby:lint:check
       - task: php:lint:check
 
-  # Core linting (Rust only)
   core:
     desc: Lint core Rust code with auto-fix
     cmds:
@@ -40,7 +37,6 @@ tasks:
     cmds:
       - task: rust:lint:check
 
-  # Data science stack (Python + Rust)
   datascience:
     desc: Lint data science bindings (Rust + Python) with auto-fix
     cmds:
@@ -53,7 +49,6 @@ tasks:
       - task: rust:lint:check
       - task: python:lint:check
 
-  # JS ecosystem (Node + WASM)
   js-ecosystem:
     desc: Lint JavaScript ecosystem (Node.js + WASM) with auto-fix
     cmds:
@@ -66,7 +61,6 @@ tasks:
       - task: node:lint:check
       - task: wasm:lint:check
 
-  # Systems languages (Rust + Go + C#)
   systems:
     desc: Lint systems languages (Rust, Go, C#) with auto-fix
     cmds:
@@ -81,7 +75,6 @@ tasks:
       - task: go:lint:check
       - task: csharp:lint:check
 
-  # JVM ecosystem (Java, C#, Ruby, PHP)
   jvm-bindings:
     desc: Lint JVM-dependent bindings (Java, C#, Ruby, PHP) with auto-fix
     cmds:
@@ -98,7 +91,6 @@ tasks:
       - task: ruby:lint:check
       - task: php:lint:check
 
-  # Web-focused (Node + WASM + Python)
   web:
     desc: Lint web-focused bindings (Node.js, WASM, Python) with auto-fix
     cmds:
@@ -113,7 +105,6 @@ tasks:
       - task: wasm:lint:check
       - task: python:lint:check
 
-  # Individual language linting (sequential)
   rust:
     desc: Lint Rust code with auto-fix
     cmds:

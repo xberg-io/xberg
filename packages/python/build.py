@@ -30,11 +30,7 @@ def ensure_stub_file() -> None:
     package_dir = Path(__file__).resolve().parent / "kreuzberg"
     pyi_file = package_dir / "_internal_bindings.pyi"
 
-    # The stub file should already exist in the source tree
-    # This just ensures it's present and valid
     if not pyi_file.exists():
-        # If for some reason it's missing, create a minimal stub
-        # that at least provides basic type information
         pyi_file.write_text(
             "from typing import Any, Awaitable, Literal, Protocol, TypedDict\n"
             "from collections.abc import Callable\n\n"

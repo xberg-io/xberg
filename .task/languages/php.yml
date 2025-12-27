@@ -12,7 +12,6 @@ vars:
   PHP_VERSION: "8.2"
 
 tasks:
-  # Installation
   install:
     desc: Install PHP dependencies with Composer
     dir: packages/php
@@ -25,7 +24,6 @@ tasks:
     cmds:
       - task: php:install
 
-  # Build Tasks
   build:
     desc: Build PHP extension (uses {{.BUILD_PROFILE}})
     dir: packages/php
@@ -52,7 +50,6 @@ tasks:
       - cmd: cargo build --release --package kreuzberg-php
         platforms: [linux, darwin, windows]
 
-  # Test Tasks
   test:
     desc: Run PHP tests with PHPUnit
     dir: packages/php
@@ -83,7 +80,6 @@ tasks:
     cmds:
       - composer exec -- phpunit --coverage-html=coverage
 
-  # Linting Tasks
   lint:
     desc: Lint PHP code with auto-fix (php-cs-fixer + phpstan)
     dir: packages/php
@@ -110,7 +106,6 @@ tasks:
     cmds:
       - composer exec -- phpstan analyse --level=max
 
-  # Formatting Tasks
   format:
     desc: Format PHP code with modifications (php-cs-fixer)
     dir: packages/php
@@ -123,14 +118,12 @@ tasks:
     cmds:
       - composer exec -- php-cs-fixer fix --dry-run --diff
 
-  # Cleanup
   clean:
     desc: Clean PHP build artifacts
     dir: packages/php
     cmds:
       - python -c "import shutil, glob, os; [shutil.rmtree(d, ignore_errors=True) for d in ['vendor', 'build', 'coverage']]; [os.remove(f) for f in glob.glob('*.so')]"
 
-  # Dependency Management
   update:
     desc: Update PHP dependencies
     dir: packages/php
@@ -144,7 +137,6 @@ tasks:
     cmds:
       - composer outdated
 
-  # E2E Tests
   e2e:generate:
     desc: Generate PHP E2E tests from fixtures
     dir: packages/php

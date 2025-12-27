@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
-#
-# Compile Ruby native extension
-# Used by: ci-ruby.yaml - Build local native extension step
-#
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# scripts/ci/ruby lives three levels below repo root
 REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 
 source "$REPO_ROOT/scripts/lib/common.sh"
@@ -19,7 +14,6 @@ setup_rust_ffi_paths "$REPO_ROOT"
 echo "=== Compiling Ruby native extension (Verbose Debug) ==="
 cd "$REPO_ROOT/packages/ruby"
 
-# Enable verbose output for debugging
 export CARGO_BUILD_JOBS=1
 export RUST_BACKTRACE=1
 export RB_SYS_VERBOSE=1
@@ -46,7 +40,6 @@ echo "packages/ruby directory contents:"
 find . -maxdepth 1 -type f -o -maxdepth 1 -type d | head -20
 echo ""
 
-# Always vendor core to ensure fresh copy for native extension build
 echo "=== Vendoring kreuzberg core ==="
 python3 "$REPO_ROOT/scripts/ci/ruby/vendor-kreuzberg-core.py"
 

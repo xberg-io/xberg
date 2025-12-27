@@ -87,13 +87,11 @@ func TestFontConfigJSONMarshaling(t *testing.T) {
 		CustomFontDirs: []string{"/fonts", "~/fonts"},
 	}
 
-	// Marshal to JSON
 	jsonBytes, err := json.Marshal(original)
 	if err != nil {
 		t.Fatalf("failed to marshal FontConfig: %v", err)
 	}
 
-	// Unmarshal back
 	restored := &FontConfig{}
 	if err := json.Unmarshal(jsonBytes, restored); err != nil {
 		t.Fatalf("failed to unmarshal FontConfig: %v", err)
@@ -246,6 +244,5 @@ func TestFontConfigNilCustomDirs(t *testing.T) {
 // TestFontConfigNilPointer verifies nil FontConfig pointer behavior
 func TestFontConfigNilPointer(t *testing.T) {
 	var config *FontConfig
-	// Verify that zero-value FontConfig pointer is nil (no explicit check needed)
 	_ = config
 }

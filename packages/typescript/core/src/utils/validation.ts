@@ -9,14 +9,11 @@
  * and is exposed through crates/kreuzberg-node/src/lib.rs
  */
 
-// Lazy-loaded native validation functions
-// These will be imported from the NAPI module at runtime
 let nativeModule: Record<string, any>;
 
 function getNativeModule(): Record<string, any> {
 	if (!nativeModule) {
 		try {
-			// This will be available when running in a Node.js environment with the compiled NAPI module
 			nativeModule = require("kreuzberg-node");
 		} catch (error) {
 			throw new Error("Unable to load native kreuzberg-node module. Please ensure it is properly compiled.");

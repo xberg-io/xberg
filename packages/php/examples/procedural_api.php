@@ -13,7 +13,6 @@ use function Kreuzberg\detect_mime_type_from_path;
 use function Kreuzberg\extract_bytes;
 use function Kreuzberg\extract_file;
 
-// Example 1: Simple file extraction
 echo "=== Simple File Extraction ===\n";
 
 $result = extract_file(__DIR__ . '/document.pdf');
@@ -21,7 +20,6 @@ echo "Content length: " . strlen($result->content) . " characters\n";
 echo "Title: {$result->metadata->title}\n";
 echo "Page count: {$result->metadata->pageCount}\n\n";
 
-// Example 2: Extraction with configuration
 echo "=== OCR Extraction ===\n";
 
 $config = new ExtractionConfig(
@@ -39,14 +37,12 @@ $result = extract_file(__DIR__ . '/invoice.pdf', config: $config);
 echo "Content length: " . strlen($result->content) . " characters\n";
 echo "Tables found: " . count($result->tables) . "\n\n";
 
-// Example 3: Extract from bytes
 echo "=== Extract from Bytes ===\n";
 
 $data = file_get_contents(__DIR__ . '/document.pdf');
 $result = extract_bytes($data, 'application/pdf');
 echo "Content length: " . strlen($result->content) . " characters\n\n";
 
-// Example 4: Batch extraction
 echo "=== Batch Extraction ===\n";
 
 $files = [
@@ -65,14 +61,11 @@ foreach ($results as $i => $result) {
 
 echo "\n";
 
-// Example 5: MIME type detection
 echo "=== MIME Type Detection ===\n";
 
-// From bytes
 $data = file_get_contents(__DIR__ . '/unknown.file');
 $mimeType = detect_mime_type($data);
 echo "Detected MIME type from bytes: {$mimeType}\n";
 
-// From path
 $mimeType = detect_mime_type_from_path(__DIR__ . '/document.pdf');
 echo "Detected MIME type from path: {$mimeType}\n";

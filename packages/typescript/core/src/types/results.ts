@@ -8,18 +8,12 @@
 import type { Metadata } from "./metadata.js";
 
 // ============================================================================
-// Table Results
-// ============================================================================
 
 export interface Table {
 	cells: string[][];
 	markdown: string;
 	pageNumber: number;
 }
-
-// ============================================================================
-// Chunk Results
-// ============================================================================
 
 export interface ChunkMetadata {
 	charStart: number;
@@ -35,10 +29,6 @@ export interface Chunk {
 	metadata: ChunkMetadata;
 }
 
-// ============================================================================
-// Image Results
-// ============================================================================
-
 export interface ExtractedImage {
 	data: Uint8Array;
 	format: string;
@@ -52,10 +42,6 @@ export interface ExtractedImage {
 	description?: string | null;
 	ocrResult?: ExtractionResult | null;
 }
-
-// ============================================================================
-// Main Extraction Result
-// ============================================================================
 
 export interface ExtractionResult {
 	content: string;

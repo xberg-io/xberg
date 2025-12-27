@@ -4,14 +4,7 @@ require 'open3'
 require 'pathname'
 
 module Kreuzberg
-  # CLI binary proxy
-  #
-  # Provides access to the Kreuzberg CLI binary built from crates/kreuzberg-cli.
-  #
   # @example
-  #   output = Kreuzberg::CLIProxy.call(['extract', 'document.pdf'])
-  #   puts output
-  #
   module CLIProxy
     Error = Class.new(Kreuzberg::Errors::Error)
     MissingBinaryError = Class.new(Error)
@@ -96,15 +89,12 @@ module Kreuzberg
     #
     def search_paths(binary_name)
       paths = [
-        # In lib/bin (for packaged gems)
         lib_path.join('bin', binary_name),
         lib_path.join(binary_name),
-        # In local development (packages/ruby)
         root_path.join('../../crates/kreuzberg-cli/target/release', binary_name),
         root_path.join('../../target/release', binary_name)
       ]
 
-      # Try workspace root
       workspace_root = root_path.parent&.parent
       paths << workspace_root.join('target', 'release', binary_name) if workspace_root
 

@@ -30,7 +30,6 @@ else
 	echo "RUSTC_WRAPPER=" >>"$GITHUB_ENV"
 fi
 
-# Preserve existing RUSTFLAGS (e.g., -g for profiling) and append our flags
 base="${RUSTFLAGS:+$RUSTFLAGS }-D warnings"
 
 check_output=""

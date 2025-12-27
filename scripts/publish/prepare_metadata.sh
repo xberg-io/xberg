@@ -1,20 +1,7 @@
 #!/usr/bin/env bash
-#
-# Prepare release metadata from GitHub event inputs
-# Validates tag format, determines release targets, and outputs metadata
-#
-# Environment variables:
-#   - GITHUB_EVENT_NAME: Type of triggering event
-#   - GITHUB_REF_NAME: Branch/tag name
-#   - GITHUB_OUTPUT: Path to GitHub Actions output file
-#
-# Usage:
-#   ./prepare_metadata.sh
-#
 
 set -euo pipefail
 
-# Parse event inputs based on trigger type
 event="${GITHUB_EVENT_NAME}"
 if [[ "$event" == "workflow_dispatch" ]]; then
 	tag="${GITHUB_INPUT_TAG}"
@@ -41,7 +28,6 @@ else
 	fi
 fi
 
-# Validate tag format
 if [[ -z "$tag" ]]; then
 	echo "Release tag could not be determined" >&2
 	exit 1
@@ -52,17 +38,14 @@ if [[ "$tag" != v* ]]; then
 	exit 1
 fi
 
-# Compute version (strip 'v' prefix)
 version="${tag#v}"
 
-# Determine checkout ref
 if [[ -n "$ref_input" ]]; then
 	ref="$ref_input"
 else
 	ref="refs/tags/${tag}"
 fi
 
-# Parse ref type and set checkout_ref
 if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
 	checkout_ref="refs/heads/main"
 	target_sha="$ref"
@@ -74,7 +57,6 @@ else
 	target_sha=""
 fi
 
-# Extract matrix_ref from ref
 if [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
 	matrix_ref="main"
 elif [[ "$ref" =~ ^refs/heads/(.+)$ ]]; then
@@ -87,14 +69,12 @@ fi
 
 dry_run="$dry_run_input"
 
-# Check if this is a tag reference
 if [[ "$ref" =~ ^refs/tags/ ]]; then
 	is_tag="true"
 else
 	is_tag="false"
 fi
 
-# Normalize target list
 normalize_target_list() {
 	local raw="$1"
 	raw="${raw:-all}"
@@ -107,7 +87,6 @@ normalize_target_list() {
 
 targets_value=$(normalize_target_list "$targets_input")
 
-# Initialize release flags
 release_python=false
 release_node=false
 release_ruby=false
@@ -118,7 +97,6 @@ release_homebrew=false
 release_java=false
 release_csharp=false
 
-# Enable all targets
 set_all_targets() {
 	release_python=true
 	release_node=true
@@ -131,7 +109,6 @@ set_all_targets() {
 	release_csharp=true
 }
 
-# Parse targets (handle comma-separated list)
 mapfile -t requested_targets < <(echo "$targets_value" | tr ',' '\n')
 
 processed_any=false
@@ -191,18 +168,15 @@ for raw_target in "${requested_targets[@]}"; do
 	esac
 done
 
-# Homebrew requires CLI
 if [[ "$release_homebrew" == "true" ]]; then
 	release_cli=true
 fi
 
-# Default to all targets if none processed
 if [[ "$processed_any" == "false" ]]; then
 	set_all_targets
 	requested_targets=("all")
 fi
 
-# Build enabled_targets array
 enabled_targets=()
 if [[ "$release_python" == "true" ]]; then enabled_targets+=("python"); fi
 if [[ "$release_node" == "true" ]]; then enabled_targets+=("node"); fi
@@ -214,7 +188,6 @@ if [[ "$release_homebrew" == "true" ]]; then enabled_targets+=("homebrew"); fi
 if [[ "$release_java" == "true" ]]; then enabled_targets+=("java"); fi
 if [[ "$release_csharp" == "true" ]]; then enabled_targets+=("csharp"); fi
 
-# Build targets summary
 if [[ ${#enabled_targets[@]} -eq 9 ]]; then
 	release_targets_summary="all"
 elif [[ ${#enabled_targets[@]} -eq 0 ]]; then
@@ -226,13 +199,11 @@ else
 	)
 fi
 
-# Check if any targets enabled
 release_any="false"
 if [[ ${#enabled_targets[@]} -gt 0 ]]; then
 	release_any="true"
 fi
 
-# Write JSON metadata file
 cat <<JSON >release-metadata.json
 {
   "tag": "$tag",
@@ -257,7 +228,6 @@ cat <<JSON >release-metadata.json
 }
 JSON
 
-# Output GitHub Actions outputs
 {
 	echo "tag=$tag"
 	echo "version=$version"

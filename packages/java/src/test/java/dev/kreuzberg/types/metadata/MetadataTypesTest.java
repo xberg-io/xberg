@@ -40,9 +40,6 @@ class MetadataTypesTest {
         objectMapper = new ObjectMapper();
     }
 
-    // ============================================================================
-    // SECTION 1: Record Structure Tests
-    // ============================================================================
 
     @Nested
     @DisplayName("Record Structure Tests")
@@ -221,9 +218,6 @@ class MetadataTypesTest {
         }
     }
 
-    // ============================================================================
-    // SECTION 2: JSON Serialization Tests (Jackson)
-    // ============================================================================
 
     @Nested
     @DisplayName("JSON Serialization Tests")
@@ -250,11 +244,9 @@ class MetadataTypesTest {
                 List.of()
             );
 
-            // Serialize
             String json = objectMapper.writeValueAsString(original);
             assertThat(json).isNotNull().isNotEmpty();
 
-            // Deserialize
             HtmlMetadata deserialized = objectMapper.readValue(json, HtmlMetadata.class);
 
             assertEquals(original.title(), deserialized.title(), "title should match");
@@ -269,17 +261,14 @@ class MetadataTypesTest {
         void testHeaderMetadataJsonSerialization() throws IOException {
             HeaderMetadata original = new HeaderMetadata(2, "Subheading", "subheading-id", 1, 123);
 
-            // Serialize
             String json = objectMapper.writeValueAsString(original);
 
-            // Verify snake_case JSON keys
             assertThat(json).contains("\"level\"");
             assertThat(json).contains("\"text\"");
             assertThat(json).contains("\"id\"");
             assertThat(json).contains("\"depth\"");
             assertThat(json).contains("\"html_offset\"");
 
-            // Deserialize
             HeaderMetadata deserialized = objectMapper.readValue(json, HeaderMetadata.class);
             assertEquals(original, deserialized, "Header should deserialize to equal object");
         }
@@ -296,13 +285,11 @@ class MetadataTypesTest {
                 Map.of("target", "_blank", "data-index", "1")
             );
 
-            // Serialize
             String json = objectMapper.writeValueAsString(original);
             assertThat(json).contains("\"rel\"");
             assertThat(json).contains("nofollow");
             assertThat(json).contains("external");
 
-            // Deserialize
             LinkMetadata deserialized = objectMapper.readValue(json, LinkMetadata.class);
             assertEquals(original.rel(), deserialized.rel(), "rel list should match");
             assertEquals(original.attributes(), deserialized.attributes(), "attributes map should match");
@@ -321,13 +308,11 @@ class MetadataTypesTest {
                 Map.of("loading", "lazy", "decoding", "async")
             );
 
-            // Serialize
             String json = objectMapper.writeValueAsString(original);
             assertThat(json).contains("\"dimensions\"");
             assertThat(json).contains("800");
             assertThat(json).contains("600");
 
-            // Deserialize
             ImageMetadata deserialized = objectMapper.readValue(json, ImageMetadata.class);
             assertArrayEquals(original.dimensions(), deserialized.dimensions(),
                 "dimensions array should match");
@@ -344,13 +329,11 @@ class MetadataTypesTest {
                 "Organization"
             );
 
-            // Serialize
             String json = objectMapper.writeValueAsString(original);
             assertThat(json).contains("\"data_type\"");
             assertThat(json).contains("\"raw_json\"");
             assertThat(json).contains("\"schema_type\"");
 
-            // Deserialize
             StructuredData deserialized = objectMapper.readValue(json, StructuredData.class);
             assertEquals(original.dataType(), deserialized.dataType(), "dataType should match");
             assertEquals(original.rawJson(), deserialized.rawJson(), "rawJson should match");
@@ -364,9 +347,7 @@ class MetadataTypesTest {
 
             String json = objectMapper.writeValueAsString(header);
 
-            // Verify snake_case conversion
             assertThat(json).contains("\"html_offset\":456");
-            // Verify other fields are present
             assertThat(json).contains("\"level\":3");
             assertThat(json).contains("\"depth\":2");
         }
@@ -392,9 +373,6 @@ class MetadataTypesTest {
         }
     }
 
-    // ============================================================================
-    // SECTION 3: Nullability Tests (JSpecify)
-    // ============================================================================
 
     @Nested
     @DisplayName("Nullability Tests")
@@ -513,9 +491,6 @@ class MetadataTypesTest {
         }
     }
 
-    // ============================================================================
-    // SECTION 4: Record Behavior Tests
-    // ============================================================================
 
     @Nested
     @DisplayName("Record Behavior Tests")
@@ -572,7 +547,6 @@ class MetadataTypesTest {
                 List.of(), List.of(), List.of(), List.of()
             );
 
-            // Records don't have setters, so we verify they return the same objects
             assertSame(metadata.keywords(), metadata.keywords(), "Same field access should return same object");
             assertSame(metadata.openGraph(), metadata.openGraph(), "Same field access should return same object");
         }
@@ -603,7 +577,6 @@ class MetadataTypesTest {
                 Map.of("rel", "nofollow")
             );
 
-            // Access via component methods
             assertEquals("https://example.com", link.href());
             assertEquals("Example", link.text());
             assertEquals("Title", link.title());
@@ -613,9 +586,6 @@ class MetadataTypesTest {
         }
     }
 
-    // ============================================================================
-    // SECTION 5: Complex Integration Tests
-    // ============================================================================
 
     @Nested
     @DisplayName("Complex Integration Tests")
@@ -658,13 +628,11 @@ class MetadataTypesTest {
                 List.of()
             );
 
-            // Serialize
             String json = objectMapper.writeValueAsString(metadata);
             assertThat(json).contains("\"headers\"");
             assertThat(json).contains("\"links\"");
             assertThat(json).contains("\"images\"");
 
-            // Deserialize
             HtmlMetadata deserialized = objectMapper.readValue(json, HtmlMetadata.class);
             assertEquals(3, deserialized.headers().size(), "Should have 3 headers");
             assertEquals(2, deserialized.links().size(), "Should have 2 links");
@@ -708,7 +676,6 @@ class MetadataTypesTest {
                 structuredData
             );
 
-            // Serialize and deserialize
             String json = objectMapper.writeValueAsString(metadata);
             HtmlMetadata deserialized = objectMapper.readValue(json, HtmlMetadata.class);
 
@@ -799,9 +766,6 @@ class MetadataTypesTest {
         }
     }
 
-    // ============================================================================
-    // SECTION 6: Special Cases and Edge Cases
-    // ============================================================================
 
     @Nested
     @DisplayName("Special Cases and Edge Cases")
@@ -898,17 +862,14 @@ class MetadataTypesTest {
         @Test
         @DisplayName("Numeric values in dimension arrays")
         void testDimensionArrayEdgeCases() throws IOException {
-            // Zero dimensions
             ImageMetadata zeroDim = new ImageMetadata(
                 "img.jpg", null, null, new int[]{0, 0}, "image/jpeg", Map.of()
             );
 
-            // Very large dimensions
             ImageMetadata largeDim = new ImageMetadata(
                 "img.jpg", null, null, new int[]{8192, 4096}, "image/jpeg", Map.of()
             );
 
-            // Single dimension (unusual but possible)
             ImageMetadata singleDim = new ImageMetadata(
                 "img.jpg", null, null, new int[]{512}, "image/jpeg", Map.of()
             );
@@ -935,7 +896,6 @@ class MetadataTypesTest {
                 List.of(), List.of(), List.of(), List.of()
             );
 
-            // Verify collections are unmodifiable
             assertThrows(UnsupportedOperationException.class, () -> metadata.keywords().add("k3"),
                 "Keywords list should be unmodifiable");
             assertThrows(UnsupportedOperationException.class, () -> metadata.openGraph().put("new", "value"),
@@ -943,9 +903,6 @@ class MetadataTypesTest {
         }
     }
 
-    // ============================================================================
-    // SECTION 7: Integration Tests with Actual HTML Extraction
-    // ============================================================================
 
     @Nested
     @DisplayName("HTML Extraction Integration Tests")
@@ -981,11 +938,9 @@ class MetadataTypesTest {
             assertNotNull(result.getMimeType(), "MIME type should be present");
             assertEquals("text/html", result.getMimeType(), "MIME type should be text/html");
 
-            // For HTML extraction, content should be present
             assertNotNull(result.getContent(), "Extracted content should not be null");
             assertThat(result.getContent()).isNotEmpty();
 
-            // Metadata should be available
             Map<String, Object> metadata = result.getMetadata();
             assertNotNull(metadata, "Metadata map should not be null");
         }
@@ -1011,16 +966,13 @@ class MetadataTypesTest {
             assertNotNull(result, "Result should not be null");
             assertTrue(result.isSuccess(), "Extraction should succeed");
 
-            // Verify content extraction
             String content = result.getContent();
             assertNotNull(content, "Content should be extracted");
             assertThat(content).isNotEmpty();
 
-            // Verify metadata extraction
             Map<String, Object> metadata = result.getMetadata();
             assertNotNull(metadata, "Metadata should be extracted");
 
-            // Verify the result structure is valid
             assertNotNull(result.getMimeType(), "MIME type should be present");
             assertNotNull(result.getChunks(), "Chunks list should not be null");
             assertNotNull(result.getImages(), "Images list should not be null");
@@ -1030,21 +982,18 @@ class MetadataTypesTest {
         @Test
         @DisplayName("Extract invalid input handles gracefully")
         void testExtractInvalidInputHandlesGracefully() {
-            // Test 1: Null input
             assertThrows(
                 KreuzbergException.class,
                 () -> Kreuzberg.extractBytes(null, "text/html", null),
                 "Should throw exception for null data"
             );
 
-            // Test 2: Empty HTML
             assertThrows(
                 KreuzbergException.class,
                 () -> Kreuzberg.extractBytes(new byte[0], "text/html", null),
                 "Should throw exception for empty data"
             );
 
-            // Test 3: Null MIME type
             byte[] testData = "<html><body>Test</body></html>".getBytes();
             assertThrows(
                 KreuzbergException.class,
@@ -1052,21 +1001,17 @@ class MetadataTypesTest {
                 "Should throw exception for null MIME type"
             );
 
-            // Test 4: Blank MIME type
             assertThrows(
                 KreuzbergException.class,
                 () -> Kreuzberg.extractBytes(testData, "   ", null),
                 "Should throw exception for blank MIME type"
             );
 
-            // Test 5: Malformed HTML (should still process but with care)
             byte[] malformedHtml = "<html><body><p>Unclosed paragraph".getBytes();
             try {
                 ExtractionResult result = Kreuzberg.extractBytes(malformedHtml, "text/html", null);
-                // Malformed HTML may still extract content
                 assertNotNull(result, "Should handle malformed HTML gracefully");
             } catch (KreuzbergException e) {
-                // This is also acceptable - graceful error handling
                 assertTrue(true, "Malformed HTML handling is acceptable");
             }
         }
@@ -1075,7 +1020,6 @@ class MetadataTypesTest {
         @DisplayName("Extract large HTML document performance test")
         @Timeout(30)
         void testExtractLargeHtmlPerformance() throws IOException, KreuzbergException {
-            // Generate a large HTML document in memory
             StringBuilder html = new StringBuilder();
             html.append("<!DOCTYPE html>\n");
             html.append("<html lang=\"en\">\n");
@@ -1087,7 +1031,6 @@ class MetadataTypesTest {
             html.append("<body>\n");
             html.append("<h1>Large Document</h1>\n");
 
-            // Add 1000 sections to create a large document
             for (int i = 0; i < 1000; i++) {
                 html.append("<section id=\"section-").append(i).append("\">\n");
                 html.append("<h2>Section ").append(i).append("</h2>\n");
@@ -1103,34 +1046,27 @@ class MetadataTypesTest {
 
             byte[] largeHtmlData = html.toString().getBytes();
 
-            // Record start time
             long startTime = System.currentTimeMillis();
 
-            // Extract the large document
             ExtractionResult result = Kreuzberg.extractBytes(
                 largeHtmlData,
                 "text/html",
                 null
             );
 
-            // Record end time
             long endTime = System.currentTimeMillis();
             long duration = endTime - startTime;
 
-            // Verify extraction was successful
             assertNotNull(result, "Result should not be null");
             assertTrue(result.isSuccess(), "Extraction should succeed");
 
-            // Verify content was extracted
             String content = result.getContent();
             assertNotNull(content, "Content should be extracted");
             assertThat(content).isNotEmpty();
 
-            // Log performance (should complete within reasonable time)
             System.out.println("Large HTML extraction took " + duration + "ms for "
                 + largeHtmlData.length + " bytes");
 
-            // Assert it completes in reasonable time (30 seconds timeout enforced by @Timeout)
             assertTrue(duration < 30000, "Extraction should complete within 30 seconds");
         }
 
@@ -1138,19 +1074,16 @@ class MetadataTypesTest {
         @DisplayName("Extract with concurrent execution is thread-safe")
         @Timeout(60)
         void testExtractConcurrentExecution() throws IOException, InterruptedException, KreuzbergException {
-            // Prepare test HTML
             byte[] testHtml = ("<html><head><title>Concurrent Test</title>"
                 + "<meta name=\"description\" content=\"Test concurrent extraction\">"
                 + "</head><body><h1>Test</h1><p>Content</p></body></html>").getBytes();
 
-            // Create thread pool
             ExecutorService executorService = Executors.newFixedThreadPool(5);
             List<Future<ExtractionResult>> futures = new ArrayList<>();
             AtomicInteger successCount = new AtomicInteger(0);
             AtomicInteger errorCount = new AtomicInteger(0);
 
             try {
-                // Submit 10 concurrent extraction tasks
                 for (int i = 0; i < 10; i++) {
                     Future<ExtractionResult> future = executorService.submit(() -> {
                         try {
@@ -1171,11 +1104,9 @@ class MetadataTypesTest {
                     futures.add(future);
                 }
 
-                // Wait for all tasks to complete
                 boolean allCompleted = executorService.awaitTermination(30, TimeUnit.SECONDS);
                 assertTrue(allCompleted, "All tasks should complete within timeout");
 
-                // Collect results
                 int completedCount = 0;
                 for (Future<ExtractionResult> future : futures) {
                     if (future.isDone()) {
@@ -1186,13 +1117,11 @@ class MetadataTypesTest {
                             assertTrue(result.isSuccess(), "Each extraction should succeed");
                             assertNotNull(result.getContent(), "Content should be extracted");
                         } catch (Exception e) {
-                            // Some extractions may fail in concurrent scenario, which is acceptable
                             assertTrue(true, "Concurrent execution handled exception gracefully");
                         }
                     }
                 }
 
-                // Verify at least some tasks completed successfully
                 assertTrue(completedCount > 0, "At least some concurrent extractions should complete");
                 assertTrue(successCount.get() > 0, "At least some extractions should succeed");
 
@@ -1228,12 +1157,10 @@ class MetadataTypesTest {
             assertNotNull(result, "Result should not be null");
             assertTrue(result.isSuccess(), "Extraction should succeed");
 
-            // Verify metadata is a valid map
             Map<String, Object> metadata = result.getMetadata();
             assertNotNull(metadata, "Metadata should not be null");
             assertThat(metadata).isNotNull();
 
-            // Content should be properly extracted
             String content = result.getContent();
             assertNotNull(content, "Content should be extracted");
             assertThat(content.length()).isGreaterThan(0);
@@ -1245,7 +1172,6 @@ class MetadataTypesTest {
             byte[] htmlBytes = ("<html><head><title>Test</title></head>"
                 + "<body><h1>Test Page</h1></body></html>").getBytes();
 
-            // Extract with explicit HTML MIME type
             ExtractionResult result = Kreuzberg.extractBytes(htmlBytes, "text/html", null);
 
             assertNotNull(result, "Result should not be null");

@@ -68,7 +68,6 @@ impl std::fmt::Debug for InternedString {
 
 impl PartialEq for InternedString {
     fn eq(&self, other: &Self) -> bool {
-        // Pointer equality check (fast) + fallback to string comparison
         Arc::ptr_eq(&self.0, &other.0) || self.as_str() == other.as_str()
     }
 }
@@ -111,12 +110,10 @@ impl MimeStringPool {
     /// Ensure all known MIME types are pre-interned (one-time initialization).
     #[inline]
     fn ensure_initialized(&self) {
-        // Fast path: already initialized
         if self.initialized.load(Ordering::Acquire) {
             return;
         }
 
-        // Pre-intern all known MIME types
         let mime_types = vec![
             "text/html",
             "text/markdown",
@@ -148,7 +145,6 @@ impl MimeStringPool {
             "application/vnd.oasis.opendocument.spreadsheet",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/vnd.oasis.opendocument.text",
-            // Image types
             "image/bmp",
             "image/gif",
             "image/jp2",
@@ -167,7 +163,6 @@ impl MimeStringPool {
             "image/x-portable-graymap",
             "image/x-portable-pixmap",
             "image/x-tiff",
-            // Document formats
             "application/csl+json",
             "application/docbook+xml",
             "application/epub+zip",
@@ -196,7 +191,6 @@ impl MimeStringPool {
             "text/x-org",
             "text/x-pod",
             "text/x-rst",
-            // Archives
             "application/zip",
             "application/x-zip-compressed",
             "application/x-tar",
@@ -211,7 +205,6 @@ impl MimeStringPool {
             self.pool.insert(mime_type.to_string(), Arc::new(mime_type.to_string()));
         }
 
-        // Mark initialization complete using compare_exchange for thread-safe one-time execution
         let _ = self
             .initialized
             .compare_exchange(false, true, Ordering::Release, Ordering::Relaxed);
@@ -254,12 +247,10 @@ impl LanguageStringPool {
     /// Ensure all known language codes are pre-interned (one-time initialization).
     #[inline]
     fn ensure_initialized(&self) {
-        // Fast path: already initialized
         if self.initialized.load(Ordering::Acquire) {
             return;
         }
 
-        // Pre-intern common ISO 639 language codes
         let lang_codes = vec![
             "en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh", "ar", "hi", "th", "tr", "pl", "nl", "sv", "no",
             "da", "fi", "cs", "hu", "ro", "el", "he", "fa", "ur", "vi", "id", "ms", "bn", "pa", "te", "mr", "ta", "gu",
@@ -271,7 +262,6 @@ impl LanguageStringPool {
             self.pool.insert(code.to_string(), Arc::new(code.to_string()));
         }
 
-        // Mark initialization complete using compare_exchange for thread-safe one-time execution
         let _ = self
             .initialized
             .compare_exchange(false, true, Ordering::Release, Ordering::Relaxed);
@@ -388,7 +378,6 @@ impl StringBufferPool {
         #[cfg(feature = "pool-metrics")]
         self.acquire_count.fetch_add(1, Ordering::Relaxed);
 
-        // Try to get from the default bucket first
         let default_bucket = self.config.initial_capacity;
         if let Some(buffer) = self.try_acquire_from_bucket(default_bucket) {
             #[cfg(feature = "pool-metrics")]
@@ -396,7 +385,6 @@ impl StringBufferPool {
             return PooledString { buffer, pool: self };
         }
 
-        // Try other buckets
         for &bucket in &[1024, 16384, 65536] {
             if let Some(buffer) = self.try_acquire_from_bucket(bucket) {
                 #[cfg(feature = "pool-metrics")]
@@ -405,7 +393,6 @@ impl StringBufferPool {
             }
         }
 
-        // Allocate new if pool exhausted
         PooledString {
             buffer: String::with_capacity(self.config.initial_capacity),
             pool: self,
@@ -414,12 +401,10 @@ impl StringBufferPool {
 
     /// Return a buffer to the pool for reuse.
     pub fn release(&self, mut buffer: String) {
-        // Don't pool buffers that have grown too large
         if buffer.capacity() > self.config.max_capacity_before_discard {
             return;
         }
 
-        // Find appropriate bucket and add if space available
         let bucket = self.find_bucket(buffer.capacity());
         buffer.clear();
 
@@ -428,7 +413,6 @@ impl StringBufferPool {
                 queue.push_back(buffer);
             }
         } else {
-            // Create new bucket if doesn't exist
             let mut queue = VecDeque::with_capacity(self.config.max_buffers_per_size);
             queue.push_back(buffer);
             self.pool.insert(bucket, queue);
@@ -508,7 +492,6 @@ impl std::ops::DerefMut for PooledString {
 
 impl Drop for PooledString {
     fn drop(&mut self) {
-        // Return buffer to pool
         let buffer = std::mem::take(&mut self.buffer);
         self.pool.release(buffer);
     }
@@ -610,7 +593,6 @@ mod tests {
         let mime2 = intern_mime_type("application/pdf");
 
         assert_eq!(mime1, mime2);
-        // Check pointer equality (Arc should point to same allocation)
         assert!(Arc::ptr_eq(&mime1.0, &mime2.0));
     }
 
@@ -620,7 +602,6 @@ mod tests {
         let en2 = intern_language_code("en");
 
         assert_eq!(en1, en2);
-        // Check pointer equality
         assert!(Arc::ptr_eq(&en1.0, &en2.0));
     }
 
@@ -640,7 +621,6 @@ mod tests {
 
     #[test]
     fn test_preinterned_mime_types() {
-        // Verify that pre-interned MIME types are actually interned
         let pdf = intern_mime_type("application/pdf");
         assert_eq!(pdf.as_str(), "application/pdf");
 
@@ -653,7 +633,6 @@ mod tests {
 
     #[test]
     fn test_preinterned_language_codes() {
-        // Verify that pre-interned language codes are actually interned
         let en = intern_language_code("en");
         assert_eq!(en.as_str(), "en");
 
@@ -689,7 +668,6 @@ mod tests {
         let interned_strings = results.lock().unwrap();
         assert_eq!(interned_strings.len(), 10);
 
-        // All should point to the same Arc
         let first_arc = &interned_strings[0].0;
         for interned in &*interned_strings {
             assert!(
@@ -709,7 +687,6 @@ mod tests {
         set.insert(mime1);
         set.insert(mime2);
 
-        // Should only contain 1 item since they're equal and hash the same
         assert_eq!(set.len(), 1);
     }
 
@@ -727,15 +704,12 @@ mod tests {
         let config = PoolConfig::default();
         let pool = Arc::new(StringBufferPool::new(config));
 
-        // Acquire buffer
         let mut buffer = pool.clone().acquire();
         buffer.push_str("test content");
         let capacity = buffer.capacity();
 
-        // Release buffer (drop)
         drop(buffer);
 
-        // Acquire again - should reuse same buffer
         let buffer2 = pool.clone().acquire();
         assert_eq!(buffer2.capacity(), capacity);
         assert!(buffer2.is_empty());
@@ -754,7 +728,7 @@ mod tests {
 
         let buffer2 = pool.clone().acquire();
         drop(buffer2);
-        assert_eq!(pool.size(), 1); // Reused, not added
+        assert_eq!(pool.size(), 1);
     }
 
     #[test]

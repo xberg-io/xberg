@@ -29,14 +29,10 @@ use Kreuzberg\Exceptions\KreuzbergException;
 use Kreuzberg\Kreuzberg;
 use function Kreuzberg\extract_file;
 
-// =============================================================================
-// Example 1: Basic Embedding Generation
-// =============================================================================
 
 echo "=== Example 1: Basic Embedding Generation ===\n\n";
 
 try {
-    // Configure chunking and embedding
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(
             maxChunkSize: 512,
@@ -45,8 +41,8 @@ try {
             respectParagraphs: true,
         ),
         embedding: new EmbeddingConfig(
-            model: 'all-MiniLM-L6-v2',  // Default embedding model
-            normalize: true,             // Normalize vectors for cosine similarity
+            model: 'all-MiniLM-L6-v2',
+            normalize: true,
         ),
     );
 
@@ -78,23 +74,13 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 2: Different Embedding Models
-// =============================================================================
 
 echo "=== Example 2: Different Embedding Models ===\n\n";
 
 try {
-    // Common embedding models:
-    // - all-MiniLM-L6-v2: Fast, 384 dimensions (default)
-    // - all-mpnet-base-v2: More accurate, 768 dimensions
-    // - multi-qa-MiniLM-L6-cos-v1: Optimized for question-answering
 
     $models = [
         'all-MiniLM-L6-v2' => 384,
-        // Uncomment to test other models if available:
-        // 'all-mpnet-base-v2' => 768,
-        // 'multi-qa-MiniLM-L6-cos-v1' => 384,
     ];
 
     foreach ($models as $modelName => $expectedDim) {
@@ -123,33 +109,28 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 3: Normalized vs Non-Normalized Embeddings
-// =============================================================================
 
 echo "=== Example 3: Normalized vs Non-Normalized Embeddings ===\n\n";
 
 try {
     $filePath = __DIR__ . '/../sample-documents/document.pdf';
 
-    // Non-normalized embeddings
     $config1 = new ExtractionConfig(
         chunking: new ChunkingConfig(maxChunkSize: 512, chunkOverlap: 50),
         embedding: new EmbeddingConfig(
             model: 'all-MiniLM-L6-v2',
-            normalize: false,  // Don't normalize
+            normalize: false,
         ),
     );
 
     $kreuzberg1 = new Kreuzberg($config1);
     $result1 = $kreuzberg1->extractFile($filePath);
 
-    // Normalized embeddings
     $config2 = new ExtractionConfig(
         chunking: new ChunkingConfig(maxChunkSize: 512, chunkOverlap: 50),
         embedding: new EmbeddingConfig(
             model: 'all-MiniLM-L6-v2',
-            normalize: true,  // Normalize for cosine similarity
+            normalize: true,
         ),
     );
 
@@ -159,7 +140,6 @@ try {
     if ($result1->chunks !== null && $result1->chunks[0]->embedding !== null &&
         $result2->chunks !== null && $result2->chunks[0]->embedding !== null) {
 
-        // Calculate L2 norm
         $norm1 = sqrt(array_sum(array_map(
             static fn ($v) => $v * $v,
             $result1->chunks[0]->embedding
@@ -183,20 +163,16 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 4: Embedding Batch Size Configuration
-// =============================================================================
 
 echo "=== Example 4: Embedding Batch Size Configuration ===\n\n";
 
 try {
-    // Configure batch size for embedding generation
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(maxChunkSize: 512, chunkOverlap: 50),
         embedding: new EmbeddingConfig(
             model: 'all-MiniLM-L6-v2',
             normalize: true,
-            batchSize: 32,  // Process 32 chunks at a time
+            batchSize: 32,
         ),
     );
 
@@ -212,9 +188,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 5: Cosine Similarity Calculation
-// =============================================================================
 
 echo "=== Example 5: Cosine Similarity Calculation ===\n\n";
 
@@ -223,7 +196,7 @@ try {
         chunking: new ChunkingConfig(maxChunkSize: 512, chunkOverlap: 50),
         embedding: new EmbeddingConfig(
             model: 'all-MiniLM-L6-v2',
-            normalize: true,  // Important for cosine similarity
+            normalize: true,
         ),
     );
 
@@ -233,18 +206,15 @@ try {
     if ($result->chunks !== null && count($result->chunks) >= 3) {
         echo "Cosine similarity between chunks:\n\n";
 
-        // Helper function to calculate cosine similarity
         $cosineSimilarity = function (array $vec1, array $vec2): float {
             $dotProduct = 0.0;
             for ($i = 0; $i < count($vec1); $i++) {
                 $dotProduct += $vec1[$i] * $vec2[$i];
             }
 
-            // For normalized vectors, dot product equals cosine similarity
             return $dotProduct;
         };
 
-        // Compare first chunk with others
         $chunk0 = $result->chunks[0];
         $chunk1 = $result->chunks[1];
         $chunk2 = $result->chunks[2];
@@ -263,14 +233,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 6: Semantic Search Example
-// =============================================================================
 
 echo "=== Example 6: Semantic Search Example ===\n\n";
 
 try {
-    // Extract and embed document
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(maxChunkSize: 512, chunkOverlap: 50),
         embedding: new EmbeddingConfig(
@@ -287,11 +253,6 @@ try {
         echo "  Total chunks indexed: " . count($result->chunks) . "\n";
         echo "  Ready for similarity search\n\n";
 
-        // In a real application, you would:
-        // 1. Store chunks and embeddings in a vector database
-        // 2. Generate embedding for user query
-        // 3. Find most similar chunks using cosine similarity
-        // 4. Return relevant chunks as context
 
         echo "Example workflow:\n";
         echo "  1. User query: 'What is machine learning?'\n";
@@ -305,9 +266,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 7: Procedural API for Embeddings
-// =============================================================================
 
 echo "=== Example 7: Procedural API for Embeddings ===\n\n";
 
@@ -320,7 +278,6 @@ try {
         ),
     );
 
-    // Use procedural function
     $result = extract_file(
         __DIR__ . '/../sample-documents/article.pdf',
         config: $config
@@ -338,9 +295,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 8: Embedding Statistics
-// =============================================================================
 
 echo "=== Example 8: Embedding Statistics ===\n\n";
 
@@ -372,7 +326,6 @@ try {
             if ($firstEmbedding !== null) {
                 echo "  Embedding dimension: " . count($firstEmbedding) . "\n";
 
-                // Calculate some statistics
                 $allValues = [];
                 foreach ($embeddedChunks as $chunk) {
                     if ($chunk->embedding !== null) {
@@ -396,9 +349,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 9: Building a Vector Database
-// =============================================================================
 
 echo "=== Example 9: Building a Vector Database ===\n\n";
 
@@ -417,7 +367,6 @@ try {
     if ($result->chunks !== null) {
         echo "Preparing data for vector database:\n\n";
 
-        // Simulate storing in a vector database
         $vectorDB = [];
 
         foreach ($result->chunks as $chunk) {
@@ -459,9 +408,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 10: RAG Pipeline Example
-// =============================================================================
 
 echo "=== Example 10: RAG Pipeline Example ===\n\n";
 

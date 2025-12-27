@@ -7,13 +7,6 @@
  * @module @kreuzberg/core/utils/errors
  */
 
-// NAPI-RS generates FFI functions with snake_case names.
-// These are imported from the native binding module when available.
-// During development/building, these are accessed via the NAPI bindings.
-//
-// The actual native functions are defined in crates/kreuzberg-node/src/lib.rs
-// and exported as NAPI functions to TypeScript with matching names.
-
 import {
 	getErrorCodeName as get_error_code_name,
 	getErrorCodeDescription as get_error_code_description,

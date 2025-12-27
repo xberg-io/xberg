@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Basic smoke tests to verify package structure and imports work
 require 'stringio'
 
 RSpec.describe 'Kreuzberg package' do

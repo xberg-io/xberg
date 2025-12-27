@@ -1,13 +1,6 @@
 #!/usr/bin/env bash
 
-# Push Ruby gems to RubyGems registry
-#
-# Publishes all gem artifacts matching kreuzberg-*.gem pattern.
-# Requires RubyGems credentials to be configured.
 # Handles already-published versions idempotently.
-#
-# Arguments:
-#   $1: Directory containing gem files (default: current directory)
 
 set -euo pipefail
 
@@ -26,25 +19,19 @@ if [ ${#gems[@]} -eq 0 ]; then
 	exit 1
 fi
 
-# Validate gem files before pushing
 # NOTE: Gems are POSIX tar archives (uncompressed) containing gzipped internal
-# files (metadata.gz, data.tar.gz, checksums.yaml.gz). This is the standard format.
-# Do not attempt to gzip the outer archive - it will break gem validation.
 echo "Validating gem files..."
 for gem in "${gems[@]}"; do
 	echo "Checking $gem..."
 
-	# Check if file is readable and non-empty
 	if [ ! -f "$gem" ] || [ ! -r "$gem" ] || [ ! -s "$gem" ]; then
 		echo "::error::Gem file is invalid (missing, unreadable, or empty): $gem" >&2
 		exit 1
 	fi
 
-	# Check file type (gems should be uncompressed tar archives)
 	file_output=$(file "$gem" 2>/dev/null || echo "")
 	echo "File type: $file_output"
 
-	# Verify gem is valid using gem spec
 	echo "Validating gem with gem spec..."
 	if ! gem spec "$gem" >/dev/null 2>&1; then
 		echo "::error::Gem file validation failed: $gem" >&2

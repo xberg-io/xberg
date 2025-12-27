@@ -119,7 +119,7 @@ final class ChunkingAndEmbeddingsTest extends TestCase
 
         $chunkingConfig = new ChunkingConfig(
             maxChunkSize: 400,
-            chunkOverlap: 100, // 25% overlap
+            chunkOverlap: 100,
             respectSentences: true,
         );
 
@@ -149,7 +149,7 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         $chunkingConfig = new ChunkingConfig(
             maxChunkSize: 300,
             chunkOverlap: 50,
-            respectSentences: true, // Should not break in the middle of sentences
+            respectSentences: true,
         );
 
         $config = new ExtractionConfig(chunking: $chunkingConfig);
@@ -264,7 +264,7 @@ final class ChunkingAndEmbeddingsTest extends TestCase
 
         $config = new ExtractionConfig(
             chunking: $chunkingConfig,
-            embedding: null, // No embeddings
+            embedding: null,
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -295,7 +295,7 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 10000, // Very large chunk size
+            maxChunkSize: 10000,
             chunkOverlap: 100,
         );
 
@@ -303,7 +303,6 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($filePath);
 
-        // Small document might fit in single chunk
         if (!empty($result->chunks)) {
             $this->assertGreaterThanOrEqual(
                 1,
@@ -326,7 +325,7 @@ final class ChunkingAndEmbeddingsTest extends TestCase
 
         $embeddingConfig = new EmbeddingConfig(
             model: 'all-minilm-l6-v2',
-            normalize: true, // Normalize embeddings to unit length
+            normalize: true,
         );
 
         $config = new ExtractionConfig(

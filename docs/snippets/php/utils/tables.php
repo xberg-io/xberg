@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Result\ExtractedTable;
 
-// Configure extraction with table support
 $config = new ExtractionConfig(
     extractTables: true
 );
@@ -28,7 +27,6 @@ echo "Table Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Tables found: " . count($result->tables) . "\n\n";
 
-// Process each table
 foreach ($result->tables as $tableIndex => $table) {
     echo "Table " . ($tableIndex + 1) . ":\n";
     echo str_repeat('-', 40) . "\n";
@@ -44,12 +42,10 @@ foreach ($result->tables as $tableIndex => $table) {
 
     echo "\n";
 
-    // Display markdown format
     echo "  Markdown representation:\n";
     echo str_repeat('-', 40) . "\n";
     echo $table->markdown . "\n\n";
 
-    // Display first few rows as preview
     echo "  Raw data preview:\n";
     echo str_repeat('-', 40) . "\n";
 
@@ -65,7 +61,6 @@ foreach ($result->tables as $tableIndex => $table) {
     echo "\n";
 }
 
-// Export tables to CSV
 echo "Exporting Tables to CSV:\n";
 echo str_repeat('=', 60) . "\n";
 
@@ -94,7 +89,6 @@ foreach ($result->tables as $index => $table) {
 
 echo "\n";
 
-// Export tables to JSON
 echo "Exporting Tables to JSON:\n";
 echo str_repeat('=', 60) . "\n";
 
@@ -121,7 +115,6 @@ foreach ($result->tables as $index => $table) {
 
 echo "\n";
 
-// Convert table to HTML
 function tableToHtml(ExtractedTable $table): string
 {
     $html = "<table>\n";
@@ -144,7 +137,6 @@ function tableToHtml(ExtractedTable $table): string
     return $html;
 }
 
-// Export tables to HTML
 echo "Exporting Tables to HTML:\n";
 echo str_repeat('=', 60) . "\n";
 
@@ -173,7 +165,6 @@ foreach ($result->tables as $index => $table) {
 
 echo "\n";
 
-// Analyze table content
 echo "Table Analysis:\n";
 echo str_repeat('=', 60) . "\n";
 
@@ -201,7 +192,6 @@ foreach ($result->tables as $index => $table) {
     echo "  Empty cells: $emptyCells (" . number_format(($emptyCells / max($totalCells, 1)) * 100, 1) . "%)\n";
     echo "  Numeric cells: $numericCells (" . number_format(($numericCells / max($totalCells, 1)) * 100, 1) . "%)\n";
 
-    // Determine table type
     $numericRatio = $numericCells / max($totalCells, 1);
     $tableType = match(true) {
         $numericRatio > 0.5 => 'Data/Numeric Table',
@@ -212,7 +202,6 @@ foreach ($result->tables as $index => $table) {
     echo "  Table type: $tableType\n\n";
 }
 
-// Convert table to associative array with headers
 function tableToAssociativeArray(ExtractedTable $table): array
 {
     if (empty($table->cells)) {
@@ -233,7 +222,6 @@ function tableToAssociativeArray(ExtractedTable $table): array
     return $data;
 }
 
-// Example: Convert first table to associative array
 if (!empty($result->tables)) {
     $firstTable = $result->tables[0];
     $associativeData = tableToAssociativeArray($firstTable);

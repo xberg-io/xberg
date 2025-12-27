@@ -17,14 +17,13 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\TesseractConfig;
 
-// Example 1: Basic OCR with default settings
 echo "Example 1: Basic OCR Configuration\n";
 echo "==================================\n";
 
 $config1 = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
-        language: 'eng'  // English language
+        language: 'eng'  
     )
 );
 
@@ -32,60 +31,50 @@ $kreuzberg = new Kreuzberg($config1);
 $result = $kreuzberg->extractFile('scanned_document.pdf');
 echo "Extracted text length: " . strlen($result->content) . " characters\n\n";
 
-// Example 2: Multi-language OCR
 echo "Example 2: Multi-Language OCR\n";
 echo "=============================\n";
 
 $config2 = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
-        language: 'eng+fra+deu'  // English, French, and German
+        language: 'eng+fra+deu'  
     )
 );
 
 echo "Configured for languages: English, French, German\n";
 echo "Use this for multilingual documents\n\n";
 
-// Example 3: OCR with specific language
 echo "Example 3: Language-Specific OCR\n";
 echo "================================\n";
 
-// Spanish
 $config3a = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'spa')
 );
 
-// French
 $config3b = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'fra')
 );
 
-// German
 $config3c = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'deu')
 );
 
-// Chinese (Simplified)
 $config3d = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'chi_sim')
 );
 
-// Chinese (Traditional)
 $config3e = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'chi_tra')
 );
 
-// Japanese
 $config3f = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'jpn')
 );
 
-// Korean
 $config3g = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'kor')
 );
 
-// Arabic
 $config3h = new ExtractionConfig(
     ocr: new OcrConfig(backend: 'tesseract', language: 'ara')
 );
@@ -104,7 +93,6 @@ echo "- jpn: Japanese\n";
 echo "- kor: Korean\n";
 echo "- ara: Arabic\n\n";
 
-// Example 4: OCR with Tesseract-specific configuration
 echo "Example 4: Advanced Tesseract Configuration\n";
 echo "==========================================\n";
 
@@ -113,9 +101,9 @@ $config4 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
-            psm: 6,                     // Assume uniform block of text
-            oem: 3,                     // LSTM neural network mode
-            enableTableDetection: true  // Enable table detection
+            psm: 6,                     
+            oem: 3,                     
+            enableTableDetection: true  
         )
     )
 );
@@ -125,7 +113,6 @@ echo "- PSM (Page Segmentation Mode): 6 (uniform text block)\n";
 echo "- OEM (OCR Engine Mode): 3 (LSTM only)\n";
 echo "- Table Detection: Enabled\n\n";
 
-// Example 5: Complete OCR configuration for forms/invoices
 echo "Example 5: OCR for Forms and Invoices\n";
 echo "=====================================\n";
 
@@ -134,9 +121,9 @@ $config5 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
-            psm: 6,                      // Uniform text block
-            oem: 3,                      // LSTM mode
-            enableTableDetection: true,  // Extract tables
+            psm: 6,                      
+            oem: 3,                      
+            enableTableDetection: true,  
             tesseditCharWhitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$.,- '
         )
     )
@@ -146,7 +133,6 @@ echo "Optimized for forms and invoices:\n";
 echo "- Table detection enabled\n";
 echo "- Character whitelist for common form characters\n\n";
 
-// Example 6: OCR for numeric documents (invoices, receipts)
 echo "Example 6: OCR for Numeric Documents\n";
 echo "====================================\n";
 
@@ -157,7 +143,7 @@ $config6 = new ExtractionConfig(
         tesseractConfig: new TesseractConfig(
             psm: 6,
             oem: 3,
-            tesseditCharWhitelist: '0123456789$.,- '  // Only numbers and currency symbols
+            tesseditCharWhitelist: '0123456789$.,- '  
         )
     )
 );
@@ -165,7 +151,6 @@ $config6 = new ExtractionConfig(
 echo "Character whitelist: '0123456789$.,- '\n";
 echo "Best for: Invoices, receipts, financial documents\n\n";
 
-// Example 7: OCR with character blacklist
 echo "Example 7: OCR with Character Blacklist\n";
 echo "=======================================\n";
 
@@ -176,7 +161,7 @@ $config7 = new ExtractionConfig(
         tesseractConfig: new TesseractConfig(
             psm: 6,
             oem: 3,
-            tesseditCharBlacklist: '|!@#%^&*()'  // Exclude special characters
+            tesseditCharBlacklist: '|!@#%^&*()'  
         )
     )
 );

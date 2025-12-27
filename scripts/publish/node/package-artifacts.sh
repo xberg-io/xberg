@@ -103,7 +103,6 @@ if [ -z "$src" ]; then
 	exit 1
 fi
 
-# Ensure platform directory exists
 platform_npm_dir="crates/kreuzberg-node/npm/${platform_dir}"
 echo ""
 echo "Ensuring platform directory exists: $platform_npm_dir"
@@ -124,7 +123,6 @@ echo ""
 echo "npm/$platform_dir directory contents:"
 find "$platform_npm_dir" -type f
 
-# Always include PDFium runtime since we build with bundled-pdfium feature
 echo ""
 echo "Including PDFium runtime..."
 pdfium_src=""
@@ -161,8 +159,6 @@ else
 	cat "$platform_pkg_json"
 fi
 
-# Only include this platform's directory in the tarball to avoid
-# overwriting other platforms when merging tarballs
 platform_npm_dir="crates/kreuzberg-node/npm/${platform_dir}"
 if [ ! -d "$platform_npm_dir" ]; then
 	echo "ERROR: Platform npm directory missing: $platform_npm_dir" >&2

@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Install appropriate wheel based on platform
-# Used by: ci-python.yaml - Install wheel step
-#
 
 set -euo pipefail
 
@@ -17,7 +13,6 @@ cd "$REPO_ROOT"
 
 echo "=== Installing wheel for current platform ==="
 
-# Find first matching wheel regardless of platform-specific suffix
 wheel_path="$(find dist -maxdepth 1 -name "kreuzberg-*.whl" -print -quit 2>/dev/null || true)"
 
 if [ -z "$wheel_path" ]; then

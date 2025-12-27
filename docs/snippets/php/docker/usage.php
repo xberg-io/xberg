@@ -70,14 +70,12 @@ class DockerKreuzbergClient
         $fileContent = file_get_contents($filePath);
         $fileName = basename($filePath);
 
-        // Build multipart/form-data request body
         $body = "--{$boundary}\r\n";
         $body .= "Content-Disposition: form-data; name=\"file\"; filename=\"{$fileName}\"\r\n";
         $body .= "Content-Type: application/octet-stream\r\n\r\n";
         $body .= $fileContent;
         $body .= "\r\n--{$boundary}--\r\n";
 
-        // Initialize cURL
         $ch = curl_init($this->apiUrl);
         curl_setopt_array($ch, [
             CURLOPT_POST => true,
@@ -126,13 +124,11 @@ class DockerKreuzbergClient
     }
 }
 
-// Usage example
 $dockerClient = new DockerKreuzbergClient();
 
 try {
     $dockerClient->startContainer();
 
-    // Wait for container to be ready
     sleep(2);
 
     $content = $dockerClient->extractFile('document.pdf');

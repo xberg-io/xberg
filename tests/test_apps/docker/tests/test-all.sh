@@ -4,7 +4,6 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Colors for output
 export RED='\033[0;31m'
 export GREEN='\033[0;32m'
 export YELLOW='\033[1;33m'
@@ -12,7 +11,6 @@ export BLUE='\033[0;34m'
 export CYAN='\033[0;36m'
 export NC='\033[0m'
 
-# Test suite tracking
 declare -a TEST_SUITES=()
 declare -a SUITE_RESULTS=()
 
@@ -21,7 +19,6 @@ echo "║     Kreuzberg Docker Image Comprehensive Test Suite      ║"
 echo -e "╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
-# Function to run a test suite
 run_test_suite() {
 	local suite_name=$1
 	local script_path=$2
@@ -41,7 +38,6 @@ run_test_suite() {
 	fi
 }
 
-# Check if Docker and Docker Compose are available
 check_prerequisites() {
 	echo -e "${BLUE}Checking prerequisites...${NC}"
 
@@ -59,7 +55,6 @@ check_prerequisites() {
 	echo ""
 }
 
-# Check if containers are running
 check_containers() {
 	echo -e "${BLUE}Checking containers...${NC}"
 
@@ -77,7 +72,6 @@ check_containers() {
 	echo ""
 }
 
-# Run all test suites
 run_all_tests() {
 	echo -e "${BLUE}Running test suites...${NC}"
 	echo ""
@@ -92,7 +86,6 @@ run_all_tests() {
 	run_test_suite "Full Image Tests" "$SCRIPT_DIR/test-full.sh"
 }
 
-# Print final summary
 print_final_summary() {
 	echo ""
 	echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗"
@@ -139,7 +132,6 @@ print_final_summary() {
 	fi
 }
 
-# Main execution
 main() {
 	check_prerequisites
 	check_containers

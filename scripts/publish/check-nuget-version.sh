@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
 # Check if C# package version exists on NuGet
-#
-# Environment Variables:
 #   - VERSION: Package version to check (e.g., 4.0.0-rc.1)
 
 set -euo pipefail
@@ -10,7 +8,6 @@ set -euo pipefail
 version="${1:?VERSION argument required}"
 package="Kreuzberg"
 
-# Query NuGet API
 url="https://api.nuget.org/v3/registration5-gz-semver2/${package,,}/index.json"
 response="$(curl -sSL --compressed "$url" 2>/dev/null || echo "")"
 

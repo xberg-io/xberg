@@ -47,7 +47,6 @@ pub fn cells_to_markdown(cells: &[Vec<String>]) -> String {
         return String::new();
     }
 
-    // Use capacity estimation function for precise calculation
     let estimated_capacity = capacity::estimate_table_markdown_capacity(cells.len(), num_cols);
     let mut markdown = String::with_capacity(estimated_capacity);
 

@@ -115,7 +115,6 @@ pub fn extract_bytes_sync(
     let result =
         Python::detach(py, || kreuzberg::extract_bytes_sync(&data, &mime_type, &rust_config)).map_err(to_py_err)?;
 
-    // Convert result within GIL context (already reacquired by detach)
     ExtractionResult::from_rust(result, py)
 }
 

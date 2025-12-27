@@ -85,7 +85,6 @@ public class MimeAndRegistryTests
                 }
                 catch
                 {
-                    // best-effort cleanup
                 }
             }
         }

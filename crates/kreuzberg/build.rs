@@ -1,29 +1,3 @@
-// Kreuzberg Build Script - PDFium Linking Configuration
-//
-// This build script handles PDFium library downloading and linking for the kreuzberg crate.
-// It supports multiple linking strategies via Cargo features:
-//
-// 1. Default (pdf, bundled-pdfium): Download dynamic library and embed in binary
-//    - Self-contained binary that extracts library at runtime
-//    - Larger binary size but no external .so dependency
-//    - No PDFIUM_*_PATH environment variables needed
-//
-// 2. static-pdfium: Static linking (no runtime dependency)
-//    - REQUIRES: PDFIUM_STATIC_LIB_PATH environment variable pointing to libpdfium.a directory
-//    - Reason: bblanchon/pdfium-binaries only provides dynamic libraries
-//    - Use case: Docker with musl, fully static binaries
-//    - Note: libpdfium.a must be obtained separately (e.g., paulocoutinhox/pdfium-lib)
-//
-// 3. system-pdfium: Use system-installed pdfium
-//    - Detected via pkg-config or KREUZBERG_PDFIUM_SYSTEM_PATH
-//
-// Environment Variables:
-// - PDFIUM_STATIC_LIB_PATH: Path to directory containing libpdfium.a (for static-pdfium)
-// - KREUZBERG_PDFIUM_PREBUILT: Path to prebuilt pdfium directory (skip download)
-// - KREUZBERG_PDFIUM_SYSTEM_PATH: System pdfium library path (for system-pdfium)
-// - PDFIUM_VERSION: Override version for bblanchon/pdfium-binaries
-// - KREUZBERG_PDFIUM_DOWNLOAD_RETRIES: Number of download retries (default: 5)
-
 use std::env;
 use std::fs;
 use std::io;
@@ -43,17 +17,12 @@ enum PdfiumLinkStrategy {
     System,
 }
 
-// ============================================================================
-// MAIN BUILD ORCHESTRATION
-// ============================================================================
-
 fn main() {
     let target = env::var("TARGET").unwrap();
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     println!("cargo::rustc-check-cfg=cfg(coverage)");
 
-    // Skip pdfium linking if the pdf feature is not enabled
     if !cfg!(feature = "pdf") {
         tracing::debug!("PDF feature not enabled, skipping pdfium linking");
         return;
@@ -67,16 +36,13 @@ fn main() {
         PdfiumLinkStrategy::DownloadStatic => {
             let pdfium_dir = download_or_use_prebuilt(&target, &out_dir);
             link_statically(&pdfium_dir, &target);
-            // Skip copy_lib_to_package - library embedded in binary
         }
         PdfiumLinkStrategy::Bundled => {
             let pdfium_dir = download_or_use_prebuilt(&target, &out_dir);
             link_bundled(&pdfium_dir, &target, &out_dir);
-            // Skip copy_lib_to_package - each binary extracts its own
         }
         PdfiumLinkStrategy::System => {
             link_system(&target);
-            // No download or copy needed
         }
     }
 
@@ -84,21 +50,14 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 }
 
-// ============================================================================
-// FEATURE & STRATEGY VALIDATION
-// ============================================================================
-
 /// Determine which linking strategy to use based on features and target
 fn determine_link_strategy(target: &str) -> PdfiumLinkStrategy {
-    // WASM handling: check for PDFIUM_WASM_LIB environment variable
     if target.contains("wasm") {
         if let Ok(wasm_lib) = env::var("PDFIUM_WASM_LIB") {
             println!("cargo:rustc-link-search=native={}", wasm_lib);
             println!("cargo:rustc-link-lib=static=pdfium");
             return PdfiumLinkStrategy::DownloadStatic;
         }
-        // For WASM without explicit PDFIUM_WASM_LIB, use bundled strategy
-        // This downloads pdfium-lib which provides WASM-compatible builds
         println!("cargo:warning=WASM build using bundled PDFium (set PDFIUM_WASM_LIB to link custom WASM PDFium)");
         return PdfiumLinkStrategy::Bundled;
     }
@@ -115,9 +74,6 @@ fn determine_link_strategy(target: &str) -> PdfiumLinkStrategy {
         );
     }
 
-    // Feature-based strategy selection.
-    // Prefer bundled-pdfium when multiple strategies are enabled (e.g. `--all-features`) because it
-    // does not require external PDFIUM_STATIC_LIB_PATH and does not depend on a system install.
     if bundled_pdfium {
         return PdfiumLinkStrategy::Bundled;
     }
@@ -128,14 +84,8 @@ fn determine_link_strategy(target: &str) -> PdfiumLinkStrategy {
         return PdfiumLinkStrategy::DownloadStatic;
     }
 
-    // Default: download and link dynamically (bundled-pdfium preferred if pdf not already selected)
-    // When only 'pdf' feature is enabled (no linking strategy), default to bundled-pdfium
     PdfiumLinkStrategy::Bundled
 }
-
-// ============================================================================
-// DOWNLOAD & PREBUILT ORCHESTRATION
-// ============================================================================
 
 /// Download PDFium or use prebuilt directory
 ///
@@ -154,7 +104,6 @@ fn download_or_use_prebuilt(target: &str, out_dir: &Path) -> PathBuf {
     let (download_url, _lib_name) = get_pdfium_url_and_lib(target);
     let pdfium_dir = out_dir.join("pdfium");
 
-    // Check for prebuilt pdfium directory
     if let Some(prebuilt) = env::var_os("KREUZBERG_PDFIUM_PREBUILT") {
         let prebuilt_path = PathBuf::from(prebuilt);
         if prebuilt_path.exists() {
@@ -172,7 +121,6 @@ fn download_or_use_prebuilt(target: &str, out_dir: &Path) -> PathBuf {
         }
     }
 
-    // Check if library already exists (cache validation) using flexible detection
     let (runtime_lib_name, runtime_subdir) = runtime_library_info(target);
     let lib_found = find_pdfium_library(&pdfium_dir, &runtime_lib_name, runtime_subdir).is_ok();
 
@@ -191,7 +139,6 @@ fn download_or_use_prebuilt(target: &str, out_dir: &Path) -> PathBuf {
         tracing::debug!("Pdfium library already cached at {}", pdfium_dir.display());
     }
 
-    // Windows-specific: ensure pdfium.lib exists
     if target.contains("windows") {
         ensure_windows_import_library(&pdfium_dir);
     }
@@ -221,10 +168,6 @@ fn ensure_windows_import_library(pdfium_dir: &Path) {
     }
 }
 
-// ============================================================================
-// DOWNLOAD UTILITIES
-// ============================================================================
-
 /// Fetch the latest release version from a GitHub repository
 ///
 /// Uses curl to query the GitHub API and extract the tag_name from the
@@ -242,14 +185,11 @@ fn get_latest_version(repo: &str) -> String {
     {
         let json = String::from_utf8_lossy(&output.stdout);
 
-        // Try to extract tag_name from JSON
         if let Some(tag) = extract_tag_from_json(&json) {
             return tag;
         }
     }
 
-    // Fallback versions based on repository
-    // These are stable versions known to have all required assets
     if repo.contains("paulocoutinhox") {
         eprintln!(
             "cargo:warning=Failed to fetch latest PDFium WASM version from GitHub API, using fallback version 7442b"
@@ -274,21 +214,17 @@ fn get_latest_version(repo: &str) -> String {
 /// Parses JSON by finding the tag_name field and extracting the value between quotes.
 /// Handles various JSON formatting variations.
 fn extract_tag_from_json(json: &str) -> Option<String> {
-    // Look for "tag_name": "..." pattern
     if let Some(start) = json.find("\"tag_name\"") {
         let after_colon = &json[start + "\"tag_name\"".len()..];
 
-        // Skip whitespace and colon
         let after_colon = after_colon.trim_start();
         let after_colon = after_colon.strip_prefix(':')?;
         let after_colon = after_colon.trim_start();
 
-        // Extract value between quotes
         if let Some(opening_quote) = after_colon.find('"') {
             let value_start = opening_quote + 1;
             if let Some(closing_quote) = after_colon[value_start..].find('"') {
                 let tag = &after_colon[value_start..value_start + closing_quote];
-                // Handle releases with '/' in tag (e.g., "chromium/1234")
                 return Some(tag.split('/').next_back().unwrap_or(tag).to_string());
             }
         }
@@ -311,8 +247,6 @@ fn get_pdfium_url_and_lib(target: &str) -> (String, String) {
             .unwrap_or_else(|| get_latest_version("paulocoutinhox/pdfium-lib"));
         tracing::debug!("Using pdfium-lib version: {}", version);
 
-        // WASM builds use a single 'wasm.tgz' asset regardless of architecture
-        // The archive contains both wasm32 and wasm64 if available
         return (
             format!(
                 "https://github.com/paulocoutinhox/pdfium-lib/releases/download/{}/wasm.tgz",
@@ -481,10 +415,6 @@ fn download_and_extract_pdfium(url: &str, dest_dir: &Path) {
     tracing::debug!("Pdfium downloaded and extracted successfully");
 }
 
-// ============================================================================
-// PREBUILT HANDLING
-// ============================================================================
-
 /// Prepare prebuilt PDFium by copying to destination directory
 ///
 /// Removes existing destination if present, then recursively copies
@@ -515,10 +445,6 @@ fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
     Ok(())
 }
 
-// ============================================================================
-// PLATFORM UTILITIES
-// ============================================================================
-
 /// Get platform-specific runtime library name and subdirectory
 ///
 /// Returns tuple of (library_name, subdirectory) for the target platform:
@@ -528,7 +454,6 @@ fn copy_dir_all(src: &Path, dst: &Path) -> io::Result<()> {
 /// - Linux: ("libpdfium.so", "lib")
 fn runtime_library_info(target: &str) -> (String, &'static str) {
     if target.contains("wasm") {
-        // pdfium-lib `wasm.tgz` extracts into `release/lib/libpdfium.a`
         ("libpdfium.a".to_string(), "release/lib")
     } else if target.contains("windows") {
         ("pdfium.dll".to_string(), "bin")
@@ -552,15 +477,13 @@ fn runtime_library_info(target: &str) -> (String, &'static str) {
 ///
 /// Returns the full path to the library if found, or an error with available files.
 fn find_pdfium_library(pdfium_dir: &Path, lib_name: &str, expected_subdir: &str) -> Result<PathBuf, String> {
-    // Candidates in priority order
     let candidates = [
-        pdfium_dir.join(expected_subdir).join(lib_name), // Standard: lib/libpdfium.dylib
-        pdfium_dir.join(lib_name),                       // Root: libpdfium.dylib
-        pdfium_dir.join("bin").join(lib_name),           // Alternative: bin/libpdfium.dylib
-        pdfium_dir.join("lib").join(lib_name),           // Explicit lib: lib/libpdfium.dylib
+        pdfium_dir.join(expected_subdir).join(lib_name),
+        pdfium_dir.join(lib_name),
+        pdfium_dir.join("bin").join(lib_name),
+        pdfium_dir.join("lib").join(lib_name),
     ];
 
-    // Try each candidate
     for candidate in &candidates {
         if candidate.exists() {
             tracing::debug!("Found PDFium library at: {}", candidate.display());
@@ -568,7 +491,6 @@ fn find_pdfium_library(pdfium_dir: &Path, lib_name: &str, expected_subdir: &str)
         }
     }
 
-    // Library not found - provide detailed error with directory listing
     let mut error_msg = format!(
         "PDFium library not found at expected location: {}/{}\n\n",
         pdfium_dir.display(),
@@ -579,7 +501,6 @@ fn find_pdfium_library(pdfium_dir: &Path, lib_name: &str, expected_subdir: &str)
         error_msg.push_str(&format!("  - {}\n", candidate.display()));
     }
 
-    // List actual contents of pdfium directory for debugging
     error_msg.push_str("\nActual archive contents:\n");
     if let Ok(entries) = fs::read_dir(pdfium_dir) {
         for entry in entries.flatten() {
@@ -587,7 +508,6 @@ fn find_pdfium_library(pdfium_dir: &Path, lib_name: &str, expected_subdir: &str)
             let file_type = if path.is_dir() { "dir" } else { "file" };
             error_msg.push_str(&format!("  {} ({})\n", path.display(), file_type));
 
-            // Show contents of subdirectories
             if path.is_dir()
                 && let Ok(sub_entries) = fs::read_dir(&path)
             {
@@ -603,10 +523,6 @@ fn find_pdfium_library(pdfium_dir: &Path, lib_name: &str, expected_subdir: &str)
     Err(error_msg)
 }
 
-// ============================================================================
-// LINKING STRATEGIES
-// ============================================================================
-
 /// Link PDFium dynamically (default)
 ///
 /// Sets up linker to use PDFium as a dynamic library (.dylib/.so/.dll)
@@ -615,7 +531,6 @@ fn find_pdfium_library(pdfium_dir: &Path, lib_name: &str, expected_subdir: &str)
 fn link_dynamically(pdfium_dir: &Path, target: &str) {
     let (runtime_lib_name, runtime_subdir) = runtime_library_info(target);
 
-    // Find the actual library location (handles multiple possible archive structures)
     let lib_path = match find_pdfium_library(pdfium_dir, &runtime_lib_name, runtime_subdir) {
         Ok(path) => path.parent().unwrap_or(pdfium_dir).to_path_buf(),
         Err(err) => panic!("{}", err),
@@ -624,19 +539,16 @@ fn link_dynamically(pdfium_dir: &Path, target: &str) {
     println!("cargo:rustc-link-search=native={}", lib_path.display());
     println!("cargo:rustc-link-lib=dylib=pdfium");
 
-    // Also add standard lib directory for compatibility
     let std_lib_dir = pdfium_dir.join("lib");
     if std_lib_dir.exists() && std_lib_dir != lib_path {
         println!("cargo:rustc-link-search=native={}", std_lib_dir.display());
     }
 
-    // Add bin directory for platforms where it might be needed
     let bin_dir = pdfium_dir.join("bin");
     if bin_dir.exists() && bin_dir != lib_path {
         println!("cargo:rustc-link-search=native={}", bin_dir.display());
     }
 
-    // Set rpath for dynamic linking
     if target.contains("darwin") {
         println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
         println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/.");
@@ -659,11 +571,9 @@ fn link_dynamically(pdfium_dir: &Path, target: &str) {
 /// On macOS, this will fallback to dynamic linking with a warning.
 /// On Linux, you must provide PDFIUM_STATIC_LIB_PATH pointing to a static build.
 fn link_statically(pdfium_dir: &Path, target: &str) {
-    // For static linking, we need libpdfium.a (not .dylib or .so)
     let static_lib_name = "libpdfium.a";
     let lib_subdir = if target.contains("wasm") { "release/lib" } else { "lib" };
 
-    // First, check if user provided a static library path via environment variable
     if let Ok(custom_path) = env::var("PDFIUM_STATIC_LIB_PATH") {
         let custom_lib_dir = PathBuf::from(&custom_path);
 
@@ -689,7 +599,6 @@ fn link_statically(pdfium_dir: &Path, target: &str) {
         println!("cargo:rustc-link-search=native={}", custom_lib_dir.display());
         println!("cargo:rustc-link-lib=static=pdfium");
 
-        // Static linking requires additional system dependencies
         if target.contains("linux") {
             println!("cargo:rustc-link-lib=dylib=pthread");
             println!("cargo:rustc-link-lib=dylib=dl");
@@ -701,22 +610,18 @@ fn link_statically(pdfium_dir: &Path, target: &str) {
         return;
     }
 
-    // Find the actual library location (handles multiple possible archive structures)
     let lib_path = match find_pdfium_library(pdfium_dir, static_lib_name, lib_subdir) {
         Ok(path) => path.parent().unwrap_or(pdfium_dir).to_path_buf(),
         Err(_err) => {
-            // Static library not found - check if we're on macOS and can fallback
             if target.contains("darwin") {
                 eprintln!("cargo:warning=Static PDFium library (libpdfium.a) not found for macOS.");
                 eprintln!("cargo:warning=bblanchon/pdfium-binaries only provides dynamic libraries.");
                 eprintln!("cargo:warning=Falling back to dynamic linking for local development.");
                 eprintln!("cargo:warning=Production Linux builds require PDFIUM_STATIC_LIB_PATH.");
 
-                // Fallback to dynamic linking on macOS
                 link_dynamically(pdfium_dir, target);
                 return;
             } else {
-                // On Linux/Windows, provide helpful error with actionable steps
                 panic!(
                     "Static PDFium library (libpdfium.a) not found.\n\n\
                      bblanchon/pdfium-binaries only provides dynamic libraries.\n\n\
@@ -745,19 +650,16 @@ fn link_statically(pdfium_dir: &Path, target: &str) {
     println!("cargo:rustc-link-search=native={}", lib_path.display());
     println!("cargo:rustc-link-lib=static=pdfium");
 
-    // Also add standard lib directory for compatibility
     let std_lib_dir = pdfium_dir.join("lib");
     if std_lib_dir.exists() && std_lib_dir != lib_path {
         println!("cargo:rustc-link-search=native={}", std_lib_dir.display());
     }
 
-    // Add bin directory for platforms where it might be needed
     let bin_dir = pdfium_dir.join("bin");
     if bin_dir.exists() && bin_dir != lib_path {
         println!("cargo:rustc-link-search=native={}", bin_dir.display());
     }
 
-    // Static linking requires additional system dependencies
     if target.contains("linux") {
         println!("cargo:rustc-link-lib=dylib=pthread");
         println!("cargo:rustc-link-lib=dylib=dl");
@@ -775,7 +677,6 @@ fn link_statically(pdfium_dir: &Path, target: &str) {
 ///
 /// For WASM targets, links statically using the bundled static library.
 fn link_bundled(pdfium_dir: &Path, target: &str, out_dir: &Path) {
-    // Copy library to OUT_DIR for bundling using flexible detection
     let (runtime_lib_name, runtime_subdir) = runtime_library_info(target);
     let src_lib = match find_pdfium_library(pdfium_dir, &runtime_lib_name, runtime_subdir) {
         Ok(path) => path,
@@ -786,13 +687,11 @@ fn link_bundled(pdfium_dir: &Path, target: &str, out_dir: &Path) {
     fs::copy(&src_lib, &bundled_lib)
         .unwrap_or_else(|err| panic!("Failed to copy library to OUT_DIR for bundling: {}", err));
 
-    // Emit environment variable with bundled library path
     let bundled_path = bundled_lib
         .to_str()
         .unwrap_or_else(|| panic!("Non-UTF8 path for bundled library: {}", bundled_lib.display()));
     println!("cargo:rustc-env=KREUZBERG_PDFIUM_BUNDLED_PATH={}", bundled_path);
 
-    // For WASM, link statically using the bundled library
     if target.contains("wasm") {
         let lib_dir = bundled_lib
             .parent()
@@ -810,7 +709,6 @@ fn link_bundled(pdfium_dir: &Path, target: &str, out_dir: &Path) {
 /// Attempts to find PDFium via pkg-config first, then falls back to
 /// environment variables (KREUZBERG_PDFIUM_SYSTEM_PATH, KREUZBERG_PDFIUM_SYSTEM_INCLUDE).
 fn link_system(_target: &str) {
-    // Try pkg-config first
     match pkg_config::Config::new().atleast_version("5.0").probe("pdfium") {
         Ok(library) => {
             tracing::debug!("Found system pdfium via pkg-config");
@@ -824,7 +722,6 @@ fn link_system(_target: &str) {
         }
     }
 
-    // Fallback to environment variables
     let lib_path = env::var("KREUZBERG_PDFIUM_SYSTEM_PATH").ok();
     let include_path = env::var("KREUZBERG_PDFIUM_SYSTEM_INCLUDE").ok();
 
@@ -848,7 +745,6 @@ fn link_system(_target: &str) {
         return;
     }
 
-    // No system pdfium found
     panic!(
         "system-pdfium feature enabled but pdfium not found.\n\
          \n\

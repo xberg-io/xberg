@@ -188,21 +188,15 @@ fn generate_markdown_and_cells(sheet_name: &str, range: &Range<Data>, capacity: 
     let header_len = header.len();
     let row_count = rows.len();
 
-    // Pre-calculate exact size needed for markdown table
-    // Use capacity estimation function with table dimensions
     let table_capacity = capacity::estimate_table_markdown_capacity(row_count, header_len);
 
-    // Base: "## sheet_name\n\n"
     let mut exact_size = 16 + sheet_name.len();
 
-    // Header row: "| " + cells + " |\n"
-    exact_size += 2 + (header_len * 2); // " | " separators and delimiters
-    exact_size += header_len * 10; // approximate cell content
+    exact_size += 2 + (header_len * 2);
+    exact_size += header_len * 10;
 
-    // Separator row: "| " + "---" * header_len + " | " * (header_len - 1) + " |\n"
     exact_size += 5 + (header_len * 5);
 
-    // Data rows (row_count - 1 data rows)
     exact_size += (row_count - 1) * (5 + header_len * 15);
 
     let mut markdown = String::with_capacity(exact_size.max(table_capacity).max(capacity));
@@ -210,14 +204,12 @@ fn generate_markdown_and_cells(sheet_name: &str, range: &Range<Data>, capacity: 
 
     write!(markdown, "## {}\n\n", sheet_name).unwrap();
 
-    // Process header row
     let mut header_cells = Vec::with_capacity(header_len);
     markdown.push_str("| ");
     for (i, cell) in header.iter().enumerate() {
         if i > 0 {
             markdown.push_str(" | ");
         }
-        // Format both markdown and extract cell value
         let cell_str = format_cell_to_string(cell);
         header_cells.push(cell_str.clone());
 
@@ -230,7 +222,6 @@ fn generate_markdown_and_cells(sheet_name: &str, range: &Range<Data>, capacity: 
     markdown.push_str(" |\n");
     cells.push(header_cells);
 
-    // Separator row
     markdown.push_str("| ");
     for i in 0..header_len {
         if i > 0 {
@@ -240,7 +231,6 @@ fn generate_markdown_and_cells(sheet_name: &str, range: &Range<Data>, capacity: 
     }
     markdown.push_str(" |\n");
 
-    // Data rows
     for row in rows.iter().skip(1) {
         let mut row_cells = Vec::with_capacity(header_len);
         markdown.push_str("| ");
@@ -478,8 +468,6 @@ fn extract_xlsx_office_metadata_from_archive<R: std::io::Read + std::io::Seek>(
 mod tests {
     use super::*;
 
-    // Note: format_cell_value_into was refactored to format_cell_to_string
-    // Keeping the concept as a test for format_cell_to_string instead
     #[test]
     fn test_format_cell_to_string_basic() {
         assert_eq!(format_cell_to_string(&Data::Empty), "");
@@ -599,8 +587,6 @@ mod tests {
         assert!(sheet.markdown.contains("30"));
     }
 
-    // Note: generate_markdown_from_range_optimized was refactored to generate_markdown_and_cells
-    // Testing the new API instead
     #[test]
     fn test_generate_markdown_and_cells_empty() {
         let range: Range<Data> = Range::empty();
@@ -625,7 +611,7 @@ mod tests {
         assert!(markdown.contains("## Sheet1"));
         assert!(markdown.contains("Col1"));
         assert!(markdown.contains("---"));
-        assert_eq!(cells.len(), 2); // header + 1 data row
+        assert_eq!(cells.len(), 2);
     }
 
     #[test]
@@ -641,7 +627,7 @@ mod tests {
 
         assert!(markdown.contains("X"));
         assert!(markdown.contains("Z"));
-        assert_eq!(cells.len(), 3); // header + 2 data rows
+        assert_eq!(cells.len(), 3);
     }
 
     #[test]

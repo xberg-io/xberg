@@ -118,7 +118,6 @@ pub async fn run_pipeline(mut result: ExtractionResult, config: &ExtractionConfi
             }
         }
 
-        // Initialize cache if needed (only happens once, amortized over all extractions)
         {
             let mut cache_lock = PROCESSOR_CACHE
                 .write()
@@ -128,8 +127,6 @@ pub async fn run_pipeline(mut result: ExtractionResult, config: &ExtractionConfi
             }
         }
 
-        // Get cached processors without acquiring registry locks
-        // Extract the Arc<Vec> pointers before the loop to avoid holding the lock across await points
         let (early_processors, middle_processors, late_processors) = {
             let cache_lock = PROCESSOR_CACHE
                 .read()
@@ -153,16 +150,13 @@ pub async fn run_pipeline(mut result: ExtractionResult, config: &ExtractionConfi
                 let processor_name = processor.name();
 
                 let should_run = if let Some(config) = pp_config {
-                    // Use O(1) HashSet lookups if available
                     if let Some(ref enabled_set) = config.enabled_set {
                         enabled_set.contains(processor_name)
                     } else if let Some(ref disabled_set) = config.disabled_set {
                         !disabled_set.contains(processor_name)
                     } else if let Some(ref enabled) = config.enabled_processors {
-                        // Fallback to O(n) Vec search if HashSet not built yet
                         enabled.iter().any(|name| name == processor_name)
                     } else if let Some(ref disabled) = config.disabled_processors {
-                        // Fallback to O(n) Vec search if HashSet not built yet
                         !disabled.iter().any(|name| name == processor_name)
                     } else {
                         true
@@ -281,7 +275,6 @@ pub async fn run_pipeline(mut result: ExtractionResult, config: &ExtractionConfi
         );
     }
 
-    // Early exit: Skip validator execution if no validators registered
     {
         let validator_registry = crate::plugins::registry::get_validator_registry();
         let validators = {
@@ -291,7 +284,6 @@ pub async fn run_pipeline(mut result: ExtractionResult, config: &ExtractionConfi
             registry.get_all()
         };
 
-        // Early exit optimization: Skip loop if validators list is empty
         if !validators.is_empty() {
             for validator in validators {
                 if validator.should_validate(&result, config) {
@@ -332,7 +324,6 @@ pub async fn run_pipeline(mut result: ExtractionResult, config: &ExtractionConfi
 /// - Async validators
 #[cfg(not(feature = "tokio-runtime"))]
 pub fn run_pipeline_sync(mut result: ExtractionResult, config: &ExtractionConfig) -> Result<ExtractionResult> {
-    // Chunking
     #[cfg(feature = "chunking")]
     if let Some(ref chunking_config) = config.chunking {
         let chunk_config = crate::chunking::ChunkingConfig {
@@ -398,7 +389,6 @@ pub fn run_pipeline_sync(mut result: ExtractionResult, config: &ExtractionConfig
         );
     }
 
-    // Language detection
     #[cfg(feature = "language-detection")]
     if let Some(ref lang_config) = config.language_detection {
         match crate::language_detection::detect_languages(&result.content, lang_config) {
@@ -895,7 +885,7 @@ Natural language processing enables computers to understand human language.
         let val_registry = crate::plugins::registry::get_validator_registry();
 
         let _guard = REGISTRY_TEST_GUARD.lock().unwrap();
-        clear_processor_cache().unwrap(); // Clear cache before modifying registry
+        clear_processor_cache().unwrap();
         pp_registry.write().unwrap().shutdown_all().unwrap();
         val_registry.write().unwrap().shutdown_all().unwrap();
 

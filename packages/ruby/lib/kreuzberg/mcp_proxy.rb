@@ -5,14 +5,7 @@ require 'pathname'
 require 'json'
 
 module Kreuzberg
-  # MCP (Model Context Protocol) server proxy
-  #
-  # Starts and manages the Kreuzberg MCP server for Claude Desktop integration.
-  #
   # @example Start MCP server
-  #   server = Kreuzberg::MCPProxy.new
-  #   server.start
-  #
   module MCPProxy
     Error = Class.new(Kreuzberg::Errors::Error)
     MissingBinaryError = Class.new(Error)
@@ -61,7 +54,6 @@ module Kreuzberg
         Process.kill('TERM', @pid)
         Process.wait(@pid)
       rescue Errno::ESRCH, Errno::ECHILD
-        # Process already dead
       ensure
         @pid = nil
         close_pipes
@@ -122,7 +114,7 @@ module Kreuzberg
           err: $stderr
         )
         Process.detach(@pid)
-        sleep 1 # Give server time to start
+        sleep 1
         @pid
       end
 
@@ -162,7 +154,6 @@ module Kreuzberg
     # @raise [MissingBinaryError] If not found
     #
     def find_mcp_binary
-      # MCP is served by kreuzberg CLI
       binary_name = Gem.win_platform? ? 'kreuzberg.exe' : 'kreuzberg'
       found = CLIProxy.search_paths(binary_name).find(&:file?)
       return found if found

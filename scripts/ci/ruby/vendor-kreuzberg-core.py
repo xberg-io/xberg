@@ -55,10 +55,8 @@ def get_workspace_version(repo_root: Path) -> str:
 def format_dependency(name: str, dep_spec: object) -> str:
     """Format a dependency spec for Cargo.toml."""
     if isinstance(dep_spec, str):
-        # Simple version string like "0.1.2"
         return f'{name} = "{dep_spec}"'
     elif isinstance(dep_spec, dict):
-        # Complex spec with version, features, etc.
         version: str = dep_spec.get("version", "")
         features: list[str] = dep_spec.get("features", [])
         default_features: bool | None = dep_spec.get("default-features")
@@ -85,22 +83,15 @@ def replace_workspace_deps_in_toml(toml_path: Path, workspace_deps: dict[str, ob
     with open(toml_path, "r") as f:
         content = f.read()
 
-    # Replace each workspace dependency
     for name, dep_spec in workspace_deps.items():
-        # Pattern 1: name = { workspace = true }
         pattern1 = rf'^{re.escape(name)} = \{{ workspace = true \}}$'
         content = re.sub(pattern1, format_dependency(name, dep_spec), content, flags=re.MULTILINE)
 
-        # Pattern 2: name = { workspace = true, ... } (with other fields)
         def replace_with_fields(match: re.Match[str]) -> str:
             other_fields_str = match.group(1).strip()
-            # Get the base spec
             base_spec = format_dependency(name, dep_spec)
-            # Extract the spec part (after "name = { ")
             spec_part = base_spec.split(" = { ", 1)[1].rstrip("}")
 
-            # Filter out duplicate keys from other_fields
-            # Extract keys already in spec_part (e.g., "version", "default-features", "features")
             existing_keys: set[str] = set()
             for part in spec_part.split(","):
                 part = part.strip()
@@ -108,7 +99,6 @@ def replace_workspace_deps_in_toml(toml_path: Path, workspace_deps: dict[str, ob
                     key = part.split("=")[0].strip()
                     existing_keys.add(key)
 
-            # Filter other_fields to remove duplicates
             filtered_fields: list[str] = []
             for field in other_fields_str.split(","):
                 field = field.strip()
@@ -116,10 +106,9 @@ def replace_workspace_deps_in_toml(toml_path: Path, workspace_deps: dict[str, ob
                     key = field.split("=")[0].strip()
                     if key not in existing_keys:
                         filtered_fields.append(field)
-                elif field:  # Handle multiline fields like closing bracket
+                elif field:
                     filtered_fields.append(field)
 
-            # Build final spec
             if filtered_fields:
                 return f"{name} = {{ {spec_part}, {', '.join(filtered_fields)} }}"
             else:
@@ -135,7 +124,6 @@ def replace_workspace_deps_in_toml(toml_path: Path, workspace_deps: dict[str, ob
 def generate_vendor_cargo_toml(repo_root: Path, workspace_deps: dict[str, object], core_version: str) -> None:
     """Generate vendor/Cargo.toml with workspace setup."""
 
-    # Format all dependencies
     deps_lines: list[str] = []
     for name, dep_spec in sorted(workspace_deps.items()):
         deps_lines.append(format_dependency(name, dep_spec))
@@ -172,7 +160,6 @@ def main() -> None:
 
     print("=== Vendoring kreuzberg core crate ===")
 
-    # Read workspace dependencies and version
     workspace_deps: dict[str, object] = get_workspace_deps(repo_root)
     core_version: str = get_workspace_version(repo_root)
 
@@ -181,14 +168,12 @@ def main() -> None:
 
     vendor_base: Path = repo_root / "packages" / "ruby" / "vendor"
 
-    # Remove existing vendor directory completely for full cleanup
     if vendor_base.exists():
         shutil.rmtree(vendor_base)
         print("Removed entire vendor directory")
 
     vendor_base.mkdir(parents=True, exist_ok=True)
 
-    # Copy core crates
     crates_to_copy: list[tuple[str, str]] = [
         ("crates/kreuzberg", "kreuzberg"),
         ("crates/kreuzberg-ffi", "kreuzberg-ffi"),
@@ -203,7 +188,6 @@ def main() -> None:
             shutil.copytree(src, dest)
             print(f"Copied {dest_name}")
 
-    # Clean up build artifacts
     artifact_dirs: list[str] = [".fastembed_cache", "target"]
     temp_patterns: list[str] = ["*.swp", "*.bak", "*.tmp", "*~"]
     crate_names: list[str] = ["kreuzberg", "kreuzberg-ffi", "kreuzberg-tesseract", "rb-sys"]
@@ -211,24 +195,20 @@ def main() -> None:
     for crate_dir in crate_names:
         crate_path: Path = vendor_base / crate_dir
         if crate_path.exists():
-            # Remove common build artifacts
             for artifact_dir in artifact_dirs:
                 artifact: Path = crate_path / artifact_dir
                 if artifact.exists():
                     shutil.rmtree(artifact)
 
-            # Remove temporary files
             for pattern in temp_patterns:
                 for f in crate_path.rglob(pattern):
                     f.unlink()
 
     print("Cleaned build artifacts")
 
-    # Replace workspace dependencies in vendored crates
     for crate_dir in ["kreuzberg", "kreuzberg-ffi", "kreuzberg-tesseract"]:
         crate_toml = vendor_base / crate_dir / "Cargo.toml"
         if crate_toml.exists():
-            # First, replace workspace.package references
             with open(crate_toml, "r") as f:
                 content = f.read()
 
@@ -241,17 +221,14 @@ def main() -> None:
             with open(crate_toml, "w") as f:
                 f.write(content)
 
-            # Then replace workspace dependencies
             replace_workspace_deps_in_toml(crate_toml, workspace_deps)
             print(f"Updated {crate_dir}/Cargo.toml")
 
-    # Handle kreuzberg-tesseract path reference in kreuzberg
     kreuzberg_toml = vendor_base / "kreuzberg" / "Cargo.toml"
     if kreuzberg_toml.exists():
         with open(kreuzberg_toml, "r") as f:
             content = f.read()
 
-        # Replace kreuzberg-tesseract version with path reference
         content = re.sub(
             r'kreuzberg-tesseract = \{ version = "[^"]*", optional = true \}',
             'kreuzberg-tesseract = { path = "../kreuzberg-tesseract", optional = true }',
@@ -261,7 +238,6 @@ def main() -> None:
         with open(kreuzberg_toml, "w") as f:
             f.write(content)
 
-    # Generate vendor/Cargo.toml
     generate_vendor_cargo_toml(repo_root, workspace_deps, core_version)
     print("Generated vendor/Cargo.toml")
 

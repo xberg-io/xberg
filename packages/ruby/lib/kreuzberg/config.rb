@@ -4,11 +4,7 @@ require 'json'
 
 module Kreuzberg
   module Config
-    # OCR configuration
-    #
     # @example
-    #   ocr = OCR.new(backend: "tesseract", language: "eng")
-    #
     class OCR
       attr_reader :backend, :language, :tesseract_config
 
@@ -348,7 +344,6 @@ module Kreuzberg
         @binarization_method = binarization_method.to_s
         @invert_colors = invert_colors ? true : false
 
-        # Validate binarization method via FFI
         result = Kreuzberg._validate_binarization_method_native(@binarization_method)
         raise ArgumentError, "Invalid binarization_method: #{@binarization_method}" if result.zero?
       end
@@ -384,7 +379,6 @@ module Kreuzberg
         @mode = mode.to_s
         @preserve_important_words = preserve_important_words ? true : false
 
-        # Validate token reduction level via FFI
         result = Kreuzberg._validate_token_reduction_level_native(@mode)
         raise ArgumentError, "Invalid token reduction mode: #{@mode}" if result.zero?
       end
@@ -663,7 +657,6 @@ module Kreuzberg
       #
       def self.from_file(path)
         hash = Kreuzberg._config_from_file_native(path)
-        # Convert string keys to symbols for keyword arguments
         new(**hash.transform_keys(&:to_sym))
       end
 
@@ -684,7 +677,6 @@ module Kreuzberg
         hash = Kreuzberg._config_discover_native
         return nil if hash.nil?
 
-        # Convert string keys to symbols for keyword arguments
         new(**hash.transform_keys(&:to_sym))
       end
 
@@ -797,7 +789,6 @@ module Kreuzberg
         other_config = other.is_a?(Extraction) ? other : Extraction.new(**other)
         merged_json = Kreuzberg._config_merge_native(JSON.generate(to_h), JSON.generate(other_config.to_h))
         merged_hash = JSON.parse(merged_json)
-        # Filter to only known keywords to avoid unknown keyword errors
         known_keys = %i[
           use_cache enable_quality_processing force_ocr ocr chunking
           language_detection pdf_options image_extraction image_preprocessing
@@ -834,7 +825,6 @@ module Kreuzberg
       def normalize_config(value, klass)
         return nil if value.nil?
         return value if value.is_a?(klass)
-        # Convert string keys to symbols for keyword arguments
         return klass.new(**value.transform_keys(&:to_sym)) if value.is_a?(Hash)
 
         raise ArgumentError, "Expected #{klass}, Hash, or nil, got #{value.class}"

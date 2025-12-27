@@ -186,7 +186,6 @@ class ExternalValidator implements ValidatorProtocol {
 	async validate(_result: ExtractionResult): Promise<void> {
 		try {
 			console.log(`[ExternalValidator] Calling validation API: ${this.apiUrl}`);
-			// Note: _apiKey would be used for authentication headers in a real implementation
 			void this._apiKey;
 
 			console.log("[ExternalValidator] ✓ External validation passed");

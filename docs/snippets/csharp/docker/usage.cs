@@ -79,13 +79,12 @@ class DockerKreuzbergClient
     }
 }
 
-// Usage
 var dockerClient = new DockerKreuzbergClient();
 
 try
 {
     await dockerClient.StartContainerAsync();
-    await Task.Delay(2000); // Wait for container to be ready
+    await Task.Delay(2000); 
 
     var content = await dockerClient.ExtractFileAsync("document.pdf");
     Console.WriteLine($"Extracted content:\n{content}");

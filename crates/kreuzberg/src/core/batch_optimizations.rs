@@ -164,12 +164,10 @@ impl BatchProcessor {
     /// Creates the pool lazily on first access.
     /// Useful for custom pooling implementations that need direct pool access.
     pub fn string_pool(&self) -> Arc<StringBufferPool> {
-        // Fast path: already initialized
         if self.string_pool_initialized.load(Ordering::Acquire) {
             return Arc::clone(self.string_pool.lock().as_ref().unwrap());
         }
 
-        // Create pool if not already created
         let mut pool_opt = self.string_pool.lock();
         if pool_opt.is_none() {
             let pool = Arc::new(create_string_buffer_pool(
@@ -177,7 +175,6 @@ impl BatchProcessor {
                 self.config.string_buffer_capacity,
             ));
             *pool_opt = Some(pool);
-            // Mark as initialized after creation
             self.string_pool_initialized.store(true, Ordering::Release);
         }
 
@@ -189,12 +186,10 @@ impl BatchProcessor {
     /// Creates the pool lazily on first access.
     /// Useful for custom pooling implementations that need direct pool access.
     pub fn byte_pool(&self) -> Arc<ByteBufferPool> {
-        // Fast path: already initialized
         if self.byte_pool_initialized.load(Ordering::Acquire) {
             return Arc::clone(self.byte_pool.lock().as_ref().unwrap());
         }
 
-        // Create pool if not already created
         let mut pool_opt = self.byte_pool.lock();
         if pool_opt.is_none() {
             let pool = Arc::new(create_byte_buffer_pool(
@@ -202,7 +197,6 @@ impl BatchProcessor {
                 self.config.byte_buffer_capacity,
             ));
             *pool_opt = Some(pool);
-            // Mark as initialized after creation
             self.byte_pool_initialized.store(true, Ordering::Release);
         }
 
@@ -339,7 +333,6 @@ mod tests {
             s.push_str("test");
         }
 
-        // After returning to pool, should be cleared
         {
             let s = pool.acquire().unwrap();
             assert_eq!(s.len(), 0);
@@ -356,7 +349,6 @@ mod tests {
             buf.extend_from_slice(b"test");
         }
 
-        // After returning to pool, should be cleared
         {
             let buf = pool.acquire().unwrap();
             assert_eq!(buf.len(), 0);

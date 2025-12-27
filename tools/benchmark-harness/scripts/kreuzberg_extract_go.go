@@ -83,7 +83,6 @@ func extractSync(path string) (*payload, error) {
 	start := time.Now()
 	debug("ExtractFileSync called with path: %s", path)
 
-	// Resolve to absolute path to handle working directory issues
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		debug("filepath.Abs failed for %s: %v", path, err)
@@ -114,7 +113,6 @@ func extractBatch(paths []string) (any, error) {
 	start := time.Now()
 	debug("BatchExtractFilesSync called with %d files", len(paths))
 
-	// Resolve all paths to absolute paths
 	absPaths := make([]string, len(paths))
 	for i, path := range paths {
 		absPath, err := filepath.Abs(path)

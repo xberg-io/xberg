@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use function Kreuzberg\extract_file;
 use function Kreuzberg\detect_mime_type_from_path;
 
-// Process different file formats
 $formats = [
     'PDF' => 'document.pdf',
     'Word' => 'document.docx',
@@ -53,7 +52,6 @@ foreach ($formats as $type => $file) {
     echo "\n";
 }
 
-// Batch process mixed formats
 $mixedFiles = glob('documents/*.*');
 $byFormat = [];
 
@@ -86,7 +84,6 @@ foreach ($byFormat as $ext => $files) {
     echo "  Total tables: $totalTables\n\n";
 }
 
-// Format-specific configuration
 $formatConfigs = [
     'pdf' => new ExtractionConfig(
         extractTables: true,
@@ -101,7 +98,7 @@ $formatConfigs = [
         preserveFormatting: true
     ),
     'xlsx' => new ExtractionConfig(
-        extractTables: true  // Excel files are primarily tables
+        extractTables: true  
     ),
     'png' => new ExtractionConfig(
         ocr: new \Kreuzberg\Config\OcrConfig(
@@ -111,7 +108,6 @@ $formatConfigs = [
     ),
 ];
 
-// Process with format-specific config
 foreach ($mixedFiles as $file) {
     $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
 
@@ -126,7 +122,6 @@ foreach ($mixedFiles as $file) {
     echo "Processed " . basename($file) . " with $ext config\n";
 }
 
-// Convert between formats
 function convertToMarkdown(string $inputFile): string
 {
     $config = new ExtractionConfig(
@@ -138,18 +133,14 @@ function convertToMarkdown(string $inputFile): string
     $kreuzberg = new Kreuzberg($config);
     $result = $kreuzberg->extractFile($inputFile);
 
-    // Add title from metadata
     $markdown = "# " . ($result->metadata->title ?? basename($inputFile)) . "\n\n";
 
-    // Add metadata
     if (isset($result->metadata->authors)) {
         $markdown .= "_Authors: " . implode(', ', $result->metadata->authors) . "_\n\n";
     }
 
-    // Add content
     $markdown .= $result->content . "\n\n";
 
-    // Add tables
     foreach ($result->tables as $index => $table) {
         $markdown .= "## Table " . ($index + 1) . "\n\n";
         $markdown .= $table->markdown . "\n\n";
@@ -158,7 +149,6 @@ function convertToMarkdown(string $inputFile): string
     return $markdown;
 }
 
-// Convert all documents to Markdown
 echo "\nConverting to Markdown:\n";
 echo str_repeat('=', 60) . "\n";
 
@@ -174,12 +164,10 @@ foreach (['document.pdf', 'document.docx'] as $file) {
     echo "Converted: $file -> $outputFile\n";
 }
 
-// Extract from archives (if supported)
 function extractFromArchive(string $archiveFile): array
 {
     $result = extract_file($archiveFile);
 
-    // The result content will list archive contents
     return [
         'archive' => basename($archiveFile),
         'listing' => $result->content,
@@ -187,7 +175,6 @@ function extractFromArchive(string $archiveFile): array
     ];
 }
 
-// Unified interface for all formats
 class UniversalExtractor
 {
     private Kreuzberg $kreuzberg;
@@ -197,7 +184,6 @@ class UniversalExtractor
     {
         $this->kreuzberg = new Kreuzberg();
 
-        // Register format handlers
         $this->formatHandlers = [
             'application/pdf' => [$this, 'handlePDF'],
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => [$this, 'handleDOCX'],
@@ -251,7 +237,7 @@ class UniversalExtractor
         return [
             'type' => 'Excel Spreadsheet',
             'content' => $result->content,
-            'sheets' => count($result->tables),  // Tables represent sheets
+            'sheets' => count($result->tables),  
         ];
     }
 

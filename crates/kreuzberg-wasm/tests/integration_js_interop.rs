@@ -16,16 +16,11 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
-// Test data
 const PDF_DATA: &[u8] = b"%PDF-1.4\n%test";
 const TEXT_DATA: &[u8] = b"Hello, World!";
 const BINARY_DATA: &[u8] = b"\x00\x01\x02\x03\x04\x05";
 const LARGE_DATA: &[u8] = b"Lorem ipsum dolor sit amet, consectetur adipiscing elit. \
                                 Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.";
-
-// ============================================================================
-// Uint8Array Conversion Tests
-// ============================================================================
 
 /// Test Uint8Array view creation from bytes
 #[wasm_bindgen_test]
@@ -109,10 +104,6 @@ fn test_uint8array_clone_preserves_data() {
     assert_eq!(vec_original, vec_clone, "Clone should convert to same data");
 }
 
-// ============================================================================
-// JsValue Result Conversion Tests
-// ============================================================================
-
 /// Test JsValue result is object type
 #[wasm_bindgen_test]
 fn test_result_jsvalue_is_object() {
@@ -160,10 +151,6 @@ fn test_promise_jsvalue_is_valid() {
     assert!(!promise.is_undefined(), "Promise should not be undefined");
 }
 
-// ============================================================================
-// Config Parsing and Conversion Tests
-// ============================================================================
-
 /// Test None config is converted properly
 #[wasm_bindgen_test]
 fn test_config_none_parsing() {
@@ -173,7 +160,6 @@ fn test_config_none_parsing() {
     let data2 = unsafe { Uint8Array::view(PDF_DATA) };
     let result2 = extract_bytes_sync_wasm(data2, "application/pdf".to_string(), None);
 
-    // Both should have same outcome
     assert_eq!(
         result1.is_ok(),
         result2.is_ok(),
@@ -202,17 +188,12 @@ fn test_config_some_vs_none_handling() {
     let data2 = unsafe { Uint8Array::view(PDF_DATA) };
     let result_none = extract_bytes_sync_wasm(data2, "application/pdf".to_string(), None);
 
-    // Results should be consistent
     assert_eq!(
         result_some.is_ok(),
         result_none.is_ok(),
         "Some(NULL) and None should behave similarly"
     );
 }
-
-// ============================================================================
-// Error Type Conversion Tests
-// ============================================================================
 
 /// Test error conversion to JsValue
 #[wasm_bindgen_test]
@@ -250,10 +231,6 @@ fn test_empty_data_error_conversion() {
     assert!(result.is_err(), "Empty data should produce error");
 }
 
-// ============================================================================
-// Type Integration Tests
-// ============================================================================
-
 /// Test multiple simultaneous extractions with different types
 #[wasm_bindgen_test]
 fn test_simultaneous_different_types() {
@@ -264,8 +241,6 @@ fn test_simultaneous_different_types() {
     let _ = extract_bytes_sync_wasm(pdf, "application/pdf".to_string(), None);
     let _ = extract_bytes_sync_wasm(text, "text/plain".to_string(), None);
     let _ = extract_bytes_sync_wasm(binary, "application/octet-stream".to_string(), None);
-
-    // No panics expected
 }
 
 /// Test batch with heterogeneous data
@@ -297,13 +272,8 @@ fn test_batch_result_array_construction() {
     if let Ok(js_value) = result {
         let arr = js_sys::Array::from(&js_value);
         assert!(arr.is_array(), "Result should be convertible to array");
-        // u32 length is always >= 0, just verify it's an array
     }
 }
-
-// ============================================================================
-// Memory and Lifetime Tests
-// ============================================================================
 
 /// Test Uint8Array view doesn't corrupt source data
 #[wasm_bindgen_test]
@@ -313,7 +283,6 @@ fn test_uint8array_view_doesnt_modify_source() {
     let data_view = unsafe { Uint8Array::view(data_original) };
     let _ = data_view.to_vec();
 
-    // Check original is unchanged
     assert_eq!(data_original, PDF_DATA, "Source data should be unchanged");
 }
 
@@ -341,10 +310,6 @@ fn test_uint8array_different_slices() {
     assert_eq!(vec1[0..3], slice1[0..3], "Slice content should be correct");
 }
 
-// ============================================================================
-// Promise and Async Tests
-// ============================================================================
-
 /// Test async extraction creates new Promise each time
 #[wasm_bindgen_test]
 fn test_async_creates_new_promise_each_call() {
@@ -354,7 +319,6 @@ fn test_async_creates_new_promise_each_call() {
     let data2 = unsafe { Uint8Array::view(TEXT_DATA) };
     let promise2 = extract_bytes_wasm(data2, "text/plain".to_string(), None);
 
-    // Both should be valid Promise objects
     assert!(!promise1.is_null());
     assert!(!promise2.is_null());
 }
@@ -375,10 +339,6 @@ fn test_async_promise_empty_batch() {
 
     assert!(!promise.is_null(), "Even empty batch should return Promise");
 }
-
-// ============================================================================
-// Edge Case Tests
-// ============================================================================
 
 /// Test single-byte Uint8Array
 #[wasm_bindgen_test]
@@ -454,7 +414,6 @@ fn test_config_null_vs_undefined() {
     let data2 = unsafe { Uint8Array::view(PDF_DATA) };
     let result_undef = extract_bytes_sync_wasm(data2, "application/pdf".to_string(), Some(JsValue::undefined()));
 
-    // Both should handle gracefully
     assert!(result_null.is_ok() || result_null.is_err(), "NULL config should parse");
     assert!(
         result_undef.is_ok() || result_undef.is_err(),

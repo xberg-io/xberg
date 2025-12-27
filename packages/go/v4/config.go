@@ -36,338 +36,208 @@ func FloatPtr(f float64) *float64 {
 // before crossing the FFI boundary. Use pointer fields to omit values and rely on Kreuzberg
 // defaults whenever possible.
 type ExtractionConfig struct {
-	// UseCache enables caching of extraction results for identical inputs.
-	UseCache *bool `json:"use_cache,omitempty"`
-	// EnableQualityProcessing applies quality improvements like deskewing and denoising.
-	EnableQualityProcessing *bool `json:"enable_quality_processing,omitempty"`
-	// OCR configures optical character recognition settings.
-	OCR *OCRConfig `json:"ocr,omitempty"`
-	// ForceOCR forces OCR processing even for text-based documents.
-	ForceOCR *bool `json:"force_ocr,omitempty"`
-	// Chunking configures text chunking for RAG/retrieval workflows.
-	Chunking *ChunkingConfig `json:"chunking,omitempty"`
-	// Images configures image extraction from documents.
-	Images *ImageExtractionConfig `json:"images,omitempty"`
-	// PdfOptions contains PDF-specific extraction settings.
-	PdfOptions *PdfConfig `json:"pdf_options,omitempty"`
-	// TokenReduction configures token pruning before embeddings.
-	TokenReduction *TokenReductionConfig `json:"token_reduction,omitempty"`
-	// LanguageDetection enables automatic language detection.
-	LanguageDetection *LanguageDetectionConfig `json:"language_detection,omitempty"`
-	// Keywords configures keyword extraction.
-	Keywords *KeywordConfig `json:"keywords,omitempty"`
-	// Postprocessor configures post-processing steps.
-	Postprocessor *PostProcessorConfig `json:"postprocessor,omitempty"`
-	// HTMLOptions configures HTML-to-Markdown conversion options.
-	HTMLOptions *HTMLConversionOptions `json:"html_options,omitempty"`
-	// Pages configures page-level extraction and tracking.
-	Pages *PageConfig `json:"pages,omitempty"`
-	// MaxConcurrentExtractions limits the number of concurrent extraction operations.
-	MaxConcurrentExtractions *int `json:"max_concurrent_extractions,omitempty"`
+	UseCache                 *bool                    `json:"use_cache,omitempty"`
+	EnableQualityProcessing  *bool                    `json:"enable_quality_processing,omitempty"`
+	OCR                      *OCRConfig               `json:"ocr,omitempty"`
+	ForceOCR                 *bool                    `json:"force_ocr,omitempty"`
+	Chunking                 *ChunkingConfig          `json:"chunking,omitempty"`
+	Images                   *ImageExtractionConfig   `json:"images,omitempty"`
+	PdfOptions               *PdfConfig               `json:"pdf_options,omitempty"`
+	TokenReduction           *TokenReductionConfig    `json:"token_reduction,omitempty"`
+	LanguageDetection        *LanguageDetectionConfig `json:"language_detection,omitempty"`
+	Keywords                 *KeywordConfig           `json:"keywords,omitempty"`
+	Postprocessor            *PostProcessorConfig     `json:"postprocessor,omitempty"`
+	HTMLOptions              *HTMLConversionOptions   `json:"html_options,omitempty"`
+	Pages                    *PageConfig              `json:"pages,omitempty"`
+	MaxConcurrentExtractions *int                     `json:"max_concurrent_extractions,omitempty"`
 }
 
 // OCRConfig selects and configures OCR backends.
 type OCRConfig struct {
-	// Backend selects the OCR backend (e.g., "tesseract", "easyocr").
-	Backend string `json:"backend,omitempty"`
-	// Language specifies the language for OCR (e.g., "eng", "deu").
-	Language *string `json:"language,omitempty"`
-	// Tesseract contains Tesseract-specific configuration options.
+	Backend   string           `json:"backend,omitempty"`
+	Language  *string          `json:"language,omitempty"`
 	Tesseract *TesseractConfig `json:"tesseract_config,omitempty"`
 }
 
 // TesseractConfig exposes fine-grained controls for the Tesseract backend.
 type TesseractConfig struct {
-	// Language is the ISO 639 language code for OCR (e.g., "eng", "deu").
-	Language string `json:"language,omitempty"`
-	// PSM is the Page Segmentation Mode (0-13); see Tesseract documentation.
-	PSM *int `json:"psm,omitempty"`
-	// OutputFormat specifies the output format (e.g., "text", "hocr").
-	OutputFormat string `json:"output_format,omitempty"`
-	// OEM is the OCR Engine Mode (0-3); see Tesseract documentation.
-	OEM *int `json:"oem,omitempty"`
-	// MinConfidence is the minimum confidence threshold (0.0-1.0) for accepting text.
-	MinConfidence *float64 `json:"min_confidence,omitempty"`
-	// Preprocessing configures image preprocessing (DPI, rotation, etc.).
-	Preprocessing *ImagePreprocessingConfig `json:"preprocessing,omitempty"`
-	// EnableTableDetection enables automatic table detection during OCR.
-	EnableTableDetection *bool `json:"enable_table_detection,omitempty"`
-	// TableMinConfidence is the minimum confidence for table detection (0.0-1.0).
-	TableMinConfidence *float64 `json:"table_min_confidence,omitempty"`
-	// TableColumnThreshold is the pixel threshold for detecting table columns.
-	TableColumnThreshold *int `json:"table_column_threshold,omitempty"`
-	// TableRowThresholdRatio is the ratio threshold for detecting table rows.
-	TableRowThresholdRatio *float64 `json:"table_row_threshold_ratio,omitempty"`
-	// UseCache enables Tesseract result caching.
-	UseCache *bool `json:"use_cache,omitempty"`
-	// ClassifyUsePreAdaptedTemplates uses pre-adapted classifier templates.
-	ClassifyUsePreAdaptedTemplates *bool `json:"classify_use_pre_adapted_templates,omitempty"`
-	// LanguageModelNgramOn enables language model n-gram processing.
-	LanguageModelNgramOn *bool `json:"language_model_ngram_on,omitempty"`
-	// TesseditDontBlkrejGoodWds prevents rejection of good words in block mode.
-	TesseditDontBlkrejGoodWds *bool `json:"tessedit_dont_blkrej_good_wds,omitempty"`
-	// TesseditDontRowrejGoodWds prevents rejection of good words in row mode.
-	TesseditDontRowrejGoodWds *bool `json:"tessedit_dont_rowrej_good_wds,omitempty"`
-	// TesseditEnableDictCorrection enables dictionary-based word correction.
-	TesseditEnableDictCorrection *bool `json:"tessedit_enable_dict_correction,omitempty"`
-	// TesseditCharWhitelist specifies characters to allow (empty = all allowed).
-	TesseditCharWhitelist string `json:"tessedit_char_whitelist,omitempty"`
-	// TesseditCharBlacklist specifies characters to reject.
-	TesseditCharBlacklist string `json:"tessedit_char_blacklist,omitempty"`
-	// TesseditUsePrimaryParamsModel uses the primary model parameters.
-	TesseditUsePrimaryParamsModel *bool `json:"tessedit_use_primary_params_model,omitempty"`
-	// TextordSpaceSizeIsVariable allows variable spacing in text ordering.
-	TextordSpaceSizeIsVariable *bool `json:"textord_space_size_is_variable,omitempty"`
-	// ThresholdingMethod selects the image thresholding method.
-	ThresholdingMethod *bool `json:"thresholding_method,omitempty"`
+	Language                       string                    `json:"language,omitempty"`
+	PSM                            *int                      `json:"psm,omitempty"`
+	OutputFormat                   string                    `json:"output_format,omitempty"`
+	OEM                            *int                      `json:"oem,omitempty"`
+	MinConfidence                  *float64                  `json:"min_confidence,omitempty"`
+	Preprocessing                  *ImagePreprocessingConfig `json:"preprocessing,omitempty"`
+	EnableTableDetection           *bool                     `json:"enable_table_detection,omitempty"`
+	TableMinConfidence             *float64                  `json:"table_min_confidence,omitempty"`
+	TableColumnThreshold           *int                      `json:"table_column_threshold,omitempty"`
+	TableRowThresholdRatio         *float64                  `json:"table_row_threshold_ratio,omitempty"`
+	UseCache                       *bool                     `json:"use_cache,omitempty"`
+	ClassifyUsePreAdaptedTemplates *bool                     `json:"classify_use_pre_adapted_templates,omitempty"`
+	LanguageModelNgramOn           *bool                     `json:"language_model_ngram_on,omitempty"`
+	TesseditDontBlkrejGoodWds      *bool                     `json:"tessedit_dont_blkrej_good_wds,omitempty"`
+	TesseditDontRowrejGoodWds      *bool                     `json:"tessedit_dont_rowrej_good_wds,omitempty"`
+	TesseditEnableDictCorrection   *bool                     `json:"tessedit_enable_dict_correction,omitempty"`
+	TesseditCharWhitelist          string                    `json:"tessedit_char_whitelist,omitempty"`
+	TesseditCharBlacklist          string                    `json:"tessedit_char_blacklist,omitempty"`
+	TesseditUsePrimaryParamsModel  *bool                     `json:"tessedit_use_primary_params_model,omitempty"`
+	TextordSpaceSizeIsVariable     *bool                     `json:"textord_space_size_is_variable,omitempty"`
+	ThresholdingMethod             *bool                     `json:"thresholding_method,omitempty"`
 }
 
 // ImagePreprocessingConfig tunes DPI normalization and related steps for OCR.
 type ImagePreprocessingConfig struct {
-	// TargetDPI sets the target DPI for image normalization (typically 300).
-	TargetDPI *int `json:"target_dpi,omitempty"`
-	// AutoRotate automatically rotates images to correct orientation.
-	AutoRotate *bool `json:"auto_rotate,omitempty"`
-	// Deskew applies skew correction to images.
-	Deskew *bool `json:"deskew,omitempty"`
-	// Denoise applies noise reduction to images.
-	Denoise *bool `json:"denoise,omitempty"`
-	// ContrastEnhance enhances image contrast.
-	ContrastEnhance *bool `json:"contrast_enhance,omitempty"`
-	// BinarizationMode selects the image binarization method.
+	TargetDPI        *int   `json:"target_dpi,omitempty"`
+	AutoRotate       *bool  `json:"auto_rotate,omitempty"`
+	Deskew           *bool  `json:"deskew,omitempty"`
+	Denoise          *bool  `json:"denoise,omitempty"`
+	ContrastEnhance  *bool  `json:"contrast_enhance,omitempty"`
 	BinarizationMode string `json:"binarization_method,omitempty"`
-	// InvertColors inverts black and white in images.
-	InvertColors *bool `json:"invert_colors,omitempty"`
+	InvertColors     *bool  `json:"invert_colors,omitempty"`
 }
 
 // ChunkingConfig configures text chunking for downstream RAG/Retrieval workloads.
 type ChunkingConfig struct {
-	// MaxChars is the maximum number of characters per chunk.
-	MaxChars *int `json:"max_chars,omitempty"`
-	// MaxOverlap is the maximum overlap between chunks in characters.
-	MaxOverlap *int `json:"max_overlap,omitempty"`
-	// ChunkSize is the target chunk size in characters.
-	ChunkSize *int `json:"chunk_size,omitempty"`
-	// ChunkOverlap is the number of overlapping characters between chunks.
-	ChunkOverlap *int `json:"chunk_overlap,omitempty"`
-	// Preset selects a predefined chunking strategy (e.g., "default", "semantic").
-	Preset *string `json:"preset,omitempty"`
-	// Embedding configures embedding generation for chunks.
-	Embedding *EmbeddingConfig `json:"embedding,omitempty"`
-	// Enabled enables or disables chunking.
-	Enabled *bool `json:"enabled,omitempty"`
+	MaxChars     *int             `json:"max_chars,omitempty"`
+	MaxOverlap   *int             `json:"max_overlap,omitempty"`
+	ChunkSize    *int             `json:"chunk_size,omitempty"`
+	ChunkOverlap *int             `json:"chunk_overlap,omitempty"`
+	Preset       *string          `json:"preset,omitempty"`
+	Embedding    *EmbeddingConfig `json:"embedding,omitempty"`
+	Enabled      *bool            `json:"enabled,omitempty"`
 }
 
 // ImageExtractionConfig controls inline image extraction from PDFs/Office docs.
 type ImageExtractionConfig struct {
-	// ExtractImages enables image extraction from documents.
-	ExtractImages *bool `json:"extract_images,omitempty"`
-	// TargetDPI sets the target DPI for extracted images.
-	TargetDPI *int `json:"target_dpi,omitempty"`
-	// MaxImageDimension limits the maximum width or height of extracted images.
-	MaxImageDimension *int `json:"max_image_dimension,omitempty"`
-	// AutoAdjustDPI automatically adjusts DPI based on image content.
-	AutoAdjustDPI *bool `json:"auto_adjust_dpi,omitempty"`
-	// MinDPI is the minimum DPI for extracted images.
-	MinDPI *int `json:"min_dpi,omitempty"`
-	// MaxDPI is the maximum DPI for extracted images.
-	MaxDPI *int `json:"max_dpi,omitempty"`
+	ExtractImages     *bool `json:"extract_images,omitempty"`
+	TargetDPI         *int  `json:"target_dpi,omitempty"`
+	MaxImageDimension *int  `json:"max_image_dimension,omitempty"`
+	AutoAdjustDPI     *bool `json:"auto_adjust_dpi,omitempty"`
+	MinDPI            *int  `json:"min_dpi,omitempty"`
+	MaxDPI            *int  `json:"max_dpi,omitempty"`
 }
 
 // FontConfig exposes font provider configuration for PDF extraction.
 type FontConfig struct {
-	// Enabled enables the custom font provider.
-	Enabled bool `json:"enabled"`
-	// CustomFontDirs provides additional font directories beyond system fonts.
+	Enabled        bool     `json:"enabled"`
 	CustomFontDirs []string `json:"custom_font_dirs,omitempty"`
 }
 
 // PdfConfig exposes PDF-specific options.
 type PdfConfig struct {
-	// ExtractImages enables image extraction from PDFs.
-	ExtractImages *bool `json:"extract_images,omitempty"`
-	// Passwords provides password(s) for encrypted PDFs (tried in order).
-	Passwords []string `json:"passwords,omitempty"`
-	// ExtractMetadata enables extraction of PDF metadata.
-	ExtractMetadata *bool `json:"extract_metadata,omitempty"`
-	// FontConfig configures the font provider for PDF extraction.
-	FontConfig *FontConfig `json:"font_config,omitempty"`
+	ExtractImages   *bool       `json:"extract_images,omitempty"`
+	Passwords       []string    `json:"passwords,omitempty"`
+	ExtractMetadata *bool       `json:"extract_metadata,omitempty"`
+	FontConfig      *FontConfig `json:"font_config,omitempty"`
 }
 
 // TokenReductionConfig governs token pruning before embeddings.
 type TokenReductionConfig struct {
-	// Mode selects the token reduction strategy (e.g., "aggressive", "conservative").
-	Mode string `json:"mode,omitempty"`
-	// PreserveImportantWords preserves semantically important words during reduction.
-	PreserveImportantWords *bool `json:"preserve_important_words,omitempty"`
+	Mode                   string `json:"mode,omitempty"`
+	PreserveImportantWords *bool  `json:"preserve_important_words,omitempty"`
 }
 
 // LanguageDetectionConfig enables automatic language detection.
 type LanguageDetectionConfig struct {
-	// Enabled enables automatic language detection.
-	Enabled *bool `json:"enabled,omitempty"`
-	// MinConfidence is the minimum confidence threshold (0.0-1.0) for language detection.
-	MinConfidence *float64 `json:"min_confidence,omitempty"`
-	// DetectMultiple enables detection of multiple languages in the document.
-	DetectMultiple *bool `json:"detect_multiple,omitempty"`
+	Enabled        *bool    `json:"enabled,omitempty"`
+	MinConfidence  *float64 `json:"min_confidence,omitempty"`
+	DetectMultiple *bool    `json:"detect_multiple,omitempty"`
 }
 
 // PostProcessorConfig determines which post processors run.
 type PostProcessorConfig struct {
-	// Enabled enables post-processing.
-	Enabled *bool `json:"enabled,omitempty"`
-	// EnabledProcessors lists specific processors to enable (overrides defaults).
-	EnabledProcessors []string `json:"enabled_processors,omitempty"`
-	// DisabledProcessors lists specific processors to disable.
+	Enabled            *bool    `json:"enabled,omitempty"`
+	EnabledProcessors  []string `json:"enabled_processors,omitempty"`
 	DisabledProcessors []string `json:"disabled_processors,omitempty"`
 }
 
 // EmbeddingModelType configures embedding model selection.
 type EmbeddingModelType struct {
-	// Type selects the embedding model type (e.g., "sentence-transformers", "openai").
-	Type string `json:"type"`
-	// Name is the name of the embedding model.
-	Name string `json:"name,omitempty"`
-	// Model is the model identifier or path.
-	Model string `json:"model,omitempty"`
-	// ModelID is an alternative model identifier.
-	ModelID string `json:"model_id,omitempty"`
-	// Dimensions is the embedding vector dimensionality.
-	Dimensions *int `json:"dimensions,omitempty"`
+	Type       string `json:"type"`
+	Name       string `json:"name,omitempty"`
+	Model      string `json:"model,omitempty"`
+	ModelID    string `json:"model_id,omitempty"`
+	Dimensions *int   `json:"dimensions,omitempty"`
 }
 
 // EmbeddingConfig configures embedding generation for chunks.
 type EmbeddingConfig struct {
-	// Model specifies the embedding model to use.
-	Model *EmbeddingModelType `json:"model,omitempty"`
-	// Normalize normalizes embedding vectors to unit length.
-	Normalize *bool `json:"normalize,omitempty"`
-	// BatchSize is the batch size for embedding generation.
-	BatchSize *int `json:"batch_size,omitempty"`
-	// ShowDownloadProgress shows progress when downloading embedding models.
-	ShowDownloadProgress *bool `json:"show_download_progress,omitempty"`
-	// CacheDir is the directory for caching embedding models.
-	CacheDir *string `json:"cache_dir,omitempty"`
+	Model                *EmbeddingModelType `json:"model,omitempty"`
+	Normalize            *bool               `json:"normalize,omitempty"`
+	BatchSize            *int                `json:"batch_size,omitempty"`
+	ShowDownloadProgress *bool               `json:"show_download_progress,omitempty"`
+	CacheDir             *string             `json:"cache_dir,omitempty"`
 }
 
 // KeywordConfig configures keyword extraction.
 type KeywordConfig struct {
-	// Algorithm selects the keyword extraction algorithm (e.g., "yake", "rake").
-	Algorithm string `json:"algorithm,omitempty"`
-	// MaxKeywords limits the maximum number of keywords to extract.
-	MaxKeywords *int `json:"max_keywords,omitempty"`
-	// MinScore is the minimum score threshold for keyword candidates (0.0-1.0).
-	MinScore *float64 `json:"min_score,omitempty"`
-	// NgramRange specifies the [min, max] n-gram size for keyword extraction.
-	NgramRange *[2]int `json:"ngram_range,omitempty"`
-	// Language is the language for keyword extraction (e.g., "en", "de").
-	Language *string `json:"language,omitempty"`
-	// Yake contains YAKE-specific parameters.
-	Yake *YakeParams `json:"yake_params,omitempty"`
-	// Rake contains RAKE-specific parameters.
-	Rake *RakeParams `json:"rake_params,omitempty"`
+	Algorithm   string      `json:"algorithm,omitempty"`
+	MaxKeywords *int        `json:"max_keywords,omitempty"`
+	MinScore    *float64    `json:"min_score,omitempty"`
+	NgramRange  *[2]int     `json:"ngram_range,omitempty"`
+	Language    *string     `json:"language,omitempty"`
+	Yake        *YakeParams `json:"yake_params,omitempty"`
+	Rake        *RakeParams `json:"rake_params,omitempty"`
 }
 
 // YakeParams holds YAKE-specific tuning.
 type YakeParams struct {
-	// WindowSize is the context window size for YAKE extraction.
 	WindowSize *int `json:"window_size,omitempty"`
 }
 
 // RakeParams holds RAKE-specific tuning.
 type RakeParams struct {
-	// MinWordLength is the minimum word length for RAKE extraction.
-	MinWordLength *int `json:"min_word_length,omitempty"`
-	// MaxWordsPerPhrase is the maximum number of words per phrase.
+	MinWordLength     *int `json:"min_word_length,omitempty"`
 	MaxWordsPerPhrase *int `json:"max_words_per_phrase,omitempty"`
 }
 
 // HTMLPreprocessingOptions configures HTML cleaning.
 type HTMLPreprocessingOptions struct {
-	// Enabled enables HTML preprocessing.
-	Enabled *bool `json:"enabled,omitempty"`
-	// Preset selects a preprocessing strategy (e.g., "aggressive", "conservative").
-	Preset *string `json:"preset,omitempty"`
-	// RemoveNavigation removes navigation elements from HTML.
-	RemoveNavigation *bool `json:"remove_navigation,omitempty"`
-	// RemoveForms removes form elements from HTML.
-	RemoveForms *bool `json:"remove_forms,omitempty"`
+	Enabled          *bool   `json:"enabled,omitempty"`
+	Preset           *string `json:"preset,omitempty"`
+	RemoveNavigation *bool   `json:"remove_navigation,omitempty"`
+	RemoveForms      *bool   `json:"remove_forms,omitempty"`
 }
 
 // HTMLConversionOptions mirrors html_to_markdown_rs::ConversionOptions for HTML-to-Markdown conversion.
 type HTMLConversionOptions struct {
-	// HeadingStyle specifies Markdown heading style (e.g., "atx", "setext").
-	HeadingStyle *string `json:"heading_style,omitempty"`
-	// ListIndentType specifies list indentation style (e.g., "tab", "spaces").
-	ListIndentType *string `json:"list_indent_type,omitempty"`
-	// ListIndentWidth is the number of spaces per indentation level.
-	ListIndentWidth *int `json:"list_indent_width,omitempty"`
-	// Bullets specifies the bullet character (e.g., "*", "-", "+").
-	Bullets *string `json:"bullets,omitempty"`
-	// StrongEmSymbol specifies symbols for strong/emphasis (e.g., "*", "_").
-	StrongEmSymbol *string `json:"strong_em_symbol,omitempty"`
-	// EscapeAsterisks escapes asterisks in the output.
-	EscapeAsterisks *bool `json:"escape_asterisks,omitempty"`
-	// EscapeUnderscores escapes underscores in the output.
-	EscapeUnderscores *bool `json:"escape_underscores,omitempty"`
-	// EscapeMisc escapes miscellaneous special characters.
-	EscapeMisc *bool `json:"escape_misc,omitempty"`
-	// EscapeASCII escapes ASCII special characters.
-	EscapeASCII *bool `json:"escape_ascii,omitempty"`
-	// CodeLanguage specifies the language for code block syntax highlighting.
-	CodeLanguage *string `json:"code_language,omitempty"`
-	// Autolinks automatically links URLs.
-	Autolinks *bool `json:"autolinks,omitempty"`
-	// DefaultTitle uses a default title if none is provided.
-	DefaultTitle *bool `json:"default_title,omitempty"`
-	// BrInTables preserves <br> tags in tables.
-	BrInTables *bool `json:"br_in_tables,omitempty"`
-	// HocrSpatialTables uses spatial information for hOCR tables.
-	HocrSpatialTables *bool `json:"hocr_spatial_tables,omitempty"`
-	// HighlightStyle specifies code highlight style.
-	HighlightStyle *string `json:"highlight_style,omitempty"`
-	// ExtractMetadata extracts metadata from HTML.
-	ExtractMetadata *bool `json:"extract_metadata,omitempty"`
-	// WhitespaceMode specifies whitespace handling (e.g., "preserve", "collapse").
-	WhitespaceMode *string `json:"whitespace_mode,omitempty"`
-	// StripNewlines removes newlines from output.
-	StripNewlines *bool `json:"strip_newlines,omitempty"`
-	// Wrap enables text wrapping.
-	Wrap *bool `json:"wrap,omitempty"`
-	// WrapWidth specifies the maximum line width for wrapping.
-	WrapWidth *int `json:"wrap_width,omitempty"`
-	// ConvertAsInline treats content as inline elements.
-	ConvertAsInline *bool `json:"convert_as_inline,omitempty"`
-	// SubSymbol specifies the symbol for subscript text.
-	SubSymbol *string `json:"sub_symbol,omitempty"`
-	// SupSymbol specifies the symbol for superscript text.
-	SupSymbol *string `json:"sup_symbol,omitempty"`
-	// NewlineStyle specifies newline style (e.g., "unix", "windows").
-	NewlineStyle *string `json:"newline_style,omitempty"`
-	// CodeBlockStyle specifies code block formatting style.
-	CodeBlockStyle *string `json:"code_block_style,omitempty"`
-	// KeepInlineImagesIn lists elements to keep inline images in.
-	KeepInlineImagesIn []string `json:"keep_inline_images_in,omitempty"`
-	// Encoding specifies the character encoding.
-	Encoding *string `json:"encoding,omitempty"`
-	// Debug enables debug output.
-	Debug *bool `json:"debug,omitempty"`
-	// StripTags lists HTML tags to remove from output.
-	StripTags []string `json:"strip_tags,omitempty"`
-	// PreserveTags lists HTML tags to preserve in output.
-	PreserveTags []string `json:"preserve_tags,omitempty"`
-	// Preprocessing configures HTML preprocessing options.
-	Preprocessing *HTMLPreprocessingOptions `json:"preprocessing,omitempty"`
+	HeadingStyle       *string                   `json:"heading_style,omitempty"`
+	ListIndentType     *string                   `json:"list_indent_type,omitempty"`
+	ListIndentWidth    *int                      `json:"list_indent_width,omitempty"`
+	Bullets            *string                   `json:"bullets,omitempty"`
+	StrongEmSymbol     *string                   `json:"strong_em_symbol,omitempty"`
+	EscapeAsterisks    *bool                     `json:"escape_asterisks,omitempty"`
+	EscapeUnderscores  *bool                     `json:"escape_underscores,omitempty"`
+	EscapeMisc         *bool                     `json:"escape_misc,omitempty"`
+	EscapeASCII        *bool                     `json:"escape_ascii,omitempty"`
+	CodeLanguage       *string                   `json:"code_language,omitempty"`
+	Autolinks          *bool                     `json:"autolinks,omitempty"`
+	DefaultTitle       *bool                     `json:"default_title,omitempty"`
+	BrInTables         *bool                     `json:"br_in_tables,omitempty"`
+	HocrSpatialTables  *bool                     `json:"hocr_spatial_tables,omitempty"`
+	HighlightStyle     *string                   `json:"highlight_style,omitempty"`
+	ExtractMetadata    *bool                     `json:"extract_metadata,omitempty"`
+	WhitespaceMode     *string                   `json:"whitespace_mode,omitempty"`
+	StripNewlines      *bool                     `json:"strip_newlines,omitempty"`
+	Wrap               *bool                     `json:"wrap,omitempty"`
+	WrapWidth          *int                      `json:"wrap_width,omitempty"`
+	ConvertAsInline    *bool                     `json:"convert_as_inline,omitempty"`
+	SubSymbol          *string                   `json:"sub_symbol,omitempty"`
+	SupSymbol          *string                   `json:"sup_symbol,omitempty"`
+	NewlineStyle       *string                   `json:"newline_style,omitempty"`
+	CodeBlockStyle     *string                   `json:"code_block_style,omitempty"`
+	KeepInlineImagesIn []string                  `json:"keep_inline_images_in,omitempty"`
+	Encoding           *string                   `json:"encoding,omitempty"`
+	Debug              *bool                     `json:"debug,omitempty"`
+	StripTags          []string                  `json:"strip_tags,omitempty"`
+	PreserveTags       []string                  `json:"preserve_tags,omitempty"`
+	Preprocessing      *HTMLPreprocessingOptions `json:"preprocessing,omitempty"`
 }
 
 // PageConfig configures page tracking and extraction.
 type PageConfig struct {
-	// ExtractPages enables per-page content extraction.
-	ExtractPages *bool `json:"extract_pages,omitempty"`
-	// InsertPageMarkers inserts page markers in the extracted content.
-	InsertPageMarkers *bool `json:"insert_page_markers,omitempty"`
-	// MarkerFormat specifies the format for page markers.
-	MarkerFormat *string `json:"marker_format,omitempty"`
+	ExtractPages      *bool   `json:"extract_pages,omitempty"`
+	InsertPageMarkers *bool   `json:"insert_page_markers,omitempty"`
+	MarkerFormat      *string `json:"marker_format,omitempty"`
 }
 
 // ConfigFromJSON parses an ExtractionConfig from a JSON string via FFI.
@@ -386,7 +256,6 @@ func ConfigFromJSON(jsonStr string) (*ExtractionConfig, error) {
 	}
 	defer C.kreuzberg_config_free(ptr)
 
-	// Parse the config back from JSON to populate Go struct
 	cfg := &ExtractionConfig{}
 	if err := json.Unmarshal([]byte(jsonStr), cfg); err != nil {
 		return nil, newSerializationErrorWithContext("failed to decode config JSON", err, ErrorCodeValidation, nil)
@@ -414,13 +283,11 @@ func ConfigToJSON(config *ExtractionConfig) (string, error) {
 		return "", newValidationErrorWithContext("config cannot be nil", nil, ErrorCodeValidation, nil)
 	}
 
-	// Serialize to JSON first
 	data, err := json.Marshal(config)
 	if err != nil {
 		return "", newSerializationErrorWithContext("failed to encode config", err, ErrorCodeValidation, nil)
 	}
 
-	// Create a C config from JSON to get the serialized representation
 	jsonStr := string(data)
 	cJSON := C.CString(jsonStr)
 	defer C.free(unsafe.Pointer(cJSON))
@@ -431,7 +298,6 @@ func ConfigToJSON(config *ExtractionConfig) (string, error) {
 	}
 	defer C.kreuzberg_config_free(ptr)
 
-	// Get the serialized form from the FFI
 	cSerialized := C.kreuzberg_config_to_json(ptr)
 	if cSerialized == nil {
 		return "", lastError()
@@ -452,7 +318,6 @@ func ConfigGetField(config *ExtractionConfig, fieldName string) (interface{}, er
 		return nil, newValidationErrorWithContext("field name cannot be empty", nil, ErrorCodeValidation, nil)
 	}
 
-	// Serialize config to JSON first
 	data, err := json.Marshal(config)
 	if err != nil {
 		return nil, newSerializationErrorWithContext("failed to encode config", err, ErrorCodeValidation, nil)
@@ -495,7 +360,6 @@ func ConfigMerge(base, override *ExtractionConfig) error {
 		return newValidationErrorWithContext("override config cannot be nil", nil, ErrorCodeValidation, nil)
 	}
 
-	// Merge in Go to preserve pointer semantics (nil = "not set").
 	if override.UseCache != nil {
 		base.UseCache = override.UseCache
 	}

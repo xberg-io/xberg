@@ -202,8 +202,6 @@ impl SyncExtractor for HtmlExtractor {
             .map(|s| s.to_string())
             .unwrap_or_else(|_| String::from_utf8_lossy(content).to_string());
 
-        // Convert HTML to markdown with direct metadata extraction
-        // This eliminates the need for YAML frontmatter parsing and improves performance
         let (markdown, html_metadata) =
             crate::extraction::html::convert_html_to_markdown_with_metadata(&html, config.html_options.clone())?;
 

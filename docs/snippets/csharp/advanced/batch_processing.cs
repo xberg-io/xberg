@@ -22,7 +22,6 @@ class Program
         {
             var batchResults = new List<ExtractionResult>();
 
-            // Process files sequentially with configuration
             foreach (var filePath in filePaths)
             {
                 var result = await KreuzbergClient.ExtractFileAsync(filePath, config);
@@ -30,7 +29,6 @@ class Program
                 Console.WriteLine($"Processed {filePath}: {result.Content.Length} chars");
             }
 
-            // Or process concurrently
             var tasks = filePaths.Select(path =>
                 KreuzbergClient.ExtractFileAsync(path, config)
             ).ToArray();

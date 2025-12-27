@@ -21,7 +21,6 @@ use Kreuzberg\Exceptions\ValidationException;
 
 $kreuzberg = new Kreuzberg();
 
-// Example 1: Basic error handling
 try {
     $result = $kreuzberg->extractFile('document.pdf');
     echo "Extracted " . strlen($result->content) . " characters\n";
@@ -38,7 +37,6 @@ try {
     }
 }
 
-// Example 2: Handling bytes extraction errors
 try {
     $config = new ExtractionConfig();
     $pdfBytes = file_get_contents('sample.pdf');
@@ -60,7 +58,6 @@ try {
     echo "File system error: " . $e->getMessage() . "\n";
 }
 
-// Example 3: Batch processing with error recovery
 $files = ['doc1.pdf', 'corrupted.pdf', 'doc3.docx'];
 $successfulExtractions = [];
 $failedExtractions = [];
@@ -83,7 +80,6 @@ echo "\nResults:\n";
 echo "Successful: " . count($successfulExtractions) . "\n";
 echo "Failed: " . count($failedExtractions) . "\n";
 
-// Example 4: Custom error handler
 function extractWithRetry(
     Kreuzberg $kreuzberg,
     string $file,
@@ -111,7 +107,6 @@ function extractWithRetry(
     return null;
 }
 
-// Use the retry handler
 $result = extractWithRetry($kreuzberg, 'difficult_scan.pdf');
 if ($result !== null) {
     echo "Successfully extracted with retry: " . strlen($result->content) . " chars\n";

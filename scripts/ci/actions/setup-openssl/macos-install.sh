@@ -4,7 +4,6 @@ set -euo pipefail
 echo "=== Installing OpenSSL and pkg-config ==="
 echo "Platform: $(uname -m)"
 
-# Install packages only if not already present
 if brew list openssl@3 &>/dev/null; then
 	echo "openssl@3 already installed"
 else
@@ -19,7 +18,6 @@ else
 	brew install pkg-config
 fi
 
-# Verify installation
 echo ""
 echo "=== Verification ==="
 brew --prefix openssl@3 && echo "✓ openssl@3 prefix found" || echo "✗ openssl@3 prefix not found"

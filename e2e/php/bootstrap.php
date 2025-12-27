@@ -11,7 +11,6 @@ declare(strict_types=1);
  * - Sets up the test environment
  */
 
-// Load Composer autoloader
 $autoloadPaths = [
     __DIR__ . '/../../packages/php/vendor/autoload.php',
     __DIR__ . '/vendor/autoload.php',
@@ -35,7 +34,6 @@ if (!$autoloaded) {
     exit(1);
 }
 
-// Check if Kreuzberg extension is loaded
 if (!extension_loaded('kreuzberg')) {
     fwrite(
         STDERR,
@@ -46,7 +44,6 @@ if (!extension_loaded('kreuzberg')) {
     exit(1);
 }
 
-// Verify test_documents directory exists
 $workspaceRoot = realpath(__DIR__ . '/../..');
 $testDocuments = $workspaceRoot . '/test_documents';
 

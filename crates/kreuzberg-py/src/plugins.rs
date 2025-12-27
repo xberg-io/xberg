@@ -752,7 +752,6 @@ fn extract_tables(obj: &Bound<'_, PyAny>) -> Result<Vec<Table>> {
                 source: None,
             })?;
 
-        // Use iterator chains to eliminate intermediate Vec allocations
         let cells: Vec<Vec<String>> = cells_list
             .iter()
             .enumerate()

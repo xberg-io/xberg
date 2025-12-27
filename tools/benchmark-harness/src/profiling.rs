@@ -84,10 +84,8 @@ impl ProfileGuard {
     ///
     /// Returns [`Error::Profiling`](crate::Error::Profiling) if the profiler cannot be initialized.
     pub fn new(frequency: i32) -> Result<Self> {
-        // Clamp frequency to valid range (100-10000 Hz)
         let clamped_frequency = frequency.clamp(100, 10000);
 
-        // Build profiler with blocklist for system libraries
         let guard = pprof::ProfilerGuardBuilder::default()
             .frequency(clamped_frequency)
             .blocklist(&["libc", "libpthread", "libgcc", "libm"])
@@ -141,7 +139,6 @@ impl ProfileGuard {
         let duration = self.start_time.elapsed();
         let estimated_samples = self.estimated_sample_count();
 
-        // Take ownership of guard and generate report
         let guard = self
             .guard
             .take()
@@ -163,8 +160,6 @@ impl ProfileGuard {
 #[cfg(all(feature = "profiling", not(target_os = "windows")))]
 impl Drop for ProfileGuard {
     fn drop(&mut self) {
-        // Guard is dropped automatically when the Option is dropped
-        // pprof's ProfilerGuard handles cleanup in its own Drop implementation
         self.guard.take();
     }
 }
@@ -207,7 +202,6 @@ impl ProfilingResult {
     /// - The output file cannot be written
     /// - The flamegraph generation fails
     pub fn generate_flamegraph(&self, output_path: &Path) -> Result<()> {
-        // Create parent directories if needed
         if let Some(parent) = output_path.parent()
             && !parent.as_os_str().is_empty()
         {
@@ -215,16 +209,13 @@ impl ProfilingResult {
                 .map_err(|e| crate::Error::Profiling(format!("Failed to create output directory: {}", e)))?;
         }
 
-        // Open file for writing
         let file = std::fs::File::create(output_path)
             .map_err(|e| crate::Error::Profiling(format!("Failed to create output file: {}", e)))?;
 
-        // Generate and write flamegraph
         self.report
             .flamegraph(file)
             .map_err(|e| crate::Error::Profiling(format!("Failed to generate flamegraph: {}", e)))?;
 
-        // Log output path to stderr
         eprintln!("Flamegraph written to: {}", output_path.display());
 
         Ok(())
@@ -320,13 +311,11 @@ pub use noop::{ProfileGuard, ProfilingResult};
 pub fn dump_heap_profile(path: &Path) -> Result<()> {
     use tikv_jemalloc_ctl::epoch;
 
-    // Update statistics to get current epoch
     epoch::mib()
         .map_err(|e| crate::Error::Profiling(format!("Failed to get epoch mib: {}", e)))?
         .advance()
         .map_err(|e| crate::Error::Profiling(format!("Failed to advance epoch: {}", e)))?;
 
-    // Dump heap profile - ensure output directory exists
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -334,11 +323,9 @@ pub fn dump_heap_profile(path: &Path) -> Result<()> {
             .map_err(|e| crate::Error::Profiling(format!("Failed to create output directory: {}", e)))?;
     }
 
-    // Create heap dump file path
     let mut prof_path = path.to_path_buf();
     prof_path.set_extension("heap");
 
-    // Log the heap profile location
     eprintln!(
         "Heap profile ready at: {} (jemalloc memory statistics have been updated)",
         prof_path.display()
@@ -385,36 +372,33 @@ mod tests {
         use tempfile::TempDir;
 
         #[test]
-        #[ignore] // pprof has safety issues in test environments
+        #[ignore]
         fn test_profile_guard_creation() -> crate::Result<()> {
             let _guard = ProfileGuard::new(1000)?;
             Ok(())
         }
 
         #[test]
-        #[ignore] // pprof has safety issues in test environments
+        #[ignore]
         fn test_generate_flamegraph() -> crate::Result<()> {
             let guard = ProfileGuard::new(1000)?;
 
-            // Simulate some work
             let _sum: u64 = (0..1_000_000).sum();
 
             let result = guard.finish()?;
 
-            // Create temporary file
             let temp_dir = TempDir::new()?;
             let output_path = temp_dir.path().join("profile.svg");
 
             result.generate_flamegraph(&output_path)?;
 
-            // Verify file exists
             assert!(output_path.exists(), "Flamegraph file should exist");
 
             Ok(())
         }
 
         #[test]
-        #[ignore] // pprof has safety issues in test environments
+        #[ignore]
         fn test_profile_guard_creates_parent_directories() -> crate::Result<()> {
             let guard = ProfileGuard::new(1000)?;
             let _sum: u64 = (0..1_000_000).sum();

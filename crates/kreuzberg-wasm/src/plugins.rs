@@ -46,10 +46,6 @@ use wasm_bindgen::prelude::*;
 #[allow(unused_imports)]
 use wasm_bindgen_futures::JsFuture;
 
-// ============================================================================
-// LOCK POISONING RECOVERY HELPERS
-// ============================================================================
-
 /// Attempt to acquire a write lock with detailed error context and poisoning recovery.
 ///
 /// When lock poisoning occurs, this function:
@@ -64,9 +60,6 @@ fn acquire_write_lock<'a, T>(registry: &'a RwLock<T>, registry_name: &str) -> Re
     match registry.write() {
         Ok(guard) => Ok(guard),
         Err(poison) => {
-            // SAFETY: We're extracting the guard from the poison error. The guard contains
-            // the data even though the lock was poisoned. This is safe as long as the lock
-            // holder didn't corrupt the data before panicking.
             let guard = poison.into_inner();
             web_sys::console::warn_1(
                 &format!(
@@ -95,10 +88,6 @@ fn acquire_read_lock<'a, T>(registry: &'a RwLock<T>, registry_name: &str) -> Res
         )
     })
 }
-
-// ============================================================================
-// WASM SINGLE-THREADED FUTURE WRAPPER
-// ============================================================================
 
 /// Wrapper that makes non-Send futures Send in WASM single-threaded contexts.
 ///
@@ -147,10 +136,6 @@ unsafe impl<F> Send for MakeSend<F> {}
 
 /// SAFETY: Safe for the same reasons as the Send implementation.
 unsafe impl<F> Sync for MakeSend<F> {}
-
-// ============================================================================
-// JSVALUE WRAPPER FOR PLUGIN STORAGE
-// ============================================================================
 
 /// Wrapper around JsValue that implements Send/Sync ONLY for WASM single-threaded contexts.
 ///
@@ -207,10 +192,6 @@ unsafe impl Send for JsPluginValue {}
 /// Prevents data races by ensuring JsValue is only accessed from one JS context.
 unsafe impl Sync for JsPluginValue {}
 
-// ============================================================================
-// POST-PROCESSOR WRAPPER AND FUNCTIONS
-// ============================================================================
-
 /// Wrapper that makes a JavaScript PostProcessor object usable from Rust.
 ///
 /// # Thread Safety
@@ -264,19 +245,14 @@ impl Plugin for JsPostProcessorWrapper {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl PostProcessor for JsPostProcessorWrapper {
     async fn process(&self, result: &mut ExtractionResult, _config: &ExtractionConfig) -> kreuzberg::Result<()> {
-        // Convert Rust result to JSON
         let json_input = serde_json::to_string(&*result).map_err(|e| KreuzbergError::Plugin {
             message: format!("Failed to serialize extraction result: {}", e),
             plugin_name: self.name.clone(),
         })?;
 
-        // Call the JS process function
         let json_input_copy = json_input.clone();
         let name_copy = self.name.clone();
 
-        // SAFETY: All JS interactions must happen on the main JS thread.
-        // We must resolve the promise BEFORE awaiting to ensure JsValue is not
-        // held across the await point. We use a block to ensure scope is ended.
         let promise = {
             let process_fn = Reflect::get(&self.js_obj.0, &JsValue::from_str("process"))
                 .map_err(|_| KreuzbergError::Plugin {
@@ -299,7 +275,6 @@ impl PostProcessor for JsPostProcessorWrapper {
             Promise::resolve(&promise_val)
         };
 
-        // Now await the promise without holding JsValue
         let result_val = MakeSend(JsFuture::from(promise))
             .await
             .map_err(|e| KreuzbergError::Plugin {
@@ -312,7 +287,6 @@ impl PostProcessor for JsPostProcessorWrapper {
             plugin_name: self.name.clone(),
         })?;
 
-        // Parse the result back
         let updated: ExtractionResult = serde_json::from_str(&json_output).map_err(|e| KreuzbergError::Plugin {
             message: format!("Failed to deserialize PostProcessor result: {}", e),
             plugin_name: self.name.clone(),
@@ -370,7 +344,6 @@ impl PostProcessor for JsPostProcessorWrapper {
 /// ```
 #[wasm_bindgen]
 pub fn register_post_processor(processor: JsValue) -> Result<(), JsValue> {
-    // Validate required methods
     let name_fn =
         Reflect::get(&processor, &JsValue::from_str("name")).map_err(|e| format!("Missing 'name' method: {:?}", e))?;
 
@@ -381,7 +354,6 @@ pub fn register_post_processor(processor: JsValue) -> Result<(), JsValue> {
         return Err(JsValue::from_str("name and process must be functions"));
     }
 
-    // Get the name
     let name_fn = name_fn
         .dyn_into::<js_sys::Function>()
         .map_err(|_| "Failed to convert name to function")?;
@@ -395,7 +367,6 @@ pub fn register_post_processor(processor: JsValue) -> Result<(), JsValue> {
         return Err(JsValue::from_str("Processor name cannot be empty"));
     }
 
-    // Get the processing stage
     let stage = if let Ok(stage_fn) = Reflect::get(&processor, &JsValue::from_str("processingStage")) {
         if stage_fn.is_function() {
             let stage_fn = stage_fn
@@ -419,7 +390,6 @@ pub fn register_post_processor(processor: JsValue) -> Result<(), JsValue> {
         ProcessingStage::Middle
     };
 
-    // Create wrapper and register
     let wrapper = JsPostProcessorWrapper::new(processor, name.clone(), stage);
     let registry = kreuzberg::plugins::registry::get_post_processor_registry();
     let mut registry = acquire_write_lock(&registry, "POST_PROCESSORS").map_err(|e| JsValue::from_str(&e))?;
@@ -506,10 +476,6 @@ pub fn list_post_processors() -> Result<js_sys::Array, JsValue> {
     Ok(arr)
 }
 
-// ============================================================================
-// VALIDATOR WRAPPER AND FUNCTIONS
-// ============================================================================
-
 /// Wrapper that makes a JavaScript Validator object usable from Rust.
 ///
 /// # Thread Safety
@@ -564,15 +530,11 @@ impl Plugin for JsValidatorWrapper {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl Validator for JsValidatorWrapper {
     async fn validate(&self, result: &ExtractionResult, _config: &ExtractionConfig) -> kreuzberg::Result<()> {
-        // Convert Rust result to JSON
         let json_input = serde_json::to_string(result).map_err(|e| KreuzbergError::Plugin {
             message: format!("Failed to serialize extraction result: {}", e),
             plugin_name: self.name.clone(),
         })?;
 
-        // SAFETY: All JS interactions must happen on the main JS thread.
-        // We must resolve the promise BEFORE awaiting to ensure JsValue is not
-        // held across the await point. We use a block to ensure scope is ended.
         let promise = {
             let validate_fn = Reflect::get(&self.js_obj.0, &JsValue::from_str("validate"))
                 .map_err(|_| KreuzbergError::Plugin {
@@ -595,7 +557,6 @@ impl Validator for JsValidatorWrapper {
             Promise::resolve(&promise_val)
         };
 
-        // Now await the promise without holding JsValue
         let result_val = MakeSend(JsFuture::from(promise)).await.map_err(|e| {
             let err_msg = format!("{:?}", e);
             if err_msg.contains("ValidationError") || err_msg.contains("validation") {
@@ -611,8 +572,6 @@ impl Validator for JsValidatorWrapper {
             }
         })?;
 
-        // Check if result is an error or success
-        // Empty string or undefined = success, any error message = validation failure
         if let Some(error_msg) = result_val.as_string()
             && !error_msg.is_empty()
         {
@@ -669,7 +628,6 @@ impl Validator for JsValidatorWrapper {
 /// ```
 #[wasm_bindgen]
 pub fn register_validator(validator: JsValue) -> Result<(), JsValue> {
-    // Validate required methods
     let name_fn =
         Reflect::get(&validator, &JsValue::from_str("name")).map_err(|e| format!("Missing 'name' method: {:?}", e))?;
 
@@ -680,7 +638,6 @@ pub fn register_validator(validator: JsValue) -> Result<(), JsValue> {
         return Err(JsValue::from_str("name and validate must be functions"));
     }
 
-    // Get the name
     let name_fn = name_fn
         .dyn_into::<js_sys::Function>()
         .map_err(|_| "Failed to convert name to function")?;
@@ -694,7 +651,6 @@ pub fn register_validator(validator: JsValue) -> Result<(), JsValue> {
         return Err(JsValue::from_str("Validator name cannot be empty"));
     }
 
-    // Get the priority
     let priority = if let Ok(priority_fn) = Reflect::get(&validator, &JsValue::from_str("priority")) {
         if priority_fn.is_function() {
             let priority_fn = priority_fn
@@ -713,7 +669,6 @@ pub fn register_validator(validator: JsValue) -> Result<(), JsValue> {
         50
     };
 
-    // Create wrapper and register
     let wrapper = JsValidatorWrapper::new(validator, name.clone(), priority);
     let registry = kreuzberg::plugins::registry::get_validator_registry();
     let mut registry = acquire_write_lock(&registry, "VALIDATORS").map_err(|e| JsValue::from_str(&e))?;
@@ -800,10 +755,6 @@ pub fn list_validators() -> Result<js_sys::Array, JsValue> {
     Ok(arr)
 }
 
-// ============================================================================
-// OCR BACKEND WRAPPER AND FUNCTIONS
-// ============================================================================
-
 /// Wrapper that makes a JavaScript OcrBackend object usable from Rust.
 ///
 /// # Thread Safety
@@ -858,13 +809,9 @@ impl Plugin for JsOcrBackendWrapper {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 impl OcrBackend for JsOcrBackendWrapper {
     async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> kreuzberg::Result<ExtractionResult> {
-        // Encode image as base64
         use base64::Engine;
         let encoded = base64::engine::general_purpose::STANDARD.encode(image_bytes);
 
-        // SAFETY: All JS interactions must happen on the main JS thread.
-        // We must resolve the promise BEFORE awaiting to ensure JsValue is not
-        // held across the await point. We use a block to ensure scope is ended.
         let promise = {
             let process_fn = Reflect::get(&self.js_obj.0, &JsValue::from_str("processImage"))
                 .map_err(|_| KreuzbergError::Ocr {
@@ -892,7 +839,6 @@ impl OcrBackend for JsOcrBackendWrapper {
             Promise::resolve(&promise_val)
         };
 
-        // Now await the promise without holding JsValue
         let result_val = MakeSend(JsFuture::from(promise))
             .await
             .map_err(|e| KreuzbergError::Ocr {
@@ -905,13 +851,11 @@ impl OcrBackend for JsOcrBackendWrapper {
             source: None,
         })?;
 
-        // Parse the JSON result
         let result: serde_json::Value = serde_json::from_str(&json_output).map_err(|e| KreuzbergError::Ocr {
             message: format!("Failed to parse OCR result: {}", e),
             source: None,
         })?;
 
-        // Extract fields from the result
         let content = result
             .get("content")
             .and_then(|v| v.as_str())
@@ -1055,7 +999,6 @@ impl OcrBackend for JsOcrBackendWrapper {
 /// ```
 #[wasm_bindgen]
 pub fn register_ocr_backend(backend: JsValue) -> Result<(), JsValue> {
-    // Validate required methods
     let name_fn =
         Reflect::get(&backend, &JsValue::from_str("name")).map_err(|e| format!("Missing 'name' method: {:?}", e))?;
 
@@ -1071,7 +1014,6 @@ pub fn register_ocr_backend(backend: JsValue) -> Result<(), JsValue> {
         ));
     }
 
-    // Get the name
     let name_fn = name_fn
         .dyn_into::<js_sys::Function>()
         .map_err(|_| "Failed to convert name to function")?;
@@ -1085,7 +1027,6 @@ pub fn register_ocr_backend(backend: JsValue) -> Result<(), JsValue> {
         return Err(JsValue::from_str("OCR backend name cannot be empty"));
     }
 
-    // Get supported languages
     let langs_fn = langs_fn
         .dyn_into::<js_sys::Function>()
         .map_err(|_| "Failed to convert supportedLanguages to function")?;
@@ -1105,7 +1046,6 @@ pub fn register_ocr_backend(backend: JsValue) -> Result<(), JsValue> {
         return Err(JsValue::from_str("OCR backend must support at least one language"));
     }
 
-    // Create wrapper and register
     let wrapper = JsOcrBackendWrapper::new(backend, name.clone(), supported_languages);
     let registry = kreuzberg::plugins::registry::get_ocr_backend_registry();
     let mut registry = acquire_write_lock(&registry, "OCR_BACKENDS").map_err(|e| JsValue::from_str(&e))?;
@@ -1199,7 +1139,6 @@ mod tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    // Helper to create a mock processor JS object
     fn create_mock_processor(name: &str) -> Result<JsValue, String> {
         let obj = js_sys::Object::new();
 
@@ -1227,7 +1166,6 @@ mod tests {
         Ok(JsValue::from(obj))
     }
 
-    // Helper to create a mock validator JS object
     fn create_mock_validator(name: &str) -> Result<JsValue, String> {
         let obj = js_sys::Object::new();
 
@@ -1255,7 +1193,6 @@ mod tests {
         Ok(JsValue::from(obj))
     }
 
-    // Helper to create a mock OCR backend JS object
     fn create_mock_ocr_backend(name: &str) -> Result<JsValue, String> {
         let obj = js_sys::Object::new();
 

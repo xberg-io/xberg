@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\PageConfig;
 
-// Configure extraction to include individual pages
 $config = new ExtractionConfig(
     pages: new PageConfig(
         extractPages: true
@@ -26,7 +25,6 @@ $config = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($config);
 $result = $kreuzberg->extractFile('document.pdf');
 
-// Process individual pages
 if (!empty($result->pages)) {
     foreach ($result->pages as $page) {
         echo "Page {$page->pageNumber}:\n";

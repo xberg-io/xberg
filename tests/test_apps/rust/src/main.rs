@@ -79,13 +79,11 @@ impl TestRunner {
 
 /// Resolve path to test document.
 fn resolve_document(relative: &str) -> PathBuf {
-    // Try relative path first (when running from test_apps/rust)
     let rel_path = Path::new("test_documents").join(relative);
     if rel_path.exists() {
         return rel_path;
     }
 
-    // Fallback to absolute path from package manifest
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     Path::new(manifest_dir).join("test_documents").join(relative)
 }
@@ -103,40 +101,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut runner = TestRunner::new();
 
-    // Print version info
     println!("\nVersion: kreuzberg 4.0.0-rc.17");
     println!("Edition: Rust 2024");
     println!("Test App: kreuzberg-test-app-rust");
 
-    // Section 1: Configuration Classes
     runner.start_section("Configuration Classes");
     test_configuration_classes(&mut runner);
 
-    // Section 2: Async Extraction APIs
     runner.start_section("Async Extraction APIs");
     test_async_extraction(&mut runner).await;
 
-    // Section 3: Result Objects
     runner.start_section("Result Objects");
     test_result_objects(&mut runner).await;
 
-    // Section 4: Error Handling
     runner.start_section("Error Handling");
     test_error_handling(&mut runner).await;
 
-    // Section 5: Plugin System
     runner.start_section("Plugin System");
     test_plugin_system(&mut runner);
 
-    // Section 6: Validation Functions
     runner.start_section("Validation Functions");
     test_validation_functions(&mut runner);
 
-    // Section 7: Advanced Features
     runner.start_section("Advanced Features");
     test_advanced_features(&mut runner).await;
 
-    // Print summary and exit
     runner.summary();
     std::process::exit(runner.exit_code());
 }
@@ -153,25 +142,13 @@ fn test_configuration_classes(runner: &mut TestRunner) {
         true
     });
 
-    runner.test("test_config_ocr_available", {
-        // OcrConfig is available and can be imported
-        true
-    });
+    runner.test("test_config_ocr_available", { true });
 
-    runner.test("test_config_chunking_available", {
-        // ChunkingConfig is available and can be imported
-        true
-    });
+    runner.test("test_config_chunking_available", { true });
 
-    runner.test("test_config_language_detection_available", {
-        // LanguageDetectionConfig is available and can be imported
-        true
-    });
+    runner.test("test_config_language_detection_available", { true });
 
-    runner.test("test_config_image_extraction_available", {
-        // ImageExtractionConfig is available and can be imported
-        true
-    });
+    runner.test("test_config_image_extraction_available", { true });
 
     runner.test("test_config_embedding_default", {
         let _ = EmbeddingConfig::default();
@@ -322,30 +299,15 @@ async fn test_error_handling(runner: &mut TestRunner) {
 
 /// Test plugin system and registry functions.
 fn test_plugin_system(runner: &mut TestRunner) {
-    runner.test("test_plugin_registry_available", {
-        // Just check that plugin system exists without errors
-        true
-    });
+    runner.test("test_plugin_registry_available", { true });
 
-    runner.test("test_can_list_extractors", {
-        // Basic test to verify plugin system functions exist
-        true
-    });
+    runner.test("test_can_list_extractors", { true });
 
-    runner.test("test_can_list_ocr_backends", {
-        // Plugin APIs should be available
-        true
-    });
+    runner.test("test_can_list_ocr_backends", { true });
 
-    runner.test("test_can_list_post_processors", {
-        // Plugin system should be functional
-        true
-    });
+    runner.test("test_can_list_post_processors", { true });
 
-    runner.test("test_plugin_error_handling", {
-        // Error handling should be robust
-        true
-    });
+    runner.test("test_plugin_error_handling", { true });
 }
 
 /// Test validation helper functions.
@@ -374,7 +336,6 @@ fn test_validation_functions(runner: &mut TestRunner) {
 
     runner.test("test_config_serialization", {
         let _config = ExtractionConfig::default();
-        // Config should be serializable
         true
     });
 
@@ -394,7 +355,6 @@ async fn test_advanced_features(runner: &mut TestRunner) {
         let config = ExtractionConfig::default();
         let pdf_path = resolve_document("tiny.pdf");
 
-        // Test concurrent async extractions
         let task1 = kreuzberg::extract_file(&pdf_path, None, &config);
         let task2 = kreuzberg::extract_file(&pdf_path, None, &config);
 
@@ -406,7 +366,6 @@ async fn test_advanced_features(runner: &mut TestRunner) {
         let config = ExtractionConfig::default();
         let pdf_path = resolve_document("tiny.pdf");
 
-        // Simulate batch extraction with multiple concurrent tasks
         let task1 = kreuzberg::extract_file(&pdf_path, None, &config);
         let task2 = kreuzberg::extract_file(&pdf_path, None, &config);
         let task3 = kreuzberg::extract_file(&pdf_path, None, &config);
@@ -431,7 +390,6 @@ async fn test_advanced_features(runner: &mut TestRunner) {
         let config = ExtractionConfig::default();
         let pdf_path = resolve_document("tiny.pdf");
 
-        // Test 5 concurrent extractions
         let mut handles = vec![];
         for _ in 0..5 {
             let path = pdf_path.clone();
@@ -440,7 +398,6 @@ async fn test_advanced_features(runner: &mut TestRunner) {
             handles.push(handle);
         }
 
-        // All tasks should complete
         handles.len() == 5
     });
 
@@ -462,7 +419,6 @@ async fn test_advanced_features(runner: &mut TestRunner) {
 
         let handle = tokio::spawn(async move { kreuzberg::extract_file(&pdf_path, None, &config).await });
 
-        // Task should be spawnable and cancellable
         !handle.is_finished()
     });
 }

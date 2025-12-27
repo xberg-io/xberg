@@ -19,7 +19,6 @@ fn run() -> Result<(), String> {
         .map_err(|e| format!("Failed to generate C bindings: {}", e))?
         .write_to_file("kreuzberg.h");
 
-    // Generate pkg-config files
     let pc_template = std::fs::read_to_string("kreuzberg-ffi.pc.in")
         .map_err(|e| format!("Failed to read pkg-config template: {}", e))?;
 
@@ -29,11 +28,8 @@ fn run() -> Result<(), String> {
         "CARGO_MANIFEST_DIR did not have expected depth (expected crates/kreuzberg-ffi/...)".to_string()
     })?;
 
-    // Normalize paths to use forward slashes for pkg-config compatibility across all platforms
     let dev_prefix = repo_root.to_string_lossy().replace('\\', "/");
 
-    // Platform-specific private libs - detect both OS and target environment
-    // Use CARGO_CFG_TARGET_OS for cross-compilation support and CARGO_CFG_TARGET_ENV for MSVC detection
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_else(|_| "unknown".to_string());
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_else(|_| "gnu".to_string());
 
@@ -42,7 +38,6 @@ fn run() -> Result<(), String> {
         "macos" => "-framework CoreFoundation -framework Security -lpthread",
         "windows" => match target_env.as_str() {
             "msvc" => "-lws2_32 -luserenv -lbcrypt",
-            // gnu targets (MinGW, etc.) support GCC-specific flags
             "gnu" => "-lpthread -lws2_32 -luserenv -lbcrypt -static-libgcc -static-libstdc++",
             _ => "-lws2_32 -luserenv -lbcrypt",
         },
@@ -55,12 +50,8 @@ fn run() -> Result<(), String> {
         .nth(3)
         .ok_or_else(|| "OUT_DIR did not have expected depth (expected target/{debug,release}/build/...)".to_string())?;
 
-    // Copy PDFium library from kreuzberg build output to profile_dir (target/release or target/debug)
-    // This is necessary for Java and other language bindings that need bundled-pdfium
     copy_pdfium_to_profile_dir(profile_dir)?;
 
-    // Development version (for monorepo use) - use actual monorepo paths
-    // Normalize path separators for pkg-config compatibility across all platforms
     let dev_libdir = profile_dir.to_string_lossy().replace('\\', "/");
     let dev_includedir = format!("{}/crates/kreuzberg-ffi", dev_prefix);
     let dev_pc = format!(
@@ -81,7 +72,6 @@ Cflags: -I${{includedir}}
     );
     std::fs::write("kreuzberg-ffi.pc", dev_pc).map_err(|e| format!("Failed to write development pkg-config: {}", e))?;
 
-    // Installation version (for release artifacts)
     let install_pc = pc_template
         .replace("@PREFIX@", "/usr/local")
         .replace("@VERSION@", &version)
@@ -110,8 +100,6 @@ Cflags: -I${{includedir}}
 fn copy_pdfium_to_profile_dir(profile_dir: &Path) -> Result<(), String> {
     let build_dir = profile_dir.join("build");
 
-    // Search for PDFium in kreuzberg build output directory
-    // Pattern: target/{debug,release}/build/kreuzberg-{hash}/out/libpdfium.*
     if let Ok(entries) = fs::read_dir(&build_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -122,19 +110,16 @@ fn copy_pdfium_to_profile_dir(profile_dir: &Path) -> Result<(), String> {
             {
                 let out_dir = path.join("out");
                 if out_dir.exists() {
-                    // Try to copy PDFium from this build directory
                     if copy_pdfium_from_dir(&out_dir, profile_dir).is_err() {
-                        continue; // Try next directory if this one fails
+                        continue;
                     } else {
-                        return Ok(()); // Success!
+                        return Ok(());
                     }
                 }
             }
         }
     }
 
-    // If we get here, PDFium was not found - this is a warning, not an error
-    // because PDFium might be system-installed or the bundled-pdfium feature might not be enabled
     eprintln!("Warning: bundled PDFium library not found in build output. Some features may not work.");
     eprintln!("If PDFium is needed, ensure the 'bundled-pdfium' feature is enabled.");
 
@@ -143,10 +128,8 @@ fn copy_pdfium_to_profile_dir(profile_dir: &Path) -> Result<(), String> {
 
 /// Copy PDFium library files from source directory to destination.
 fn copy_pdfium_from_dir(src_dir: &Path, dest_dir: &Path) -> Result<(), String> {
-    // Read all files in the source directory
     let entries = fs::read_dir(src_dir).map_err(|e| format!("Failed to read {}: {}", src_dir.display(), e))?;
 
-    // Look for libpdfium.* files
     for entry in entries.flatten() {
         let path = entry.path();
         let file_name = path.file_name().ok_or("No file name")?;
@@ -155,8 +138,6 @@ fn copy_pdfium_from_dir(src_dir: &Path, dest_dir: &Path) -> Result<(), String> {
         if file_name_str.starts_with("libpdfium") || file_name_str.starts_with("pdfium") {
             let dest_file = dest_dir.join(file_name);
 
-            // On Windows, skip copy if destination already exists and is accessible
-            // This avoids "Access denied" errors when the DLL is in use
             if dest_file.exists() {
                 eprintln!(
                     "PDFium library already exists at {}, skipping copy",

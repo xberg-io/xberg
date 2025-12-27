@@ -34,9 +34,6 @@ use Kreuzberg\Exceptions\KreuzbergException;
 use Kreuzberg\Kreuzberg;
 use function Kreuzberg\extract_file;
 
-// =============================================================================
-// Example 1: Basic Metadata Extraction
-// =============================================================================
 
 echo "=== Example 1: Basic Metadata Extraction ===\n\n";
 
@@ -62,9 +59,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 2: Detailed Metadata Fields
-// =============================================================================
 
 echo "=== Example 2: Detailed Metadata Fields ===\n\n";
 
@@ -111,9 +105,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 3: Custom Metadata Fields
-// =============================================================================
 
 echo "=== Example 3: Custom Metadata Fields ===\n\n";
 
@@ -135,7 +126,6 @@ try {
         echo "  No custom metadata fields found\n";
     }
 
-    // Access custom field using helper method
     if ($result->metadata->hasCustom('custom_field')) {
         $value = $result->metadata->getCustom('custom_field');
         echo "\nCustom field 'custom_field': {$value}\n";
@@ -147,9 +137,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 4: Table Metadata
-// =============================================================================
 
 echo "=== Example 4: Table Metadata ===\n\n";
 
@@ -181,9 +168,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 5: Image Metadata
-// =============================================================================
 
 echo "=== Example 5: Image Metadata ===\n\n";
 
@@ -227,9 +211,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 6: Page-Level Metadata
-// =============================================================================
 
 echo "=== Example 6: Page-Level Metadata ===\n\n";
 
@@ -271,9 +252,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 7: Language Detection Metadata
-// =============================================================================
 
 echo "=== Example 7: Language Detection Metadata ===\n\n";
 
@@ -301,9 +279,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 8: Keyword Extraction Metadata
-// =============================================================================
 
 echo "=== Example 8: Keyword Extraction Metadata ===\n\n";
 
@@ -336,9 +311,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 9: Comprehensive Metadata Report
-// =============================================================================
 
 echo "=== Example 9: Comprehensive Metadata Report ===\n\n";
 
@@ -412,9 +384,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 10: Metadata Comparison Across File Types
-// =============================================================================
 
 echo "=== Example 10: Metadata Comparison Across File Types ===\n\n";
 
@@ -449,9 +418,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 11: Procedural API for Metadata
-// =============================================================================
 
 echo "=== Example 11: Procedural API for Metadata ===\n\n";
 
@@ -467,9 +433,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 12: Exporting Metadata to JSON
-// =============================================================================
 
 echo "=== Example 12: Exporting Metadata to JSON ===\n\n";
 
@@ -477,7 +440,6 @@ try {
     $kreuzberg = new Kreuzberg();
     $result = $kreuzberg->extractFile(__DIR__ . '/../sample-documents/document.pdf');
 
-    // Convert metadata to array for JSON export
     $metadataArray = [
         'title' => $result->metadata->title,
         'subject' => $result->metadata->subject,

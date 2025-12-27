@@ -99,7 +99,6 @@ impl TokenReducer {
             return text.to_string();
         }
 
-        // Pre-allocate normalized text only if needed
         let nfc_string;
         let working_text = if text.is_ascii() {
             text
@@ -210,12 +209,9 @@ impl TokenReducer {
             return text.to_string();
         }
 
-        // Pre-allocate capacity for word frequency map based on estimated unique words.
-        // Heuristic: ~70% of words are typically unique in moderate text.
         let estimated_unique = (words.len() as f32 * 0.7).ceil() as usize;
         let mut word_freq = AHashMap::with_capacity(estimated_unique);
 
-        // Pre-allocate word_lengths with capacity.
         let mut word_lengths = Vec::with_capacity(words.len());
 
         for word in &words {
@@ -243,7 +239,6 @@ impl TokenReducer {
         let original_count = words.len();
         let has_cjk_content = text.chars().any(|c| c as u32 >= 0x4E00 && (c as u32) <= 0x9FFF);
 
-        // Pre-allocate filtered_words to reduce reallocation during filtering.
         let mut filtered_words = Vec::with_capacity(words.len());
         for word in &words {
             let clean_word = if word.chars().all(|c| c.is_alphabetic()) {
@@ -450,8 +445,6 @@ impl TokenReducer {
         score += (long_word_count as f32 / words.len() as f32) * LONG_WORD_WEIGHT;
         score += (punct_density as f32 / sentence.len() as f32) * PUNCTUATION_DENSITY_WEIGHT;
 
-        // Pre-allocate AHashSet with expected unique words.
-        // Heuristic: ~60% unique in typical sentence.
         let estimated_unique = (words.len() as f32 * 0.6).ceil() as usize;
         let mut unique_words: ahash::AHashSet<String> = ahash::AHashSet::with_capacity(estimated_unique.max(10));
 
@@ -463,7 +456,6 @@ impl TokenReducer {
                 .to_lowercase();
             unique_words.insert(clean);
 
-            // Early exit if we've collected enough unique words
             if unique_words.len() >= estimated_unique {
                 break;
             }
@@ -472,7 +464,6 @@ impl TokenReducer {
         let final_unique_count = if unique_words.len() >= estimated_unique {
             unique_words.len()
         } else {
-            // Only iterate remaining words if needed
             for w in &words {
                 let clean = w
                     .chars()
@@ -503,8 +494,6 @@ impl TokenReducer {
             return 0.0;
         }
 
-        // Pre-allocate AHashMap with estimated unique character count.
-        // Heuristic: usually < 10% unique characters in typical text (ASCII alphabet ~26 chars).
         let estimated_unique = (chars.len() as f32 * 0.1).ceil() as usize;
         let mut char_freq = AHashMap::with_capacity(estimated_unique.max(26));
 

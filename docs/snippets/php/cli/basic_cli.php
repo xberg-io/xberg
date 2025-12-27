@@ -15,7 +15,6 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Kreuzberg\Kreuzberg;
 use function Kreuzberg\extract_file;
 
-// Parse command line arguments
 $options = getopt('f:o:h', ['file:', 'output:', 'help']);
 
 if (isset($options['h']) || isset($options['help']) || empty($argv[1])) {
@@ -32,7 +31,6 @@ if (isset($options['h']) || isset($options['help']) || empty($argv[1])) {
     exit(0);
 }
 
-// Get input file
 $inputFile = $options['f'] ?? $options['file'] ?? $argv[1] ?? null;
 
 if ($inputFile === null || !file_exists($inputFile)) {
@@ -40,10 +38,8 @@ if ($inputFile === null || !file_exists($inputFile)) {
     exit(1);
 }
 
-// Get output file (optional)
 $outputFile = $options['o'] ?? $options['output'] ?? null;
 
-// Extract document
 try {
     fwrite(STDERR, "Extracting: $inputFile\n");
     $start = microtime(true);
@@ -55,7 +51,6 @@ try {
     fwrite(STDERR, "Content length: " . strlen($result->content) . " characters\n");
     fwrite(STDERR, "Tables found: " . count($result->tables) . "\n");
 
-    // Output content
     if ($outputFile) {
         file_put_contents($outputFile, $result->content);
         fwrite(STDERR, "Saved to: $outputFile\n");

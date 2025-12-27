@@ -411,7 +411,6 @@ internal static partial class NativeMethods
             return IntPtr.Zero;
         }
 
-        // Prefer .NET's built-in resolution first (e.g., NuGet native assets under runtimes/<rid>/native).
         var effectiveSearchPath = searchPath ?? DllImportSearchPath.AssemblyDirectory;
         if (NativeLibrary.TryLoad(libraryName, assembly, effectiveSearchPath, out var defaultHandle))
         {
@@ -463,10 +462,8 @@ internal static partial class NativeMethods
             yield return Path.Combine(envDir, fileName);
         }
 
-        // Current base directory (e.g., test bin)
         yield return Path.Combine(AppContext.BaseDirectory, fileName);
 
-        // Common NuGet layout when native assets are not copied to the base directory.
         var rid = GetStableRuntimeIdentifier();
         if (!string.IsNullOrWhiteSpace(rid))
         {
@@ -476,7 +473,6 @@ internal static partial class NativeMethods
         var cwd = Directory.GetCurrentDirectory();
         yield return Path.Combine(cwd, fileName);
 
-        // Also check CWD for target subdirectories
         var cwdRelease = Path.Combine(cwd, "target", "release", fileName);
         if (File.Exists(cwdRelease))
         {
@@ -489,7 +485,6 @@ internal static partial class NativeMethods
             yield return cwdDebug;
         }
 
-        // Walk up from base directory to workspace target/{release,debug}
         string? dir = AppContext.BaseDirectory;
         for (var i = 0; i < 5 && dir != null; i++)
         {

@@ -145,7 +145,6 @@ func TestHtmlMetadataStructure(t *testing.T) {
 		StructuredData: []StructuredData{},
 	}
 
-	// Verify that all expected fields exist
 	if htmlMeta.Title == nil || *htmlMeta.Title != "Test Page" {
 		t.Errorf("Title field missing or incorrect")
 	}
@@ -169,19 +168,16 @@ func TestKeywordsIsSlice(t *testing.T) {
 		Keywords: []string{"keyword1", "keyword2", "keyword3"},
 	}
 
-	// Verify Keywords is a slice
 	if len(htmlMeta.Keywords) != 3 {
 		t.Errorf("Keywords should be a slice with 3 items, got %d", len(htmlMeta.Keywords))
 	}
 
-	// Verify we can iterate and access elements
 	for i, kw := range htmlMeta.Keywords {
 		if kw == "" {
 			t.Errorf("Keyword at index %d is empty", i)
 		}
 	}
 
-	// Verify it's not a pointer
 	keywords := htmlMeta.Keywords
 	_ = keywords
 }
@@ -190,7 +186,6 @@ func TestKeywordsIsSlice(t *testing.T) {
 func TestCanonicalUrlRenamed(t *testing.T) {
 	htmlMeta := &HtmlMetadata{}
 
-	// Verify the field name is CanonicalURL
 	htmlMetaType := reflect.TypeOf(*htmlMeta)
 	foundCanonicalURL := false
 
@@ -198,7 +193,6 @@ func TestCanonicalUrlRenamed(t *testing.T) {
 		field := htmlMetaType.Field(i)
 		if field.Name == "CanonicalURL" {
 			foundCanonicalURL = true
-			// Verify JSON tag
 			jsonTag := field.Tag.Get("json")
 			if !strings.Contains(jsonTag, "canonical_url") {
 				t.Errorf("CanonicalURL JSON tag should contain 'canonical_url', got %s", jsonTag)
@@ -211,7 +205,6 @@ func TestCanonicalUrlRenamed(t *testing.T) {
 		t.Errorf("CanonicalURL field not found in HtmlMetadata struct")
 	}
 
-	// Verify old field name doesn't exist
 	htmlMetaType = reflect.TypeOf(*htmlMeta)
 	for i := 0; i < htmlMetaType.NumField(); i++ {
 		field := htmlMetaType.Field(i)
@@ -231,12 +224,10 @@ func TestOpenGraphIsMap(t *testing.T) {
 		},
 	}
 
-	// Verify OpenGraph is a map
 	if len(htmlMeta.OpenGraph) != 3 {
 		t.Errorf("OpenGraph should have 3 items, got %d", len(htmlMeta.OpenGraph))
 	}
 
-	// Verify we can access map values
 	if htmlMeta.OpenGraph["og:title"] != "Page Title" {
 		t.Errorf("OpenGraph map access failed")
 	}
@@ -251,12 +242,10 @@ func TestTwitterCardIsMap(t *testing.T) {
 		},
 	}
 
-	// Verify TwitterCard is a map
 	if len(htmlMeta.TwitterCard) != 2 {
 		t.Errorf("TwitterCard should have 2 items, got %d", len(htmlMeta.TwitterCard))
 	}
 
-	// Verify we can access map values
 	if htmlMeta.TwitterCard["twitter:card"] != "summary_large_image" {
 		t.Errorf("TwitterCard map access failed")
 	}
@@ -353,7 +342,6 @@ func TestLinkMetadataJSON(t *testing.T) {
 		t.Fatalf("unmarshal to map failed: %v", err)
 	}
 
-	// Verify link_type is in the JSON
 	if _, ok := jsonData["link_type"]; !ok {
 		t.Errorf("JSON should contain 'link_type' field")
 	}
@@ -392,7 +380,6 @@ func TestImageMetadataJSON(t *testing.T) {
 		t.Fatalf("unmarshal to map failed: %v", err)
 	}
 
-	// Verify image_type is in the JSON
 	if _, ok := jsonData["image_type"]; !ok {
 		t.Errorf("JSON should contain 'image_type' field")
 	}
@@ -428,7 +415,6 @@ func TestStructuredDataJSON(t *testing.T) {
 		t.Fatalf("unmarshal to map failed: %v", err)
 	}
 
-	// Verify data_type is in the JSON
 	if _, ok := jsonData["data_type"]; !ok {
 		t.Errorf("JSON should contain 'data_type' field")
 	}
@@ -516,12 +502,10 @@ func TestMetadataKeywordArray(t *testing.T) {
 		t.Fatalf("HTMLMetadata not extracted")
 	}
 
-	// Keywords should be a slice
 	if htmlMeta.Keywords == nil {
 		t.Errorf("Keywords should not be nil")
 	}
 
-	// Should be able to iterate
 	for _, kw := range htmlMeta.Keywords {
 		if kw == "" {
 			t.Errorf("Empty keyword in array")
@@ -551,11 +535,9 @@ func TestMetadataOpenGraphMap(t *testing.T) {
 		t.Fatalf("HTMLMetadata not extracted")
 	}
 
-	// OpenGraph should be a map
 	if htmlMeta.OpenGraph == nil {
 		t.Logf("Note: OpenGraph may be nil if no OG tags were extracted")
 	} else {
-		// Verify it's a map and we can access values
 		for key, value := range htmlMeta.OpenGraph {
 			if key == "" || value == "" {
 				t.Errorf("Invalid OpenGraph entry")
@@ -585,11 +567,9 @@ func TestMetadataHeadersList(t *testing.T) {
 		t.Fatalf("HTMLMetadata not extracted")
 	}
 
-	// Headers should be a slice
 	if htmlMeta.Headers == nil {
 		t.Logf("Note: Headers may be empty if no headers were extracted")
 	} else {
-		// Verify we can iterate
 		for _, hdr := range htmlMeta.Headers {
 			if hdr.Level == 0 {
 				t.Errorf("Header level should be set")
@@ -619,11 +599,9 @@ func TestMetadataLinksList(t *testing.T) {
 		t.Fatalf("HTMLMetadata not extracted")
 	}
 
-	// Links should be a slice
 	if htmlMeta.Links == nil {
 		t.Logf("Note: Links may be empty if no links were extracted")
 	} else {
-		// Verify we can iterate
 		for _, link := range htmlMeta.Links {
 			if link.Href == "" {
 				t.Errorf("Link href should be set")
@@ -653,11 +631,9 @@ func TestMetadataImagesList(t *testing.T) {
 		t.Fatalf("HTMLMetadata not extracted")
 	}
 
-	// Images should be a slice
 	if htmlMeta.Images == nil {
 		t.Logf("Note: Images may be empty if no images were extracted")
 	} else {
-		// Verify we can iterate
 		for _, img := range htmlMeta.Images {
 			if img.Src == "" {
 				t.Errorf("Image src should be set")
@@ -692,7 +668,6 @@ func TestMetadataEmptyHTML(t *testing.T) {
 		t.Fatalf("HTMLMetadata should be present")
 	}
 
-	// Title should be nil for empty page
 	if htmlMeta.Title != nil && *htmlMeta.Title == "" {
 		t.Errorf("Empty title should be nil, not empty string")
 	}
@@ -700,12 +675,10 @@ func TestMetadataEmptyHTML(t *testing.T) {
 
 // TestMetadataNilPointers verifies optional fields are nil when missing.
 func TestMetadataNilPointers(t *testing.T) {
-	// Create metadata with minimal fields
 	htmlMeta := &HtmlMetadata{
 		Keywords: []string{},
 	}
 
-	// Optional string fields should be nil
 	if htmlMeta.Title != nil {
 		t.Errorf("Title should be nil when not set")
 	}
@@ -733,7 +706,6 @@ func TestMetadataEmptyCollections(t *testing.T) {
 		StructuredData: []StructuredData{},
 	}
 
-	// Verify slices/maps are empty, not nil
 	if htmlMeta.Keywords == nil {
 		t.Errorf("Keywords should be empty slice, not nil")
 	}
@@ -758,7 +730,6 @@ func TestMetadataEmptyCollections(t *testing.T) {
 func TestOldFieldsRemoved(t *testing.T) {
 	htmlMetaType := reflect.TypeOf(HtmlMetadata{})
 
-	// List of old field names that should NOT exist
 	oldFields := []string{
 		"OgTitle",
 		"OgDescription",
@@ -966,7 +937,6 @@ func TestMalformedHTMLHandling(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Should not panic on malformed HTML
 			defer func() {
 				if r := recover(); r != nil {
 					t.Fatalf("extraction panicked on malformed HTML: %v", r)
@@ -982,7 +952,6 @@ func TestMalformedHTMLHandling(t *testing.T) {
 				t.Errorf("unexpected error: %v", err)
 			}
 
-			// Should return a result even if HTML is malformed
 			if !tc.wantErr && result == nil {
 				t.Errorf("expected non-nil result")
 			}
@@ -1031,23 +1000,19 @@ func TestSpecialCharactersInMetadata(t *testing.T) {
 		t.Fatalf("HTMLMetadata not extracted")
 	}
 
-	// Verify title contains emoji and non-ASCII
 	if htmlMeta.Title == nil || len(*htmlMeta.Title) == 0 {
 		t.Errorf("Title should be extracted with special characters")
 	} else {
 		title := *htmlMeta.Title
-		// Should contain some of the original characters
 		if !strings.ContainsAny(title, "🚀日本語") && !strings.Contains(title, "Rocket") {
 			t.Logf("Title may have been processed: %s", title)
 		}
 	}
 
-	// Verify description handles HTML entities and emojis
 	if htmlMeta.Description == nil || len(*htmlMeta.Description) == 0 {
 		t.Logf("Note: Description may be nil if not extracted")
 	}
 
-	// Verify keywords array can contain various encodings
 	if len(htmlMeta.Keywords) > 0 {
 		for _, kw := range htmlMeta.Keywords {
 			if kw == "" {
@@ -1056,7 +1021,6 @@ func TestSpecialCharactersInMetadata(t *testing.T) {
 		}
 	}
 
-	// Verify OpenGraph handles special characters
 	if len(htmlMeta.OpenGraph) > 0 {
 		for key, value := range htmlMeta.OpenGraph {
 			if key == "" || value == "" {
@@ -1154,16 +1118,13 @@ func TestConcurrentExtraction(t *testing.T) {
 </body>
 </html>`)
 
-	// Number of concurrent goroutines
 	numGoroutines := 10
 	results := make([]*ExtractionResult, numGoroutines)
 	errors := make([]error, numGoroutines)
 
-	// Channel to coordinate completion
 	done := make(chan struct{})
 	defer close(done)
 
-	// Launch concurrent extractions
 	for i := 0; i < numGoroutines; i++ {
 		go func(index int) {
 			defer func() {
@@ -1179,12 +1140,10 @@ func TestConcurrentExtraction(t *testing.T) {
 		}(i)
 	}
 
-	// Wait for all goroutines to complete
 	for i := 0; i < numGoroutines; i++ {
 		<-done
 	}
 
-	// Verify all extractions succeeded
 	for i := 0; i < numGoroutines; i++ {
 		if errors[i] != nil {
 			t.Errorf("goroutine %d failed: %v", i, errors[i])
@@ -1195,7 +1154,6 @@ func TestConcurrentExtraction(t *testing.T) {
 			t.Errorf("goroutine %d extraction not successful", i)
 		}
 
-		// Verify results are consistent
 		htmlMeta, ok := results[i].Metadata.HTMLMetadata()
 		if !ok {
 			t.Errorf("goroutine %d: HTMLMetadata not extracted", i)
@@ -1331,7 +1289,6 @@ func BenchmarkHTMLExtraction(b *testing.B) {
 // BenchmarkHTMLExtractionLargeDocument benchmarks extraction on a larger HTML document
 // to measure performance at scale.
 func BenchmarkHTMLExtractionLargeDocument(b *testing.B) {
-	// Generate a large HTML document with many repeated elements
 	var sb strings.Builder
 	sb.WriteString(`<!DOCTYPE html>
 <html lang="en">
@@ -1344,7 +1301,6 @@ func BenchmarkHTMLExtractionLargeDocument(b *testing.B) {
 	<h1>Large Document</h1>
 `)
 
-	// Add many sections
 	for i := 0; i < 50; i++ {
 		sb.WriteString(fmt.Sprintf(`
 	<section id="section-%d">
@@ -1377,5 +1333,3 @@ func BenchmarkHTMLExtractionLargeDocument(b *testing.B) {
 		}
 	}
 }
-
-// Note: StringPtr is defined in config.go, so we don't redefine it here

@@ -15,7 +15,6 @@ cp "$ROOT/target/${TARGET}/release/kreuzberg" "$STAGE/"
 cp "$ROOT/LICENSE" "$STAGE/"
 cp "$ROOT/README.md" "$STAGE/"
 
-# Copy shared libraries if they exist
 if [[ -f "$ROOT/target/${TARGET}/release/libpdfium.dylib" ]]; then
 	cp "$ROOT/target/${TARGET}/release/libpdfium.dylib" "$STAGE/"
 fi

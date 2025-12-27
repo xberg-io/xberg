@@ -18,8 +18,7 @@ func getValidPDFBytes() ([]byte, error) {
 	repoRoot := filepath.Join(wd, "..", "..", "..")
 	testPDF := filepath.Join(repoRoot, "test_documents", "pdfs_with_tables", "tiny.pdf")
 
-	// Read test PDF file from repo test_documents directory
-	// #nosec G304 -- test fixture reads from controlled test data directory
+	// #nosec G304 -- testPDF is a controlled test fixture path
 	data, err := os.ReadFile(testPDF)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read test PDF from %s: %w", testPDF, err)

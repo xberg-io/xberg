@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Configuration validation tests
-
 RSpec.describe 'Configuration Validation' do
   describe Kreuzberg::Config::Extraction do
     it 'accepts all valid parameters' do
@@ -268,7 +266,6 @@ RSpec.describe 'Configuration Validation' do
     end
 
     it 'validates binarization method via FFI' do
-      # Valid methods should work
       expect { described_class.new(binarization_method: 'otsu') }.not_to raise_error
       expect { described_class.new(binarization_method: 'adaptive') }.not_to raise_error
       expect { described_class.new(binarization_method: 'sauvola') }.not_to raise_error
@@ -309,7 +306,6 @@ RSpec.describe 'Configuration Validation' do
     end
 
     it 'validates token reduction levels via FFI' do
-      # All valid modes should work
       expect { described_class.new(mode: 'off') }.not_to raise_error
       expect { described_class.new(mode: 'light') }.not_to raise_error
       expect { described_class.new(mode: 'moderate') }.not_to raise_error

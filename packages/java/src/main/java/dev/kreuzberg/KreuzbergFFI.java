@@ -820,7 +820,6 @@ public final class KreuzbergFFI {
             List<Path> files = listExtractedFiles(dir);
             loadOnnxRuntimeRequired(files, ortExt);
         } catch (UnsatisfiedLinkError e) {
-            // Try loading from system path as fallback
             if (isDebugEnabled()) {
                 System.err.println("[KreuzbergFFI] Failed to load ONNX Runtime from KREUZBERG_FFI_DIR, "
                     + "trying system path: " + e.getMessage());
@@ -836,7 +835,6 @@ public final class KreuzbergFFI {
     private static void loadOnnxRuntimeRequired(List<Path> extractedFiles, String ortExt) {
         Path core = findOnnxRuntimeCoreLibrary(extractedFiles, ortExt);
         if (core == null) {
-            // ONNX Runtime not found in bundled natives, try system library path
             if (isDebugEnabled()) {
                 System.err.println("[KreuzbergFFI] ONNX Runtime not found in bundled natives, "
                     + "trying system library path");
@@ -888,7 +886,6 @@ public final class KreuzbergFFI {
             if (isDebugEnabled()) {
                 System.err.println("[KreuzbergFFI] Failed to load ONNX Runtime from system path: " + e.getMessage());
             }
-            // Not fatal - ONNX Runtime may not be needed for all operations
         }
     }
 

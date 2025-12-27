@@ -205,7 +205,6 @@ class ExternalAPIEnricher implements PostProcessorProtocol {
 	async process(result: ExtractionResult): Promise<ExtractionResult> {
 		try {
 			console.log(`[ExternalAPIEnricher] Calling API: ${this.apiUrl}`);
-			// Note: _apiKey would be used for authentication headers in a real implementation
 			void this._apiKey;
 
 			result.metadata.external_data = {

@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Install Ruby dependencies via bundle
-# Used by: ci-ruby.yaml - Install Ruby deps step (Unix)
-#
 
 set -euo pipefail
 

@@ -108,8 +108,6 @@ fn detect_page_breaks(bytes: &[u8]) -> Result<Vec<usize>> {
 
     let document_xml = match archive.by_name("word/document.xml") {
         Ok(mut file) => {
-            // Estimate XML size; typical DOCX documents have 50KB-5MB XML
-            // DOCX files are ZIP-compressed, so actual XML can be 3-10x larger
             let file_size = file.size();
             let estimated_size = capacity::estimate_content_capacity(file_size, "docx").max(file_size as usize);
             let mut content = String::with_capacity(estimated_size);
@@ -120,7 +118,6 @@ fn detect_page_breaks(bytes: &[u8]) -> Result<Vec<usize>> {
         Err(_) => return Ok(Vec::new()),
     };
 
-    // Pre-allocate Vec; typical documents have 5-20 page breaks
     let mut breaks = Vec::with_capacity(16);
     let search_pattern = r#"<w:br w:type="page"/>"#;
 
@@ -158,22 +155,18 @@ fn map_page_breaks_to_boundaries(text: &str, page_breaks: Vec<usize>) -> Result<
     let char_count = text.chars().count();
     let chars_per_page = char_count / page_count;
 
-    // Pre-allocate Vec; we know exact capacity from page_breaks
     let mut boundaries = Vec::with_capacity(page_count);
     let mut current_byte = 0;
     let mut current_char = 0;
 
-    // Single forward pass O(n) - advances incrementally through text exactly once
     for page_num in 1..=page_count {
         let start_byte = current_byte;
 
-        // For last page, always end at text.len() to handle rounding
         let end_byte = if page_num == page_count {
             text.len()
         } else {
             let target_char = (page_num * chars_per_page).min(char_count);
 
-            // Advance from current position to target character count
             for ch in text[current_byte..].chars() {
                 if current_char >= target_char {
                     break;

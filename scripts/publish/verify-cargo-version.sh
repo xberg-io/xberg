@@ -1,13 +1,8 @@
 #!/usr/bin/env bash
 
 # Verify Cargo.toml version matches release tag
-#
 # Compares workspace version in Cargo.toml with the release version.
-# Exits with error if they don't match.
-#
-# Arguments:
 #   $1: Expected release version (e.g., 4.0.0-rc.1)
-#   $2: Path to Cargo.toml (default: Cargo.toml)
 
 set -euo pipefail
 

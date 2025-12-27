@@ -47,10 +47,6 @@ use std::sync::Mutex;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-// SAFETY: Global mutex protects against TOCTOU (time-of-check-time-of-use) race conditions
-// where multiple threads simultaneously check if the file exists, both find it missing,
-// and try to write concurrently. This mutex ensures only one thread performs extraction
-// while others wait for completion.
 static EXTRACTION_LOCK: Mutex<()> = Mutex::new(());
 
 /// Runtime library name and extraction directory for the bundled PDFium library.
@@ -61,10 +57,7 @@ fn bundled_library_info() -> (&'static str, &'static str) {
         ("pdfium.dll", "kreuzberg-pdfium")
     } else if cfg!(target_os = "macos") {
         ("libpdfium.dylib", "kreuzberg-pdfium")
-    } else if cfg!(target_os = "linux") {
-        ("libpdfium.so", "kreuzberg-pdfium")
     } else {
-        // Fallback for other Unix-like systems
         ("libpdfium.so", "kreuzberg-pdfium")
     }
 }
@@ -89,11 +82,9 @@ fn is_extracted_library_valid(lib_path: &Path, embedded_size: usize) -> bool {
         return false;
     }
 
-    // Verify file size matches to catch partial/corrupted extractions
     match fs::metadata(lib_path) {
         Ok(metadata) => {
             let file_size = metadata.len() as usize;
-            // Allow 1% size difference for platform-specific variations
             let size_tolerance = (embedded_size as f64 * 0.01) as usize;
             let min_size = embedded_size.saturating_sub(size_tolerance);
             let max_size = embedded_size.saturating_add(size_tolerance);
@@ -140,7 +131,6 @@ fn is_extracted_library_valid(lib_path: &Path, embedded_size: usize) -> bool {
 /// - macOS: `libpdfium.dylib`
 /// - Windows: `pdfium.dll`
 pub fn extract_bundled_pdfium() -> io::Result<PathBuf> {
-    // WASM targets cannot use file extraction
     #[cfg(target_arch = "wasm32")]
     {
         return Err(io::Error::new(
@@ -154,7 +144,6 @@ pub fn extract_bundled_pdfium() -> io::Result<PathBuf> {
     let (lib_name, _) = bundled_library_info();
     let extract_dir = get_extraction_dir()?;
 
-    // Create extraction directory if it doesn't exist
     fs::create_dir_all(&extract_dir).map_err(|e| {
         io::Error::new(
             e.kind(),
@@ -168,40 +157,20 @@ pub fn extract_bundled_pdfium() -> io::Result<PathBuf> {
 
     let lib_path = extract_dir.join(lib_name);
 
-    // Include bundled PDFium library
     let bundled_lib = include_bytes!(env!("KREUZBERG_PDFIUM_BUNDLED_PATH"));
 
-    // Check if library already exists and is valid
     if is_extracted_library_valid(&lib_path, bundled_lib.len()) {
         return Ok(lib_path);
     }
 
-    // SAFETY: EXTRACTION_LOCK is a static Mutex that protects against concurrent writes.
-    // This serializes extraction across threads, preventing the "file too short" error
-    // that occurs when one thread reads a partially-written file.
-    //
-    // Lock poisoning recovery: If a previous holder panicked while holding the lock,
-    // we recover by extracting the inner value. This is safe because the lock guards
-    // only the extraction process itself - the state doesn't need to be consistent
-    // across panics since we use atomic file operations (write-then-rename).
-    let _guard = EXTRACTION_LOCK.lock().unwrap_or_else(|poisoned| {
-        // SAFETY: Recovering from poisoned lock is safe because:
-        // 1. We use atomic operations (write temp, then rename) that are safe to retry
-        // 2. The lock only serializes the extraction, doesn't protect invariants
-        // 3. A panic during extraction leaves either old or new file, both valid states
-        poisoned.into_inner()
-    });
+    let _guard = EXTRACTION_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 
-    // Double-check after acquiring lock: another thread may have already extracted the file
     if is_extracted_library_valid(&lib_path, bundled_lib.len()) {
         return Ok(lib_path);
     }
 
-    // Write to a temporary file first, then atomically rename to prevent other threads
-    // from reading a partially written file. This fixes the "file too short" race condition.
     let temp_path = lib_path.with_extension(format!("tmp.{}", std::process::id()));
 
-    // Write library to temporary file
     fs::write(&temp_path, bundled_lib).map_err(|e| {
         io::Error::new(
             e.kind(),
@@ -213,12 +182,10 @@ pub fn extract_bundled_pdfium() -> io::Result<PathBuf> {
         )
     })?;
 
-    // Set executable permissions on Unix (before rename)
     #[cfg(unix)]
     {
         let perms = fs::Permissions::from_mode(0o755);
         fs::set_permissions(&temp_path, perms).map_err(|e| {
-            // Clean up temp file on error
             let _ = fs::remove_file(&temp_path);
             io::Error::new(
                 e.kind(),
@@ -231,10 +198,7 @@ pub fn extract_bundled_pdfium() -> io::Result<PathBuf> {
         })?;
     }
 
-    // Atomically rename temp file to final location
-    // This ensures other threads never see a partially written file
     fs::rename(&temp_path, &lib_path).map_err(|e| {
-        // Clean up temp file on error
         let _ = fs::remove_file(&temp_path);
         io::Error::new(
             e.kind(),
@@ -298,7 +262,6 @@ mod tests {
 
     #[test]
     fn test_is_extracted_library_valid_size_match() {
-        // Create a temporary test file
         let temp_dir = std::env::temp_dir();
         let test_file = temp_dir.join("test-pdfium-size.dll");
         let test_size = 5_000_000;
@@ -313,13 +276,11 @@ mod tests {
 
     #[test]
     fn test_is_extracted_library_valid_size_tolerance() {
-        // Create a temporary test file
         let temp_dir = std::env::temp_dir();
         let test_file = temp_dir.join("test-pdfium-tolerance.dll");
         let original_size = 10_000_000;
         let tolerance = (original_size as f64 * 0.01) as usize;
 
-        // Create file that's 0.5% smaller (within tolerance)
         let actual_size = original_size - tolerance / 2;
         let test_data = vec![0u8; actual_size];
 
@@ -332,12 +293,10 @@ mod tests {
 
     #[test]
     fn test_is_extracted_library_valid_size_mismatch() {
-        // Create a temporary test file
         let temp_dir = std::env::temp_dir();
         let test_file = temp_dir.join("test-pdfium-mismatch.dll");
         let original_size = 10_000_000;
 
-        // Create file that's 10% smaller (outside tolerance)
         let actual_size = (original_size as f64 * 0.85) as usize;
         let test_data = vec![0u8; actual_size];
 
@@ -362,7 +321,6 @@ mod tests {
         );
         assert!(lib_path.file_name().is_some(), "Library path should have filename");
 
-        // Verify correct library name for platform
         let (expected_name, _) = bundled_library_info();
         assert_eq!(lib_path.file_name().unwrap(), expected_name);
     }
@@ -370,24 +328,19 @@ mod tests {
     #[test]
     #[cfg(feature = "bundled-pdfium")]
     fn test_extract_bundled_pdfium_reuses_existing() {
-        // First extraction
         let result1 = extract_bundled_pdfium();
         assert!(result1.is_ok());
         let path1 = result1.unwrap();
 
-        // Get file size and basic metadata of first extraction
         let metadata1 = fs::metadata(&path1).expect("Should be able to read metadata");
         let size1 = metadata1.len();
 
-        // Second extraction should reuse the file
         let result2 = extract_bundled_pdfium();
         assert!(result2.is_ok());
         let path2 = result2.unwrap();
 
-        // Paths should be identical
         assert_eq!(path1, path2, "Extraction should return same path on second call");
 
-        // File size should be identical (reused, not rewritten)
         let metadata2 = fs::metadata(&path2).expect("Should be able to read metadata");
         let size2 = metadata2.len();
         assert_eq!(size1, size2, "Reused library should have same file size");
@@ -398,7 +351,6 @@ mod tests {
     fn test_extract_bundled_pdfium_concurrent_access() {
         use std::thread;
 
-        // Spawn multiple threads that all try to extract simultaneously
         let handles: Vec<_> = (0..10)
             .map(|_| {
                 thread::spawn(|| {
@@ -409,27 +361,23 @@ mod tests {
             })
             .collect();
 
-        // Collect all results
         let paths: Vec<PathBuf> = handles
             .into_iter()
             .map(|h| h.join().expect("Thread should complete"))
             .collect();
 
-        // All paths should be identical
         let first_path = &paths[0];
         assert!(
             paths.iter().all(|p| p == first_path),
             "All concurrent extractions should return the same path"
         );
 
-        // Verify file exists and is valid
         assert!(
             first_path.exists(),
             "Extracted library should exist at: {}",
             first_path.display()
         );
 
-        // Verify file size is not truncated/partial
         let metadata = fs::metadata(first_path).expect("Should be able to read metadata");
         let file_size = metadata.len();
         assert!(
@@ -451,7 +399,6 @@ mod tests {
         let perms = metadata.permissions();
         let mode = perms.mode();
 
-        // Verify executable bit is set (at least 0o700 or 0o755)
         assert!(
             mode & 0o111 != 0,
             "Library should have executable bit set, got mode: {:#o}",

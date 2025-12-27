@@ -18,7 +18,6 @@ use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\EmbeddingConfig;
 use Kreuzberg\Enums\EmbeddingModelType;
 
-// Configure chunking with balanced embedding model
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChars: 1024,
@@ -39,7 +38,6 @@ echo "Embedding Generation Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Total chunks: " . count($result->chunks ?? []) . "\n\n";
 
-// Analyze embedding coverage
 $chunksWithEmbeddings = 0;
 $totalEmbeddingDimensions = 0;
 
@@ -56,7 +54,6 @@ echo "Coverage: " . ($chunksWithEmbeddings > 0
     ? sprintf("%.1f%%", ($chunksWithEmbeddings / count($result->chunks ?? [1])) * 100)
     : "0%") . "\n\n";
 
-// Display sample chunk with embedding
 if (!empty($result->chunks) && $result->chunks[0]->embedding !== null) {
     $sampleChunk = $result->chunks[0];
 
@@ -73,7 +70,6 @@ if (!empty($result->chunks) && $result->chunks[0]->embedding !== null) {
     echo ", ...]\n\n";
 }
 
-// Calculate average chunk size
 if (!empty($result->chunks)) {
     $totalChars = array_sum(array_map(
         fn($chunk) => strlen($chunk->content),

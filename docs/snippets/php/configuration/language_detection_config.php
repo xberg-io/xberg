@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\LanguageDetectionConfig;
 
-// Basic language detection
 $config = new ExtractionConfig(
     languageDetection: new LanguageDetectionConfig(
         enabled: true
@@ -32,12 +31,11 @@ foreach ($result->detectedLanguages ?? [] as $lang) {
 }
 echo "\n";
 
-// Advanced language detection with confidence threshold
 $advancedConfig = new ExtractionConfig(
     languageDetection: new LanguageDetectionConfig(
         enabled: true,
-        maxLanguages: 3,           // Detect up to 3 languages
-        confidenceThreshold: 0.8   // Only report if 80% confident
+        maxLanguages: 3,           
+        confidenceThreshold: 0.8   
     )
 );
 
@@ -51,10 +49,8 @@ if (!empty($result->detectedLanguages)) {
     echo "No languages detected with sufficient confidence\n\n";
 }
 
-// Use detected language for OCR
 use Kreuzberg\Config\OcrConfig;
 
-// First pass: detect language
 $detectConfig = new ExtractionConfig(
     languageDetection: new LanguageDetectionConfig(enabled: true)
 );
@@ -62,7 +58,6 @@ $detectConfig = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($detectConfig);
 $result = $kreuzberg->extractFile('scanned.pdf');
 
-// Second pass: use detected language for OCR
 if (!empty($result->detectedLanguages)) {
     $primaryLanguage = $result->detectedLanguages[0];
     echo "Primary language detected: $primaryLanguage\n";
@@ -80,7 +75,6 @@ if (!empty($result->detectedLanguages)) {
     echo "OCR extraction complete\n";
 }
 
-// Route documents by language
 $files = ['doc1.pdf', 'doc2.pdf', 'doc3.pdf'];
 $languageMap = [];
 

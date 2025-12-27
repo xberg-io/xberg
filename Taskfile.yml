@@ -1,13 +1,10 @@
 version: "3"
 
-# Language bindings (namespaced)
 includes:
-  # Configuration
   _cfg:
     taskfile: .task/config/vars.yml
     internal: true
 
-  # Languages (namespaced: rust, python, node/typescript, wasm, ruby, go, java, csharp, php)
   rust:
     taskfile: .task/languages/rust.yml
   python:
@@ -27,7 +24,6 @@ includes:
   php:
     taskfile: .task/languages/php.yml
 
-  # Workflows (orchestration across languages - internal includes)
   _build_wf:
     taskfile: .task/workflows/build.yml
     internal: true
@@ -43,7 +39,6 @@ includes:
   benchmark:
     taskfile: .task/workflows/benchmark.yml
 
-  # Tools (version-sync and pdfium namespaced, general flattened)
   version:
     taskfile: .task/tools/version-sync.yml
   pdfium:
@@ -55,11 +50,8 @@ includes:
 vars:
   RUST_LOG: info
 
-# Note: TypeScript tasks are accessed via 'node:' namespace (e.g., task node:build)
-# For backwards compatibility, add aliases if needed in individual language files
 
 tasks:
-  # Setup and initialization
   setup:
     desc: "Install all dependencies and initialize project. Idempotent - safe to re-run anytime."
     cmds:
@@ -81,7 +73,6 @@ tasks:
       - task: php:install
       - echo "Setup complete - safe to re-run anytime"
 
-  # Build (top-level convenience task)
   build:
     desc: Build core libraries and language bindings
     cmds:
@@ -93,7 +84,6 @@ tasks:
       - task: csharp:build
       - task: php:build
 
-  # Test (top-level convenience task)
   test:
     desc: Run test suites for all languages
     cmds:
@@ -107,7 +97,6 @@ tasks:
       - task: php:test
 
 
-  # Format (top-level convenience task)
   format:
     desc: Format code for all languages (with modifications)
     cmds:
@@ -134,14 +123,12 @@ tasks:
       - task: csharp:format:check
       - task: php:format:check
 
-  # Convenience task combining lint:check and format:check
   check:
     desc: Run all checks without modifications (lint + format checks)
     cmds:
       - task: lint:check
       - task: format:check
 
-  # Update dependencies
   update:
     desc: Update all dependencies to latest versions
     cmds:
@@ -151,6 +138,8 @@ tasks:
       - task: python:update
       - echo "Updating TypeScript dependencies..."
       - task: node:update
+      - echo "Updating WASM dependencies..."
+      - task: wasm:update
       - echo "Updating Ruby dependencies..."
       - task: ruby:update
       - echo "Updating Java dependencies..."
@@ -163,7 +152,6 @@ tasks:
       - task: php:update
       - echo "All dependencies updated"
 
-  # Clean build artifacts
   clean:
     desc: Clean all build artifacts
     cmds:
@@ -177,7 +165,6 @@ tasks:
       - task: php:clean
       - task: wasm:clean
 
-  # Workflow namespaces - delegate to internal workflow includes
   build:all:
     desc: Build all bindings across all languages
     cmds:

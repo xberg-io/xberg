@@ -45,7 +45,6 @@ use super::{
 fn parse_size_limits_from_env() -> ApiSizeLimits {
     const DEFAULT_100MB_MB: usize = 100;
 
-    // Try the modern byte-based environment variables first
     if let Ok(value) = std::env::var("KREUZBERG_MAX_REQUEST_BODY_BYTES") {
         if let Ok(bytes) = value.parse::<usize>() {
             if bytes > 0 {
@@ -72,7 +71,6 @@ fn parse_size_limits_from_env() -> ApiSizeLimits {
         }
     }
 
-    // Fall back to the legacy MB-based environment variable
     if let Ok(value) = std::env::var("KREUZBERG_MAX_UPLOAD_SIZE_MB") {
         if let Ok(mb) = value.parse::<usize>() {
             if mb > 0 {
@@ -93,7 +91,6 @@ fn parse_size_limits_from_env() -> ApiSizeLimits {
         }
     }
 
-    // Use default 100 MB limits
     let limits = ApiSizeLimits::from_mb(DEFAULT_100MB_MB, DEFAULT_100MB_MB);
     tracing::info!(
         "Upload size limit: 100 MB (default, {} bytes) - Configure with KREUZBERG_MAX_REQUEST_BODY_BYTES or KREUZBERG_MAX_UPLOAD_SIZE_MB",
@@ -392,7 +389,6 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_parse_size_limits_default_100mb() {
-        // When no environment variables are set, should default to 100 MB
         unsafe {
             std::env::remove_var("KREUZBERG_MAX_REQUEST_BODY_BYTES");
             std::env::remove_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES");
@@ -407,10 +403,9 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_parse_size_limits_from_bytes_env_vars() {
-        // When modern byte-based env vars are set, should use those
         unsafe {
-            std::env::set_var("KREUZBERG_MAX_REQUEST_BODY_BYTES", "5368709120"); // 5 GB
-            std::env::set_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES", "2684354560"); // 2.5 GB
+            std::env::set_var("KREUZBERG_MAX_REQUEST_BODY_BYTES", "5368709120");
+            std::env::set_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES", "2684354560");
             std::env::remove_var("KREUZBERG_MAX_UPLOAD_SIZE_MB");
         }
 
@@ -418,7 +413,6 @@ mod tests {
         assert_eq!(limits.max_request_body_bytes, 5 * 1024 * 1024 * 1024);
         assert_eq!(limits.max_multipart_field_bytes, 2_684_354_560);
 
-        // Cleanup
         unsafe {
             std::env::remove_var("KREUZBERG_MAX_REQUEST_BODY_BYTES");
             std::env::remove_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES");
@@ -428,9 +422,8 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_parse_size_limits_bytes_env_var_only() {
-        // When only request body is set, multipart should use same value
         unsafe {
-            std::env::set_var("KREUZBERG_MAX_REQUEST_BODY_BYTES", "1073741824"); // 1 GB
+            std::env::set_var("KREUZBERG_MAX_REQUEST_BODY_BYTES", "1073741824");
             std::env::remove_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES");
             std::env::remove_var("KREUZBERG_MAX_UPLOAD_SIZE_MB");
         }
@@ -439,7 +432,6 @@ mod tests {
         assert_eq!(limits.max_request_body_bytes, 1 * 1024 * 1024 * 1024);
         assert_eq!(limits.max_multipart_field_bytes, 1 * 1024 * 1024 * 1024);
 
-        // Cleanup
         unsafe {
             std::env::remove_var("KREUZBERG_MAX_REQUEST_BODY_BYTES");
         }
@@ -448,18 +440,16 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_parse_size_limits_from_legacy_mb_env_var() {
-        // When legacy MB env var is set, should use that (backward compatibility)
         unsafe {
             std::env::remove_var("KREUZBERG_MAX_REQUEST_BODY_BYTES");
             std::env::remove_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES");
-            std::env::set_var("KREUZBERG_MAX_UPLOAD_SIZE_MB", "5000"); // 5 GB
+            std::env::set_var("KREUZBERG_MAX_UPLOAD_SIZE_MB", "5000");
         }
 
         let limits = parse_size_limits_from_env();
         assert_eq!(limits.max_request_body_bytes, 5000 * 1024 * 1024);
         assert_eq!(limits.max_multipart_field_bytes, 5000 * 1024 * 1024);
 
-        // Cleanup
         unsafe {
             std::env::remove_var("KREUZBERG_MAX_UPLOAD_SIZE_MB");
         }
@@ -468,7 +458,6 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_parse_size_limits_invalid_bytes_env_var() {
-        // When invalid byte value is provided, should fallback to legacy then default
         unsafe {
             std::env::set_var("KREUZBERG_MAX_REQUEST_BODY_BYTES", "not a number");
             std::env::remove_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES");
@@ -476,10 +465,8 @@ mod tests {
         }
 
         let limits = parse_size_limits_from_env();
-        // Should use default 100 MB since both modern and legacy env vars are missing/invalid
         assert_eq!(limits.max_request_body_bytes, 100 * 1024 * 1024);
 
-        // Cleanup
         unsafe {
             std::env::remove_var("KREUZBERG_MAX_REQUEST_BODY_BYTES");
         }
@@ -488,7 +475,6 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_parse_size_limits_zero_bytes_env_var() {
-        // When zero is provided, should be treated as invalid and use default
         unsafe {
             std::env::set_var("KREUZBERG_MAX_REQUEST_BODY_BYTES", "0");
             std::env::remove_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES");
@@ -496,10 +482,8 @@ mod tests {
         }
 
         let limits = parse_size_limits_from_env();
-        // Should use default 100 MB since 0 is invalid
         assert_eq!(limits.max_request_body_bytes, 100 * 1024 * 1024);
 
-        // Cleanup
         unsafe {
             std::env::remove_var("KREUZBERG_MAX_REQUEST_BODY_BYTES");
         }
@@ -508,18 +492,16 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn test_parse_size_limits_bytes_env_var_precedence() {
-        // Modern byte-based vars should take precedence over legacy MB var
         unsafe {
-            std::env::set_var("KREUZBERG_MAX_REQUEST_BODY_BYTES", "1073741824"); // 1 GB
+            std::env::set_var("KREUZBERG_MAX_REQUEST_BODY_BYTES", "1073741824");
             std::env::remove_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES");
-            std::env::set_var("KREUZBERG_MAX_UPLOAD_SIZE_MB", "5000"); // 5 GB (should be ignored)
+            std::env::set_var("KREUZBERG_MAX_UPLOAD_SIZE_MB", "5000");
         }
 
         let limits = parse_size_limits_from_env();
         assert_eq!(limits.max_request_body_bytes, 1 * 1024 * 1024 * 1024);
         assert_ne!(limits.max_request_body_bytes, 5000 * 1024 * 1024);
 
-        // Cleanup
         unsafe {
             std::env::remove_var("KREUZBERG_MAX_REQUEST_BODY_BYTES");
             std::env::remove_var("KREUZBERG_MAX_UPLOAD_SIZE_MB");

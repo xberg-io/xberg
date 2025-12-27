@@ -41,10 +41,7 @@
 pub fn from_utf8(bytes: &[u8]) -> Result<&str, std::str::Utf8Error> {
     #[cfg(feature = "simd-utf8")]
     {
-        // Map simdutf8 error to std::str::Utf8Error by attempting validation on invalid bytes
         simdutf8::basic::from_utf8(bytes).map_err(|_| {
-            // Create a Utf8Error by validating an invalid byte sequence
-            // SAFETY: This always fails with a valid Utf8Error
             #[allow(invalid_from_utf8)]
             let err = std::str::from_utf8(&[0xFF, 0xFF, 0xFF, 0xFF]).unwrap_err();
             err
@@ -80,7 +77,6 @@ pub fn string_from_utf8(bytes: Vec<u8>) -> Result<String, std::string::FromUtf8E
     {
         #[allow(clippy::collapsible_if)]
         if simdutf8::basic::from_utf8(&bytes).is_ok() {
-            // SAFETY: simdutf8 has already validated the UTF-8
             #[allow(unsafe_code)]
             Ok(unsafe { String::from_utf8_unchecked(bytes) })
         } else {

@@ -21,7 +21,6 @@ for rid in linux-x64 osx-arm64 win-x64; do
 	echo ""
 	echo "Checking $rid..."
 
-	# Check kreuzberg_ffi
 	if unzip -l "$pkg" | grep -E "runtimes/${rid}/native/.*kreuzberg_ffi\\.(dll|so|dylib)"; then
 		echo "  ✓ Found kreuzberg_ffi for $rid"
 	else
@@ -29,8 +28,6 @@ for rid in linux-x64 osx-arm64 win-x64; do
 		missing_files=$((missing_files + 1))
 	fi
 
-	# Note: ONNX Runtime is no longer bundled (switched to dynamic linking in commit 97e9318e)
-	# Users must install ONNX Runtime separately
 done
 
 if [ "$missing_files" -gt 0 ]; then

@@ -189,7 +189,6 @@ public final class ExtractionConfig {
    */
   public String toJson() throws KreuzbergException {
     try (var arena = Arena.ofConfined()) {
-      // Create a temporary config in Rust FFI to serialize
       String jsonInput = CONFIG_MAPPER.writeValueAsString(toMap());
       MemorySegment configJsonSeg = KreuzbergFFI.allocateCString(arena, jsonInput);
 

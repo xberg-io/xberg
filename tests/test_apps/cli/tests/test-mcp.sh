@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo "===== Kreuzberg CLI MCP Server Test ====="
 echo
 
-# Check if kreuzberg is available
 if ! command -v kreuzberg &>/dev/null; then
 	echo -e "${RED}✗ kreuzberg not found. Run ./tests/install.sh first.${NC}"
 	exit 1
@@ -29,16 +27,13 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Start MCP server in background
 echo "Starting MCP server..."
 kreuzberg mcp >/tmp/kreuzberg-mcp.log 2>&1 &
 SERVER_PID=$!
 
-# Wait for server to start
 echo "Waiting for MCP server to start..."
 sleep 2
 
-# Check if server is running
 if ! kill -0 "$SERVER_PID" 2>/dev/null; then
 	echo -e "${RED}✗ MCP server failed to start${NC}"
 	cat /tmp/kreuzberg-mcp.log
@@ -48,7 +43,6 @@ fi
 echo -e "${GREEN}✓ MCP server started successfully (PID: $SERVER_PID)${NC}"
 ((PASSED++))
 
-# Test server is responsive (basic check)
 echo "Checking if MCP server is responsive..."
 if ps -p "$SERVER_PID" >/dev/null; then
 	echo -e "${GREEN}✓ MCP server is running${NC}"

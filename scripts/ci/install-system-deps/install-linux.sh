@@ -70,7 +70,6 @@ if command -v tesseract >/dev/null 2>&1; then
 		echo "::warning::Tesseract CLI present but failed to run"
 	fi
 else
-	# OCR in Kreuzberg uses the bundled kreuzberg-tesseract build; the system tesseract CLI is optional.
 	echo "::warning::Tesseract CLI not found; continuing (OCR will rely on bundled Tesseract)"
 fi
 

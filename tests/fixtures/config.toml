@@ -1,4 +1,3 @@
-# Test configuration file in TOML format
 use_cache = false
 enable_quality_processing = true
 force_ocr = false

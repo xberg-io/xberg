@@ -10,7 +10,6 @@ declare(strict_types=1);
  * This snippet shows how to check for the extension and provides guidance for installation.
  */
 
-// Check if the extension is loaded
 if (!extension_loaded('kreuzberg')) {
     echo "Kreuzberg extension not found!\n\n";
     echo "Installation steps:\n";
@@ -27,12 +26,10 @@ if (!extension_loaded('kreuzberg')) {
     exit(1);
 }
 
-// Display extension information
 echo "Kreuzberg Extension Information:\n";
 echo "================================\n";
 echo "Status: Loaded\n";
 
-// Check for optional dependencies
 $tesseract_available = function_exists('kreuzberg_has_tesseract') ? kreuzberg_has_tesseract() : false;
 $onnx_available = function_exists('kreuzberg_has_onnx') ? kreuzberg_has_onnx() : false;
 

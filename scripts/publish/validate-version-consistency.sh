@@ -12,7 +12,6 @@ errors=0
 echo "Expected version: $expected"
 echo "----------------------------------------"
 
-# Rust workspace (Cargo.toml)
 cargo_version="$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
 echo "Cargo.toml: $cargo_version"
 [ "$cargo_version" = "$expected" ] || {
@@ -20,7 +19,6 @@ echo "Cargo.toml: $cargo_version"
 	errors=$((errors + 1))
 }
 
-# Root package.json
 root_version="$(jq -r '.version' package.json)"
 echo "package.json (root): $root_version"
 [ "$root_version" = "$expected" ] || {
@@ -28,7 +26,6 @@ echo "package.json (root): $root_version"
 	errors=$((errors + 1))
 }
 
-# WASM package.json
 wasm_version="$(jq -r '.version' crates/kreuzberg-wasm/package.json)"
 echo "crates/kreuzberg-wasm/package.json: $wasm_version"
 [ "$wasm_version" = "$expected" ] || {
@@ -36,7 +33,6 @@ echo "crates/kreuzberg-wasm/package.json: $wasm_version"
 	errors=$((errors + 1))
 }
 
-# Node package.json
 node_version="$(jq -r '.version' crates/kreuzberg-node/package.json)"
 echo "crates/kreuzberg-node/package.json: $node_version"
 [ "$node_version" = "$expected" ] || {
@@ -44,7 +40,6 @@ echo "crates/kreuzberg-node/package.json: $node_version"
 	errors=$((errors + 1))
 }
 
-# Python pyproject.toml
 python_version="$(grep '^version' packages/python/pyproject.toml | head -1 | cut -d'"' -f2)"
 echo "packages/python/pyproject.toml: $python_version"
 [ "$python_version" = "$expected" ] || {
@@ -52,7 +47,6 @@ echo "packages/python/pyproject.toml: $python_version"
 	errors=$((errors + 1))
 }
 
-# Ruby version.rb
 ruby_version="$(grep "VERSION =" packages/ruby/lib/kreuzberg/version.rb | cut -d"'" -f2)"
 echo "packages/ruby/lib/kreuzberg/version.rb: $ruby_version"
 [ "$ruby_version" = "$expected" ] || {
@@ -60,7 +54,6 @@ echo "packages/ruby/lib/kreuzberg/version.rb: $ruby_version"
 	errors=$((errors + 1))
 }
 
-# Java pom.xml (first <version> tag is the project version)
 java_version="$(
 	python3 - <<'PY'
 import re
@@ -80,7 +73,6 @@ echo "packages/java/pom.xml: $java_version"
 	errors=$((errors + 1))
 }
 
-# C# Kreuzberg.csproj
 csharp_version="$(
 	python3 - <<'PY'
 import re
@@ -104,7 +96,6 @@ echo "packages/csharp/Kreuzberg/Kreuzberg.csproj: $csharp_version"
 	errors=$((errors + 1))
 }
 
-# Go doc.go version comment
 go_version="$(
 	python3 - <<'PY'
 import re
@@ -121,7 +112,6 @@ echo "packages/go/v4/doc.go: $go_version"
 	errors=$((errors + 1))
 }
 
-# PHP composer.json
 php_version="$(jq -r '.version' packages/php/composer.json)"
 echo "packages/php/composer.json: $php_version"
 [ "$php_version" = "$expected" ] || {

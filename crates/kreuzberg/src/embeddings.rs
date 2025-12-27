@@ -249,7 +249,6 @@ pub fn get_or_init_model(
         let embedding_model = TextEmbedding::try_new(init_options).map_err(|e| {
             let error_msg = e.to_string();
 
-            // Detect ONNX Runtime loading errors by checking for common patterns
             if error_msg.contains("onnxruntime")
                 || error_msg.contains("ORT")
                 || error_msg.contains("libonnxruntime")

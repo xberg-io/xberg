@@ -124,7 +124,6 @@ impl ResultPool {
     fn add_result(&self, result: ExtractionResult) -> *const ExtractionResult {
         let mut results = self.results.lock().expect("Mutex poisoned");
 
-        // Track capacity growth
         if results.len() == results.capacity() && results.capacity() > 0 {
             self.growth_events.fetch_add(1, Ordering::Relaxed);
         }
@@ -132,8 +131,6 @@ impl ResultPool {
         results.push(result);
         self.total_allocations.fetch_add(1, Ordering::Relaxed);
 
-        // Return pointer to last element
-        // SAFETY: We just pushed an element, so last() is guaranteed to be Some
         results.last().unwrap() as *const ExtractionResult
     }
 
@@ -147,7 +144,6 @@ impl ResultPool {
     fn stats(&self) -> CResultPoolStats {
         let results = self.results.lock().expect("Mutex poisoned");
 
-        // Estimate memory usage (rough approximation)
         let estimated_memory_bytes = results
             .iter()
             .map(|r| {
@@ -255,7 +251,6 @@ pub unsafe extern "C" fn kreuzberg_result_pool_reset(pool: *mut ResultPool) {
         return;
     }
 
-    // SAFETY: Caller guarantees pool is valid pointer
     let pool_ref = unsafe { &*pool };
     pool_ref.reset();
 }
@@ -291,9 +286,7 @@ pub unsafe extern "C" fn kreuzberg_result_pool_free(pool: *mut ResultPool) {
         return;
     }
 
-    // SAFETY: Caller guarantees pool is valid pointer from kreuzberg_result_pool_new()
     let _ = unsafe { Box::from_raw(pool) };
-    // Pool and all results are freed when Box is dropped
 }
 
 /// Get statistics about pool usage and efficiency.
@@ -341,7 +334,6 @@ pub unsafe extern "C" fn kreuzberg_result_pool_stats(pool: *const ResultPool) ->
 
     clear_last_error();
 
-    // SAFETY: Caller guarantees pool is valid pointer
     let pool_ref = unsafe { &*pool };
     pool_ref.stats()
 }
@@ -399,7 +391,6 @@ pub unsafe extern "C" fn kreuzberg_extract_file_into_pool(
 ) -> *const CExtractionResultView {
     clear_last_error();
 
-    // Validate arguments
     if file_path.is_null() {
         set_last_error("File path cannot be NULL".to_string());
         return ptr::null();
@@ -410,8 +401,6 @@ pub unsafe extern "C" fn kreuzberg_extract_file_into_pool(
         return ptr::null();
     }
 
-    // Parse file path
-    // SAFETY: Caller guarantees file_path is valid null-terminated UTF-8
     let path_str = match unsafe { CStr::from_ptr(file_path) }.to_str() {
         Ok(s) => s,
         Err(e) => {
@@ -420,9 +409,7 @@ pub unsafe extern "C" fn kreuzberg_extract_file_into_pool(
         }
     };
 
-    // Parse configuration if provided
     let config = if !config_json.is_null() {
-        // SAFETY: Caller guarantees config_json is valid null-terminated UTF-8
         match unsafe { CStr::from_ptr(config_json) }.to_str() {
             Ok(config_str) => match parse_extraction_config_from_json(config_str) {
                 Ok(cfg) => cfg,
@@ -440,7 +427,6 @@ pub unsafe extern "C" fn kreuzberg_extract_file_into_pool(
         Default::default()
     };
 
-    // Extract file
     let result = match extract_file_internal(path_str, &config) {
         Ok(r) => r,
         Err(e) => {
@@ -449,15 +435,8 @@ pub unsafe extern "C" fn kreuzberg_extract_file_into_pool(
         }
     };
 
-    // Add to pool and get pointer
-    // SAFETY: Caller guarantees pool is valid
     let pool_ref = unsafe { &*pool };
     let result_ptr = pool_ref.add_result(result);
-
-    // Create view (stored in thread-local, safe to return pointer)
-    // Note: We need to store the view somewhere permanent
-    // For now, we'll return the result pointer cast to view pointer
-    // The caller will need to call kreuzberg_get_result_view separately
 
     result_ptr as *const CExtractionResultView
 }
@@ -488,37 +467,30 @@ pub unsafe extern "C" fn kreuzberg_extract_file_into_pool_view(
 ) -> CExtractionResultView {
     clear_last_error();
 
-    // Validate arguments
     if file_path.is_null() || pool.is_null() {
         set_last_error("Arguments cannot be NULL".to_string());
-        // SAFETY: Returning zeroed view on error is safe as all fields are POD types
         return unsafe { std::mem::zeroed() };
     }
 
-    // Parse file path
     let path_str = match unsafe { CStr::from_ptr(file_path) }.to_str() {
         Ok(s) => s,
         Err(e) => {
             set_last_error(format!("Invalid UTF-8 in file path: {}", e));
-            // SAFETY: Returning zeroed view on error is safe as all fields are POD types
             return unsafe { std::mem::zeroed() };
         }
     };
 
-    // Parse configuration
     let config = if !config_json.is_null() {
         match unsafe { CStr::from_ptr(config_json) }.to_str() {
             Ok(config_str) => match parse_extraction_config_from_json(config_str) {
                 Ok(cfg) => cfg,
                 Err(e) => {
                     set_last_error(format!("Invalid configuration: {}", e));
-                    // SAFETY: Returning zeroed view on error is safe as all fields are POD types
                     return unsafe { std::mem::zeroed() };
                 }
             },
             Err(e) => {
                 set_last_error(format!("Invalid UTF-8 in config: {}", e));
-                // SAFETY: Returning zeroed view on error is safe as all fields are POD types
                 return unsafe { std::mem::zeroed() };
             }
         }
@@ -526,21 +498,17 @@ pub unsafe extern "C" fn kreuzberg_extract_file_into_pool_view(
         Default::default()
     };
 
-    // Extract file
     let result = match extract_file_internal(path_str, &config) {
         Ok(r) => r,
         Err(e) => {
             set_last_error(e);
-            // SAFETY: Returning zeroed view on error is safe as all fields are POD types
             return unsafe { std::mem::zeroed() };
         }
     };
 
-    // Add to pool and get pointer
     let pool_ref = unsafe { &*pool };
     let result_ptr = pool_ref.add_result(result);
 
-    // Create and return view
     create_result_view(unsafe { &*result_ptr })
 }
 
@@ -555,7 +523,6 @@ fn extract_file_internal(
         return Err(format!("File not found: {}", file_path));
     }
 
-    // Create async runtime
     let rt = tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
 
     rt.block_on(async {
@@ -620,18 +587,16 @@ mod tests {
         let path_cstr = CString::new(file_path.to_str().unwrap()).unwrap();
 
         unsafe {
-            // Add result
             kreuzberg_extract_file_into_pool_view(path_cstr.as_ptr(), ptr::null(), pool);
 
             let stats_before = kreuzberg_result_pool_stats(pool);
             assert_eq!(stats_before.current_count, 1);
 
-            // Reset
             kreuzberg_result_pool_reset(pool);
 
             let stats_after = kreuzberg_result_pool_stats(pool);
             assert_eq!(stats_after.current_count, 0);
-            assert_eq!(stats_after.total_allocations, 1); // Tracked allocation persists
+            assert_eq!(stats_after.total_allocations, 1);
 
             kreuzberg_result_pool_free(pool);
         }
@@ -641,10 +606,9 @@ mod tests {
     fn test_pool_growth() {
         let temp_dir = tempfile::tempdir().unwrap();
 
-        let pool = kreuzberg_result_pool_new(2); // Small capacity
+        let pool = kreuzberg_result_pool_new(2);
 
         unsafe {
-            // Add 5 results (should trigger growth)
             for i in 0..5 {
                 let file_path = temp_dir.path().join(format!("test{}.txt", i));
                 std::fs::write(&file_path, format!("Content {}", i)).unwrap();
@@ -656,7 +620,7 @@ mod tests {
             let stats = kreuzberg_result_pool_stats(pool);
             assert_eq!(stats.current_count, 5);
             assert_eq!(stats.total_allocations, 5);
-            assert!(stats.growth_events > 0); // Should have grown
+            assert!(stats.growth_events > 0);
 
             kreuzberg_result_pool_free(pool);
         }
@@ -666,7 +630,7 @@ mod tests {
     fn test_pool_null_arguments() {
         unsafe {
             kreuzberg_result_pool_reset(ptr::null_mut());
-            kreuzberg_result_pool_free(ptr::null_mut()); // Should not crash
+            kreuzberg_result_pool_free(ptr::null_mut());
 
             let stats = kreuzberg_result_pool_stats(ptr::null());
             assert_eq!(stats.current_count, 0);

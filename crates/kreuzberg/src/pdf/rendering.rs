@@ -122,16 +122,12 @@ impl PdfRenderer {
             }
         })?;
 
-        // Use lazy page-by-page rendering instead of pre-allocating
-        // This reduces memory for large documents by releasing rendered pages
-        // from memory as they are consumed
         let page_count = document.pages().len() as usize;
         let mut images = Vec::with_capacity(page_count);
 
         for page_index in 0..page_count {
             let image = self.render_page_to_image_with_password(pdf_bytes, page_index, options, password)?;
             images.push(image);
-            // Image is held in vector; previous images can be consumed/dropped as needed
         }
 
         Ok(images)
@@ -239,12 +235,8 @@ mod tests {
 
     #[test]
     fn test_renderer_size() {
-        // PdfRenderer may be a zero-sized type (ZST) since Pdfium is a ZST.
-        // The important thing is that the size is consistent and the type is valid.
-        // We just verify the type can be instantiated rather than checking specific size.
         use std::mem::size_of;
         let _size = size_of::<PdfRenderer>();
-        // If this compiles and runs, the type is valid regardless of size
     }
 
     #[test]

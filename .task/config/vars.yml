@@ -11,15 +11,12 @@ vars:
         powershell -Command "(Select-String -Path Cargo.toml -Pattern '^version = ' | Select-Object -First 1 | ForEach-Object {$_.Line -replace 'version = \"([^\"]*)\"', '$1'})" 2>/dev/null || echo "0.0.0"
       fi
 
-  # Build profile (dev, release, ci)
   BUILD_PROFILE: '{{.BUILD_PROFILE | default "release"}}'
 
-  # Tool versions (extracted from current Taskfile.yaml)
   PDFIUM_VERSION: "7578"
   ORT_VERSION: "1.23.2"
   GOLANGCI_LINT_VERSION: "2.7.2"
 
-  # Paths
   ROOT: "{{.ROOT}}"
   CRATES_DIR: "{{.ROOT}}/crates"
   PACKAGES_DIR: "{{.ROOT}}/packages"
@@ -27,7 +24,6 @@ vars:
   DIST_DIR: "{{.ROOT}}/dist"
   TARGET_DIR: "{{.ROOT}}/target"
 
-  # Platform detection with comprehensive Windows/Linux/macOS support
   OS:
     sh: |
       # Try PowerShell for Windows (native, Git Bash, MSYS2, MinGW)
@@ -77,7 +73,6 @@ vars:
         powershell -NoProfile -Command '[System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")' 2>/dev/null || echo "unknown"
       fi
 
-  # Cargo profile directory mapping (debug for dev, release for release/ci)
   CARGO_PROFILE_DIR:
     sh: |
       profile='{{.BUILD_PROFILE}}'

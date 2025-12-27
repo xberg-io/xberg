@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\PageConfig;
 
-// Extract content with page markers
 $config = new ExtractionConfig(
     page: new PageConfig(
         extractPages: false,
@@ -32,7 +31,6 @@ echo "Content with page markers:\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n\n";
 
-// Extract per-page content
 $pageConfig = new ExtractionConfig(
     page: new PageConfig(
         extractPages: true,
@@ -43,7 +41,6 @@ $pageConfig = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($pageConfig);
 $result = $kreuzberg->extractFile('multi_page.pdf');
 
-// Process each page individually
 foreach ($result->pages ?? [] as $page) {
     echo "Page {$page->pageNumber}:\n";
     echo str_repeat('-', 60) . "\n";
@@ -52,7 +49,6 @@ foreach ($result->pages ?? [] as $page) {
     echo "Images on page: " . count($page->images) . "\n\n";
 }
 
-// Custom page marker format
 $customConfig = new ExtractionConfig(
     page: new PageConfig(
         extractPages: false,
@@ -64,11 +60,9 @@ $customConfig = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($customConfig);
 $result = $kreuzberg->extractFile('document.pdf');
 
-// Split content by page markers
 $pages = preg_split('/={10} PAGE \d+ ={10}/', $result->content);
 echo "Split into " . count($pages) . " sections\n";
 
-// Extract specific page range (process all pages, filter after)
 $allPagesConfig = new ExtractionConfig(
     page: new PageConfig(extractPages: true)
 );
@@ -76,7 +70,6 @@ $allPagesConfig = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($allPagesConfig);
 $result = $kreuzberg->extractFile('large_doc.pdf');
 
-// Get only pages 10-20
 $selectedPages = array_filter(
     $result->pages ?? [],
     fn($page) => $page->pageNumber >= 10 && $page->pageNumber <= 20

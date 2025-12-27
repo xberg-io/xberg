@@ -100,7 +100,6 @@ impl StringInternTable {
             cache_hits: 0,
         };
 
-        // Pre-populate common MIME types
         let common_mimes = [
             "text/plain",
             "application/pdf",
@@ -125,7 +124,6 @@ impl StringInternTable {
             table.intern_string(mime);
         }
 
-        // Pre-populate common language codes (ISO 639-1)
         let common_langs = [
             "en", "es", "fr", "de", "zh", "ja", "ko", "pt", "ru", "ar", "hi", "it", "nl", "pl", "tr", "vi", "th", "sv",
             "da", "fi", "no",
@@ -135,14 +133,12 @@ impl StringInternTable {
             table.intern_string(lang);
         }
 
-        // Pre-populate common encodings
         let common_encodings = ["UTF-8", "ISO-8859-1", "ASCII", "Windows-1252"];
 
         for encoding in &common_encodings {
             table.intern_string(encoding);
         }
 
-        // Reset statistics (pre-population shouldn't count)
         table.total_requests = 0;
         table.cache_hits = 0;
 
@@ -154,13 +150,11 @@ impl StringInternTable {
         self.total_requests += 1;
 
         if let Some(entry) = self.strings.get_mut(s) {
-            // String already interned - increment reference count
             entry.ref_count += 1;
             entry.request_count += 1;
             self.cache_hits += 1;
             entry.c_string.as_ptr()
         } else {
-            // New string - create entry
             let c_string = match CString::new(s) {
                 Ok(cs) => cs,
                 Err(_) => return ptr::null(),
@@ -183,7 +177,6 @@ impl StringInternTable {
 
     /// Free an interned string reference.
     fn free_string(&mut self, ptr: *const c_char) -> bool {
-        // Find entry with matching pointer
         let key = self
             .strings
             .iter()
@@ -195,7 +188,6 @@ impl StringInternTable {
             entry.ref_count -= 1;
 
             if entry.ref_count == 0 {
-                // No more references - remove entry
                 self.strings.remove(&key);
             }
 
@@ -209,7 +201,6 @@ impl StringInternTable {
     fn stats(&self) -> CStringInternStats {
         let total_memory_bytes: usize = self.strings.values().map(|e| e.c_string.as_bytes().len() + 1).sum();
 
-        // Estimate memory saved: for each duplicate request, we saved the string size
         let estimated_memory_saved: usize = self
             .strings
             .values()
@@ -300,7 +291,6 @@ pub unsafe extern "C" fn kreuzberg_intern_string(s: *const c_char) -> *const c_c
         return ptr::null();
     }
 
-    // SAFETY: Caller guarantees s is valid null-terminated UTF-8
     let str_ref = match unsafe { CStr::from_ptr(s) }.to_str() {
         Ok(s) => s,
         Err(e) => {
@@ -427,7 +417,6 @@ mod tests {
 
     #[test]
     fn test_intern_same_string() {
-        // Use unique test string to avoid conflicts with pre-populated strings
         let s1 = CString::new("test_unique_12345").unwrap();
         let s2 = CString::new("test_unique_12345").unwrap();
 
@@ -437,11 +426,9 @@ mod tests {
             let ptr1 = kreuzberg_intern_string(s1.as_ptr());
             let ptr2 = kreuzberg_intern_string(s2.as_ptr());
 
-            // Same string should return same pointer
             assert_eq!(ptr1, ptr2);
 
             let stats = kreuzberg_string_intern_stats();
-            // Allow for concurrent tests - check >= instead of ==
             assert!(stats.total_requests - stats_before.total_requests >= 2);
             assert!(stats.cache_hits - stats_before.cache_hits >= 1);
 
@@ -452,7 +439,6 @@ mod tests {
 
     #[test]
     fn test_intern_different_strings() {
-        // Use unique test strings
         let s1 = CString::new("test_unique_aaa").unwrap();
         let s2 = CString::new("test_unique_bbb").unwrap();
 
@@ -462,13 +448,10 @@ mod tests {
             let ptr1 = kreuzberg_intern_string(s1.as_ptr());
             let ptr2 = kreuzberg_intern_string(s2.as_ptr());
 
-            // Different strings should return different pointers
             assert_ne!(ptr1, ptr2);
 
             let stats = kreuzberg_string_intern_stats();
-            // Allow for concurrent tests
             assert!(stats.total_requests - stats_before.total_requests >= 2);
-            // Cache hits delta should be 0 (no hits for new strings), but other tests might add hits
             assert!(stats.cache_misses - stats_before.cache_misses >= 2);
 
             kreuzberg_free_interned_string(ptr1);
@@ -478,7 +461,6 @@ mod tests {
 
     #[test]
     fn test_intern_reference_counting() {
-        // Use unique test string
         let s = CString::new("test_refcount_xyz").unwrap();
 
         unsafe {
@@ -489,19 +471,15 @@ mod tests {
             let stats_before = kreuzberg_string_intern_stats();
             let unique_before = stats_before.unique_count;
 
-            // Free first two references
             kreuzberg_free_interned_string(ptr1);
             kreuzberg_free_interned_string(ptr2);
 
             let stats_mid = kreuzberg_string_intern_stats();
-            // Should still be in table (one reference remaining)
             assert_eq!(stats_mid.unique_count, unique_before);
 
-            // Free last reference
             kreuzberg_free_interned_string(ptr3);
 
             let stats_after = kreuzberg_string_intern_stats();
-            // Should be removed now
             assert_eq!(stats_after.unique_count, unique_before - 1);
         }
     }
@@ -511,17 +489,14 @@ mod tests {
         kreuzberg_string_intern_reset();
 
         let stats_initial = kreuzberg_string_intern_stats();
-        // Should have pre-populated common strings
         assert!(stats_initial.unique_count > 0);
 
-        // Common MIME type should already be interned
         let mime = CString::new("application/pdf").unwrap();
 
         unsafe {
             let ptr = kreuzberg_intern_string(mime.as_ptr());
 
             let stats = kreuzberg_string_intern_stats();
-            // Request count increases but unique count doesn't
             assert_eq!(stats.unique_count, stats_initial.unique_count);
             assert_eq!(stats.cache_hits, 1);
 
@@ -537,13 +512,11 @@ mod tests {
         unsafe {
             let stats_before = kreuzberg_string_intern_stats();
 
-            // Intern same string multiple times
             let ptr1 = kreuzberg_intern_string(s.as_ptr());
             let ptr2 = kreuzberg_intern_string(s.as_ptr());
             let ptr3 = kreuzberg_intern_string(s.as_ptr());
 
             let stats = kreuzberg_string_intern_stats();
-            // Should show memory savings from deduplication
             let savings_delta = stats.estimated_memory_saved - stats_before.estimated_memory_saved;
             assert!(savings_delta > 0);
             assert_eq!(savings_delta, 2 * (test_str.len() + 1));
@@ -565,7 +538,7 @@ mod tests {
     #[test]
     fn test_free_null_string() {
         unsafe {
-            kreuzberg_free_interned_string(ptr::null()); // Should not crash
+            kreuzberg_free_interned_string(ptr::null());
         }
     }
 
@@ -583,7 +556,6 @@ mod tests {
 
             let stats = kreuzberg_string_intern_stats();
             assert!(stats.unique_count > 0);
-            // Allow for concurrent tests
             assert!(stats.total_requests - stats_before.total_requests >= 3);
             assert!(stats.cache_hits - stats_before.cache_hits >= 1);
             assert!(stats.cache_misses - stats_before.cache_misses >= 2);

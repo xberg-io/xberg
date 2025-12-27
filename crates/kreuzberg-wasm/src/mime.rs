@@ -70,18 +70,14 @@ pub fn detect_mime_from_bytes(data: js_sys::Uint8Array) -> Result<String, JsValu
 /// ```
 #[wasm_bindgen(js_name = getMimeFromExtension)]
 pub fn get_mime_from_extension(extension: String) -> Option<String> {
-    // Remove leading dot if present
     let ext = if let Some(stripped) = extension.strip_prefix('.') {
         stripped
     } else {
         &extension
     };
 
-    // Normalize to lowercase
     let ext_lower = ext.to_lowercase();
 
-    // Try to get MIME type from kreuzberg
-    // We need to match against known extensions
     match ext_lower.as_str() {
         "txt" => Some("text/plain".to_string()),
         "md" | "markdown" => Some("text/markdown".to_string()),
@@ -211,10 +207,8 @@ pub fn get_extensions_for_mime(mime_type: String) -> Result<Array, JsValue> {
 /// ```
 #[wasm_bindgen(js_name = normalizeMimeType)]
 pub fn normalize_mime_type(mime_type: String) -> String {
-    // Convert to lowercase and trim whitespace
     let trimmed = mime_type.trim().to_lowercase();
 
-    // Remove parameters (everything after ';')
     if let Some(semicolon_pos) = trimmed.find(';') {
         trimmed[..semicolon_pos].trim().to_string()
     } else {

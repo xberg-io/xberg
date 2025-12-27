@@ -60,7 +60,6 @@ fn dataframe_to_markdown(df: &DataFrame) -> Result<String> {
         return Ok(String::new());
     }
 
-    // Estimate capacity: each cell ~10 chars, 2 pipes per row, height * width cells
     let estimated_capacity = df.height().saturating_mul(df.width()).saturating_mul(12).max(64);
     let mut markdown = String::with_capacity(estimated_capacity);
 

@@ -78,7 +78,6 @@ impl PostProcessor for ChunkingProcessor {
 
     fn estimated_duration_ms(&self, result: &ExtractionResult) -> u64 {
         let text_length = result.content.len();
-        // Chunking is fast: ~1ms per 10KB
         (text_length / 10240).max(1) as u64
     }
 }

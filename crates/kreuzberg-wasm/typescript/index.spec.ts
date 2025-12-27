@@ -3,7 +3,6 @@ import * as adapterModule from "./adapters/wasm-adapter.js";
 import * as registryModule from "./ocr/registry.js";
 import * as runtimeModule from "./runtime.js";
 
-// Test adapter exports
 describe("WASM Adapter Module", () => {
 	it("should export all adapter functions", () => {
 		expect(typeof adapterModule.fileToUint8Array).toBe("function");
@@ -14,7 +13,6 @@ describe("WASM Adapter Module", () => {
 	});
 });
 
-// Test runtime exports
 describe("Runtime Module", () => {
 	it("should export all runtime detection functions", () => {
 		expect(typeof runtimeModule.detectRuntime).toBe("function");
@@ -49,7 +47,6 @@ describe("Runtime Module", () => {
 		const isDeno = runtimeModule.isDeno();
 		const isBun = runtimeModule.isBun();
 
-		// Only one should be true
 		const count = [isBrowser, isNode, isDeno, isBun].filter(Boolean).length;
 		expect(count).toBeLessThanOrEqual(1);
 	});
@@ -83,7 +80,6 @@ describe("Runtime Module", () => {
 	});
 });
 
-// Test OCR registry exports
 describe("OCR Registry Module", () => {
 	it("should export all registry functions", () => {
 		expect(typeof registryModule.registerOcrBackend).toBe("function");
@@ -99,7 +95,6 @@ describe("OCR Registry Module", () => {
 	});
 });
 
-// Integration tests between modules
 describe("Module Integration", () => {
 	it("should provide consistent error wrapping", () => {
 		const error = new Error("Test");

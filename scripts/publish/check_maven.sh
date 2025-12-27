@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
-#
-# Check if Java package exists on Maven Central
-#
-# Arguments:
 #   $1: Package version (required)
-#
-# Environment variables:
-#   - GITHUB_OUTPUT: Path to GitHub Actions output file
-#
-# Usage:
-#   ./check_maven.sh "1.0.0"
-#
 
 set -euo pipefail
 
@@ -28,8 +17,6 @@ max_attempts=12
 attempt=1
 found=false
 
-# Check if JAR exists in Maven repository (direct check, not search API)
-# Search API has indexing lag; repository check is immediate
 while [ $attempt -le $max_attempts ]; do
 	echo "::debug::Checking Maven Central repository for ${group}:${artifact}:${version} (attempt ${attempt}/${max_attempts})" >&2
 

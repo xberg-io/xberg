@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Set environment variables for OpenSSL detection
-# On Ubuntu, OpenSSL is typically in /usr with pkgconfig in arch-specific path
 OPENSSL_ROOT="/usr"
 PKG_CONFIG_DIR="/usr/lib/x86_64-linux-gnu/pkgconfig"
 
-# Verify OpenSSL installation
 if [ ! -f "${PKG_CONFIG_DIR}/openssl.pc" ]; then
 	echo "ERROR: openssl.pc not found at ${PKG_CONFIG_DIR}" >&2
 	echo "Searching for openssl.pc..." >&2
@@ -14,7 +11,6 @@ if [ ! -f "${PKG_CONFIG_DIR}/openssl.pc" ]; then
 	exit 1
 fi
 
-# Export environment variables
 {
 	echo "OPENSSL_DIR=${OPENSSL_ROOT}"
 	echo "OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu"

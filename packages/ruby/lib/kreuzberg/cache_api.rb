@@ -1,23 +1,9 @@
 # frozen_string_literal: true
 
 module Kreuzberg
-  # Provides caching capabilities for extraction results.
-  #
-  # This module manages the cache for document extraction results. Results are cached
-  # based on document content, configuration, and MIME type, improving performance for
-  # repeated extractions of the same documents.
   module CacheAPI
-    # Clear all cached extraction results.
-    #
-    # Removes all entries from both the native Rust cache and the local tracking state.
-    # After calling this method, all extraction results will be recomputed on subsequent
-    # requests (unless caching is disabled).
-    #
     # @return [void] No meaningful return value
-    #
     # @example Clear cache
-    #   Kreuzberg.clear_cache
-    #   puts "Cache cleared"
     def clear_cache
       native_clear_cache
       reset_cache_tracker!

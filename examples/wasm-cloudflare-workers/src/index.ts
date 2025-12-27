@@ -104,7 +104,6 @@ function getFileType(filename: string): string {
  */
 async function handleExtract(request: Request): Promise<Response> {
 	try {
-		// Parse form data
 		const formData = await request.formData();
 		const fileData = formData.get("file");
 
@@ -118,7 +117,6 @@ async function handleExtract(request: Request): Promise<Response> {
 		}
 		const file: File = fileData;
 
-		// Validate file size (100MB limit)
 		const MAX_FILE_SIZE = 100 * 1024 * 1024;
 		if (file.size > MAX_FILE_SIZE) {
 			return createErrorResponse(
@@ -129,7 +127,6 @@ async function handleExtract(request: Request): Promise<Response> {
 			);
 		}
 
-		// Get file type
 		const fileType = getFileType(file.name);
 		if (fileType === "unknown") {
 			return createErrorResponse(
@@ -140,15 +137,12 @@ async function handleExtract(request: Request): Promise<Response> {
 			);
 		}
 
-		// Convert file to ArrayBuffer
 		const arrayBuffer = await file.arrayBuffer();
 		const uint8Array = new Uint8Array(arrayBuffer);
 
-		// Initialize WASM module and extract data
 		await initWasm();
 		const extractedData = await extractBytes(uint8Array, `application/${fileType}`);
 
-		// Prepare response
 		const response: ExtractedData = {
 			text: extractedData.content || "",
 			...(extractedData.metadata && { metadata: extractedData.metadata }),
@@ -217,23 +211,19 @@ export default {
 		const path = url.pathname;
 		const method = request.method;
 
-		// Handle CORS preflight
 		const corsResponse = handleCors(request);
 		if (corsResponse) {
 			return corsResponse;
 		}
 
-		// Health check endpoint
 		if (path === "/health" && method === "GET") {
 			return handleHealth();
 		}
 
-		// File extraction endpoint
 		if (path === "/extract" && method === "POST") {
 			return await handleExtract(request);
 		}
 
-		// Handle API documentation
 		if (path === "/" && method === "GET") {
 			const docs = {
 				name: "Kreuzberg WASM API",
@@ -266,7 +256,6 @@ export default {
 			return createJsonResponse(docs);
 		}
 
-		// 404 for unknown routes
 		return handleNotFound();
 	},
 } satisfies ExportedHandler<Record<string, never>>;

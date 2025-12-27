@@ -40,10 +40,8 @@ class CleanupPostProcessor : IPostProcessor
             return result;
         }
 
-        // Remove extra whitespace
         var cleaned = Regex.Replace(result.Content, @"\s+", " ").Trim();
 
-        // Remove special characters but keep punctuation
         cleaned = Regex.Replace(cleaned, @"[^\w\s\.\,\!\?\-]", "");
 
         result.Content = cleaned;
@@ -77,7 +75,6 @@ class LanguageDetectionPostProcessor : IPostProcessor
 
     private string DetectLanguage(string text)
     {
-        // Placeholder - replace with real language detection
         var commonEnglishWords = new[] { "the", "is", "and", "to", "of", "a", "in", "that" };
         var lowerText = text.ToLower();
         var matches = commonEnglishWords.Count(word =>

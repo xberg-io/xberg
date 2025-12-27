@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\ImagePreprocessingConfig;
 
-// Basic preprocessing - denoise and sharpen
 $config = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -36,13 +35,12 @@ echo "Basic Preprocessing Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo substr($result->content, 0, 300) . "...\n\n";
 
-// High DPI preprocessing for better character recognition
 $highDpiConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            targetDpi: 400,  // Very high DPI
+            targetDpi: 400,  
             denoise: true,
             sharpen: true
         )
@@ -57,14 +55,13 @@ echo str_repeat('=', 60) . "\n";
 echo "Characters extracted: " . strlen($result->content) . "\n";
 echo "Preview: " . substr($result->content, 0, 200) . "...\n\n";
 
-// Deskew and auto-rotate for crooked scans
 $deskewConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            deskew: true,      // Fix skewed text
-            autoRotate: true,  // Correct rotation
+            deskew: true,      
+            autoRotate: true,  
             targetDpi: 300
         )
     )
@@ -77,7 +74,6 @@ echo "Deskewed OCR Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n\n";
 
-// Remove background for documents with watermarks or stains
 $cleanConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -98,20 +94,19 @@ echo str_repeat('=', 60) . "\n";
 echo "Extracted " . strlen($result->content) . " characters\n";
 echo "Text quality improved by removing background noise\n\n";
 
-// Complete preprocessing pipeline for challenging documents
 $comprehensiveConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            targetDpi: 400,         // High resolution
-            denoise: true,          // Remove noise
-            sharpen: true,          // Enhance edges
-            autoRotate: true,       // Fix orientation
-            deskew: true,           // Straighten text
-            removeBackground: true, // Clean background
-            contrastEnhancement: true,  // Improve contrast
-            binarize: true         // Convert to pure black/white
+            targetDpi: 400,         
+            denoise: true,          
+            sharpen: true,          
+            autoRotate: true,       
+            deskew: true,           
+            removeBackground: true, 
+            contrastEnhancement: true,  
+            binarize: true         
         )
     )
 );
@@ -127,7 +122,6 @@ echo "  Characters: " . strlen($result->content) . "\n";
 echo "  Content preview:\n";
 echo "  " . substr($result->content, 0, 300) . "...\n\n";
 
-// Compare preprocessing options
 $testFile = 'test_scan.pdf';
 if (file_exists($testFile)) {
     $configs = [
@@ -170,10 +164,8 @@ if (file_exists($testFile)) {
     }
 }
 
-// Adaptive preprocessing based on document analysis
 function getOptimalPreprocessing(string $file): ImagePreprocessingConfig
 {
-    // Do a quick initial scan to assess quality
     $quickScan = new Kreuzberg(new ExtractionConfig(
         ocr: new OcrConfig(backend: 'tesseract', language: 'eng')
     ));
@@ -183,9 +175,7 @@ function getOptimalPreprocessing(string $file): ImagePreprocessingConfig
     $contentLength = strlen($quickResult->content);
     $ratio = $contentLength / $fileSize;
 
-    // If ratio is very low, document quality is poor
     if ($ratio < 0.01) {
-        // Use aggressive preprocessing
         return new ImagePreprocessingConfig(
             targetDpi: 400,
             denoise: true,
@@ -196,7 +186,6 @@ function getOptimalPreprocessing(string $file): ImagePreprocessingConfig
             contrastEnhancement: true
         );
     } elseif ($ratio < 0.05) {
-        // Use moderate preprocessing
         return new ImagePreprocessingConfig(
             targetDpi: 300,
             denoise: true,
@@ -204,7 +193,6 @@ function getOptimalPreprocessing(string $file): ImagePreprocessingConfig
             deskew: true
         );
     } else {
-        // Use minimal preprocessing
         return new ImagePreprocessingConfig(
             targetDpi: 300,
             denoise: true
@@ -212,7 +200,6 @@ function getOptimalPreprocessing(string $file): ImagePreprocessingConfig
     }
 }
 
-// Use adaptive preprocessing
 $file = 'auto_detect_quality.pdf';
 if (file_exists($file)) {
     $preprocessing = getOptimalPreprocessing($file);

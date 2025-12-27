@@ -12,7 +12,6 @@ fn test_registry_provides_easyocr_languages() {
 
     assert_eq!(languages.len(), 83);
 
-    // Check common languages
     let expected = vec!["en", "fr", "de", "es", "it", "pt", "ja", "ko", "ch_sim", "ch_tra", "ru"];
     for lang in expected {
         assert!(
@@ -32,7 +31,6 @@ fn test_registry_provides_paddleocr_languages() {
 
     assert_eq!(languages.len(), 14);
 
-    // Check expected languages
     let expected = vec!["en", "ch", "french", "german", "korean", "japan", "arabic"];
     for lang in expected {
         assert!(
@@ -52,7 +50,6 @@ fn test_registry_provides_tesseract_languages() {
 
     assert!(languages.len() >= 100, "Tesseract should support 100+ languages");
 
-    // Check expected languages (Tesseract uses 3-letter codes)
     let expected = vec![
         "eng", "fra", "deu", "spa", "ita", "por", "jpn", "kor", "chi_sim", "chi_tra", "rus",
     ];
@@ -69,22 +66,18 @@ fn test_registry_provides_tesseract_languages() {
 fn test_language_support_checking() {
     let registry = LanguageRegistry::new();
 
-    // Test EasyOCR
     assert!(registry.is_language_supported("easyocr", "en"));
     assert!(registry.is_language_supported("easyocr", "fr"));
     assert!(!registry.is_language_supported("easyocr", "invalid_lang"));
 
-    // Test PaddleOCR
     assert!(registry.is_language_supported("paddleocr", "en"));
     assert!(registry.is_language_supported("paddleocr", "ch"));
     assert!(!registry.is_language_supported("paddleocr", "en_US"));
 
-    // Test Tesseract
     assert!(registry.is_language_supported("tesseract", "eng"));
     assert!(registry.is_language_supported("tesseract", "fra"));
     assert!(!registry.is_language_supported("tesseract", "en"));
 
-    // Test invalid backend
     assert!(!registry.is_language_supported("invalid_backend", "en"));
 }
 
@@ -114,7 +107,6 @@ fn test_registry_singleton_behavior() {
     let global1 = LanguageRegistry::global();
     let global2 = LanguageRegistry::global();
 
-    // Should return same instance (same memory pointer)
     assert_eq!(
         global1.get_language_count("easyocr"),
         global2.get_language_count("easyocr")
@@ -130,13 +122,7 @@ fn test_easyocr_special_languages() {
     let registry = LanguageRegistry::new();
     let languages = registry.get_supported_languages("easyocr").unwrap();
 
-    // Test some special/interesting language codes from EasyOCR
-    let special_langs = vec![
-        "ch_sim",      // Simplified Chinese
-        "ch_tra",      // Traditional Chinese
-        "rs_cyrillic", // Serbian Cyrillic
-        "rs_latin",    // Serbian Latin
-    ];
+    let special_langs = vec!["ch_sim", "ch_tra", "rs_cyrillic", "rs_latin"];
 
     for lang in special_langs {
         assert!(
@@ -169,7 +155,6 @@ fn test_registry_default() {
 
 #[test]
 fn test_registry_consistency() {
-    // Create multiple registries and verify they all have the same data
     let registries: Vec<_> = (0..5).map(|_| LanguageRegistry::new()).collect();
 
     let expected_backends = vec!["easyocr", "paddleocr", "tesseract"];
@@ -198,11 +183,9 @@ fn test_registry_consistency() {
 fn test_language_case_sensitivity() {
     let registry = LanguageRegistry::new();
 
-    // EasyOCR is case-sensitive
     assert!(registry.is_language_supported("easyocr", "en"));
-    assert!(!registry.is_language_supported("easyocr", "EN")); // Different case
+    assert!(!registry.is_language_supported("easyocr", "EN"));
 
-    // Backend names are also case-sensitive
     assert!(registry.is_language_supported("easyocr", "en"));
-    assert!(!registry.is_language_supported("EASYOCR", "en")); // Different backend case
+    assert!(!registry.is_language_supported("EASYOCR", "en"));
 }

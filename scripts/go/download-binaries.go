@@ -48,7 +48,6 @@ func main() {
 }
 
 func run(tag, dest string, skipBuildFallback, verbose bool) error {
-	// Detect platform
 	platform, arch, err := detectPlatform()
 	if err != nil {
 		return fmt.Errorf("platform detection failed: %w", err)
@@ -57,7 +56,6 @@ func run(tag, dest string, skipBuildFallback, verbose bool) error {
 		fmt.Printf("Detected platform: %s/%s\n", platform, arch)
 	}
 
-	// Auto-detect release tag if not provided
 	if tag == "" {
 		latestTag, err := getLatestReleaseTag(verbose)
 		if err != nil {
@@ -69,13 +67,11 @@ func run(tag, dest string, skipBuildFallback, verbose bool) error {
 		}
 	}
 
-	// Construct artifact name
 	artifactName := fmt.Sprintf("go-ffi-%s-%s.tar.gz", platform, arch)
 	if verbose {
 		fmt.Printf("Target artifact: %s\n", artifactName)
 	}
 
-	// Determine installation destination
 	if dest == "" {
 		var err error
 		dest, err = getDefaultDestination(verbose)
@@ -87,7 +83,6 @@ func run(tag, dest string, skipBuildFallback, verbose bool) error {
 		fmt.Printf("Installation destination: %s\n", dest)
 	}
 
-	// Try to download
 	if err := downloadAndInstall(tag, artifactName, dest, verbose); err != nil {
 		if verbose {
 			fmt.Printf("Download failed: %v\n", err)
@@ -115,14 +110,12 @@ func detectPlatform() (string, string, error) {
 	platform := runtime.GOOS
 	arch := runtime.GOARCH
 
-	// Map Go platform names to release artifact names
 	platformMap := map[string]string{
 		"darwin":  "macos",
 		"linux":   "linux",
 		"windows": "windows",
 	}
 
-	// Map Go arch names to release artifact names
 	archMap := map[string]string{
 		"amd64": "x86_64",
 		"arm64": "arm64",
@@ -136,17 +129,14 @@ func detectPlatform() (string, string, error) {
 		arch = mappedArch
 	}
 
-	// Validate
 	switch platform {
 	case "macos", "linux", "windows":
-		// OK
 	default:
 		return "", "", fmt.Errorf("unsupported platform: %s", platform)
 	}
 
 	switch arch {
 	case "x86_64", "arm64":
-		// OK
 	default:
 		return "", "", fmt.Errorf("unsupported architecture: %s", arch)
 	}
@@ -195,7 +185,6 @@ func getLatestReleaseTag(verbose bool) (string, error) {
 }
 
 func downloadAndInstall(tag, artifactName, dest string, verbose bool) error {
-	// Find asset URL
 	url := fmt.Sprintf("https://api.github.com/repos/kreuzberg-dev/kreuzberg/releases/tags/%s", tag)
 	if verbose {
 		fmt.Printf("Fetching release info from: %s\n", url)
@@ -236,7 +225,6 @@ func downloadAndInstall(tag, artifactName, dest string, verbose bool) error {
 		fmt.Printf("Downloading from: %s\n", downloadURL)
 	}
 
-	// Download file
 	resp, err = httpGet(downloadURL)
 	if err != nil {
 		return err
@@ -251,7 +239,6 @@ func downloadAndInstall(tag, artifactName, dest string, verbose bool) error {
 		return fmt.Errorf("download returned %d: %s", resp.StatusCode, string(body))
 	}
 
-	// Extract to destination
 	if err := extractTarGz(resp.Body, dest, verbose); err != nil {
 		return fmt.Errorf("extraction failed: %w", err)
 	}
@@ -260,7 +247,6 @@ func downloadAndInstall(tag, artifactName, dest string, verbose bool) error {
 }
 
 func extractTarGz(src io.Reader, dest string, verbose bool) error {
-	// Create destination if needed
 	if err := os.MkdirAll(dest, 0o750); err != nil {
 		return fmt.Errorf("failed to create destination: %w", err)
 	}
@@ -276,7 +262,7 @@ func extractTarGz(src io.Reader, dest string, verbose bool) error {
 	}()
 
 	tr := tar.NewReader(gz)
-	const maxSize = 1 << 30 // 1GB max file size
+	const maxSize = 1 << 30
 
 	for {
 		header, err := tr.Next()
@@ -287,8 +273,6 @@ func extractTarGz(src io.Reader, dest string, verbose bool) error {
 			return fmt.Errorf("tar error: %w", err)
 		}
 
-		// Validate path doesn't escape destination
-		// Use filepath.FromSlash to normalize header.Name, which may use forward slashes
 		normalizedName := filepath.FromSlash(header.Name)
 		targetPath := filepath.Join(dest, normalizedName)
 		if !isPathSafe(dest, targetPath) {
@@ -327,7 +311,6 @@ func extractTarGz(src io.Reader, dest string, verbose bool) error {
 				return fmt.Errorf("failed to close file %s: %w", targetPath, err)
 			}
 
-			// Convert file mode (int64 from tar header to uint32) safely
 			//nolint:gosec
 			if err := os.Chmod(targetPath, os.FileMode(header.Mode)&0o777); err != nil {
 				return err
@@ -353,7 +336,6 @@ func isPathSafe(basePath, targetPath string) bool {
 		return false
 	}
 
-	// Ensure target is under base directory
 	return len(target) >= len(base) && target[:len(base)] == base && (len(target) == len(base) || target[len(base)] == filepath.Separator)
 }
 
@@ -363,7 +345,6 @@ func getDefaultDestination(verbose bool) (string, error) {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	// Default to ~/.local (user-local installation, no sudo required)
 	dest := filepath.Join(homeDir, ".local")
 	if verbose {
 		fmt.Printf("Using user-local destination: %s\n", dest)
@@ -417,7 +398,6 @@ func httpGet(url string) (*http.Response, error) {
 		return nil, err
 	}
 
-	// GitHub API requires User-Agent
 	req.Header.Set("User-Agent", "kreuzberg-go-binaries-installer")
 
 	return client.Do(req)

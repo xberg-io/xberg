@@ -11,7 +11,6 @@ tmp_json="$(mktemp)"
 exists=false
 
 if gh release view "$tag" --json assets >"$tmp_json" 2>/dev/null; then
-	# Validate the JSON response has assets array
 	if ! jq -e '.assets' "$tmp_json" >/dev/null 2>&1; then
 		echo "::warning::Release '${tag}' found but has no assets" >&2
 	else

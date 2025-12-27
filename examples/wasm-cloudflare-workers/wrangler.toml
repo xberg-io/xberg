@@ -10,7 +10,6 @@ cwd = "."
 [build.upload]
 format = "service-worker"
 
-# Environment variables for different deployment targets
 [env.production]
 route = "https://api.example.com/*"
 zone_id = "your-zone-id"

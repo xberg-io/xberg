@@ -1,7 +1,5 @@
 version: "3"
 
-# Benchmark and profiling workflow tasks
-# These tasks support running benchmarks with profiling enabled
 
 vars:
   FIXTURES_DIR: "tools/benchmark-harness/fixtures"

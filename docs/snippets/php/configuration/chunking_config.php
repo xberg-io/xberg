@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\ChunkingConfig;
 
-// Example 1: Basic chunking with default settings
 echo "Example 1: Basic Chunking\n";
 echo "=========================\n";
 
@@ -41,15 +40,14 @@ if ($result->chunks !== null) {
 
 echo "\n\n";
 
-// Example 2: Custom chunk size and overlap
 echo "Example 2: Custom Chunk Size (Small chunks for fine-grained retrieval)\n";
 echo "======================================================================\n";
 
 $config2 = new ExtractionConfig(
     chunking: new ChunkingConfig(
-        maxChunkSize: 256,      // Smaller chunks (default: 512)
-        chunkOverlap: 25,       // 25 character overlap (default: 50)
-        respectSentences: true, // Split at sentence boundaries
+        maxChunkSize: 256,      
+        chunkOverlap: 25,       
+        respectSentences: true, 
         respectParagraphs: false
     )
 );
@@ -57,32 +55,30 @@ $config2 = new ExtractionConfig(
 $result2 = (new Kreuzberg($config2))->extractFile('document.pdf');
 echo "Chunks created: " . (isset($result2->chunks) ? count($result2->chunks) : 0) . "\n\n";
 
-// Example 3: Large chunks with paragraph awareness
 echo "Example 3: Large Chunks (More context per chunk)\n";
 echo "================================================\n";
 
 $config3 = new ExtractionConfig(
     chunking: new ChunkingConfig(
-        maxChunkSize: 2000,      // Larger chunks for more context
-        chunkOverlap: 200,       // Larger overlap to maintain continuity
-        respectSentences: true,  // Respect sentence boundaries
-        respectParagraphs: true  // Also respect paragraph boundaries
+        maxChunkSize: 2000,      
+        chunkOverlap: 200,       
+        respectSentences: true,  
+        respectParagraphs: true  
     )
 );
 
 $result3 = (new Kreuzberg($config3))->extractFile('document.pdf');
 echo "Chunks created: " . (isset($result3->chunks) ? count($result3->chunks) : 0) . "\n\n";
 
-// Example 4: RAG-optimized chunking
 echo "Example 4: RAG-Optimized Configuration\n";
 echo "=====================================\n";
 
 $config4 = new ExtractionConfig(
     chunking: new ChunkingConfig(
-        maxChunkSize: 512,       // Balanced size for embedding models
-        chunkOverlap: 50,        // Standard overlap for context continuity
-        respectSentences: true,  // Maintain semantic coherence
-        respectParagraphs: false // Allow paragraph splitting for consistent size
+        maxChunkSize: 512,       
+        chunkOverlap: 50,        
+        respectSentences: true,  
+        respectParagraphs: false 
     )
 );
 
@@ -91,7 +87,6 @@ $result4 = (new Kreuzberg($config4))->extractFile('document.pdf');
 if ($result4->chunks !== null) {
     echo "Total chunks: " . count($result4->chunks) . "\n";
 
-    // Analyze chunk statistics
     $chunkSizes = array_map(fn($chunk) => $chunk->metadata->charCount, $result4->chunks);
     echo "Average chunk size: " . round(array_sum($chunkSizes) / count($chunkSizes)) . " characters\n";
     echo "Min chunk size: " . min($chunkSizes) . " characters\n";
@@ -100,7 +95,6 @@ if ($result4->chunks !== null) {
 
 echo "\n\n";
 
-// Example 5: Processing chunks individually
 echo "Example 5: Processing Chunks for Vector Database\n";
 echo "================================================\n";
 
@@ -116,7 +110,6 @@ $result5 = (new Kreuzberg($config5))->extractFile('document.pdf');
 
 if ($result5->chunks !== null) {
     foreach ($result5->chunks as $i => $chunk) {
-        // Prepare chunk for vector database storage
         $documentId = "doc_123";
         $chunkData = [
             'document_id' => $documentId,
@@ -130,8 +123,6 @@ if ($result5->chunks !== null) {
                 : null,
         ];
 
-        // Here you would insert into your vector database
-        // Example: $vectorDb->insert($chunkData);
 
         echo "Prepared chunk {$i} for database insertion\n";
     }

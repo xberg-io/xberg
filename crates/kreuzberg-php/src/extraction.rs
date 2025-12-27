@@ -93,11 +93,9 @@ pub fn kreuzberg_extract_bytes(
 ) -> PhpResult<ExtractionResult> {
     let rust_config = config.map(|c| c.to_rust()).unwrap_or_default();
 
-    // Check for custom extractor first
     if crate::plugins::has_custom_extractor(&mime_type) {
         match crate::plugins::call_custom_extractor(&mime_type, &data) {
             Ok(result_zval) => {
-                // Convert Zval result to ExtractionResult
                 if let Some(result_array) = result_zval.array() {
                     let content = result_array
                         .get("content")
@@ -106,7 +104,6 @@ pub fn kreuzberg_extract_bytes(
                         .to_string();
 
                     let metadata = if let Some(_meta_val) = result_array.get("metadata") {
-                        // Convert metadata array to HashMap
                         // TODO: Implement metadata conversion
                         Default::default()
                     } else {
@@ -114,7 +111,6 @@ pub fn kreuzberg_extract_bytes(
                     };
 
                     let tables = if let Some(_tables_val) = result_array.get("tables") {
-                        // Convert tables array
                         // TODO: Implement tables conversion
                         vec![]
                     } else {
@@ -136,13 +132,11 @@ pub fn kreuzberg_extract_bytes(
                 }
             }
             Err(e) => {
-                // Log error and fall through to built-in extractors
                 eprintln!("Custom extractor failed for '{}': {:?}", mime_type, e);
             }
         }
     }
 
-    // Fall back to built-in extraction
     let result = kreuzberg::extract_bytes_sync(&data, &mime_type, &rust_config).map_err(to_php_exception)?;
 
     ExtractionResult::from_rust(result)

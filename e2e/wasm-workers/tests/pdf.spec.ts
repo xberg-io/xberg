@@ -1,5 +1,4 @@
 // Auto-generated tests for pdf fixtures.
-// Designed for Cloudflare Workers with Vitest + Miniflare
 
 import { describe, it, expect } from "vitest";
 import { extractBytes } from "@kreuzberg/wasm";

@@ -168,8 +168,6 @@ fn calculate_ocr_penalty(text: &str, total_chars: f64) -> f64 {
         return 0.0;
     }
 
-    // Use combined regex for most patterns (single pass instead of 5),
-    // then add the dash count which requires line-based context checking
     let artifact_chars =
         sum_match_lengths(text, &COMBINED_OCR_ARTIFACTS_PATTERN) + count_non_table_dash_artifacts(text);
 

@@ -115,14 +115,12 @@ final class BatchProcessingTest extends TestCase
         $kreuzberg = new Kreuzberg();
         $results = $kreuzberg->batchExtractFiles($files);
 
-        // First result should be PDF
         $this->assertStringContainsString(
             'pdf',
             strtolower($results[0]->mimeType),
             'First result should correspond to first file (PDF)',
         );
 
-        // Second result should be markdown/text
         $this->assertStringContainsString(
             'text',
             strtolower($results[1]->mimeType),
@@ -208,7 +206,7 @@ final class BatchProcessingTest extends TestCase
             file_get_contents($filePath),
             file_get_contents($filePath),
         ];
-        $mimeTypes = ['application/pdf']; // Only one MIME type for two files
+        $mimeTypes = ['application/pdf'];
 
         $this->expectException(KreuzbergException::class);
 
@@ -223,7 +221,6 @@ final class BatchProcessingTest extends TestCase
             $this->testDocumentsPath . '/pdfs/code_and_formula.pdf',
         ];
 
-        // Try to add another PDF if available
         $secondPdf = $this->testDocumentsPath . '/pdfs_with_tables/simple.pdf';
         if (file_exists($secondPdf)) {
             $files[] = $secondPdf;

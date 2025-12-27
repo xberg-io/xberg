@@ -4,9 +4,7 @@ require 'mkmf'
 require 'rb_sys/mkmf'
 require 'rbconfig'
 
-# Set shorter build directory for Windows to avoid MAX_PATH issues
 if Gem.win_platform?
-  # Use a much shorter path to avoid Windows MAX_PATH (260 char) limit
   short_target_dir = 'D:/kz-build'
   ENV['CARGO_TARGET_DIR'] = short_target_dir
   ENV['OUT_DIR'] = short_target_dir
@@ -40,6 +38,5 @@ native_dir = 'native'
 
 create_rust_makefile('kreuzberg_rb') do |config|
   config.profile = default_profile.to_sym
-  # Build from the actual Rust crate location (native/) so Cargo.toml is resolvable in packaged gems
   config.ext_dir = native_dir
 end

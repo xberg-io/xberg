@@ -31,18 +31,14 @@ use Kreuzberg\Exceptions\KreuzbergException;
 use Kreuzberg\Kreuzberg;
 use function Kreuzberg\extract_file;
 
-// =============================================================================
-// Example 1: Basic OCR Extraction (OOP API)
-// =============================================================================
 
 echo "=== Example 1: Basic OCR Extraction (OOP API) ===\n\n";
 
 try {
-    // Configure basic OCR with Tesseract
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
-            language: 'eng',  // English language
+            language: 'eng',
         ),
     );
 
@@ -60,14 +56,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 2: Basic OCR Extraction (Procedural API)
-// =============================================================================
 
 echo "=== Example 2: Basic OCR Extraction (Procedural API) ===\n\n";
 
 try {
-    // Use procedural API
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
@@ -86,18 +78,14 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 3: Multi-Language OCR
-// =============================================================================
 
 echo "=== Example 3: Multi-Language OCR ===\n\n";
 
 try {
-    // Configure for English and German
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
-            language: 'eng+deu',  // Multiple languages separated by +
+            language: 'eng+deu',
         ),
     );
 
@@ -112,18 +100,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 4: OCR with Page Segmentation Mode (PSM)
-// =============================================================================
 
 echo "=== Example 4: OCR with Page Segmentation Mode ===\n\n";
 
 try {
-    // Different PSM modes for different document types:
-    // PSM 3: Fully automatic page segmentation (default)
-    // PSM 6: Assume a single uniform block of text
-    // PSM 11: Sparse text. Find as much text as possible in no particular order
-    // PSM 13: Raw line (treat the image as a single text line)
 
     $psmModes = [
         3 => 'Fully automatic page segmentation',
@@ -154,21 +134,17 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 5: Table Detection in Scanned Documents
-// =============================================================================
 
 echo "=== Example 5: Table Detection in Scanned Documents ===\n\n";
 
 try {
-    // Enable table detection for scanned documents
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
             language: 'eng',
             tesseractConfig: new TesseractConfig(
                 psm: 6,
-                enableTableDetection: true,  // Enable table detection
+                enableTableDetection: true,
             ),
         ),
     );
@@ -194,18 +170,13 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 6: OCR Fallback for Hybrid Documents
-// =============================================================================
 
 echo "=== Example 6: OCR Fallback for Hybrid Documents ===\n\n";
 
 try {
-    // Use OCR as fallback when normal text extraction fails
-    // Useful for documents that mix digital text and scanned images
     $config = new ExtractionConfig(
         pdf: new PdfConfig(
-            ocrFallback: true,  // Use OCR only if text extraction fails
+            ocrFallback: true,
         ),
         ocr: new OcrConfig(
             backend: 'tesseract',
@@ -224,21 +195,17 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 7: Character Whitelisting and Blacklisting
-// =============================================================================
 
 echo "=== Example 7: Character Whitelisting and Blacklisting ===\n\n";
 
 try {
-    // Whitelist: Extract only numeric characters (useful for invoices, receipts)
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
             language: 'eng',
             tesseractConfig: new TesseractConfig(
                 psm: 6,
-                tesseditCharWhitelist: '0123456789.,',  // Only digits and punctuation
+                tesseditCharWhitelist: '0123456789.,',
             ),
         ),
     );
@@ -249,14 +216,13 @@ try {
     echo "Character whitelist (numbers only):\n";
     echo "  Extracted: {$result->content}\n\n";
 
-    // Blacklist: Remove certain characters that cause issues
     $config2 = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
             language: 'eng',
             tesseractConfig: new TesseractConfig(
                 psm: 6,
-                tesseditCharBlacklist: '|@#$%',  // Exclude these characters
+                tesseditCharBlacklist: '|@#$%',
             ),
         ),
     );
@@ -271,18 +237,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 8: OCR Engine Mode (OEM)
-// =============================================================================
 
 echo "=== Example 8: OCR Engine Mode ===\n\n";
 
 try {
-    // OEM modes:
-    // 0: Legacy engine only
-    // 1: Neural nets LSTM engine only (default in Tesseract 4.0+)
-    // 2: Legacy + LSTM engines
-    // 3: Default, based on what is available
 
     $oemModes = [
         1 => 'LSTM engine only (best quality)',
@@ -313,9 +271,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 9: OCR from Image Files
-// =============================================================================
 
 echo "=== Example 9: OCR from Image Files ===\n\n";
 
@@ -357,21 +312,15 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 10: Image Preprocessing for Better OCR
-// =============================================================================
 
 echo "=== Example 10: Image Preprocessing for Better OCR ===\n\n";
 
 try {
-    // Configure image preprocessing to improve OCR accuracy
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
             language: 'eng',
             imagePreprocessing: new ImagePreprocessingConfig(
-                // Preprocessing options would go here
-                // (actual options depend on the implementation)
             ),
             tesseractConfig: new TesseractConfig(
                 psm: 6,
@@ -390,26 +339,22 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 11: Comprehensive OCR Configuration
-// =============================================================================
 
 echo "=== Example 11: Comprehensive OCR Configuration ===\n\n";
 
 try {
-    // Create a comprehensive OCR configuration
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
-            language: 'eng+fra+deu',  // Multi-language support
+            language: 'eng+fra+deu',
             tesseractConfig: new TesseractConfig(
-                psm: 6,                      // Uniform block of text
-                oem: 1,                      // LSTM engine only
-                enableTableDetection: true,  // Detect tables
+                psm: 6,
+                oem: 1,
+                enableTableDetection: true,
             ),
         ),
         pdf: new PdfConfig(
-            ocrFallback: true,  // Use OCR as fallback
+            ocrFallback: true,
         ),
     );
 
@@ -425,16 +370,12 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 12: Comparing OCR Configurations
-// =============================================================================
 
 echo "=== Example 12: Comparing OCR Configurations ===\n\n";
 
 try {
     $filePath = __DIR__ . '/../sample-documents/scanned.pdf';
 
-    // Config 1: Fast (PSM 3, automatic)
     $fastConfig = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
@@ -443,7 +384,6 @@ try {
         ),
     );
 
-    // Config 2: Accurate (PSM 6, LSTM only)
     $accurateConfig = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'tesseract',
@@ -457,7 +397,6 @@ try {
 
     echo "Comparing configurations:\n\n";
 
-    // Fast extraction
     $startTime = microtime(true);
     $kreuzberg1 = new Kreuzberg($fastConfig);
     $result1 = $kreuzberg1->extractFile($filePath);
@@ -467,7 +406,6 @@ try {
     echo "  Time: " . round($time1, 3) . " seconds\n";
     echo "  Content length: " . strlen($result1->content) . " characters\n\n";
 
-    // Accurate extraction
     $startTime = microtime(true);
     $kreuzberg2 = new Kreuzberg($accurateConfig);
     $result2 = $kreuzberg2->extractFile($filePath);

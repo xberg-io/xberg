@@ -176,8 +176,6 @@ pub trait OcrBackend: Plugin {
         #[cfg(not(feature = "tokio-runtime"))]
         {
             let _ = (path, config);
-            // For WASM and non-tokio environments, file-based OCR is not supported
-            // through the default implementation. Implementations must provide their own.
             Err(KreuzbergError::Other(
                 "File-based OCR processing requires the tokio-runtime feature".to_string(),
             ))

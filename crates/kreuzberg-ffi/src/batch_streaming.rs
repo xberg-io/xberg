@@ -149,17 +149,15 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_streaming(
 ) -> c_int {
     clear_last_error();
 
-    // Validate arguments
     if files.is_null() {
         set_last_error("Files array cannot be NULL".to_string());
         return -1;
     }
 
     if count == 0 {
-        return 0; // Empty batch is success
+        return 0;
     }
 
-    // Parse configuration if provided
     let config = if !config_json.is_null() {
         match unsafe { CStr::from_ptr(config_json) }.to_str() {
             Ok(config_str) => match parse_extraction_config_from_json(config_str) {
@@ -178,9 +176,7 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_streaming(
         Default::default()
     };
 
-    // Process files sequentially
     for i in 0..count {
-        // SAFETY: Caller guarantees files is valid array of count pointers
         let file_ptr = unsafe { *files.add(i) };
 
         if file_ptr.is_null() {
@@ -192,7 +188,6 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_streaming(
             continue;
         }
 
-        // SAFETY: Caller guarantees each file path is valid null-terminated UTF-8
         let file_path = match unsafe { CStr::from_ptr(file_ptr) }.to_str() {
             Ok(s) => s,
             Err(e) => {
@@ -205,20 +200,13 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_streaming(
             }
         };
 
-        // Extract file
         match extract_file_internal(file_path, &config) {
             Ok(result) => {
-                // Create zero-copy view
                 let view = create_result_view(&result);
 
-                // Invoke callback with borrowed result
-                // SAFETY: Callback contract requires not storing the pointer
                 let continue_processing = unsafe { result_callback(&view as *const _, i, user_data) };
 
-                // Result is automatically freed when it goes out of scope
-
                 if continue_processing != 0 {
-                    // Callback requested cancellation
                     return 0;
                 }
             }
@@ -228,12 +216,11 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_streaming(
                 {
                     unsafe { err_cb(i, err_msg.as_ptr(), user_data) };
                 }
-                // Continue with next file
             }
         }
     }
 
-    0 // Success
+    0
 }
 
 /// Extract multiple files in parallel streaming mode.
@@ -297,7 +284,6 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_parallel(
 ) -> c_int {
     clear_last_error();
 
-    // Validate arguments
     if files.is_null() {
         set_last_error("Files array cannot be NULL".to_string());
         return -1;
@@ -307,7 +293,6 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_parallel(
         return 0;
     }
 
-    // Parse configuration
     let config = if !config_json.is_null() {
         match unsafe { CStr::from_ptr(config_json) }.to_str() {
             Ok(config_str) => match parse_extraction_config_from_json(config_str) {
@@ -326,10 +311,8 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_parallel(
         Default::default()
     };
 
-    // Collect file paths (need owned strings for thread safety)
     let mut file_paths = Vec::with_capacity(count);
     for i in 0..count {
-        // SAFETY: Caller guarantees files is valid array
         let file_ptr = unsafe { *files.add(i) };
 
         if file_ptr.is_null() {
@@ -341,7 +324,6 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_parallel(
             continue;
         }
 
-        // SAFETY: Caller guarantees valid null-terminated UTF-8
         match unsafe { CStr::from_ptr(file_ptr) }.to_str() {
             Ok(s) => file_paths.push((i, s.to_string())),
             Err(e) => {
@@ -354,16 +336,13 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_parallel(
         }
     }
 
-    // Process files in parallel using rayon
     #[cfg(feature = "rayon")]
     {
         use rayon::prelude::*;
 
-        // Cancellation flag
         let cancelled = Arc::new(AtomicBool::new(false));
         let config = Arc::new(config);
 
-        // Configure thread pool
         let pool = if max_parallel > 0 {
             rayon::ThreadPoolBuilder::new().num_threads(max_parallel).build()
         } else {
@@ -378,7 +357,6 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_parallel(
             }
         };
 
-        // Convert user_data to usize for thread-safe capture in closure
         let user_data_ptr = user_data as usize;
 
         pool.install(|| {
@@ -391,8 +369,6 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_parallel(
                     Ok(result) => {
                         let view = create_result_view(&result);
 
-                        // SAFETY: Callback must be thread-safe. user_data was converted to usize
-                        // and back to preserve the original pointer value for the callback.
                         let should_cancel =
                             unsafe { result_callback(&view as *const _, *index, user_data_ptr as *mut c_void) };
 
@@ -416,7 +392,6 @@ pub unsafe extern "C" fn kreuzberg_extract_batch_parallel(
 
     #[cfg(not(feature = "rayon"))]
     {
-        // Fallback to sequential processing
         set_last_error("Parallel processing requires 'rayon' feature to be enabled".to_string());
         -1
     }
@@ -435,7 +410,6 @@ fn extract_file_internal(
         return Err(format!("File not found: {}", file_path));
     }
 
-    // Create async runtime for extraction
     let rt = tokio::runtime::Runtime::new().map_err(|e| format!("Failed to create runtime: {}", e))?;
 
     rt.block_on(async {
@@ -462,15 +436,12 @@ mod tests {
         file_index: usize,
         user_data: *mut c_void,
     ) -> c_int {
-        // SAFETY: Test harness guarantees user_data is valid Mutex<TestContext>
         let ctx = unsafe { &mut *(user_data as *mut Mutex<TestContext>) };
         let mut guard = ctx.lock().unwrap();
 
         if !result.is_null() {
-            // SAFETY: Callback contract guarantees result is valid during callback
             let view = unsafe { &*result };
             let content = if !view.content_ptr.is_null() && view.content_len > 0 {
-                // SAFETY: View guarantees valid UTF-8 slice
                 unsafe {
                     String::from_utf8_lossy(std::slice::from_raw_parts(view.content_ptr, view.content_len)).to_string()
                 }
@@ -480,22 +451,19 @@ mod tests {
             guard.results.push(format!("File {}: {}", file_index, content));
         }
 
-        0 // Continue
+        0
     }
 
     unsafe extern "C" fn test_error_callback(file_index: usize, error_msg: *const c_char, user_data: *mut c_void) {
-        // SAFETY: Test harness guarantees user_data is valid Mutex<TestContext>
         let ctx = unsafe { &mut *(user_data as *mut Mutex<TestContext>) };
         let mut guard = ctx.lock().unwrap();
 
-        // SAFETY: Callback contract guarantees error_msg is valid null-terminated UTF-8
         let msg = unsafe { CStr::from_ptr(error_msg).to_string_lossy().to_string() };
         guard.errors.push(format!("File {}: {}", file_index, msg));
     }
 
     #[test]
     fn test_batch_streaming_basic() {
-        // Create test files
         let temp_dir = tempfile::tempdir().unwrap();
         let file1 = temp_dir.path().join("test1.txt");
         let file2 = temp_dir.path().join("test2.txt");
@@ -550,7 +518,7 @@ mod tests {
             )
         };
 
-        assert_eq!(result, 0); // Completes despite errors
+        assert_eq!(result, 0);
 
         let ctx = context.lock().unwrap();
         assert_eq!(ctx.results.len(), 0);
@@ -564,11 +532,7 @@ mod tests {
             file_index: usize,
             _user_data: *mut c_void,
         ) -> c_int {
-            if file_index == 0 {
-                1 // Cancel after first file
-            } else {
-                0
-            }
+            if file_index == 0 { 1 } else { 0 }
         }
 
         let temp_dir = tempfile::tempdir().unwrap();
@@ -592,7 +556,7 @@ mod tests {
             )
         };
 
-        assert_eq!(result, 0); // Success (cancelled is not an error)
+        assert_eq!(result, 0);
     }
 
     #[test]
@@ -619,6 +583,6 @@ mod tests {
             )
         };
 
-        assert_eq!(result, 0); // Empty batch is success
+        assert_eq!(result, 0);
     }
 }

@@ -271,7 +271,6 @@ fn build_page_structure(document: &PdfDocument<'_>, boundaries: &[PageBoundary])
 pub fn extract_common_metadata_from_document(document: &PdfDocument<'_>) -> Result<CommonPdfMetadata> {
     let pdf_metadata = document.metadata();
 
-    // Define all metadata tags to fetch in batch
     let tag_types = [
         PdfDocumentMetadataTagType::Title,
         PdfDocumentMetadataTagType::Subject,
@@ -282,7 +281,6 @@ pub fn extract_common_metadata_from_document(document: &PdfDocument<'_>) -> Resu
         PdfDocumentMetadataTagType::Creator,
     ];
 
-    // Batch fetch all metadata tags into cache (single pass through metadata)
     let mut metadata_cache: [Option<String>; 7] = Default::default();
     for (index, tag_type) in tag_types.iter().enumerate() {
         if let Some(tag) = pdf_metadata.get(*tag_type) {
@@ -290,7 +288,6 @@ pub fn extract_common_metadata_from_document(document: &PdfDocument<'_>) -> Resu
         }
     }
 
-    // Extract values from cache
     let title = metadata_cache[0].clone();
 
     let subject = metadata_cache[1].clone();

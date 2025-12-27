@@ -429,10 +429,8 @@ impl ExtractionConfig {
     /// decompression can improve CPU utilization by 5-10% by avoiding wasteful
     /// image I/O and processing when results won't be used.
     pub fn needs_image_processing(&self) -> bool {
-        // OCR requires image processing for page rendering
         let ocr_enabled = self.ocr.is_some();
 
-        // Image extraction requires decompression and extraction
         let image_extraction_enabled = self.images.as_ref().map(|i| i.extract_images).unwrap_or(false);
 
         ocr_enabled || image_extraction_enabled
@@ -450,21 +448,18 @@ impl ExtractionConfig {
     pub fn from_toml_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
 
-        // Get file metadata for mtime
         let metadata = std::fs::metadata(path)
             .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
         let mtime = metadata.modified().map_err(|e| {
             KreuzbergError::validation(format!("Failed to get modification time for {}: {}", path.display(), e))
         })?;
 
-        // Check cache
         if let Some(entry) = CONFIG_CACHE.get(path)
             && entry.0 == mtime
         {
             return Ok((*entry.1).clone());
         }
 
-        // Cache miss or stale - read and parse
         let content = std::fs::read_to_string(path)
             .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
 
@@ -481,21 +476,18 @@ impl ExtractionConfig {
     pub fn from_yaml_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
 
-        // Get file metadata for mtime
         let metadata = std::fs::metadata(path)
             .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
         let mtime = metadata.modified().map_err(|e| {
             KreuzbergError::validation(format!("Failed to get modification time for {}: {}", path.display(), e))
         })?;
 
-        // Check cache
         if let Some(entry) = CONFIG_CACHE.get(path)
             && entry.0 == mtime
         {
             return Ok((*entry.1).clone());
         }
 
-        // Cache miss or stale - read and parse
         let content = std::fs::read_to_string(path)
             .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
 
@@ -512,21 +504,18 @@ impl ExtractionConfig {
     pub fn from_json_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
 
-        // Get file metadata for mtime
         let metadata = std::fs::metadata(path)
             .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
         let mtime = metadata.modified().map_err(|e| {
             KreuzbergError::validation(format!("Failed to get modification time for {}: {}", path.display(), e))
         })?;
 
-        // Check cache
         if let Some(entry) = CONFIG_CACHE.get(path)
             && entry.0 == mtime
         {
             return Ok((*entry.1).clone());
         }
 
-        // Cache miss or stale - read and parse
         let content = std::fs::read_to_string(path)
             .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
 
@@ -571,14 +560,12 @@ impl ExtractionConfig {
     pub fn from_file(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
 
-        // Get file metadata for mtime (for cache checking at this level)
         let metadata = std::fs::metadata(path)
             .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
         let mtime = metadata.modified().map_err(|e| {
             KreuzbergError::validation(format!("Failed to get modification time for {}: {}", path.display(), e))
         })?;
 
-        // Check cache
         if let Some(entry) = CONFIG_CACHE.get(path)
             && entry.0 == mtime
         {
@@ -604,7 +591,6 @@ impl ExtractionConfig {
             }
         };
 
-        // Cache the result
         let config_arc = Arc::new(config.clone());
         CONFIG_CACHE.insert(path.to_path_buf(), (mtime, config_arc));
 
@@ -1254,7 +1240,6 @@ enable_quality_processing = true
         let config1 = ExtractionConfig::from_toml_file(&config_path).unwrap();
         assert!(!config1.use_cache);
 
-        // Sleep to ensure mtime changes (some filesystems have 1-second granularity)
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         fs::write(

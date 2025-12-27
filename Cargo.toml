@@ -13,8 +13,6 @@ members = [
     "e2e/rust",
 ]
 exclude = ["tests/test_apps/rust"]
-# Note: packages/ruby/ext/kreuzberg_rb/native is excluded because it uses a vendored
-# kreuzberg crate for gem packaging. Build it separately via: cd packages/ruby && bundle exec rake compile
 default-members = ["crates/kreuzberg", "crates/kreuzberg-cli"]
 resolver = "2"
 
@@ -32,7 +30,6 @@ repository = "https://github.com/kreuzberg-dev/kreuzberg"
 homepage = "https://kreuzberg.dev"
 
 [workspace.dependencies]
-# Core async runtime
 tokio = { version = "1.48.0", features = [
     "rt",
     "rt-multi-thread",
@@ -44,22 +41,17 @@ tokio = { version = "1.48.0", features = [
     "io-util",
 ] }
 
-# Serialization
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.148" }
 
-# Error handling
 thiserror = "2.0.17"
 anyhow = "1.0"
 libc = "0.2.178"
 
-# Async utilities
 async-trait = "0.1.89"
 
-# Tracing/observability
 tracing = "0.1"
 
-# Utilities
 ahash = "0.8.12"
 base64 = "0.22.1"
 hex = "0.4.3"
@@ -70,17 +62,13 @@ html-to-markdown-rs = { version = "2.16.1", default-features = false }
 reqwest = { version = "0.12.28", default-features = false }
 image = { version = "0.25.9", default-features = false }
 
-# CLI
 clap = { version = "4.5", features = ["derive", "color", "suggestions"] }
 
-# Config/parsing
 toml = "0.9.10"
 
-# Testing (dev)
 tempfile = "3.24.0"
 criterion = { version = "0.8", features = ["html_reports"] }
 
-# Dependency resolution fix for lzma-rust2 compatibility with crc 3.x
 lzma-rust2 = { version = "0.15.4" }
 
 [profile.release]
@@ -93,7 +81,6 @@ strip = true
 opt-level = 0
 debug = true
 
-# Package-specific profile overrides for WASM optimizations
 [profile.release.package.kreuzberg-wasm]
 opt-level = "z"
 codegen-units = 1

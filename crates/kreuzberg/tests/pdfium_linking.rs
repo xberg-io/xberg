@@ -45,13 +45,10 @@ fn test_pdf_extraction_basic() {
 
     let result = extract_file_sync(&file_path, None, &config).expect("Should extract PDF successfully");
 
-    // Verify MIME type detection
     assert_mime_type(&result, "application/pdf");
 
-    // Verify content was extracted
     assert_non_empty_content(&result);
 
-    // Verify reasonable content length for a small PDF
     assert_min_content_length(&result, 10);
 }
 
@@ -74,7 +71,6 @@ fn test_pdf_extraction_medium() {
     assert_mime_type(&result, "application/pdf");
     assert_non_empty_content(&result);
 
-    // Medium PDF should have more content than tiny
     assert!(result.content.len() >= 50, "Medium PDF should have substantial content");
 }
 
@@ -96,7 +92,6 @@ fn test_pdf_extraction_rotated_pages() {
     let result = extract_file_sync(&file_path, None, &config).expect("Should extract rotated PDF successfully");
 
     assert_mime_type(&result, "application/pdf");
-    // Rotated PDFs may have OCR-only content, just verify extraction completes
 }
 
 /// Test PDF text extraction with code and formula content.
@@ -134,8 +129,6 @@ fn test_pdf_extraction_right_to_left() {
     let result = extract_file_sync(&file_path, None, &config).expect("Should extract RTL PDF successfully");
 
     assert_mime_type(&result, "application/pdf");
-    // RTL PDFs might have minimal or no extracted text depending on PDF structure
-    // Just verify extraction completes without error
 }
 
 /// Test PDF metadata extraction.
@@ -153,8 +146,6 @@ fn test_pdf_metadata_extraction() {
 
     let result = extract_file_sync(&file_path, None, &config).expect("Should extract PDF metadata");
 
-    // Metadata field is always present (may have empty fields for some PDFs)
-    // Just verify the structure exists
     let _metadata = &result.metadata;
     assert!(!result.mime_type.is_empty(), "MIME type should be set");
 }
@@ -189,10 +180,8 @@ fn test_pdf_extraction_from_bytes() {
 fn test_bundled_pdfium_extraction() {
     use kreuzberg::pdf::extract_bundled_pdfium;
 
-    // Extract bundled PDFium library to temporary directory
     let lib_path = extract_bundled_pdfium().expect("Should extract bundled PDFium library");
 
-    // Verify extracted library exists and is a file
     assert!(
         lib_path.exists(),
         "Extracted PDFium library should exist at {}",
@@ -203,7 +192,6 @@ fn test_bundled_pdfium_extraction() {
         "Extracted PDFium library should be a file, not directory"
     );
 
-    // Verify library has a reasonable file size (at least a few MB)
     let metadata = std::fs::metadata(&lib_path).expect("Should read library metadata");
     assert!(
         metadata.len() > 1_000_000,
@@ -224,10 +212,8 @@ fn test_bundled_pdfium_caching() {
     let path1 = extract_bundled_pdfium().expect("First extraction should succeed");
     let path2 = extract_bundled_pdfium().expect("Second extraction should succeed");
 
-    // Both calls should return the same path (caching in place)
     assert_eq!(path1, path2, "Multiple extractions should return consistent path");
 
-    // Path should still exist
     assert!(path1.exists(), "Extracted library should still exist");
 }
 
@@ -242,10 +228,8 @@ fn test_bundled_pdfium_with_pdf_extraction() {
         return;
     }
 
-    // Ensure bundled PDFium is extracted and available
     let _lib_path = kreuzberg::pdf::extract_bundled_pdfium().expect("Should extract bundled PDFium library");
 
-    // Now test that PDF extraction works with the bundled library
     let file_path = get_test_file_path("pdfs_with_tables/tiny.pdf");
     let config = ExtractionConfig::default();
 
@@ -266,7 +250,6 @@ fn test_pdf_extraction_with_config() {
 
     let file_path = get_test_file_path("pdfs_with_tables/tiny.pdf");
 
-    // Create custom extraction config
     let config = ExtractionConfig::default();
 
     let result = extract_file_sync(&file_path, None, &config).expect("Should extract PDF with custom config");
@@ -274,7 +257,6 @@ fn test_pdf_extraction_with_config() {
     assert_mime_type(&result, "application/pdf");
     assert_non_empty_content(&result);
 
-    // Verify metadata is present
     assert!(!result.mime_type.is_empty(), "MIME type should be set in result");
 }
 
@@ -284,7 +266,6 @@ fn test_pdf_extraction_with_config() {
 /// handles these gracefully.
 #[test]
 fn test_pdf_extraction_edge_cases() {
-    // Test extraction of a minimal PDF
     if skip_if_missing("pdfs_with_tables/tiny.pdf") {
         return;
     }
@@ -292,7 +273,6 @@ fn test_pdf_extraction_edge_cases() {
     let file_path = get_test_file_path("pdfs_with_tables/tiny.pdf");
     let config = ExtractionConfig::default();
 
-    // Should complete without panic, regardless of content
     let result = extract_file_sync(&file_path, None, &config);
     assert!(result.is_ok(), "PDF extraction should succeed");
 }
@@ -315,13 +295,10 @@ fn test_pdf_batch_extraction() {
 
     let config = ExtractionConfig::default();
 
-    // Use synchronous batch extraction
     let results = kreuzberg::batch_extract_file_sync(paths, &config).expect("Should extract PDFs in batch");
 
-    // Verify all PDFs were extracted
     assert_eq!(results.len(), 2, "Should extract both PDFs");
 
-    // Verify all results are valid
     for result in &results {
         assert_mime_type(result, "application/pdf");
         assert_non_empty_content(result);
@@ -334,7 +311,6 @@ fn test_pdf_batch_extraction() {
 /// characters correctly.
 #[test]
 fn test_pdf_unicode_content() {
-    // Right-to-left PDFs often contain Unicode content
     if skip_if_missing("pdfs/right_to_left_01.pdf") {
         return;
     }
@@ -344,8 +320,6 @@ fn test_pdf_unicode_content() {
 
     let result = extract_file_sync(&file_path, None, &config).expect("Should extract PDF with Unicode content");
 
-    // Just verify extraction completes - Unicode content handling
-    // varies by PDF structure
     assert_mime_type(&result, "application/pdf");
 }
 
@@ -357,18 +331,10 @@ fn test_pdf_unicode_content() {
 #[test]
 #[cfg(feature = "pdf")]
 fn test_pdf_module_availability() {
-    // This test verifies that:
-    // 1. The pdf module is available (feature = "pdf")
-    // 2. Key functions are accessible
-    // 3. pdf-bundled module is available when feature enabled
-
-    // Verify we can access the text extraction function
     let _ = kreuzberg::pdf::extract_text_from_pdf;
 
-    // Verify we can access the metadata function
     let _ = kreuzberg::pdf::extract_metadata;
 
-    // Verify bundled module is available when feature enabled
     #[cfg(feature = "bundled-pdfium")]
     let _ = kreuzberg::pdf::extract_bundled_pdfium;
 }

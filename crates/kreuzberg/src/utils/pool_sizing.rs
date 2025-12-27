@@ -94,16 +94,13 @@ impl PoolSizeHint {
 #[inline]
 fn get_format_ratio(mime_type: &str) -> f64 {
     match mime_type {
-        // Plain text formats - minimal overhead
         "text/plain" | "text/markdown" | "text/x-markdown" => 0.95,
         "text/csv" | "text/tab-separated-values" => 0.90,
 
-        // Markup formats - moderate overhead from tags/attributes
         "text/html" | "text/html; charset=utf-8" => 0.65,
         "application/xml" | "text/xml" => 0.60,
         "image/svg+xml" => 0.55,
 
-        // Compressed office formats - depends on content density
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         | "application/vnd.openxmlformats-officedocument.wordprocessingml.macro-enabled.document"
         | "application/msword" => 0.45,
@@ -114,25 +111,20 @@ fn get_format_ratio(mime_type: &str) -> f64 {
         | "application/vnd.openxmlformats-officedocument.presentationml.macro-enabled.presentation"
         | "application/vnd.ms-powerpoint" => 0.35,
 
-        // ODF formats - similar to office
         "application/vnd.oasis.opendocument.text" => 0.45,
         "application/vnd.oasis.opendocument.spreadsheet" => 0.40,
         "application/vnd.oasis.opendocument.presentation" => 0.35,
 
-        // PDF - high compression overhead
         "application/pdf" => 0.25,
 
-        // JSON/YAML - varies, assume moderate
         "application/json" | "text/json" => 0.80,
         "application/x-yaml" | "text/yaml" | "text/x-yaml" | "application/yaml" => 0.85,
 
-        // Archives/other formats - conservative default
         "application/zip" | "application/x-zip-compressed" => 0.30,
         "application/gzip" | "application/x-gzip" => 0.25,
         "application/x-rar-compressed" => 0.30,
         "application/x-7z-compressed" => 0.25,
 
-        // Default: conservative estimate
         _ => 0.50,
     }
 }
@@ -152,18 +144,14 @@ fn get_format_ratio(mime_type: &str) -> f64 {
 #[inline]
 fn get_format_base_config(mime_type: &str) -> (usize, usize) {
     match mime_type {
-        // Plain text - minimal pools
         "text/plain" | "text/markdown" | "text/x-markdown" => (2, 4096),
         "text/csv" | "text/tab-separated-values" => (3, 8192),
 
-        // HTML - many temporary strings during conversion
         "text/html" | "text/html; charset=utf-8" => (8, 16384),
 
-        // Markup - moderate pools
         "application/xml" | "text/xml" => (5, 8192),
         "image/svg+xml" => (4, 8192),
 
-        // Office documents - need good capacity for structured content
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         | "application/vnd.openxmlformats-officedocument.wordprocessingml.macro-enabled.document"
         | "application/msword" => (5, 8192),
@@ -174,19 +162,15 @@ fn get_format_base_config(mime_type: &str) -> (usize, usize) {
         | "application/vnd.openxmlformats-officedocument.presentationml.macro-enabled.presentation"
         | "application/vnd.ms-powerpoint" => (4, 8192),
 
-        // ODF - similar to office
         "application/vnd.oasis.opendocument.text" => (5, 8192),
         "application/vnd.oasis.opendocument.spreadsheet" => (4, 8192),
         "application/vnd.oasis.opendocument.presentation" => (4, 8192),
 
-        // PDF - significant overhead, needs more buffers
         "application/pdf" => (6, 16384),
 
-        // JSON - moderate pools
         "application/json" | "text/json" => (4, 8192),
         "application/x-yaml" | "text/yaml" | "text/x-yaml" | "application/yaml" => (4, 8192),
 
-        // Default: conservative
         _ => (3, 8192),
     }
 }
@@ -207,10 +191,10 @@ fn get_format_base_config(mime_type: &str) -> (usize, usize) {
 #[inline]
 fn adjust_for_file_size(file_size: u64, base_count: usize) -> usize {
     match file_size {
-        0..=100_000 => base_count,                              // < 100KB: base size
-        100_001..=1_000_000 => base_count.saturating_add(2),    // 100KB-1MB: +2
-        1_000_001..=10_000_000 => base_count.saturating_add(4), // 1MB-10MB: +4
-        _ => base_count.saturating_add(6),                      // >10MB: +6
+        0..=100_000 => base_count,
+        100_001..=1_000_000 => base_count.saturating_add(2),
+        1_000_001..=10_000_000 => base_count.saturating_add(4),
+        _ => base_count.saturating_add(6),
     }
 }
 
@@ -229,11 +213,11 @@ fn adjust_for_file_size(file_size: u64, base_count: usize) -> usize {
 #[inline]
 fn estimate_buffer_capacity(file_size: u64) -> usize {
     match file_size {
-        0..=10_000 => 1024,              // < 10KB: 1KB buffers
-        10_001..=100_000 => 4096,        // 10KB-100KB: 4KB buffers
-        100_001..=1_000_000 => 16384,    // 100KB-1MB: 16KB buffers
-        1_000_001..=10_000_000 => 65536, // 1MB-10MB: 64KB buffers
-        _ => 262144,                     // >10MB: 256KB buffers
+        0..=10_000 => 1024,
+        10_001..=100_000 => 4096,
+        100_001..=1_000_000 => 16384,
+        1_000_001..=10_000_000 => 65536,
+        _ => 262144,
     }
 }
 
@@ -266,16 +250,12 @@ pub fn estimate_pool_size(file_size: u64, mime_type: &str) -> PoolSizeHint {
     let format_ratio = get_format_ratio(mime_type);
     let (base_count, _base_capacity) = get_format_base_config(mime_type);
 
-    // Adjust buffer count based on file size
     let adjusted_string_buffer_count = adjust_for_file_size(file_size, base_count);
 
-    // Estimate buffer capacity based on file size
     let buffer_capacity = estimate_buffer_capacity(file_size);
 
-    // Estimate total pool size using format ratio
     let estimated_total_size = (file_size as f64 * format_ratio).ceil() as usize;
 
-    // Byte buffers are typically 8x larger and fewer in number
     let byte_buffer_count = (adjusted_string_buffer_count / 2).max(1);
     let byte_buffer_capacity = buffer_capacity * 8;
 
@@ -319,56 +299,49 @@ mod tests {
     #[test]
     fn test_small_file_sizing() {
         let hint = estimate_pool_size(5_000, "application/pdf");
-        // 5KB PDF
-        assert_eq!(hint.string_buffer_count, 6); // Base 6, no adjustment for size
-        assert_eq!(hint.string_buffer_capacity, 1024); // Small files get 1KB buffers
+        assert_eq!(hint.string_buffer_count, 6);
+        assert_eq!(hint.string_buffer_capacity, 1024);
     }
 
     #[test]
     fn test_medium_file_sizing() {
         let hint = estimate_pool_size(500_000, "application/pdf");
-        // 500KB PDF
-        assert_eq!(hint.string_buffer_count, 8); // Base 6 + 2 for size
-        assert_eq!(hint.string_buffer_capacity, 16384); // Medium files get 16KB buffers
+        assert_eq!(hint.string_buffer_count, 8);
+        assert_eq!(hint.string_buffer_capacity, 16384);
     }
 
     #[test]
     fn test_large_file_sizing() {
         let hint = estimate_pool_size(5_000_000, "application/pdf");
-        // 5MB PDF
-        assert_eq!(hint.string_buffer_count, 10); // Base 6 + 4 for size
-        assert_eq!(hint.string_buffer_capacity, 65536); // Large files get 64KB buffers
+        assert_eq!(hint.string_buffer_count, 10);
+        assert_eq!(hint.string_buffer_capacity, 65536);
     }
 
     #[test]
     fn test_huge_file_sizing() {
         let hint = estimate_pool_size(50_000_000, "application/pdf");
-        // 50MB PDF
-        assert_eq!(hint.string_buffer_count, 12); // Base 6 + 6 for size
-        assert_eq!(hint.string_buffer_capacity, 262144); // Huge files get 256KB buffers
+        assert_eq!(hint.string_buffer_count, 12);
+        assert_eq!(hint.string_buffer_capacity, 262144);
     }
 
     #[test]
     fn test_html_sizing() {
         let hint = estimate_pool_size(1_000_000, "text/html");
-        // 1MB HTML
-        assert_eq!(hint.string_buffer_count, 10); // Base 8 + 2 for size
+        assert_eq!(hint.string_buffer_count, 10);
         assert_eq!(hint.string_buffer_capacity, 16384);
-        assert_eq!(hint.estimated_total_size, 650_000); // 65% of 1MB
+        assert_eq!(hint.estimated_total_size, 650_000);
     }
 
     #[test]
     fn test_text_sizing() {
         let hint = estimate_pool_size(1_000_000, "text/plain");
-        // 1MB plain text
-        assert_eq!(hint.string_buffer_count, 4); // Base 2 + 2 for size
-        assert_eq!(hint.estimated_total_size, 950_000); // 95% of 1MB
+        assert_eq!(hint.string_buffer_count, 4);
+        assert_eq!(hint.estimated_total_size, 950_000);
     }
 
     #[test]
     fn test_byte_buffer_sizing() {
         let hint = estimate_pool_size(5_000_000, "application/pdf");
-        // Byte buffers should be ~half the count, 8x the capacity
         assert!(hint.byte_buffer_count < hint.string_buffer_count);
         assert_eq!(hint.byte_buffer_capacity, hint.string_buffer_capacity * 8);
     }
@@ -376,7 +349,6 @@ mod tests {
     #[test]
     fn test_total_size_estimation() {
         let hint = estimate_pool_size(10_000_000, "application/pdf");
-        // Total size should be 25% of 10MB
         assert_eq!(hint.estimated_total_size, 2_500_000);
     }
 
@@ -386,8 +358,7 @@ mod tests {
             2_000_000,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         );
-        // 2MB XLSX - 40% ratio, 1-10MB range means +4 adjustment
         assert_eq!(hint.estimated_total_size, 800_000);
-        assert_eq!(hint.string_buffer_count, 8); // Base 4 + 4 for size
+        assert_eq!(hint.string_buffer_count, 8);
     }
 }

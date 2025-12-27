@@ -13,9 +13,6 @@ inputs:
 runs:
   using: composite
   steps:
-    # ============================================================================
-    # macOS: Tesseract & LibreOffice Installation with Caching
-    # ============================================================================
 
     - name: Detect Tesseract version (macOS)
       if: runner.os == 'macOS'
@@ -51,9 +48,6 @@ runs:
       shell: bash
       run: scripts/ci/install-system-deps/install-macos.sh
 
-    # ============================================================================
-    # Linux: Tesseract, LibreOffice, Fonts & Build Tools with Caching
-    # ============================================================================
 
     - name: Detect Tesseract version (Linux)
       if: runner.os == 'Linux'
@@ -79,9 +73,6 @@ runs:
       shell: bash
       run: scripts/ci/install-system-deps/install-linux.sh
 
-    # ============================================================================
-    # Windows: Tesseract & LibreOffice Installation with Caching via Chocolatey
-    # ============================================================================
 
     - name: Cache Tesseract (Windows)
       if: runner.os == 'Windows'

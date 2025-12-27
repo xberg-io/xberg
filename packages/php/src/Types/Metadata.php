@@ -55,7 +55,6 @@ readonly class Metadata
      */
     public static function fromArray(array $data): self
     {
-        // Known fields
         $knownFields = [
             'language',
             'date',
@@ -71,7 +70,6 @@ readonly class Metadata
             'page_count',
         ];
 
-        // Extract and validate known fields
         /** @var string|null $language */
         $language = $data['language'] ?? null;
 
@@ -108,7 +106,6 @@ readonly class Metadata
         /** @var int|null $pageCount */
         $pageCount = $data['page_count'] ?? null;
 
-        // Collect custom fields (anything not in known fields)
         $custom = [];
         foreach ($data as $key => $value) {
             if (!in_array($key, $knownFields, true)) {

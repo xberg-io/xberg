@@ -1,17 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Comprehensive test suite for Kreuzberg Ruby bindings v4.0.0-rc6+.
-#
-# Tests ALL exported functions and types/classes.
-# Validates:
-# - All configuration classes import correctly
-# - All extraction functions work (sync variants)
-# - Plugin registration system works
-# - Error handling and validation functions work
-# - Result objects have correct structure
 
-# Don't use bundler/setup - load gem directly
 require 'kreuzberg'
 
 puts '=' * 80
@@ -94,7 +84,6 @@ end
 
 runner = TestRunner.new
 
-# Section 1: Test imports and basic module setup
 runner.start_section('Module Imports & Setup')
 
 runner.test('Kreuzberg module is defined') do
@@ -117,7 +106,6 @@ runner.test('KeywordAlgorithm constants are defined') do
   Kreuzberg::KeywordAlgorithm::YAKE == :yake && Kreuzberg::KeywordAlgorithm::RAKE == :rake
 end
 
-# Section 2: Configuration Classes
 runner.start_section('Configuration Classes - Creation & Structure')
 
 runner.test('OCR config creation with defaults') do
@@ -238,7 +226,6 @@ runner.test('Extraction config to_h serialization') do
   hash.is_a?(Hash) && hash[:force_ocr] == true
 end
 
-# Section 3: Error Classes
 runner.start_section('Error Classes & Exception Hierarchy')
 
 runner.test('ValidationError is defined') do
@@ -299,7 +286,6 @@ runner.test('Error stores error_code') do
   error.error_code == 5
 end
 
-# Section 4: MIME Type Functions
 runner.start_section('MIME Type Detection & Validation')
 
 runner.test('detect_mime_type from PDF bytes') do
@@ -338,7 +324,6 @@ runner.test('get_extensions_for_mime for DOCX') do
   extensions.is_a?(Array) && extensions.include?('docx')
 end
 
-# Section 5: Plugin Registry Functions
 runner.start_section('Plugin Registry - Validators')
 
 runner.test('list_validators returns array') do
@@ -370,7 +355,6 @@ runner.test('clear_validators clears all validators') do
   result == true
 end
 
-# Section 6: Plugin Registry Functions - Post-Processors
 runner.start_section('Plugin Registry - Post-Processors')
 
 runner.test('list_post_processors returns array') do
@@ -402,7 +386,6 @@ runner.test('clear_post_processors clears all post-processors') do
   result == true
 end
 
-# Section 7: Plugin Registry Functions - OCR Backends
 runner.start_section('Plugin Registry - OCR Backends')
 
 runner.test('list_ocr_backends returns array') do
@@ -415,7 +398,6 @@ runner.test('unregister_ocr_backend on non-existent backend returns false or tru
   result.is_a?(TrueClass) || result.is_a?(FalseClass)
 end
 
-# Section 8: Embedding Presets
 runner.start_section('Embedding Presets')
 
 runner.test('list_embedding_presets returns array') do
@@ -424,7 +406,6 @@ runner.test('list_embedding_presets returns array') do
 end
 
 runner.test('get_embedding_preset on built-in preset') do
-  # Try common presets
   ['bert', 'nomic', 'mxbai'].each do |name|
     preset = Kreuzberg.get_embedding_preset(name)
     if preset
@@ -432,11 +413,9 @@ runner.test('get_embedding_preset on built-in preset') do
       return true
     end
   end
-  # If no built-in preset found, just check that method works
   true
 end
 
-# Section 9: Cache API (if available)
 runner.start_section('Cache API')
 
 runner.test('clear_cache method exists') do
@@ -448,12 +427,10 @@ runner.test('cache_stats returns hash-like object') do
     stats = Kreuzberg.cache_stats
     stats.is_a?(Hash) || stats.respond_to?(:[])
   rescue StandardError
-    # Cache stats might not be implemented
     skip('cache_stats not implemented', 'native extension limitation')
   end
 end
 
-# Section 10: Result Object Structure
 runner.start_section('Result Object Structure')
 
 runner.test('Result class has expected attributes') do
@@ -518,7 +495,6 @@ runner.test('Result.to_h produces hash with all fields') do
   hash.is_a?(Hash) && hash[:content] == 'test'
 end
 
-# Section 11: Extraction Functions (File-based - sync only)
 runner.start_section('Extraction Functions - File-based (Sync)')
 
 runner.test('extract_file_sync method is accessible') do
@@ -537,7 +513,6 @@ runner.test('extract_file_sync with non-existent file raises IOError') do
   end
 end
 
-# Section 12: Extraction Functions (Bytes-based - sync only)
 runner.start_section('Extraction Functions - Bytes-based (Sync)')
 
 runner.test('extract_bytes_sync method is accessible') do
@@ -556,7 +531,6 @@ runner.test('extract_bytes_sync with empty PDF raises ParsingError or IOError') 
   end
 end
 
-# Section 13: Batch Extraction (Sync)
 runner.start_section('Batch Extraction Functions (Sync)')
 
 runner.test('batch_extract_files_sync method is accessible') do
@@ -577,7 +551,6 @@ runner.test('batch_extract_bytes_sync with empty array returns array') do
   result.is_a?(Array)
 end
 
-# Section 14: Module Functions and Aliases
 runner.start_section('Module Functions & API Aliases')
 
 runner.test('Kreuzberg::ExtractionConfig is an alias for Config::Extraction') do
@@ -594,7 +567,6 @@ runner.test('Protocol classes are accessible') do
     defined?(Kreuzberg::OcrBackendProtocol) == 'constant'
 end
 
-# Section 15: Error Context
 runner.start_section('Error Context & ErrorContext Class')
 
 runner.test('ErrorContext class is defined') do
@@ -605,6 +577,5 @@ runner.test('PanicContext is defined in Errors') do
   defined?(Kreuzberg::Errors::PanicContext) == 'constant'
 end
 
-# Print summary and exit with appropriate code
 success = runner.summary
 exit(success ? 0 : 1)

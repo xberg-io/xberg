@@ -119,10 +119,8 @@ impl ResourceMonitor {
     fn capture_heap_stats() -> Option<u64> {
         use tikv_jemalloc_ctl::{epoch, stats};
 
-        // Advance the epoch to refresh stats (returns the previous epoch)
         let _prev_epoch = epoch::mib().and_then(|e| e.advance()).ok()?;
 
-        // Read allocated bytes from statistics
         let allocated = stats::allocated::mib().and_then(|a| a.read()).ok()?;
 
         Some(allocated as u64)
@@ -152,8 +150,6 @@ impl ResourceMonitor {
             let refresh_kind = ProcessRefreshKind::nothing().with_memory().with_cpu();
 
             while running.load(Ordering::SeqCst) {
-                // CRITICAL: refresh_cpu_usage() must be called before refresh_processes_specifics()
-                // to ensure CPU metrics are populated. sysinfo requires this ordering.
                 system.refresh_cpu_usage();
 
                 system.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), false, refresh_kind);
@@ -161,9 +157,6 @@ impl ResourceMonitor {
                 if let Some(process) = system.process(pid) {
                     let elapsed = start.elapsed();
 
-                    // Normalize CPU usage by CPU count (sysinfo returns unbounded percentage)
-                    // sysinfo: 0-100% per core * number of cores = 0-(100 * num_cpus)
-                    // Normalized: 0-100% (single core equivalent)
                     let cpu_count = num_cpus::get() as f64;
                     let normalized_cpu_percent = (process.cpu_usage() as f64) / cpu_count;
 
@@ -175,13 +168,11 @@ impl ResourceMonitor {
                         timestamp_ms: elapsed.as_millis() as u64,
                     };
 
-                    // Capture heap stats if memory-profiling is enabled
                     #[cfg(feature = "memory-profiling")]
                     let heap_allocated = Self::capture_heap_stats();
                     #[cfg(not(feature = "memory-profiling"))]
                     let _heap_allocated: Option<u64> = None;
 
-                    // Create memory snapshot
                     #[cfg(feature = "memory-profiling")]
                     let snapshot =
                         MemorySnapshot::new(elapsed, process.memory(), process.virtual_memory(), 0, heap_allocated);
@@ -254,7 +245,6 @@ impl ResourceMonitor {
         let growth_percent = ((end_rss - start_rss) / start_rss) * 100.0;
         let retained_percent = (end_rss / peak_rss) * 100.0;
 
-        // Leak detected if >5% growth and retains >20% of peak
         growth_percent > 5.0 && retained_percent > 20.0
     }
 
@@ -290,7 +280,6 @@ impl ResourceMonitor {
         let peak_vm = *vm_values.iter().max().unwrap_or(&0);
         let avg_cpu = cpu_values.iter().sum::<f64>() / cpu_values.len() as f64;
 
-        // Calculate memory growth rate
         let memory_growth_rate_mb_s = if samples.len() >= 2 {
             let first_memory = memory_values[0];
             let last_memory = memory_values[memory_values.len() - 1];
@@ -312,7 +301,6 @@ impl ResourceMonitor {
             0.0
         };
 
-        // Detect memory leaks
         let leak_detected = if snapshots.len() >= 2 {
             let start_rss = snapshots[0].rss_bytes as f64;
             let end_rss = snapshots[snapshots.len() - 1].rss_bytes as f64;
@@ -329,7 +317,6 @@ impl ResourceMonitor {
             false
         };
 
-        // Get page faults from the last sample
         let total_page_faults = samples.last().map(|s| s.page_faults).unwrap_or(0);
 
         ResourceStats {
@@ -488,7 +475,6 @@ mod tests {
         assert_eq!(stats.p50_memory_bytes, 150);
         assert!((stats.avg_cpu_percent - 15.0).abs() < 0.1);
         assert_eq!(stats.sample_count, 3);
-        // Memory growth rate: (150 - 100) bytes / 1_048_576 / 0.02 seconds
         assert!(stats.memory_growth_rate_mb_s >= 0.0);
         assert_eq!(stats.snapshots.len(), 3);
     }
@@ -502,7 +488,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_leak_detection() {
-        // Create snapshots where memory grows by >5% and retains >20% of peak
         let snapshots = vec![
             MemorySnapshot::new(
                 Duration::from_millis(0),
@@ -522,7 +507,7 @@ mod tests {
             ),
             MemorySnapshot::new(
                 Duration::from_millis(20),
-                1200, // 20% growth, retains 60% of peak
+                1200,
                 5500,
                 0,
                 #[cfg(feature = "memory-profiling")]
@@ -530,7 +515,6 @@ mod tests {
             ),
         ];
 
-        // Need at least one sample for calculate_stats to process
         let samples = vec![ResourceSample {
             memory_bytes: 1200,
             vm_size_bytes: 5500,
@@ -547,7 +531,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_leak_detection_temporary_spike() {
-        // Temporary spike that gets released should not be detected as leak
         let snapshots = vec![
             MemorySnapshot::new(
                 Duration::from_millis(0),
@@ -559,7 +542,7 @@ mod tests {
             ),
             MemorySnapshot::new(
                 Duration::from_millis(10),
-                5000, // Spike to 5MB
+                5000,
                 9000,
                 0,
                 #[cfg(feature = "memory-profiling")]
@@ -567,7 +550,7 @@ mod tests {
             ),
             MemorySnapshot::new(
                 Duration::from_millis(20),
-                1001, // Almost back to start
+                1001,
                 5001,
                 0,
                 #[cfg(feature = "memory-profiling")]
@@ -575,7 +558,6 @@ mod tests {
             ),
         ];
 
-        // Need at least one sample for calculate_stats to process
         let samples = vec![ResourceSample {
             memory_bytes: 1001,
             vm_size_bytes: 5001,

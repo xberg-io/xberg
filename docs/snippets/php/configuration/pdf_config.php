@@ -16,7 +16,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\PdfConfig;
 
-// Basic PDF configuration
 $config = new ExtractionConfig(
     pdf: new PdfConfig(
         extractImages: true,
@@ -31,11 +30,10 @@ $result = $kreuzberg->extractFile('document.pdf');
 echo "PDF extraction complete\n";
 echo "Images extracted: " . count($result->images ?? []) . "\n\n";
 
-// High-quality image extraction
 $highQualityConfig = new ExtractionConfig(
     pdf: new PdfConfig(
         extractImages: true,
-        imageQuality: 100,  // Maximum quality
+        imageQuality: 100,  
         preserveImageFormat: true
     ),
     extractImages: true
@@ -44,7 +42,6 @@ $highQualityConfig = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($highQualityConfig);
 $result = $kreuzberg->extractFile('presentation.pdf');
 
-// Save extracted images with high quality
 foreach ($result->images ?? [] as $image) {
     $filename = sprintf('image_%d_page_%d.%s',
         $image->imageIndex,
@@ -55,13 +52,12 @@ foreach ($result->images ?? [] as $image) {
     echo "Saved high-quality image: $filename ({$image->width}x{$image->height})\n";
 }
 
-// Performance-optimized configuration
 $fastConfig = new ExtractionConfig(
     pdf: new PdfConfig(
-        extractImages: false,  // Skip images for faster extraction
-        imageQuality: 50       // Lower quality if images are needed
+        extractImages: false,  
+        imageQuality: 50       
     ),
-    extractTables: false  // Skip table detection
+    extractTables: false  
 );
 
 $kreuzberg = new Kreuzberg($fastConfig);

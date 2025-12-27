@@ -294,23 +294,18 @@ final class ValidatorRegistry
      */
     public function withValidators(array $validators, callable $callback): mixed
     {
-        // Save current state
         $previousValidators = $this->list();
 
         try {
-            // Register temporary validators
             $this->registerMany($validators);
 
-            // Execute callback
             return $callback();
         } finally {
-            // Clean up: unregister temporary validators
             foreach (array_keys($validators) as $name) {
                 if (!in_array($name, $previousValidators, true)) {
                     try {
                         $this->unregister($name);
                     } catch (\Exception $e) {
-                        // Ignore errors during cleanup
                     }
                 }
             }

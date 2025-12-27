@@ -6,13 +6,11 @@ class Program
     {
         try
         {
-            // Extract from file asynchronously
             var result = await KreuzbergClient.ExtractFileAsync("document.pdf");
 
             Console.WriteLine($"Content length: {result.Content.Length}");
             Console.WriteLine($"MIME type: {result.MimeType}");
 
-            // Extract multiple files concurrently
             var tasks = new[]
             {
                 KreuzbergClient.ExtractFileAsync("file1.pdf"),

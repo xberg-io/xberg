@@ -9,12 +9,7 @@ require 'tempfile'
 # Tests verify T::Struct behavior, type safety, and integration with extraction
 # rubocop:disable Metrics/ClassLength, Metrics/MethodLength, Metrics/AbcSize
 class MetadataTypesTest < Minitest::Test
-  # ============================================================================
-  # Type Structure Tests
-  # ============================================================================
-
   def test_html_metadata_structure
-    # Verify HtmlMetadata has all expected fields with correct Sorbet types
     metadata = Kreuzberg::HtmlMetadata.new(
       title: 'Test Page',
       description: 'A test description',
@@ -56,7 +51,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_keywords_is_array
-    # Verify keywords is T::Array[String], not a String
     keywords_array = %w[test metadata array]
     metadata = Kreuzberg::HtmlMetadata.new(
       title: nil,
@@ -89,7 +83,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_canonical_url_renamed
-    # Verify canonical_url field exists (not canonical)
     metadata = Kreuzberg::HtmlMetadata.new(
       title: nil,
       description: nil,
@@ -116,12 +109,10 @@ class MetadataTypesTest < Minitest::Test
     )
 
     assert_equal 'https://example.com/canonical', metadata.canonical_url
-    # Verify it's accessible via the correct field name
     assert_respond_to metadata, :canonical_url
   end
 
   def test_open_graph_is_hash
-    # Verify open_graph is T::Hash[String, String]
     og_tags = {
       'og:title' => 'Test Title',
       'og:description' => 'Test Description',
@@ -162,7 +153,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_twitter_card_is_hash
-    # Verify twitter_card is T::Hash[String, String]
     twitter_tags = {
       'twitter:card' => 'summary_large_image',
       'twitter:title' => 'Test',
@@ -207,7 +197,6 @@ class MetadataTypesTest < Minitest::Test
   # ============================================================================
 
   def test_header_metadata_creation
-    # Create HeaderMetadata with all fields
     header = Kreuzberg::HeaderMetadata.new(
       level: 1,
       text: 'Main Title',
@@ -224,7 +213,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_header_metadata_nil_id
-    # HeaderMetadata with nil id
     header = Kreuzberg::HeaderMetadata.new(
       level: 2,
       text: 'Subtitle',
@@ -241,7 +229,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_link_metadata_creation
-    # Create LinkMetadata with all fields including rel array and attributes hash
     link = Kreuzberg::LinkMetadata.new(
       href: 'https://example.com',
       text: 'Example',
@@ -263,7 +250,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_link_metadata_empty_arrays_and_hashes
-    # LinkMetadata with empty rel and attributes
     link = Kreuzberg::LinkMetadata.new(
       href: 'https://example.com',
       text: 'Link',
@@ -280,7 +266,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_image_metadata_creation
-    # Create ImageMetadata with dimensions and attributes
     image = Kreuzberg::ImageMetadata.new(
       src: 'images/logo.png',
       alt: 'Company Logo',
@@ -301,7 +286,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_image_metadata_nil_dimensions
-    # ImageMetadata with nil dimensions
     image = Kreuzberg::ImageMetadata.new(
       src: 'image.jpg',
       alt: 'Description',
@@ -317,7 +301,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_structured_data_creation
-    # Create StructuredData with data_type and raw_json
     json_data = '{"@context":"https://schema.org","@type":"Article","headline":"Test Article"}'
     structured = Kreuzberg::StructuredData.new(
       data_type: 'json-ld',
@@ -328,13 +311,11 @@ class MetadataTypesTest < Minitest::Test
     assert_equal 'json-ld', structured.data_type
     assert_equal json_data, structured.raw_json
     assert_equal 'Article', structured.schema_type
-    # Verify JSON is valid
     parsed = JSON.parse(structured.raw_json)
     assert_equal 'Article', parsed['@type']
   end
 
   def test_structured_data_nil_schema_type
-    # StructuredData with nil schema_type
     json_data = '{"data":"value"}'
     structured = Kreuzberg::StructuredData.new(
       data_type: 'microdata',
@@ -351,7 +332,6 @@ class MetadataTypesTest < Minitest::Test
   # ============================================================================
 
   def test_extract_html_returns_metadata
-    # Test that extraction returns proper metadata structure
     html_file = create_test_html_file(
       '<html><head><title>Test Page</title></head><body><p>Content</p></body></html>'
     )
@@ -361,8 +341,6 @@ class MetadataTypesTest < Minitest::Test
       assert_instance_of Kreuzberg::Result, result
       assert_not_nil result.metadata
 
-      # Metadata can be a hash or HtmlMetadata instance
-      # Depending on implementation
       if result.metadata.is_a?(Hash)
         assert result.metadata.is_a?(Hash)
       elsif result.metadata.is_a?(Kreuzberg::HtmlMetadata)
@@ -374,7 +352,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_metadata_keywords_array
-    # Verify keywords are extracted as an array
     html_content = <<~HTML
       <html>
         <head>
@@ -391,10 +368,8 @@ class MetadataTypesTest < Minitest::Test
       metadata = result.metadata
 
       if metadata.is_a?(Hash) && metadata['keywords']
-        # Check as hash
         assert metadata['keywords'].is_a?(Array)
       elsif metadata.is_a?(Kreuzberg::HtmlMetadata)
-        # Check as HtmlMetadata
         assert_instance_of Array, metadata.keywords
       end
     ensure
@@ -403,7 +378,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_metadata_open_graph_hash
-    # Verify Open Graph tags are extracted as a hash
     html_content = <<~HTML
       <html>
         <head>
@@ -422,10 +396,8 @@ class MetadataTypesTest < Minitest::Test
       metadata = result.metadata
 
       if metadata.is_a?(Hash) && metadata['open_graph']
-        # Check as hash
         assert metadata['open_graph'].is_a?(Hash)
       elsif metadata.is_a?(Kreuzberg::HtmlMetadata)
-        # Check as HtmlMetadata
         assert_instance_of Hash, metadata.open_graph
       end
     ensure
@@ -434,7 +406,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_metadata_headers_array
-    # Verify headers are extracted as an array of HeaderMetadata or hash
     html_content = <<~HTML
       <html>
         <head><title>Test</title></head>
@@ -452,10 +423,8 @@ class MetadataTypesTest < Minitest::Test
       metadata = result.metadata
 
       if metadata.is_a?(Hash) && metadata['headers']
-        # Check as hash
         assert metadata['headers'].is_a?(Array)
       elsif metadata.is_a?(Kreuzberg::HtmlMetadata)
-        # Check as HtmlMetadata
         assert_instance_of Array, metadata.headers
       end
     ensure
@@ -464,7 +433,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_metadata_links_array
-    # Verify links are extracted as an array of LinkMetadata or hash
     html_content = <<~HTML
       <html>
         <head><title>Test</title></head>
@@ -482,10 +450,8 @@ class MetadataTypesTest < Minitest::Test
       metadata = result.metadata
 
       if metadata.is_a?(Hash) && metadata['links']
-        # Check as hash
         assert metadata['links'].is_a?(Array)
       elsif metadata.is_a?(Kreuzberg::HtmlMetadata)
-        # Check as HtmlMetadata
         assert_instance_of Array, metadata.links
       end
     ensure
@@ -494,7 +460,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_metadata_images_array
-    # Verify images are extracted as an array of ImageMetadata or hash
     html_content = <<~HTML
       <html>
         <head><title>Test</title></head>
@@ -512,10 +477,8 @@ class MetadataTypesTest < Minitest::Test
       metadata = result.metadata
 
       if metadata.is_a?(Hash) && metadata['images']
-        # Check as hash
         assert metadata['images'].is_a?(Array)
       elsif metadata.is_a?(Kreuzberg::HtmlMetadata)
-        # Check as HtmlMetadata
         assert_instance_of Array, metadata.images
       end
     ensure
@@ -528,7 +491,6 @@ class MetadataTypesTest < Minitest::Test
   # ============================================================================
 
   def test_metadata_empty_html
-    # Empty HTML returns defaults
     html_file = create_test_html_file('<html><body></body></html>')
 
     begin
@@ -536,7 +498,6 @@ class MetadataTypesTest < Minitest::Test
       metadata = result.metadata
 
       if metadata.is_a?(Kreuzberg::HtmlMetadata)
-        # Should have default empty collections
         assert_instance_of Array, metadata.keywords
         assert_instance_of Hash, metadata.open_graph
         assert_instance_of Hash, metadata.twitter_card
@@ -546,7 +507,6 @@ class MetadataTypesTest < Minitest::Test
         assert_instance_of Array, metadata.images
         assert_instance_of Array, metadata.structured_data
       elsif metadata.is_a?(Hash)
-        # Check hash defaults
         assert_instance_of Array, metadata['keywords'] || []
         assert_instance_of Hash, metadata['open_graph'] || {}
         assert_instance_of Hash, metadata['twitter_card'] || {}
@@ -557,7 +517,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_metadata_nil_optional_fields
-    # Optional fields are nil when missing
     metadata = Kreuzberg::HtmlMetadata.new(
       title: nil,
       description: nil,
@@ -600,7 +559,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_metadata_empty_collections
-    # Empty arrays and hashes when no data
     metadata = Kreuzberg::HtmlMetadata.new(
       title: nil,
       description: nil,
@@ -641,7 +599,6 @@ class MetadataTypesTest < Minitest::Test
   # ============================================================================
 
   def test_type_checking_enabled
-    # Verify Sorbet runtime type checking is available
     metadata = Kreuzberg::HtmlMetadata.new(
       title: 'Test',
       description: nil,
@@ -667,7 +624,6 @@ class MetadataTypesTest < Minitest::Test
       structured_data: []
     )
 
-    # Verify the object responds to Sorbet reflection methods
     assert_kind_of Kreuzberg::HtmlMetadata, metadata
     assert metadata.respond_to?(:title)
     assert metadata.respond_to?(:keywords)
@@ -675,7 +631,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_immutable_tstruct_fields
-    # T::Struct fields should be immutable (const)
     metadata = Kreuzberg::HtmlMetadata.new(
       title: 'Original',
       description: nil,
@@ -701,12 +656,10 @@ class MetadataTypesTest < Minitest::Test
       structured_data: []
     )
 
-    # Attempting to assign should raise an error
     assert_raises(NoMethodError) { metadata.title = 'Modified' }
   end
 
   def test_headers_with_multiple_levels
-    # Create headers at different nesting levels
     headers = [
       Kreuzberg::HeaderMetadata.new(level: 1, text: 'H1', id: nil, depth: 0, html_offset: 0),
       Kreuzberg::HeaderMetadata.new(level: 2, text: 'H2', id: nil, depth: 1, html_offset: 50),
@@ -746,7 +699,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_links_with_various_types
-    # Create links of different types
     links = [
       Kreuzberg::LinkMetadata.new(
         href: 'https://external.com',
@@ -807,7 +759,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_images_with_attributes
-    # Create images with various attributes
     images = [
       Kreuzberg::ImageMetadata.new(
         src: 'logo.png',
@@ -859,7 +810,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_structured_data_multiple_types
-    # Multiple structured data formats
     json_ld = '{"@context":"https://schema.org","@type":"Article"}'
     microdata = '{"type":"http://schema.org/Person"}'
 
@@ -914,7 +864,6 @@ class MetadataTypesTest < Minitest::Test
   end
 
   def test_html_metadata_with_all_fields_populated
-    # Create a comprehensive HtmlMetadata with all fields
     headers = [
       Kreuzberg::HeaderMetadata.new(level: 1, text: 'Title', id: 'title', depth: 0, html_offset: 100)
     ]
@@ -980,7 +929,6 @@ class MetadataTypesTest < Minitest::Test
       structured_data: structured
     )
 
-    # Verify all fields
     assert_equal 'Complete Test Page', metadata.title
     assert_equal 'A complete test page with all metadata', metadata.description
     assert_equal 'Test Author', metadata.author
@@ -998,10 +946,6 @@ class MetadataTypesTest < Minitest::Test
     assert_equal 1, metadata.images.length
     assert_equal 1, metadata.structured_data.length
   end
-
-  # ============================================================================
-  # Helper Methods
-  # ============================================================================
 
   private
 

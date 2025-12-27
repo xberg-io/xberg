@@ -42,18 +42,14 @@ use kreuzberg::core::config_validation::{
 
 use crate::set_last_error;
 
-// Constants for list responses (duplicated from core module for FFI purposes)
 const VALID_BINARIZATION_METHODS: &[&str] = &["otsu", "adaptive", "sauvola"];
 const VALID_TOKEN_REDUCTION_LEVELS: &[&str] = &["off", "light", "moderate", "aggressive", "maximum"];
 const VALID_OCR_BACKENDS: &[&str] = &["tesseract", "easyocr", "paddleocr"];
 const VALID_LANGUAGE_CODES: &[&str] = &[
-    // Major languages
-    "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "zh", "ja", "ko", // Extended European
-    "bg", "cs", "da", "el", "et", "fi", "hu", "lt", "lv", "ro", "sk", "sl", "sv", "uk", // Extended Asian
-    "ar", "hi", "th", "tr", "vi", // Extended variants (some as 3-letter codes for compatibility)
-    "eng", "deu", "fra", "spa", "ita", "por", "nld", "pol", "rus", "zho", "jpn", "kor",
-    // Additional 3-letter codes for broader support
-    "ces", "dan", "ell", "est", "fin", "hun", "lit", "lav", "ron", "slk", "slv", "swe", "tur",
+    "en", "de", "fr", "es", "it", "pt", "nl", "pl", "ru", "zh", "ja", "ko", "bg", "cs", "da", "el", "et", "fi", "hu",
+    "lt", "lv", "ro", "sk", "sl", "sv", "uk", "ar", "hi", "th", "tr", "vi", "eng", "deu", "fra", "spa", "ita", "por",
+    "nld", "pol", "rus", "zho", "jpn", "kor", "ces", "dan", "ell", "est", "fin", "hun", "lit", "lav", "ron", "slk",
+    "slv", "swe", "tur",
 ];
 
 /// Validates a binarization method string.
@@ -85,8 +81,6 @@ pub unsafe extern "C" fn kreuzberg_validate_binarization_method(method: *const c
         return 0;
     }
 
-    // SAFETY: We've checked that method is not null, and FFI contract requires
-    // that method points to a valid null-terminated C string for the duration of this call.
     let method_str = match unsafe { CStr::from_ptr(method) }.to_str() {
         Ok(s) => s,
         Err(_) => {
@@ -133,8 +127,6 @@ pub unsafe extern "C" fn kreuzberg_validate_ocr_backend(backend: *const c_char) 
         return 0;
     }
 
-    // SAFETY: We've checked that backend is not null, and FFI contract requires
-    // that backend points to a valid null-terminated C string for the duration of this call.
     let backend_str = match unsafe { CStr::from_ptr(backend) }.to_str() {
         Ok(s) => s,
         Err(_) => {
@@ -183,8 +175,6 @@ pub unsafe extern "C" fn kreuzberg_validate_language_code(code: *const c_char) -
         return 0;
     }
 
-    // SAFETY: We've checked that code is not null, and FFI contract requires
-    // that code points to a valid null-terminated C string for the duration of this call.
     let code_str = match unsafe { CStr::from_ptr(code) }.to_str() {
         Ok(s) => s,
         Err(_) => {
@@ -231,8 +221,6 @@ pub unsafe extern "C" fn kreuzberg_validate_token_reduction_level(level: *const 
         return 0;
     }
 
-    // SAFETY: We've checked that level is not null, and FFI contract requires
-    // that level points to a valid null-terminated C string for the duration of this call.
     let level_str = match unsafe { CStr::from_ptr(level) }.to_str() {
         Ok(s) => s,
         Err(_) => {
@@ -333,8 +321,6 @@ pub unsafe extern "C" fn kreuzberg_validate_output_format(format: *const c_char)
         return 0;
     }
 
-    // SAFETY: We've checked that format is not null, and FFI contract requires
-    // that format points to a valid null-terminated C string for the duration of this call.
     let format_str = match unsafe { CStr::from_ptr(format) }.to_str() {
         Ok(s) => s,
         Err(_) => {
@@ -586,7 +572,6 @@ mod tests {
 
     #[test]
     fn test_validate_binarization_method_valid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(
                 kreuzberg_validate_binarization_method(b"otsu\0".as_ptr() as *const c_char),
@@ -605,7 +590,6 @@ mod tests {
 
     #[test]
     fn test_validate_binarization_method_invalid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(
                 kreuzberg_validate_binarization_method(b"invalid\0".as_ptr() as *const c_char),
@@ -616,7 +600,6 @@ mod tests {
 
     #[test]
     fn test_validate_binarization_method_null() {
-        // SAFETY: test with null pointer
         unsafe {
             assert_eq!(kreuzberg_validate_binarization_method(std::ptr::null()), 0);
         }
@@ -624,7 +607,6 @@ mod tests {
 
     #[test]
     fn test_validate_ocr_backend_valid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(
                 kreuzberg_validate_ocr_backend(b"tesseract\0".as_ptr() as *const c_char),
@@ -643,7 +625,6 @@ mod tests {
 
     #[test]
     fn test_validate_ocr_backend_invalid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(
                 kreuzberg_validate_ocr_backend(b"invalid_backend\0".as_ptr() as *const c_char),
@@ -654,7 +635,6 @@ mod tests {
 
     #[test]
     fn test_validate_ocr_backend_null() {
-        // SAFETY: test with null pointer
         unsafe {
             assert_eq!(kreuzberg_validate_ocr_backend(std::ptr::null()), 0);
         }
@@ -662,7 +642,6 @@ mod tests {
 
     #[test]
     fn test_validate_language_code_valid_2letter() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(kreuzberg_validate_language_code(b"en\0".as_ptr() as *const c_char), 1);
             assert_eq!(kreuzberg_validate_language_code(b"de\0".as_ptr() as *const c_char), 1);
@@ -672,7 +651,6 @@ mod tests {
 
     #[test]
     fn test_validate_language_code_valid_3letter() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(kreuzberg_validate_language_code(b"eng\0".as_ptr() as *const c_char), 1);
             assert_eq!(kreuzberg_validate_language_code(b"deu\0".as_ptr() as *const c_char), 1);
@@ -682,7 +660,6 @@ mod tests {
 
     #[test]
     fn test_validate_language_code_invalid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(
                 kreuzberg_validate_language_code(b"invalid\0".as_ptr() as *const c_char),
@@ -694,7 +671,6 @@ mod tests {
 
     #[test]
     fn test_validate_language_code_null() {
-        // SAFETY: test with null pointer
         unsafe {
             assert_eq!(kreuzberg_validate_language_code(std::ptr::null()), 0);
         }
@@ -702,7 +678,6 @@ mod tests {
 
     #[test]
     fn test_validate_token_reduction_level_valid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(
                 kreuzberg_validate_token_reduction_level(b"off\0".as_ptr() as *const c_char),
@@ -729,7 +704,6 @@ mod tests {
 
     #[test]
     fn test_validate_token_reduction_level_invalid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(
                 kreuzberg_validate_token_reduction_level(b"extreme\0".as_ptr() as *const c_char),
@@ -740,7 +714,6 @@ mod tests {
 
     #[test]
     fn test_validate_token_reduction_level_null() {
-        // SAFETY: test with null pointer
         unsafe {
             assert_eq!(kreuzberg_validate_token_reduction_level(std::ptr::null()), 0);
         }
@@ -776,7 +749,6 @@ mod tests {
 
     #[test]
     fn test_validate_output_format_valid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(kreuzberg_validate_output_format(b"text\0".as_ptr() as *const c_char), 1);
             assert_eq!(
@@ -788,7 +760,6 @@ mod tests {
 
     #[test]
     fn test_validate_output_format_invalid() {
-        // SAFETY: test uses valid C strings
         unsafe {
             assert_eq!(kreuzberg_validate_output_format(b"json\0".as_ptr() as *const c_char), 0);
         }
@@ -796,7 +767,6 @@ mod tests {
 
     #[test]
     fn test_validate_output_format_null() {
-        // SAFETY: test with null pointer
         unsafe {
             assert_eq!(kreuzberg_validate_output_format(std::ptr::null()), 0);
         }
@@ -851,7 +821,6 @@ mod tests {
 
     #[test]
     fn test_get_valid_binarization_methods() {
-        // SAFETY: test calls FFI function that returns allocated string
         unsafe {
             let json_ptr = kreuzberg_get_valid_binarization_methods();
             assert!(!json_ptr.is_null(), "Should return non-null pointer");
@@ -859,20 +828,17 @@ mod tests {
             let c_str = CStr::from_ptr(json_ptr);
             let json_str = c_str.to_str().expect("Should be valid UTF-8");
 
-            // Check that it's valid JSON and contains expected values
             assert!(json_str.contains("otsu"));
             assert!(json_str.contains("adaptive"));
             assert!(json_str.contains("sauvola"));
             assert!(json_str.starts_with('[') && json_str.ends_with(']'));
 
-            // Free the allocated string
             let _ = std::ffi::CString::from_raw(json_ptr as *mut c_char);
         }
     }
 
     #[test]
     fn test_get_valid_language_codes() {
-        // SAFETY: test calls FFI function that returns allocated string
         unsafe {
             let json_ptr = kreuzberg_get_valid_language_codes();
             assert!(!json_ptr.is_null(), "Should return non-null pointer");
@@ -880,21 +846,18 @@ mod tests {
             let c_str = CStr::from_ptr(json_ptr);
             let json_str = c_str.to_str().expect("Should be valid UTF-8");
 
-            // Check that it's valid JSON and contains expected values
             assert!(json_str.contains("en"));
             assert!(json_str.contains("de"));
             assert!(json_str.contains("eng"));
             assert!(json_str.contains("deu"));
             assert!(json_str.starts_with('[') && json_str.ends_with(']'));
 
-            // Free the allocated string
             let _ = std::ffi::CString::from_raw(json_ptr as *mut c_char);
         }
     }
 
     #[test]
     fn test_get_valid_ocr_backends() {
-        // SAFETY: test calls FFI function that returns allocated string
         unsafe {
             let json_ptr = kreuzberg_get_valid_ocr_backends();
             assert!(!json_ptr.is_null(), "Should return non-null pointer");
@@ -902,20 +865,17 @@ mod tests {
             let c_str = CStr::from_ptr(json_ptr);
             let json_str = c_str.to_str().expect("Should be valid UTF-8");
 
-            // Check that it's valid JSON and contains expected values
             assert!(json_str.contains("tesseract"));
             assert!(json_str.contains("easyocr"));
             assert!(json_str.contains("paddleocr"));
             assert!(json_str.starts_with('[') && json_str.ends_with(']'));
 
-            // Free the allocated string
             let _ = std::ffi::CString::from_raw(json_ptr as *mut c_char);
         }
     }
 
     #[test]
     fn test_get_valid_token_reduction_levels() {
-        // SAFETY: test calls FFI function that returns allocated string
         unsafe {
             let json_ptr = kreuzberg_get_valid_token_reduction_levels();
             assert!(!json_ptr.is_null(), "Should return non-null pointer");
@@ -923,7 +883,6 @@ mod tests {
             let c_str = CStr::from_ptr(json_ptr);
             let json_str = c_str.to_str().expect("Should be valid UTF-8");
 
-            // Check that it's valid JSON and contains expected values
             assert!(json_str.contains("off"));
             assert!(json_str.contains("light"));
             assert!(json_str.contains("moderate"));
@@ -931,7 +890,6 @@ mod tests {
             assert!(json_str.contains("maximum"));
             assert!(json_str.starts_with('[') && json_str.ends_with(']'));
 
-            // Free the allocated string
             let _ = std::ffi::CString::from_raw(json_ptr as *mut c_char);
         }
     }

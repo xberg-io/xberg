@@ -97,8 +97,8 @@ final class OcrExtractionTest extends TestCase
         }
 
         $tesseractConfig = new TesseractConfig(
-            psm: 6, // Assume uniform block of text
-            oem: 3, // Default OCR Engine Mode
+            psm: 6,
+            oem: 3,
         );
 
         $config = new ExtractionConfig(
@@ -161,7 +161,7 @@ final class OcrExtractionTest extends TestCase
         $config = new ExtractionConfig(
             ocr: new OcrConfig(
                 backend: 'tesseract',
-                language: 'eng', // English
+                language: 'eng',
             ),
         );
 

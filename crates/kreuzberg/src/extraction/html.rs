@@ -41,10 +41,8 @@ pub use html_to_markdown_rs::{
     PreprocessingPreset, WhitespaceMode,
 };
 
-// WASM has a much smaller stack and cannot spawn threads for large documents
-// Set a conservative limit to prevent stack overflow in WASM builds
 #[cfg(target_arch = "wasm32")]
-const MAX_HTML_SIZE_BYTES: usize = 2 * 1024 * 1024; // 2MB limit for WASM
+const MAX_HTML_SIZE_BYTES: usize = 2 * 1024 * 1024;
 
 #[cfg(not(target_arch = "wasm32"))]
 const LARGE_HTML_STACK_THRESHOLD_BYTES: usize = 512 * 1024;
@@ -90,7 +88,6 @@ fn inline_image_format_to_str(format: &InlineImageFormat) -> String {
                 return "svg".to_string();
             }
 
-            // Pre-allocate with capacity; format strings are typically 4-10 chars
             let mut result = String::with_capacity(10);
             let mut candidate = lower.as_str();
 
@@ -156,7 +153,6 @@ fn convert_inline_images_with_options(
         .map_err(|e| KreuzbergError::parsing(format!("Failed to convert HTML to Markdown with images: {}", e)))
 }
 
-// Native (non-WASM) implementations use dedicated thread stack for large HTML documents
 #[cfg(not(target_arch = "wasm32"))]
 fn convert_inline_images_with_large_stack(
     html: String,
@@ -198,7 +194,6 @@ fn extract_panic_reason(panic: &Box<dyn Any + Send + 'static>) -> String {
     }
 }
 
-// WASM implementations skip dedicated stack (not supported) and process inline
 /// Convert HTML to markdown with optional configuration.
 ///
 /// Uses sensible defaults if no configuration is provided:
@@ -211,7 +206,6 @@ fn extract_panic_reason(panic: &Box<dyn Any + Send + 'static>) -> String {
 /// In WASM builds, HTML files larger than 2MB will be rejected with an error
 /// to prevent stack overflow. For larger files, use the native library.
 pub fn convert_html_to_markdown(html: &str, options: Option<ConversionOptions>) -> Result<String> {
-    // WASM builds have strict size limits due to limited stack space
     #[cfg(target_arch = "wasm32")]
     if html.len() > MAX_HTML_SIZE_BYTES {
         return Err(KreuzbergError::validation(format!(
@@ -245,7 +239,6 @@ pub fn process_html(
     extract_images: bool,
     max_image_size: u64,
 ) -> Result<HtmlExtractionResult> {
-    // WASM builds have strict size limits due to limited stack space
     #[cfg(target_arch = "wasm32")]
     if html.len() > MAX_HTML_SIZE_BYTES {
         return Err(KreuzbergError::validation(format!(
@@ -310,7 +303,6 @@ pub fn convert_html_to_markdown_with_metadata(
     html: &str,
     options: Option<ConversionOptions>,
 ) -> Result<(String, Option<HtmlMetadata>)> {
-    // WASM builds have strict size limits due to limited stack space
     #[cfg(target_arch = "wasm32")]
     if html.len() > MAX_HTML_SIZE_BYTES {
         return Err(KreuzbergError::validation(format!(
@@ -483,17 +475,6 @@ mod tests {
         assert!(markdown.contains("Taylor Alison Swift"), "{markdown}");
     }
 
-    // ========================================================================
-    // BEHAVIOR-DRIVEN TESTS FOR HTML METADATA EXTRACTION
-    // ========================================================================
-    // These tests validate the comprehensive metadata extraction functionality
-    // that uses convert_with_metadata from html-to-markdown-rs to extract
-    // extensive metadata in a single pass, replacing the old YAML frontmatter.
-
-    // ========================================================================
-    // 1. DOCUMENT METADATA TESTS
-    // ========================================================================
-
     /// Test extraction of core document metadata fields:
     /// title, description, author, canonical_url, and base_href.
     #[test]
@@ -516,35 +497,30 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate title extraction
         assert_eq!(
             metadata.title,
             Some("Amazing Article".to_string()),
             "Title should be extracted from <title> tag"
         );
 
-        // Validate description extraction
         assert_eq!(
             metadata.description,
             Some("This is a description of the article".to_string()),
             "Description should be extracted from meta description tag"
         );
 
-        // Validate author extraction
         assert_eq!(
             metadata.author,
             Some("Jane Doe".to_string()),
             "Author should be extracted from meta author tag"
         );
 
-        // Validate canonical URL extraction
         assert_eq!(
             metadata.canonical_url,
             Some("https://example.com/article/amazing".to_string()),
             "Canonical URL should be extracted from link[rel=canonical]"
         );
 
-        // Validate base href extraction
         assert_eq!(
             metadata.base_href,
             Some("https://example.com/".to_string()),
@@ -569,7 +545,6 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate keywords are parsed as Vec<String>, split on commas
         assert!(
             !metadata.keywords.is_empty(),
             "Keywords should be extracted as a vector"
@@ -579,7 +554,6 @@ mod tests {
             "Keywords should be split on comma separators"
         );
 
-        // Verify individual keywords after comma-separation
         let keyword_set: std::collections::HashSet<_> = metadata.keywords.iter().map(|k| k.trim()).collect();
         assert!(
             keyword_set.contains("rust") || keyword_set.iter().any(|k| k.contains("rust")),
@@ -603,7 +577,6 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate language extraction from lang attribute
         assert_eq!(
             metadata.language,
             Some("en-US".to_string()),
@@ -615,7 +588,6 @@ mod tests {
     /// Validates the detection of document text directionality.
     #[test]
     fn test_metadata_text_direction() {
-        // Test LTR (Left-to-Right) direction
         let html_ltr = r#"<!DOCTYPE html>
 <html dir="ltr">
   <head><title>LTR</title></head>
@@ -630,7 +602,6 @@ mod tests {
             "Text direction should be extracted as LeftToRight"
         );
 
-        // Test RTL (Right-to-Left) direction
         let html_rtl = r#"<!DOCTYPE html>
 <html dir="rtl">
   <head><title>RTL</title></head>
@@ -645,7 +616,6 @@ mod tests {
             "Text direction should be extracted as RightToLeft"
         );
 
-        // Test Auto direction
         let html_auto = r#"<!DOCTYPE html>
 <html dir="auto">
   <head><title>Auto</title></head>
@@ -660,10 +630,6 @@ mod tests {
             "Text direction should be extracted as Auto"
         );
     }
-
-    // ========================================================================
-    // 2. OPEN GRAPH & TWITTER CARD TESTS
-    // ========================================================================
 
     /// Test Open Graph metadata extraction into BTreeMap.
     /// Validates extraction of og:title, og:description, og:image, og:url,
@@ -689,13 +655,11 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate Open Graph BTreeMap is populated
         assert!(
             !metadata.open_graph.is_empty(),
             "Open Graph map should contain extracted OG tags"
         );
 
-        // Verify specific OG properties
         assert!(
             metadata.open_graph.contains_key("title")
                 || metadata.open_graph.values().any(|v| v.contains("Open Graph Title")),
@@ -755,13 +719,11 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate Twitter Card BTreeMap is populated
         assert!(
             !metadata.twitter_card.is_empty(),
             "Twitter Card map should contain extracted Twitter tags"
         );
 
-        // Verify specific Twitter Card properties
         assert!(
             metadata.twitter_card.contains_key("card")
                 || metadata
@@ -824,13 +786,11 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate meta_tags BTreeMap is populated with generic tags
         assert!(
             !metadata.meta_tags.is_empty(),
             "Meta tags map should contain generic meta tags"
         );
 
-        // Verify specific meta tags
         assert!(
             metadata.meta_tags.contains_key("viewport")
                 || metadata.meta_tags.values().any(|v| v.contains("width=device-width")),
@@ -843,10 +803,6 @@ mod tests {
             "Meta tags should contain robots directive"
         );
     }
-
-    // ========================================================================
-    // 3. RICH METADATA TESTS
-    // ========================================================================
 
     /// Test header/heading extraction with level, text, id, depth, and html_offset.
     #[test]
@@ -866,13 +822,11 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate headers vector is populated
         assert!(
             !metadata.headers.is_empty(),
             "Headers vector should contain extracted headings"
         );
 
-        // Verify h1 extraction
         let h1 = metadata.headers.iter().find(|h| h.level == 1);
         assert!(h1.is_some(), "H1 header should be extracted");
         assert_eq!(h1.unwrap().text, "Main Title", "H1 text should be correctly extracted");
@@ -887,7 +841,6 @@ mod tests {
             "H1 html_offset should be within reasonable range"
         );
 
-        // Verify h2 extraction
         let h2 = metadata.headers.iter().find(|h| h.level == 2);
         assert!(h2.is_some(), "H2 header should be extracted");
         assert_eq!(
@@ -896,7 +849,6 @@ mod tests {
             "H2 text should be correctly extracted"
         );
 
-        // Verify h3 extraction with id
         let h3 = metadata.headers.iter().find(|h| h.level == 3);
         assert!(h3.is_some(), "H3 header should be extracted");
         assert_eq!(
@@ -905,7 +857,6 @@ mod tests {
             "H3 id should be extracted"
         );
 
-        // Verify h4 extraction
         let h4 = metadata.headers.iter().find(|h| h.level == 4);
         assert!(h4.is_some(), "H4 header should be extracted");
     }
@@ -931,13 +882,11 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate links vector is populated
         assert!(
             !metadata.links.is_empty(),
             "Links vector should contain extracted links"
         );
 
-        // Verify anchor link
         let anchor = metadata.links.iter().find(|l| l.href.starts_with('#'));
         assert!(anchor.is_some(), "Anchor link should be extracted");
         assert_eq!(
@@ -947,7 +896,6 @@ mod tests {
         );
         assert_eq!(anchor.unwrap().text, "Anchor Link", "Link text should be extracted");
 
-        // Verify external link
         let external = metadata.links.iter().find(|l| l.href.contains("external.com"));
         assert!(external.is_some(), "External link should be extracted");
         assert_eq!(
@@ -956,7 +904,6 @@ mod tests {
             "External domain link should be classified as External"
         );
 
-        // Verify email link
         let email = metadata.links.iter().find(|l| l.href.starts_with("mailto:"));
         assert!(email.is_some(), "Email link should be extracted");
         assert_eq!(
@@ -965,7 +912,6 @@ mod tests {
             "mailto: link should be classified as Email"
         );
 
-        // Verify phone link
         let phone = metadata.links.iter().find(|l| l.href.starts_with("tel:"));
         assert!(phone.is_some(), "Phone link should be extracted");
         assert_eq!(
@@ -974,7 +920,6 @@ mod tests {
             "tel: link should be classified as Phone"
         );
 
-        // Verify internal link with title
         let internal = metadata.links.iter().find(|l| l.href == "/about");
         assert!(internal.is_some(), "Internal link should be extracted");
         assert_eq!(
@@ -1003,13 +948,11 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate images vector is populated
         assert!(
             !metadata.images.is_empty(),
             "Images vector should contain extracted images"
         );
 
-        // Verify external image
         let external_img = metadata.images.iter().find(|img| img.src.contains("example.com"));
         assert!(external_img.is_some(), "External image should be extracted");
         assert_eq!(
@@ -1028,7 +971,6 @@ mod tests {
             "External image should be classified as External"
         );
 
-        // Verify image with dimensions
         let img_with_dims = metadata.images.iter().find(|img| img.src.contains("logo.png"));
         assert!(img_with_dims.is_some(), "Image with dimensions should be extracted");
         assert_eq!(
@@ -1037,7 +979,6 @@ mod tests {
             "Image dimensions should be extracted as (width, height)"
         );
 
-        // Verify inline SVG - could be DataUri or InlineSvg depending on library classification
         let svg_img = metadata.images.iter().find(|img| img.src.contains("svg"));
         assert!(svg_img.is_some(), "Inline SVG should be extracted");
         assert!(
@@ -1045,7 +986,6 @@ mod tests {
             "SVG should be classified as either InlineSvg or DataUri"
         );
 
-        // Verify data URI image
         let data_uri_img = metadata.images.iter().find(|img| img.src.starts_with("data:image/png"));
         assert!(data_uri_img.is_some(), "Data URI image should be extracted");
         assert_eq!(
@@ -1054,7 +994,6 @@ mod tests {
             "Base64 data URI should be classified as DataUri"
         );
 
-        // Verify relative path image
         let relative_img = metadata.images.iter().find(|img| img.src.contains("relative"));
         assert!(relative_img.is_some(), "Relative path image should be extracted");
         assert_eq!(
@@ -1092,13 +1031,11 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Validate structured_data vector is populated
         assert!(
             !metadata.structured_data.is_empty(),
             "Structured data vector should contain extracted data blocks"
         );
 
-        // Verify JSON-LD extraction
         let json_ld = metadata
             .structured_data
             .iter()
@@ -1114,9 +1051,6 @@ mod tests {
             "JSON-LD schema_type should be detected"
         );
 
-        // Verify microdata extraction (if present)
-        // Note: Microdata extraction depends on the html-to-markdown-rs library configuration
-        // It may or may not extract microdata depending on parsing options
         let microdata = metadata
             .structured_data
             .iter()
@@ -1129,10 +1063,6 @@ mod tests {
         }
     }
 
-    // ========================================================================
-    // 4. EDGE CASES
-    // ========================================================================
-
     /// Test that empty HTML returns default metadata (None or empty collections).
     #[test]
     fn test_metadata_empty_html() {
@@ -1140,7 +1070,6 @@ mod tests {
 
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
 
-        // Empty HTML should return None metadata (all fields empty)
         assert!(
             metadata.is_none() || metadata.as_ref().unwrap().is_empty(),
             "Empty HTML should return None or empty metadata"
@@ -1160,14 +1089,11 @@ mod tests {
 
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
 
-        // Should either be None or have mostly empty fields
         if let Some(meta) = metadata {
-            // Optional fields should be None
             assert!(
                 meta.title.is_none() || meta.title.is_some(),
                 "Title might be extracted from h1 or might be None"
             );
-            // Collections should be empty
             assert!(meta.open_graph.is_empty(), "Open Graph should be empty with no OG tags");
             assert!(
                 meta.twitter_card.is_empty(),
@@ -1192,7 +1118,6 @@ mod tests {
   </body>
 </html>"#;
 
-        // Should not panic, even with malformed HTML
         let result = convert_html_to_markdown_with_metadata(html, None);
         assert!(
             result.is_ok(),
@@ -1200,8 +1125,6 @@ mod tests {
         );
 
         let (_, metadata) = result.unwrap();
-        // Metadata extraction should attempt to extract what it can
-        // The library should be resilient to malformed HTML
         assert!(
             metadata.is_some() || metadata.is_none(),
             "Should return either Some or None metadata"
@@ -1227,14 +1150,11 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // HTML entities should be properly decoded
         if let Some(title) = &metadata.title {
-            // Title might contain special characters or decoded entities
             assert!(!title.is_empty(), "Title should be extracted and decoded");
         }
 
         if let Some(author) = &metadata.author {
-            // Author with non-ASCII characters should be preserved
             assert!(
                 author.contains("García") || author.contains("Jose"),
                 "Special characters should be handled correctly"
@@ -1242,7 +1162,6 @@ mod tests {
         }
 
         if let Some(desc) = &metadata.description {
-            // Description with HTML entities should be decoded
             assert!(!desc.is_empty(), "Description should be extracted");
         }
     }
@@ -1267,7 +1186,6 @@ mod tests {
         let (_, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("metadata should be present");
 
-        // Title should be "First Title" (only one title tag typically)
         if let Some(title) = &metadata.title {
             assert_eq!(
                 title, "First Title",
@@ -1275,14 +1193,11 @@ mod tests {
             );
         }
 
-        // For duplicate meta tags, the behavior depends on the library
-        // Typically the last one wins, or they are concatenated
         if let Some(description) = &metadata.description {
             assert!(
                 !description.is_empty(),
                 "Description should be populated even with duplicates"
             );
-            // Either might win, both should have content
             assert!(
                 description.contains("First") || description.contains("Second"),
                 "Description should contain one of the duplicate values"
@@ -1290,15 +1205,10 @@ mod tests {
         }
     }
 
-    // ========================================================================
-    // 5. INTEGRATION TESTS
-    // ========================================================================
-
     /// Comprehensive test of a complete HTML document with ALL metadata types.
     /// Validates that all metadata extraction works together correctly.
     #[test]
     fn test_metadata_comprehensive() {
-        // Using concatenated strings to avoid raw string quote issues in Rust 2021
         let html = "<html lang=\"en\" dir=\"ltr\"><head>\
             <meta charset=\"UTF-8\">\
             <title>Complete Metadata Example</title>\
@@ -1347,7 +1257,6 @@ mod tests {
         let (markdown, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("comprehensive HTML should have metadata");
 
-        // ---- Document Metadata ----
         assert_eq!(
             metadata.title,
             Some("Complete Metadata Example".to_string()),
@@ -1385,23 +1294,19 @@ mod tests {
             "Base href should be extracted"
         );
 
-        // ---- Open Graph ----
         assert!(!metadata.open_graph.is_empty(), "Open Graph tags should be extracted");
 
-        // ---- Twitter Card ----
         assert!(
             !metadata.twitter_card.is_empty(),
             "Twitter Card tags should be extracted"
         );
 
-        // ---- Headers ----
         assert!(!metadata.headers.is_empty(), "Headers should be extracted");
         let h1_count = metadata.headers.iter().filter(|h| h.level == 1).count();
         assert_eq!(h1_count, 1, "Should have exactly one H1");
         assert!(metadata.headers.iter().any(|h| h.level == 2), "Should have H2 headers");
         assert!(metadata.headers.iter().any(|h| h.level == 3), "Should have H3 headers");
 
-        // ---- Links ----
         assert!(!metadata.links.is_empty(), "Links should be extracted");
         assert!(
             metadata.links.iter().any(|l| l.link_type == LinkType::Anchor),
@@ -1416,7 +1321,6 @@ mod tests {
             "Phone links should be present"
         );
 
-        // ---- Images ----
         assert!(!metadata.images.is_empty(), "Images should be extracted");
         assert!(
             metadata.images.iter().any(|img| img.image_type == ImageType::External),
@@ -1431,7 +1335,6 @@ mod tests {
             "Relative images should be present"
         );
 
-        // Verify images with dimensions
         let img_with_dims = metadata.images.iter().find(|img| img.dimensions.is_some());
         assert!(img_with_dims.is_some(), "At least one image should have dimensions");
         if let Some(img) = img_with_dims {
@@ -1442,13 +1345,11 @@ mod tests {
             );
         }
 
-        // ---- Structured Data ----
         assert!(
             !metadata.structured_data.is_empty(),
             "Structured data should be extracted"
         );
 
-        // ---- Markdown conversion ----
         assert!(!markdown.is_empty(), "Markdown should be generated");
         assert!(
             markdown.contains("Complete Metadata Example"),
@@ -1515,7 +1416,6 @@ mod tests {
         let (markdown, metadata) = convert_html_to_markdown_with_metadata(html, None).unwrap();
         let metadata = metadata.expect("real-world HTML should have metadata");
 
-        // Validate comprehensive extraction
         assert_eq!(
             metadata.title,
             Some("How to Build Rust Web Applications | TechBlog".to_string()),
@@ -1529,16 +1429,13 @@ mod tests {
         );
         assert!(!metadata.keywords.is_empty(), "Keywords should be extracted");
 
-        // Open Graph for social sharing
         assert!(!metadata.open_graph.is_empty(), "Article should have Open Graph tags");
 
-        // Twitter Card for tweets
         assert!(
             !metadata.twitter_card.is_empty(),
             "Article should have Twitter Card tags"
         );
 
-        // Rich heading hierarchy
         assert!(metadata.headers.len() >= 5, "Should extract multiple heading levels");
         assert!(
             metadata.headers.iter().any(|h| h.level == 1),
@@ -1553,7 +1450,6 @@ mod tests {
             "Should have H3 (subsections)"
         );
 
-        // Multiple link types
         assert!(metadata.links.len() >= 3, "Should extract multiple links");
         assert!(
             metadata.links.iter().any(|l| l.link_type == LinkType::Internal),
@@ -1563,28 +1459,22 @@ mod tests {
             metadata.links.iter().any(|l| l.link_type == LinkType::External),
             "Should have external links"
         );
-        // Email and phone links may or may not be present in simplified HTML
-        // but we should have the link types we included
         assert!(
             metadata.links.iter().any(|l| l.link_type == LinkType::Email)
                 || metadata.links.iter().any(|l| l.link_type == LinkType::Phone),
             "Should have either email or phone links"
         );
 
-        // Images with metadata
         assert!(!metadata.images.is_empty(), "Should extract images");
-        // Hero image might have various alt texts, so check for common patterns
         let hero_image = metadata.images.iter().find(|img| {
             img.alt.as_ref().map_or(false, |a| {
                 a.contains("Hero") || a.contains("development") || a.contains("hero")
             })
         });
-        // If no specific hero image found, just verify we extracted some images
         if hero_image.is_none() {
             assert!(metadata.images.len() >= 1, "Should have extracted at least one image");
         }
 
-        // Structured data for rich snippets
         assert!(
             !metadata.structured_data.is_empty(),
             "Should extract structured data (JSON-LD)"
@@ -1600,21 +1490,15 @@ mod tests {
             "JSON-LD should identify as BlogPosting schema"
         );
 
-        // Markdown output
         assert!(!markdown.is_empty(), "Should generate Markdown from HTML");
         assert!(markdown.contains("Rust"), "Markdown should contain article content");
     }
-
-    // ========================================================================
-    // 6. CRITICAL MISSING TESTS
-    // ========================================================================
 
     /// Test extraction of large HTML document (1MB+) for performance
     /// Generates HTML with 10,000+ elements and validates extraction
     /// completes within reasonable time (<30s) with no panics.
     #[test]
     fn test_large_html_performance() {
-        // Build a 1MB+ HTML document with 10,000+ elements
         let mut html = String::with_capacity(2_000_000);
         html.push_str(
             r#"<!DOCTYPE html>
@@ -1627,7 +1511,6 @@ mod tests {
     <h1>Large Document Test</h1>"#,
         );
 
-        // Add 10,000+ list items with substantial content to create large HTML (~1.5MB)
         for i in 0..10000 {
             html.push_str(&format!(
                 "<article><h2>Article {}</h2><p>Content block {} with expanded text content to increase document size. \
@@ -1641,7 +1524,6 @@ mod tests {
         }
         html.push_str("</body></html>");
 
-        // Verify document size is >1MB
         let html_size_bytes = html.len();
         assert!(
             html_size_bytes > 1_000_000,
@@ -1649,15 +1531,12 @@ mod tests {
             html_size_bytes
         );
 
-        // Time the extraction
         let start = std::time::Instant::now();
 
-        // Should complete successfully without panics
         let result = process_html(&html, None, false, 1024 * 1024);
 
         let duration = start.elapsed();
 
-        // Verify successful extraction
         assert!(
             result.is_ok(),
             "Large HTML extraction should succeed. Error: {:?}",
@@ -1667,7 +1546,6 @@ mod tests {
         let result = result.unwrap();
         assert!(!result.markdown.is_empty(), "Markdown should be generated");
 
-        // Verify performance: should complete in <30 seconds (reasonable for large HTML)
         assert!(
             duration.as_secs() < 30,
             "Large HTML extraction took too long: {:.2}s (must be <30s)",
@@ -1680,7 +1558,6 @@ mod tests {
     /// proper error handling and boundary detection.
     #[test]
     fn test_wasm_size_limit_boundary() {
-        // Test 1: HTML just under 2MB (1.8MB) - should succeed
         let mut html_under = String::from(
             r#"<!DOCTYPE html>
 <html>
@@ -1688,7 +1565,6 @@ mod tests {
 <body><h1>Content</h1>"#,
         );
 
-        // Add content to reach ~1.8MB (safely under the 2MB limit)
         let target_size = 1_800_000;
         while html_under.len() < target_size {
             html_under.push_str("<p>Padding content for size testing. This is test data to reach the target document size. Lorem ipsum dolor sit amet.</p>\n");
@@ -1696,21 +1572,18 @@ mod tests {
         html_under.truncate(target_size);
         html_under.push_str("</body></html>");
 
-        // Verify size is under 2MB
         assert!(
             html_under.len() < 2 * 1024 * 1024,
             "HTML should be under 2MB limit (got {} bytes)",
             html_under.len()
         );
 
-        // Should succeed for HTML under 2MB
         let result = process_html(&html_under, None, false, 1024);
         #[cfg(target_arch = "wasm32")]
         assert!(result.is_ok(), "HTML under 2MB should be accepted in WASM");
         #[cfg(not(target_arch = "wasm32"))]
         assert!(result.is_ok(), "HTML under 2MB should always be accepted");
 
-        // Test 2: HTML just over 2MB (2.2MB) - WASM should fail
         let mut html_over = String::from(
             r#"<!DOCTYPE html>
 <html>
@@ -1718,7 +1591,6 @@ mod tests {
 <body><h1>Content</h1>"#,
         );
 
-        // Add content to reach ~2.2MB (safely over the 2MB limit)
         let target_size = 2_200_000;
         while html_over.len() < target_size {
             html_over.push_str("<p>Oversized content for boundary testing. This section generates large HTML to exceed limits. Lorem ipsum dolor sit amet.</p>\n");
@@ -1726,14 +1598,12 @@ mod tests {
         html_over.truncate(target_size);
         html_over.push_str("</body></html>");
 
-        // Verify size is over 2MB
         assert!(
             html_over.len() > 2 * 1024 * 1024,
             "HTML should be over 2MB limit (got {} bytes)",
             html_over.len()
         );
 
-        // Test result based on build target
         let result = process_html(&html_over, None, false, 1024);
         #[cfg(target_arch = "wasm32")]
         {
@@ -1746,9 +1616,6 @@ mod tests {
         }
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // Native builds should handle large HTML without strict 2MB limit
-            // May succeed or fail depending on conversion logic, but should not
-            // fail due to size check
             if let Err(e) = result {
                 let msg = format!("{:?}", e);
                 assert!(
@@ -1784,10 +1651,8 @@ mod tests {
 </body>
 </html>"#;
 
-        // Should not panic, should handle gracefully
         let result = convert_html_to_markdown_with_metadata(html, None);
 
-        // Must succeed without panicking
         assert!(
             result.is_ok(),
             "Malformed JSON-LD should not cause panic. Error: {:?}",
@@ -1796,7 +1661,6 @@ mod tests {
 
         let (markdown, metadata) = result.unwrap();
 
-        // Markdown should still be extracted even if JSON-LD is invalid
         assert!(
             !markdown.is_empty(),
             "Markdown should be extracted despite invalid JSON-LD"
@@ -1806,15 +1670,12 @@ mod tests {
             "Content should be properly converted to Markdown"
         );
 
-        // Metadata may be partially extracted or empty, but should not panic
         if let Some(meta) = metadata {
             assert_eq!(
                 meta.title,
                 Some("Malformed JSON-LD Test".to_string()),
                 "Document metadata should be extracted from tags"
             );
-            // Structured data might be empty or incomplete due to invalid JSON
-            // but that's acceptable - we just don't want a panic
         }
     }
 
@@ -1840,7 +1701,6 @@ mod tests {
 </body>
 </html>"#;
 
-        // Should not panic when processing HTML with script-like content
         let result = convert_html_to_markdown_with_metadata(html, None);
         assert!(
             result.is_ok(),
@@ -1850,14 +1710,11 @@ mod tests {
 
         let (markdown, metadata) = result.unwrap();
 
-        // Verify markdown was generated (main requirement)
         assert!(!markdown.is_empty(), "Markdown should be generated");
 
         if let Some(meta) = metadata {
-            // Title should be extracted
             if let Some(title) = &meta.title {
                 assert!(!title.is_empty(), "Title should be extracted");
-                // Title should contain something sensible, even with encoded content
                 assert!(
                     title.contains("Safe") || title.contains("script"),
                     "Title should extract content from title tag: {}",
@@ -1865,19 +1722,15 @@ mod tests {
                 );
             }
 
-            // Description should be extracted
             if let Some(desc) = &meta.description {
                 assert!(!desc.is_empty(), "Description should be extracted");
             }
 
-            // Author should be extracted
             if let Some(author) = &meta.author {
                 assert_eq!(author, "Author Name", "Author should be correctly extracted");
             }
 
-            // Open Graph should be extracted
             if !meta.open_graph.is_empty() {
-                // Just verify OG tags were extracted without errors
                 let og_count = meta.open_graph.len();
                 assert!(og_count > 0, "Open Graph tags should be extracted");
             }
@@ -1927,10 +1780,8 @@ mod tests {
             .map(|thread_id| {
                 let html = Arc::clone(&html);
                 std::thread::spawn(move || {
-                    // Each thread extracts the same HTML
                     let result = convert_html_to_markdown_with_metadata(html.as_ref(), None);
 
-                    // Must succeed without panics
                     assert!(
                         result.is_ok(),
                         "Thread {} extraction failed: {:?}",
@@ -1940,7 +1791,6 @@ mod tests {
 
                     let (markdown, metadata) = result.unwrap();
 
-                    // Validate basic extraction succeeded
                     assert!(
                         !markdown.is_empty(),
                         "Thread {} markdown should not be empty",
@@ -1955,7 +1805,6 @@ mod tests {
                             thread_id
                         );
 
-                        // Verify consistent metadata extraction
                         assert!(!meta.headers.is_empty(), "Thread {} should extract headers", thread_id);
                         assert!(!meta.links.is_empty(), "Thread {} should extract links", thread_id);
                         assert!(!meta.images.is_empty(), "Thread {} should extract images", thread_id);
@@ -1966,13 +1815,11 @@ mod tests {
                         );
                     }
 
-                    // Return validation flag
                     true
                 })
             })
             .collect();
 
-        // Wait for all threads to complete and collect results
         let all_succeeded = handles.into_iter().enumerate().all(|(i, handle)| {
             let result = handle.join();
             assert!(result.is_ok(), "Thread {} panicked: {:?}", i, result.err());

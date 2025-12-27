@@ -80,7 +80,6 @@ impl ExtractionResult {
 impl ExtractionResult {
     /// Convert from Rust ExtractionResult to PHP ExtractionResult.
     pub fn from_rust(result: kreuzberg::ExtractionResult) -> PhpResult<Self> {
-        // Convert metadata to vector of tuples
         let mut metadata = Vec::new();
 
         if let Some(title) = &result.metadata.title {
@@ -111,14 +110,12 @@ impl ExtractionResult {
             metadata.push(("modified_by".to_string(), modified_by.clone()));
         }
 
-        // Convert tables
         let tables = result
             .tables
             .into_iter()
             .map(ExtractedTable::from_rust)
             .collect::<PhpResult<Vec<_>>>()?;
 
-        // Convert images
         let images = result
             .images
             .map(|imgs| {
@@ -128,7 +125,6 @@ impl ExtractionResult {
             })
             .transpose()?;
 
-        // Convert chunks
         let chunks = result
             .chunks
             .map(|chnks| {
@@ -139,7 +135,6 @@ impl ExtractionResult {
             })
             .transpose()?;
 
-        // Convert pages
         let pages = result
             .pages
             .map(|pgs| {

@@ -12,7 +12,6 @@ vars:
   GO_VERSION: "1.22"
 
 tasks:
-  # Installation
   install:
     desc: Install Go tools and modules
     cmds:
@@ -23,7 +22,6 @@ tasks:
     cmds:
       - task: go:install
 
-  # Build Tasks
   build:
     desc: Build Go bindings (depends on Rust FFI)
     deps:
@@ -69,7 +67,6 @@ tasks:
     cmds:
       - bash scripts/benchmarks/build-go-bindings.sh
 
-  # Test Tasks
   test:
     desc: Run Go tests
     cmds:
@@ -88,7 +85,6 @@ tasks:
     cmds:
       - go test -v ./...
 
-  # Linting Tasks
   lint:
     desc: Lint and format Go code with auto-fix (golangci-lint + gofmt)
     cmds:
@@ -105,7 +101,6 @@ tasks:
       - cmd: pwsh scripts/task/go-lint.ps1 -Mode check
         platforms: [windows]
 
-  # Formatting Tasks
   format:
     desc: Format Go code with modifications (gofmt)
     dir: packages/go/v4
@@ -118,7 +113,6 @@ tasks:
     cmds:
       - scripts/go/format_check.sh
 
-  # Cleanup
   clean:
     desc: Clean Go build artifacts
     dir: packages/go/v4
@@ -126,14 +120,12 @@ tasks:
       - go clean
       - python -c "import shutil; shutil.rmtree('bin', ignore_errors=True)"
 
-  # Dependency Management
   update:
     desc: Update Go dependencies and linters
     cmds:
       - echo "Updating Go dependencies and linters..."
       - scripts/go/update.sh {{.GOLANGCI_LINT_VERSION}}
 
-  # E2E Tests
   e2e:generate:
     desc: Generate Go E2E tests from fixtures
     cmds:

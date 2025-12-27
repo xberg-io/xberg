@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Error handling and exception mapping tests
-
 RSpec.describe 'Error Handling' do
   let(:nested_ocr_result) do
     {
@@ -58,7 +56,6 @@ RSpec.describe 'Error Handling' do
     it 'handles unknown MIME types' do
       path = create_test_file('Unknown MIME')
 
-      # Implementation may either handle gracefully or raise error for unknown MIME types
       begin
         result = Kreuzberg.extract_file_sync(path, mime_type: 'application/x-unknown-type')
         expect(result).to be_a(Kreuzberg::Result)
@@ -110,7 +107,6 @@ RSpec.describe 'Error Handling' do
         '/definitely/nonexistent/file.txt'
       ]
 
-      # Implementation may either raise error or handle gracefully
       begin
         result = Kreuzberg.batch_extract_files_sync(files)
         expect(result).to be_an(Array)
@@ -126,13 +122,10 @@ RSpec.describe 'Error Handling' do
         '/nonexistent3.txt'
       ]
 
-      # Batch operations may either fail fast or return partial results
       begin
         result = Kreuzberg.batch_extract_files_sync(files)
-        # If no error is raised, result should be an array (possibly empty or with errors)
         expect(result).to be_an(Array)
       rescue StandardError => e
-        # If error is raised, it should be a StandardError
         expect(e).to be_a(StandardError)
       end
     end
@@ -146,8 +139,6 @@ RSpec.describe 'Error Handling' do
     end
 
     it 'propagates errors in async bytes extraction' do
-      # Implementation may either handle invalid MIME types or raise error
-
       result = Kreuzberg.extract_bytes('data', 'invalid/mime/type/that/causes/error')
       expect(result).to be_a(Kreuzberg::Result)
     rescue StandardError => e
@@ -157,7 +148,6 @@ RSpec.describe 'Error Handling' do
 
   describe 'result parsing errors' do
     it 'handles malformed result gracefully' do
-      # This tests the Result class constructor with edge cases
       result = Kreuzberg::Result.new({})
 
       expect(result.content).to eq('')
@@ -202,7 +192,6 @@ RSpec.describe 'Error Handling' do
 
   describe 'type conversion errors' do
     it 'handles non-string content gracefully' do
-      # Test that the wrapper handles type coercion
       path = create_test_file('Type test')
       result = Kreuzberg.extract_file_sync(path)
 

@@ -50,8 +50,6 @@ pub fn extract_bytes_sync_wasm(
     config: Option<JsValue>,
 ) -> Result<JsValue, JsValue> {
     let extraction_config = parse_config(config)?;
-    // Copy data: Uint8Array is a JS object reference. While synchronous calls
-    // keep it live, we copy to maintain safety and isolation from JS runtime state.
     let bytes = data.to_vec();
 
     extract_bytes_sync(&bytes, &mime_type, &extraction_config)
@@ -94,8 +92,6 @@ pub fn extract_bytes_sync_wasm(
 /// ```
 #[wasm_bindgen(js_name = extractBytes)]
 pub fn extract_bytes_wasm(data: Uint8Array, mime_type: String, config: Option<JsValue>) -> js_sys::Promise {
-    // Must copy: data is a JS object reference that crosses async boundary.
-    // JS garbage collector could invalidate the reference during async operations.
     let bytes = data.to_vec();
 
     wasm_bindgen_futures::future_to_promise(async move {
@@ -146,7 +142,6 @@ pub fn extract_file_wasm(file: &web_sys::File, mime_type: Option<String>, config
     let config_clone = config.clone();
 
     wasm_bindgen_futures::future_to_promise(async move {
-        // Read the file using FileReader
         let bytes = read_file_as_array_buffer(&file_clone)
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to read file: {}", e)))?;
@@ -205,9 +200,6 @@ pub fn batch_extract_bytes_sync_wasm(
     }
 
     let extraction_config = parse_config(config)?;
-    // Collect owned data directly without intermediate Vec<Vec<u8>> allocation.
-    // Each Uint8Array must be copied (JS reference has no guaranteed lifetime),
-    // but we construct borrowed pairs efficiently in a single pass.
     let owned_data: Vec<Vec<u8>> = data_list.into_iter().map(|d| d.to_vec()).collect();
     let contents: Vec<(&[u8], &str)> = owned_data
         .iter()
@@ -271,8 +263,6 @@ pub fn batch_extract_bytes_wasm(
         }
 
         let extraction_config = parse_config(config)?;
-        // Must copy: data_list contains JS object references crossing async boundary.
-        // JS garbage collector could invalidate references during await points.
         let owned_data: Vec<Vec<u8>> = data_list.iter().map(|d| d.to_vec()).collect();
 
         let mut results = Vec::with_capacity(owned_data.len());
@@ -377,7 +367,6 @@ async fn read_file_as_array_buffer(file: &web_sys::File) -> Result<Vec<u8>, Stri
     let reader = FileReader::new().map_err(|_| "Failed to create FileReader".to_string())?;
     let reader = Rc::new(RefCell::new(reader));
 
-    // Create a promise that will resolve when FileReader completes
     let promise = js_sys::Promise::new(&mut |resolve, _reject| {
         let reader_clone = reader.clone();
 
@@ -399,18 +388,15 @@ async fn read_file_as_array_buffer(file: &web_sys::File) -> Result<Vec<u8>, Stri
         onload.forget();
     });
 
-    // Start the read
     reader
         .borrow_mut()
         .read_as_array_buffer(file)
         .map_err(|_| "Failed to read file".to_string())?;
 
-    // Wait for the promise
     let array_buffer = JsFuture::from(promise)
         .await
         .map_err(|_| "File read failed".to_string())?;
 
-    // Convert to Vec
     let arr = Uint8Array::new(&array_buffer);
     Ok(arr.to_vec())
 }
@@ -422,7 +408,6 @@ mod tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    // Static test data with 'static lifetime to avoid use-after-free
     const VALID_PDF_DATA: &[u8] = b"%PDF-1.4\n%test";
     const INVALID_DATA: &[u8] = b"some data";
     const EMPTY_DATA: &[u8] = b"";
@@ -430,8 +415,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_extract_bytes_sync_wasm_valid_pdf_data_returns_result() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime,
-        // so the Uint8Array view remains valid for the entire test duration.
         let data = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let mime_type = "application/pdf".to_string();
         let config = None;
@@ -443,7 +426,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_extract_bytes_sync_wasm_invalid_mime_type_returns_error() {
-        // SAFETY: INVALID_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(INVALID_DATA) };
         let mime_type = "invalid/mime".to_string();
         let config = None;
@@ -455,7 +437,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_extract_bytes_sync_wasm_empty_data_returns_error() {
-        // SAFETY: EMPTY_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(EMPTY_DATA) };
         let mime_type = "application/pdf".to_string();
         let config = None;
@@ -467,7 +448,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_extract_bytes_sync_wasm_with_valid_config_returns_result() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let mime_type = "application/pdf".to_string();
         let config = Some(JsValue::NULL);
@@ -479,7 +459,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_extract_bytes_sync_wasm_text_plain_data_returns_result() {
-        // SAFETY: TEXT_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(TEXT_DATA) };
         let mime_type = "text/plain".to_string();
         let config = None;
@@ -491,7 +470,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_extract_bytes_wasm_returns_promise() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let mime_type = "application/pdf".to_string();
         let config = None;
@@ -504,7 +482,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_extract_bytes_wasm_invalid_mime_type_returns_promise() {
-        // SAFETY: INVALID_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(INVALID_DATA) };
         let mime_type = "invalid/type".to_string();
         let config = None;
@@ -516,7 +493,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_extract_bytes_wasm_with_config_returns_promise() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let mime_type = "application/pdf".to_string();
         let config = Some(JsValue::NULL);
@@ -557,13 +533,11 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // Static batch test data
     const PDF_DATA_1: &[u8] = b"%PDF-1.4\n%test1";
     const TEXT_CONTENT: &[u8] = b"Plain text content";
 
     #[wasm_bindgen_test]
     fn test_batch_extract_bytes_sync_wasm_matching_lengths_returns_result() {
-        // SAFETY: PDF_DATA_1 and TEXT_CONTENT are static const slices with 'static lifetime.
         let data1 = unsafe { Uint8Array::view(PDF_DATA_1) };
         let data2 = unsafe { Uint8Array::view(TEXT_CONTENT) };
         let data_list = vec![data1, data2];
@@ -577,7 +551,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_batch_extract_bytes_sync_wasm_mismatched_lengths_returns_error() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime.
         let data1 = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let data_list = vec![data1];
         let mime_types = vec!["application/pdf".to_string(), "text/plain".to_string()];
@@ -601,7 +574,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_batch_extract_bytes_sync_wasm_single_document_returns_result() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let data_list = vec![data];
         let mime_types = vec!["application/pdf".to_string()];
@@ -614,7 +586,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_batch_extract_bytes_sync_wasm_with_config_returns_result() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let data_list = vec![data];
         let mime_types = vec!["application/pdf".to_string()];
@@ -627,7 +598,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_batch_extract_bytes_wasm_returns_promise() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let data_list = vec![data];
         let mime_types = vec!["application/pdf".to_string()];
@@ -640,7 +610,6 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_batch_extract_bytes_wasm_mismatched_lengths_returns_promise() {
-        // SAFETY: VALID_PDF_DATA is a static const slice with 'static lifetime.
         let data = unsafe { Uint8Array::view(VALID_PDF_DATA) };
         let data_list = vec![data];
         let mime_types = vec!["application/pdf".to_string(), "text/plain".to_string()];

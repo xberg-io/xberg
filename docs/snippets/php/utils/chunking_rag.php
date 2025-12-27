@@ -19,7 +19,6 @@ use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\EmbeddingConfig;
 use Kreuzberg\Enums\EmbeddingModelType;
 
-// RAG-optimized configuration with embeddings
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChars: 500,
@@ -38,7 +37,6 @@ $result = $kreuzberg->extractFile('research_paper.pdf');
 echo "RAG Chunking Results:\n";
 echo str_repeat('=', 60) . "\n";
 
-// Collect chunks with embeddings
 $chunksWithEmbeddings = [];
 foreach ($result->chunks ?? [] as $chunk) {
     if ($chunk->embedding !== null) {
@@ -53,7 +51,6 @@ foreach ($result->chunks ?? [] as $chunk) {
 
 echo "Chunks with embeddings: " . count($chunksWithEmbeddings) . "\n\n";
 
-// Display sample chunks for RAG system
 echo "Sample chunks for vector database:\n";
 echo str_repeat('=', 60) . "\n";
 
@@ -64,7 +61,6 @@ foreach (array_slice($chunksWithEmbeddings, 0, 3) as $index => $chunk) {
     echo "  Ready for vector DB: Yes\n\n";
 }
 
-// Example: Prepare data for vector database insertion
 $vectorDbRecords = array_map(
     fn($chunk, $idx) => [
         'id' => sprintf('doc_%s_chunk_%d', md5('research_paper.pdf'), $idx),

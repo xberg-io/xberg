@@ -194,9 +194,6 @@ impl ErrorCode {
     }
 }
 
-// FFI exports - these functions provide C-compatible access to error codes.
-// They allow bindings to reference error codes without hardcoding numeric values.
-
 /// Returns the validation error code (0).
 ///
 /// # C Signature
@@ -384,8 +381,6 @@ pub extern "C" fn kreuzberg_error_code_description(code: u32) -> *const c_char {
     }
 }
 
-// Error Details Structure for FFI
-//
 /// C-compatible structured error details returned by `kreuzberg_get_error_details()`.
 ///
 /// All string fields (message, error_type, source_file, source_function, context_info)
@@ -474,7 +469,6 @@ pub extern "C" fn kreuzberg_get_error_details() -> CErrorDetails {
         0
     };
 
-    // Determine error type name based on code
     let error_type = match error_code_enum {
         panic_shield::ErrorCode::Success => "success".to_string(),
         panic_shield::ErrorCode::GenericError => "generic_error".to_string(),
@@ -486,25 +480,20 @@ pub extern "C" fn kreuzberg_get_error_details() -> CErrorDetails {
         panic_shield::ErrorCode::MissingDependency => "missing_dependency".to_string(),
     };
 
-    // Extract panic context if available
     let (source_file, source_function, source_line) = if let Some(ctx) = panic_shield::get_last_panic_context() {
         (Some(ctx.file), Some(ctx.function), ctx.line)
     } else {
         (None, None, 0)
     };
 
-    // SAFETY: All strings are created from owned String values and converted to C strings.
-    // CString::into_raw() is safe as long as the caller uses kreuzberg_free_string() to deallocate.
     CErrorDetails {
-        message: CString::new(message).map(CString::into_raw).unwrap_or_else(|_| {
-            // SAFETY: fallback to static string if CString creation fails
-            "Error message creation failed".as_ptr() as *mut c_char
-        }),
+        message: CString::new(message)
+            .map(CString::into_raw)
+            .unwrap_or_else(|_| "Error message creation failed".as_ptr() as *mut c_char),
         error_code,
-        error_type: CString::new(error_type).map(CString::into_raw).unwrap_or_else(|_| {
-            // SAFETY: fallback to static string if CString creation fails
-            "unknown".as_ptr() as *mut c_char
-        }),
+        error_type: CString::new(error_type)
+            .map(CString::into_raw)
+            .unwrap_or_else(|_| "unknown".as_ptr() as *mut c_char),
         source_file: source_file
             .and_then(|f| CString::new(f).ok())
             .map(CString::into_raw)
@@ -514,7 +503,7 @@ pub extern "C" fn kreuzberg_get_error_details() -> CErrorDetails {
             .map(CString::into_raw)
             .unwrap_or(ptr::null_mut()),
         source_line,
-        context_info: ptr::null_mut(), // Reserved for future use
+        context_info: ptr::null_mut(),
         is_panic,
     }
 }
@@ -574,7 +563,6 @@ pub unsafe extern "C" fn kreuzberg_classify_error(error_message: *const c_char) 
         return ErrorCode::Internal as u32;
     }
 
-    // SAFETY: Caller has verified that error_message is a valid null-terminated C string.
     let message_str = match unsafe { std::ffi::CStr::from_ptr(error_message) }.to_str() {
         Ok(s) => s,
         Err(_) => return ErrorCode::Internal as u32,
@@ -582,7 +570,6 @@ pub unsafe extern "C" fn kreuzberg_classify_error(error_message: *const c_char) 
 
     let lower = message_str.to_lowercase();
 
-    // Check for missing dependency errors first (before OCR, since tesseract could match both)
     if lower.contains("not found")
         || lower.contains("missing")
         || lower.contains("dependency")
@@ -592,7 +579,6 @@ pub unsafe extern "C" fn kreuzberg_classify_error(error_message: *const c_char) 
         return ErrorCode::MissingDependency as u32;
     }
 
-    // Check for validation errors
     if lower.contains("invalid")
         || lower.contains("validation")
         || lower.contains("parameter")
@@ -602,7 +588,6 @@ pub unsafe extern "C" fn kreuzberg_classify_error(error_message: *const c_char) 
         return ErrorCode::Validation as u32;
     }
 
-    // Check for parsing errors
     if lower.contains("parse")
         || lower.contains("parsing")
         || lower.contains("corrupt")
@@ -612,7 +597,6 @@ pub unsafe extern "C" fn kreuzberg_classify_error(error_message: *const c_char) 
         return ErrorCode::Parsing as u32;
     }
 
-    // Check for OCR errors (after missing dependency to avoid "missing tesseract" matching OCR)
     if lower.contains("ocr")
         || lower.contains("tesseract")
         || lower.contains("recognition")
@@ -621,7 +605,6 @@ pub unsafe extern "C" fn kreuzberg_classify_error(error_message: *const c_char) 
         return ErrorCode::Ocr as u32;
     }
 
-    // Check for I/O errors
     if lower.contains("io")
         || lower.contains("file")
         || lower.contains("read")
@@ -634,18 +617,15 @@ pub unsafe extern "C" fn kreuzberg_classify_error(error_message: *const c_char) 
         return ErrorCode::Io as u32;
     }
 
-    // Check for plugin errors
     if lower.contains("plugin") || lower.contains("loader") || lower.contains("registry") || lower.contains("extension")
     {
         return ErrorCode::Plugin as u32;
     }
 
-    // Check for unsupported format errors
     if lower.contains("unsupported") || lower.contains("unknown format") || lower.contains("mime type") {
         return ErrorCode::UnsupportedFormat as u32;
     }
 
-    // Default to internal error
     ErrorCode::Internal as u32
 }
 
@@ -736,30 +716,8 @@ mod tests {
         assert_eq!(kreuzberg_error_code_internal(), 7);
     }
 
-    // Note: The FFI pointer tests below are disabled due to a pre-existing issue with how
-    // static string literals are optimized and stored by the Rust compiler. The pointers
-    // returned from FFI functions for static strings may not be directly readable via CStr::from_ptr
-    // due to compiler optimizations that merge string literals in memory. These functions work
-    // correctly at the C FFI boundary but are not testable via these Rust tests.
-    //
-    // In practice, these functions are tested by the language bindings (Java FFM, Go cgo, etc.)
-    // which properly handle the FFI pointer semantics.
-    //
     // #[test]
-    // fn test_error_code_name_ffi() {
-    //     unsafe {
-    //         let name = CStr::from_ptr(kreuzberg_error_code_name(0)).to_str().unwrap();
-    //         assert_eq!(name, "validation");
-    //     }
-    // }
-    //
     // #[test]
-    // fn test_error_code_description_ffi() {
-    //     unsafe {
-    //         let desc = CStr::from_ptr(kreuzberg_error_code_description(0)).to_str().unwrap();
-    //         assert_eq!(desc, "Input validation error");
-    //     }
-    // }
 
     #[test]
     fn test_error_code_round_trip() {
@@ -767,7 +725,6 @@ mod tests {
             let err = ErrorCode::from_code(code).unwrap();
             assert_eq!(err as u32, code);
 
-            // Verify name and description are non-empty
             assert!(!err.name().is_empty());
             assert!(!err.description().is_empty());
         }
@@ -790,7 +747,7 @@ mod tests {
         let mut set = HashSet::new();
         set.insert(ErrorCode::Validation);
         set.insert(ErrorCode::Parsing);
-        set.insert(ErrorCode::Validation); // duplicate
+        set.insert(ErrorCode::Validation);
 
         assert_eq!(set.len(), 2);
         assert!(set.contains(&ErrorCode::Validation));
@@ -810,14 +767,11 @@ mod tests {
 
         let details = kreuzberg_get_error_details();
 
-        // Should have default "No error" message
         let msg = unsafe { CStr::from_ptr(details.message).to_str().unwrap() };
         assert_eq!(msg, "No error");
 
-        // Should be success code
         assert_eq!(details.error_code, 0);
 
-        // Cleanup
         unsafe {
             let _ = CString::from_raw(details.message);
             let _ = CString::from_raw(details.error_type);
@@ -841,11 +795,9 @@ mod tests {
         let error_type = unsafe { CStr::from_ptr(details.error_type).to_str().unwrap() };
         assert_eq!(error_type, "io_error");
 
-        // Should have IoError code
         assert_eq!(details.error_code, crate::panic_shield::ErrorCode::IoError as u32);
         assert_eq!(details.is_panic, 0);
 
-        // Cleanup
         unsafe {
             let _ = CString::from_raw(details.message);
             let _ = CString::from_raw(details.error_type);
@@ -935,7 +887,6 @@ mod tests {
 
     #[test]
     fn test_classify_error_null() {
-        // Null pointer should return internal error
         assert_eq!(unsafe { kreuzberg_classify_error(std::ptr::null()) }, 7);
     }
 

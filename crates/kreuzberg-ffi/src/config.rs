@@ -203,8 +203,6 @@ pub unsafe extern "C" fn kreuzberg_config_to_json(config: *const ExtractionConfi
 
     clear_last_error();
 
-    // SAFETY: We've verified config is not null and it must be a valid ExtractionConfig
-    // pointer from kreuzberg_config_from_json or similar.
     match serde_json::to_string(unsafe { &*config }) {
         Ok(json) => match std::ffi::CString::new(json) {
             Ok(c_string) => c_string.into_raw(),
@@ -292,7 +290,6 @@ pub unsafe extern "C" fn kreuzberg_config_get_field(
         }
     };
 
-    // Serialize config to JSON value for field extraction
     let json_value = match serde_json::to_value(unsafe { &*config }) {
         Ok(val) => val,
         Err(e) => {
@@ -301,7 +298,6 @@ pub unsafe extern "C" fn kreuzberg_config_get_field(
         }
     };
 
-    // Navigate the JSON path using dot notation
     let mut current = &json_value;
     for part in field_str.split('.') {
         if let Some(obj) = current.as_object() {
@@ -318,7 +314,6 @@ pub unsafe extern "C" fn kreuzberg_config_get_field(
         }
     }
 
-    // Serialize the field value to JSON string
     match serde_json::to_string(current) {
         Ok(json) => match std::ffi::CString::new(json) {
             Ok(c_string) => c_string.into_raw(),
@@ -394,20 +389,14 @@ pub unsafe extern "C" fn kreuzberg_config_merge(
 
     clear_last_error();
 
-    // SAFETY: We've verified both pointers are non-null.
-    // base must be valid mutable ExtractionConfig, override_config must be valid immutable ExtractionConfig.
     let base_ref = unsafe { &mut *base };
     let override_ref = unsafe { &*override_config };
 
-    // Proper merge: unconditionally copy all fields from override to base.
-    // This ensures that override values take precedence, even when they match
-    // the default (fixes the bug where overriding to a default value was ignored).
     base_ref.use_cache = override_ref.use_cache;
     base_ref.enable_quality_processing = override_ref.enable_quality_processing;
     base_ref.force_ocr = override_ref.force_ocr;
     base_ref.max_concurrent_extractions = override_ref.max_concurrent_extractions;
 
-    // Merge nested optional fields
     if override_ref.ocr.is_some() {
         base_ref.ocr = override_ref.ocr.clone();
     }
@@ -470,8 +459,6 @@ fn parse_extraction_config_from_json(json_str: &str) -> FfiResult<ExtractionConf
     };
 
     // ~keep: This function performs the JSON parsing and validation that was
-    // previously duplicated across all 7 language bindings. Now all bindings
-    // call this single implementation via the FFI boundary, ensuring consistency.
 
     fn parse_enum<T, F>(value: Option<&serde_json::Value>, parse_fn: F) -> FfiResult<Option<T>>
     where
@@ -575,7 +562,6 @@ fn parse_extraction_config_from_json(json_str: &str) -> FfiResult<ExtractionConf
             .as_object()
             .ok_or_else(|| "html_options must be an object".to_string())?;
 
-        // Parse all supported HTML conversion options
         if let Some(val) = obj.get("heading_style") {
             opts.heading_style = parse_enum(Some(val), parse_heading_style)?.unwrap_or(opts.heading_style);
         }
@@ -773,14 +759,11 @@ fn parse_extraction_config_from_json(json_str: &str) -> FfiResult<ExtractionConf
         Ok(opts)
     }
 
-    // Parse the JSON into a value first for validation
     let json_value: serde_json::Value = serde_json::from_str(json_str).map_err(|e| format!("Invalid JSON: {}", e))?;
 
-    // Try to deserialize into ExtractionConfig
     let mut config: ExtractionConfig =
         serde_json::from_value(json_value.clone()).map_err(|e| format!("Invalid configuration structure: {}", e))?;
 
-    // Parse HTML options if present (they're skipped in normal deserialization)
     if let Some(html_opts_val) = json_value.get("html_options") {
         config.html_options = Some(parse_html_options(html_opts_val)?);
     }
@@ -948,7 +931,6 @@ mod tests {
         let result = unsafe { kreuzberg_config_merge(base_ptr, override_ptr) };
         assert_eq!(result, 1);
 
-        // Verify the merge: use_cache should still be true, force_ocr should be true
         let merged_json = unsafe { kreuzberg_config_to_json(base_ptr) };
         assert!(!merged_json.is_null());
 
@@ -992,8 +974,6 @@ mod tests {
 
     #[test]
     fn test_config_merge_override_to_default_value() {
-        // Test the bug fix: overriding use_cache from false to true
-        // (true is the default, so the old code would skip it)
         let base_json = r#"{"use_cache": false}"#;
         let override_json = r#"{"use_cache": true}"#;
 
@@ -1004,15 +984,12 @@ mod tests {
         assert!(!base_ptr.is_null());
         assert!(!override_ptr.is_null());
 
-        // Verify base starts with use_cache = false
         let base_ref = unsafe { &*base_ptr };
         assert!(!base_ref.use_cache);
 
-        // Perform merge
         let result = unsafe { kreuzberg_config_merge(base_ptr, override_ptr) };
         assert_eq!(result, 1);
 
-        // Verify the merge applied the override (use_cache should now be true)
         let base_ref = unsafe { &*base_ptr };
         assert!(base_ref.use_cache, "override to default value should be applied");
 
@@ -1024,7 +1001,6 @@ mod tests {
 
     #[test]
     fn test_config_merge_override_force_ocr() {
-        // Test merging force_ocr field (default is false)
         let base_json = r#"{"force_ocr": false}"#;
         let override_json = r#"{"force_ocr": true}"#;
 
@@ -1038,7 +1014,6 @@ mod tests {
         let result = unsafe { kreuzberg_config_merge(base_ptr, override_ptr) };
         assert_eq!(result, 1);
 
-        // Verify merged config has force_ocr = true
         let base_ref = unsafe { &*base_ptr };
         assert!(base_ref.force_ocr);
 

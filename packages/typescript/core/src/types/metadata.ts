@@ -6,7 +6,6 @@
  */
 
 // ============================================================================
-// Format-Specific Metadata Interfaces
 // ============================================================================
 
 export interface ExcelMetadata {
@@ -132,10 +131,6 @@ export interface OcrMetadata {
 	tableCols?: number | null;
 }
 
-// ============================================================================
-// Image Preprocessing Metadata
-// ============================================================================
-
 export interface ImagePreprocessingMetadata {
 	originalDimensions?: [number, number];
 	originalDpi?: [number, number];
@@ -151,18 +146,10 @@ export interface ImagePreprocessingMetadata {
 	resizeError?: string | null;
 }
 
-// ============================================================================
-// Error Metadata
-// ============================================================================
-
 export interface ErrorMetadata {
 	errorType?: string;
 	message?: string;
 }
-
-// ============================================================================
-// Unified Metadata Interface
-// ============================================================================
 
 /**
  * Extraction result metadata.
@@ -180,7 +167,6 @@ export interface Metadata {
 
 	format_type?: "pdf" | "excel" | "email" | "pptx" | "archive" | "image" | "xml" | "text" | "html" | "ocr";
 
-	// Common PDF/Document metadata
 	title?: string | null;
 	author?: string | null;
 	keywords?: string | null;
@@ -190,11 +176,9 @@ export interface Metadata {
 	modification_date?: string | null;
 	page_count?: number;
 
-	// Excel-specific metadata
 	sheet_count?: number;
 	sheet_names?: string[];
 
-	// Email-specific metadata
 	from_email?: string | null;
 	from_name?: string | null;
 	to_emails?: string[];
@@ -203,28 +187,23 @@ export interface Metadata {
 	message_id?: string | null;
 	attachments?: string[];
 
-	// PowerPoint-specific metadata
 	description?: string | null;
 	summary?: string | null;
 	fonts?: string[];
 
-	// Archive-specific metadata
 	format?: string;
 	file_count?: number;
 	file_list?: string[];
 	total_size?: number;
 	compressed_size?: number | null;
 
-	// Image-specific metadata
 	width?: number;
 	height?: number;
 	exif?: Record<string, string>;
 
-	// XML-specific metadata
 	element_count?: number;
 	unique_elements?: string[];
 
-	// Text-specific metadata
 	line_count?: number;
 	word_count?: number;
 	character_count?: number;
@@ -232,7 +211,6 @@ export interface Metadata {
 	links?: [string, string][] | null;
 	code_blocks?: [string, string][] | null;
 
-	// HTML-specific metadata
 	canonical_url?: string | null;
 	base_href?: string | null;
 	open_graph?: Record<string, string>;
@@ -245,20 +223,16 @@ export interface Metadata {
 	html_images?: ImageMetadata[];
 	structured_data?: StructuredData[];
 
-	// OCR-specific metadata
 	psm?: number;
 	output_format?: string;
 	table_count?: number;
 	table_rows?: number | null;
 	table_cols?: number | null;
 
-	// Image preprocessing metadata
 	image_preprocessing?: ImagePreprocessingMetadata | null;
 
-	// JSON schema
 	json_schema?: Record<string, unknown> | null;
 
-	// Error information
 	error?: ErrorMetadata | null;
 
 	// biome-ignore lint/suspicious/noExplicitAny: Postprocessors can add arbitrary metadata fields

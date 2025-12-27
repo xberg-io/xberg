@@ -9,7 +9,6 @@ includes:
     internal: true
 
 tasks:
-  # Installation
   install:
     desc: Install Node/TypeScript dependencies
     dir: crates/kreuzberg-node
@@ -22,7 +21,6 @@ tasks:
     cmds:
       - task: node:install
 
-  # Build Tasks
   build:
     desc: Build Node/TypeScript native bindings (uses {{.BUILD_PROFILE}})
     dir: crates/kreuzberg-node
@@ -52,7 +50,6 @@ tasks:
     cmds:
       - bash scripts/benchmarks/build-node-bindings.sh
 
-  # Test Tasks
   test:
     desc: Run Node/TypeScript tests
     dir: crates/kreuzberg-node
@@ -65,7 +62,6 @@ tasks:
     cmds:
       - pnpm test
 
-  # Linting Tasks
   lint:
     desc: Auto-fix Node/TypeScript code linting (biome + oxlint)
     dir: crates/kreuzberg-node
@@ -80,7 +76,6 @@ tasks:
       - pnpm lint
       - pnpm typecheck
 
-  # Formatting Tasks
   format:
     desc: Format Node/TypeScript code with modifications (biome)
     dir: crates/kreuzberg-node
@@ -93,7 +88,6 @@ tasks:
     cmds:
       - pnpm exec biome format typescript
 
-  # Cleanup
   clean:
     desc: Clean Node/TypeScript build artifacts
     dir: crates/kreuzberg-node
@@ -101,7 +95,6 @@ tasks:
       - python -c "import shutil; [shutil.rmtree(d, ignore_errors=True) for d in ['dist', 'build', 'node_modules']]"
       - python -c "import shutil, os; [shutil.rmtree(os.path.join(r, d), ignore_errors=True) for r, dirs, _ in os.walk('.') for d in dirs if d == '.turbo']"
 
-  # Dependency Management
   update:
     desc: Update Node/TypeScript dependencies
     dir: crates/kreuzberg-node
@@ -110,7 +103,6 @@ tasks:
       - corepack up
       - pnpm up --latest
 
-  # E2E Tests
   e2e:generate:
     desc: Generate TypeScript E2E tests
     cmds:

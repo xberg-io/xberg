@@ -1,7 +1,6 @@
 version: "3"
 
 tasks:
-  # Generate all E2E tests from fixtures
   generate:all:
     desc: Generate all E2E tests from fixtures across all supported languages
     cmds:
@@ -16,7 +15,6 @@ tasks:
       - task: ruby:e2e:generate
       - task: php:e2e:generate
 
-  # Run all E2E tests
   test:all:
     desc: Run all E2E tests across all supported languages
     cmds:
@@ -31,7 +29,6 @@ tasks:
       - task: ruby:e2e:test
       - task: php:e2e:test
 
-  # Full E2E pipeline - generate + lint + test
   verify:all:
     desc: Full E2E pipeline - generate, lint, and test all suites
     cmds:
@@ -39,7 +36,6 @@ tasks:
       - task: e2e:lint:all
       - task: e2e:test:all
 
-  # Lint all generated E2E tests
   lint:all:
     desc: Lint all generated E2E test code
     cmds:
@@ -54,7 +50,6 @@ tasks:
       - task: ruby:e2e:lint
       - task: php:e2e:lint
 
-  # Rust E2E
   rust:generate:
     desc: Generate Rust E2E tests from fixtures
     cmds:
@@ -78,7 +73,6 @@ tasks:
       - task: rust:e2e:lint
       - task: rust:e2e:test
 
-  # Python E2E (if tests exist)
   python:generate:
     desc: Generate Python E2E tests from fixtures
     cmds:
@@ -101,7 +95,6 @@ tasks:
       - task: python:e2e:lint
       - task: python:e2e:test
 
-  # Go E2E
   go:generate:
     desc: Generate Go E2E tests from fixtures
     cmds:
@@ -118,7 +111,6 @@ tasks:
       - task: go:e2e:generate
       - task: go:e2e:test
 
-  # Node E2E
   node:generate:
     desc: Generate Node E2E tests from fixtures
     cmds:
@@ -141,7 +133,6 @@ tasks:
       - task: node:e2e:lint
       - task: node:e2e:test
 
-  # Java E2E
   java:generate:
     desc: Generate Java E2E tests from fixtures
     cmds:
@@ -158,7 +149,6 @@ tasks:
       - task: java:e2e:generate
       - task: java:e2e:test
 
-  # C# E2E
   csharp:generate:
     desc: Generate C# E2E tests from fixtures
     cmds:
@@ -175,7 +165,6 @@ tasks:
       - task: csharp:e2e:generate
       - task: csharp:e2e:test
 
-  # WASM Deno E2E
   wasm:deno:generate:
     desc: Generate Deno WASM E2E tests from fixtures
     cmds:
@@ -198,7 +187,6 @@ tasks:
       - task: wasm:e2e:deno:generate
       - task: wasm:e2e:deno:test
 
-  # WASM Cloudflare Workers E2E
   wasm:workers:generate:
     desc: Generate Cloudflare Workers WASM E2E tests from fixtures
     cmds:
@@ -221,14 +209,12 @@ tasks:
       - task: wasm:e2e:workers:generate
       - task: wasm:e2e:workers:test
 
-  # WASM all E2E tests
   wasm:verify:
     desc: Verify all WASM test suites (Deno + Workers)
     cmds:
       - task: wasm:deno:verify
       - task: wasm:workers:verify
 
-  # PHP E2E
   php:generate:
     desc: Generate PHP E2E tests from fixtures
     cmds:
@@ -245,7 +231,6 @@ tasks:
       - task: php:e2e:generate
       - task: php:e2e:test
 
-  # Quick E2E (core languages only)
   quick:
     desc: Run quick E2E tests (Rust + Go only)
     cmds:
@@ -258,7 +243,6 @@ tasks:
       - task: rust:e2e:verify
       - task: go:e2e:verify
 
-  # Systems E2E (Rust + Go + C#)
   systems:
     desc: E2E test systems languages (Rust, Go, C#)
     cmds:
@@ -273,7 +257,6 @@ tasks:
       - task: go:e2e:verify
       - task: csharp:e2e:verify
 
-  # JVM E2E (Java, C#, PHP)
   jvm:
     desc: E2E test JVM languages (Java, C#, PHP)
     cmds:
@@ -288,7 +271,6 @@ tasks:
       - task: csharp:e2e:verify
       - task: php:e2e:verify
 
-  # WASM E2E only (both Deno and Workers)
   wasm:all:
     desc: Run all WASM E2E tests (Deno + Workers)
     cmds:
@@ -301,7 +283,6 @@ tasks:
       - task: wasm:deno:verify
       - task: wasm:workers:verify
 
-  # Ruby E2E
   ruby:generate:
     desc: Generate Ruby E2E tests from fixtures
     cmds:

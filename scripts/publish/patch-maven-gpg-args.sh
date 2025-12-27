@@ -1,15 +1,5 @@
 #!/usr/bin/env bash
 
-# Patch legacy Maven GPG pinentry arguments
-#
-# Converts legacy two-argument format to modern single-argument format:
-#   <arg>--pinentry-mode</arg><arg>loopback</arg>
-# becomes:
-#   <arg>--pinentry-mode=loopback</arg>
-#
-# Arguments:
-#   $1: Path to pom.xml file (default: packages/java/pom.xml)
-
 set -euo pipefail
 
 pom_file="${1:-packages/java/pom.xml}"

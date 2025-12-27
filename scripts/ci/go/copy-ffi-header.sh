@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Copy FFI header from kreuzberg-ffi crate to Go bindings
-# Used by: ci-go.yaml - after building FFI library
-# Ensures Go code can find the FFI header at internal/ffi/kreuzberg.h
 
 set -euo pipefail
 

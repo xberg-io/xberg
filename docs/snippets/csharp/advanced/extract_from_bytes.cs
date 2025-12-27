@@ -6,10 +6,8 @@ class Program
     {
         try
         {
-            // Read file into bytes
             var pdfBytes = await File.ReadAllBytesAsync("document.pdf");
 
-            // Extract from bytes without config (uses defaults)
             var result = await KreuzbergClient.ExtractBytesAsync(
                 pdfBytes,
                 "application/pdf"
@@ -18,7 +16,6 @@ class Program
             Console.WriteLine($"Content: {result.Content}");
             Console.WriteLine($"MIME type: {result.MimeType}");
 
-            // Extract from bytes with custom configuration
             var config = new ExtractionConfig
             {
                 UseCache = true,
@@ -33,8 +30,7 @@ class Program
 
             Console.WriteLine($"Configured extraction: {result2.Content.Length} chars");
 
-            // Extract from in-memory data
-            var imageBytes = new byte[] { /* JPEG bytes */ };
+            var imageBytes = new byte[] {  };
 
             var imageResult = await KreuzbergClient.ExtractBytesAsync(
                 imageBytes,
@@ -43,7 +39,6 @@ class Program
 
             Console.WriteLine($"Image text: {imageResult.Content}");
 
-            // Batch extraction from bytes
             var multipleFiles = new Dictionary<string, (byte[], string)>
             {
                 { "file1", (await File.ReadAllBytesAsync("file1.pdf"), "application/pdf") },

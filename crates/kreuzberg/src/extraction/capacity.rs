@@ -78,7 +78,7 @@ pub fn estimate_content_capacity(file_size: u64, format: &str) -> usize {
         "xlsx" | "xls" | "xlsm" | "xlam" | "xltm" | "xlsb" => 0.40,
         "pptx" | "ppt" | "pptm" | "ppsx" => 0.35,
         "pdf" => 0.25,
-        _ => 0.50, // Conservative default for unknown formats
+        _ => 0.50,
     };
 
     (file_size as f64 * ratio).ceil() as usize
@@ -98,7 +98,6 @@ pub fn estimate_content_capacity(file_size: u64, format: &str) -> usize {
 /// An estimated capacity for the Markdown output
 #[inline]
 pub fn estimate_html_markdown_capacity(html_size: u64) -> usize {
-    // HTML to Markdown is typically 65% of original HTML size
     let estimated = (html_size as f64 * 0.65).ceil() as usize;
     estimated.max(64)
 }
@@ -117,7 +116,6 @@ pub fn estimate_html_markdown_capacity(html_size: u64) -> usize {
 /// An estimated capacity for cell value accumulation
 #[inline]
 pub fn estimate_spreadsheet_capacity(file_size: u64) -> usize {
-    // Spreadsheet cells are typically 40% of compressed file size
     let estimated = (file_size as f64 * 0.40).ceil() as usize;
     estimated.max(64)
 }
@@ -136,7 +134,6 @@ pub fn estimate_spreadsheet_capacity(file_size: u64) -> usize {
 /// An estimated capacity for slide content accumulation
 #[inline]
 pub fn estimate_presentation_capacity(file_size: u64) -> usize {
-    // Presentation content is typically 35% of file size
     let estimated = (file_size as f64 * 0.35).ceil() as usize;
     estimated.max(64)
 }
@@ -156,8 +153,6 @@ pub fn estimate_presentation_capacity(file_size: u64) -> usize {
 /// An estimated capacity for the markdown table output
 #[inline]
 pub fn estimate_table_markdown_capacity(row_count: usize, col_count: usize) -> usize {
-    // Estimate: each cell is ~12 bytes on average (separators + content)
-    // Plus header (50 bytes) and separators (5 bytes per column)
     let base = 50 + (col_count * 5);
     let cell_estimate = row_count.saturating_mul(col_count).saturating_mul(12);
     base.saturating_add(cell_estimate).max(64)
@@ -251,7 +246,6 @@ mod tests {
     #[test]
     fn test_table_markdown_capacity() {
         let capacity = estimate_table_markdown_capacity(10, 5);
-        // Base (50 + 5*5) + cells (10*5*12) = 75 + 600 = 675
         assert_eq!(capacity, 675);
     }
 
@@ -263,7 +257,6 @@ mod tests {
 
     #[test]
     fn test_capacity_overflow_resistance() {
-        // Test that very large file sizes don't cause overflow
         let capacity = estimate_content_capacity(u64::MAX, "txt");
         assert!(capacity > 0);
     }

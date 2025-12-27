@@ -9,7 +9,6 @@ echo -e "${BLUE}================================"
 echo "CLI Command Tests"
 echo "================================${NC}"
 
-# Test 1: Core version command
 echo ""
 log_info "Test 1: Core version command"
 if docker exec kreuzberg-core-test kreuzberg --version >/dev/null 2>&1; then
@@ -18,7 +17,6 @@ else
 	log_fail "Core version command failed"
 fi
 
-# Test 2: Full version command
 echo ""
 log_info "Test 2: Full version command"
 if docker exec kreuzberg-full-test kreuzberg --version >/dev/null 2>&1; then
@@ -27,7 +25,6 @@ else
 	log_fail "Full version command failed"
 fi
 
-# Test 3: Core help command
 echo ""
 log_info "Test 3: Core help command"
 output=$(docker exec kreuzberg-core-test kreuzberg --help 2>&1 || true)
@@ -37,7 +34,6 @@ else
 	log_fail "Core help command output unexpected"
 fi
 
-# Test 4: Full help command
 echo ""
 log_info "Test 4: Full help command"
 output=$(docker exec kreuzberg-full-test kreuzberg --help 2>&1 || true)
@@ -47,7 +43,6 @@ else
 	log_fail "Full help command output unexpected"
 fi
 
-# Test 5: Core extract subcommand exists
 echo ""
 log_info "Test 5: Core extract subcommand exists"
 output=$(docker exec kreuzberg-core-test kreuzberg extract --help 2>&1 || true)
@@ -57,7 +52,6 @@ else
 	log_warn "Core extract help: $output"
 fi
 
-# Test 6: Full extract subcommand exists
 echo ""
 log_info "Test 6: Full extract subcommand exists"
 output=$(docker exec kreuzberg-full-test kreuzberg extract --help 2>&1 || true)
@@ -67,7 +61,6 @@ else
 	log_warn "Full extract help: $output"
 fi
 
-# Test 7: Core serve subcommand exists
 echo ""
 log_info "Test 7: Core serve subcommand exists"
 output=$(docker exec kreuzberg-core-test kreuzberg serve --help 2>&1 || true)
@@ -77,7 +70,6 @@ else
 	log_warn "Core serve help: $output"
 fi
 
-# Test 8: Full serve subcommand exists
 echo ""
 log_info "Test 8: Full serve subcommand exists"
 output=$(docker exec kreuzberg-full-test kreuzberg serve --help 2>&1 || true)
@@ -87,7 +79,6 @@ else
 	log_warn "Full serve help: $output"
 fi
 
-# Test 9: Core can list file formats
 echo ""
 log_info "Test 9: Core list formats or similar"
 output=$(docker exec kreuzberg-core-test kreuzberg --help 2>&1 || true)
@@ -97,7 +88,6 @@ else
 	log_fail "Core CLI output empty"
 fi
 
-# Test 10: Full can list file formats
 echo ""
 log_info "Test 10: Full list formats or similar"
 output=$(docker exec kreuzberg-full-test kreuzberg --help 2>&1 || true)

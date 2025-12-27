@@ -200,7 +200,6 @@ class ValidationError extends KreuzbergException
         mixed $expected,
         string $validator = 'unknown',
     ): self {
-        // Convert to string representation for message
         $expectedStr = self::valueToString($expected);
         $actualStr = self::valueToString($actual);
 

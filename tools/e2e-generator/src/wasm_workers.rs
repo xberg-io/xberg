@@ -8,8 +8,6 @@ use std::fs;
 
 use crate::fixtures::{Assertions, Fixture, WasmTarget};
 
-// Helpers template for Cloudflare Workers with fixture loading disabled
-// Cloudflare Workers cannot access the filesystem, so all fixture-based tests are skipped
 const WORKERS_HELPERS_TEMPLATE: &str = r#"import { expect } from "vitest";
 import type {
     ChunkingConfig,
@@ -394,7 +392,6 @@ pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
 
     clean_test_files(&tests_dir)?;
 
-    // Filter fixtures for Workers WASM target
     let doc_fixtures: Vec<_> = fixtures
         .iter()
         .filter(|f| f.is_document_extraction() && crate::fixtures::should_include_for_wasm(f, WasmTarget::Workers))
@@ -402,10 +399,8 @@ pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
 
     let plugin_fixtures: Vec<_> = fixtures.iter().filter(|f| f.is_plugin_api()).collect();
 
-    // Generate helpers (fixtures are loaded from disk at runtime)
     write_helpers(&tests_dir)?;
 
-    // Group document fixtures by category
     let mut grouped = doc_fixtures
         .into_iter()
         .into_group_map_by(|fixture| fixture.category().to_string())
@@ -421,12 +416,10 @@ pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
         fs::write(&path, content).with_context(|| format!("Writing {}", path))?;
     }
 
-    // Generate plugin API tests if any exist
     if !plugin_fixtures.is_empty() {
         generate_plugin_api_tests(&plugin_fixtures, &tests_dir)?;
     }
 
-    // Generate vitest configuration
     write_vitest_config(&output_dir)?;
 
     Ok(())

@@ -5,8 +5,6 @@ use kreuzberg::core::config::ExtractionConfig;
 
 #[test]
 fn test_image_metadata_only() {
-    // JPEG image to validate metadata extraction without OCR.
-
     let document_path = resolve_document("images/example.jpg");
     if !document_path.exists() {
         println!(

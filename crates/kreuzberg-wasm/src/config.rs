@@ -72,7 +72,6 @@ pub fn load_config_from_string(content: String, format: String) -> Result<JsValu
         _ => return Err(JsValue::from_str("Unsupported format. Use 'toml', 'yaml', or 'json'.")),
     };
 
-    // Serialize the config back to JsValue
     serde_wasm_bindgen::to_value(&config)
         .map_err(|e| JsValue::from_str(&format!("Failed to convert config to JS value: {}", e)))
 }

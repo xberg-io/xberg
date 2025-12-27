@@ -4,7 +4,6 @@ class Program
 {
     static async Task Main()
     {
-        // Extract from file with comprehensive error handling
         try
         {
             var result = await KreuzbergClient.ExtractFileAsync("document.pdf");
@@ -27,11 +26,10 @@ class Program
             Console.WriteLine($"Extraction error: {ex.Message}");
         }
 
-        // Extract from bytes with configuration
         try
         {
             var config = new ExtractionConfig();
-            var pdfBytes = new byte[] { 0x25, 0x50, 0x44, 0x46 }; // %PDF
+            var pdfBytes = new byte[] { 0x25, 0x50, 0x44, 0x46 }; 
 
             var result = await KreuzbergClient.ExtractBytesAsync(
                 pdfBytes,
@@ -58,7 +56,6 @@ class Program
             Console.WriteLine($"Extraction failed: {ex.Message}");
         }
 
-        // Handle specific file not found
         try
         {
             var result = await KreuzbergClient.ExtractFileAsync("nonexistent.pdf");

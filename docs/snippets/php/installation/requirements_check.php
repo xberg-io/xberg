@@ -14,7 +14,6 @@ echo "====================================\n\n";
 
 $requirements_met = true;
 
-// Check PHP version
 echo "PHP Version: " . PHP_VERSION;
 if (version_compare(PHP_VERSION, '8.1.0', '>=')) {
     echo " ✓ (>= 8.1.0 required)\n";
@@ -23,7 +22,6 @@ if (version_compare(PHP_VERSION, '8.1.0', '>=')) {
     $requirements_met = false;
 }
 
-// Check for required extensions
 $required_extensions = ['json', 'mbstring'];
 foreach ($required_extensions as $ext) {
     echo "Extension '$ext': ";
@@ -35,7 +33,6 @@ foreach ($required_extensions as $ext) {
     }
 }
 
-// Check for Kreuzberg extension
 echo "Extension 'kreuzberg': ";
 if (extension_loaded('kreuzberg')) {
     echo "✓ Loaded\n";
@@ -44,7 +41,6 @@ if (extension_loaded('kreuzberg')) {
     $requirements_met = false;
 }
 
-// Check memory limit
 $memory_limit = ini_get('memory_limit');
 echo "\nMemory Limit: $memory_limit";
 $memory_bytes = return_bytes($memory_limit);
@@ -74,10 +70,8 @@ function return_bytes(string $val): int
     switch ($last) {
         case 'g':
             $val *= 1024;
-            // fall through
         case 'm':
             $val *= 1024;
-            // fall through
         case 'k':
             $val *= 1024;
     }

@@ -69,7 +69,6 @@ public class KreuzbergBenchmark
     }
 }
 
-// Alternative: Manual benchmark
 public class ManualBenchmark
 {
     public static async Task Main(string[] args)
@@ -77,10 +76,8 @@ public class ManualBenchmark
         var filePath = "document.pdf";
         var config = new ExtractionConfig();
 
-        // Warmup
         await KreuzbergClient.ExtractFileAsync(filePath, config);
 
-        // Benchmark sync extraction
         var sw = Stopwatch.StartNew();
         for (int i = 0; i < 10; i++)
         {
@@ -89,7 +86,6 @@ public class ManualBenchmark
         sw.Stop();
         Console.WriteLine($"Sync extraction (10 runs): {sw.ElapsedMilliseconds}ms avg {sw.ElapsedMilliseconds / 10f}ms");
 
-        // Benchmark async extraction
         sw.Restart();
         var tasks = new System.Collections.Generic.List<Task>();
         for (int i = 0; i < 10; i++)
@@ -100,7 +96,6 @@ public class ManualBenchmark
         sw.Stop();
         Console.WriteLine($"Async extraction (10 parallel runs): {sw.ElapsedMilliseconds}ms");
 
-        // Run BenchmarkDotNet
         var summary = BenchmarkRunner.Run<KreuzbergBenchmark>();
     }
 }

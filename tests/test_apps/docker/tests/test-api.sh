@@ -9,21 +9,17 @@ echo -e "${BLUE}================================"
 echo "API Endpoint Tests"
 echo "================================${NC}"
 
-# Core container API tests (port 8000)
 CORE_API="http://localhost:8000"
 FULL_API="http://localhost:8001"
 
-# Test 1: Core health endpoint
 echo ""
 log_info "Test 1: Core health endpoint"
 assert_http_status "$CORE_API/health" 200 "Core /health endpoint returns 200"
 
-# Test 2: Full health endpoint
 echo ""
 log_info "Test 2: Full health endpoint"
 assert_http_status "$FULL_API/health" 200 "Full /health endpoint returns 200"
 
-# Test 3: Core API responds
 echo ""
 log_info "Test 3: Core API responds"
 response=$(curl -s "$CORE_API/health" 2>/dev/null || echo "{}")
@@ -33,7 +29,6 @@ else
 	log_warn "Core health response: $response"
 fi
 
-# Test 4: Full API responds
 echo ""
 log_info "Test 4: Full API responds"
 response=$(curl -s "$FULL_API/health" 2>/dev/null || echo "{}")
@@ -43,7 +38,6 @@ else
 	log_warn "Full health response: $response"
 fi
 
-# Test 5: Core extract endpoint exists
 echo ""
 log_info "Test 5: Core extract endpoint exists"
 status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$CORE_API/extract" \
@@ -55,7 +49,6 @@ else
 	log_fail "Core /extract endpoint not found"
 fi
 
-# Test 6: Full extract endpoint exists
 echo ""
 log_info "Test 6: Full extract endpoint exists"
 status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$FULL_API/extract" \
@@ -67,7 +60,6 @@ else
 	log_fail "Full /extract endpoint not found"
 fi
 
-# Test 7: Core can extract text file
 echo ""
 log_info "Test 7: Core can extract text file"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -79,7 +71,6 @@ else
 	log_warn "Core extract response: $response"
 fi
 
-# Test 8: Full can extract text file
 echo ""
 log_info "Test 8: Full can extract text file"
 response=$(curl -s -X POST "$FULL_API/extract" \
@@ -91,7 +82,6 @@ else
 	log_warn "Full extract response: $response"
 fi
 
-# Test 9: Core can extract PDF
 echo ""
 log_info "Test 9: Core can extract PDF"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -103,7 +93,6 @@ else
 	log_warn "Core PDF extract response: $response"
 fi
 
-# Test 10: Full can extract PDF
 echo ""
 log_info "Test 10: Full can extract PDF"
 response=$(curl -s -X POST "$FULL_API/extract" \
@@ -115,7 +104,6 @@ else
 	log_warn "Full PDF extract response: $response"
 fi
 
-# Test 11: Core can extract Markdown
 echo ""
 log_info "Test 11: Core can extract Markdown"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -127,7 +115,6 @@ else
 	log_warn "Core Markdown extract response: $response"
 fi
 
-# Test 12: Full can extract Markdown
 echo ""
 log_info "Test 12: Full can extract Markdown"
 response=$(curl -s -X POST "$FULL_API/extract" \
@@ -139,7 +126,6 @@ else
 	log_warn "Full Markdown extract response: $response"
 fi
 
-# Test 13: Core can extract ODT
 echo ""
 log_info "Test 13: Core can extract ODT"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -151,7 +137,6 @@ else
 	log_warn "Core ODT extract response: $response"
 fi
 
-# Test 14: Full can extract ODT
 echo ""
 log_info "Test 14: Full can extract ODT"
 response=$(curl -s -X POST "$FULL_API/extract" \
@@ -163,7 +148,6 @@ else
 	log_warn "Full ODT extract response: $response"
 fi
 
-# Test 15: Core can extract image (for OCR if available)
 echo ""
 log_info "Test 15: Core can extract image"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -175,7 +159,6 @@ else
 	log_warn "Core image extract response: $response"
 fi
 
-# Test 16: Full can extract image
 echo ""
 log_info "Test 16: Full can extract image"
 response=$(curl -s -X POST "$FULL_API/extract" \

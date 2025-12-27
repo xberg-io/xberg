@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
 
-# Prefer gpg2 binary by creating a wrapper in PATH
-#
-# If gpg2 is available, creates a gpg wrapper that delegates to gpg2.
-# This ensures Maven uses gpg2 for signing operations.
-
 set -euo pipefail
 
 if command -v gpg2 >/dev/null 2>&1; then

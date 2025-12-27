@@ -12,7 +12,6 @@ echo "=== Building Rust FFI library ==="
 
 if [ "$crate_name" = "kreuzberg-rb" ]; then
 	CRATE_DIR="packages/ruby/ext/kreuzberg_rb/native"
-	# kreuzberg-rb is in its own workspace, use --manifest-path
 	CARGO_ARGS=("build" "--manifest-path" "$CRATE_DIR/Cargo.toml")
 else
 	CRATE_DIR="crates/${crate_name}"
@@ -41,7 +40,6 @@ fi
 if [ "$crate_name" = "kreuzberg-rb" ]; then
 	FFI_MANIFEST="packages/ruby/vendor/Cargo.toml"
 	if [ -f "$FFI_MANIFEST" ]; then
-		# Clean vendored workspace to avoid fingerprint conflicts
 		echo "Cleaning vendored FFI workspace..."
 		CLEAN_ARGS=("clean" "--manifest-path" "$FFI_MANIFEST" "-p" "kreuzberg-ffi")
 		if [ "$build_profile" = "release" ]; then
@@ -115,8 +113,6 @@ export RUSTC_WRAPPER=""
 export CARGO_BUILD_RUSTC_WRAPPER=""
 export SCCACHE_GHA_ENABLED="false"
 
-# Ensure OpenSSL environment variables are available to build scripts
-# (required for transitive dependencies like openssl-probe via rustls-native-certs)
 if [ -n "${OPENSSL_DIR:-}" ]; then
 	export OPENSSL_DIR
 	echo "OPENSSL_DIR: $OPENSSL_DIR"

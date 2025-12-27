@@ -19,17 +19,14 @@ mod tests {
     fn test_string_pool_reuse_reduces_allocations() {
         let pool = create_string_buffer_pool(5, 8192);
 
-        // First batch of operations
         let mut buffers = vec![];
         for _ in 0..3 {
             let buf = pool.acquire().unwrap();
             buffers.push(buf);
         }
 
-        // Return buffers
         drop(buffers);
 
-        // Second batch - should reuse existing buffers
         assert_eq!(pool.size(), 3, "pool should have 3 buffers after first batch");
 
         let mut buffers = vec![];
@@ -39,7 +36,6 @@ mod tests {
         }
         drop(buffers);
 
-        // Pool maintains the same number of buffers
         assert!(pool.size() <= 5, "pool should not exceed max size");
     }
 
@@ -47,7 +43,6 @@ mod tests {
     fn test_batch_processor_multiple_operations() {
         let processor = BatchProcessor::new();
 
-        // Simulate multiple batch operations
         for _batch in 0..3 {
             let mut results = vec![];
 
@@ -58,10 +53,8 @@ mod tests {
                 results.push((string_buf, byte_buf));
             }
 
-            // Buffers are returned to pools when dropped
             drop(results);
 
-            // Pool sizes should grow but stay within max limits
             assert!(processor.string_pool_size() <= 10);
             assert!(processor.byte_pool_size() <= 10);
         }
@@ -76,14 +69,11 @@ mod tests {
             buf.capacity()
         };
 
-        // Run multiple iterations without clearing
         for _ in 0..10 {
             let mut buf = pool.acquire().unwrap();
             buf.push_str("test data");
-            // buf is returned to pool when dropped
         }
 
-        // Buffer should maintain capacity across reuses
         let capacity_final = {
             let buf = pool.acquire().unwrap();
             buf.capacity()
@@ -100,7 +90,6 @@ mod tests {
         let processor = BatchProcessor::new();
         let _config = ExtractionConfig::default();
 
-        // Verify processor works with extraction config
         assert!(processor.config().string_pool_size > 0);
         assert!(processor.config().string_buffer_capacity > 0);
         assert!(processor.config().byte_pool_size > 0);
@@ -111,7 +100,6 @@ mod tests {
     fn test_pool_clear_resets_size() {
         let processor = BatchProcessor::new();
 
-        // Acquire buffers
         {
             let _s1 = processor.string_pool().acquire().unwrap();
             let _s2 = processor.string_pool().acquire().unwrap();
@@ -121,7 +109,6 @@ mod tests {
         assert!(processor.string_pool_size() > 0);
         assert!(processor.byte_pool_size() > 0);
 
-        // Clear pools
         processor.clear_pools().unwrap();
 
         assert_eq!(processor.string_pool_size(), 0);
@@ -143,7 +130,6 @@ mod tests {
                 for _ in 0..5 {
                     let _buf1 = processor_clone.string_pool().acquire();
                     let _buf2 = processor_clone.byte_pool().acquire();
-                    // Buffers returned when dropped
                 }
             });
 
@@ -154,7 +140,6 @@ mod tests {
             handle.join().unwrap();
         }
 
-        // All threads completed successfully
         assert!(processor.string_pool_size() <= 10);
         assert!(processor.byte_pool_size() <= 10);
     }

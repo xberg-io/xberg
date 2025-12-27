@@ -40,7 +40,6 @@ function extract_file(
 ): ExtractionResult {
     $config ??= new ExtractionConfig();
 
-    // Call the native extension function
     /** @var array<string, mixed> $resultArray */
     $resultArray = \kreuzberg_extract_file($filePath, $mimeType, $config->toArray());
 
@@ -72,7 +71,6 @@ function extract_bytes(
 ): ExtractionResult {
     $config ??= new ExtractionConfig();
 
-    // Call the native extension function
     /** @var array<string, mixed> $resultArray */
     $resultArray = \kreuzberg_extract_bytes($data, $mimeType, $config->toArray());
 
@@ -105,7 +103,6 @@ function batch_extract_files(
 ): array {
     $config ??= new ExtractionConfig();
 
-    // Call the native extension function
     /** @var array<array<string, mixed>> $resultArrays */
     $resultArrays = \kreuzberg_batch_extract_files($paths, $config->toArray());
 
@@ -145,7 +142,6 @@ function batch_extract_bytes(
 ): array {
     $config ??= new ExtractionConfig();
 
-    // Call the native extension function
     /** @var array<array<string, mixed>> $resultArrays */
     $resultArrays = \kreuzberg_batch_extract_bytes($dataList, $mimeTypes, $config->toArray());
 

@@ -118,7 +118,7 @@ func TestErrorCodeName(t *testing.T) {
 		{5, "plugin"},
 		{6, "unsupported_format"},
 		{7, "internal"},
-		{99, "unknown"}, // invalid code
+		{99, "unknown"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {

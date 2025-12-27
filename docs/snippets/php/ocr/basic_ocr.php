@@ -15,7 +15,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 
-// Simple OCR for English documents
 $config = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -30,11 +29,10 @@ echo "OCR Extraction Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n\n";
 
-// OCR for multilingual documents
 $multilingualConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
-        language: 'eng+fra+deu'  // English, French, German
+        language: 'eng+fra+deu'  
     )
 );
 
@@ -45,7 +43,6 @@ echo "Multilingual OCR:\n";
 echo str_repeat('=', 60) . "\n";
 echo substr($result->content, 0, 500) . "...\n\n";
 
-// OCR on image files
 $imageConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -66,7 +63,6 @@ foreach ($imageFormats as $format) {
     }
 }
 
-// OCR with specific languages
 $languages = [
     'spa' => 'Spanish document',
     'fra' => 'French document',
@@ -97,7 +93,6 @@ foreach ($languages as $lang => $description) {
     }
 }
 
-// Procedural API for OCR
 use function Kreuzberg\extract_file;
 
 $config = new ExtractionConfig(
@@ -110,10 +105,8 @@ echo "Invoice OCR:\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n";
 
-// Extract and validate OCR quality
 $result = $kreuzberg->extractFile('scanned.pdf');
 
-// Simple quality check: if OCR produces very little text, quality might be poor
 $contentLength = strlen($result->content);
 $pageCount = $result->metadata->pageCount ?? 1;
 $avgCharsPerPage = $contentLength / $pageCount;

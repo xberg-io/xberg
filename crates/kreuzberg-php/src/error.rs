@@ -145,7 +145,6 @@ impl ErrorClassification {}
 pub fn kreuzberg_classify_error(error_message: String) -> ErrorClassification {
     let lower = error_message.to_lowercase();
 
-    // Calculate confidence and determine error code based on keywords
     let (code, confidence) = if lower.contains("validation")
         || lower.contains("invalid_argument")
         || lower.contains("schema")
@@ -211,7 +210,6 @@ pub fn kreuzberg_classify_error(error_message: String) -> ErrorClassification {
     {
         (7i64, 0.86)
     } else {
-        // Default to internal with low confidence
         (7i64, 0.1)
     };
 

@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\EmbeddingConfig;
 
-// Generate embeddings with default model
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChunkSize: 512,
@@ -36,7 +35,6 @@ echo "Embedding Generation Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Chunks with embeddings: " . count($result->chunks ?? []) . "\n\n";
 
-// Display embedding information
 foreach ($result->chunks ?? [] as $chunk) {
     echo "Chunk {$chunk->metadata->chunkIndex}:\n";
     echo "  Content length: " . strlen($chunk->content) . " chars\n";
@@ -51,11 +49,10 @@ foreach ($result->chunks ?? [] as $chunk) {
     echo "\n";
 }
 
-// Different embedding models
 $models = [
-    'all-MiniLM-L6-v2',      // Fast, 384 dimensions
-    'all-mpnet-base-v2',     // Better quality, 768 dimensions
-    'paraphrase-multilingual-MiniLM-L12-v2', // Multilingual
+    'all-MiniLM-L6-v2',      
+    'all-mpnet-base-v2',     
+    'paraphrase-multilingual-MiniLM-L12-v2', 
 ];
 
 foreach ($models as $model) {
@@ -82,7 +79,6 @@ foreach ($models as $model) {
     }
 }
 
-// Calculate cosine similarity between chunks
 function cosineSimilarity(array $a, array $b): float
 {
     $dotProduct = 0.0;
@@ -111,7 +107,6 @@ echo str_repeat('=', 60) . "\n";
 
 $chunks = $result->chunks ?? [];
 if (count($chunks) >= 2) {
-    // Compare first chunk with all others
     $referenceChunk = $chunks[0];
 
     foreach (array_slice($chunks, 1, 5) as $chunk) {
@@ -128,7 +123,6 @@ if (count($chunks) >= 2) {
 }
 echo "\n";
 
-// Build a simple vector database in memory
 class SimpleVectorDB
 {
     private array $vectors = [];
@@ -175,7 +169,6 @@ class SimpleVectorDB
     }
 }
 
-// Index documents
 $db = new SimpleVectorDB();
 
 $files = ['doc1.pdf', 'doc2.pdf', 'doc3.pdf'];
@@ -195,7 +188,6 @@ foreach ($files as $file) {
 echo "Vector database built\n";
 echo "Ready for semantic search!\n";
 
-// Export embeddings for external use (e.g., Pinecone, Weaviate)
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(maxChunkSize: 512),
     embedding: new EmbeddingConfig(model: 'all-MiniLM-L6-v2', normalize: true)

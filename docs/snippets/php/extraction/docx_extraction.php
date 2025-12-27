@@ -15,7 +15,6 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use function Kreuzberg\extract_file;
 
-// Simple DOCX extraction
 $result = extract_file('document.docx');
 
 echo "Word Document Extraction:\n";
@@ -23,7 +22,6 @@ echo str_repeat('=', 60) . "\n";
 echo "Content:\n";
 echo $result->content . "\n\n";
 
-// Extract metadata
 echo "Document Metadata:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Title: " . ($result->metadata->title ?? 'N/A') . "\n";
@@ -33,7 +31,6 @@ echo "Modified: " . ($result->metadata->modifiedAt ?? 'N/A') . "\n";
 echo "Subject: " . ($result->metadata->subject ?? 'N/A') . "\n";
 echo "Keywords: " . implode(', ', $result->metadata->keywords ?? []) . "\n\n";
 
-// Extract with tables
 $config = new ExtractionConfig(
     extractTables: true,
     preserveFormatting: true
@@ -42,12 +39,10 @@ $config = new ExtractionConfig(
 $kreuzberg = new Kreuzberg($config);
 $result = $kreuzberg->extractFile('report.docx');
 
-// Process tables
 foreach ($result->tables as $index => $table) {
     echo "Table " . ($index + 1) . ":\n";
     echo str_repeat('-', 60) . "\n";
 
-    // Display as formatted table
     foreach ($table->cells as $rowIndex => $row) {
         echo implode(' | ', $row) . "\n";
         if ($rowIndex === 0) {
@@ -57,7 +52,6 @@ foreach ($result->tables as $index => $table) {
     echo "\n";
 }
 
-// Extract and convert to different formats
 $conversions = [
     'plain' => null,
     'markdown' => 'markdown',
@@ -77,7 +71,6 @@ foreach ($conversions as $name => $format) {
     echo "Saved $name format to: $outputFile\n";
 }
 
-// Batch process multiple DOCX files
 use function Kreuzberg\batch_extract_files;
 
 $docxFiles = glob('*.docx');
@@ -95,7 +88,6 @@ if (!empty($docxFiles)) {
     }
 }
 
-// Extract document creator information (if available in metadata)
 $result = extract_file('reviewed_document.docx');
 
 if (!empty($result->metadata->createdBy)) {
@@ -107,7 +99,6 @@ if (!empty($result->metadata->producer)) {
     echo "Producer: " . $result->metadata->producer . "\n";
 }
 
-// Extract and analyze document statistics
 $result = extract_file('document.docx');
 $content = $result->content;
 

@@ -9,11 +9,9 @@ source "$REPO_ROOT/scripts/lib/tessdata.sh"
 
 validate_repo_root "$REPO_ROOT" || exit 1
 
-# Setup Rust FFI and Tesseract paths
 setup_rust_ffi_paths "$REPO_ROOT"
 setup_tessdata
 
-# Ensure tesseract binary is on PATH for OCR tests
 case "${RUNNER_OS:-$(uname -s)}" in
 Linux)
 	PATH="/usr/bin:${PATH}"

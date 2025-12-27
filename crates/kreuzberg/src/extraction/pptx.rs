@@ -1066,7 +1066,6 @@ fn extract_notes_text(notes_xml: &[u8]) -> Result<String> {
     let doc =
         Document::parse(xml_str).map_err(|e| KreuzbergError::parsing(format!("Failed to parse notes XML: {}", e)))?;
 
-    // Pre-allocate Vec; typical notes have 5-20 text elements
     let mut text_parts = Vec::with_capacity(16);
     const DRAWINGML_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
@@ -1145,9 +1144,6 @@ pub fn extract_pptx_from_path(
     let mut iterator = SlideIterator::new(container);
     let slide_count = iterator.slide_count();
 
-    // Estimate capacity based on typical presentation sizes
-    // Average slide has ~500-1000 bytes of extracted content
-    // Using conservative estimate: 1000 bytes per slide
     let estimated_capacity = slide_count.saturating_mul(1000).max(8192);
     let mut content_builder = ContentBuilder::with_page_config(estimated_capacity, page_config.cloned());
 

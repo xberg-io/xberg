@@ -18,7 +18,6 @@ use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\EmbeddingConfig;
 use Kreuzberg\Enums\EmbeddingModelType;
 
-// Basic chunking configuration
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChars: 1500,
@@ -36,7 +35,6 @@ echo "Chunking Results:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Total chunks created: " . count($result->chunks ?? []) . "\n\n";
 
-// Process each chunk
 foreach ($result->chunks ?? [] as $index => $chunk) {
     echo "Chunk " . ($index + 1) . ":\n";
     echo "  Length: " . strlen($chunk->content) . " characters\n";

@@ -197,8 +197,6 @@ fn finalize_word(chars: &[CharInfo], page_height: i32, min_confidence: f64) -> O
         return None;
     }
 
-    // Single-pass fold to compute bounding box (10-15% performance improvement).
-    // Mathematically equivalent to 4 separate min/max scans but O(n) instead of O(4n).
     let (left, right, bottom, top) = chars.iter().fold(
         (f32::INFINITY, f32::NEG_INFINITY, f32::INFINITY, f32::NEG_INFINITY),
         |(left, right, bottom, top), c| {
@@ -211,7 +209,6 @@ fn finalize_word(chars: &[CharInfo], page_height: i32, min_confidence: f64) -> O
         },
     );
 
-    // Handle empty or all-NaN case by falling back to 0.0 if bounds are infinite.
     let (left, right, bottom, top) = if left.is_infinite() {
         (0.0, 0.0, 0.0, 0.0)
     } else {

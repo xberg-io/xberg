@@ -16,12 +16,11 @@ use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\LanguageDetectionConfig;
 
-// Configure for multilingual detection
 $config = new ExtractionConfig(
     languageDetection: new LanguageDetectionConfig(
         enabled: true,
         minConfidence: 0.7,
-        detectMultiple: true  // Enable detection of multiple languages
+        detectMultiple: true  
     )
 );
 
@@ -32,7 +31,6 @@ echo "Multilingual Language Detection:\n";
 echo str_repeat('=', 60) . "\n";
 echo "Document: multilingual_document.pdf\n\n";
 
-// Analyze detected languages
 $detectedLanguages = $result->detectedLanguages ?? [];
 $languageCount = count($detectedLanguages);
 
@@ -55,7 +53,6 @@ if ($languageCount > 1) {
     echo "No languages detected.\n\n";
 }
 
-// Analyze language distribution in metadata
 if (isset($result->metadata['language_distribution'])) {
     echo "Language Distribution:\n";
     echo str_repeat('-', 40) . "\n";
@@ -75,7 +72,6 @@ if (isset($result->metadata['language_distribution'])) {
     echo "\n";
 }
 
-// Helper function to categorize document type
 function categorizeMultilingualDocument(array $languages): string
 {
     $count = count($languages);
@@ -89,7 +85,6 @@ function categorizeMultilingualDocument(array $languages): string
     }
 
     if ($count === 2) {
-        // Check for common bilingual patterns
         sort($languages);
         $pair = implode('-', $languages);
 
@@ -109,7 +104,6 @@ function categorizeMultilingualDocument(array $languages): string
 $docType = categorizeMultilingualDocument($detectedLanguages);
 echo "Document type: $docType\n\n";
 
-// Process multilingual content
 if ($languageCount > 1) {
     echo "Multilingual Processing Recommendations:\n";
     echo str_repeat('=', 60) . "\n";
@@ -120,11 +114,8 @@ if ($languageCount > 1) {
     echo "4. Use multilingual embedding models for semantic search\n\n";
 }
 
-// Example: Extract language-specific content sections
 function extractLanguageSections(string $content, array $languages): array
 {
-    // This is a simplified example
-    // In practice, you would use more sophisticated NLP techniques
 
     $sections = [];
     $lines = explode("\n", $content);
@@ -135,7 +126,6 @@ function extractLanguageSections(string $content, array $languages): array
             continue;
         }
 
-        // Store line with detected language
         if (!isset($sections[$currentLang])) {
             $sections[$currentLang] = [];
         }
@@ -146,7 +136,6 @@ function extractLanguageSections(string $content, array $languages): array
     return $sections;
 }
 
-// Batch multilingual detection
 $testDocuments = [
     'english_only.pdf',
     'spanish_english.pdf',
@@ -186,7 +175,6 @@ foreach ($testDocuments as $document) {
     echo "  Languages: " . implode(', ', $languages) . "\n";
     echo "  Type: $type\n\n";
 
-    // Update statistics
     if (count($languages) === 1) {
         $statistics['monolingual']++;
     } elseif (count($languages) === 2) {
@@ -201,7 +189,6 @@ echo "  Monolingual: {$statistics['monolingual']}\n";
 echo "  Bilingual: {$statistics['bilingual']}\n";
 echo "  Multilingual: {$statistics['multilingual']}\n\n";
 
-// Language pair analysis
 function analyzeLanguagePairs(array $documents, Kreuzberg $kreuzberg): array
 {
     $pairs = [];
@@ -230,7 +217,6 @@ function analyzeLanguagePairs(array $documents, Kreuzberg $kreuzberg): array
     return $pairs;
 }
 
-// Common language combinations for translation workflows
 $translationPairs = [
     'en-es' => 'English ↔ Spanish',
     'en-fr' => 'English ↔ French',

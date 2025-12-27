@@ -12,7 +12,6 @@ vars:
   RUST_LOG: info
 
 tasks:
-  # Installation
   install:
     desc: Install Rust toolchain and tools (rustup, taplo, cargo-deny)
     cmds:
@@ -25,7 +24,6 @@ tasks:
       - cmd: cargo-deny --version || cargo install cargo-deny
         ignore_error: true
 
-  # Build Tasks
   build:
     desc: Build all Rust crates (uses {{.BUILD_PROFILE}})
     cmds:
@@ -56,28 +54,22 @@ tasks:
     cmds:
       - cargo build --workspace --release --features full,profiling,api,mcp,otel
       - cargo build --manifest-path tools/benchmark-harness/Cargo.toml --release --features profiling
-      # Builds are optimized for profiling with debug symbols
 
-  # CLI-specific builds
   cli:build:
     desc: Build CLI binary
     cmds:
       - cargo build --release --package kreuzberg-cli
-      # Binary available at: {{.TARGET_DIR}}/release/kreuzberg{{.EXE_EXT}}
 
   cli:build:dev:
     desc: Build CLI binary in debug mode
     cmds:
       - cargo build --package kreuzberg-cli
-      # Binary available at: {{.TARGET_DIR}}/debug/kreuzberg{{.EXE_EXT}}
 
   cli:install:
     desc: Install CLI binary
     cmds:
       - cargo install --path crates/kreuzberg-cli
-      # Installed binary: kreuzberg{{.EXE_EXT}}
 
-  # FFI builds (for Go/Java/C# bindings)
   ffi:build:
     desc: Build FFI library for language bindings
     cmds:
@@ -95,7 +87,6 @@ tasks:
     cmds:
       - cargo build --release --package kreuzberg-ffi {{.CARGO_ARGS | default ""}}
 
-  # Test Tasks
   test:
     desc: Run all Rust tests
     cmds:
@@ -116,7 +107,6 @@ tasks:
     cmds:
       - cargo test --lib --workspace
 
-  # Linting Tasks
   lint:
     desc: Auto-fix Rust code linting (cargo fmt + clippy)
     cmds:
@@ -129,7 +119,6 @@ tasks:
       - cargo fmt --all -- --check
       - cargo clippy --workspace -- -D warnings
 
-  # Formatting Tasks
   format:
     desc: Format Rust code with modifications (cargo fmt)
     cmds:
@@ -140,13 +129,11 @@ tasks:
     cmds:
       - cargo fmt --all -- --check
 
-  # License checking
   licenses:
     desc: Check Rust dependency licenses with cargo-deny
     cmds:
       - cargo deny check licenses
 
-  # Documentation
   doc:
     desc: Generate Rust documentation and open in browser
     cmds:
@@ -157,7 +144,6 @@ tasks:
     cmds:
       - cargo doc --no-deps
 
-  # Cleanup
   clean:
     desc: Clean Rust build artifacts
     cmds:
@@ -183,7 +169,6 @@ tasks:
       - cmd: du -sh target 2>/dev/null || echo "No target directory found"
         ignore_error: true
 
-  # Dependency Management
   update:
     desc: Update Rust dependencies
     cmds:
@@ -191,7 +176,6 @@ tasks:
       - cargo upgrade --incompatible
       - cargo update
 
-  # E2E Tests
   e2e:generate:
     desc: Generate Rust E2E tests from fixtures
     cmds:

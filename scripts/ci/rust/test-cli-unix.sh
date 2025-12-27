@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#
-# Extract and test CLI binary (Unix)
-# Used by: ci-rust.yaml - Extract and test CLI (Unix) step
-# Arguments: TARGET (e.g., x86_64-unknown-linux-gnu, aarch64-apple-darwin)
-#
 
 set -euo pipefail
 
@@ -20,10 +15,8 @@ fi
 
 echo "=== Testing CLI binary for $TARGET ==="
 
-# Setup library paths
 setup_pdfium_paths
 
-# Extract and test
 tar xzf "kreuzberg-cli-$TARGET.tar.gz"
 chmod +x kreuzberg
 ./kreuzberg --version

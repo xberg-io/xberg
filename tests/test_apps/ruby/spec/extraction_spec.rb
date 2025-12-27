@@ -3,7 +3,6 @@
 require_relative 'spec_helper'
 
 RSpec.describe 'Kreuzberg Extraction' do
-  # Type Verification Tests
   describe 'Type verification' do
     it 'Kreuzberg module exists' do
       expect(defined?(Kreuzberg)).to be_truthy
@@ -38,7 +37,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Sync Extraction Tests - File Path
   describe 'Synchronous file extraction' do
     it 'extracts content from DOCX file' do
       path = test_document_path('documents/fake.docx')
@@ -77,7 +75,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Async Extraction Tests - File Path
   describe 'Asynchronous file extraction' do
     it 'extracts content from file asynchronously' do
       path = test_document_path('documents/fake.docx')
@@ -96,7 +93,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Sync Byte Extraction Tests
   describe 'Synchronous byte extraction' do
     it 'extracts content from binary DOCX data' do
       path = test_document_path('documents/fake.docx')
@@ -119,13 +115,11 @@ RSpec.describe 'Kreuzberg Extraction' do
 
     it 'requires MIME type for byte extraction' do
       data = read_test_document('documents/fake.docx')
-      # Expect error or fallback when MIME type is incorrect
       result = Kreuzberg.extract_bytes_sync(data, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
       expect(result).to be_a(Kreuzberg::Result)
     end
   end
 
-  # Async Byte Extraction Tests
   describe 'Asynchronous byte extraction' do
     it 'extracts content from binary data asynchronously' do
       data = read_test_document('documents/fake.docx')
@@ -146,7 +140,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Batch Sync Extraction Tests
   describe 'Batch synchronous file extraction' do
     it 'extracts multiple files in batch' do
       paths = [
@@ -190,7 +183,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Batch Async Extraction Tests
   describe 'Batch asynchronous file extraction' do
     it 'extracts multiple files asynchronously' do
       paths = [
@@ -213,7 +205,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Batch Byte Extraction Tests
   describe 'Batch byte extraction' do
     it 'batch extracts multiple binary documents synchronously' do
       data_array = [
@@ -262,7 +253,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # MIME Type Detection Tests
   describe 'MIME type detection' do
     it 'detects MIME type from file path' do
       path = test_document_path('documents/fake.docx')
@@ -289,7 +279,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # File Type Coverage Tests
   describe 'File type coverage' do
     it 'extracts from DOCX files' do
       path = test_document_path('documents/fake.docx')
@@ -333,7 +322,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Configuration and Result Structure Tests
   describe 'Configuration handling' do
     it 'creates extraction config object' do
       config = Kreuzberg::Config::Extraction.new
@@ -362,7 +350,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Result Structure Tests
   describe 'Result structure and attributes' do
     it 'result has content attribute' do
       path = test_document_path('documents/fake.docx')
@@ -425,7 +412,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # Integration Tests
   describe 'Integration tests' do
     it 'extracts and provides consistent results on repeated calls' do
       path = test_document_path('documents/fake.docx')
@@ -465,7 +451,6 @@ RSpec.describe 'Kreuzberg Extraction' do
     end
   end
 
-  # CLI Tests
   describe 'CLI interface' do
     it 'CLI extract returns string output' do
       path = test_document_path('documents/fake.docx')

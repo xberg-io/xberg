@@ -62,9 +62,6 @@ env:
   BUILD_PROFILE: "ci"
 
 jobs:
-  # ============================================================================
-  # UNIT & INTEGRATION TESTS (PLATFORM MATRIX)
-  # ============================================================================
 
   unit-tests:
     name: Unit Tests (${{ matrix.os }})
@@ -112,9 +109,6 @@ jobs:
         if: always()
         uses: ./.github/actions/cleanup-rust-cache
 
-  # ============================================================================
-  # WASM BUILD TARGETS (PARALLEL ACROSS PLATFORMS)
-  # ============================================================================
 
   build-wasm-targets:
     name: Build WASM (${{ matrix.os }})
@@ -191,9 +185,6 @@ jobs:
         if: always()
         uses: ./.github/actions/cleanup-rust-cache
 
-  # ============================================================================
-  # TYPE DEFINITIONS VALIDATION
-  # ============================================================================
 
   type-definitions:
     name: Type Definitions Check
@@ -241,9 +232,6 @@ jobs:
         if: always()
         uses: ./.github/actions/cleanup-rust-cache
 
-  # ============================================================================
-  # NODE.JS INTEGRATION TESTS (MULTIPLE VERSIONS)
-  # ============================================================================
 
   integration-tests-node:
     name: Integration Tests (Node ${{ matrix.node-version }})
@@ -278,9 +266,6 @@ jobs:
         shell: bash
         run: task wasm:test:ci
 
-  # ============================================================================
-  # DENO RUNTIME TESTS (MULTIPLE VERSIONS & PLATFORMS)
-  # ============================================================================
 
   deno-tests:
     name: Deno Tests
@@ -334,9 +319,6 @@ jobs:
         if: always()
         uses: ./.github/actions/cleanup-rust-cache
 
-  # ============================================================================
-  # CLOUDFLARE WORKERS TESTS
-  # ============================================================================
 
   workers-tests:
     name: Cloudflare Workers Tests

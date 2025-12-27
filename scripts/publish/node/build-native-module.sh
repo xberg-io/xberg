@@ -22,7 +22,6 @@ fi
 echo "Running: pnpm --filter @kreuzberg/node exec napi build ${args[*]}"
 pnpm --filter @kreuzberg/node exec napi build "${args[@]}"
 
-# Verify build succeeded
 artifacts_dir="crates/kreuzberg-node/artifacts"
 echo ""
 echo "=== Build Output ==="

@@ -23,11 +23,9 @@ public class EmbeddingTests
     [Fact]
     public void GetEmbeddingPreset_WithValidName_ReturnPreset()
     {
-        // Get list of available presets
         var presets = KreuzbergClient.ListEmbeddingPresets();
         Assert.NotEmpty(presets);
 
-        // Use the first available preset
         var presetName = presets[0];
         var preset = KreuzbergClient.GetEmbeddingPreset(presetName);
 

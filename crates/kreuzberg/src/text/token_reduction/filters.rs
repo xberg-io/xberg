@@ -68,7 +68,6 @@ impl FilterPipeline {
 
         let mut result = Cow::Borrowed(text);
 
-        // Lazily allocate preserved_blocks only when actually needed.
         let mut preserved_blocks: Option<AHashMap<String, String>> = None;
         if self.config.preserve_markdown {
             let mut blocks = AHashMap::new();
@@ -102,7 +101,6 @@ impl FilterPipeline {
     pub fn apply_moderate_filters(&self, text: &str) -> String {
         let mut result = self.apply_light_filters(text);
 
-        // Lazily allocate preserved_blocks only when preserve_code is enabled.
         let mut preserved_blocks: Option<AHashMap<String, String>> = None;
         if self.config.preserve_code {
             let mut blocks = AHashMap::new();
@@ -125,7 +123,6 @@ impl FilterPipeline {
 
     fn remove_stopwords_preserving_markdown(&self, text: &str) -> String {
         let lines: Vec<&str> = text.lines().collect();
-        // Pre-allocate processed_lines with same capacity as input lines.
         let mut processed_lines = Vec::with_capacity(lines.len());
 
         for line in lines {
@@ -153,7 +150,6 @@ impl FilterPipeline {
 
     fn remove_stopwords(&self, text: &str) -> String {
         let words: Vec<&str> = text.split_whitespace().collect();
-        // Pre-allocate with estimated size after stopword removal (~70% kept in typical text).
         let mut filtered_words = Vec::with_capacity((words.len() as f32 * 0.7).ceil() as usize);
 
         for word in words {
@@ -253,7 +249,6 @@ impl FilterPipeline {
 
     fn preserve_markdown_structure(&self, text: &str) -> String {
         let lines: Vec<&str> = text.lines().collect();
-        // Pre-allocate processed_lines with same capacity as input lines (no filtering expected).
         let mut processed_lines = Vec::with_capacity(lines.len());
 
         for line in lines {

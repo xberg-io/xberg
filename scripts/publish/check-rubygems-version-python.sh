@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 
 # Check RubyGems version using Python
-#
 # Queries RubyGems API to check if a specific gem version exists.
-#
-# Environment Variables:
 #   - VERSION: Package version to check (e.g., 4.0.0-rc.1)
 
 set -euo pipefail

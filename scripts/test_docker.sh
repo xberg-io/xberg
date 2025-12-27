@@ -1,28 +1,9 @@
 #!/usr/bin/env bash
-#
-# Comprehensive Docker image testing script for Kreuzberg v4
-#
-# This script builds the Docker image and runs extensive feature tests including:
 # - Basic CLI functionality (help, version, mime detection)
-# - File extraction (PDF, DOCX, TXT, HTML, XML, Excel, etc.)
-# - OCR capabilities (Tesseract)
-# - API server (health, extraction endpoints)
 # - LibreOffice conversion (legacy .doc files)
-# - Security (non-root user, read-only volumes)
-#
-# Usage:
-#   ./scripts/test_docker.sh [--skip-build] [--image IMAGE_NAME] [--variant VARIANT]
-#
-# Options:
-#   --skip-build       Skip building the Docker image
-#   --image NAME       Use custom image name (default: kreuzberg:test)
-#   --variant VARIANT  Build variant: core, full, or all (default: full)
-#   --verbose          Enable verbose output
-#
 
 set -euo pipefail
 
-# Configuration
 IMAGE_NAME="${IMAGE_NAME:-kreuzberg:test}"
 SKIP_BUILD=false
 VERBOSE=false
@@ -32,20 +13,17 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_DOCS_DIR="${TEST_DIR}/test_documents"
 TEST_RESULTS_FILE="/tmp/kreuzberg-docker-test-results.json"
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Test counters
 TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
 declare -a FAILED_TEST_NAMES=()
 
-# Parse arguments
 while [[ $# -gt 0 ]]; do
 	case $1 in
 	--skip-build)
@@ -72,13 +50,11 @@ while [[ $# -gt 0 ]]; do
 	esac
 done
 
-# Validate variant
 if [[ "$VARIANT" != "core" && "$VARIANT" != "full" && "$VARIANT" != "all" ]]; then
 	echo "Error: Invalid variant '$VARIANT'. Must be 'core', 'full', or 'all'"
 	exit 1
 fi
 
-# Helper functions
 log_info() {
 	echo -e "${BLUE}[INFO]${NC} $*"
 }
@@ -101,7 +77,6 @@ log_verbose() {
 	fi
 }
 
-# Test result tracking
 start_test() {
 	TOTAL_TESTS=$((TOTAL_TESTS + 1))
 	log_info "Test $TOTAL_TESTS: $*"
@@ -121,7 +96,6 @@ fail_test() {
 	fi
 }
 
-# Cleanup function
 # shellcheck disable=SC2317,SC2329
 cleanup() {
 	log_info "Cleaning up test containers..."
@@ -130,15 +104,12 @@ cleanup() {
 	done
 }
 
-# Trap cleanup on exit
 trap cleanup EXIT
 
-# Generate random container name
 random_container_name() {
 	echo "${CONTAINER_PREFIX}-$(date +%s)-${RANDOM}"
 }
 
-# Wait for container to be healthy
 # shellcheck disable=SC2317,SC2329
 wait_for_container() {
 	local container=$1
@@ -156,12 +127,7 @@ wait_for_container() {
 	return 1
 }
 
-# ============================================================================
-# Build Docker Image
-# ============================================================================
-
 if [ "$SKIP_BUILD" = false ]; then
-	# Determine Dockerfile based on variant
 	if [ "$VARIANT" = "core" ]; then
 		DOCKERFILE="docker/Dockerfile.core"
 		log_info "Building Docker image: $IMAGE_NAME (Core variant - without LibreOffice)"
@@ -182,7 +148,6 @@ else
 	log_warning "Skipping Docker build (--skip-build flag set)"
 fi
 
-# Verify image exists
 if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${IMAGE_NAME}$"; then
 	log_error "Docker image $IMAGE_NAME not found"
 	exit 1
@@ -192,20 +157,12 @@ log_info "Starting Docker feature tests for: $IMAGE_NAME"
 log_info "Variant: $VARIANT ($([ "$VARIANT" = "full" ] && echo "with LibreOffice" || echo "without LibreOffice"))"
 echo "========================================================================"
 
-# ============================================================================
-# Test 1: Image exists and basic info
-# ============================================================================
-
 start_test "Docker image exists"
 if docker inspect "$IMAGE_NAME" >/dev/null 2>&1; then
 	pass_test
 else
 	fail_test "Image does not exist" "$IMAGE_NAME"
 fi
-
-# ============================================================================
-# Test 2: CLI --version
-# ============================================================================
 
 start_test "CLI --version command"
 output=$(docker run --rm --security-opt no-new-privileges "$IMAGE_NAME" --version 2>&1 || true)
@@ -217,10 +174,6 @@ else
 	fail_test "CLI version" "Expected 'kreuzberg' in output, got: $output"
 fi
 
-# ============================================================================
-# Test 3: CLI help
-# ============================================================================
-
 start_test "CLI --help command"
 output=$(docker run --rm --security-opt no-new-privileges "$IMAGE_NAME" --help 2>&1 || true)
 
@@ -229,10 +182,6 @@ if echo "$output" | grep -qi "extract"; then
 else
 	fail_test "CLI help" "Expected 'extract' in help output"
 fi
-
-# ============================================================================
-# Test 4: MIME type detection
-# ============================================================================
 
 start_test "MIME type detection (detect command)"
 container=$(random_container_name)
@@ -249,10 +198,6 @@ if echo "$output" | grep -qi "application/pdf"; then
 else
 	fail_test "MIME detection" "Expected 'application/pdf', got: $output"
 fi
-
-# ============================================================================
-# Test 5: Extract text file
-# ============================================================================
 
 start_test "Extract plain text file"
 container=$(random_container_name)
@@ -271,10 +216,6 @@ else
 	fail_test "Text extraction" "Output too short (${text_length} chars) or missing expected keywords"
 fi
 
-# ============================================================================
-# Test 6: Extract PDF (searchable)
-# ============================================================================
-
 start_test "Extract searchable PDF"
 container=$(random_container_name)
 output=$(docker run --rm \
@@ -291,10 +232,6 @@ if [ ${#output} -gt 50 ]; then
 else
 	fail_test "Searchable PDF extraction" "Output too short: ${#output} chars"
 fi
-
-# ============================================================================
-# Test 7: Extract DOCX
-# ============================================================================
 
 start_test "Extract DOCX file"
 container=$(random_container_name)
@@ -313,10 +250,6 @@ else
 	fail_test "DOCX extraction" "Output too short (${docx_length} chars) or missing expected doc text"
 fi
 
-# ============================================================================
-# Test 8: Extract HTML
-# ============================================================================
-
 start_test "Extract HTML file"
 container=$(random_container_name)
 output=$(docker run --rm \
@@ -332,10 +265,6 @@ if [ ${#output} -gt 10 ]; then
 else
 	fail_test "HTML extraction" "Output too short: ${#output} chars"
 fi
-
-# ============================================================================
-# Test 9: OCR extraction (Tesseract)
-# ============================================================================
 
 start_test "OCR extraction with Tesseract"
 container=$(random_container_name)
@@ -353,10 +282,6 @@ if [ ${#output} -gt 10 ]; then
 else
 	fail_test "OCR extraction" "Output too short or OCR failed"
 fi
-
-# ============================================================================
-# Test 10: LibreOffice extraction (legacy .doc) - Full variant only
-# ============================================================================
 
 if [ "$VARIANT" = "full" ]; then
 	start_test "LibreOffice extraction (legacy .doc file)"
@@ -379,15 +304,10 @@ else
 	log_info "Skipping LibreOffice .doc test (Core variant - LibreOffice not included)"
 fi
 
-# ============================================================================
-# Test 11: LibreOffice PPT extraction (legacy .ppt) - Full variant only
-# ============================================================================
-
 if [ "$VARIANT" = "full" ]; then
 	start_test "LibreOffice PPT extraction (legacy .ppt file)"
 	container=$(random_container_name)
 
-	# Check if we have a .ppt test file
 	if [ -f "${TEST_DOCS_DIR}/legacy_office/test.ppt" ] || [ -f "${TEST_DOCS_DIR}/legacy_office/sample.ppt" ]; then
 		PPT_FILE=$(find "${TEST_DOCS_DIR}/legacy_office" -maxdepth 1 -name '*.ppt' -print | head -n1)
 
@@ -417,10 +337,6 @@ else
 	log_info "Skipping LibreOffice .ppt test (Core variant - LibreOffice not included)"
 fi
 
-# ============================================================================
-# Test 12: API server health check
-# ============================================================================
-
 start_test "API server startup and health check"
 container=$(random_container_name)
 port=$((9000 + RANDOM % 1000))
@@ -433,7 +349,6 @@ docker run -d \
 	-p "${port}:8000" \
 	"$IMAGE_NAME" >/dev/null 2>&1
 
-# Wait for container to be ready
 sleep 5
 
 if curl -f -s "http://localhost:${port}/health" >/dev/null 2>&1; then
@@ -444,10 +359,6 @@ else
 	docker logs "$container" 2>&1 | tail -20 | log_verbose
 	docker rm -f "$container" >/dev/null 2>&1
 fi
-
-# ============================================================================
-# Test 13: API extraction endpoint
-# ============================================================================
 
 start_test "API extraction endpoint"
 container=$(random_container_name)
@@ -461,13 +372,10 @@ docker run -d \
 	-p "${port}:8000" \
 	"$IMAGE_NAME" >/dev/null 2>&1
 
-# Wait for API to be ready
 sleep 5
 
-# Create test file
 echo "Test content for API extraction" >/tmp/test-api-file.txt
 
-# Test extraction endpoint
 response=$(curl -f -s -X POST "http://localhost:${port}/extract" \
 	-F "files=@/tmp/test-api-file.txt" 2>&1 || echo "CURL_FAILED")
 
@@ -484,10 +392,6 @@ fi
 
 rm -f /tmp/test-api-file.txt
 
-# ============================================================================
-# Test 14: API server health check
-# ============================================================================
-
 start_test "API /info endpoint"
 container=$(random_container_name)
 port=$((9000 + RANDOM % 1000))
@@ -500,7 +404,6 @@ docker run -d \
 	-p "${port}:8000" \
 	"$IMAGE_NAME" >/dev/null 2>&1
 
-# Wait for API to be ready
 sleep 5
 
 response=$(curl -f -s "http://localhost:${port}/info" 2>&1 || echo "CURL_FAILED")
@@ -513,10 +416,6 @@ else
 fi
 
 docker rm -f "$container" >/dev/null 2>&1
-
-# ============================================================================
-# Test 15: API /info endpoint
-# ============================================================================
 
 start_test "API /cache/stats endpoint"
 container=$(random_container_name)
@@ -543,10 +442,6 @@ fi
 
 docker rm -f "$container" >/dev/null 2>&1
 
-# ============================================================================
-# Test 16: API /cache/stats endpoint
-# ============================================================================
-
 start_test "API /cache/clear endpoint"
 container=$(random_container_name)
 port=$((9000 + RANDOM % 1000))
@@ -572,10 +467,6 @@ fi
 
 docker rm -f "$container" >/dev/null 2>&1
 
-# ============================================================================
-# Test 17: API /cache/clear endpoint (multiple files)
-# ============================================================================
-
 start_test "API batch extraction (multiple files)"
 container=$(random_container_name)
 port=$((9000 + RANDOM % 1000))
@@ -590,7 +481,6 @@ docker run -d \
 
 sleep 5
 
-# Create test files
 echo "File one content" >/tmp/test-api-file1.txt
 echo "File two content" >/tmp/test-api-file2.txt
 
@@ -609,10 +499,6 @@ fi
 docker rm -f "$container" >/dev/null 2>&1
 rm -f /tmp/test-api-file1.txt /tmp/test-api-file2.txt
 
-# ============================================================================
-# Test 18: API batch extraction
-# ============================================================================
-
 start_test "CLI batch extraction command"
 container=$(random_container_name)
 output=$(docker run --rm \
@@ -630,14 +516,9 @@ else
 	fail_test "CLI batch command" "Output too short or malformed"
 fi
 
-# ============================================================================
-# Test 19: CLI batch command and persistence
-# ============================================================================
-
 start_test "MCP server startup and persistence (stays running)"
 container=$(random_container_name)
 
-# Start MCP server in background
 docker run -d -i \
 	--name "$container" \
 	--security-opt no-new-privileges \
@@ -645,28 +526,20 @@ docker run -d -i \
 	"$IMAGE_NAME" \
 	mcp >/dev/null 2>&1
 
-# Wait a few seconds
 sleep 3
 
-# Check if container is still running (MCP server should NOT exit immediately)
 if docker ps --filter "name=$container" | grep -q "$container"; then
 	log_verbose "MCP server is running"
 
-	# Check container logs for MCP startup messages
 	logs=$(docker logs "$container" 2>&1 || true)
 	log_verbose "MCP server logs (first 200 chars): ${logs:0:200}"
 
-	# MCP server should either have started or show logs (we're just checking it didn't crash)
 	pass_test
 else
 	fail_test "MCP server persistence" "MCP server exited immediately"
 fi
 
 docker rm -f "$container" >/dev/null 2>&1
-
-# ============================================================================
-# Test 20: MCP server startup command
-# ============================================================================
 
 start_test "CLI cache stats command"
 container=$(random_container_name)
@@ -684,10 +557,6 @@ else
 	fail_test "CLI cache stats" "Output missing expected fields"
 fi
 
-# ============================================================================
-# Test 21: CLI cache stats command
-# ============================================================================
-
 start_test "CLI cache clear command"
 container=$(random_container_name)
 output=$(docker run --rm \
@@ -704,10 +573,6 @@ else
 	fail_test "CLI cache clear" "Output missing expected fields"
 fi
 
-# ============================================================================
-# Test 22: CLI cache clear
-# ============================================================================
-
 start_test "Security: Container runs as non-root user"
 container=$(random_container_name)
 user_output=$(docker run --rm \
@@ -721,10 +586,6 @@ if [ "$user_output" = "kreuzberg" ]; then
 else
 	fail_test "Non-root user" "Container running as: $user_output (expected: kreuzberg)"
 fi
-
-# ============================================================================
-# Test 23: Security - Non-root user mount
-# ============================================================================
 
 start_test "Security: Read-only volume enforcement"
 container=$(random_container_name)
@@ -746,10 +607,6 @@ else
 	fail_test "Read-only volume" "Was able to write to read-only volume"
 fi
 
-# ============================================================================
-# Test 24: Security - Read-only volume enforcement
-# ============================================================================
-
 start_test "Security: Memory limit enforcement"
 container=$(random_container_name)
 result=$(docker run --rm \
@@ -766,17 +623,12 @@ else
 	fail_test "Memory limit" "Container failed with memory limit"
 fi
 
-# ============================================================================
-# Test Results Summary
-# ============================================================================
-
-# Get Docker image size
 IMAGE_SIZE=$(docker images "$IMAGE_NAME" --format "{{.Size}}" 2>/dev/null || echo "unknown")
 IMAGE_SIZE_BYTES_RAW=$(docker image inspect "$IMAGE_NAME" --format '{{.Size}}' 2>/dev/null || true)
 if [[ -n "${IMAGE_SIZE_BYTES_RAW:-}" && "$IMAGE_SIZE_BYTES_RAW" =~ ^[0-9]+$ ]]; then
 	IMAGE_SIZE_BYTES="$IMAGE_SIZE_BYTES_RAW"
 else
-	IMAGE_SIZE_BYTES="0" # ensure valid JSON numeric literal
+	IMAGE_SIZE_BYTES="0"
 fi
 
 echo ""
@@ -801,13 +653,11 @@ if [ $FAILED_TESTS -gt 0 ]; then
 	echo ""
 fi
 
-# Calculate success rate
 success_rate=$((PASSED_TESTS * 100 / TOTAL_TESTS))
 
 echo "Success Rate: ${success_rate}%"
 echo ""
 
-# Write results to JSON
 cat >"$TEST_RESULTS_FILE" <<EOF
 {
   "image": "$IMAGE_NAME",
@@ -825,7 +675,6 @@ EOF
 
 log_info "Test results written to: $TEST_RESULTS_FILE"
 
-# Exit with appropriate code
 if [ $FAILED_TESTS -eq 0 ]; then
 	log_success "All tests passed! 🎉"
 	exit 0

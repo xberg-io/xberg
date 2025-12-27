@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DOCS_DIR="$SCRIPT_DIR/../test_documents"
@@ -12,7 +11,6 @@ TEST_DOCS_DIR="$SCRIPT_DIR/../test_documents"
 echo "===== Kreuzberg CLI HTTP API Server Test ====="
 echo
 
-# Check if kreuzberg is available
 if ! command -v kreuzberg &>/dev/null; then
 	echo -e "${RED}✗ kreuzberg not found. Run ./tests/install.sh first.${NC}"
 	exit 1
@@ -33,16 +31,13 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Start server in background
 echo "Starting HTTP API server on port $PORT..."
 kreuzberg serve --port "$PORT" >/tmp/kreuzberg-serve.log 2>&1 &
 SERVER_PID=$!
 
-# Wait for server to start
 echo "Waiting for server to start..."
 sleep 3
 
-# Check if server is running
 if ! kill -0 "$SERVER_PID" 2>/dev/null; then
 	echo -e "${RED}✗ Server failed to start${NC}"
 	cat /tmp/kreuzberg-serve.log
@@ -51,7 +46,6 @@ fi
 
 echo -e "${GREEN}✓ Server started successfully (PID: $SERVER_PID)${NC}"
 
-# Test health endpoint
 echo "Testing health endpoint..."
 if curl -s -f "http://localhost:$PORT/health" >/dev/null; then
 	echo -e "${GREEN}✓ Health endpoint working${NC}"
@@ -61,7 +55,6 @@ else
 	((FAILED++))
 fi
 
-# Test extraction endpoint with PDF
 echo "Testing extraction endpoint with PDF..."
 if curl -s -f -X POST "http://localhost:$PORT/extract" \
 	-F "file=@$TEST_DOCS_DIR/tiny.pdf" |
@@ -73,7 +66,6 @@ else
 	((FAILED++))
 fi
 
-# Test extraction endpoint with DOCX
 echo "Testing extraction endpoint with DOCX..."
 if curl -s -f -X POST "http://localhost:$PORT/extract" \
 	-F "file=@$TEST_DOCS_DIR/lorem_ipsum.docx" |

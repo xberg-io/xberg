@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo "===== Kreuzberg CLI Installation Test ====="
 echo
 
-# Check if cargo is available
 if ! command -v cargo &>/dev/null; then
 	echo -e "${RED}✗ cargo not found. Please install Rust toolchain.${NC}"
 	exit 1
@@ -17,7 +15,6 @@ fi
 
 echo -e "${GREEN}✓ cargo found${NC}"
 
-# Install kreuzberg-cli from crates.io
 echo
 echo "Installing kreuzberg-cli from crates.io..."
 if cargo install kreuzberg-cli --force; then
@@ -27,7 +24,6 @@ else
 	exit 1
 fi
 
-# Verify binary is in PATH
 echo
 echo "Verifying kreuzberg binary..."
 if command -v kreuzberg &>/dev/null; then
@@ -37,7 +33,6 @@ else
 	exit 1
 fi
 
-# Check version
 echo
 echo "Checking version..."
 if kreuzberg --version; then
@@ -47,7 +42,6 @@ else
 	exit 1
 fi
 
-# Check help output
 echo
 echo "Checking help output..."
 if kreuzberg --help >/dev/null; then

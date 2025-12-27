@@ -12,8 +12,6 @@ import type {
 	TokenReductionConfig,
 } from "@kreuzberg/wasm";
 
-// CRITICAL: Cloudflare Workers cannot access the filesystem
-// All fixture-based tests are skipped in this environment
 export function getFixture(fixturePath: string): Uint8Array | null {
 	console.warn(`[SKIP] Cloudflare Workers cannot load fixtures from disk. Fixture: ${fixturePath}`);
 	console.warn("[SKIP] These tests require filesystem access which is not available in the Workers sandbox.");

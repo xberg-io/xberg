@@ -16,16 +16,13 @@ use function Kreuzberg\extract_file;
 
 $result = extract_file('document.pdf');
 
-// Check if page boundaries are available
 if (isset($result->metadata->pages->boundaries) && !empty($result->metadata->pages->boundaries)) {
     $boundaries = $result->metadata->pages->boundaries;
     $contentBytes = $result->content;
 
-    // Process first 3 pages
     $pagesToShow = array_slice($boundaries, 0, 3);
 
     foreach ($pagesToShow as $boundary) {
-        // Extract content for this page using byte offsets
         $pageContent = mb_substr(
             $contentBytes,
             $boundary->byteStart,

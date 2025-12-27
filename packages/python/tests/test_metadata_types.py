@@ -36,7 +36,6 @@ class TestHtmlMetadataStructure:
 
     def test_html_metadata_has_required_fields(self) -> None:
         """Verify HtmlMetadata has all documented fields."""
-        # Create a sample HtmlMetadata dict
         sample: HtmlMetadata = {
             "title": "Test Title",
             "description": "Test Description",
@@ -55,12 +54,11 @@ class TestHtmlMetadataStructure:
             "structured_data": [],
         }
 
-        # Verify all expected fields are accessible
         assert "title" in sample
         assert "description" in sample
         assert "keywords" in sample
         assert "author" in sample
-        assert "canonical_url" in sample  # Must be 'canonical_url', not 'canonical'
+        assert "canonical_url" in sample
         assert "base_href" in sample
         assert "language" in sample
         assert "text_direction" in sample
@@ -84,7 +82,6 @@ class TestHtmlMetadataStructure:
 
     def test_keywords_is_not_string(self) -> None:
         """Verify keywords is NOT a single string."""
-        # This test documents the correct type - keywords should be list, not str
         sample: HtmlMetadata = {
             "keywords": ["keyword1", "keyword2"],
         }
@@ -134,13 +131,11 @@ class TestHtmlMetadataStructure:
 
     def test_html_metadata_partial_fields(self) -> None:
         """HtmlMetadata should support partial field population (total=False)."""
-        # Minimal HtmlMetadata with only some fields
         minimal: HtmlMetadata = {
             "title": "Just Title",
         }
         assert minimal["title"] == "Just Title"
 
-        # HtmlMetadata with mid-range fields
         partial: HtmlMetadata = {
             "title": "Title",
             "keywords": ["test"],
@@ -451,7 +446,6 @@ class TestStructuredDataFields:
             "schema_type": "Product",
         }
 
-        # Verify the raw_json can be parsed
         parsed = json.loads(structured["raw_json"])
         assert parsed["@type"] == "Product"
         assert parsed["name"] == "Widget"
@@ -480,12 +474,10 @@ class TestHtmlExtractionIntegration:
         metadata = result.metadata
 
         assert isinstance(metadata, dict), "metadata should be dict"
-        # Metadata should contain at least some content
         assert len(metadata) >= 0, "metadata should be accessible"
 
     def test_extract_html_with_comprehensive_tags(self, test_documents: Path) -> None:
         """Extract HTML with multiple metadata tags."""
-        # Create HTML with comprehensive metadata
         html_content = b"""
         <!DOCTYPE html>
         <html lang="en">
@@ -517,9 +509,7 @@ class TestHtmlExtractionIntegration:
         result = extract_bytes_sync(html_content, "text/html")
         metadata = result.metadata
 
-        # Verify metadata structure
         assert isinstance(metadata, dict)
-        # HTML metadata should be present
         if "html_headers" in metadata:
             assert isinstance(metadata["html_headers"], list)
         if "html_links" in metadata:
@@ -595,7 +585,6 @@ class TestHtmlExtractionIntegration:
 
             for header in headers:
                 assert isinstance(header, dict), "header must be dict"
-                # Verify HeaderMetadata structure
                 assert "level" in header, "header must have level"
                 assert "text" in header, "header must have text"
                 assert isinstance(header["level"], int)
@@ -625,7 +614,6 @@ class TestHtmlExtractionIntegration:
 
             for link in links:
                 assert isinstance(link, dict), "link must be dict"
-                # Verify LinkMetadata structure
                 assert "href" in link, "link must have href"
                 assert "text" in link, "link must have text"
                 assert "link_type" in link, "link must have link_type"
@@ -658,7 +646,6 @@ class TestHtmlExtractionIntegration:
 
             for image in images:
                 assert isinstance(image, dict), "image must be dict"
-                # Verify ImageMetadata structure
                 assert "src" in image, "image must have src"
                 assert "image_type" in image, "image must have image_type"
                 assert isinstance(image["src"], str)
@@ -701,8 +688,6 @@ class TestMetadataEdgeCases:
         result = extract_bytes_sync(html_minimal, "text/html")
         metadata = result.metadata
 
-        # Fields may not be present or may be None
-        # Just verify structure is valid
         assert isinstance(metadata, dict)
 
     def test_metadata_empty_collections(self) -> None:
@@ -711,17 +696,14 @@ class TestMetadataEdgeCases:
         result = extract_bytes_sync(html, "text/html")
         metadata = result.metadata
 
-        # Headers might be empty list
         if "html_headers" in metadata:
             headers = metadata["html_headers"]
             assert isinstance(headers, list)
 
-        # Links might be empty list
         if "html_links" in metadata:
             links = metadata["html_links"]
             assert isinstance(links, list)
 
-        # Images might be empty list
         if "html_images" in metadata:
             images = metadata["html_images"]
             assert isinstance(images, list)
@@ -747,7 +729,6 @@ class TestMetadataEdgeCases:
         metadata = result.metadata
 
         assert isinstance(metadata, dict)
-        # Just verify it didn't crash and structure is valid
 
     def test_metadata_very_long_values(self) -> None:
         """HTML with very long metadata values."""
@@ -785,7 +766,6 @@ class TestMetadataEdgeCases:
         result = extract_bytes_sync(malformed, "text/html")
         metadata = result.metadata
 
-        # Should still have valid metadata structure
         assert isinstance(metadata, dict)
 
     def test_metadata_nested_html_elements(self) -> None:
@@ -890,11 +870,9 @@ class TestMetadataEdgeCases:
         metadata = result.metadata
 
         assert isinstance(metadata, dict)
-        # Verify headers are properly collected
         if "html_headers" in metadata:
             headers = metadata["html_headers"]
             if len(headers) > 0:
-                # Should have multiple h1s
                 h1s = [h for h in headers if h.get("level") == 1]
                 assert len(h1s) >= 1
 
@@ -912,11 +890,9 @@ class TestMetadataJsonSerialization:
             "html_offset": 100,
         }
 
-        # Should be JSON serializable
         json_str = json.dumps(header)
         assert isinstance(json_str, str)
 
-        # Should be deserializable
         deserialized = json.loads(json_str)
         assert deserialized["level"] == 1
         assert deserialized["text"] == "Heading"
@@ -948,7 +924,6 @@ class TestMetadataJsonSerialization:
             ],
         }
 
-        # Serialize and deserialize
         json_str = json.dumps(original)
         deserialized = json.loads(json_str)
 
@@ -974,7 +949,6 @@ class TestMetadataJsonSerialization:
 
         result = extract_bytes_sync(html_content, "text/html")
 
-        # Metadata should be JSON serializable
         try:
             json.dumps(result.metadata, default=str)
         except TypeError as e:
@@ -990,11 +964,9 @@ class TestLargeHtmlExtractionPerformance:
         Generates HTML with 10,000+ elements and verifies extraction
         completes in reasonable time (<5 seconds).
         """
-        # Generate HTML with 10,000+ elements
         elements = []
         elements.append("<h1>Performance Test</h1>")
 
-        # Create 1000 sections with headers, paragraphs, and links
         for i in range(1000):
             elements.append(f"<section id='section-{i}'>")
             elements.append(f"<h2>Section {i}</h2>")
@@ -1015,17 +987,14 @@ class TestLargeHtmlExtractionPerformance:
         </html>
         """.encode()
 
-        # Measure extraction time
         start_time = time.time()
         result = extract_bytes_sync(html_content, "text/html")
         elapsed_time = time.time() - start_time
 
-        # Verify result is valid
         assert hasattr(result, "metadata")
         metadata = result.metadata
         assert isinstance(metadata, dict)
 
-        # Assert extraction completed within 5 seconds
         assert elapsed_time < 5.0, f"Extraction took {elapsed_time:.2f}s, expected < 5.0s"
 
 
@@ -1071,23 +1040,18 @@ class TestConcurrentExtractionThreadSafety:
                 exceptions.append((e, traceback.format_exc()))
                 raise
 
-        # Use ThreadPoolExecutor to extract concurrently
         with ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(extract_html) for _ in range(extraction_count)]
             results = [future.result() for future in futures]
 
-        # Verify no exceptions occurred
         assert len(exceptions) == 0, f"Thread safety violations detected: {exceptions}"
 
-        # Verify all extractions succeeded and returned valid metadata
         assert len(results) == extraction_count
         for i, metadata in enumerate(results):
             assert isinstance(metadata, dict), f"Result {i} metadata should be dict, got {type(metadata)}"
 
-        # Verify data consistency across concurrent extractions
         first_result = results[0]
         for i, metadata in enumerate(results[1:], 1):
-            # Verify title is consistent
             if "title" in first_result and "title" in metadata:
                 assert first_result["title"] == metadata["title"], f"Result {i} has different title than first result"
 
@@ -1101,7 +1065,6 @@ class TestMalformedStructuredDataHandling:
         HTML with invalid JSON-LD should not cause extraction to fail.
         Should handle gracefully without exceptions.
         """
-        # HTML with malformed JSON-LD
         html_content = b"""
         <!DOCTYPE html>
         <html>
@@ -1121,7 +1084,6 @@ class TestMalformedStructuredDataHandling:
         </html>
         """
 
-        # Should handle malformed JSON-LD without exceptions
         try:
             result = extract_bytes_sync(html_content, "text/html")
         except Exception as e:
@@ -1131,7 +1093,6 @@ class TestMalformedStructuredDataHandling:
         metadata = result.metadata
         assert isinstance(metadata, dict)
 
-        # Verify valid content is still extracted
         if "title" in metadata:
             assert metadata["title"] is not None
 
@@ -1144,10 +1105,8 @@ class TestMemoryCleanupAfterExtraction:
 
         Extracts a large document and validates memory is properly cleaned up.
         """
-        # Start tracing memory allocations
         tracemalloc.start()
 
-        # Generate large HTML
         large_html = (
             b"""
         <!DOCTYPE html>
@@ -1164,23 +1123,17 @@ class TestMemoryCleanupAfterExtraction:
         """
         )
 
-        # Get memory before extraction
         tracemalloc.reset_peak()
 
-        # Extract large document
         result = extract_bytes_sync(large_html, "text/html")
         assert hasattr(result, "metadata")
 
-        # Get memory statistics
         _current, peak = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
-        # Verify extraction completed
         metadata = result.metadata
         assert isinstance(metadata, dict)
 
-        # Verify peak memory usage is reasonable
-        # For large document, peak should not exceed 100 MB
         peak_mb = peak / (1024 * 1024)
         assert peak_mb < 100, f"Peak memory usage {peak_mb:.2f}MB seems excessive for document"
 
@@ -1195,7 +1148,6 @@ class TestInvalidEncodingHandling:
         Should handle gracefully without crashing.
         """
         test_cases = [
-            # Valid UTF-8
             {
                 "name": "valid_utf8",
                 "content": b"""
@@ -1209,7 +1161,6 @@ class TestInvalidEncodingHandling:
                 </html>
                 """,
             },
-            # Invalid UTF-8 bytes (should be handled gracefully)
             {
                 "name": "invalid_utf8",
                 "content": b"""
@@ -1223,7 +1174,6 @@ class TestInvalidEncodingHandling:
                 </html>
                 """,
             },
-            # Mixed valid and invalid
             {
                 "name": "mixed_encoding",
                 "content": b"""
@@ -1239,7 +1189,6 @@ class TestInvalidEncodingHandling:
                 </html>
                 """,
             },
-            # UTF-16 detection
             {
                 "name": "utf16_content",
                 "content": "<!DOCTYPE html><html><head><title>UTF-16 Test</title></head><body>Content</body></html>".encode(
@@ -1251,17 +1200,13 @@ class TestInvalidEncodingHandling:
         try:
             for test_case in test_cases:
                 result = extract_bytes_sync(test_case["content"], "text/html")
-                # Should succeed or fail gracefully, not crash
                 assert hasattr(result, "metadata"), f"{test_case['name']}: result should have metadata"
         except Exception as e:
-            # Some encodings may fail extraction, but should not crash
-            # just verify it's a reasonable error
             assert isinstance(e, (UnicodeDecodeError, ValueError, Exception)), (
                 f"{test_case['name']}: unexpected exception type {type(e)}"
             )
 
 
-# Fixtures
 @pytest.fixture
 def test_documents() -> Path:
     """Path to test_documents directory."""

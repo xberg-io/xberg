@@ -77,7 +77,6 @@ final class ExtensionTest extends TestCase
     #[Test]
     public function it_detects_mime_type_from_pdf_bytes(): void
     {
-        // Minimal PDF header
         $pdfBytes = "%PDF-1.4\n%âãÏÓ\n";
 
         $mimeType = \kreuzberg_detect_mime_type($pdfBytes);
@@ -89,7 +88,6 @@ final class ExtensionTest extends TestCase
     #[Test]
     public function it_detects_mime_type_from_png_bytes(): void
     {
-        // PNG file signature
         $pngBytes = "\x89PNG\r\n\x1a\n";
 
         $mimeType = \kreuzberg_detect_mime_type($pngBytes);
@@ -149,13 +147,11 @@ final class ExtensionTest extends TestCase
     #[Test]
     public function it_validates_extraction_result_structure(): void
     {
-        // This test validates that ExtractionResult class exists and has expected structure
         $this->assertTrue(class_exists(ExtractionResult::class));
 
         $reflection = new \ReflectionClass(ExtractionResult::class);
         $this->assertTrue($reflection->isReadOnly());
 
-        // Check for required properties
         $expectedProperties = [
             'content',
             'mimeType',
@@ -201,7 +197,6 @@ final class ExtensionTest extends TestCase
         $classVersion = Kreuzberg::version();
         $extensionVersion = phpversion('kreuzberg');
 
-        // Both should be valid version strings
         $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+/', $classVersion);
 
         if ($extensionVersion !== false) {
@@ -214,12 +209,10 @@ final class ExtensionTest extends TestCase
     {
         $kreuzberg = new Kreuzberg();
 
-        // Creating a temporary test file
         $tmpFile = tempnam(sys_get_temp_dir(), 'krz_test_');
         file_put_contents($tmpFile, 'test content');
 
         try {
-            // This should either work or throw KreuzbergException
             $this->expectException(KreuzbergException::class);
             $kreuzberg->extractFile($tmpFile, 'invalid/mime-type');
         } finally {
@@ -232,8 +225,6 @@ final class ExtensionTest extends TestCase
     {
         $kreuzberg = new Kreuzberg();
 
-        // Verify the methods accept arrays - we're not actually executing
-        // to avoid file I/O in unit tests, just checking signatures
         $reflection = new \ReflectionClass($kreuzberg);
 
         $batchExtractFiles = $reflection->getMethod('batchExtractFiles');
@@ -249,11 +240,9 @@ final class ExtensionTest extends TestCase
     #[Test]
     public function it_checks_extension_constants_are_defined(): void
     {
-        // Check if the extension defines any constants
         $constants = get_defined_constants(true);
 
         $this->assertArrayHasKey('user', $constants);
-        // Extension may or may not define constants, so we just verify the system is working
         $this->assertIsArray($constants);
     }
 }

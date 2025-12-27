@@ -1,14 +1,12 @@
 #!/bin/bash
 set -e
 
-# Colors for output
 export RED='\033[0;31m'
 export GREEN='\033[0;32m'
 export YELLOW='\033[1;33m'
 export BLUE='\033[0;34m'
-export NC='\033[0m' # No Color
+export NC='\033[0m'
 
-# Configuration
 VERBOSE=${VERBOSE:-0}
 API_HOST=${API_HOST:-127.0.0.1}
 API_PORT=${API_PORT:-8000}
@@ -25,7 +23,6 @@ SAMPLE_PDF_URL="https://www.w3.org/WAI/WCAG21/Techniques/pdf/img/table.pdf"
 LOG_FILE="/tmp/kreuzberg_api_${API_PORT}.log"
 API_PID_FILE="/tmp/kreuzberg_api_${API_PORT}.pid"
 
-# Helper functions
 log_info() {
 	echo -e "${BLUE}[INFO]${NC} $1"
 }
@@ -52,7 +49,6 @@ verbose() {
 cleanup() {
 	log_info "Cleaning up..."
 
-	# Kill the API server if it's running
 	if [ -f "$API_PID_FILE" ]; then
 		API_PID=$(cat "$API_PID_FILE")
 		if ps -p "$API_PID" >/dev/null 2>&1; then
@@ -60,7 +56,6 @@ cleanup() {
 			kill "$API_PID" 2>/dev/null || true
 			sleep 1
 
-			# Force kill if still running
 			if ps -p "$API_PID" >/dev/null 2>&1; then
 				verbose "Force killing API server..."
 				kill -9 "$API_PID" 2>/dev/null || true
@@ -69,21 +64,17 @@ cleanup() {
 		rm -f "$API_PID_FILE"
 	fi
 
-	# Clean up log file if VERBOSE is not set
 	if [ "$VERBOSE" != "1" ] && [ -f "$LOG_FILE" ]; then
 		rm -f "$LOG_FILE"
 	fi
 }
 
-# Set trap to clean up on exit
 trap cleanup EXIT
 
-# Script start
 echo ""
 log_info "=== Kreuzberg API Server Test ==="
 echo ""
 
-# Check if kreuzberg command exists
 log_info "Checking if kreuzberg CLI is available..."
 if ! command -v kreuzberg &>/dev/null; then
 	log_error "kreuzberg command not found. Did you run install.sh first?"
@@ -91,7 +82,6 @@ if ! command -v kreuzberg &>/dev/null; then
 fi
 log_success "kreuzberg found at: $(command -v kreuzberg)"
 
-# Check if port is already in use
 log_info "Checking if port $API_PORT is available..."
 if lsof -i :"$API_PORT" &>/dev/null 2>&1; then
 	log_error "Port $API_PORT is already in use"
@@ -100,7 +90,6 @@ if lsof -i :"$API_PORT" &>/dev/null 2>&1; then
 fi
 log_success "Port $API_PORT is available"
 
-# Prepare test document
 log_info "Preparing test document..."
 mkdir -p "$TEST_DOCUMENTS_DIR"
 
@@ -157,7 +146,6 @@ if [ ! -f "$TEST_PDF" ]; then
 fi
 log_success "Test PDF ready: $TEST_PDF"
 
-# Start API server
 log_info "Starting Kreuzberg API server on ${API_URL}..."
 log_info "Command: kreuzberg serve --host $API_HOST --port $API_PORT"
 
@@ -168,7 +156,6 @@ echo "$API_PID" >"$API_PID_FILE"
 verbose "API server started with PID: $API_PID"
 verbose "Server logs: $LOG_FILE"
 
-# Wait for server to be ready
 log_info "Waiting for server to start (timeout: ${HEALTH_CHECK_TIMEOUT}s)..."
 ELAPSED=0
 SERVER_READY=0
@@ -179,7 +166,6 @@ while [ "$ELAPSED" -lt "$HEALTH_CHECK_TIMEOUT" ]; do
 		break
 	fi
 
-	# Check if process is still alive
 	if ! ps -p "$API_PID" >/dev/null 2>&1; then
 		log_error "API server process died during startup"
 		log_error "Server output:"
@@ -201,7 +187,6 @@ fi
 
 log_success "Server is ready and accepting requests (${ELAPSED}s startup time)"
 
-# Test 1: Health check endpoint
 log_info "Test 1: Testing health check endpoint..."
 HEALTH_RESPONSE=$(curl -f -s -m "$API_TIMEOUT" "${API_URL}/health" 2>&1 || echo "FAILED")
 
@@ -213,7 +198,6 @@ else
 	exit 1
 fi
 
-# Test 2: List endpoints
 log_info "Test 2: Checking available endpoints..."
 if curl -f -s -m "$API_TIMEOUT" "${API_URL}/" >/dev/null 2>&1; then
 	log_success "Root endpoint accessible"
@@ -221,7 +205,6 @@ else
 	log_warning "Root endpoint not accessible (continuing anyway)"
 fi
 
-# Test 3: Extract endpoint with POST
 log_info "Test 3: Testing extraction endpoint..."
 RESPONSE_FILE="/tmp/kreuzberg_api_response_${API_PORT}.json"
 
@@ -232,10 +215,8 @@ fi
 
 log_info "Sending POST request to ${API_URL}/extract with test PDF..."
 
-# Try different API endpoints
 EXTRACT_SUCCESS=0
 
-# Try /extract endpoint with multipart form-data
 if curl -f -s -m "$API_TIMEOUT" \
 	-F "file=@${TEST_PDF}" \
 	"${API_URL}/extract" \
@@ -244,7 +225,6 @@ if curl -f -s -m "$API_TIMEOUT" \
 	verbose "Extraction succeeded with /extract endpoint"
 fi
 
-# If that didn't work, try /api/extract
 if [ "$EXTRACT_SUCCESS" -eq 0 ]; then
 	if curl -f -s -m "$API_TIMEOUT" \
 		-F "file=@${TEST_PDF}" \
@@ -255,7 +235,6 @@ if [ "$EXTRACT_SUCCESS" -eq 0 ]; then
 	fi
 fi
 
-# If that didn't work, try with binary upload
 if [ "$EXTRACT_SUCCESS" -eq 0 ]; then
 	if curl -f -s -m "$API_TIMEOUT" \
 		-H "Content-Type: application/pdf" \
@@ -283,7 +262,6 @@ else
 			head -c 500 "$RESPONSE_FILE" | sed 's/^/  /'
 			echo ""
 
-			# Try to validate JSON if jq is available
 			if command -v jq &>/dev/null; then
 				if jq empty "$RESPONSE_FILE" 2>/dev/null; then
 					log_success "Response is valid JSON"
@@ -295,7 +273,6 @@ else
 	fi
 fi
 
-# Test 4: Verify server is still running
 log_info "Test 4: Verifying server is still running..."
 if ps -p "$API_PID" >/dev/null 2>&1; then
 	log_success "Server is running (PID: $API_PID)"
@@ -304,17 +281,14 @@ else
 	exit 1
 fi
 
-# Cleanup response file
 if [ -f "$RESPONSE_FILE" ]; then
 	rm -f "$RESPONSE_FILE"
 fi
 
-# Stop the server gracefully
 log_info "Shutting down server gracefully..."
 kill "$API_PID" 2>/dev/null || true
 sleep 2
 
-# Check if process stopped
 if ps -p "$API_PID" >/dev/null 2>&1; then
 	log_warning "Process did not stop gracefully, force killing..."
 	kill -9 "$API_PID" 2>/dev/null || true
@@ -329,7 +303,6 @@ fi
 log_success "Server shut down successfully"
 rm -f "$API_PID_FILE"
 
-# Final summary
 echo ""
 log_success "=== API Server Test Passed ==="
 echo ""

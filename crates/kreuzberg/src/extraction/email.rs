@@ -109,7 +109,6 @@ pub fn parse_eml_content(data: &[u8]) -> Result<EmailExtractionResult> {
         String::new()
     };
 
-    // Pre-allocate attachments Vec; typical emails have 1-5 attachments
     let mut attachments = Vec::with_capacity(message.attachments().count().min(20));
     for attachment in message.attachments() {
         let filename = attachment.attachment_name().map(|s| s.to_string());
@@ -325,7 +324,6 @@ pub fn extract_email_content(data: &[u8], mime_type: &str) -> Result<EmailExtrac
 
 /// Build text output from email extraction result
 pub fn build_email_text_output(result: &EmailExtractionResult) -> String {
-    // Pre-allocate Vec; typical emails have 7-10 header/content sections
     let mut text_parts = Vec::with_capacity(10);
 
     if let Some(ref subject) = result.subject {
@@ -374,7 +372,6 @@ fn clean_html_content(html: &str) -> String {
         return String::new();
     }
 
-    // Pre-allocate with capacity hint: typically 60-80% of original after cleaning
     let mut result = String::with_capacity(html.len().saturating_mul(8).saturating_div(10));
 
     let cleaned = script_regex().replace_all(html, "");

@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Clean previous wheel artifacts
-# Used by: ci-python.yaml - Clean previous wheel artifacts step
-#
 
 set -euo pipefail
 

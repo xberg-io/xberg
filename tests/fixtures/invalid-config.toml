@@ -1,3 +1,2 @@
-# Invalid TOML file - missing closing bracket
 [ocr
 backend = "tesseract"

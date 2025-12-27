@@ -137,10 +137,8 @@ pub fn extract_text_and_metadata_from_pdf_document(
     document: &PdfDocument<'_>,
     page_config: Option<&PageConfig>,
 ) -> Result<PdfUnifiedExtractionResult> {
-    // Extract text using the lazy iteration approach
     let (text, boundaries, page_contents) = extract_text_from_pdf_document(document, page_config)?;
 
-    // Extract metadata using the existing implementation
     let metadata = crate::pdf::metadata::extract_metadata_from_document_impl(document, boundaries.as_deref())?;
 
     Ok((text, boundaries, page_contents, metadata))
@@ -174,13 +172,11 @@ pub fn extract_text_from_pdf_document(
     page_config: Option<&PageConfig>,
 ) -> Result<PdfTextExtractionResult> {
     if page_config.is_none() {
-        // Fast path: lazy iteration without page tracking
         return extract_text_lazy_fast_path(document);
     }
 
     let config = page_config.unwrap();
 
-    // Page tracking enabled: use lazy iteration with boundary/content tracking
     extract_text_lazy_with_tracking(document, config)
 }
 
@@ -211,29 +207,22 @@ fn extract_text_lazy_fast_path(document: &PdfDocument<'_>) -> Result<PdfTextExtr
         let page_text = text.all();
         let page_size = page_text.len();
 
-        // Add separator before page (not before first page)
         if page_idx > 0 {
             content.push_str("\n\n");
         }
 
-        // Append page text directly
         content.push_str(&page_text);
 
-        // Sample first 5 pages for capacity estimation
         if page_idx < 5 {
             total_sample_size += page_size;
             sample_count += 1;
         }
 
-        // Reserve additional capacity after processing first batch if needed
         if page_idx == 4 && sample_count > 0 && page_count > 5 {
             let avg_page_size = total_sample_size / sample_count;
             let estimated_remaining = avg_page_size * (page_count - 5);
-            // Reserve with 10% overhead for separators and safety
             content.reserve(estimated_remaining + (estimated_remaining / 10));
         }
-
-        // Page resources are automatically released as we iterate
     }
 
     Ok((content, None, None))
@@ -261,7 +250,6 @@ fn extract_text_lazy_with_tracking(document: &PdfDocument<'_>, config: &PageConf
         None
     };
 
-    // Track sample sizes for capacity estimation
     let mut total_sample_size = 0usize;
     let mut sample_count = 0;
 
@@ -275,13 +263,11 @@ fn extract_text_lazy_with_tracking(document: &PdfDocument<'_>, config: &PageConf
         let page_text_ref = text.all();
         let page_size = page_text_ref.len();
 
-        // Sample first 5 pages for capacity estimation
         if page_idx < 5 {
             total_sample_size += page_size;
             sample_count += 1;
         }
 
-        // Add marker or separator before this page (not before first page)
         if page_number > 1 {
             if config.insert_page_markers {
                 let marker = config.marker_format.replace("{page_num}", &page_number.to_string());
@@ -291,7 +277,6 @@ fn extract_text_lazy_with_tracking(document: &PdfDocument<'_>, config: &PageConf
             }
         }
 
-        // Track byte positions for boundary
         let byte_start = content.len();
         content.push_str(&page_text_ref);
         let byte_end = content.len();
@@ -302,7 +287,6 @@ fn extract_text_lazy_with_tracking(document: &PdfDocument<'_>, config: &PageConf
             page_number,
         });
 
-        // Collect per-page content if enabled
         if let Some(ref mut pages) = page_contents {
             pages.push(PageContent {
                 page_number,
@@ -312,16 +296,12 @@ fn extract_text_lazy_with_tracking(document: &PdfDocument<'_>, config: &PageConf
             });
         }
 
-        // Reserve capacity after processing first batch
         if page_idx == 4 && page_count > 5 && sample_count > 0 {
             let avg_page_size = total_sample_size / sample_count;
             let estimated_remaining = avg_page_size * (page_count - 5);
-            // Account for separators/markers: 2-3 bytes per page average
             let separator_overhead = (page_count - 5) * 3;
             content.reserve(estimated_remaining + separator_overhead + (estimated_remaining / 10));
         }
-
-        // Page resources are automatically released as we iterate
     }
 
     Ok((content, Some(boundaries), page_contents))
@@ -382,17 +362,14 @@ mod cache_regression_tests {
 
         let extractor = PdfTextExtractor::new().expect("Failed to create extractor");
 
-        // Cold run
         let start = Instant::now();
         let text1 = extractor.extract_text(&pdf_bytes).expect("Failed to extract (cold)");
         let cold = start.elapsed();
 
-        // Warm run 1
         let start = Instant::now();
         let text2 = extractor.extract_text(&pdf_bytes).expect("Failed to extract (warm1)");
         let warm1 = start.elapsed();
 
-        // Warm run 2
         let start = Instant::now();
         let text3 = extractor.extract_text(&pdf_bytes).expect("Failed to extract (warm2)");
         let warm2 = start.elapsed();
@@ -404,7 +381,6 @@ mod cache_regression_tests {
         assert_eq!(text1, text2);
         assert_eq!(text2, text3);
 
-        // Warm should not be 100x faster than cold (that would indicate PAGE_INDEX_CACHE bug)
         let ratio1 = cold.as_micros() / warm1.as_micros().max(1);
         let ratio2 = cold.as_micros() / warm2.as_micros().max(1);
 

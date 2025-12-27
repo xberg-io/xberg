@@ -1,10 +1,8 @@
 // Auto-generated tests for ocr fixtures.
-// Run with: deno test --allow-read
 
 import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
 
-// Initialize WASM module once at module load time
 await initWasm();
 
 Deno.test("ocr_image_hello_world", { permissions: { read: true } }, async () => {

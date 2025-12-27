@@ -5,8 +5,6 @@ use kreuzberg::core::config::ExtractionConfig;
 
 #[test]
 fn test_structured_json_basic() {
-    // Structured JSON extraction should stream and preserve content.
-
     let document_path = resolve_document("json/sample_document.json");
     if !document_path.exists() {
         println!(
@@ -29,8 +27,6 @@ fn test_structured_json_basic() {
 
 #[test]
 fn test_structured_json_simple() {
-    // Simple JSON document to verify structured extraction.
-
     let document_path = resolve_document("data_formats/simple.json");
     if !document_path.exists() {
         println!(
@@ -53,8 +49,6 @@ fn test_structured_json_simple() {
 
 #[test]
 fn test_structured_yaml_simple() {
-    // Simple YAML document to validate structured extraction.
-
     let document_path = resolve_document("data_formats/simple.yaml");
     if !document_path.exists() {
         println!(

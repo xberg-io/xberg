@@ -45,7 +45,6 @@ fn calculate_cache_key(data: &[u8]) -> String {
     let sample = if data.len() > 1024 { &data[..1024] } else { data };
     sample.hash(&mut hasher);
     data.len().hash(&mut hasher);
-    // Pre-allocate with capacity; hash format is typically 16 hex chars
     let mut result = String::with_capacity(16);
     result.push_str(&format!("{:x}", hasher.finish()));
     result
@@ -106,12 +105,10 @@ pub fn safe_decode(byte_data: &[u8], encoding: Option<&str>) -> String {
 }
 
 pub fn get_encoding_cache_key(data_hash: &str, size: usize) -> String {
-    // Pre-allocate with reasonable capacity: hash (16 chars) + ':' + size (up to 20 chars)
     let estimated_capacity = 16 + 1 + 20;
     let mut result = String::with_capacity(estimated_capacity);
     result.push_str(data_hash);
     result.push(':');
-    // Manual formatting to avoid another allocation from format!
     use std::fmt::Write;
     let _ = write!(result, "{}", size);
     result
@@ -155,13 +152,11 @@ pub fn fix_mojibake(text: &str) -> String {
     fix_mojibake_internal(text).into_owned()
 }
 
-// Zero-copy version: returns borrowed reference if no changes needed
 fn fix_mojibake_internal(text: &str) -> Cow<'_, str> {
     if text.is_empty() {
         return Cow::Borrowed("");
     }
 
-    // Quick check: if no patterns match, return borrowed reference (zero copy)
     if !CONTROL_CHARS.is_match(text) && !REPLACEMENT_CHARS.is_match(text) && !ISOLATED_COMBINING.is_match(text) {
         return Cow::Borrowed(text);
     }

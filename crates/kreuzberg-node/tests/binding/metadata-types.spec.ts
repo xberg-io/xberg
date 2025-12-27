@@ -93,7 +93,6 @@ const _metadataStructureTests: [
 	AssertMetadataHasImagePreprocessing,
 ] = [true, true, true, true, true, true, true, true, true, true, true];
 
-// Compile-time checks for new HTML metadata fields
 type AssertHtmlHasCanonicalUrl = "canonicalUrl" extends keyof HtmlMetadata ? true : never;
 type AssertHtmlHasOpenGraph = "openGraph" extends keyof HtmlMetadata ? true : never;
 type AssertHtmlHasTwitterCard = "twitterCard" extends keyof HtmlMetadata ? true : never;
@@ -104,7 +103,6 @@ type AssertHtmlHasImages = "htmlImages" extends keyof HtmlMetadata ? true : neve
 type AssertHtmlHasStructuredData = "structuredData" extends keyof HtmlMetadata ? true : never;
 type AssertHtmlHasKeywords = "keywords" extends keyof HtmlMetadata ? true : never;
 
-// Verify these are Records, not strings (for breaking change validation)
 type AssertOpenGraphIsRecord = HtmlMetadata["openGraph"] extends Record<string, string> ? true : never;
 type AssertTwitterCardIsRecord = HtmlMetadata["twitterCard"] extends Record<string, string> ? true : never;
 type AssertKeywordsIsArray = HtmlMetadata["keywords"] extends string[] ? true : never;
@@ -127,7 +125,6 @@ const _newHtmlMetadataFields: [
 describe("Metadata Types - Type Compatibility Tests", () => {
 	describe("HtmlMetadata Type Structure", () => {
 		it("test_html_metadata_deserializes", () => {
-			// Test JSON deserialization to TypeScript HtmlMetadata
 			const jsonMetadata = {
 				keywords: ["test", "keywords"],
 				canonicalUrl: "https://example.com",
@@ -150,7 +147,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_keywords_is_array", () => {
-			// Verify keywords is string[], not string
 			const htmlMetadata: HtmlMetadata = {
 				keywords: ["search", "terms", "here"],
 				openGraph: {},
@@ -168,7 +164,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_canonical_url_renamed", () => {
-			// Verify canonicalUrl field exists (not canonical)
 			const htmlMetadata: HtmlMetadata = {
 				canonicalUrl: "https://example.com/canonical",
 				openGraph: {},
@@ -185,7 +180,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_open_graph_is_record", () => {
-			// Verify openGraph is Record<string, string>
 			const htmlMetadata: HtmlMetadata = {
 				openGraph: {
 					"og:title": "Page Title",
@@ -208,7 +202,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_twitter_card_is_record", () => {
-			// Verify twitterCard is Record<string, string>
 			const htmlMetadata: HtmlMetadata = {
 				twitterCard: {
 					card: "summary_large_image",
@@ -233,7 +226,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 
 	describe("Rich Metadata Type Tests", () => {
 		it("test_header_metadata_structure", () => {
-			// Verify HeaderMetadata has correct fields and types
 			const header: HeaderMetadata = {
 				level: 1,
 				text: "Main Heading",
@@ -253,7 +245,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_link_metadata_structure", () => {
-			// Verify LinkMetadata with linkType enum values
 			const link: LinkMetadata = {
 				href: "https://example.com",
 				text: "Example Site",
@@ -272,7 +263,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_link_metadata_internal_link", () => {
-			// Test internal link type
 			const internalLink: LinkMetadata = {
 				href: "/page/about",
 				text: "About Us",
@@ -286,7 +276,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_link_metadata_email_phone_types", () => {
-			// Test email and phone link types
 			const emailLink: LinkMetadata = {
 				href: "mailto:contact@example.com",
 				text: "Email Us",
@@ -308,7 +297,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_image_metadata_structure", () => {
-			// Verify HtmlImageMetadata with imageType enum values
 			const image: HtmlImageMetadata = {
 				src: "https://example.com/image.png",
 				alt: "Alternative text",
@@ -327,7 +315,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_image_metadata_data_uri", () => {
-			// Test data URI image type
 			const dataUriImage: HtmlImageMetadata = {
 				src: "data:image/png;base64,iVBORw0KGgo=",
 				imageType: "data_uri",
@@ -338,7 +325,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_image_metadata_relative", () => {
-			// Test relative image type
 			const relativeImage: HtmlImageMetadata = {
 				src: "./images/logo.svg",
 				imageType: "relative",
@@ -349,7 +335,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_structured_data_structure", () => {
-			// Verify StructuredData with dataType enum values
 			const jsonLd: StructuredData = {
 				dataType: "json_ld",
 				rawJson: '{"@context":"https://schema.org","@type":"Article"}',
@@ -377,7 +362,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 
 	describe("Integration Tests", () => {
 		it("test_extract_html_with_metadata", () => {
-			// Test that HTML extraction produces correct metadata structure
 			const htmlContent = `
         <!DOCTYPE html>
         <html lang="en">
@@ -408,7 +392,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_extract_html_file_integration", () => {
-			// Integration test: Extract actual HTML file and validate metadata
 			const htmlPath = getTestDocumentPath("web/taylor_swift.html");
 			const buffer = loadTestDocument("web/taylor_swift.html");
 
@@ -421,12 +404,10 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 			expect(result.content).toBeTruthy();
 			expect(typeof result.content).toBe("string");
 
-			// Validate HTML metadata structure
 			const htmlMetadata = result.metadata.html;
 			if (htmlMetadata) {
 				expect(typeof htmlMetadata === "object").toBe(true);
 
-				// Check for metadata fields
 				if (htmlMetadata.title) {
 					expect(typeof htmlMetadata.title).toBe("string");
 				}
@@ -435,14 +416,12 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 					expect(typeof htmlMetadata.description).toBe("string");
 				}
 
-				// Verify array fields exist
 				expect(Array.isArray(htmlMetadata.keywords)).toBe(true);
 				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
 				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
 				expect(Array.isArray(htmlMetadata.htmlImages)).toBe(true);
 				expect(Array.isArray(htmlMetadata.structuredData)).toBe(true);
 
-				// Verify Record fields exist
 				expect(typeof htmlMetadata.openGraph).toBe("object");
 				expect(typeof htmlMetadata.twitterCard).toBe("object");
 				expect(typeof htmlMetadata.metaTags).toBe("object");
@@ -450,7 +429,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_empty_html_returns_defaults", () => {
-			// Edge case: Empty/minimal HTML should handle gracefully with defaults
 			const emptyHtml = `<!DOCTYPE html><html><head></head><body></body></html>`;
 			const buffer = Buffer.from(emptyHtml, "utf-8");
 
@@ -462,7 +440,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 
 			const htmlMetadata = result.metadata.html;
 			if (htmlMetadata) {
-				// Fields should exist with default values (arrays/objects are empty)
 				expect(Array.isArray(htmlMetadata.keywords)).toBe(true);
 				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
 				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
@@ -473,15 +450,12 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 				expect(typeof htmlMetadata.twitterCard).toBe("object");
 				expect(typeof htmlMetadata.metaTags).toBe("object");
 
-				// Empty collections
 				expect(Object.keys(htmlMetadata.openGraph).length).toBeGreaterThanOrEqual(0);
 				expect(Object.keys(htmlMetadata.twitterCard).length).toBeGreaterThanOrEqual(0);
 			}
 		});
 
 		it("test_malformed_html_graceful_handling", () => {
-			// Edge case: Malformed HTML (unclosed tags, invalid structure) should not throw
-			// Note: This tests that the extraction handles broken HTML gracefully without crashing
 			const malformedHtml = `
         <!DOCTYPE html>
         <html>
@@ -500,7 +474,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 
 			const buffer = Buffer.from(malformedHtml, "utf-8");
 
-			// Should not throw, even with malformed HTML
 			expect(() => {
 				extractBytesSync(buffer, "text/html", null);
 			}).not.toThrow();
@@ -511,7 +484,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 			expect(result.mimeType).toBe("text/html");
 			expect(result.metadata).toBeDefined();
 
-			// Metadata should still be properly structured
 			const htmlMetadata = result.metadata.html;
 			if (htmlMetadata) {
 				expect(typeof htmlMetadata === "object").toBe(true);
@@ -520,15 +492,12 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
 				expect(Array.isArray(htmlMetadata.htmlImages)).toBe(true);
 
-				// Metadata structure should be valid even if content extraction failed
 				expect(typeof htmlMetadata.openGraph).toBe("object");
 				expect(typeof htmlMetadata.twitterCard).toBe("object");
 			}
 		});
 
 		it("test_special_characters_in_metadata", () => {
-			// Edge case: Special characters, Unicode, HTML entities
-			// Tests proper handling of non-ASCII characters and HTML entities
 			const specialHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -554,23 +523,19 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 
 			const htmlMetadata = result.metadata.html;
 			if (htmlMetadata) {
-				// Title should be extracted correctly
 				if (htmlMetadata.title) {
 					expect(htmlMetadata.title).toBeDefined();
 					expect(typeof htmlMetadata.title).toBe("string");
 					expect(htmlMetadata.title.length).toBeGreaterThan(0);
 				}
 
-				// Description should be extracted
 				if (htmlMetadata.description) {
 					expect(typeof htmlMetadata.description).toBe("string");
 					expect(htmlMetadata.description.length).toBeGreaterThan(0);
 				}
 
-				// Keywords should be an array
 				expect(Array.isArray(htmlMetadata.keywords)).toBe(true);
 
-				// Headers should be extracted
 				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
 				if (htmlMetadata.htmlHeaders.length > 0) {
 					const header = htmlMetadata.htmlHeaders[0];
@@ -578,12 +543,10 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 					expect(header.text.length).toBeGreaterThan(0);
 				}
 
-				// OpenGraph metadata should be a Record
 				if (htmlMetadata.openGraph) {
 					expect(typeof htmlMetadata.openGraph).toBe("object");
 				}
 
-				// Links should be extracted correctly
 				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
 				if (htmlMetadata.htmlLinks.length > 0) {
 					const link = htmlMetadata.htmlLinks[0];
@@ -595,8 +558,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_large_html_extraction_performance", () => {
-			// Performance test: Large HTML document should extract efficiently
-			// Generate large HTML with many elements
 			let largeHtml = `
         <!DOCTYPE html>
         <html>
@@ -608,7 +569,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
           <h1>Main Heading</h1>
       `;
 
-			// Add 500 paragraphs with links and images
 			for (let i = 0; i < 500; i++) {
 				largeHtml += `
           <section>
@@ -628,7 +588,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 			const buffer = Buffer.from(largeHtml, "utf-8");
 			const startTime = Date.now();
 
-			// Should complete in reasonable time (< 5 seconds)
 			const result = extractBytesSync(buffer, "text/html", null);
 			const duration = Date.now() - startTime;
 
@@ -640,33 +599,26 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 
 			const htmlMetadata = result.metadata.html;
 			if (htmlMetadata) {
-				// Should extract headers
 				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
 				if (htmlMetadata.htmlHeaders.length > 0) {
 					expect(htmlMetadata.htmlHeaders.length).toBeGreaterThan(0);
 				}
 
-				// Should extract links
 				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
 				if (htmlMetadata.htmlLinks.length > 0) {
-					// Should have extracted some links from the 500+ sections
 					expect(htmlMetadata.htmlLinks.length).toBeGreaterThan(0);
 				}
 
-				// Should extract images
 				expect(Array.isArray(htmlMetadata.htmlImages)).toBe(true);
 				if (htmlMetadata.htmlImages.length > 0) {
-					// Should have extracted some images from the 500+ sections
 					expect(htmlMetadata.htmlImages.length).toBeGreaterThan(0);
 				}
 			}
 
-			// Performance assertion: Should complete reasonably fast
 			expect(duration).toBeLessThan(5000);
 		});
 
 		it("test_metadata_round_trip", () => {
-			// Test serialize/deserialize metadata preserves structure
 			const originalMetadata: HtmlMetadata = {
 				title: "Test Page",
 				description: "Test description",
@@ -702,7 +654,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 				structuredData: [],
 			};
 
-			// Simulate JSON serialization/deserialization
 			const json = JSON.stringify(originalMetadata);
 			const deserialized: HtmlMetadata = JSON.parse(json);
 
@@ -714,7 +665,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_empty_collections_default", () => {
-			// Test that empty arrays/objects default correctly
 			const minimalMetadata: HtmlMetadata = {
 				keywords: [],
 				openGraph: {},
@@ -735,7 +685,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 
 	describe("Breaking Change Validation", () => {
 		it("test_old_field_names_removed", () => {
-			// Verify old fields (ogTitle, twitterCard as string) don't exist as direct fields
 			const htmlMetadata: HtmlMetadata = {
 				openGraph: { "og:title": "OG Title" },
 				twitterCard: { card: "summary" },
@@ -747,19 +696,16 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 				structuredData: [],
 			};
 
-			// Old fields should not be directly accessible
 			expect((htmlMetadata as any).ogTitle).toBeUndefined();
 			expect((htmlMetadata as any).ogDescription).toBeUndefined();
 			expect((htmlMetadata as any).twitterTitle).toBeUndefined();
 
-			// Verify structure doesn't have old string-based fields
 			const keys = Object.keys(htmlMetadata);
 			expect(keys).not.toContain("ogTitle");
 			expect(keys).not.toContain("twitterTitle");
 		});
 
 		it("test_new_field_names_exist", () => {
-			// Verify new fields (canonicalUrl, openGraph as Record) exist
 			const htmlMetadata: HtmlMetadata = {
 				canonicalUrl: "https://example.com",
 				openGraph: { "og:title": "Test" },
@@ -782,7 +728,6 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_record_types_enforced", () => {
-			// Verify openGraph and twitterCard are Records, not strings
 			const htmlMetadata: HtmlMetadata = {
 				openGraph: { "og:title": "Title", "og:image": "url" },
 				twitterCard: { card: "summary_large_image", site: "@user" },
@@ -794,15 +739,12 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 				structuredData: [],
 			};
 
-			// Should be objects (Records)
 			expect(typeof htmlMetadata.openGraph).toBe("object");
 			expect(typeof htmlMetadata.twitterCard).toBe("object");
 
-			// Should not be strings
 			expect(typeof htmlMetadata.openGraph).not.toBe("string");
 			expect(typeof htmlMetadata.twitterCard).not.toBe("string");
 
-			// Should support Record-like access
 			expect(htmlMetadata.openGraph["og:title"]).toBe("Title");
 			expect(htmlMetadata.twitterCard.card).toBe("summary_large_image");
 		});

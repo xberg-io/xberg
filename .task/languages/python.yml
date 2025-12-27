@@ -9,7 +9,6 @@ includes:
     internal: true
 
 tasks:
-  # Installation
   install:
     desc: Install Python dependencies
     dir: packages/python
@@ -21,7 +20,6 @@ tasks:
     cmds:
       - task: python:install
 
-  # Build Tasks
   build:
     desc: Build Python extension (uses {{.BUILD_PROFILE}})
     dir: packages/python
@@ -66,7 +64,6 @@ tasks:
       - mkdir -p {{.DIST_DIR | default "dist"}}
       - cd packages/python && uv build --sdist --out-dir ../../{{.DIST_DIR | default "dist"}}
 
-  # Test Tasks
   test:
     desc: Run Python tests
     dir: packages/python
@@ -85,7 +82,6 @@ tasks:
     cmds:
       - uv run pytest --cov --cov-report=html
 
-  # Linting Tasks
   lint:
     desc: Auto-fix Python code linting (ruff check + format)
     dir: packages/python
@@ -101,7 +97,6 @@ tasks:
       - uv run ruff format --check
       - uv run mypy
 
-  # Formatting Tasks
   format:
     desc: Format Python code with modifications (ruff format)
     dir: packages/python
@@ -114,7 +109,6 @@ tasks:
     cmds:
       - uv run ruff format --check
 
-  # Project configuration
   pyproject:format:
     desc: Format pyproject.toml (pyproject-fmt)
     dir: packages/python
@@ -127,7 +121,6 @@ tasks:
     cmds:
       - uv run validate-pyproject pyproject.toml
 
-  # Cleanup
   clean:
     desc: Clean Python build artifacts
     dir: packages/python
@@ -136,14 +129,12 @@ tasks:
       - python -c "import shutil, os; [shutil.rmtree(os.path.join(r, d), ignore_errors=True) for r, dirs, _ in os.walk('.') for d in dirs if d == '__pycache__']"
       - python -c "import os, glob; [os.remove(f) for f in glob.glob('**/*.pyc', recursive=True)]"
 
-  # Dependency Management
   update:
     desc: Update Python dependencies
     cmds:
       - echo "Updating Python dependencies..."
       - uv sync --all-packages --all-extras --upgrade --no-install-workspace --no-install-project
 
-  # E2E Tests
   e2e:generate:
     desc: Generate Python E2E tests from fixtures
     cmds:

@@ -47,15 +47,15 @@ impl NativeAdapter {
     /// # Returns
     /// Sampling interval in milliseconds (1, 5, or 10)
     fn calculate_adaptive_sampling_interval(file_size: u64) -> u64 {
-        const SMALL_FILE_THRESHOLD: u64 = 100 * 1024; // 100KB
-        const MEDIUM_FILE_THRESHOLD: u64 = 1024 * 1024; // 1MB
+        const SMALL_FILE_THRESHOLD: u64 = 100 * 1024;
+        const MEDIUM_FILE_THRESHOLD: u64 = 1024 * 1024;
 
         if file_size < SMALL_FILE_THRESHOLD {
-            1 // 1ms for quick extractions
+            1
         } else if file_size < MEDIUM_FILE_THRESHOLD {
-            5 // 5ms for medium extractions
+            5
         } else {
-            10 // 10ms for long extractions
+            10
         }
     }
 
@@ -201,7 +201,6 @@ impl FrameworkAdapter for NativeAdapter {
     }
 
     async fn extract_batch(&self, file_paths: &[&Path], timeout: Duration) -> Result<Vec<BenchmarkResult>> {
-        // Calculate total file size for adaptive sampling interval
         let total_file_size: u64 = file_paths
             .iter()
             .filter_map(|path| std::fs::metadata(path).ok())

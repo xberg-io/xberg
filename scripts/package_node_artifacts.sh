@@ -5,7 +5,6 @@ TARGET="${TARGET:?TARGET environment variable must be set}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Verify that the build has already produced .node artifacts
 ARTIFACT_DIR="$ROOT/crates/kreuzberg-node/artifacts"
 if [[ ! -d "$ARTIFACT_DIR" ]]; then
 	echo "ERROR: Artifacts directory not found at $ARTIFACT_DIR" >&2
@@ -25,7 +24,6 @@ echo "Found ${#NODE_FILES[@]} .node file(s) in $ARTIFACT_DIR"
 
 pushd "$ROOT" >/dev/null
 
-# Run napi artifacts to organize the built .node files into platform packages
 pnpm --filter @kreuzberg/node exec napi artifacts --output-dir ./artifacts
 
 if [[ ! -d crates/kreuzberg-node/npm ]]; then
@@ -33,7 +31,6 @@ if [[ ! -d crates/kreuzberg-node/npm ]]; then
 	exit 1
 fi
 
-# Create tarball for distribution
 tar -czf "node-bindings-${TARGET}.tar.gz" -C crates/kreuzberg-node npm
 echo "Created node-bindings-${TARGET}.tar.gz"
 

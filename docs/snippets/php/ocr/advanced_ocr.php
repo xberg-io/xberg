@@ -18,13 +18,12 @@ use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\TesseractConfig;
 use Kreuzberg\Config\ImagePreprocessingConfig;
 
-// OCR with table detection
 $config = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
-            psm: 6,  // Assume uniform block of text
+            psm: 6,  
             enableTableDetection: true
         )
     )
@@ -42,14 +41,13 @@ foreach ($result->tables as $index => $table) {
     echo $table->markdown . "\n\n";
 }
 
-// OCR for invoices and forms (numeric focus)
 $invoiceConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
             psm: 6,
-            tesseditCharWhitelist: '0123456789.,€$£¥-/'  // Only numbers and currency
+            tesseditCharWhitelist: '0123456789.,€$£¥-/'  
         )
     )
 );
@@ -61,20 +59,19 @@ echo "Invoice OCR (numbers only):\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n\n";
 
-// OCR with image preprocessing for better quality
 $preprocessedConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         imagePreprocessing: new ImagePreprocessingConfig(
-            targetDpi: 300,      // Increase DPI for better recognition
-            denoise: true,       // Remove noise
-            sharpen: true,       // Sharpen text edges
-            autoRotate: true,    // Correct rotation
-            deskew: true        // Straighten skewed scans
+            targetDpi: 300,      
+            denoise: true,       
+            sharpen: true,       
+            autoRotate: true,    
+            deskew: true        
         ),
         tesseractConfig: new TesseractConfig(
-            psm: 3  // Fully automatic page segmentation
+            psm: 3  
         )
     )
 );
@@ -87,7 +84,6 @@ echo str_repeat('=', 60) . "\n";
 echo "Extracted " . strlen($result->content) . " characters\n";
 echo "Preview: " . substr($result->content, 0, 200) . "...\n\n";
 
-// Different PSM (Page Segmentation Mode) examples
 $psmModes = [
     0 => 'Orientation and script detection (OSD) only',
     1 => 'Automatic page segmentation with OSD',
@@ -129,13 +125,12 @@ if (file_exists($testFile)) {
     }
 }
 
-// OCR for single-column documents
 $singleColumnConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
-            psm: 4  // Single column
+            psm: 4  
         ),
         imagePreprocessing: new ImagePreprocessingConfig(
             targetDpi: 300,
@@ -150,13 +145,12 @@ $result = $kreuzberg->extractFile('book_scan.pdf');
 echo "Single-column OCR:\n";
 echo $result->content . "\n\n";
 
-// OCR for sparse text (receipts, labels)
 $sparseConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
-            psm: 11  // Sparse text
+            psm: 11  
         ),
         imagePreprocessing: new ImagePreprocessingConfig(
             targetDpi: 300,
@@ -173,7 +167,6 @@ echo "Sparse text OCR (receipt):\n";
 echo str_repeat('=', 60) . "\n";
 echo $result->content . "\n\n";
 
-// High-accuracy OCR for critical documents
 $highAccuracyConfig = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -183,7 +176,7 @@ $highAccuracyConfig = new ExtractionConfig(
             enableTableDetection: true
         ),
         imagePreprocessing: new ImagePreprocessingConfig(
-            targetDpi: 400,      // Very high DPI
+            targetDpi: 400,      
             denoise: true,
             sharpen: true,
             autoRotate: true,

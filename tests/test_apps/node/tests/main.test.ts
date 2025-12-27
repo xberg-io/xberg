@@ -3,7 +3,6 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-	// Core extraction functions
 	extractFile,
 	extractFileSync,
 	extractBytes,
@@ -12,14 +11,11 @@ import {
 	batchExtractFilesSync,
 	batchExtractBytes,
 	batchExtractBytesSync,
-	// Configuration
 	ExtractionConfig,
-	// MIME type functions
 	detectMimeType,
 	detectMimeTypeFromPath,
 	validateMimeType,
 	getExtensionsForMime,
-	// Plugin registry functions
 	registerPostProcessor,
 	unregisterPostProcessor,
 	clearPostProcessors,
@@ -35,7 +31,6 @@ import {
 	listDocumentExtractors,
 	unregisterDocumentExtractor,
 	clearDocumentExtractors,
-	// Error handling
 	KreuzbergError,
 	ValidationError,
 	ParsingError,
@@ -50,12 +45,9 @@ import {
 	getErrorCodeName,
 	getErrorCodeDescription,
 	classifyError,
-	// Embeddings and utils
 	listEmbeddingPresets,
 	getEmbeddingPreset,
-	// Version
 	__version__,
-	// Type exports
 	type ExtractionResult,
 	type Chunk,
 	type ExtractedImage,
@@ -79,10 +71,6 @@ import {
 } from "@kreuzberg/node";
 
 describe("Kreuzberg TypeScript/Node.js Bindings", () => {
-	// =========================================================================
-	// VERSION & PACKAGE INFO
-	// =========================================================================
-
 	describe("Version Info", () => {
 		it("should export version constant", () => {
 			expect(__version__).toBeDefined();
@@ -90,10 +78,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 			expect(__version__).toMatch(/^\d+\.\d+\.\d+/);
 		});
 	});
-
-	// =========================================================================
-	// MIME TYPE FUNCTIONS
-	// =========================================================================
 
 	describe("MIME Type Detection & Validation", () => {
 		let testFile: string;
@@ -138,10 +122,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 			expect(extensions.includes("docx")).toBe(true);
 		});
 	});
-
-	// =========================================================================
-	// EXTRACTION CONFIGURATION
-	// =========================================================================
 
 	describe("ExtractionConfig Builder", () => {
 		it("should create default extraction config", () => {
@@ -217,22 +197,16 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 		});
 	});
 
-	// =========================================================================
-	// EXTRACTION FUNCTIONS - SINGLE DOCUMENT
-	// =========================================================================
-
 	describe("Single Document Extraction", () => {
 		let testPdfFile: string;
 		let testTxtFile: string;
 		let testPdfBuffer: Buffer;
 
 		beforeAll(() => {
-			// Create test PDF
 			testPdfBuffer = Buffer.from("%PDF-1.4\n%EOF");
 			testPdfFile = join(tmpdir(), "test-document.pdf");
 			writeFileSync(testPdfFile, testPdfBuffer);
 
-			// Create test text file
 			testTxtFile = join(tmpdir(), "test-document.txt");
 			writeFileSync(testTxtFile, Buffer.from("Hello, World!"));
 		});
@@ -286,17 +260,12 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 		});
 	});
 
-	// =========================================================================
-	// BATCH EXTRACTION FUNCTIONS
-	// =========================================================================
-
 	describe("Batch Document Extraction", () => {
 		const testFiles: string[] = [];
 		const testBuffers: Buffer[] = [];
 		const testMimeTypes: string[] = [];
 
 		beforeAll(() => {
-			// Create multiple test files
 			for (let i = 0; i < 3; i++) {
 				const filePath = join(tmpdir(), `batch-test-${i}.txt`);
 				const content = Buffer.from(`Test document ${i}\n`);
@@ -362,10 +331,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 		});
 	});
 
-	// =========================================================================
-	// POST-PROCESSOR PLUGIN REGISTRY
-	// =========================================================================
-
 	describe("Post-Processor Plugin Registry", () => {
 		const mockProcessor: PostProcessorProtocol = {
 			name: "test-processor",
@@ -410,10 +375,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 		});
 	});
 
-	// =========================================================================
-	// VALIDATOR PLUGIN REGISTRY
-	// =========================================================================
-
 	describe("Validator Plugin Registry", () => {
 		const mockValidator: ValidatorProtocol = {
 			name: "test-validator",
@@ -453,10 +414,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 			expect(() => unregisterValidator("non-existent-validator")).not.toThrow();
 		});
 	});
-
-	// =========================================================================
-	// OCR BACKEND PLUGIN REGISTRY
-	// =========================================================================
 
 	describe("OCR Backend Plugin Registry", () => {
 		const mockOcrBackend: OcrBackendProtocol = {
@@ -498,29 +455,19 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 		});
 	});
 
-	// =========================================================================
-	// DOCUMENT EXTRACTOR REGISTRY
-	// =========================================================================
-
 	describe("Document Extractor Registry", () => {
 		it("should list document extractors", () => {
 			const extractors = listDocumentExtractors();
 			expect(Array.isArray(extractors)).toBe(true);
-			// Should have at least some built-in extractors
 			expect(extractors.length).toBeGreaterThanOrEqual(0);
 		});
 
 		it("should handle clearing document extractors", () => {
 			clearDocumentExtractors();
-			// Should not throw
 			const extractors = listDocumentExtractors();
 			expect(Array.isArray(extractors)).toBe(true);
 		});
 	});
-
-	// =========================================================================
-	// EMBEDDING PRESETS
-	// =========================================================================
 
 	describe("Embedding Presets", () => {
 		it("should list embedding presets", () => {
@@ -543,10 +490,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 			expect(preset).toBeNull();
 		});
 	});
-
-	// =========================================================================
-	// ERROR HANDLING & CLASSIFICATION
-	// =========================================================================
 
 	describe("Error Handling & Classification", () => {
 		it("should have defined error codes", () => {
@@ -577,16 +520,11 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 
 		it("should get last panic context", () => {
 			const context = getLastPanicContext();
-			// Can be null or object
 			if (context !== null) {
 				expect(typeof context).toBe("object");
 			}
 		});
 	});
-
-	// =========================================================================
-	// ERROR EXCEPTION CLASSES
-	// =========================================================================
 
 	describe("Error Exception Classes", () => {
 		it("should have KreuzbergError", () => {
@@ -639,14 +577,8 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 		});
 	});
 
-	// =========================================================================
-	// TYPE EXPORTS VALIDATION
-	// =========================================================================
-
 	describe("Type System Validation", () => {
 		it("should have ExtractionResult type", () => {
-			// Type validation happens at compile time
-			// This test just ensures the type is importable
 			const result: ExtractionResult = {
 				content: "test",
 				mimeType: "text/plain",
@@ -765,10 +697,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 		});
 	});
 
-	// =========================================================================
-	// PROTOCOL/INTERFACE VALIDATION
-	// =========================================================================
-
 	describe("Plugin Protocol Validation", () => {
 		it("should satisfy PostProcessorProtocol", () => {
 			const processor: PostProcessorProtocol = {
@@ -802,10 +730,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings", () => {
 	});
 });
 
-// =========================================================================
-// HELPER FUNCTIONS
-// =========================================================================
-
 function validateExtractionResult(result: unknown): void {
 	expect(result).toBeDefined();
 	expect(typeof result).toBe("object");
@@ -813,7 +737,6 @@ function validateExtractionResult(result: unknown): void {
 	if (typeof result === "object" && result !== null) {
 		const r = result as Record<string, unknown>;
 
-		// Check for expected properties
 		if (r.content !== undefined) {
 			expect(typeof r.content).toMatch(/^(string|object)$/);
 		}

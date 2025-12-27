@@ -4,11 +4,7 @@ require 'spec_helper'
 require 'json'
 require 'tempfile'
 
-# Comprehensive tests for Kreuzberg metadata types
-# Tests verify T::Struct behavior, type safety, and integration with extraction
 RSpec.describe 'Kreuzberg Metadata Types' do
-  # ============================================================================
-  # Type Structure Tests
   # ============================================================================
 
   describe 'HtmlMetadata structure' do
@@ -196,10 +192,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
     end
   end
 
-  # ============================================================================
-  # T::Struct Behavior Tests
-  # ============================================================================
-
   describe 'HeaderMetadata creation' do
     it 'creates HeaderMetadata with all fields' do
       header = Kreuzberg::HeaderMetadata.new(
@@ -322,7 +314,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
       expect(structured.data_type).to eq('json-ld')
       expect(structured.raw_json).to eq(json_data)
       expect(structured.schema_type).to eq('Article')
-      # Verify JSON is valid
       parsed = JSON.parse(structured.raw_json)
       expect(parsed['@type']).to eq('Article')
     end
@@ -340,10 +331,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
     end
   end
 
-  # ============================================================================
-  # Integration Tests
-  # ============================================================================
-
   describe 'extract_html returns metadata' do
     it 'extracts HTML and returns proper metadata structure' do
       html_file = create_test_html_file(
@@ -355,7 +342,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
         expect(result).to be_a(Kreuzberg::Result)
         expect(result.metadata).not_to be_nil
 
-        # Metadata can be a hash or HtmlMetadata instance
         expect([Hash, Kreuzberg::HtmlMetadata]).to include(result.metadata.class)
       ensure
         FileUtils.rm_f(html_file)
@@ -508,10 +494,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
     end
   end
 
-  # ============================================================================
-  # Edge Cases
-  # ============================================================================
-
   describe 'metadata edge cases' do
     it 'returns defaults for empty HTML' do
       html_file = create_test_html_file('<html><body></body></html>')
@@ -530,7 +512,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
           expect(metadata.images).to be_a(Array)
           expect(metadata.structured_data).to be_a(Array)
         elsif metadata.is_a?(Hash)
-          # Verify default collections are present
           expect(metadata['keywords'] || []).to be_a(Array)
           expect(metadata['open_graph'] || {}).to be_a(Hash)
           expect(metadata['twitter_card'] || {}).to be_a(Hash)
@@ -619,10 +600,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
     end
   end
 
-  # ============================================================================
-  # Sorbet Type Safety
-  # ============================================================================
-
   describe 'Sorbet type safety' do
     it 'enables runtime type checking' do
       metadata = Kreuzberg::HtmlMetadata.new(
@@ -682,14 +659,9 @@ RSpec.describe 'Kreuzberg Metadata Types' do
         structured_data: []
       )
 
-      # Attempting to assign should raise an error
       expect { metadata.title = 'Modified' }.to raise_error(NoMethodError)
     end
   end
-
-  # ============================================================================
-  # Complex Structure Tests
-  # ============================================================================
 
   describe 'complex metadata structures' do
     it 'handles headers with multiple levels' do
@@ -965,7 +937,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
         structured_data: structured
       )
 
-      # Verify all fields
       expect(metadata.title).to eq('Complete Test Page')
       expect(metadata.description).to eq('A complete test page with all metadata')
       expect(metadata.author).to eq('Test Author')
@@ -986,28 +957,19 @@ RSpec.describe 'Kreuzberg Metadata Types' do
     # rubocop:enable RSpec/ExampleLength
   end
 
-  # ============================================================================
-  # Critical Tests: Integration, Edge Cases, Error Handling, Thread Safety
-  # ============================================================================
-
   describe 'Integration Test: Extract actual HTML file' do
     it 'extracts metadata from actual HTML file' do
-      # Use real test document from test_documents directory
       html_file = test_document_path('web/html.html')
 
-      # Verify file exists
       expect(File.exist?(html_file)).to be(true)
 
-      # Extract and validate metadata
       result = Kreuzberg.extract_file_sync(html_file)
       expect(result).to be_a(Kreuzberg::Result)
       expect(result.metadata).not_to be_nil
 
       metadata = result.metadata
 
-      # Validate metadata type and structure
       if metadata.is_a?(Kreuzberg::HtmlMetadata)
-        # Verify basic fields exist
         expect(metadata).to respond_to(:title)
         expect(metadata).to respond_to(:description)
         expect(metadata).to respond_to(:keywords)
@@ -1015,7 +977,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
         expect(metadata).to respond_to(:links)
         expect(metadata).to respond_to(:images)
 
-        # Verify collections are proper types
         expect(metadata.keywords).to be_a(Array)
         expect(metadata.headers).to be_a(Array)
         expect(metadata.links).to be_a(Array)
@@ -1023,7 +984,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
         expect(metadata.open_graph).to be_a(Hash)
         expect(metadata.twitter_card).to be_a(Hash)
 
-        # Verify real data was extracted (headers should exist in html.html)
         expect(metadata.headers).not_to be_empty
       elsif metadata.is_a?(Hash)
         expect(metadata['keywords']).to be_a(Array) if metadata['keywords']
@@ -1036,7 +996,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
 
   describe 'Edge Case: Malformed HTML' do
     it 'handles malformed HTML gracefully' do
-      # HTML with unclosed tags, broken structure
       malformed_html = <<~HTML
         <html>
         <head>
@@ -1059,7 +1018,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
       html_file = create_test_html_file(malformed_html)
 
       begin
-        # Should not raise an error, should handle gracefully
         expect do
           result = Kreuzberg.extract_file_sync(html_file)
           expect(result).to be_a(Kreuzberg::Result)
@@ -1069,7 +1027,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
         result = Kreuzberg.extract_file_sync(html_file)
         metadata = result.metadata
 
-        # Verify structure is valid even with malformed input
         if metadata.is_a?(Kreuzberg::HtmlMetadata)
           expect(metadata.keywords).to be_a(Array)
           expect(metadata.headers).to be_a(Array)
@@ -1084,7 +1041,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
 
   describe 'Edge Case: Special Characters in Metadata' do
     it 'handles special characters in metadata' do
-      # HTML with Unicode, emojis, HTML entities, and special characters
       special_chars_html = <<~HTML
         <html>
         <head>
@@ -1113,7 +1069,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
 
         metadata = result.metadata
         if metadata.is_a?(Kreuzberg::HtmlMetadata)
-          # Verify special characters are preserved
           expect(metadata.title).not_to be_nil
           expect(metadata.title).to include('🚀')
 
@@ -1123,19 +1078,15 @@ RSpec.describe 'Kreuzberg Metadata Types' do
           expect(metadata.author).not_to be_nil
           expect(metadata.author).to include('编者')
 
-          # Verify keywords with special chars
           expect(metadata.keywords).to be_a(Array)
           expect(metadata.keywords.any? { |k| k.include?('中文') }).to be(true)
 
-          # Verify headers with emojis
           expect(metadata.headers).not_to be_empty
           expect(metadata.headers[0].text).to include('🎯')
 
-          # Verify links and images with special chars
           expect(metadata.links).not_to be_empty
           expect(metadata.images).not_to be_empty
         elsif metadata.is_a?(Hash)
-          # At minimum, metadata should be extracted without errors
           expect(metadata['title']).not_to be_nil if metadata['title']
         end
       ensure
@@ -1146,7 +1097,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
 
   describe 'Error Handling: Invalid Input' do
     it 'handles invalid input gracefully' do
-      # Test 1: Empty HTML file
       empty_html = ''
       empty_file = create_test_html_file(empty_html)
       begin
@@ -1158,7 +1108,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
         FileUtils.rm_f(empty_file)
       end
 
-      # Test 2: Minimal HTML
       minimal_html = '<html></html>'
       minimal_file = create_test_html_file(minimal_html)
       begin
@@ -1175,7 +1124,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
         FileUtils.rm_f(minimal_file)
       end
 
-      # Test 3: Very large HTML file (10MB+ of repeated content)
       large_html = "<html><body>\n"
       1000.times do |i|
         large_html += "<h#{(i % 6) + 1}>Header #{i}</h#{(i % 6) + 1}>\n"
@@ -1191,11 +1139,9 @@ RSpec.describe 'Kreuzberg Metadata Types' do
           expect(result).to be_a(Kreuzberg::Result)
           metadata = result.metadata
 
-          # Verify large file is processed correctly
           if metadata.is_a?(Kreuzberg::HtmlMetadata)
             expect(metadata.headers).to be_a(Array)
             expect(metadata.links).to be_a(Array)
-            # Should have extracted many headers and links
             expect(metadata.headers.length).to be > 100
             expect(metadata.links.length).to be > 100
           end
@@ -1208,7 +1154,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
 
   describe 'Thread Safety: Concurrent Extraction' do
     it 'handles concurrent extraction safely' do
-      # Create multiple test HTML files
       test_files = []
       results = []
       errors = []
@@ -1233,7 +1178,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
       end
 
       begin
-        # Create threads to extract concurrently
         threads = test_files.map do |file|
           Thread.new do
             result = Kreuzberg.extract_file_sync(file)
@@ -1243,13 +1187,10 @@ RSpec.describe 'Kreuzberg Metadata Types' do
           end
         end
 
-        # Wait for all threads to complete
         threads.each(&:join)
 
-        # Verify no errors occurred
         expect(errors).to be_empty
 
-        # Verify all results were extracted correctly
         expect(results.length).to eq(5)
         results.each do |result|
           expect(result).to be_a(Kreuzberg::Result)
@@ -1266,7 +1207,6 @@ RSpec.describe 'Kreuzberg Metadata Types' do
           expect(metadata.images).to be_a(Array)
         end
 
-        # Verify data independence: each result should have unique content
         titles = results.map { |r| r.metadata.is_a?(Kreuzberg::HtmlMetadata) ? r.metadata.title : r.metadata['title'] }
         expect(titles.uniq.length).to eq(5)
       ensure

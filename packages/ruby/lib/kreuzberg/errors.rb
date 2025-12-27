@@ -3,7 +3,6 @@
 require 'json'
 
 module Kreuzberg
-  # Error code constants matching kreuzberg-ffi error codes
   ERROR_CODE_SUCCESS = 0
   ERROR_CODE_GENERIC = 1
   ERROR_CODE_PANIC = 2
@@ -14,7 +13,6 @@ module Kreuzberg
   ERROR_CODE_MISSING_DEPENDENCY = 7
 
   module Errors
-    # Panic context information from FFI error introspection
     class PanicContext
       attr_reader :file, :line, :function, :message, :timestamp_secs
 

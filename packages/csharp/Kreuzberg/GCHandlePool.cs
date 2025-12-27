@@ -56,7 +56,6 @@ public sealed class GCHandlePool
             throw new ArgumentNullException(nameof(target));
         }
 
-        // Try to reuse a pooled handle
         if (Pool.TryTake(out var handle))
         {
             System.Threading.Interlocked.Decrement(ref PooledCount);
@@ -64,7 +63,6 @@ public sealed class GCHandlePool
             return handle;
         }
 
-        // No pooled handles available; allocate a new one
         return GCHandle.Alloc(target, GCHandleType.Pinned);
     }
 
@@ -77,21 +75,17 @@ public sealed class GCHandlePool
     {
         if (!handle.IsAllocated)
         {
-            // Handle was already freed; silently ignore
             return;
         }
 
-        // Check if we have room in the pool
         if (PooledCount < MaxPoolSize)
         {
-            // Clear the target to allow GC to collect the pinned object when returned to pool
             handle.Target = null;
             Pool.Add(handle);
             System.Threading.Interlocked.Increment(ref PooledCount);
         }
         else
         {
-            // Pool is full; free the handle immediately
             handle.Free();
         }
     }

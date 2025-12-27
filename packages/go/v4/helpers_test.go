@@ -9,7 +9,6 @@ import (
 // createTestPDF creates a minimal valid PDF file for testing.
 // Returns the path to the created file.
 func createTestPDF(t *testing.T) string {
-	// Minimal valid PDF content
 	pdfContent := `%PDF-1.4
 1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj
@@ -30,14 +29,12 @@ startxref
 %%EOF
 `
 
-	// Create temporary file
 	tmpFile, err := os.CreateTemp("", "test-*.pdf")
 	if err != nil {
 		t.Fatalf("failed to create temp PDF file: %v", err)
 	}
 	defer tmpFile.Close()
 
-	// Write minimal PDF content
 	if _, err := tmpFile.WriteString(pdfContent); err != nil {
 		t.Fatalf("failed to write PDF content: %v", err)
 	}
@@ -47,7 +44,6 @@ startxref
 
 // generateTestPDFBytes generates minimal valid PDF bytes for testing.
 func generateTestPDFBytes(t *testing.T) []byte {
-	// Minimal valid PDF content
 	pdfContent := `%PDF-1.4
 1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj

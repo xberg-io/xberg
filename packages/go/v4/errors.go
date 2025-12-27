@@ -270,7 +270,6 @@ func classifyNativeError(message string, code ErrorCode, panicCtx *PanicContext)
 		trimmed = "unknown error"
 	}
 
-	// Route to appropriate error type based on FFI error code
 	switch code {
 	case ErrorCodeValidation:
 		return newValidationErrorWithContext(trimmed, nil, code, panicCtx)
@@ -279,30 +278,25 @@ func classifyNativeError(message string, code ErrorCode, panicCtx *PanicContext)
 	case ErrorCodeOcr:
 		return newOCRErrorWithContext(trimmed, nil, code, panicCtx)
 	case ErrorCodeMissingDependency:
-		// Extract dependency name from message if available
 		dependency := extractDependencyName(trimmed)
 		return newMissingDependencyErrorWithContext(dependency, trimmed, nil, code, panicCtx)
 	case ErrorCodeIo:
 		return newIOErrorWithContext(trimmed, nil, code, panicCtx)
 	case ErrorCodePlugin:
-		// Extract plugin name from message if available
 		plugin := extractPluginName(trimmed)
 		return newPluginErrorWithContext(plugin, trimmed, nil, code, panicCtx)
 	case ErrorCodeUnsupportedFormat:
-		// Extract format name from message if available
 		format := extractFormatName(trimmed)
 		return newUnsupportedFormatErrorWithContext(format, trimmed, nil, code, panicCtx)
 	case ErrorCodeInternal:
 		return newRuntimeErrorWithContext(trimmed, nil, code, panicCtx)
 	default:
-		// Fallback for unknown codes
 		return newRuntimeErrorWithContext(trimmed, nil, code, panicCtx)
 	}
 }
 
 // extractDependencyName extracts the dependency name from an error message.
 func extractDependencyName(message string) string {
-	// Try to extract dependency name from message patterns like "Missing dependency: tesseract"
 	if idx := strings.Index(message, ":"); idx != -1 {
 		return strings.TrimSpace(message[idx+1:])
 	}
@@ -311,7 +305,6 @@ func extractDependencyName(message string) string {
 
 // extractPluginName extracts the plugin name from an error message.
 func extractPluginName(message string) string {
-	// Try to extract plugin name from message patterns like "Plugin error in 'custom'"
 	start := strings.Index(message, "'")
 	if start == -1 {
 		return ""
@@ -326,7 +319,6 @@ func extractPluginName(message string) string {
 
 // extractFormatName extracts the format name from an error message.
 func extractFormatName(message string) string {
-	// Try to extract format name from message patterns like "Unsupported format: docx"
 	if idx := strings.Index(message, ":"); idx != -1 {
 		return strings.TrimSpace(message[idx+1:])
 	}

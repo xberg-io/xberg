@@ -109,7 +109,6 @@ async function batchExtractParallel(
 
 	console.log(`Processing ${documents.length} documents in parallel (concurrency: ${concurrency})...`);
 
-	// Process in batches to limit concurrency
 	for (let i = 0; i < documents.length; i += concurrency) {
 		const batch = documents.slice(i, i + concurrency);
 		const promises = batch.map((doc) =>
@@ -171,14 +170,12 @@ function printResults(results: BatchResult, label: string) {
  * Main example function
  */
 async function main() {
-	// Initialize the WASM module
 	await init();
 
 	console.log("=".repeat(60));
 	console.log("Kreuzberg WASM Batch Processing Examples");
 	console.log("=".repeat(60));
 
-	// Example 1: Sequential batch processing
 	console.log("\n--- Example 1: Sequential Batch Processing ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -211,7 +208,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 2: Parallel batch processing
 	console.log("\n--- Example 2: Parallel Batch Processing ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -249,7 +245,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 3: Batch with configuration
 	console.log("\n--- Example 3: Batch with Configuration ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -284,18 +279,17 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 4: Error handling
 	console.log("\n--- Example 4: Error Handling ---");
 	try {
 		const documents = [
 			{
 				filename: "valid.pdf",
-				data: new Uint8Array([0x25, 0x50, 0x44, 0x46]), // PDF header
+				data: new Uint8Array([0x25, 0x50, 0x44, 0x46]),
 				mimeType: "application/pdf",
 			},
 			{
 				filename: "invalid.pdf",
-				data: new Uint8Array([0xff, 0xff, 0xff, 0xff]), // Invalid data
+				data: new Uint8Array([0xff, 0xff, 0xff, 0xff]),
 				mimeType: "application/pdf",
 			},
 		];
@@ -309,7 +303,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 5: Performance comparison
 	console.log("\n--- Example 5: Performance Comparison ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -338,7 +331,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 6: Mixed document types
 	console.log("\n--- Example 6: Mixed Document Types ---");
 	console.log("Example batch processing with different document types:");
 	const documentTypes = [
@@ -360,7 +352,6 @@ async function main() {
 	console.log("=".repeat(60));
 }
 
-// Run main function
 main().catch((error) => {
 	console.error("Fatal error:", error);
 	Deno.exit(1);

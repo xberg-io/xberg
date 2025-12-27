@@ -1668,7 +1668,6 @@ jobs:
             exit 1
           fi
 
-      # Note: dotnet restore is handled by task csharp:build:release
       - name: Build C# bindings
         run: task csharp:build:release
 
@@ -1754,7 +1753,6 @@ jobs:
           platform-id: ${{ matrix.pdfium_platform }}
           arch-id: ${{ matrix.pdfium_arch }}
 
-      # ONNX Runtime removed - users provide their own
 
       - name: Stage PDFium runtime
         uses: ./.github/actions/stage-pdfium-runtime

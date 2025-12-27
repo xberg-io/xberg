@@ -188,7 +188,6 @@ fn validate_utf8_boundaries(text: &str, boundaries: &[PageBoundary]) -> Result<(
 
     let text_len = text.len();
 
-    // Choose validation strategy based on boundary count
     if boundaries.len() <= ADAPTIVE_VALIDATION_THRESHOLD {
         validate_utf8_boundaries_fast_path(text, boundaries, text_len)
     } else {
@@ -214,7 +213,6 @@ fn validate_utf8_boundaries(text: &str, boundaries: &[PageBoundary]) -> Result<(
 /// Returns `KreuzbergError::Validation` if any boundary is invalid.
 fn validate_utf8_boundaries_fast_path(text: &str, boundaries: &[PageBoundary], text_len: usize) -> Result<()> {
     for (idx, boundary) in boundaries.iter().enumerate() {
-        // Check bounds first
         if boundary.byte_start > text_len {
             return Err(KreuzbergError::validation(format!(
                 "Page boundary {} has byte_start={} which exceeds text length {}",
@@ -229,7 +227,6 @@ fn validate_utf8_boundaries_fast_path(text: &str, boundaries: &[PageBoundary], t
             )));
         }
 
-        // Check UTF-8 boundaries using native is_char_boundary()
         if boundary.byte_start > 0 && boundary.byte_start < text_len && !text.is_char_boundary(boundary.byte_start) {
             return Err(KreuzbergError::validation(format!(
                 "Page boundary {} has byte_start={} which is not a valid UTF-8 character boundary (text length={}). This may indicate corrupted multibyte characters (emoji, CJK, etc.)",
@@ -268,7 +265,6 @@ fn validate_utf8_boundaries_batch_path(text: &str, boundaries: &[PageBoundary], 
     let valid_boundaries = precompute_utf8_boundaries(text);
 
     for (idx, boundary) in boundaries.iter().enumerate() {
-        // Check bounds first
         if boundary.byte_start > text_len {
             return Err(KreuzbergError::validation(format!(
                 "Page boundary {} has byte_start={} which exceeds text length {}",
@@ -283,7 +279,6 @@ fn validate_utf8_boundaries_batch_path(text: &str, boundaries: &[PageBoundary], 
             )));
         }
 
-        // Check UTF-8 boundaries using precomputed BitVec
         if boundary.byte_start > 0 && boundary.byte_start <= text_len && !valid_boundaries[boundary.byte_start] {
             return Err(KreuzbergError::validation(format!(
                 "Page boundary {} has byte_start={} which is not a valid UTF-8 character boundary (text length={}). This may indicate corrupted multibyte characters (emoji, CJK, etc.)",
@@ -2104,7 +2099,6 @@ mod tests {
         };
         let text = "Hello 👋 World 🌍 End";
 
-        // Small boundary set (3 boundaries) should use fast path
         let boundaries = vec![
             PageBoundary {
                 byte_start: 0,
@@ -2140,7 +2134,6 @@ mod tests {
         let text = "Test text ".repeat(50);
         let text_len = text.len();
 
-        // Create exactly ADAPTIVE_VALIDATION_THRESHOLD boundaries
         let mut boundaries = vec![];
         let step = text_len / ADAPTIVE_VALIDATION_THRESHOLD;
 
@@ -2190,7 +2183,6 @@ mod tests {
         let text = "Lorem ipsum dolor sit amet ".repeat(100);
         let text_len = text.len();
 
-        // Create 50 boundaries (uses batch path)
         let mut boundaries = vec![];
         let boundary_count = 50;
         let step = text_len / boundary_count;
@@ -2269,7 +2261,6 @@ mod tests {
         ];
 
         let result = chunk_text(&text, &config, Some(&boundaries));
-        // May fail on invalid UTF-8 boundaries, but should not panic
         let _ = result;
     }
 }

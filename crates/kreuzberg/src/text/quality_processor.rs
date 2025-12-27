@@ -58,8 +58,6 @@ impl Plugin for QualityProcessor {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl PostProcessor for QualityProcessor {
     async fn process(&self, result: &mut ExtractionResult, _config: &ExtractionConfig) -> Result<()> {
-        // Calculate quality score - calculate_quality_score handles metadata directly
-        // without requiring string conversion, avoiding unnecessary allocations
         let quality_score = if should_use_metadata(&result.metadata) {
             crate::text::quality::calculate_quality_score(&result.content, Some(&result.metadata.additional))
         } else {
@@ -86,7 +84,6 @@ impl PostProcessor for QualityProcessor {
 
     fn estimated_duration_ms(&self, result: &ExtractionResult) -> u64 {
         let text_length = result.content.len();
-        // Quality processing is relatively fast: ~1ms per 100KB
         (text_length / 102400).max(1) as u64
     }
 }
@@ -154,8 +151,6 @@ mod tests {
             pages: None,
         };
 
-        // When disabled, the processor should not run, so no quality_score should be added
-        // (because should_process returns false)
         processor.process(&mut result, &config).await.unwrap();
     }
 

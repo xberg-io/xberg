@@ -36,7 +36,6 @@ public static class TestHelpers
             dir = Directory.GetParent(candidate)?.FullName;
         }
 
-        // Fallback to legacy two-levels-up resolution
         var cwd = Directory.GetCurrentDirectory();
         return Path.GetFullPath(Path.Combine(cwd, "..", ".."));
     }

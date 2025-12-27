@@ -14,18 +14,14 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Kreuzberg\Kreuzberg;
 
-// Create a new Kreuzberg instance
 $kreuzberg = new Kreuzberg();
 
-// Extract content from a PDF file
 $result = $kreuzberg->extractFile('document.pdf');
 
-// Access the extracted content
 echo "Extracted Content:\n";
 echo "==================\n";
 echo $result->content . "\n\n";
 
-// Access metadata
 echo "Metadata:\n";
 echo "=========\n";
 echo "Title: " . ($result->metadata->title ?? 'N/A') . "\n";
@@ -33,7 +29,6 @@ echo "Authors: " . (isset($result->metadata->authors) ? implode(', ', $result->m
 echo "Pages: " . ($result->metadata->pageCount ?? 'N/A') . "\n";
 echo "Format: " . $result->mimeType . "\n\n";
 
-// Access extracted tables
 if (count($result->tables) > 0) {
     echo "Tables Found: " . count($result->tables) . "\n";
     foreach ($result->tables as $index => $table) {

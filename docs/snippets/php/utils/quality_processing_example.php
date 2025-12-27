@@ -15,7 +15,6 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Kreuzberg\Kreuzberg;
 use Kreuzberg\Config\ExtractionConfig;
 
-// Enable quality processing
 $config = new ExtractionConfig(
     enableQualityProcessing: true
 );
@@ -28,14 +27,12 @@ echo str_repeat('=', 60) . "\n";
 echo "Document: scanned_document.pdf\n";
 echo "Content length: " . strlen($result->content) . " characters\n\n";
 
-// Check quality score
 $qualityScore = $result->metadata['quality_score'] ?? null;
 
 if ($qualityScore !== null) {
     echo "Quality Score: " . number_format($qualityScore, 2) . "\n";
     echo "Rating: ";
 
-    // Provide quality rating
     if ($qualityScore >= 0.8) {
         echo "Excellent\n";
         echo "Status: ✓ Ready for production use\n";
@@ -52,7 +49,6 @@ if ($qualityScore !== null) {
 
     echo "\n";
 
-    // Provide recommendations for low quality
     if ($qualityScore < 0.5) {
         echo "Recommendations for Improvement:\n";
         echo str_repeat('-', 40) . "\n";
@@ -70,7 +66,6 @@ if ($qualityScore !== null) {
     echo "Enable quality processing in configuration.\n\n";
 }
 
-// Additional quality indicators
 if (isset($result->metadata['ocr_confidence'])) {
     $ocrConfidence = $result->metadata['ocr_confidence'];
     echo "OCR Confidence: " . number_format($ocrConfidence * 100, 1) . "%\n\n";
@@ -81,7 +76,6 @@ if (isset($result->metadata['ocr_confidence'])) {
     }
 }
 
-// Quality metrics breakdown
 if (isset($result->metadata['quality_metrics'])) {
     echo "Detailed Quality Metrics:\n";
     echo str_repeat('-', 40) . "\n";
@@ -99,7 +93,6 @@ if (isset($result->metadata['quality_metrics'])) {
     echo "\n";
 }
 
-// Process multiple documents and compare quality
 $documents = [
     'high_quality_scan.pdf',
     'medium_quality_scan.pdf',
@@ -135,7 +128,6 @@ foreach ($documents as $document) {
     echo "  Quality score: " . number_format($score, 2) . "\n";
     echo "  Content length: " . strlen($result->content) . " chars\n";
 
-    // Quality indicator
     $indicator = match(true) {
         $score >= 0.8 => '✓ Excellent',
         $score >= 0.6 => '✓ Good',
@@ -146,7 +138,6 @@ foreach ($documents as $document) {
     echo "  Status: $indicator\n\n";
 }
 
-// Calculate statistics
 if (!empty($qualityResults)) {
     $scores = array_column($qualityResults, 'score');
     $avgScore = array_sum($scores) / count($scores);
@@ -159,7 +150,6 @@ if (!empty($qualityResults)) {
     echo "  Highest: " . number_format($maxScore, 2) . "\n";
     echo "  Lowest:  " . number_format($minScore, 2) . "\n\n";
 
-    // Identify documents needing attention
     $lowQualityDocs = array_filter(
         $qualityResults,
         fn($result) => $result['score'] < 0.5
@@ -177,14 +167,11 @@ if (!empty($qualityResults)) {
     }
 }
 
-// Helper function to determine if re-processing is needed
 function needsReprocessing(float $qualityScore, int $contentLength): bool
 {
-    // Low quality score or suspiciously short content
     return $qualityScore < 0.5 || $contentLength < 100;
 }
 
-// Quality-based workflow routing
 function routeDocumentByQuality(string $filePath, float $qualityScore): string
 {
     return match(true) {
@@ -195,7 +182,6 @@ function routeDocumentByQuality(string $filePath, float $qualityScore): string
     };
 }
 
-// Route documents based on quality
 echo "Document Routing Based on Quality:\n";
 echo str_repeat('=', 60) . "\n";
 

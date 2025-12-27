@@ -2,8 +2,6 @@ using Kreuzberg;
 using System.Text.Json;
 
 // NOTE: IDocumentExtractor interface is not available in C# bindings
-// Custom extractors can only be registered in Rust core
-// This example shows how to manually process JSON and wrap in ExtractionResult
 
 class CustomJsonProcessor
 {
@@ -58,7 +56,6 @@ class Program
                 @"{""name"": ""John"", ""age"": 30}"
             );
 
-            // Process manually since custom extractors aren't supported in C# bindings
             var result = CustomJsonProcessor.ProcessJson(jsonBytes, "application/json");
 
             Console.WriteLine($"Extracted: {result.Content}");

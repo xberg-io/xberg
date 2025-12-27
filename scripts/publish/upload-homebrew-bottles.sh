@@ -1,17 +1,5 @@
 #!/usr/bin/env bash
 
-# Upload Homebrew bottles to GitHub Release
-#
-# Uploads all Homebrew bottle artifacts to the specified release.
-# Uses gh release upload with --clobber for idempotent uploads.
-#
-# Environment Variables:
-#   - GH_TOKEN: GitHub API token (required for gh command)
-#
-# Arguments:
-#   $1: Release tag (e.g., v4.0.0-rc.1)
-#   $2: Directory containing bottle artifacts (default: dist/homebrew)
-
 set -euo pipefail
 
 tag="${1:?Release tag argument required}"

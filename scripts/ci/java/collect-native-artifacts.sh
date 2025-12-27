@@ -12,21 +12,18 @@ windows-x86_64)
 	if [ -f target/release/pdfium.dll ]; then
 		cp -f target/release/pdfium.dll "$out/"
 	fi
-	# ONNX Runtime removed - users provide their own
 	;;
 macos-x86_64 | macos-arm64)
 	cp -f target/release/libkreuzberg_ffi.dylib "$out/"
 	if [ -f target/release/libpdfium.dylib ]; then
 		cp -f target/release/libpdfium.dylib "$out/"
 	fi
-	# ONNX Runtime removed - users provide their own
 	;;
 linux-x86_64)
 	cp -f target/release/libkreuzberg_ffi.so "$out/"
 	if [ -f target/release/libpdfium.so ]; then
 		cp -f target/release/libpdfium.so "$out/"
 	fi
-	# ONNX Runtime removed - users provide their own
 	;;
 *)
 	echo "Unsupported rid: $rid" >&2

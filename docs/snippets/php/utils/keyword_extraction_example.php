@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\KeywordConfig;
 use Kreuzberg\Enums\KeywordAlgorithm;
 
-// Configure keyword extraction with YAKE algorithm
 $config = new ExtractionConfig(
     keywords: new KeywordConfig(
         algorithm: KeywordAlgorithm::YAKE,
@@ -34,7 +33,6 @@ echo str_repeat('=', 60) . "\n";
 echo "Document: research_paper.pdf\n";
 echo "Content length: " . strlen($result->content) . " characters\n\n";
 
-// Extract and display keywords
 $keywords = $result->metadata['keywords'] ?? [];
 
 if (!empty($keywords)) {
@@ -59,7 +57,6 @@ if (!empty($keywords)) {
     echo "No keywords extracted. Try adjusting minScore or maxKeywords.\n\n";
 }
 
-// Extract keywords with different algorithms
 $algorithms = [
     'YAKE' => KeywordAlgorithm::YAKE,
     'TextRank' => KeywordAlgorithm::TEXT_RANK,
@@ -96,7 +93,6 @@ foreach ($algorithms as $name => $algorithm) {
     echo "\n";
 }
 
-// Advanced: Keyword-based document categorization
 function categorizeDocument(array $keywords): string
 {
     $categories = [
@@ -128,13 +124,11 @@ function categorizeDocument(array $keywords): string
     return $topCategory ?? 'uncategorized';
 }
 
-// Categorize document based on keywords
 if (!empty($keywords)) {
     $category = categorizeDocument($keywords);
     echo "Document Category: " . ucfirst($category) . "\n\n";
 }
 
-// Extract keywords from multiple documents
 $documents = [
     'tech_article.pdf',
     'business_report.pdf',
@@ -179,7 +173,6 @@ foreach ($documents as $document) {
     echo "\n";
 }
 
-// Create keyword index for search
 $keywordIndex = [];
 
 foreach ($documents as $document) {

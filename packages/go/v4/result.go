@@ -15,7 +15,6 @@ import "C"
 // Returns -1 if there is an error (check the error return value).
 // This method provides efficient access to page count metadata without JSON parsing.
 func (r *ExtractionResult) GetPageCount() (int, error) {
-	// Use the Go data available in the struct
 	if r.Metadata.PageStructure != nil {
 		return int(r.Metadata.PageStructure.TotalCount), nil
 	}
@@ -37,12 +36,10 @@ func (r *ExtractionResult) GetChunkCount() (int, error) {
 // Returns an empty string if no language was detected.
 // This method provides efficient access to language detection without JSON parsing.
 func (r *ExtractionResult) GetDetectedLanguage() (string, error) {
-	// Try metadata.language first
 	if r.Metadata.Language != nil {
 		return *r.Metadata.Language, nil
 	}
 
-	// Try the first detected language
 	if len(r.DetectedLanguages) > 0 {
 		return r.DetectedLanguages[0], nil
 	}
@@ -52,11 +49,8 @@ func (r *ExtractionResult) GetDetectedLanguage() (string, error) {
 
 // MetadataField represents a metadata field with its value and existence status.
 type MetadataField struct {
-	// Name is the field name that was requested.
-	Name string
-	// Value is the parsed field value as a Go interface{}.
-	Value interface{}
-	// IsNull indicates whether the field exists (false) or is null/missing (true).
+	Name   string
+	Value  interface{}
 	IsNull bool
 }
 
@@ -69,7 +63,6 @@ func (r *ExtractionResult) GetMetadataField(fieldName string) (*MetadataField, e
 		return nil, newValidationErrorWithContext("field name cannot be empty", nil, ErrorCodeValidation, nil)
 	}
 
-	// Parse the metadata JSON to extract the field
 	metadataJSON, err := json.Marshal(r.Metadata)
 	if err != nil {
 		return nil, newSerializationErrorWithContext("failed to encode metadata", err, ErrorCodeValidation, nil)
@@ -80,7 +73,6 @@ func (r *ExtractionResult) GetMetadataField(fieldName string) (*MetadataField, e
 		return nil, newSerializationErrorWithContext("failed to parse metadata", err, ErrorCodeValidation, nil)
 	}
 
-	// Handle simple field access (no nesting for now)
 	value, exists := metadataMap[fieldName]
 	if !exists {
 		return &MetadataField{
@@ -90,7 +82,6 @@ func (r *ExtractionResult) GetMetadataField(fieldName string) (*MetadataField, e
 		}, nil
 	}
 
-	// Check if value is nil
 	if value == nil {
 		return &MetadataField{
 			Name:   fieldName,

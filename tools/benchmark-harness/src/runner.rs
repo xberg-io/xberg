@@ -219,7 +219,6 @@ impl BenchmarkRunner {
     ) -> Result<BenchmarkResult> {
         let mut all_results = Vec::new();
 
-        // Estimate task duration from first warmup iteration for adaptive profiling
         let estimated_task_duration_ms = if config.profiling.enabled {
             let warmup_start = std::time::Instant::now();
             let warmup_result = adapter.extract(file_path, config.timeout).await?;
@@ -229,12 +228,10 @@ impl BenchmarkRunner {
             config.profiling.task_duration_ms
         };
 
-        // Calculate adaptive sampling frequency based on task duration
         #[cfg(feature = "profiling")]
         let sampling_frequency =
             crate::config::ProfilingConfig::calculate_optimal_frequency(estimated_task_duration_ms);
 
-        // Initialize profiler with adaptive frequency if profiling is enabled
         #[cfg(feature = "profiling")]
         let profiler = if should_profile() && config.profiling.enabled {
             match ProfileGuard::new(sampling_frequency) {
@@ -254,15 +251,12 @@ impl BenchmarkRunner {
             None
         };
 
-        // Run warmup iterations if needed and not already completed for profiling
         let warmup_start = if config.profiling.enabled { 1 } else { 0 };
         for _iteration in warmup_start..config.warmup_iterations {
             let result = adapter.extract(file_path, config.timeout).await?;
-            // Warmup iterations are discarded
             drop(result);
         }
 
-        // Run benchmark iterations with optional task amplification
         let amplification_factor = if config.profiling.enabled {
             calculate_amplified_iterations(estimated_task_duration_ms, 1000)
         } else {
@@ -270,14 +264,12 @@ impl BenchmarkRunner {
         };
 
         for _iteration in 0..config.benchmark_iterations {
-            // Run amplified iterations for profiling
             for _amp in 0..amplification_factor {
                 let result = adapter.extract(file_path, config.timeout).await?;
                 all_results.push(result);
             }
         }
 
-        // Finish profiling if enabled and configured
         #[cfg(feature = "profiling")]
         if let Some(profiler) = profiler {
             let framework_name = adapter.name();
@@ -300,7 +292,6 @@ impl BenchmarkRunner {
                         result.sample_count, result.duration
                     );
 
-                    // Check if sample count meets threshold
                     if result.sample_count < config.profiling.sample_count_threshold {
                         eprintln!(
                             "Warning: Low sample count ({} < {} threshold); profile may have high variance",
@@ -308,18 +299,15 @@ impl BenchmarkRunner {
                         );
                     }
 
-                    // Generate flamegraph if enabled in config
                     if config.profiling.flamegraph_enabled {
                         let path = Path::new(&flamegraph_path);
                         if let Err(e) = result.generate_flamegraph(path) {
                             eprintln!("Warning: Failed to generate flamegraph: {}", e);
                         }
 
-                        // Generate profiling report
                         let profile_report = ProfileReport::from_profiling_result(&result, framework_name);
                         let html_report = profile_report.generate_html();
 
-                        // Write HTML report
                         let report_file_path = Path::new(&report_path);
                         if let Some(parent) = report_file_path.parent()
                             && !parent.as_os_str().is_empty()
@@ -698,26 +686,15 @@ mod tests {
 
     #[test]
     fn test_profiling_config_optimal_frequency() {
-        // Quick tasks: highest frequency (clamped to max 500 Hz)
-        // For 50ms: (500 * 1000) / 50 = 10000 → clamped to 500
         assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(50), 500);
-        // For 99ms: (500 * 1000) / 99 = 5050 → clamped to 500
         assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(99), 500);
 
-        // Medium-fast tasks: still at max frequency
-        // For 500ms: (500 * 1000) / 500 = 1000 → clamped to 500
         assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(500), 500);
 
-        // At exactly 1000ms, we get the max frequency without clamping
-        // For 1000ms: (500 * 1000) / 1000 = 500
         assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(1000), 500);
 
-        // Longer tasks: lower frequency
-        // For 5000ms: (500 * 1000) / 5000 = 100
         assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(5000), 100);
 
-        // Very long tasks: still at minimum 100 Hz
-        // For 10000ms: (500 * 1000) / 10000 = 50 → clamped to 100
         assert_eq!(crate::ProfilingConfig::calculate_optimal_frequency(10000), 100);
     }
 
@@ -725,28 +702,23 @@ mod tests {
     fn test_profiling_config_validation() {
         let mut config = crate::ProfilingConfig::default();
 
-        // Valid config should pass
         assert!(config.validate().is_ok());
 
-        // Invalid sampling frequency
         config.sampling_frequency = 50;
         assert!(config.validate().is_err());
 
         config.sampling_frequency = 20000;
         assert!(config.validate().is_err());
 
-        // Valid frequency again
         config.sampling_frequency = 1000;
         assert!(config.validate().is_ok());
 
-        // Invalid batch size
         config.batch_size = 0;
         assert!(config.validate().is_err());
 
         config.batch_size = 10;
         assert!(config.validate().is_ok());
 
-        // Invalid sample count threshold
         config.sample_count_threshold = 0;
         assert!(config.validate().is_err());
 

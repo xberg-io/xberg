@@ -6,7 +6,6 @@ use std::sync::Arc;
 use crate::pdf::metadata::PdfMetadata;
 
 // ============================================================================
-// Serde module for Arc<T> transparent serialization
 // ============================================================================
 
 /// Module providing transparent serde support for Arc<T>.
@@ -139,9 +138,6 @@ mod serde_vec_arc {
         Ok(vec.into_iter().map(Arc::new).collect())
     }
 }
-
-// ============================================================================
-// ============================================================================
 
 /// General extraction result used by the core extraction API.
 ///
@@ -723,7 +719,6 @@ impl HtmlMetadata {
     }
 }
 
-// Conversion from html-to-markdown-rs ExtendedMetadata
 #[cfg(feature = "html")]
 impl From<html_to_markdown_rs::ExtendedMetadata> for HtmlMetadata {
     fn from(metadata: html_to_markdown_rs::ExtendedMetadata) -> Self {
@@ -1441,10 +1436,6 @@ mod tests {
 
         assert_eq!(json.get("quality_score").unwrap(), 1.0);
     }
-
-    // ========================================================================
-    // Arc serialization tests
-    // ========================================================================
 
     #[test]
     fn test_arc_table_serialization_format() {

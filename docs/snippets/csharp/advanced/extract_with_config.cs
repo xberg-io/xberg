@@ -6,14 +6,12 @@ class Program
     {
         try
         {
-            // Create comprehensive extraction configuration
             var config = new ExtractionConfig
             {
                 UseCache = true,
                 EnableQualityProcessing = true,
                 ForceOcr = false,
 
-                // OCR configuration
                 Ocr = new OcrConfig
                 {
                     Backend = "tesseract",
@@ -34,14 +32,12 @@ class Program
                     }
                 },
 
-                // PDF configuration
                 PdfOptions = new PdfConfig
                 {
                     ExtractImages = true,
                     ExtractMetadata = true
                 },
 
-                // Image extraction
                 Images = new ImageExtractionConfig
                 {
                     ExtractImages = true,
@@ -49,7 +45,6 @@ class Program
                     MaxImageDimension = 4096
                 },
 
-                // Chunking
                 Chunking = new ChunkingConfig
                 {
                     MaxChars = 1000,
@@ -57,14 +52,12 @@ class Program
                     Preset = "default"
                 },
 
-                // Token reduction
                 TokenReduction = new TokenReductionConfig
                 {
                     Mode = "moderate",
                     PreserveImportantWords = true
                 },
 
-                // Language detection
                 LanguageDetection = new LanguageDetectionConfig
                 {
                     Enabled = true,
@@ -72,14 +65,12 @@ class Program
                     DetectMultiple = false
                 },
 
-                // Post-processing
                 Postprocessor = new PostProcessorConfig
                 {
                     Enabled = true
                 }
             };
 
-            // Extract with configuration
             var result = await KreuzbergClient.ExtractFileAsync(
                 "document.pdf",
                 config

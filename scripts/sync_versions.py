@@ -89,7 +89,6 @@ def update_pyproject_toml(file_path: Path, version: str) -> Tuple[bool, str, str
     old_version = match.group(1) if match else "NOT FOUND"
 
     if old_version != version:
-        # Update project version
         content = re.sub(
             r'^(version\s*=\s*)"[^"]+"',
             rf'\1"{version}"',
@@ -98,8 +97,6 @@ def update_pyproject_toml(file_path: Path, version: str) -> Tuple[bool, str, str
             flags=re.MULTILINE
         )
 
-    # Also update kreuzberg dependency version if present
-    # Python dependencies should not have dots before rc (e.g., 4.0.0rc19 not 4.0.0rc.19)
     dep_version = version.replace("rc.", "rc")
     dep_pattern = r'(kreuzberg\s*==\s*")([^"]+)(")'
     dep_match = re.search(dep_pattern, content)
@@ -149,7 +146,6 @@ def update_cargo_toml(file_path: Path, version: str) -> Tuple[bool, str, str]:
     old_version = match.group(1) if match else "NOT FOUND"
 
     if old_version != version:
-        # Update package version
         content = re.sub(
             r'^(version\s*=\s*)"[^"]+"',
             rf'\1"{version}"',
@@ -158,7 +154,6 @@ def update_cargo_toml(file_path: Path, version: str) -> Tuple[bool, str, str]:
             flags=re.MULTILINE
         )
 
-    # Also update kreuzberg dependency version if present
     dep_pattern = r'(kreuzberg\s*=\s*")([^"]+)(")'
     dep_match = re.search(dep_pattern, content)
     if dep_match and dep_match.group(2) != version:
@@ -179,9 +174,6 @@ def update_go_mod(file_path: Path, version: str) -> Tuple[bool, str, str]:
     """
     content = file_path.read_text()
 
-    # Look for kreuzberg module dependencies
-    # Pattern: github.com/kreuzberg-dev/kreuzberg[/path] vX.Y.Z[-prerelease]
-    # Updated pattern to support pre-release versions with dashes
     pattern = r'(github\.com/kreuzberg-dev/kreuzberg(?:/[^\s]+)?\s+)v([0-9]+\.[0-9]+\.[0-9]+(?:-[^\s]+)?)'
     match = re.search(pattern, content)
     old_version = match.group(2) if match else "NOT FOUND"
@@ -189,7 +181,6 @@ def update_go_mod(file_path: Path, version: str) -> Tuple[bool, str, str]:
     if old_version == version:
         return False, old_version, version
 
-    # Only update if there are kreuzberg dependencies
     if not re.search(pattern, content):
         return False, "NOT FOUND", version
 
@@ -257,7 +248,6 @@ def update_pom_xml(file_path: Path, version: str) -> Tuple[bool, str, str]:
     """
     content = file_path.read_text()
 
-    # Pattern to match kreuzberg dependency version
     pattern = r'(<artifactId>kreuzberg</artifactId>\s*<version>)([^<]+)(</version>)'
     match = re.search(pattern, content, re.DOTALL)
     old_version = match.group(2) if match else "NOT FOUND"
@@ -287,7 +277,6 @@ def update_csproj(file_path: Path, version: str) -> Tuple[bool, str, str]:
     """
     content = file_path.read_text()
 
-    # Pattern to match Kreuzberg package reference
     pattern = r'(<PackageReference Include="Kreuzberg" Version=")([^"]+)(" />)'
     match = re.search(pattern, content)
     old_version = match.group(2) if match else "NOT FOUND"
@@ -316,7 +305,6 @@ def update_gemfile(file_path: Path, version: str) -> Tuple[bool, str, str]:
     """
     content = file_path.read_text()
 
-    # Pattern to match: gem 'kreuzberg', 'VERSION'
     pattern = r"(gem\s+['\"]kreuzberg['\"]\s*,\s*['\"])([^'\"]+)(['\"])"
     match = re.search(pattern, content)
     old_version = match.group(2) if match else "NOT FOUND"
@@ -557,7 +545,6 @@ def main():
                 else:
                     unchanged_files.append(str(rel_path))
 
-    # Sync Go modules
     for go_mod in repo_root.rglob("go.mod"):
         if "target" in go_mod.parts or "vendor" in go_mod.parts:
             continue
@@ -571,45 +558,36 @@ def main():
         elif old_ver != "NOT FOUND":
             unchanged_files.append(str(rel_path))
 
-    # Sync test_apps manifests
     print()
     test_apps_manifests = [
-        # Python test app
         (
             repo_root / "tests/test_apps/python/pyproject.toml",
             lambda p, v: update_pyproject_toml(p, normalize_python_version(v))
         ),
-        # Node test app
         (
             repo_root / "tests/test_apps/node/package.json",
             lambda p, v: update_package_json(p, v)
         ),
-        # WASM test app
         (
             repo_root / "tests/test_apps/wasm/package.json",
             lambda p, v: update_package_json(p, v)
         ),
-        # Ruby test app
         (
             repo_root / "tests/test_apps/ruby/Gemfile",
             lambda p, v: update_gemfile(p, v)
         ),
-        # Go test app
         (
             repo_root / "tests/test_apps/go/go.mod",
             lambda p, v: update_go_mod(p, v)
         ),
-        # Java test app
         (
             repo_root / "tests/test_apps/java/pom.xml",
             lambda p, v: update_pom_xml(p, v)
         ),
-        # C# test app
         (
             repo_root / "tests/test_apps/csharp/KreuzbergSmokeTest.csproj",
             lambda p, v: update_csproj(p, v)
         ),
-        # Rust test app
         (
             repo_root / "tests/test_apps/rust/Cargo.toml",
             lambda p, v: update_cargo_toml(p, v)

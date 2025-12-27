@@ -20,7 +20,6 @@ fn create_test_result(content_size: usize, chunk_count: usize) -> ExtractionResu
     };
     metadata.pages = Some(page_structure);
 
-    // Generate realistic content
     let content = format!(
         "{}{}{}",
         "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ",
@@ -28,7 +27,6 @@ fn create_test_result(content_size: usize, chunk_count: usize) -> ExtractionResu
         "Final sentence."
     );
 
-    // Generate chunks
     let chunks = if chunk_count > 0 {
         let chunk_size = content.len() / chunk_count;
         Some(
@@ -105,7 +103,6 @@ fn bench_copy_based_approach(c: &mut Criterion) {
             let result = create_test_result(size, 10);
 
             b.iter(|| {
-                // Simulate copy-based approach: allocate CStrings
                 let content_cstr = CString::new(result.content.as_str()).unwrap();
                 let mime_cstr = CString::new(result.mime_type.as_str()).unwrap();
                 let language_cstr = result
@@ -119,13 +116,10 @@ fn bench_copy_based_approach(c: &mut Criterion) {
                     .as_ref()
                     .map(|s| CString::new(s.as_str()).unwrap());
 
-                // Black box to prevent optimization
                 black_box(content_cstr);
                 black_box(mime_cstr);
                 black_box(language_cstr);
                 black_box(title_cstr);
-
-                // Strings are automatically freed when they go out of scope
             });
         });
     }

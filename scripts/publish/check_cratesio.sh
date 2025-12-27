@@ -1,16 +1,5 @@
 #!/usr/bin/env bash
-#
-# Check if Rust crates exist on crates.io
-#
-# Arguments:
 #   $1: Package version (required)
-#
-# Environment variables:
-#   - GITHUB_OUTPUT: Path to GitHub Actions output file
-#
-# Usage:
-#   ./check_cratesio.sh "1.0.0"
-#
 
 set -euo pipefail
 

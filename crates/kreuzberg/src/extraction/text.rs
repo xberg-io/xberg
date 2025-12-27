@@ -39,7 +39,6 @@ static CODE_BLOCK_DELIMITER: Lazy<Regex> = Lazy::new(|| {
 });
 
 pub fn parse_text(text_bytes: &[u8], is_markdown: bool) -> Result<TextExtractionResult> {
-    // Use Cow to avoid copy when UTF-8 validation passes
     let text: std::borrow::Cow<'_, str> = match utf8_validation::from_utf8(text_bytes) {
         Ok(s) => std::borrow::Cow::Borrowed(s),
         Err(_) => std::borrow::Cow::Owned(String::from_utf8_lossy(text_bytes).into_owned()),
@@ -49,21 +48,15 @@ pub fn parse_text(text_bytes: &[u8], is_markdown: bool) -> Result<TextExtraction
     let mut word_count = 0;
     let character_count = text.len();
 
-    // Pre-allocate with capacity hints based on input size
-    // Markdown typically has 5-10% of bytes as headers
     let estimated_headers_capacity = text.len().saturating_div(20).max(16);
-    // Links typically 5% of lines
     let estimated_links_capacity = text.lines().count().saturating_div(20).max(4);
-    // Code blocks rarely more than 20-30 per document
     let estimated_code_blocks_capacity = 8;
 
     let mut headers = Vec::with_capacity(estimated_headers_capacity);
     let mut links = Vec::with_capacity(estimated_links_capacity);
     let mut code_blocks = Vec::with_capacity(estimated_code_blocks_capacity);
     let mut in_code_block = false;
-    // Code language tags typically 5-20 bytes
     let mut current_code_lang = String::with_capacity(16);
-    // Current code accumulates multiple lines; heuristic: 50 bytes avg per line
     let mut current_code = String::with_capacity(128);
 
     for line in text.lines() {
@@ -80,7 +73,6 @@ pub fn parse_text(text_bytes: &[u8], is_markdown: bool) -> Result<TextExtraction
                     if current_code_lang.is_empty() {
                         "plain".to_string()
                     } else {
-                        // Move string instead of clone
                         std::mem::take(&mut current_code_lang)
                     },
                     current_code.trim_end().to_string(),
@@ -90,7 +82,6 @@ pub fn parse_text(text_bytes: &[u8], is_markdown: bool) -> Result<TextExtraction
                 in_code_block = false;
             } else {
                 if let Some(caps) = CODE_BLOCK_DELIMITER.captures(line) {
-                    // Use cow to avoid copy when match is captured
                     current_code_lang = caps.get(1).map(|m| m.as_str()).unwrap_or("").to_string();
                 }
                 in_code_block = true;

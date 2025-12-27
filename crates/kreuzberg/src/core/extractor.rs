@@ -367,9 +367,6 @@ pub async fn batch_extract_file(
 
     let config = Arc::new(config.clone());
 
-    // Conservative concurrency multiplier (1.5x instead of 2.0x) to reduce contention
-    // on external libraries (pdfium, tesseract) which have their own internal threading.
-    // Users can override via config.max_concurrent_extractions if needed.
     let max_concurrent = config
         .max_concurrent_extractions
         .unwrap_or_else(|| (num_cpus::get() as f64 * 1.5).ceil() as usize);
@@ -471,9 +468,6 @@ pub async fn batch_extract_bytes(
     let batch_config = config.clone();
     let config = Arc::new(batch_config);
 
-    // Conservative concurrency multiplier (1.5x instead of 2.0x) to reduce contention
-    // on external libraries (pdfium, tesseract) which have their own internal threading.
-    // Users can override via config.max_concurrent_extractions if needed.
     let max_concurrent = config
         .max_concurrent_extractions
         .unwrap_or_else(|| (num_cpus::get() as f64 * 1.5).ceil() as usize);
@@ -678,7 +672,6 @@ fn extract_bytes_sync_impl(
 
     let config = config.unwrap_or_default();
 
-    // Validate MIME type if provided
     let validated_mime = if let Some(mime) = mime_type {
         mime::validate_mime_type(&mime)?
     } else {
@@ -688,13 +681,10 @@ fn extract_bytes_sync_impl(
         });
     };
 
-    // Ensure extractors are initialized
     crate::extractors::ensure_initialized()?;
 
-    // Get the appropriate extractor
     let extractor = get_extractor(&validated_mime)?;
 
-    // Check if extractor supports synchronous extraction
     let sync_extractor = extractor.as_sync_extractor().ok_or_else(|| {
         KreuzbergError::UnsupportedFormat(format!(
             "Extractor for '{}' does not support synchronous extraction",
@@ -702,10 +692,8 @@ fn extract_bytes_sync_impl(
         ))
     })?;
 
-    // Call the sync extract method
     let mut result = sync_extractor.extract_sync(&content, &validated_mime, &config)?;
 
-    // Run post-processing pipeline (sync version)
     result = crate::core::pipeline::run_pipeline_sync(result, &config)?;
 
     Ok(result)

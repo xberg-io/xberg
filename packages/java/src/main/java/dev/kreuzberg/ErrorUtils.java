@@ -136,9 +136,6 @@ public final class ErrorUtils {
                 return result;
             }
 
-            // Parse the error details from the native structure
-            // This would require mapping the C struct to Java objects
-            // For now, return the message as a basic fallback
             String errorMsg = KreuzbergFFI.readCString(detailsPtr);
             if (errorMsg != null) {
                 result.put("message", errorMsg);

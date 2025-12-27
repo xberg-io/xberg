@@ -424,7 +424,6 @@ if pdf_path.exists():
 
     runner.test("ExtractionResult.pages iteration works", lambda: (list(result_with_pages.pages or []), True)[1])
 
-    # Test result metadata structure
     runner.test(
         "ExtractionResult.metadata contains extraction_duration",
         lambda: "extraction_duration_ms" in result.metadata
@@ -432,7 +431,6 @@ if pdf_path.exists():
         or len(result.metadata) >= 0,
     )
 
-    # Test tables structure
     if len(result.tables) > 0:
         runner.test(
             "ExtractionResult.tables contains ExtractedTable instances",
@@ -784,10 +782,7 @@ runner.test("File not found raises appropriate error", test_file_not_found)
 
 def test_invalid_chunking():
     try:
-        # Try with invalid params but don't fail on extraction - just config creation
         ExtractionConfig(chunking=ChunkingConfig(max_chars=100, max_overlap=200))
-        # If we get here, the validation didn't fail at config creation time
-        # Try validation function instead
         is_valid = validate_chunking_params(100, 200)
         return not is_valid
     except Exception as e:

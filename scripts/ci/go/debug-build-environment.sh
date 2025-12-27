@@ -1,23 +1,16 @@
 #!/usr/bin/env bash
-# Comprehensive build environment diagnostics for Go CI
-# Helps debug Rust FFI builds and Go cgo compilation issues
-#
-# Usage: scripts/ci/go/debug-build-environment.sh
-# Output: Prints detailed environment information for troubleshooting
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 
-# Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Utility function to print section headers
 print_section() {
 	echo ""
 	echo -e "${BLUE}========================================${NC}"
@@ -26,7 +19,6 @@ print_section() {
 	echo ""
 }
 
-# Utility function to print status
 print_status() {
 	local status="$1"
 	local message="$2"
@@ -48,7 +40,6 @@ print_status() {
 
 print_section "Go CI Build Environment Diagnostics"
 
-# 1. System Information
 print_section "System Information"
 print_status INFO "OS: $(uname -s)"
 print_status INFO "Architecture: $(uname -m)"
@@ -62,7 +53,6 @@ else
 fi
 echo ""
 
-# 2. Tool Versions
 print_section "Tool Versions"
 print_status INFO "Rust:"
 rustc --version || print_status WARN "rustc not found"
@@ -75,7 +65,6 @@ print_status INFO "pkg-config:"
 pkg-config --version 2>&1 || print_status WARN "pkg-config not found"
 echo ""
 
-# 3. Cargo Configuration
 print_section "Cargo Configuration"
 print_status INFO "Cargo.toml location: $REPO_ROOT/Cargo.toml"
 if [ -f "$REPO_ROOT/Cargo.toml" ]; then
@@ -87,7 +76,6 @@ else
 fi
 echo ""
 
-# 4. Build Targets and Output Directories
 print_section "Build Targets and Output Directories"
 print_status INFO "Default target:"
 rustc --version --verbose | grep host || print_status WARN "Could not determine default target"
@@ -118,7 +106,6 @@ else
 fi
 echo ""
 
-# 5. Environment Variables
 print_section "Environment Variables - Rust Build"
 print_status INFO "RUSTFLAGS: ${RUSTFLAGS:-<not set>}"
 print_status INFO "RUSTC_WRAPPER: ${RUSTC_WRAPPER:-<not set>}"
@@ -145,7 +132,6 @@ print_status INFO "DYLD_FALLBACK_LIBRARY_PATH: ${DYLD_FALLBACK_LIBRARY_PATH:-<no
 print_status INFO "PATH (first 500 chars): ${PATH:0:500}..."
 echo ""
 
-# 6. Windows-Specific Information
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
 	print_section "Windows Build Environment"
 	print_status INFO "MSYS2 Installation:"
@@ -190,7 +176,6 @@ if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; t
 fi
 echo ""
 
-# 7. FFI Library Configuration
 print_section "FFI Library Configuration"
 print_status INFO "FFI source directory: $REPO_ROOT/crates/kreuzberg-ffi"
 if [ -d "$REPO_ROOT/crates/kreuzberg-ffi" ]; then
@@ -216,7 +201,6 @@ else
 fi
 echo ""
 
-# 8. Go Module Configuration
 print_section "Go Module Configuration"
 print_status INFO "Go module location: $REPO_ROOT/packages/go/v4"
 if [ -f "$REPO_ROOT/packages/go/v4/go.mod" ]; then
@@ -233,7 +217,6 @@ if [ -d "$REPO_ROOT/packages/go/v4" ]; then
 fi
 echo ""
 
-# 9. Dependency Status
 print_section "Dependency Status"
 print_status INFO "Checking PDFium..."
 if [ -n "${KREUZBERG_PDFIUM_PREBUILT:-}" ] && [ -d "$KREUZBERG_PDFIUM_PREBUILT" ]; then
@@ -260,7 +243,6 @@ else
 fi
 echo ""
 
-# 10. Timing Information
 print_section "Timing Information"
 START_TIME=$(date +%s)
 print_status INFO "Script execution started at: $(date)"

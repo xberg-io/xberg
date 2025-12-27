@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DOCS_DIR="$SCRIPT_DIR/../test_documents"
@@ -12,7 +11,6 @@ TEST_DOCS_DIR="$SCRIPT_DIR/../test_documents"
 echo "===== Kreuzberg CLI Extraction Test ====="
 echo
 
-# Check if kreuzberg is available
 if ! command -v kreuzberg &>/dev/null; then
 	echo -e "${RED}✗ kreuzberg not found. Run ./tests/install.sh first.${NC}"
 	exit 1
@@ -21,7 +19,6 @@ fi
 PASSED=0
 FAILED=0
 
-# Test PDF extraction
 echo "Testing PDF extraction..."
 if kreuzberg extract "$TEST_DOCS_DIR/tiny.pdf" >/dev/null 2>&1; then
 	echo -e "${GREEN}✓ PDF extraction successful${NC}"
@@ -31,7 +28,6 @@ else
 	((FAILED++))
 fi
 
-# Test DOCX extraction
 echo "Testing DOCX extraction..."
 if kreuzberg extract "$TEST_DOCS_DIR/lorem_ipsum.docx" >/dev/null 2>&1; then
 	echo -e "${GREEN}✓ DOCX extraction successful${NC}"
@@ -41,7 +37,6 @@ else
 	((FAILED++))
 fi
 
-# Test XLSX extraction
 echo "Testing XLSX extraction..."
 if kreuzberg extract "$TEST_DOCS_DIR/stanley_cups.xlsx" >/dev/null 2>&1; then
 	echo -e "${GREEN}✓ XLSX extraction successful${NC}"
@@ -51,7 +46,6 @@ else
 	((FAILED++))
 fi
 
-# Test JSON output format
 echo "Testing JSON output format..."
 if kreuzberg extract "$TEST_DOCS_DIR/tiny.pdf" --format json >/dev/null 2>&1; then
 	echo -e "${GREEN}✓ JSON format successful${NC}"
@@ -61,7 +55,6 @@ else
 	((FAILED++))
 fi
 
-# Test markdown output format
 echo "Testing markdown output format..."
 if kreuzberg extract "$TEST_DOCS_DIR/tiny.pdf" --format markdown >/dev/null 2>&1; then
 	echo -e "${GREEN}✓ Markdown format successful${NC}"
@@ -71,7 +64,6 @@ else
 	((FAILED++))
 fi
 
-# Test error handling - non-existent file
 echo "Testing error handling (non-existent file)..."
 if ! kreuzberg extract "/nonexistent/file.pdf" >/dev/null 2>&1; then
 	echo -e "${GREEN}✓ Error handling successful${NC}"
@@ -81,7 +73,6 @@ else
 	((FAILED++))
 fi
 
-# Test version flag
 echo "Testing --version flag..."
 if kreuzberg --version >/dev/null 2>&1; then
 	echo -e "${GREEN}✓ Version flag successful${NC}"
@@ -91,7 +82,6 @@ else
 	((FAILED++))
 fi
 
-# Test help flag
 echo "Testing --help flag..."
 if kreuzberg --help >/dev/null 2>&1; then
 	echo -e "${GREEN}✓ Help flag successful${NC}"

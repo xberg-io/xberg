@@ -7,7 +7,6 @@ using Kreuzberg;
 
 var rootCommand = new RootCommand("Kreuzberg document extraction CLI");
 
-// extract-file command
 var extractFileCommand = new Command("extract-file", "Extract text from a document file");
 var filePath = new Argument<string>("path", "Path to the document file");
 var outputFormat = new Option<string>(

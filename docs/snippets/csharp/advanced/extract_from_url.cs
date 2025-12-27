@@ -9,11 +9,9 @@ class Program
 
         try
         {
-            // Download document from URL
             var url = "https://example.com/document.pdf";
             var documentBytes = await httpClient.GetByteArrayAsync(url);
 
-            // Extract from downloaded content
             var result = await KreuzbergClient.ExtractBytesAsync(
                 documentBytes,
                 "application/pdf"
@@ -21,7 +19,6 @@ class Program
 
             Console.WriteLine($"Extracted from URL: {result.Content.Length} chars");
 
-            // Extract with configuration
             var config = new ExtractionConfig
             {
                 EnableQualityProcessing = true
@@ -35,7 +32,6 @@ class Program
 
             Console.WriteLine($"Quality score: {result2.Metadata["quality_score"]}");
 
-            // Batch download and extract
             var urls = new[]
             {
                 "https://example.com/doc1.pdf",

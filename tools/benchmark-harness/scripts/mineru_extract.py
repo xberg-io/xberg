@@ -23,7 +23,6 @@ def extract_sync(file_path: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmpdir:
         output_dir = Path(tmpdir) / "output"
 
-        # Run mineru CLI
         result = subprocess.run(
             ["mineru", "-p", file_path, "-o", str(output_dir)],
             capture_output=True,
@@ -34,12 +33,10 @@ def extract_sync(file_path: str) -> dict[str, Any]:
         if result.returncode != 0:
             raise RuntimeError(f"MinerU extraction failed: {result.stderr}")
 
-        # Find markdown output (MinerU creates .md files)
         md_files = list(output_dir.rglob("*.md"))
         if not md_files:
             raise RuntimeError("No markdown output found from MinerU")
 
-        # Read first markdown file found
         markdown = md_files[0].read_text(encoding="utf-8")
 
     duration_ms = (time.perf_counter() - start) * 1000.0

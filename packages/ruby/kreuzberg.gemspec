@@ -4,7 +4,6 @@ require_relative 'lib/kreuzberg/version'
 
 repo_root = File.expand_path('../..', __dir__)
 
-# Include files from packages/ruby
 ruby_prefix = 'packages/ruby/'
 ruby_cmd = %(git -C "#{repo_root}" ls-files -z #{ruby_prefix})
 ruby_files =
@@ -12,7 +11,6 @@ ruby_files =
                .select { |path| path.start_with?(ruby_prefix) }
                .map { |path| path.delete_prefix(ruby_prefix) }
 
-# Include the kreuzberg core crate (needed for path patch in Cargo.toml)
 core_prefix = 'crates/kreuzberg/'
 core_cmd = %(git -C "#{repo_root}" ls-files -z #{core_prefix})
 core_files =
@@ -21,7 +19,6 @@ core_files =
                .map { |path| path.delete_prefix('crates/') }
                .map { |path| "vendor/#{path}" }
 
-# Include the kreuzberg-ffi crate
 ffi_prefix = 'crates/kreuzberg-ffi/'
 ffi_cmd = %(git -C "#{repo_root}" ls-files -z #{ffi_prefix})
 ffi_files =
@@ -50,7 +47,6 @@ fallback_files = Dir.chdir(__dir__) do
     File::FNM_DOTMATCH
   )
 
-  # Fallback for core crate - copy from repo root
   core_fallback = Dir.chdir(repo_root) do
     Dir.glob('crates/kreuzberg/**/*', File::FNM_DOTMATCH)
        .reject { |f| File.directory?(f) }
@@ -61,7 +57,6 @@ fallback_files = Dir.chdir(__dir__) do
        .map { |path| "vendor/#{path.delete_prefix('crates/')}" }
   end
 
-  # Fallback for FFI crate - copy from repo root
   ffi_fallback = Dir.chdir(repo_root) do
     Dir.glob('crates/kreuzberg-ffi/**/*', File::FNM_DOTMATCH)
        .reject { |f| File.directory?(f) }
@@ -83,7 +78,6 @@ fallback_files = Dir.chdir(__dir__) do
   ruby_fallback + core_fallback + ffi_fallback + tesseract_fallback
 end
 
-# Check for vendored crates (copied during CI/packaging)
 vendor_files = Dir.chdir(__dir__) do
   kreuzberg_files = if Dir.exist?('vendor/kreuzberg')
                       Dir.glob('vendor/kreuzberg/**/*', File::FNM_DOTMATCH)
@@ -136,8 +130,6 @@ vendor_files = Dir.chdir(__dir__) do
   kreuzberg_files + kreuzberg_ffi_files + kreuzberg_tesseract_files + rb_sys_files + workspace_toml
 end
 
-# Use git-tracked files if available, otherwise fallback to glob
-# Always include vendored files if they exist on disk (for CI packaging)
 files = if (ruby_files + core_files + ffi_files).empty?
           fallback_files
         elsif vendor_files.any?
@@ -146,8 +138,6 @@ files = if (ruby_files + core_files + ffi_files).empty?
           ruby_files + core_files + ffi_files
         end
 
-# Include built native artifacts when present (untracked by git)
-# This enables shipping precompiled gems from CI without committing binaries.
 native_artifacts = Dir.chdir(__dir__) do
   Dir.glob(%w[
              lib/**/*.bundle
@@ -158,7 +148,6 @@ native_artifacts = Dir.chdir(__dir__) do
 end
 files.concat(native_artifacts)
 
-# Filter to only include files that actually exist
 files = files.select { |f| File.exist?(f) }
 files = files.uniq
 
@@ -194,10 +183,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
   spec.extensions = ['ext/kreuzberg_rb/extconf.rb']
 
-  # Runtime dependencies
-  # None - the gem is self-contained with the Rust extension
-
-  # Development dependencies
   spec.add_development_dependency 'bundler', '~> 4.0'
   spec.add_development_dependency 'rake', '~> 13.0'
   spec.add_development_dependency 'rake-compiler', '~> 1.2'

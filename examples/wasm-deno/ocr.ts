@@ -46,7 +46,6 @@ async function extractWithOcr(
 	try {
 		return await extractBytes(data, mimeType, config);
 	} catch (error) {
-		// Check if error is due to missing Tesseract
 		if (error instanceof Error && error.message.toLowerCase().includes("tesseract")) {
 			console.log("  (Tesseract OCR not available - skipping)");
 			return null;
@@ -73,14 +72,12 @@ function printMetadata(result: ExtractionResult | null) {
  * Main example function
  */
 async function main() {
-	// Initialize the WASM module
 	await init();
 
 	console.log("=".repeat(60));
 	console.log("Kreuzberg WASM OCR Extraction Examples");
 	console.log("=".repeat(60));
 
-	// Example 1: Basic OCR with English
 	console.log("\n--- Example 1: Basic OCR (English) ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -102,7 +99,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 2: OCR with German language
 	console.log("\n--- Example 2: OCR with German Language ---");
 	console.log("German OCR configuration example (language: deu)");
 	const germanConfig: ExtractionConfig = {
@@ -114,7 +110,6 @@ async function main() {
 	console.log(`  Configuration: ${JSON.stringify(germanConfig, null, 2)}`);
 	console.log("  (Requires German language pack for Tesseract)");
 
-	// Example 3: Force OCR on text PDFs
 	console.log("\n--- Example 3: Force OCR on Text PDFs ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -133,7 +128,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 4: OCR with Tesseract configuration
 	console.log("\n--- Example 4: Advanced Tesseract Configuration ---");
 	const psmModes: Record<number, string> = {
 		0: "Orientation and script detection",
@@ -164,7 +158,6 @@ async function main() {
 	};
 	console.log(`  ${JSON.stringify(tesseractConfig, null, 2)}`);
 
-	// Example 5: Language options
 	console.log("\n--- Example 5: Supported OCR Languages ---");
 	const languages = [
 		{ code: "eng", name: "English" },
@@ -185,14 +178,13 @@ async function main() {
 		console.log(`  - ${lang.code.padEnd(8)}: ${lang.name}`);
 	});
 
-	// Example 6: Table detection
 	console.log("\n--- Example 6: OCR with Table Detection ---");
 	const tableDetectionConfig: ExtractionConfig = {
 		ocr: {
 			backend: "tesseract",
 			language: "eng",
 			tesseractConfig: {
-				psm: 3, // Automatic page segmentation
+				psm: 3,
 				enableTableDetection: true,
 			},
 		},
@@ -201,7 +193,6 @@ async function main() {
 	console.log("Configuration for detecting tables in scanned documents:");
 	console.log(`  ${JSON.stringify(tableDetectionConfig, null, 2)}`);
 
-	// Example 7: Error handling for OCR
 	console.log("\n--- Example 7: OCR Error Handling ---");
 	console.log("OCR operations may fail if:");
 	console.log("  - Tesseract is not installed on the system");
@@ -213,7 +204,6 @@ async function main() {
 	console.log("  2. Fall back to regular text extraction");
 	console.log("  3. Return structured metadata");
 
-	// Example 8: Batch OCR processing
 	console.log("\n--- Example 8: Batch OCR Processing ---");
 	try {
 		const sampleData = await loadFixture("sample.pdf");
@@ -252,7 +242,6 @@ async function main() {
 		console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
 	}
 
-	// Example 9: Configuration best practices
 	console.log("\n--- Example 9: OCR Configuration Best Practices ---");
 	const configs: Record<string, ExtractionConfig> = {
 		basic: {
@@ -312,7 +301,6 @@ async function main() {
 	console.log("=".repeat(60));
 }
 
-// Run main function
 main().catch((error) => {
 	console.error("Fatal error:", error);
 	Deno.exit(1);

@@ -46,7 +46,6 @@ impl LanguageRegistry {
             backends: HashMap::new(),
         };
 
-        // EasyOCR languages (83 total)
         registry.backends.insert(
             "easyocr".to_string(),
             vec![
@@ -136,7 +135,6 @@ impl LanguageRegistry {
             ],
         );
 
-        // PaddleOCR languages (14 total)
         registry.backends.insert(
             "paddleocr".to_string(),
             vec![
@@ -157,7 +155,6 @@ impl LanguageRegistry {
             ],
         );
 
-        // Tesseract languages (100+ supported)
         registry.backends.insert(
             "tesseract".to_string(),
             vec![
@@ -492,7 +489,6 @@ mod tests {
         let registry = LanguageRegistry::new();
         let languages = registry.get_supported_languages("easyocr").unwrap();
 
-        // Check some specific languages from the original Python list
         assert!(languages.contains(&"abq".to_string()));
         assert!(languages.contains(&"bho".to_string()));
         assert!(languages.contains(&"gom".to_string()));
@@ -505,7 +501,6 @@ mod tests {
         let registry = LanguageRegistry::new();
         let languages = registry.get_supported_languages("paddleocr").unwrap();
 
-        // Check specific languages
         assert!(languages.contains(&"ch".to_string()));
         assert!(languages.contains(&"chinese_cht".to_string()));
         assert!(languages.contains(&"devanagari".to_string()));
@@ -517,7 +512,6 @@ mod tests {
         let registry = LanguageRegistry::new();
         let languages = registry.get_supported_languages("tesseract").unwrap();
 
-        // Check specific languages
         assert!(languages.contains(&"chi_sim".to_string()));
         assert!(languages.contains(&"chi_tra".to_string()));
         assert!(languages.contains(&"ita_old".to_string()));

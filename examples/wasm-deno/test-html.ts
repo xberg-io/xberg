@@ -10,13 +10,11 @@
 import init, { extractBytes } from "@kreuzberg/wasm";
 
 async function main() {
-	// Initialize the WASM module
 	console.log("Initializing WASM module...");
 	await init();
 	console.log("WASM module initialized successfully!");
 
 	try {
-		// Test HTML extraction with test.html
 		console.log("\n--- Testing HTML Extraction ---");
 		const htmlPath = new URL("./fixtures/test.html", import.meta.url);
 		const htmlData = await Deno.readFile(htmlPath.pathname);
@@ -32,7 +30,6 @@ async function main() {
 		console.log(result.content);
 		console.log("---");
 
-		// Print metadata if available
 		if (result.metadata) {
 			console.log("\nMetadata:");
 			console.log(JSON.stringify(result.metadata, null, 2));

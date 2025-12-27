@@ -10,7 +10,6 @@ import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-	// Extraction functions - verified signatures
 	extractFile,
 	extractFileSync,
 	extractBytes,
@@ -19,13 +18,10 @@ import {
 	batchExtractFilesSync,
 	batchExtractBytes,
 	batchExtractBytesSync,
-	// Configuration - actual API
 	ExtractionConfig,
-	// MIME type functions - actual exports
 	detectMimeType,
 	validateMimeType,
 	getExtensionsForMime,
-	// Plugin registry - actual functions
 	registerPostProcessor,
 	unregisterPostProcessor,
 	clearPostProcessors,
@@ -39,15 +35,11 @@ import {
 	clearOcrBackends,
 	listOcrBackends,
 	listDocumentExtractors,
-	// Error utilities
 	getLastErrorCode,
 	classifyError,
-	// Embedding presets
 	listEmbeddingPresets,
 	getEmbeddingPreset,
-	// Version
 	__version__,
-	// Types
 	type ExtractionResult,
 	type OcrConfig,
 	type PostProcessorProtocol,
@@ -66,7 +58,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 		});
 
 		it("should load config from file", () => {
-			// Create a test config file
 			const configPath = join(tmpdir(), "test-config.json");
 			const configContent = JSON.stringify({
 				chunking: { maxChars: 2048 },
@@ -74,7 +65,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 			});
 			writeFileSync(configPath, configContent);
 
-			// Load config
 			const config = ExtractionConfig.fromFile(configPath);
 			expect(config).toBeDefined();
 			expect(typeof config).toBe("object");
@@ -82,7 +72,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 
 		it("should discover config or return null", () => {
 			const config = ExtractionConfig.discover();
-			// Can be null or config object
 			if (config !== null) {
 				expect(typeof config).toBe("object");
 			}
@@ -90,12 +79,10 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 
 		it("should accept null config (uses defaults)", () => {
 			const result = extractFileSync(testFile, null, null);
-			// Should not throw, result structure varies
 			expect(result).toBeDefined();
 		});
 
 		it("should accept undefined mimeType and config", () => {
-			// Test with minimal parameters
 			const result = extractFileSync(testFile);
 			expect(result).toBeDefined();
 		});
@@ -113,7 +100,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 		});
 
 		it("extractFileSync accepts (filePath, mimeType?, config?)", () => {
-			// Signature: extractFileSync(filePath: string, mimeType?: string | null, config?: ExtractionConfig | null)
 			const result1 = extractFileSync(testFile);
 			expect(result1).toBeDefined();
 
@@ -125,7 +111,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 		});
 
 		it("extractBytesSync requires (data: Buffer, mimeType: string, config?)", () => {
-			// Signature: extractBytesSync(data: Buffer, mimeType: string, config?: ExtractionConfig | null)
 			const result = extractBytesSync(testBuffer, "text/plain");
 			expect(result).toBeDefined();
 
@@ -165,7 +150,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 		});
 
 		it("batchExtractFilesSync accepts (paths: string[], config?)", () => {
-			// Signature: batchExtractFilesSync(paths: string[], config?: ExtractionConfig | null)
 			const results = batchExtractFilesSync(testFiles);
 			expect(Array.isArray(results)).toBe(true);
 			expect(results.length).toBe(testFiles.length);
@@ -175,7 +159,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 		});
 
 		it("batchExtractBytesSync accepts (dataArray: Buffer[], mimeTypes: string[], config?)", () => {
-			// Signature: batchExtractBytesSync(dataArray: Buffer[], mimeTypes: string[], config?: ExtractionConfig | null)
 			const mimeTypes = ["text/plain", "text/plain"];
 			const results = batchExtractBytesSync(testBuffers, mimeTypes);
 			expect(Array.isArray(results)).toBe(true);
@@ -211,11 +194,7 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 			expect(Array.isArray(extensions)).toBe(true);
 		});
 
-		it("detectMimeTypeFromPath NOT exported in rc.16", () => {
-			// This function is not exported in the public API
-			// Users should use detectMimeType(bytes) or detectMimeTypeFromPath alternatives
-			// if available in full API
-		});
+		it("detectMimeTypeFromPath NOT exported in rc.16", () => {});
 	});
 
 	describe("Plugin Registration - Corrected Expectations", () => {
@@ -237,8 +216,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 		});
 
 		it("registerValidator - requires proper method binding", () => {
-			// The validator's validate method must be properly bound
-			// This is the issue in the original tests
 			const validator: ValidatorProtocol = {
 				name: "test-validator",
 				validate: (content: string) => ({
@@ -247,7 +224,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 				}),
 			};
 
-			// Binding the method explicitly might help
 			validator.validate = validator.validate.bind(validator);
 
 			registerValidator(validator);
@@ -256,7 +232,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 		});
 
 		it("registerOcrBackend - requires proper method binding", () => {
-			// Similar to validator - the processImage async method must be properly bound
 			const backend: OcrBackendProtocol = {
 				name: "test-ocr",
 				processImage: async (imageData: Uint8Array, config: OcrConfig) => ({
@@ -265,7 +240,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 				}),
 			};
 
-			// Try binding the async method
 			backend.processImage = backend.processImage.bind(backend);
 
 			registerOcrBackend(backend);
@@ -304,7 +278,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 			const classification = classifyError("PDF parsing error");
 			expect(typeof classification).toBe("object");
 			if (typeof classification === "object" && classification !== null) {
-				// Check for expected properties
 				const obj = classification as Record<string, unknown>;
 				if (obj.category !== undefined) {
 					expect(typeof obj.category).toBe("string");
@@ -338,7 +311,6 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 		});
 
 		it("version includes rc.16 indication", () => {
-			// Verify we're testing against rc.16
 			expect(__version__).toMatch(/(rc\.|4\.0\.0)/);
 		});
 	});
@@ -374,7 +346,6 @@ function validateResultStructure(result: unknown): void {
 	if (typeof result === "object" && result !== null) {
 		const r = result as Record<string, unknown>;
 
-		// Check for key properties
 		if (r.content !== undefined) {
 			expect(typeof r.content).toMatch(/^(string|object)$/);
 		}

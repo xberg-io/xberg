@@ -134,12 +134,10 @@ fn _internal_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(validation::get_valid_ocr_backends, m)?)?;
     m.add_function(wrap_pyfunction!(validation::get_valid_token_reduction_levels, m)?)?;
 
-    // Config Phase 1 FFI functions
     m.add_function(wrap_pyfunction!(config::config_to_json, m)?)?;
     m.add_function(wrap_pyfunction!(config::config_get_field, m)?)?;
     m.add_function(wrap_pyfunction!(config::config_merge, m)?)?;
 
-    // Error Phase 2 FFI functions
     m.add_function(wrap_pyfunction!(ffi::get_error_details, m)?)?;
     m.add_function(wrap_pyfunction!(ffi::classify_error, m)?)?;
     m.add_function(wrap_pyfunction!(ffi::error_code_name, m)?)?;

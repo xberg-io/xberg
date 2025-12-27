@@ -1,7 +1,6 @@
 version: "3"
 
 vars:
-  # Platform-specific binary extensions with robust Windows detection
   EXE_EXT:
     sh: |
       os="{{.OS}}"
@@ -36,7 +35,6 @@ vars:
       # Unix-like systems have no extension
       echo ""
 
-  # Library extensions
   LIB_EXT:
     sh: |
       os="{{.OS}}"
@@ -55,7 +53,6 @@ vars:
           ;;
       esac
 
-  # CPU count for parallel builds with comprehensive platform support
   NUM_CPUS:
     sh: |
       os="{{.OS}}"

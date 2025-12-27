@@ -28,20 +28,16 @@ use Kreuzberg\Exceptions\KreuzbergException;
 use Kreuzberg\Kreuzberg;
 use function Kreuzberg\extract_file;
 
-// =============================================================================
-// Example 1: Basic Text Chunking
-// =============================================================================
 
 echo "=== Example 1: Basic Text Chunking ===\n\n";
 
 try {
-    // Configure basic chunking
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(
-            maxChunkSize: 512,      // Maximum characters per chunk
-            chunkOverlap: 50,       // Overlap between chunks
-            respectSentences: true, // Don't split mid-sentence
-            respectParagraphs: true, // Prefer splitting at paragraph boundaries
+            maxChunkSize: 512,
+            chunkOverlap: 50,
+            respectSentences: true,
+            respectParagraphs: true,
         ),
     );
 
@@ -70,14 +66,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 2: Small Chunks for Fine-Grained Retrieval
-// =============================================================================
 
 echo "=== Example 2: Small Chunks for Fine-Grained Retrieval ===\n\n";
 
 try {
-    // Small chunks (256 characters) for precise retrieval
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(
             maxChunkSize: 256,
@@ -105,14 +97,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 3: Large Chunks for Context
-// =============================================================================
 
 echo "=== Example 3: Large Chunks for Context ===\n\n";
 
 try {
-    // Large chunks (2048 characters) for more context
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(
             maxChunkSize: 2048,
@@ -140,19 +128,15 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 4: Sentence-Aware Chunking
-// =============================================================================
 
 echo "=== Example 4: Sentence-Aware Chunking ===\n\n";
 
 try {
-    // Respect sentence boundaries (don't split mid-sentence)
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(
             maxChunkSize: 512,
             chunkOverlap: 50,
-            respectSentences: true,  // Keep sentences intact
+            respectSentences: true,
             respectParagraphs: false,
         ),
     );
@@ -177,20 +161,16 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 5: Paragraph-Aware Chunking
-// =============================================================================
 
 echo "=== Example 5: Paragraph-Aware Chunking ===\n\n";
 
 try {
-    // Respect paragraph boundaries (prefer splitting at paragraphs)
     $config = new ExtractionConfig(
         chunking: new ChunkingConfig(
             maxChunkSize: 1024,
             chunkOverlap: 100,
             respectSentences: true,
-            respectParagraphs: true,  // Prefer paragraph boundaries
+            respectParagraphs: true,
         ),
     );
 
@@ -207,14 +187,10 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 6: Chunk Overlap Analysis
-// =============================================================================
 
 echo "=== Example 6: Chunk Overlap Analysis ===\n\n";
 
 try {
-    // Different overlap sizes
     $overlapSizes = [0, 25, 50, 100];
 
     foreach ($overlapSizes as $overlap) {
@@ -246,9 +222,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 7: Chunking with Page Information
-// =============================================================================
 
 echo "=== Example 7: Chunking with Page Information ===\n\n";
 
@@ -293,9 +266,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 8: Procedural API for Chunking
-// =============================================================================
 
 echo "=== Example 8: Procedural API for Chunking ===\n\n";
 
@@ -309,7 +279,6 @@ try {
         ),
     );
 
-    // Use procedural function
     $result = extract_file(
         __DIR__ . '/../sample-documents/document.pdf',
         config: $config
@@ -325,9 +294,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 9: Iterating and Processing Chunks
-// =============================================================================
 
 echo "=== Example 9: Iterating and Processing Chunks ===\n\n";
 
@@ -347,7 +313,6 @@ try {
     if ($result->chunks !== null) {
         echo "Processing chunks:\n\n";
 
-        // Example: Find chunks containing specific keywords
         $keyword = 'example';
         $matchingChunks = array_filter(
             $result->chunks,
@@ -356,7 +321,6 @@ try {
 
         echo "Chunks containing '{$keyword}': " . count($matchingChunks) . "\n";
 
-        // Example: Calculate statistics
         $chunkLengths = array_map(
             static fn ($chunk) => strlen($chunk->content),
             $result->chunks
@@ -368,7 +332,6 @@ try {
         echo "  Maximum length: " . max($chunkLengths) . " characters\n";
         echo "  Average length: " . round(array_sum($chunkLengths) / count($chunkLengths)) . " characters\n";
 
-        // Example: Group chunks by page
         $chunksByPage = [];
         foreach ($result->chunks as $chunk) {
             if ($chunk->metadata->firstPage !== null) {
@@ -392,9 +355,6 @@ try {
     echo "Error: {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 10: Comparing Chunking Strategies
-// =============================================================================
 
 echo "=== Example 10: Comparing Chunking Strategies ===\n\n";
 

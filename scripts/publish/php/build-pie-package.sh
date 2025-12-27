@@ -1,21 +1,4 @@
 #!/usr/bin/env bash
-#
-# Build PHP PIE package for kreuzberg extension
-#
-# This script builds the kreuzberg PHP extension as a PIE-compatible package.
-# PIE (PHP Installer for Extensions) is a modern package manager for PHP extensions.
-#
-# Arguments:
-#   $1: Platform identifier (e.g., linux-x86_64, macos-arm64, windows-x86_64)
-#   $2: Output directory for the PIE package
-#
-# Environment variables:
-#   - VERSION: Package version (required)
-#   - GITHUB_WORKSPACE: GitHub Actions workspace path
-#
-# Usage:
-#   ./build-pie-package.sh linux-x86_64 ./dist
-#
 
 set -euo pipefail
 
@@ -30,7 +13,6 @@ VERSION="${VERSION:-unknown}"
 
 echo "::group::Building PIE package for ${PLATFORM}"
 
-# Determine OS and architecture from platform identifier
 case "$PLATFORM" in
 linux-x86_64)
 	OS="linux"
@@ -58,32 +40,26 @@ echo "OS: ${OS}"
 echo "Architecture: ${ARCH}"
 echo "Version: ${VERSION}"
 
-# Create output directory
 mkdir -p "$OUTPUT_DIR"
 
-# Determine paths
 WORKSPACE="${GITHUB_WORKSPACE:-$(pwd)}"
 PHP_DIR="${WORKSPACE}/packages/php"
 TARGET_DIR="${WORKSPACE}/target/release"
 EXT_FILE="libkreuzberg.${EXT_SUFFIX}"
 
-# Check if extension was built
 if [[ ! -f "${TARGET_DIR}/${EXT_FILE}" ]]; then
 	echo "::error::Extension file not found: ${TARGET_DIR}/${EXT_FILE}" >&2
 	exit 1
 fi
 
-# Create PIE package structure
 PKG_NAME="kreuzberg-${VERSION}-${PLATFORM}"
 PKG_DIR="${OUTPUT_DIR}/${PKG_NAME}"
 mkdir -p "${PKG_DIR}/ext"
 
 echo "Creating PIE package: ${PKG_NAME}"
 
-# Copy extension binary
 cp "${TARGET_DIR}/${EXT_FILE}" "${PKG_DIR}/ext/"
 
-# Copy composer.json and package.xml (for PIE/PECL compatibility)
 cp "${PHP_DIR}/composer.json" "${PKG_DIR}/"
 cp "${PHP_DIR}/package.xml" "${PKG_DIR}/" || echo "::warning::package.xml not found"
 
@@ -92,7 +68,6 @@ cp "${PHP_DIR}/README.md" "${PKG_DIR}/" || echo "::warning::README.md not found"
 cp "${PHP_DIR}/LICENSE" "${PKG_DIR}/" || echo "::warning::LICENSE not found"
 cp "${PHP_DIR}/CHANGELOG.md" "${PKG_DIR}/" || echo "::warning::CHANGELOG.md not found"
 
-# Create PIE metadata file
 cat >"${PKG_DIR}/pie.json" <<EOF
 {
   "name": "kreuzberg",
@@ -106,7 +81,6 @@ cat >"${PKG_DIR}/pie.json" <<EOF
 }
 EOF
 
-# Create installation instructions
 cat >"${PKG_DIR}/INSTALL.md" <<EOF
 # Installation Instructions
 
@@ -157,21 +131,17 @@ php -m | grep kreuzberg
 For issues, visit: https://github.com/kreuzberg-dev/kreuzberg/issues
 EOF
 
-# Create tarball
 TARBALL_NAME="${PKG_NAME}.tar.gz"
 echo "Creating tarball: ${TARBALL_NAME}"
 tar -czf "${OUTPUT_DIR}/${TARBALL_NAME}" -C "${OUTPUT_DIR}" "${PKG_NAME}"
 
-# Create checksum
 cd "${OUTPUT_DIR}"
 shasum -a 256 "${TARBALL_NAME}" >"${TARBALL_NAME}.sha256"
 
-# Display package info
 echo "::notice::PIE package created: ${TARBALL_NAME}"
 echo "Package size: $(du -h "${TARBALL_NAME}" | cut -f1)"
 echo "SHA256: $(cat "${TARBALL_NAME}.sha256")"
 
-# Clean up temporary directory
 rm -rf "${PKG_DIR}"
 
 echo "::endgroup::"

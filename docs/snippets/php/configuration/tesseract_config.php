@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\TesseractConfig;
 
-// Example 1: Default Tesseract settings
 echo "Example 1: Default Tesseract Configuration\n";
 echo "==========================================\n";
 
@@ -25,7 +24,7 @@ $config1 = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
         language: 'eng',
-        tesseractConfig: new TesseractConfig()  // All defaults
+        tesseractConfig: new TesseractConfig()  
     )
 );
 
@@ -34,11 +33,9 @@ echo "- PSM: 3 (Fully automatic page segmentation)\n";
 echo "- OEM: 3 (Default, based on what's available)\n";
 echo "- Table Detection: Disabled\n\n";
 
-// Example 2: Page Segmentation Modes (PSM)
 echo "Example 2: Different Page Segmentation Modes\n";
 echo "============================================\n";
 
-// PSM 6: Uniform block of text (most common)
 $config2a = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -51,7 +48,6 @@ echo "PSM 6 - Uniform block of text:\n";
 echo "- Best for: Most documents, clean text blocks\n";
 echo "- Use when: Document has clear text structure\n\n";
 
-// PSM 11: Sparse text
 $config2b = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -64,7 +60,6 @@ echo "PSM 11 - Sparse text:\n";
 echo "- Best for: Screenshots, signs, sparse documents\n";
 echo "- Use when: Text is scattered across the image\n\n";
 
-// PSM 7: Single text line
 $config2c = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -77,7 +72,6 @@ echo "PSM 7 - Single text line:\n";
 echo "- Best for: Single line of text, headers, captions\n";
 echo "- Use when: Processing individual text lines\n\n";
 
-// PSM 8: Single word
 $config2d = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -90,7 +84,6 @@ echo "PSM 8 - Single word:\n";
 echo "- Best for: Individual words, labels\n";
 echo "- Use when: Processing single words\n\n";
 
-// Example 3: Table detection
 echo "Example 3: Table Detection\n";
 echo "=========================\n";
 
@@ -100,7 +93,7 @@ $config3 = new ExtractionConfig(
         language: 'eng',
         tesseractConfig: new TesseractConfig(
             psm: 6,
-            enableTableDetection: true  // Enable table extraction
+            enableTableDetection: true  
         )
     )
 );
@@ -121,7 +114,6 @@ if (count($result->tables) > 0) {
 
 echo "\n\n";
 
-// Example 4: Character whitelisting (numeric only)
 echo "Example 4: Character Whitelisting\n";
 echo "=================================\n";
 
@@ -131,7 +123,7 @@ $config4a = new ExtractionConfig(
         language: 'eng',
         tesseractConfig: new TesseractConfig(
             psm: 6,
-            tesseditCharWhitelist: '0123456789'  // Digits only
+            tesseditCharWhitelist: '0123456789'  
         )
     )
 );
@@ -139,7 +131,6 @@ $config4a = new ExtractionConfig(
 echo "Whitelist: '0123456789' (digits only)\n";
 echo "Best for: Serial numbers, IDs, numeric codes\n\n";
 
-// Alphanumeric whitelist
 $config4b = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -154,7 +145,6 @@ $config4b = new ExtractionConfig(
 echo "Whitelist: Letters and numbers only\n";
 echo "Best for: Product codes, alphanumeric IDs\n\n";
 
-// Currency and numbers
 $config4c = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -169,7 +159,6 @@ $config4c = new ExtractionConfig(
 echo "Whitelist: '0123456789$€£¥.,- ' (financial data)\n";
 echo "Best for: Invoices, receipts, price lists\n\n";
 
-// Example 5: Character blacklisting
 echo "Example 5: Character Blacklisting\n";
 echo "=================================\n";
 
@@ -179,7 +168,7 @@ $config5 = new ExtractionConfig(
         language: 'eng',
         tesseractConfig: new TesseractConfig(
             psm: 6,
-            tesseditCharBlacklist: '|!@#%^&*()'  // Exclude special chars
+            tesseditCharBlacklist: '|!@#%^&*()'  
         )
     )
 );
@@ -187,11 +176,9 @@ $config5 = new ExtractionConfig(
 echo "Blacklist: '|!@#%^&*()'\n";
 echo "Use to: Exclude problematic characters that cause OCR errors\n\n";
 
-// Example 6: OEM (OCR Engine Mode)
 echo "Example 6: OCR Engine Modes\n";
 echo "===========================\n";
 
-// OEM 0: Legacy engine
 $config6a = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -204,7 +191,6 @@ echo "OEM 0 - Legacy engine:\n";
 echo "- Older, simpler algorithm\n";
 echo "- Sometimes better for very low-quality scans\n\n";
 
-// OEM 1: LSTM only
 $config6b = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -217,7 +203,6 @@ echo "OEM 1 - LSTM neural network:\n";
 echo "- Modern deep learning approach\n";
 echo "- Better accuracy for most documents\n\n";
 
-// OEM 3: Default (recommended)
 $config6c = new ExtractionConfig(
     ocr: new OcrConfig(
         backend: 'tesseract',
@@ -230,7 +215,6 @@ echo "OEM 3 - Default (recommended):\n";
 echo "- Chooses best available engine\n";
 echo "- Use this unless you have specific needs\n\n";
 
-// Example 7: Complete configuration for invoices
 echo "Example 7: Complete Invoice Processing Configuration\n";
 echo "====================================================\n";
 
@@ -239,9 +223,9 @@ $config7 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
-            psm: 6,                      // Uniform text block
-            oem: 3,                      // Default engine
-            enableTableDetection: true,  // Extract tables
+            psm: 6,                      
+            oem: 3,                      
+            enableTableDetection: true,  
             tesseditCharWhitelist: '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz$€£.,- :#/'
         )
     )
@@ -253,7 +237,6 @@ echo "- Table detection: Enabled\n";
 echo "- Character whitelist: Alphanumeric + currency + common symbols\n";
 echo "- Best for: Invoices, receipts, financial documents\n\n";
 
-// Example 8: Complete configuration for forms
 echo "Example 8: Complete Form Processing Configuration\n";
 echo "=================================================\n";
 
@@ -276,7 +259,6 @@ echo "- Table detection: Enabled\n";
 echo "- Character whitelist: Alphanumeric + common form characters\n";
 echo "- Best for: Forms, applications, surveys\n\n";
 
-// Example 9: Sparse text configuration (screenshots, signs)
 echo "Example 9: Sparse Text Configuration\n";
 echo "====================================\n";
 
@@ -285,7 +267,7 @@ $config9 = new ExtractionConfig(
         backend: 'tesseract',
         language: 'eng',
         tesseractConfig: new TesseractConfig(
-            psm: 11,  // Sparse text
+            psm: 11,  
             oem: 3
         )
     )

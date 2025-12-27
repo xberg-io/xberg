@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\ImageExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 
-// Example 1: Basic image extraction
 echo "Example 1: Basic Image Extraction\n";
 echo "=================================\n";
 
@@ -43,15 +42,14 @@ if ($result->images !== null) {
 
 echo "\n\n";
 
-// Example 2: Image extraction with size filtering
 echo "Example 2: Image Extraction with Size Filter\n";
 echo "============================================\n";
 
 $config2 = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
-        minWidth: 200,    // Only extract images >= 200px wide
-        minHeight: 200    // Only extract images >= 200px high
+        minWidth: 200,    
+        minHeight: 200    
     )
 );
 
@@ -64,14 +62,13 @@ if ($result2->images !== null) {
 
 echo "\n\n";
 
-// Example 3: Extract only large images (photos, diagrams)
 echo "Example 3: Extract Only Large Images\n";
 echo "====================================\n";
 
 $config3 = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
-        minWidth: 800,    // Large images only
+        minWidth: 800,    
         minHeight: 600
     )
 );
@@ -79,14 +76,13 @@ $config3 = new ExtractionConfig(
 echo "Configured to extract images >= 800x600 pixels\n";
 echo "Good for: Photos, large diagrams, full-page scans\n\n";
 
-// Example 4: Extract thumbnails and small images
 echo "Example 4: Extract All Images (Including Thumbnails)\n";
 echo "===================================================\n";
 
 $config4 = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
-        minWidth: 50,     // Very small minimum
+        minWidth: 50,     
         minHeight: 50
     )
 );
@@ -94,14 +90,13 @@ $config4 = new ExtractionConfig(
 echo "Configured to extract images >= 50x50 pixels\n";
 echo "Good for: Extracting all images including icons and thumbnails\n\n";
 
-// Example 5: Image extraction with OCR
 echo "Example 5: Image Extraction with OCR\n";
 echo "====================================\n";
 
 $config5 = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
-        performOcr: true,  // Perform OCR on extracted images
+        performOcr: true,  
         minWidth: 100,
         minHeight: 100
     ),
@@ -130,7 +125,6 @@ if ($result5->images !== null) {
 
 echo "\n\n";
 
-// Example 6: Save extracted images to disk
 echo "Example 6: Extract and Save Images to Disk\n";
 echo "=========================================\n";
 
@@ -153,7 +147,6 @@ if ($result6->images !== null) {
     foreach ($result6->images as $i => $image) {
         $filename = "{$outputDir}/image_{$i}_page_{$image->pageNumber}.{$image->format}";
 
-        // Image data is base64 encoded
         $imageData = base64_decode($image->data);
         file_put_contents($filename, $imageData);
 
@@ -163,35 +156,31 @@ if ($result6->images !== null) {
 
 echo "\n\n";
 
-// Example 7: Extract images from specific file types
 echo "Example 7: File Type-Specific Image Extraction\n";
 echo "==============================================\n";
 
-// Configuration for PDFs
 $pdfConfig = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
         minWidth: 300,
         minHeight: 300,
-        performOcr: false  // PDFs usually have text already
+        performOcr: false  
     )
 );
 
-// Configuration for PowerPoint presentations
 $pptxConfig = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
-        minWidth: 100,     // Include smaller images (icons, logos)
+        minWidth: 100,     
         minHeight: 100,
         performOcr: false
     )
 );
 
-// Configuration for image files (JPEG, PNG, etc.)
 $imageConfig = new ExtractionConfig(
     imageExtraction: new ImageExtractionConfig(
         extractImages: true,
-        performOcr: true,  // OCR on image files
+        performOcr: true,  
         minWidth: 50,
         minHeight: 50
     ),
@@ -210,7 +199,6 @@ echo "Image File Configuration:\n";
 echo "- Min size: 50x50 (all images)\n";
 echo "- OCR: Enabled\n\n";
 
-// Example 8: Complete image extraction pipeline
 echo "Example 8: Complete Image Processing Pipeline\n";
 echo "=============================================\n";
 
@@ -232,20 +220,16 @@ $result8 = (new Kreuzberg($config8))->extractFile('mixed_content.pdf');
 if ($result8->images !== null) {
     echo "Extracted images: " . count($result8->images) . "\n\n";
 
-    // Process each image
     foreach ($result8->images as $i => $image) {
         echo "Processing Image {$i}:\n";
 
-        // 1. Validate image
         $isValid = $image->width >= 200 && $image->height >= 200;
         echo "- Valid size: " . ($isValid ? 'Yes' : 'No') . "\n";
 
-        // 2. Save image
         $filename = "image_{$i}.{$image->format}";
         file_put_contents($filename, base64_decode($image->data));
         echo "- Saved: {$filename}\n";
 
-        // 3. Extract OCR text if available
         if ($image->ocrResult !== null) {
             $ocrText = trim($image->ocrResult->content);
             if (!empty($ocrText)) {
@@ -254,7 +238,6 @@ if ($result8->images !== null) {
             }
         }
 
-        // 4. Extract metadata
         $metadata = [
             'format' => $image->format,
             'width' => $image->width,

@@ -4,22 +4,8 @@ require 'open3'
 require 'pathname'
 
 module Kreuzberg
-  # API server proxy
-  #
-  # Starts and manages the Kreuzberg API server (Litestar/Python-based or Rust-based).
-  #
   # @example Start the server
-  #   server = Kreuzberg::APIProxy.new(port: 8000)
-  #   server.start
-  #   # Server runs in background
-  #   server.stop
-  #
   # @example With block
-  #   Kreuzberg::APIProxy.run(port: 8000) do |server|
-  #     # Server runs while block executes
-  #     response = Net::HTTP.get(URI('http://localhost:8000/health'))
-  #   end
-  #
   module APIProxy
     Error = Class.new(Kreuzberg::Errors::Error)
     MissingBinaryError = Class.new(Error)
@@ -57,7 +43,7 @@ module Kreuzberg
           err: $stderr
         )
         Process.detach(@pid)
-        sleep 1 # Give server time to start
+        sleep 1
         @pid
       end
 
@@ -71,7 +57,6 @@ module Kreuzberg
         Process.kill('TERM', @pid)
         Process.wait(@pid)
       rescue Errno::ESRCH, Errno::ECHILD
-        # Process already dead
       ensure
         @pid = nil
       end
@@ -118,7 +103,6 @@ module Kreuzberg
     # @raise [MissingBinaryError] If not found
     #
     def find_api_binary
-      # API might be served by kreuzberg CLI or a separate binary
       binary_name = Gem.win_platform? ? 'kreuzberg.exe' : 'kreuzberg'
       found = CLIProxy.search_paths(binary_name).find(&:file?)
       return found if found

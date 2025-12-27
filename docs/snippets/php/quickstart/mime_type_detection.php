@@ -16,29 +16,23 @@ use function Kreuzberg\detect_mime_type;
 use function Kreuzberg\detect_mime_type_from_path;
 use function Kreuzberg\extract_file;
 
-// Detect MIME type from file path
 $path = 'document.pdf';
 $mimeType = detect_mime_type_from_path($path);
 echo "Detected MIME type from path: $mimeType\n";
 
-// Detect MIME type from file content
 $data = file_get_contents($path);
 $mimeType = detect_mime_type($data);
 echo "Detected MIME type from content: $mimeType\n\n";
 
-// Example: Process file with unknown extension
 $unknownFile = 'file_without_extension';
 if (file_exists($unknownFile)) {
-    // Detect MIME type first
     $detectedType = detect_mime_type_from_path($unknownFile);
     echo "Unknown file detected as: $detectedType\n";
 
-    // Extract with detected type
     $result = extract_file($unknownFile, $detectedType);
     echo "Successfully extracted " . strlen($result->content) . " characters\n";
 }
 
-// Example: Validate file type before processing
 $allowedTypes = [
     'application/pdf',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

@@ -60,14 +60,10 @@ pub type Result<T> = std::result::Result<T, PdfError>;
 pub(crate) fn format_pdfium_error<E: std::fmt::Debug>(error: E) -> String {
     let debug_msg = format!("{:?}", error);
 
-    // Extract the variant name and clean up Debug formatting
-    // "PdfiumLibraryInternalError(FormatError,)" -> "PdfiumLibraryInternalError: FormatError"
-    // "SomeError" -> "SomeError"
     if let Some(paren_idx) = debug_msg.find('(') {
         let variant = &debug_msg[..paren_idx];
         let inner = &debug_msg[paren_idx + 1..];
 
-        // Remove trailing ",)" or ")"
         let inner_clean = inner.trim_end_matches(')').trim_end_matches(',');
 
         if inner_clean.is_empty() {
@@ -166,21 +162,18 @@ mod tests {
 
     #[test]
     fn test_format_pdfium_error_with_inner_value() {
-        // Simulate pdfium error: "PdfiumLibraryInternalError(FormatError,)"
         #[derive(Debug)]
         #[allow(dead_code)]
         struct MockError(String);
 
         let error = MockError("FormatError,".to_string());
         let formatted = format_pdfium_error(error);
-        // Should clean up the trailing comma
         assert!(formatted.contains("MockError"));
         assert!(formatted.contains("FormatError"));
     }
 
     #[test]
     fn test_format_pdfium_error_simple() {
-        // Simulate simple error without parentheses
         #[derive(Debug)]
         struct SimpleError;
 
@@ -190,20 +183,15 @@ mod tests {
 
     #[test]
     fn test_format_pdfium_error_empty_inner() {
-        // Simulate error with empty inner: "SomeError()"
         #[derive(Debug)]
         struct EmptyInner;
 
         let formatted = format_pdfium_error(EmptyInner);
-        // Will be "EmptyInner" since the formatting doesn't add parentheses
         assert_eq!(formatted, "EmptyInner");
     }
 
     #[test]
     fn test_format_pdfium_error_cleans_trailing_comma() {
-        // This test simulates the actual pdfium error format
-        // "PdfiumLibraryInternalError(FormatError,)" should become
-        // "PdfiumLibraryInternalError: FormatError"
         #[derive(Debug)]
         #[allow(dead_code)]
         enum PdfiumError {
@@ -219,7 +207,6 @@ mod tests {
         let error = PdfiumError::PdfiumLibraryInternalError(InternalError::FormatError);
         let formatted = format_pdfium_error(error);
 
-        // Should not contain trailing comma or redundant parentheses
         assert!(!formatted.contains(",)"));
         assert!(formatted.contains("PdfiumLibraryInternalError"));
         assert!(formatted.contains("FormatError"));

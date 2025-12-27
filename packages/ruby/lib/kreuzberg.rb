@@ -21,14 +21,12 @@ module Kreuzberg
   autoload :ValidatorProtocol, 'kreuzberg/validator_protocol'
   autoload :OcrBackendProtocol, 'kreuzberg/ocr_backend_protocol'
 
-  # Type definitions for structured metadata
   autoload :HtmlMetadata, 'kreuzberg/types'
   autoload :HeaderMetadata, 'kreuzberg/types'
   autoload :LinkMetadata, 'kreuzberg/types'
   autoload :ImageMetadata, 'kreuzberg/types'
   autoload :StructuredData, 'kreuzberg/types'
 
-  # Alias for API consistency with other language bindings
   ExtractionConfig = Config::Extraction
   PageConfig = Config::PageConfig
 
@@ -40,7 +38,6 @@ module Kreuzberg
   @__cache_tracker = { entries: 0, bytes: 0 }
 
   class << self
-    # Store native methods as private methods
     alias native_extract_file_sync extract_file_sync
     alias native_extract_bytes_sync extract_bytes_sync
     alias native_batch_extract_files_sync batch_extract_files_sync
@@ -57,55 +54,38 @@ module Kreuzberg
     private :native_batch_extract_bytes_sync, :native_batch_extract_bytes
   end
 
-  # Register a Ruby post-processor that conforms to PostProcessorProtocol.
   module_function :register_post_processor
 
-  # Remove a post-processor by name.
   module_function :unregister_post_processor
 
-  # Purge all registered post-processors.
   module_function :clear_post_processors
 
-  # Register a validator that follows ValidatorProtocol.
   module_function :register_validator
 
-  # Remove a validator by name.
   module_function :unregister_validator
 
-  # Purge all validators.
   module_function :clear_validators
 
-  # List all registered validators.
   module_function :list_validators
 
-  # List all registered post-processors.
   module_function :list_post_processors
 
-  # Register an OCR backend instance implementing OcrBackendProtocol.
   module_function :register_ocr_backend
 
-  # Unregister an OCR backend by name.
   module_function :unregister_ocr_backend
 
-  # List all registered OCR backends.
   module_function :list_ocr_backends
 
-  # Detect MIME type from file bytes.
   module_function :detect_mime_type
 
-  # Detect MIME type from a file path.
   module_function :detect_mime_type_from_path
 
-  # Validate a MIME type string.
   module_function :validate_mime_type
 
-  # Get file extensions for a given MIME type.
   module_function :get_extensions_for_mime
 
-  # List all available embedding presets.
   module_function :list_embedding_presets
 
-  # Get a specific embedding preset by name.
   module_function :get_embedding_preset
 end
 

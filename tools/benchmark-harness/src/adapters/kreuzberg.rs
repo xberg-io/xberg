@@ -81,14 +81,12 @@ fn find_php() -> Result<(PathBuf, Vec<String>)> {
 /// 1. Checking workspace packages/ruby/lib directory
 /// 2. Checking installed gem location via `gem which kreuzberg`
 fn get_ruby_gem_lib_path() -> Result<PathBuf> {
-    // Try workspace first
     let workspace_root = workspace_root()?;
     let workspace_gem_lib = workspace_root.join("packages/ruby/lib");
     if workspace_gem_lib.exists() {
         return Ok(workspace_gem_lib);
     }
 
-    // Try to find installed gem via `ruby -e` call
     use std::process::Command;
     if let Ok(output) = Command::new("ruby")
         .arg("-e")
@@ -306,7 +304,6 @@ pub fn create_ruby_sync_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract.rb")?;
     let (command, mut args) = find_ruby()?;
 
-    // Add -I flag for gem lib directory so Ruby can find the kreuzberg gem
     if let Ok(gem_lib_path) = get_ruby_gem_lib_path() {
         args.push("-I".to_string());
         args.push(gem_lib_path.to_string_lossy().to_string());
@@ -324,7 +321,6 @@ pub fn create_ruby_batch_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract.rb")?;
     let (command, mut args) = find_ruby()?;
 
-    // Add -I flag for gem lib directory so Ruby can find the kreuzberg gem
     if let Ok(gem_lib_path) = get_ruby_gem_lib_path() {
         args.push("-I".to_string());
         args.push(gem_lib_path.to_string_lossy().to_string());
@@ -544,7 +540,6 @@ mod tests {
     #[test]
     fn test_find_node() {
         let result = find_node();
-        // Should succeed if any of tsx, ts-node, or pnpm is available
         if result.is_err() {
             assert!(which::which("tsx").is_err());
             assert!(which::which("ts-node").is_err());

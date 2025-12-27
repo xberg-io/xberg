@@ -4,7 +4,6 @@ set -euo pipefail
 
 echo "Copying kreuzberg core crate to vendor directory..."
 
-# Remove existing vendor directory completely for full cleanup
 rm -rf packages/ruby/vendor
 mkdir -p packages/ruby/vendor
 

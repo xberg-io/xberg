@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Run Rust unit tests
-# Used by: ci-rust.yaml - Run unit tests step
-#
 
 set -euo pipefail
 
@@ -29,7 +25,6 @@ echo "Workspace information:"
 echo "  Repository: $REPO_ROOT"
 echo "  Excluded packages: kreuzberg-e2e-generator, kreuzberg-py, kreuzberg-node"
 
-# Check if test data is available
 if [ ! -d "$TESSDATA_PREFIX" ]; then
 	echo "WARNING: TESSDATA_PREFIX directory not found: $TESSDATA_PREFIX"
 	echo "Attempting to create it..."
@@ -37,7 +32,6 @@ if [ ! -d "$TESSDATA_PREFIX" ]; then
 	ensure_tessdata "$TESSDATA_PREFIX"
 fi
 
-# Verify critical tessdata files
 echo "Verifying Tesseract data files..."
 for lang in eng osd; do
 	langfile="$TESSDATA_PREFIX/${lang}.traineddata"
@@ -49,7 +43,6 @@ for lang in eng osd; do
 	fi
 done
 
-# Configure library paths for PDFium and other shared libraries
 if [ -n "${KREUZBERG_PDFIUM_PREBUILT:-}" ]; then
 	export LD_LIBRARY_PATH="${KREUZBERG_PDFIUM_PREBUILT}/lib:${LD_LIBRARY_PATH:-}"
 	export DYLD_LIBRARY_PATH="${KREUZBERG_PDFIUM_PREBUILT}/lib:${DYLD_LIBRARY_PATH:-}"
@@ -62,11 +55,7 @@ fi
 
 echo "=== Starting cargo test ==="
 
-# Run tests with detailed output and capture logs.
-#
 # NOTE: We intentionally avoid `--all-features` for the `kreuzberg` crate because
-# `pdf-static`, `pdf-bundled`, and `pdf-system` are mutually exclusive (enforced
-# in `crates/kreuzberg/build.rs`). CI covers `pdf-system` in a dedicated job.
 TEST_LOG="/tmp/cargo-test-$$.log"
 
 if ! {
@@ -76,7 +65,6 @@ if ! {
 	echo "=== cargo test --workspace (all features, excluding kreuzberg) ==="
 	extra_excludes=()
 	if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
-		# tikv-jemalloc-sys fails to build on Windows without a full autotools toolchain.
 		extra_excludes+=(--exclude benchmark-harness)
 	fi
 	cargo test \

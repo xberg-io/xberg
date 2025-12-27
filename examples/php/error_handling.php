@@ -30,9 +30,6 @@ use Kreuzberg\Kreuzberg;
 use function Kreuzberg\extract_bytes;
 use function Kreuzberg\extract_file;
 
-// =============================================================================
-// Example 1: Basic Error Handling
-// =============================================================================
 
 echo "=== Example 1: Basic Error Handling ===\n\n";
 
@@ -50,9 +47,6 @@ try {
     echo "  Line: {$e->getLine()}\n\n";
 }
 
-// =============================================================================
-// Example 2: File Not Found Handling
-// =============================================================================
 
 echo "=== Example 2: File Not Found Handling ===\n\n";
 
@@ -77,16 +71,12 @@ foreach ($files as $file) {
 
 echo "\n";
 
-// =============================================================================
-// Example 3: Invalid File Format Handling
-// =============================================================================
 
 echo "=== Example 3: Invalid File Format Handling ===\n\n";
 
 try {
-    // Try to extract from a non-document file
     $kreuzberg = new Kreuzberg();
-    $result = $kreuzberg->extractFile(__FILE__);  // This PHP file
+    $result = $kreuzberg->extractFile(__FILE__);
 
     echo "Extracted from PHP file: " . strlen($result->content) . " characters\n";
     echo "MIME type: {$result->mimeType}\n\n";
@@ -96,14 +86,10 @@ try {
     echo "  {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 4: Corrupted File Handling
-// =============================================================================
 
 echo "=== Example 4: Corrupted File Handling ===\n\n";
 
 try {
-    // Create a corrupted PDF-like file
     $corruptedPath = sys_get_temp_dir() . '/corrupted.pdf';
     file_put_contents($corruptedPath, 'This is not a valid PDF file');
 
@@ -112,22 +98,17 @@ try {
 
     echo "Content: {$result->content}\n";
 
-    // Clean up
     unlink($corruptedPath);
 
 } catch (KreuzbergException $e) {
     echo "Caught error for corrupted file:\n";
     echo "  {$e->getMessage()}\n\n";
 
-    // Clean up
     if (file_exists(sys_get_temp_dir() . '/corrupted.pdf')) {
         unlink(sys_get_temp_dir() . '/corrupted.pdf');
     }
 }
 
-// =============================================================================
-// Example 5: Invalid MIME Type Handling
-// =============================================================================
 
 echo "=== Example 5: Invalid MIME Type Handling ===\n\n";
 
@@ -137,7 +118,6 @@ try {
         throw new RuntimeException('Failed to read file');
     }
 
-    // Try to extract with wrong MIME type
     $kreuzberg = new Kreuzberg();
     $result = $kreuzberg->extractBytes($data, 'application/invalid-mime-type');
 
@@ -148,14 +128,10 @@ try {
     echo "  {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 6: OCR Configuration Errors
-// =============================================================================
 
 echo "=== Example 6: OCR Configuration Errors ===\n\n";
 
 try {
-    // Configure with invalid OCR settings
     $config = new ExtractionConfig(
         ocr: new OcrConfig(
             backend: 'invalid_backend',
@@ -173,16 +149,13 @@ try {
     echo "  {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 7: Batch Processing Error Handling
-// =============================================================================
 
 echo "=== Example 7: Batch Processing Error Handling ===\n\n";
 
 try {
     $files = [
         __DIR__ . '/../sample-documents/valid1.pdf',
-        __DIR__ . '/invalid.pdf',  // This doesn't exist
+        __DIR__ . '/invalid.pdf',
         __DIR__ . '/../sample-documents/valid2.pdf',
     ];
 
@@ -197,7 +170,6 @@ try {
     echo "\nNote: Batch operations fail fast on first error.\n";
     echo "Process files individually for better error handling:\n\n";
 
-    // Process individually with error handling
     foreach ($files as $file) {
         $filename = basename($file);
         try {
@@ -212,9 +184,6 @@ try {
     echo "\n";
 }
 
-// =============================================================================
-// Example 8: Procedural API Error Handling
-// =============================================================================
 
 echo "=== Example 8: Procedural API Error Handling ===\n\n";
 
@@ -227,15 +196,11 @@ try {
     echo "  {$e->getMessage()}\n\n";
 }
 
-// =============================================================================
-// Example 9: Graceful Degradation
-// =============================================================================
 
 echo "=== Example 9: Graceful Degradation ===\n\n";
 
 $file = __DIR__ . '/../sample-documents/sample.pdf';
 
-// Try with OCR first, fall back to basic extraction
 try {
     $config = new ExtractionConfig(
         ocr: new OcrConfig(backend: 'tesseract', language: 'eng'),
@@ -250,7 +215,6 @@ try {
     echo "OCR failed ({$e->getMessage()}), falling back to basic extraction\n";
 
     try {
-        // Fall back to basic extraction without OCR
         $kreuzberg = new Kreuzberg();
         $result = $kreuzberg->extractFile($file);
 
@@ -263,9 +227,6 @@ try {
 
 echo "\n";
 
-// =============================================================================
-// Example 10: Error Recovery with Retries
-// =============================================================================
 
 echo "=== Example 10: Error Recovery with Retries ===\n\n";
 
@@ -288,7 +249,7 @@ function extractWithRetry(string $file, int $maxRetries = 3): ?string
             }
 
             echo "Attempt {$attempt} failed, retrying... ({$e->getMessage()})\n";
-            usleep(100000);  // Wait 100ms before retry
+            usleep(100000);
         }
     }
 
@@ -305,9 +266,6 @@ if ($content !== null) {
 
 echo "\n";
 
-// =============================================================================
-// Example 11: Logging Errors
-// =============================================================================
 
 echo "=== Example 11: Logging Errors ===\n\n";
 
@@ -320,7 +278,6 @@ function logError(string $message, array $context = []): void
         $logMessage .= ' | Context: ' . json_encode($context);
     }
 
-    // In production, use a proper logging library like Monolog
     echo $logMessage . "\n";
 }
 
@@ -339,9 +296,6 @@ try {
 
 echo "\n";
 
-// =============================================================================
-// Example 12: Custom Error Messages
-// =============================================================================
 
 echo "=== Example 12: Custom Error Messages ===\n\n";
 
@@ -386,27 +340,21 @@ if ($result['success']) {
 
 echo "\n";
 
-// =============================================================================
-// Example 13: Validating Files Before Extraction
-// =============================================================================
 
 echo "=== Example 13: Validating Files Before Extraction ===\n\n";
 
 function validateAndExtract(string $file): ?string
 {
-    // Check if file exists
     if (!file_exists($file)) {
         echo "Error: File does not exist: {$file}\n";
         return null;
     }
 
-    // Check if file is readable
     if (!is_readable($file)) {
         echo "Error: File is not readable: {$file}\n";
         return null;
     }
 
-    // Check file size (e.g., max 100MB)
     $maxSize = 100 * 1024 * 1024;
     $fileSize = filesize($file);
 
@@ -420,7 +368,6 @@ function validateAndExtract(string $file): ?string
         return null;
     }
 
-    // Check file extension
     $allowedExtensions = ['pdf', 'docx', 'txt', 'html', 'xlsx', 'pptx'];
     $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
 
@@ -429,7 +376,6 @@ function validateAndExtract(string $file): ?string
         return null;
     }
 
-    // Validation passed, attempt extraction
     try {
         $kreuzberg = new Kreuzberg();
         $result = $kreuzberg->extractFile($file);
@@ -449,9 +395,6 @@ if ($content !== null) {
 
 echo "\n";
 
-// =============================================================================
-// Example 14: Error Handling Best Practices Summary
-// =============================================================================
 
 echo "=== Example 14: Error Handling Best Practices ===\n\n";
 

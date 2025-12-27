@@ -15,8 +15,6 @@ echo "=========================================="
 
 setup_go_paths "$REPO_ROOT"
 
-# On Windows, CGO_LDFLAGS is already set by setup-go-cgo-env action
-# Don't re-export it to avoid potential duplication issues
 if [[ "${RUNNER_OS:-}" == "Windows" ]]; then
 	{
 		echo "PATH=${PATH}"

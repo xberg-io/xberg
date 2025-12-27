@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-#
-# Smoke test wheel installation
-# Used by: ci-python.yaml - Smoke test wheel step
-#
 
 set -euo pipefail
 

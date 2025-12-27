@@ -312,7 +312,6 @@ public static class KreuzbergClient
             return Array.Empty<ExtractionResult>();
         }
 
-        // Use ArrayPool to reduce allocation overhead for path pointer arrays
         var pathPtrs = System.Buffers.ArrayPool<IntPtr>.Shared.Rent(paths.Count);
         try
         {
@@ -329,7 +328,6 @@ public static class KreuzbergClient
 
             try
             {
-                // Use GCHandlePool to rent a pinned handle instead of allocating new one
                 var handle = GCHandlePool.Rent(pathPtrs);
                 try
                 {
@@ -356,7 +354,6 @@ public static class KreuzbergClient
         }
         finally
         {
-            // Return the rented array to the pool
             System.Buffers.ArrayPool<IntPtr>.Shared.Return(pathPtrs);
         }
     }
@@ -391,7 +388,6 @@ public static class KreuzbergClient
             return Array.Empty<ExtractionResult>();
         }
 
-        // Use ArrayPool to reduce allocation overhead for CBytesWithMime structures and mime pointers
         var cItems = System.Buffers.ArrayPool<NativeMethods.CBytesWithMime>.Shared.Rent(items.Count);
         var mimePtrs = System.Buffers.ArrayPool<IntPtr>.Shared.Rent(items.Count);
         var pinnedBuffers = System.Buffers.ArrayPool<GCHandle>.Shared.Rent(items.Count);
@@ -414,7 +410,6 @@ public static class KreuzbergClient
                         throw new KreuzbergValidationException($"mimeType at index {i} is empty");
                     }
 
-                    // Use GCHandlePool to rent pinned handle instead of allocating new one
                     var bufferHandle = GCHandlePool.Rent(item.Data);
                     pinnedBuffers[i] = bufferHandle;
                     pinnedBufferCount++;
@@ -431,7 +426,6 @@ public static class KreuzbergClient
                     };
                 }
 
-                // Use GCHandlePool to rent pinned handle for the items array itself
                 var itemsHandle = GCHandlePool.Rent(cItems);
                 var configPtr = SerializeConfig(config);
                 try
@@ -451,13 +445,11 @@ public static class KreuzbergClient
             }
             finally
             {
-                // Return pooled handles to the GCHandlePool
                 for (var i = 0; i < pinnedBufferCount; i++)
                 {
                     GCHandlePool.Return(pinnedBuffers[i]);
                 }
 
-                // Free UTF-8 pointers
                 for (var i = 0; i < mimePtrCount; i++)
                 {
                     InteropUtilities.FreeUtf8(mimePtrs[i]);
@@ -466,7 +458,6 @@ public static class KreuzbergClient
         }
         finally
         {
-            // Return rented arrays to pools
             System.Buffers.ArrayPool<NativeMethods.CBytesWithMime>.Shared.Return(cItems);
             System.Buffers.ArrayPool<IntPtr>.Shared.Return(mimePtrs);
             System.Buffers.ArrayPool<GCHandle>.Shared.Return(pinnedBuffers);
@@ -1263,7 +1254,6 @@ public static class KreuzbergClient
             return IntPtr.Zero;
         }
 
-        // Try to get cached JSON for this config object
         string json;
         if (ConfigJsonCache.TryGetValue(config, out var cacheEntry))
         {
@@ -1271,7 +1261,6 @@ public static class KreuzbergClient
         }
         else
         {
-            // Serialize and cache for future use
             json = JsonSerializer.Serialize(config, Serialization.Options);
             ConfigJsonCache.Add(config, new ConfigCacheEntry(json));
         }

@@ -14,9 +14,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use Kreuzberg\Plugins\ExtractorInterface;
 use Kreuzberg\Plugins\ExtractorRegistry;
 
-// ============================================================================
-// Example 1: Simple Custom Format Extractor
-// ============================================================================
 
 /**
  * Custom extractor for a hypothetical ".custom" format.
@@ -27,7 +24,6 @@ class CustomFormatExtractor implements ExtractorInterface
 {
     public function extract(string $bytes, string $mimeType): array
     {
-        // Parse custom format (simplified example)
         $lines = explode("\n", $bytes);
         $content = '';
         $metadata = [];
@@ -50,10 +46,8 @@ class CustomFormatExtractor implements ExtractorInterface
     }
 }
 
-// Register the custom extractor
 ExtractorRegistry::register('text/x-custom', new CustomFormatExtractor());
 
-// Test with sample data
 $customDocument = <<<CUSTOM
 TITLE: Sample Document
 AUTHOR: John Doe
@@ -73,14 +67,10 @@ try {
     echo "Error: {$e->getMessage()}\n";
 }
 
-// ============================================================================
-// Example 2: Closure-based Extractor
-// ============================================================================
 
-// Register extractor using a closure (for simple cases)
 ExtractorRegistry::register('text/simple', function (string $bytes, string $mimeType): array {
     return [
-        'content' => strtoupper($bytes), // Convert to uppercase
+        'content' => strtoupper($bytes),
         'metadata' => [
             'extractor' => 'closure-based',
             'length' => strlen($bytes),
@@ -99,9 +89,6 @@ try {
     echo "Error: {$e->getMessage()}\n";
 }
 
-// ============================================================================
-// Example 3: JSON Extractor with Table Support
-// ============================================================================
 
 class JsonExtractor implements ExtractorInterface
 {
@@ -113,10 +100,8 @@ class JsonExtractor implements ExtractorInterface
             throw new RuntimeException('Invalid JSON: ' . json_last_error_msg());
         }
 
-        // Extract all string values as content
         $content = $this->extractStrings($data);
 
-        // Extract tables if present
         $tables = [];
         if (isset($data['tables']) && is_array($data['tables'])) {
             foreach ($data['tables'] as $tableData) {
@@ -178,7 +163,6 @@ class JsonExtractor implements ExtractorInterface
         foreach ($cells as $rowIndex => $row) {
             $markdown .= '| ' . implode(' | ', $row) . ' |' . "\n";
 
-            // Add separator after header row
             if ($rowIndex === 0) {
                 $markdown .= '|' . str_repeat(' --- |', count($row)) . "\n";
             }
@@ -219,9 +203,6 @@ try {
     echo "Error: {$e->getMessage()}\n";
 }
 
-// ============================================================================
-// Example 4: Testing Registered Extractors
-// ============================================================================
 
 echo "=== Registered Extractors ===\n";
 $extractors = ExtractorRegistry::list();
@@ -230,7 +211,6 @@ foreach ($extractors as $mimeType) {
 }
 echo "\n";
 
-// Test an extractor
 echo "=== Testing Custom Extractor ===\n";
 $testData = "TITLE: Test\nContent here";
 try {
@@ -241,14 +221,6 @@ try {
 }
 echo "\n";
 
-// ============================================================================
-// Cleanup
-// ============================================================================
 
-// Unregister specific extractor
 ExtractorRegistry::unregister('text/simple');
 echo "Unregistered 'text/simple' extractor\n";
-
-// Or clear all custom extractors
-// ExtractorRegistry::clear();
-// echo "Cleared all custom extractors\n";

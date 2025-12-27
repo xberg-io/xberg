@@ -12,7 +12,6 @@ const pkg = path.join(__dirname, "..", "pkg");
 const dist = path.join(__dirname, "..", "dist");
 const distPkg = path.join(dist, "pkg");
 
-// Copy pkg directory to dist/pkg
 if (fs.existsSync(pkg)) {
 	fs.cpSync(pkg, distPkg, { recursive: true, force: true });
 	console.log("Copied pkg directory to dist/pkg");
@@ -21,7 +20,6 @@ if (fs.existsSync(pkg)) {
 	process.exit(1);
 }
 
-// Copy pdfium.js to dist/ if it exists in src/
 const srcPdfium = path.join(__dirname, "..", "src", "pdfium_init.js");
 const distPdfium = path.join(dist, "pdfium.js");
 if (fs.existsSync(srcPdfium)) {
@@ -31,7 +29,6 @@ if (fs.existsSync(srcPdfium)) {
 	console.warn("src/pdfium_init.js not found, pdfium support may be disabled");
 }
 
-// Fix import paths in dist/index.js and dist/index.cjs
 const files = [path.join(dist, "index.js"), path.join(dist, "index.cjs")];
 
 for (const file of files) {
@@ -39,7 +36,6 @@ for (const file of files) {
 		let content = fs.readFileSync(file, "utf-8");
 		const original = content;
 
-		// Replace ../pkg/ with ./pkg/
 		content = content.replace(/import\("\.\.\/pkg\/kreuzberg_wasm\.js"\)/g, 'import("./pkg/kreuzberg_wasm.js")');
 
 		if (content !== original) {

@@ -20,7 +20,6 @@ echo ""
 
 cd "$npm_dir"
 
-# Count platform directories
 platform_count=$(find . -maxdepth 1 -type d ! -name '.' | wc -l)
 echo "Found $platform_count platform directories:"
 find . -maxdepth 1 -type d ! -name '.' | sort

@@ -56,7 +56,6 @@ function extractViaApi(string $filePath, string $apiUrl = 'http://localhost:8000
         return $results;
 
     } catch (ClientException $e) {
-        // 4xx errors (client errors)
         $response = $e->getResponse();
         $statusCode = $response->getStatusCode();
         $body = json_decode($response->getBody()->getContents(), true);
@@ -74,7 +73,6 @@ function extractViaApi(string $filePath, string $apiUrl = 'http://localhost:8000
         return null;
 
     } catch (ServerException $e) {
-        // 5xx errors (server errors)
         $response = $e->getResponse();
         $statusCode = $response->getStatusCode();
 
@@ -84,7 +82,6 @@ function extractViaApi(string $filePath, string $apiUrl = 'http://localhost:8000
         return null;
 
     } catch (RequestException $e) {
-        // Network or timeout errors
         echo "Request Error: " . $e->getMessage() . "\n";
 
         if ($e->hasResponse()) {
@@ -101,7 +98,6 @@ function extractViaApi(string $filePath, string $apiUrl = 'http://localhost:8000
     }
 }
 
-// Example usage with error handling
 echo "Attempting to extract document via API...\n";
 echo str_repeat('=', 60) . "\n";
 
@@ -124,7 +120,6 @@ if ($result !== null) {
     echo "\nExtraction failed. Check the error messages above.\n";
 }
 
-// Example: Retry logic with exponential backoff
 function extractWithRetry(
     string $filePath,
     string $apiUrl = 'http://localhost:8000/extract',
@@ -145,7 +140,7 @@ function extractWithRetry(
         if ($attempt < $maxRetries) {
             echo "\nRetrying in " . number_format($delay, 1) . " seconds... (Attempt " . ($attempt + 1) . "/$maxRetries)\n";
             usleep((int)($delay * 1000000));
-            $delay *= 2; // Exponential backoff
+            $delay *= 2; 
         }
     }
 
@@ -153,7 +148,6 @@ function extractWithRetry(
     return null;
 }
 
-// Use retry logic
 echo "\n" . str_repeat('=', 60) . "\n";
 echo "Extracting with retry logic...\n";
 echo str_repeat('=', 60) . "\n";

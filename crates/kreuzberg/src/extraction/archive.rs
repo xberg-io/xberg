@@ -39,7 +39,6 @@ pub fn extract_zip_metadata(bytes: &[u8]) -> Result<ArchiveMetadata> {
     let mut archive =
         ZipArchive::new(cursor).map_err(|e| KreuzbergError::parsing(format!("Failed to read ZIP archive: {}", e)))?;
 
-    // Pre-allocate Vec with known archive size
     let mut file_list = Vec::with_capacity(archive.len());
     let mut total_size = 0u64;
 
@@ -72,8 +71,6 @@ pub fn extract_tar_metadata(bytes: &[u8]) -> Result<ArchiveMetadata> {
     let cursor = Cursor::new(bytes);
     let mut archive = TarArchive::new(cursor);
 
-    // Pre-allocate Vec; TAR has typical density of entries per KB
-    // Estimate: 1 entry per 512 bytes (conservative)
     let estimated_entries = bytes.len().saturating_div(512).max(16);
     let mut file_list = Vec::with_capacity(estimated_entries);
     let mut total_size = 0u64;
@@ -119,7 +116,6 @@ pub fn extract_zip_text_content(bytes: &[u8]) -> Result<HashMap<String, String>>
     let mut archive =
         ZipArchive::new(cursor).map_err(|e| KreuzbergError::parsing(format!("Failed to read ZIP archive: {}", e)))?;
 
-    // Pre-allocate HashMap; typically 20-30% of files are text in archives
     let estimated_text_files = archive.len().saturating_mul(3).saturating_div(10).max(2);
     let mut contents = HashMap::with_capacity(estimated_text_files);
     let text_extensions = [
@@ -134,7 +130,6 @@ pub fn extract_zip_text_content(bytes: &[u8]) -> Result<HashMap<String, String>>
         let path = file.name().to_string();
 
         if !file.is_dir() && text_extensions.iter().any(|ext| path.to_lowercase().ends_with(ext)) {
-            // Estimate file size to pre-allocate String; cap at 10MB to avoid excessive allocation
             let estimated_size = (file.size() as usize).min(10 * 1024 * 1024);
             let mut content = String::with_capacity(estimated_size);
             if file.read_to_string(&mut content).is_ok() {
@@ -153,8 +148,7 @@ pub fn extract_tar_text_content(bytes: &[u8]) -> Result<HashMap<String, String>>
     let cursor = Cursor::new(bytes);
     let mut archive = TarArchive::new(cursor);
 
-    // Pre-allocate HashMap; typically 20-30% of files are text in archives
-    let estimated_text_files = bytes.len().saturating_div(1024 * 10).min(100); // Rough estimate: 1 text file per 10KB
+    let estimated_text_files = bytes.len().saturating_div(1024 * 10).min(100);
     let mut contents = HashMap::with_capacity(estimated_text_files.max(2));
     let text_extensions = [
         ".txt", ".md", ".json", ".xml", ".html", ".csv", ".log", ".yaml", ".toml",
@@ -176,7 +170,6 @@ pub fn extract_tar_text_content(bytes: &[u8]) -> Result<HashMap<String, String>>
 
         if !entry.header().entry_type().is_dir() && text_extensions.iter().any(|ext| path.to_lowercase().ends_with(ext))
         {
-            // Estimate file size to pre-allocate String; cap at 10MB
             let estimated_size = (entry.size().min(10 * 1024 * 1024)) as usize;
             let mut content = String::with_capacity(estimated_size);
             if entry.read_to_string(&mut content).is_ok() {

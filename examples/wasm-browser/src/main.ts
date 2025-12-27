@@ -17,10 +17,6 @@
 import { extractBytes } from "@kreuzberg/wasm";
 import type { ExtractionResult } from "./types";
 
-// ============================================================================
-// DOM Elements
-// ============================================================================
-
 const dropZone = document.getElementById("dropZone") as HTMLElement;
 const fileInput = document.getElementById("fileInput") as HTMLInputElement;
 const sampleButton = document.getElementById("sampleButton") as HTMLButtonElement;
@@ -50,10 +46,6 @@ const contentTab = document.getElementById("contentTab") as HTMLButtonElement;
 const metadataTab = document.getElementById("metadataTab") as HTMLButtonElement;
 const errorMessage = document.getElementById("errorMessage") as HTMLElement;
 
-// ============================================================================
-// State Management
-// ============================================================================
-
 interface AppState {
 	currentFile: {
 		name: string;
@@ -70,10 +62,6 @@ const state: AppState = {
 	results: null,
 	isProcessing: false,
 };
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
 
 /**
  * Format bytes to human-readable size
@@ -134,20 +122,16 @@ function displayResults(result: ExtractionResult, fileInfo: AppState["currentFil
 
 	state.results = result;
 
-	// Update file info
 	fileName.textContent = fileInfo.name;
 	fileSize.textContent = formatSize(fileInfo.size);
 	mimeType.textContent = fileInfo.mimeType;
 	charCount.textContent = result.content.length.toLocaleString();
 
-	// Display content
 	extractedContent.textContent = result.content;
 
-	// Display metadata
 	const metadata = result.metadata || {};
 	metadataContent.textContent = JSON.stringify(metadata, null, 2);
 
-	// Show results section
 	showSection(resultsSection);
 }
 
@@ -175,16 +159,11 @@ function resetUI() {
 	state.results = null;
 	state.isProcessing = false;
 
-	// Reset tabs
 	contentTab.classList.add("active");
 	metadataTab.classList.remove("active");
 	document.getElementById("contentTab-pane")?.classList.add("active");
 	document.getElementById("metadataTab-pane")?.classList.remove("active");
 }
-
-// ============================================================================
-// File Processing
-// ============================================================================
 
 /**
  * Process a file for extraction
@@ -198,7 +177,6 @@ async function processFile(file: File) {
 		hideSection(errorSection);
 		showSection(progressSection);
 
-		// Read file as buffer
 		updateProgress(10, "Reading file...");
 		const arrayBuffer = await file.arrayBuffer();
 		const fileData = new Uint8Array(arrayBuffer);
@@ -210,13 +188,11 @@ async function processFile(file: File) {
 			data: fileData,
 		};
 
-		// Extract content
 		updateProgress(30, "Initializing extraction...");
 		const result = await extractBytes(fileData, state.currentFile.mimeType || "application/octet-stream");
 
 		updateProgress(90, "Processing results...");
 
-		// Display results
 		displayResults(result, state.currentFile);
 
 		updateProgress(100, "Complete!");
@@ -274,10 +250,6 @@ async function loadSamplePDF() {
 		displayError(error as Error);
 	}
 }
-
-// ============================================================================
-// Event Listeners
-// ============================================================================
 
 /**
  * Drop zone interactions
@@ -383,10 +355,6 @@ downloadButton.addEventListener("click", () => {
  */
 closeButton.addEventListener("click", resetUI);
 errorCloseButton.addEventListener("click", resetUI);
-
-// ============================================================================
-// Initialization
-// ============================================================================
 
 console.log("Kreuzberg WASM Browser Example initialized");
 console.log("COOP/COEP headers are configured for SharedArrayBuffer support");

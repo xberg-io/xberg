@@ -17,7 +17,6 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\EmbeddingConfig;
 
-// Initialize Kreuzberg with embedding generation
 $config = new ExtractionConfig(
     chunking: new ChunkingConfig(
         maxChunkSize: 512,
@@ -32,7 +31,6 @@ $config = new ExtractionConfig(
 
 $kreuzberg = new Kreuzberg($config);
 
-// Build document index
 echo "Building document index...\n";
 $documentIndex = [];
 
@@ -60,7 +58,6 @@ foreach ($files as $file) {
 
 echo "Indexed " . count($documentIndex) . " chunks from " . count($files) . " documents\n\n";
 
-// Function to search the index
 function semanticSearch(array $index, array $queryEmbedding, int $topK = 5): array
 {
     $results = [];
@@ -88,10 +85,8 @@ function cosineSimilarity(array $a, array $b): float
     return $dotProduct / (sqrt($magnitudeA) * sqrt($magnitudeB));
 }
 
-// Create a temporary document with the query to get its embedding
 function getQueryEmbedding(Kreuzberg $kreuzberg, string $query): ?array
 {
-    // Create a temporary file with the query text
     $tempFile = tempnam(sys_get_temp_dir(), 'query_');
     file_put_contents($tempFile, $query);
 
@@ -104,7 +99,6 @@ function getQueryEmbedding(Kreuzberg $kreuzberg, string $query): ?array
     }
 }
 
-// Perform searches
 $queries = [
     "What are the key features of the product?",
     "How do I install and configure the system?",
@@ -134,14 +128,13 @@ foreach ($queries as $query) {
     echo "\n" . str_repeat('-', 60) . "\n\n";
 }
 
-// Build a RAG (Retrieval Augmented Generation) context
 function buildRAGContext(array $searchResults, int $maxTokens = 2000): string
 {
     $context = "Relevant context:\n\n";
     $currentTokens = 0;
 
     foreach ($searchResults as $result) {
-        $tokens = strlen($result['content']) / 4; // Rough token estimate
+        $tokens = strlen($result['content']) / 4; 
 
         if ($currentTokens + $tokens > $maxTokens) {
             break;
@@ -155,7 +148,6 @@ function buildRAGContext(array $searchResults, int $maxTokens = 2000): string
     return $context;
 }
 
-// Example: RAG query
 $userQuestion = "How do I optimize performance?";
 $queryEmbedding = getQueryEmbedding($kreuzberg, $userQuestion);
 
@@ -169,14 +161,12 @@ if ($queryEmbedding) {
     echo "\nContext ready for LLM prompt!\n";
 }
 
-// Save index for future use
 file_put_contents(
     'document_index.json',
     json_encode($documentIndex, JSON_PRETTY_PRINT)
 );
 echo "\nSaved document index to: document_index.json\n";
 
-// Multi-query search (find content relevant to multiple queries)
 function multiQuerySearch(array $index, array $queries, Kreuzberg $kreuzberg): array
 {
     $allResults = [];
@@ -189,7 +179,6 @@ function multiQuerySearch(array $index, array $queries, Kreuzberg $kreuzberg): a
         }
     }
 
-    // Deduplicate and re-rank by average similarity
     $grouped = [];
     foreach ($allResults as $result) {
         $key = $result['file'] . '_' . $result['chunk_index'];

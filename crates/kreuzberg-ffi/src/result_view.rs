@@ -46,7 +46,6 @@ use std::ptr;
 /// Views are NOT thread-safe. External synchronization required for concurrent access.
 #[repr(C)]
 pub struct CExtractionResultView {
-    // Content fields (direct pointers, no allocation)
     /// Direct pointer to content bytes (UTF-8, not null-terminated)
     pub content_ptr: *const u8,
     /// Length of content in bytes
@@ -77,7 +76,6 @@ pub struct CExtractionResultView {
     /// Length of title in bytes (0 if NULL)
     pub title_len: usize,
 
-    // Counts (no allocation needed)
     /// Number of tables extracted
     pub table_count: usize,
 
@@ -159,24 +157,17 @@ pub unsafe extern "C" fn kreuzberg_get_result_view(
 
     clear_last_error();
 
-    // SAFETY: We've verified result is not null and it must be a valid ExtractionResult.
-    // We create a borrowed reference with the appropriate lifetime.
     let result_ref = unsafe { &*result };
 
-    // SAFETY: We've verified out_view is not null and writable.
-    // We populate it with borrowed pointers from result_ref.
     unsafe {
-        // Content (always present)
         let content_bytes = result_ref.content.as_bytes();
         (*out_view).content_ptr = content_bytes.as_ptr();
         (*out_view).content_len = content_bytes.len();
 
-        // MIME type (always present)
         let mime_bytes = result_ref.mime_type.as_bytes();
         (*out_view).mime_type_ptr = mime_bytes.as_ptr();
         (*out_view).mime_type_len = mime_bytes.len();
 
-        // Optional metadata fields
         if let Some(ref language) = result_ref.metadata.language {
             let lang_bytes = language.as_bytes();
             (*out_view).language_ptr = lang_bytes.as_ptr();
@@ -213,7 +204,6 @@ pub unsafe extern "C" fn kreuzberg_get_result_view(
             (*out_view).title_len = 0;
         }
 
-        // Counts
         (*out_view).table_count = result_ref.tables.len();
         (*out_view).chunk_count = result_ref.chunks.as_ref().map_or(0, |c| c.len());
         (*out_view).detected_language_count = result_ref.detected_languages.as_ref().map_or(0, |l| l.len());
@@ -254,17 +244,14 @@ pub(crate) fn create_result_view(result: &ExtractionResult) -> CExtractionResult
         page_count: 0,
     };
 
-    // Populate content
     let content_bytes = result.content.as_bytes();
     view.content_ptr = content_bytes.as_ptr();
     view.content_len = content_bytes.len();
 
-    // Populate MIME type
     let mime_bytes = result.mime_type.as_bytes();
     view.mime_type_ptr = mime_bytes.as_ptr();
     view.mime_type_len = mime_bytes.len();
 
-    // Optional metadata fields
     if let Some(ref language) = result.metadata.language {
         let lang_bytes = language.as_bytes();
         view.language_ptr = lang_bytes.as_ptr();
@@ -289,7 +276,6 @@ pub(crate) fn create_result_view(result: &ExtractionResult) -> CExtractionResult
         view.title_len = title_bytes.len();
     }
 
-    // Counts
     view.table_count = result.tables.len();
     view.chunk_count = result.chunks.as_ref().map_or(0, |c| c.len());
     view.detected_language_count = result.detected_languages.as_ref().map_or(0, |l| l.len());
@@ -347,7 +333,6 @@ pub unsafe extern "C" fn kreuzberg_view_get_content(
 
     clear_last_error();
 
-    // SAFETY: We've verified all pointers are valid.
     unsafe {
         *out_ptr = (*view).content_ptr;
         *out_len = (*view).content_len;
@@ -401,7 +386,6 @@ pub unsafe extern "C" fn kreuzberg_view_get_mime_type(
 
     clear_last_error();
 
-    // SAFETY: We've verified all pointers are valid.
     unsafe {
         *out_ptr = (*view).mime_type_ptr;
         *out_len = (*view).mime_type_len;
@@ -472,8 +456,6 @@ mod tests {
 
     #[test]
     fn test_result_view_structure_size() {
-        // Verify structure size is reasonable
-        // 6 ptr+len pairs (6*16=96 bytes) + 5 usize counts (5*8=40 bytes) = 136 bytes
         let size = mem::size_of::<CExtractionResultView>();
         assert_eq!(
             size, 136,
@@ -490,29 +472,24 @@ mod tests {
         let ret = unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
         assert_eq!(ret, 0, "Should return success");
 
-        // Verify content pointers
         assert!(!view.content_ptr.is_null());
         assert_eq!(view.content_len, result.content.len());
 
-        // Verify MIME type
         assert!(!view.mime_type_ptr.is_null());
         assert_eq!(view.mime_type_len, result.mime_type.len());
 
-        // Verify optional fields
         assert!(!view.language_ptr.is_null());
-        assert_eq!(view.language_len, 2); // "en"
+        assert_eq!(view.language_len, 2);
 
         assert!(!view.title_ptr.is_null());
         assert_eq!(view.title_len, "Test Document".len());
 
-        // Verify counts
         assert_eq!(view.chunk_count, 2);
         assert_eq!(view.detected_language_count, 2);
         assert_eq!(view.page_count, 10);
         assert_eq!(view.table_count, 0);
         assert_eq!(view.image_count, 0);
 
-        // Verify actual content matches
         let content_slice = unsafe { std::slice::from_raw_parts(view.content_ptr, view.content_len) };
         assert_eq!(content_slice, result.content.as_bytes());
 
@@ -598,7 +575,6 @@ mod tests {
 
     #[test]
     fn test_view_lifetime_safety_pattern() {
-        // This test demonstrates the correct lifetime pattern
         let result = create_test_result();
         let expected_content = result.content.clone();
 
@@ -608,29 +584,22 @@ mod tests {
 
             unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
 
-            // View is valid here because result is still alive
             let content_slice = unsafe { std::slice::from_raw_parts(view.content_ptr, view.content_len) };
             assert_eq!(content_slice, expected_content.as_bytes());
-
-            // View goes out of scope here (no cleanup needed - zero-copy)
         }
 
-        // Result still valid here
         assert_eq!(result.content, expected_content);
     }
 
     #[test]
     fn test_zero_copy_no_allocation() {
-        // Verify that creating a view doesn't allocate
         let result = create_test_result();
         let result_ptr = &result as *const ExtractionResult;
 
         let mut view: CExtractionResultView = unsafe { mem::zeroed() };
 
-        // Get view (should be zero-copy, no allocations)
         unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
 
-        // Verify pointers point into result's memory
         let content_start = result.content.as_ptr() as usize;
         let content_end = content_start + result.content.len();
         let view_ptr = view.content_ptr as usize;
@@ -659,12 +628,10 @@ mod tests {
 
         unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
 
-        // Test NULL out_ptr
         let mut content_len: usize = 0;
         let ret = unsafe { kreuzberg_view_get_content(&view, ptr::null_mut(), &mut content_len) };
         assert_eq!(ret, -1, "Should return error for NULL out_ptr");
 
-        // Test NULL out_len
         let mut content_ptr: *const u8 = ptr::null();
         let ret = unsafe { kreuzberg_view_get_content(&view, &mut content_ptr, ptr::null_mut()) };
         assert_eq!(ret, -1, "Should return error for NULL out_len");
@@ -691,7 +658,6 @@ mod tests {
         let ret = unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
         assert_eq!(ret, 0);
 
-        // Empty content should have valid pointer but zero length
         assert!(
             !view.content_ptr.is_null(),
             "Empty string should still have valid pointer"
@@ -702,7 +668,6 @@ mod tests {
     #[test]
     fn test_view_large_content() {
         let mut result = create_test_result();
-        // Create large content (10MB)
         result.content = "x".repeat(10 * 1024 * 1024);
         let expected_len = result.content.len();
 
@@ -712,11 +677,9 @@ mod tests {
         let ret = unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
         assert_eq!(ret, 0);
 
-        // Verify large content is handled correctly
         assert_eq!(view.content_len, expected_len);
         assert!(!view.content_ptr.is_null());
 
-        // Verify content matches
         let content_slice = unsafe { std::slice::from_raw_parts(view.content_ptr, view.content_len) };
         assert_eq!(content_slice, result.content.as_bytes());
     }
@@ -724,7 +687,6 @@ mod tests {
     #[test]
     fn test_view_unicode_content() {
         let mut result = create_test_result();
-        // Test various Unicode content
         result.content = "Hello 世界 🌍 Привет مرحبا".to_string();
         result.metadata.title = Some("Título español 中文标题".to_string());
 
@@ -734,7 +696,6 @@ mod tests {
         let ret = unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
         assert_eq!(ret, 0);
 
-        // Verify Unicode content
         let content_slice = unsafe { std::slice::from_raw_parts(view.content_ptr, view.content_len) };
         assert_eq!(content_slice, result.content.as_bytes());
 
@@ -762,7 +723,6 @@ mod tests {
         let ret = unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
         assert_eq!(ret, 0);
 
-        // All counts should be zero
         assert_eq!(view.table_count, 0);
         assert_eq!(view.chunk_count, 0);
         assert_eq!(view.detected_language_count, 0);
@@ -778,13 +738,11 @@ mod tests {
         let mut view1: CExtractionResultView = unsafe { mem::zeroed() };
         let mut view2: CExtractionResultView = unsafe { mem::zeroed() };
 
-        // Create two views from the same result
         unsafe {
             kreuzberg_get_result_view(result_ptr, &mut view1);
             kreuzberg_get_result_view(result_ptr, &mut view2);
         }
 
-        // Both views should have identical data
         assert_eq!(view1.content_ptr, view2.content_ptr);
         assert_eq!(view1.content_len, view2.content_len);
         assert_eq!(view1.mime_type_ptr, view2.mime_type_ptr);
@@ -801,14 +759,12 @@ mod tests {
 
         unsafe { kreuzberg_get_result_view(result_ptr, &mut view) };
 
-        // Verify each pointer is distinct and points to different data
         assert_ne!(view.content_ptr, view.mime_type_ptr);
 
         if !view.language_ptr.is_null() && !view.title_ptr.is_null() {
             assert_ne!(view.language_ptr, view.title_ptr);
         }
 
-        // Verify lengths match expected values
         assert_eq!(view.mime_type_len, "text/plain".len());
         assert_eq!(view.language_len, "en".len());
     }

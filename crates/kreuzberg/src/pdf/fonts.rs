@@ -87,7 +87,6 @@ fn system_font_directories() -> Vec<PathBuf> {
 /// Platform-specific font directory paths for other OSes.
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 fn system_font_directories() -> Vec<PathBuf> {
-    // Fallback: try common directory names if available
     vec![]
 }
 
@@ -116,27 +115,24 @@ fn load_font_file(path: &Path) -> Result<Arc<[u8]>, PdfError> {
 /// A HashMap mapping font identifiers (relative paths) to loaded font bytes.
 fn discover_system_fonts() -> Result<HashMap<String, Arc<[u8]>>, PdfError> {
     let mut fonts = HashMap::new();
-    const MAX_FONT_SIZE: u64 = 50 * 1024 * 1024; // 50MB safety limit
+    const MAX_FONT_SIZE: u64 = 50 * 1024 * 1024;
 
     for dir in system_font_directories() {
         if !dir.exists() {
             continue;
         }
 
-        // Walk the font directory tree
         match std::fs::read_dir(&dir) {
             Ok(entries) => {
                 for entry in entries.flatten() {
                     let path = entry.path();
 
-                    // Check if it's a font file
                     if let Some(ext) = path.extension() {
                         let ext_str = ext.to_string_lossy().to_lowercase();
                         if ext_str != "ttf" && ext_str != "otf" {
                             continue;
                         }
 
-                        // Check file size to prevent loading oversized fonts
                         if let Ok(metadata) = std::fs::metadata(&path) {
                             if metadata.len() > MAX_FONT_SIZE {
                                 tracing::warn!(
@@ -150,17 +146,14 @@ fn discover_system_fonts() -> Result<HashMap<String, Arc<[u8]>>, PdfError> {
                             continue;
                         }
 
-                        // Load the font
                         match load_font_file(&path) {
                             Ok(font_data) => {
-                                // Use the filename as the font identifier
                                 if let Some(filename) = path.file_name() {
                                     let key = filename.to_string_lossy().to_string();
                                     fonts.insert(key, font_data);
                                 }
                             }
                             Err(_e) => {
-                                // Log warning but continue processing other fonts
                                 tracing::debug!("Failed to load font file: {}", path.display());
                             }
                         }
@@ -168,7 +161,6 @@ fn discover_system_fonts() -> Result<HashMap<String, Arc<[u8]>>, PdfError> {
                 }
             }
             Err(_e) => {
-                // Log warning but continue with other directories
                 tracing::debug!("Failed to read font directory: {}", dir.display());
             }
         }
@@ -191,7 +183,6 @@ fn discover_system_fonts() -> Result<HashMap<String, Arc<[u8]>>, PdfError> {
 /// - First call: 50-100ms (system font discovery + loading)
 /// - Subsequent calls: < 1μs (no-op, just checks initialized flag)
 pub fn initialize_font_cache() -> Result<(), PdfError> {
-    // Quick check: read lock to see if already initialized
     {
         let cache = FONT_CACHE
             .read()
@@ -202,17 +193,14 @@ pub fn initialize_font_cache() -> Result<(), PdfError> {
         }
     }
 
-    // Not initialized yet; acquire write lock and perform initialization
     let mut cache = FONT_CACHE
         .write()
         .map_err(|e| PdfError::FontLoadingFailed(format!("Font cache lock poisoned: {}", e)))?;
 
     if cache.initialized {
-        // Another thread initialized while we were waiting; return early
         return Ok(());
     }
 
-    // Discover and load fonts
     tracing::debug!("Initializing font cache...");
     let fonts = discover_system_fonts()?;
     let font_count = fonts.len();
@@ -238,34 +226,27 @@ pub fn initialize_font_cache() -> Result<(), PdfError> {
 /// - First call: ~50-100ms (includes font discovery)
 /// - Subsequent calls: < 1ms (reads from cache)
 pub fn get_font_descriptors() -> Result<Vec<FontDescriptor>, PdfError> {
-    // Ensure cache is initialized
     initialize_font_cache()?;
 
-    // Read the cached fonts
     let cache = FONT_CACHE
         .read()
         .map_err(|e| PdfError::FontLoadingFailed(format!("Font cache lock poisoned: {}", e)))?;
 
-    // Convert cached fonts to FontDescriptors
     let descriptors = cache
         .fonts
         .iter()
         .map(|(filename, data)| {
-            // Parse basic font attributes from filename
-            // For now, we create descriptors with generic attributes
-            // In a real implementation, we'd extract these from the font file itself
             let is_italic = filename.to_lowercase().contains("italic");
             let is_bold = filename.to_lowercase().contains("bold");
             let weight = if is_bold { 700 } else { 400 };
 
-            // Extract family name from filename (remove extension)
             let family = filename.split('.').next().unwrap_or("Unknown").to_string();
 
             FontDescriptor {
                 family,
                 weight,
                 is_italic,
-                charset: 0, // ANSI/Western charset
+                charset: 0,
                 data: data.clone(),
             }
         })
@@ -313,11 +294,9 @@ mod tests {
     fn test_initialize_font_cache_idempotent() {
         clear_font_cache();
 
-        // First call
         let result1 = initialize_font_cache();
         assert!(result1.is_ok());
 
-        // Second call should be a no-op and still succeed
         let result2 = initialize_font_cache();
         assert!(result2.is_ok());
     }
@@ -326,7 +305,6 @@ mod tests {
     fn test_get_font_descriptors() {
         clear_font_cache();
         let result = get_font_descriptors();
-        // May be empty if no system fonts are available, but should not error
         assert!(result.is_ok());
     }
 
@@ -337,8 +315,6 @@ mod tests {
 
         let _ = initialize_font_cache();
         let _count = cached_font_count();
-        // After initialization, count will be either 0 (no system fonts) or > 0
-        // We just verify the function doesn't panic
     }
 
     #[test]
@@ -346,7 +322,6 @@ mod tests {
         let dirs = system_font_directories();
         assert!(!dirs.is_empty(), "Should have at least one font directory");
 
-        // Verify directories are absolute paths
         for dir in dirs {
             assert!(
                 dir.is_absolute(),
@@ -366,7 +341,6 @@ mod tests {
     fn test_font_descriptors_attributes() {
         clear_font_cache();
 
-        // Create a test font descriptor manually
         let data: Arc<[u8]> = Arc::from(vec![0u8; 100].into_boxed_slice());
         let descriptor = FontDescriptor {
             family: "TestFont".to_string(),

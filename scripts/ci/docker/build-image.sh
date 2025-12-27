@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#
-# Build Docker image for specified variant
-# Used by: ci-docker.yaml - Build Docker image step
-# Arguments: VARIANT (core|full)
-#
 
 set -euo pipefail
 

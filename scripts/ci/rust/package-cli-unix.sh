@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#
-# Package CLI binary as tar.gz archive (Unix)
-# Used by: ci-rust.yaml - Package CLI (Unix) step
-# Arguments: TARGET (e.g., x86_64-unknown-linux-gnu, aarch64-apple-darwin)
-#
 
 set -euo pipefail
 

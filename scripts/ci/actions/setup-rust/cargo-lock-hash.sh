@@ -9,13 +9,11 @@ if [ -f "Cargo.lock" ]; then
 		hash="$(shasum -a 256 Cargo.lock | cut -d' ' -f1)"
 		echo "Generated Cargo.lock hash using shasum"
 	else
-		# Fallback to timestamp-based hash (suboptimal for caching)
 		hash="$(stat -c %Y Cargo.lock 2>/dev/null || stat -f %m Cargo.lock)"
 		echo "WARNING: Neither sha256sum nor shasum available, using timestamp-based hash"
 		echo "WARNING: This may cause unnecessary cache invalidation"
 	fi
 else
-	# Fallback when Cargo.lock doesn't exist (should be rare)
 	hash="$(date +%Y%m%d)"
 	echo "WARNING: Cargo.lock not found, using date-based hash"
 fi

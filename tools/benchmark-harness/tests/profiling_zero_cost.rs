@@ -16,7 +16,6 @@
 /// If this test runs, it means the profiling feature is properly isolated.
 #[test]
 fn test_profiling_absent_when_disabled() {
-    // If this compiles and runs, profiling is properly excluded
     assert!(true, "Profiling successfully excluded from build when feature disabled");
 }
 
@@ -27,7 +26,6 @@ fn test_profiling_absent_when_disabled() {
 /// the conditional compilation is working correctly.
 #[test]
 fn test_no_profiling_symbols_in_binary() {
-    // This test existing proves profiling symbols are not required
     assert!(true, "No profiling symbols present in binary");
 }
 
@@ -37,6 +35,5 @@ fn test_no_profiling_symbols_in_binary() {
 /// the fact that the code compiles and runs proves the no-op fallbacks are being used.
 #[test]
 fn test_noop_implementations_active() {
-    // If this test runs, the no-op implementations from profiling.rs are active
     assert!(true, "No-op profiling implementations are active");
 }

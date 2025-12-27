@@ -3,7 +3,6 @@
  * Basic usage examples for Kreuzberg PHP bindings
  */
 
-// Check if extension is loaded
 if (!extension_loaded('kreuzberg')) {
     die("Kreuzberg extension not loaded. Please install and enable it in php.ini\n");
 }
@@ -11,7 +10,6 @@ if (!extension_loaded('kreuzberg')) {
 echo "Kreuzberg PHP Bindings Examples\n";
 echo "================================\n\n";
 
-// Example 1: Simple file extraction
 echo "Example 1: Extract a PDF file\n";
 echo "------------------------------\n";
 try {
@@ -24,7 +22,6 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 2: Extract with custom OCR configuration
 echo "Example 2: Extract with custom OCR\n";
 echo "-----------------------------------\n";
 try {
@@ -40,7 +37,6 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 3: Extract from bytes
 echo "Example 3: Extract from bytes\n";
 echo "------------------------------\n";
 try {
@@ -56,13 +52,11 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 4: Batch processing
 echo "Example 4: Batch processing\n";
 echo "---------------------------\n";
 try {
     $paths = ["doc1.pdf", "doc2.txt", "doc3.docx"];
 
-    // Filter to only existing files
     $existing_paths = array_filter($paths, 'file_exists');
 
     if (!empty($existing_paths)) {
@@ -80,7 +74,6 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 5: Working with tables
 echo "Example 5: Extract tables\n";
 echo "-------------------------\n";
 try {
@@ -91,7 +84,6 @@ try {
             echo "Table on page {$table->page_number}:\n";
             echo $table->markdown . "\n";
 
-            // Show dimensions
             $rows = count($table->cells);
             $cols = $rows > 0 ? count($table->cells[0]) : 0;
             echo "Dimensions: {$rows} rows x {$cols} columns\n\n";
@@ -103,7 +95,6 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 6: MIME type detection
 echo "Example 6: MIME type detection\n";
 echo "-------------------------------\n";
 try {
@@ -120,7 +111,6 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 7: Metadata extraction
 echo "Example 7: Metadata extraction\n";
 echo "-------------------------------\n";
 try {
@@ -139,7 +129,6 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 8: Language detection
 echo "Example 8: Language detection\n";
 echo "------------------------------\n";
 try {
@@ -165,7 +154,6 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 9: Chunking with embeddings
 echo "Example 9: Text chunking\n";
 echo "------------------------\n";
 try {
@@ -197,7 +185,6 @@ try {
     echo "Error: " . $e->getMessage() . "\n\n";
 }
 
-// Example 10: Version info
 echo "Example 10: Version info\n";
 echo "------------------------\n";
 $version = kreuzberg_version();

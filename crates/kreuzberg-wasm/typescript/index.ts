@@ -100,7 +100,6 @@ import { TesseractWasmBackend } from "./ocr/tesseract-wasm-backend.js";
 import { detectRuntime, hasWasm, isBrowser } from "./runtime.js";
 import type { ExtractionConfig as ExtractionConfigType, ExtractionResult } from "./types.js";
 
-// Re-export adapter utilities for convenient access
 export {
 	configToJS,
 	fileToUint8Array,
@@ -108,7 +107,6 @@ export {
 	jsToExtractionResult,
 	wrapWasmError,
 } from "./adapters/wasm-adapter.js";
-// Re-export OCR registry
 export {
 	clearOcrBackends,
 	getOcrBackend,
@@ -116,9 +114,7 @@ export {
 	registerOcrBackend,
 	unregisterOcrBackend,
 } from "./ocr/registry.js";
-// Re-export OCR backends
 export { TesseractWasmBackend } from "./ocr/tesseract-wasm-backend.js";
-// Re-export runtime utilities
 export {
 	detectRuntime,
 	getRuntimeInfo,
@@ -163,10 +159,7 @@ export type {
 	TokenReductionConfig,
 } from "./types.js";
 
-// WASM binding imports (to be populated during build)
-// Type definition for the WASM module interface
 type WasmModule = {
-	// Extraction functions
 	extractBytes: (data: Uint8Array, mimeType: string, config: Record<string, unknown> | null) => Promise<unknown>;
 	extractBytesSync: (data: Uint8Array, mimeType: string, config: Record<string, unknown> | null) => unknown;
 	batchExtractBytes: (
@@ -182,48 +175,39 @@ type WasmModule = {
 	extractFile: (file: File, mimeType: string | null, config: Record<string, unknown> | null) => Promise<unknown>;
 	batchExtractFiles: (files: File[], config: Record<string, unknown> | null) => Promise<unknown>;
 
-	// MIME and file type utilities
 	detectMimeFromBytes: (data: Uint8Array) => string;
 	normalizeMimeType: (mimeType: string) => string;
 	getMimeFromExtension: (extension: string) => string | null;
 	getExtensionsForMime: (mimeType: string) => string[];
 
-	// Configuration
 	loadConfigFromString: (content: string, format: string) => Record<string, unknown>;
 	discoverConfig: () => Record<string, unknown>;
 
-	// Module information
 	version: () => string;
 	get_module_info: () => ModuleInfo;
 
-	// OCR backend management
 	register_ocr_backend: (backend: unknown) => void;
 	unregister_ocr_backend: (name: string) => void;
 	list_ocr_backends: () => string[];
 	clear_ocr_backends: () => void;
 
-	// Post-processor management
 	register_post_processor: (processor: unknown) => void;
 	unregister_post_processor: (name: string) => void;
 	list_post_processors: () => string[];
 	clear_post_processors: () => void;
 
-	// Validator management
 	register_validator: (validator: unknown) => void;
 	unregister_validator: (name: string) => void;
 	list_validators: () => string[];
 	clear_validators: () => void;
 
-	// PDF/WASM utilities
 	initialize_pdfium_render: (pdfiumWasmModule: unknown, localWasmModule: unknown, debug: boolean) => boolean;
 	read_block_from_callback_wasm: (param: number, position: number, pBuf: number, size: number) => number;
 	write_block_from_callback_wasm: (param: number, buf: number, size: number) => number;
 
-	// Initialization
 	default?: () => Promise<void>;
 };
 
-// ModuleInfo type definition
 type ModuleInfo = {
 	name: () => string;
 	version: () => string;
@@ -294,27 +278,21 @@ async function initializePdfiumAsync(wasmModule: WasmModule): Promise<void> {
 		return;
 	}
 
-	// Skip PDFium initialization for non-browser environments (Deno, Node.js)
-	// Browser environments will load pdfium.js from the package
 	if (!isBrowser()) {
 		console.debug("PDFium initialization skipped (non-browser environment)");
 		return;
 	}
 
 	try {
-		// For browser environments, load PDFium from the package distribution
 		// @ts-expect-error - Dynamic module loading
-		// @vite-ignore - PDFium is loaded from dist at runtime
 		const pdfiumModule = await import("./pdfium.js");
 		const pdfium = typeof pdfiumModule.default === "function" ? await pdfiumModule.default() : pdfiumModule;
 
-		// Bind PDFium to the Rust module
 		const success = wasmModule.initialize_pdfium_render(pdfium, wasmModule, false);
 		if (!success) {
 			console.warn("PDFium initialization returned false");
 		}
 	} catch (error) {
-		// Don't throw - PDF extraction will fail gracefully if PDFium isn't available
 		console.debug("PDFium initialization error:", error);
 	}
 }
@@ -324,39 +302,31 @@ export async function initWasm(): Promise<void> {
 		return;
 	}
 
-	// Handle concurrent init calls
 	if (initializationPromise) {
 		return initializationPromise;
 	}
 
 	initializationPromise = (async () => {
 		try {
-			// Check WASM support
 			if (!hasWasm()) {
 				throw new Error("WebAssembly is not supported in this environment");
 			}
 
-			// Dynamic WASM import and initialization
 			let wasmModule: unknown;
 			try {
-				// Try importing from wasm-pack output (pkg/) shipped with the published package.
 				// eslint-disable-next-line @typescript-eslint/no-implied-eval
-				wasmModule = await import(/* @vite-ignore */ "../pkg/kreuzberg_wasm.js");
+				wasmModule = await import("../pkg/kreuzberg_wasm.js");
 			} catch {
-				// Fallback to dist-relative path (legacy builds which copy wasm-pack outputs into dist/)
 				// @ts-expect-error - Dynamic import path
 				// eslint-disable-next-line @typescript-eslint/no-implied-eval
-				wasmModule = await import(/* @vite-ignore */ "./kreuzberg_wasm.js");
+				wasmModule = await import("./kreuzberg_wasm.js");
 			}
 			wasm = wasmModule as unknown as WasmModule;
 
-			// Call default initialization if available (for some wasm-pack targets)
 			if (wasm && typeof wasm.default === "function") {
 				await wasm.default();
 			}
 
-			// Auto-initialize PDFium for browser environments
-			// PDFium is required for PDF extraction in WASM
 			if (isBrowser() && wasm && typeof wasm.initialize_pdfium_render === "function") {
 				initializePdfiumAsync(wasm).catch((error) => {
 					console.warn("PDFium auto-initialization failed (PDF extraction disabled):", error);
@@ -480,7 +450,6 @@ export async function extractBytes(
 	}
 
 	try {
-		// Validate input
 		if (!data || data.length === 0) {
 			throw new Error("Document data cannot be empty");
 		}
@@ -489,18 +458,14 @@ export async function extractBytes(
 			throw new Error("MIME type is required");
 		}
 
-		// Normalize config for WASM
 		const normalizedConfig = configToJS(config ?? null);
 
-		// Call WASM function
 		const result = await wasm.extractBytes(data, mimeType, normalizedConfig);
 
-		// Validate result
 		if (!result) {
 			throw new Error("Invalid extraction result: no result from WASM module");
 		}
 
-		// Convert and return result
 		return jsToExtractionResult(result);
 	} catch (error) {
 		throw wrapWasmError(error, "extracting from bytes");
@@ -560,31 +525,23 @@ export async function extractFile(
 			throw new Error("File path is required");
 		}
 
-		// This function is only suitable for Node.js/Deno/Bun environments
-		// Browser environments should use extractBytes with fileToUint8Array
 		const runtime = detectRuntime();
 		if (runtime === "browser") {
 			throw new Error("Use extractBytes with fileToUint8Array for browser environments");
 		}
 
-		// Read file based on runtime
 		let fileData: Uint8Array;
 
 		if (runtime === "node") {
-			// Node.js: use dynamic import to avoid issues in non-Node.js environments
-			// @vite-ignore - Dynamic require for Node.js only
 			const { readFile } = await import("node:fs/promises");
 			const buffer = await readFile(path);
 			fileData = new Uint8Array(buffer);
 		} else if (runtime === "deno") {
-			// Deno: use Deno.readFile
 			const deno = (globalThis as Record<string, unknown>).Deno as {
 				readFile: (path: string) => Promise<Uint8Array>;
 			};
 			fileData = await deno.readFile(path);
 		} else if (runtime === "bun") {
-			// Bun: use dynamic import for fs/promises (compatible with Node.js API)
-			// @vite-ignore - Dynamic require for Bun only
 			const { readFile } = await import("node:fs/promises");
 			const buffer = await readFile(path);
 			fileData = new Uint8Array(buffer);
@@ -592,7 +549,6 @@ export async function extractFile(
 			throw new Error(`Unsupported runtime for file extraction: ${runtime}`);
 		}
 
-		// Detect MIME type if not provided
 		let detectedMimeType = mimeType;
 		if (!detectedMimeType) {
 			detectedMimeType = wasm.detectMimeFromBytes(fileData);
@@ -602,10 +558,8 @@ export async function extractFile(
 			throw new Error("Could not detect MIME type for file. Please provide mimeType parameter.");
 		}
 
-		// Normalize MIME type
 		detectedMimeType = wasm.normalizeMimeType(detectedMimeType);
 
-		// Call extractBytes with the file contents
 		return await extractBytes(fileData, detectedMimeType, config);
 	} catch (error) {
 		throw wrapWasmError(error, `extracting from file: ${path}`);
@@ -661,7 +615,6 @@ export async function extractFromFile(
 		const bytes = await fileToUint8Array(file);
 		let type = mimeType ?? (file instanceof File ? file.type : "application/octet-stream");
 
-		// Normalize MIME type
 		type = wasm.normalizeMimeType(type);
 
 		return await extractBytes(bytes, type, config);
@@ -703,7 +656,6 @@ export function extractBytesSync(
 	}
 
 	try {
-		// Validate input
 		if (!data || data.length === 0) {
 			throw new Error("Document data cannot be empty");
 		}
@@ -712,18 +664,14 @@ export function extractBytesSync(
 			throw new Error("MIME type is required");
 		}
 
-		// Normalize config for WASM
 		const normalizedConfig = configToJS(config ?? null);
 
-		// Call WASM function
 		const result = wasm.extractBytesSync(data, mimeType, normalizedConfig);
 
-		// Validate result
 		if (!result) {
 			throw new Error("Invalid extraction result: no result from WASM module");
 		}
 
-		// Convert and return result
 		return jsToExtractionResult(result);
 	} catch (error) {
 		throw wrapWasmError(error, "extracting from bytes (sync)");
@@ -764,7 +712,6 @@ export async function batchExtractBytes(
 	}
 
 	try {
-		// Validate input
 		if (!Array.isArray(files)) {
 			throw new Error("Files parameter must be an array");
 		}
@@ -773,7 +720,6 @@ export async function batchExtractBytes(
 			throw new Error("Files array cannot be empty");
 		}
 
-		// Extract data arrays and MIME types
 		const dataList: Uint8Array[] = [];
 		const mimeTypes: string[] = [];
 
@@ -801,18 +747,14 @@ export async function batchExtractBytes(
 			mimeTypes.push(f.mimeType);
 		}
 
-		// Normalize config for WASM
 		const normalizedConfig = configToJS(config ?? null);
 
-		// Call WASM function
 		const results = await wasm.batchExtractBytes(dataList, mimeTypes, normalizedConfig);
 
-		// Validate results
 		if (!Array.isArray(results)) {
 			throw new Error("Invalid batch extraction result: expected array");
 		}
 
-		// Convert each result
 		return results.map((result, index) => {
 			if (!result) {
 				throw new Error(`Invalid extraction result at index ${index}: no result from WASM module`);
@@ -859,7 +801,6 @@ export function batchExtractBytesSync(
 	}
 
 	try {
-		// Validate input
 		if (!Array.isArray(files)) {
 			throw new Error("Files parameter must be an array");
 		}
@@ -868,7 +809,6 @@ export function batchExtractBytesSync(
 			throw new Error("Files array cannot be empty");
 		}
 
-		// Extract data arrays and MIME types
 		const dataList: Uint8Array[] = [];
 		const mimeTypes: string[] = [];
 
@@ -896,18 +836,14 @@ export function batchExtractBytesSync(
 			mimeTypes.push(f.mimeType);
 		}
 
-		// Normalize config for WASM
 		const normalizedConfig = configToJS(config ?? null);
 
-		// Call WASM function
 		const results = wasm.batchExtractBytesSync(dataList, mimeTypes, normalizedConfig);
 
-		// Validate results
 		if (!Array.isArray(results)) {
 			throw new Error("Invalid batch extraction result: expected array");
 		}
 
-		// Convert each result
 		return results.map((result, index) => {
 			if (!result) {
 				throw new Error(`Invalid extraction result at index ${index}: no result from WASM module`);
@@ -950,7 +886,6 @@ export async function batchExtractFiles(
 	}
 
 	try {
-		// Validate input
 		if (!Array.isArray(files)) {
 			throw new Error("Files parameter must be an array");
 		}
@@ -959,7 +894,6 @@ export async function batchExtractFiles(
 			throw new Error("Files array cannot be empty");
 		}
 
-		// Convert all files to Uint8Array and collect MIME types
 		const byteFiles: Array<{ data: Uint8Array; mimeType: string }> = [];
 
 		for (let i = 0; i < files.length; i += 1) {
@@ -975,7 +909,6 @@ export async function batchExtractFiles(
 			});
 		}
 
-		// Call batchExtractBytes with converted files
 		return await batchExtractBytes(byteFiles, config);
 	} catch (error) {
 		throw wrapWasmError(error, "batch extracting from files");
@@ -1062,12 +995,10 @@ export async function batchExtractFiles(
  * ```
  */
 export async function enableOcr(): Promise<void> {
-	// Check if WASM module is initialized
 	if (!initialized) {
 		throw new Error("WASM module not initialized. Call initWasm() first.");
 	}
 
-	// Check if in browser environment
 	if (!isBrowser()) {
 		throw new Error(
 			"OCR is only available in browser environments. TesseractWasmBackend requires Web Workers and createImageBitmap.",
@@ -1075,11 +1006,9 @@ export async function enableOcr(): Promise<void> {
 	}
 
 	try {
-		// Create and initialize backend
 		const backend = new TesseractWasmBackend();
 		await backend.initialize();
 
-		// Register the backend
 		registerOcrBackend(backend);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

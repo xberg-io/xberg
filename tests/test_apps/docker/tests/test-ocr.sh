@@ -9,11 +9,9 @@ echo -e "${BLUE}================================"
 echo "OCR Tests"
 echo "================================${NC}"
 
-# Core container API tests (port 8000)
 CORE_API="http://localhost:8000"
 FULL_API="http://localhost:8001"
 
-# Test 1: Core can OCR image file (default)
 echo ""
 log_info "Test 1: Core can OCR image file (default)"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -25,7 +23,6 @@ else
 	log_warn "Core OCR response: $response"
 fi
 
-# Test 2: Full can OCR image file (default)
 echo ""
 log_info "Test 2: Full can OCR image file (default)"
 response=$(curl -s -X POST "$FULL_API/extract" \
@@ -37,7 +34,6 @@ else
 	log_warn "Full OCR response: $response"
 fi
 
-# Test 3: Core can force OCR on text PDF (scanned document simulation)
 echo ""
 log_info "Test 3: Core can force OCR on image-only PDF"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -49,7 +45,6 @@ else
 	log_warn "Core force OCR response: $response"
 fi
 
-# Test 4: Full can force OCR on image-only PDF
 echo ""
 log_info "Test 4: Full can force OCR on image-only PDF"
 response=$(curl -s -X POST "$FULL_API/extract" \
@@ -61,7 +56,6 @@ else
 	log_warn "Full force OCR response: $response"
 fi
 
-# Test 5: Core OCR with PNG image
 echo ""
 log_info "Test 5: Core OCR with PNG image"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -73,7 +67,6 @@ else
 	log_warn "Core OCR PNG response: $response"
 fi
 
-# Test 6: Full OCR with PNG image
 echo ""
 log_info "Test 6: Full OCR with PNG image"
 response=$(curl -s -X POST "$FULL_API/extract" \
@@ -85,7 +78,6 @@ else
 	log_warn "Full OCR PNG response: $response"
 fi
 
-# Test 7: Core OCR with large PDF (has both text and images)
 echo ""
 log_info "Test 7: Core OCR with large PDF"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -97,7 +89,6 @@ else
 	log_warn "Core large PDF response: $response"
 fi
 
-# Test 8: Full OCR with large PDF
 echo ""
 log_info "Test 8: Full OCR with large PDF"
 response=$(curl -s -X POST "$FULL_API/extract" \
@@ -109,7 +100,6 @@ else
 	log_warn "Full large PDF response: $response"
 fi
 
-# Test 9: Core normal PDF extraction (text PDF, no OCR needed)
 echo ""
 log_info "Test 9: Core normal PDF extraction without OCR"
 response=$(curl -s -X POST "$CORE_API/extract" \
@@ -121,7 +111,6 @@ else
 	log_warn "Core PDF no-OCR response: $response"
 fi
 
-# Test 10: Full normal PDF extraction (text PDF, no OCR needed)
 echo ""
 log_info "Test 10: Full normal PDF extraction without OCR"
 response=$(curl -s -X POST "$FULL_API/extract" \

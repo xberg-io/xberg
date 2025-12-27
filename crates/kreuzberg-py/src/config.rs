@@ -2286,10 +2286,8 @@ pub fn config_get_field(config: ExtractionConfig, field_name: &str) -> PyResult<
 #[pyfunction]
 #[pyo3(signature = (base, override_config))]
 pub fn config_merge(py: Python<'_>, base: Py<ExtractionConfig>, override_config: &ExtractionConfig) -> PyResult<()> {
-    // Shallow merge: override non-default fields from override into base
     let override_default = kreuzberg::ExtractionConfig::default();
 
-    // Get mutable borrow of base
     let mut base_mut = base.borrow_mut(py);
 
     if override_config.inner.use_cache != override_default.use_cache {

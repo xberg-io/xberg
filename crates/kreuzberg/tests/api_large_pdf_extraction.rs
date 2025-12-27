@@ -40,20 +40,15 @@ fn create_mock_pdf_content(size_bytes: usize) -> Vec<u8> {
     let pdf_header = b"%PDF-1.4\n";
     let mut content = pdf_header.to_vec();
 
-    // PDF object 1: catalog
     let catalog = b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n";
     content.extend_from_slice(catalog);
 
-    // PDF object 2: pages
     let pages = b"2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n";
     content.extend_from_slice(pages);
 
-    // PDF object 3: page with content
     let page_header = b"3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>\nendobj\n";
     content.extend_from_slice(page_header);
 
-    // PDF object 4: stream with text content
-    // Fill with repeated text to reach target size
     let text_content = b"BT /F1 12 Tf 50 750 Td (Large PDF Content for Testing) Tj ET\n";
     let stream_prefix = b"4 0 obj\n<< /Length ";
     let stream_suffix = b" >>\nstream\n";
@@ -71,7 +66,6 @@ fn create_mock_pdf_content(size_bytes: usize) -> Vec<u8> {
     content.extend_from_slice(stream_size.to_string().as_bytes());
     content.extend_from_slice(stream_suffix);
 
-    // Add repeated text content
     for _ in 0..text_repeat_count {
         content.extend_from_slice(text_content);
         content.push(b'\n');
@@ -79,7 +73,6 @@ fn create_mock_pdf_content(size_bytes: usize) -> Vec<u8> {
 
     content.extend_from_slice(stream_end);
 
-    // PDF xref and trailer
     let xref_offset = content.len();
     let xref = b"xref\n0 5\n0000000000 65535 f \n";
     content.extend_from_slice(xref);
@@ -110,10 +103,8 @@ fn create_mock_pdf_content(size_bytes: usize) -> Vec<u8> {
 fn create_multipart_pdf_request(boundary: &str, pdf_content: &[u8], filename: &str) -> Vec<u8> {
     let mut body = Vec::new();
 
-    // Start boundary
     body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
 
-    // Content-Disposition header
     body.extend_from_slice(
         format!(
             "Content-Disposition: form-data; name=\"files\"; filename=\"{}\"\r\n",
@@ -122,16 +113,12 @@ fn create_multipart_pdf_request(boundary: &str, pdf_content: &[u8], filename: &s
         .as_bytes(),
     );
 
-    // Content-Type header
     body.extend_from_slice(b"Content-Type: application/pdf\r\n");
 
-    // Empty line before content
     body.extend_from_slice(b"\r\n");
 
-    // PDF content
     body.extend_from_slice(pdf_content);
 
-    // End boundary
     body.extend_from_slice(format!("\r\n--{}--\r\n", boundary).as_bytes());
 
     body
@@ -150,11 +137,10 @@ fn create_multipart_pdf_request(boundary: &str, pdf_content: &[u8], filename: &s
 /// (Payload Too Large).
 #[tokio::test]
 async fn test_extract_5mb_pdf_file() {
-    // Create router with 10MB limits (should be sufficient)
     let limits = ApiSizeLimits::from_mb(10, 10);
     let router = create_router_with_limits(ExtractionConfig::default(), limits);
 
-    let pdf_size = 5 * 1024 * 1024; // 5 MB
+    let pdf_size = 5 * 1024 * 1024;
     let pdf_content = create_mock_pdf_content(pdf_size);
 
     let boundary = "----large-pdf-boundary";
@@ -188,11 +174,10 @@ async fn test_extract_5mb_pdf_file() {
 /// it indicates the server's default size limits are too restrictive.
 #[tokio::test]
 async fn test_extract_10mb_pdf_file() {
-    // Create router with 20MB limits
     let limits = ApiSizeLimits::from_mb(20, 20);
     let router = create_router_with_limits(ExtractionConfig::default(), limits);
 
-    let pdf_size = 10 * 1024 * 1024; // 10 MB
+    let pdf_size = 10 * 1024 * 1024;
     let pdf_content = create_mock_pdf_content(pdf_size);
 
     let boundary = "----large-pdf-boundary";
@@ -228,13 +213,12 @@ async fn test_extract_10mb_pdf_file() {
 /// The request should succeed with HTTP 200. The test uses very large limits
 /// (500MB) to allow the file to be processed.
 #[tokio::test]
-#[ignore] // Ignore by default due to memory/time requirements
+#[ignore]
 async fn test_extract_100mb_pdf_file() {
-    // Create router with 500MB limits
     let limits = ApiSizeLimits::from_mb(500, 500);
     let router = create_router_with_limits(ExtractionConfig::default(), limits);
 
-    let pdf_size = 100 * 1024 * 1024; // 100 MB
+    let pdf_size = 100 * 1024 * 1024;
     let pdf_content = create_mock_pdf_content(pdf_size);
 
     let boundary = "----large-pdf-boundary";
@@ -269,11 +253,10 @@ async fn test_extract_100mb_pdf_file() {
 /// configured for smaller limits, then larger limits.
 #[tokio::test]
 async fn test_size_limits_configurable() {
-    let pdf_size = 6 * 1024 * 1024; // 6 MB
+    let pdf_size = 6 * 1024 * 1024;
     let pdf_content = create_mock_pdf_content(pdf_size);
     let boundary = "----size-limit-test";
 
-    // Test 1: Router with only 5MB limit should reject
     let small_limits = ApiSizeLimits::from_mb(5, 5);
     let router_small = create_router_with_limits(ExtractionConfig::default(), small_limits);
 
@@ -295,7 +278,6 @@ async fn test_size_limits_configurable() {
         "6MB file should be rejected when limit is 5MB"
     );
 
-    // Test 2: Router with 10MB limit should accept
     let large_limits = ApiSizeLimits::from_mb(10, 10);
     let router_large = create_router_with_limits(ExtractionConfig::default(), large_limits);
 
@@ -327,7 +309,6 @@ async fn test_size_limits_configurable() {
 /// different request/field limits.
 #[tokio::test]
 async fn test_api_size_limits_from_mb() {
-    // Create various limit configurations
     let limits_15 = ApiSizeLimits::from_mb(15, 15);
     assert_eq!(limits_15.max_request_body_bytes, 15 * 1024 * 1024);
     assert_eq!(limits_15.max_multipart_field_bytes, 15 * 1024 * 1024);
@@ -336,11 +317,9 @@ async fn test_api_size_limits_from_mb() {
     assert_eq!(limits_20_10.max_request_body_bytes, 20 * 1024 * 1024);
     assert_eq!(limits_20_10.max_multipart_field_bytes, 10 * 1024 * 1024);
 
-    // Verify the limits are respected by creating routers
     let router_15 = create_router_with_limits(ExtractionConfig::default(), limits_15);
     let router_20_10 = create_router_with_limits(ExtractionConfig::default(), limits_20_10);
 
-    // Both routers should be created successfully
     assert!(size_of_val(&router_15) > 0);
     assert!(size_of_val(&router_20_10) > 0);
 }
@@ -360,7 +339,7 @@ async fn test_multipart_large_payload_streaming() {
     let limits = ApiSizeLimits::from_mb(15, 15);
     let router = create_router_with_limits(ExtractionConfig::default(), limits);
 
-    let pdf_size = 12 * 1024 * 1024; // 12 MB
+    let pdf_size = 12 * 1024 * 1024;
     let pdf_content = create_mock_pdf_content(pdf_size);
 
     let boundary = "----multipart-stream-test";
@@ -395,18 +374,14 @@ async fn test_multipart_large_payload_streaming() {
 /// files (due to memory constraints), but verifies configuration is possible.
 #[tokio::test]
 async fn test_gigabyte_scale_limits() {
-    // Configure limits for 1GB requests and fields
     let limits = ApiSizeLimits::from_mb(1024, 1024);
     assert_eq!(limits.max_request_body_bytes, 1024 * 1024 * 1024);
     assert_eq!(limits.max_multipart_field_bytes, 1024 * 1024 * 1024);
 
-    // Create router with gigabyte-scale limits
     let router = create_router_with_limits(ExtractionConfig::default(), limits);
 
-    // Verify router was created successfully
     assert!(size_of_val(&router) > 0);
 
-    // Router should be ready to handle requests
     let health_request = Request::builder()
         .uri("/health")
         .body(Body::empty())
@@ -430,28 +405,25 @@ async fn test_extract_multiple_large_pdfs() {
     let limits = ApiSizeLimits::from_mb(15, 15);
     let router = create_router_with_limits(ExtractionConfig::default(), limits);
 
-    let pdf_size = 4 * 1024 * 1024; // 4 MB per file
+    let pdf_size = 4 * 1024 * 1024;
     let pdf_content_1 = create_mock_pdf_content(pdf_size);
     let pdf_content_2 = create_mock_pdf_content(pdf_size);
 
     let boundary = "----multi-large-boundary";
     let mut request_body = Vec::new();
 
-    // First file
     request_body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
     request_body.extend_from_slice(b"Content-Disposition: form-data; name=\"files\"; filename=\"large1.pdf\"\r\n");
     request_body.extend_from_slice(b"Content-Type: application/pdf\r\n\r\n");
     request_body.extend_from_slice(&pdf_content_1);
     request_body.extend_from_slice(b"\r\n");
 
-    // Second file
     request_body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
     request_body.extend_from_slice(b"Content-Disposition: form-data; name=\"files\"; filename=\"large2.pdf\"\r\n");
     request_body.extend_from_slice(b"Content-Type: application/pdf\r\n\r\n");
     request_body.extend_from_slice(&pdf_content_2);
     request_body.extend_from_slice(b"\r\n");
 
-    // End boundary
     request_body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
 
     let request = Request::builder()
@@ -483,17 +455,13 @@ async fn test_extract_multiple_large_pdfs() {
 /// demonstrating the pattern that environment variables should follow.
 #[tokio::test]
 async fn test_environment_configurable_limits_pattern() {
-    // Simulate parsing from environment (actual env reading is in server.rs)
-    // Environment variable format: KREUZBERG_MAX_UPLOAD_SIZE_MB=<value>
-    let env_configured_mb = 256; // Would come from env var
+    let env_configured_mb = 256;
 
     let limits = ApiSizeLimits::from_mb(env_configured_mb, env_configured_mb);
     let router = create_router_with_limits(ExtractionConfig::default(), limits);
 
-    // Verify the limits were applied
     assert_eq!(limits.max_request_body_bytes, 256 * 1024 * 1024);
 
-    // Router should be functional
     let health_request = Request::builder()
         .uri("/health")
         .body(Body::empty())

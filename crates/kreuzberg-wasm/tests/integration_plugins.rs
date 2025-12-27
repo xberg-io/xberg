@@ -21,21 +21,18 @@ wasm_bindgen_test_configure!(run_in_browser);
 fn create_mock_processor(name: &str) -> JsValue {
     let obj = js_sys::Object::new();
 
-    // Set name method
     let _ = Reflect::set(
         &obj,
         &JsValue::from_str("name"),
         &js_sys::Function::new_with_args("", &format!("return '{}'", name)),
     );
 
-    // Set process method
     let _ = Reflect::set(
         &obj,
         &JsValue::from_str("process"),
         &js_sys::Function::new_with_args("json", "return Promise.resolve(json)"),
     );
 
-    // Set processingStage method
     let _ = Reflect::set(
         &obj,
         &JsValue::from_str("processingStage"),
@@ -97,10 +94,6 @@ fn create_mock_ocr_backend(name: &str) -> JsValue {
 
     JsValue::from(obj)
 }
-
-// ============================================================================
-// Post-Processor Lifecycle Tests
-// ============================================================================
 
 /// Test post-processor registration succeeds
 #[wasm_bindgen_test]
@@ -226,10 +219,6 @@ fn test_list_post_processors_contains_registered() {
     assert!(arr.length() > 0, "Registered processor should appear in list");
 }
 
-// ============================================================================
-// Validator Lifecycle Tests
-// ============================================================================
-
 /// Test validator registration succeeds
 #[wasm_bindgen_test]
 fn test_register_validator_valid_succeeds() {
@@ -351,10 +340,6 @@ fn test_list_validators_contains_registered() {
     let arr = result.unwrap();
     assert!(arr.length() > 0, "Registered validator should appear in list");
 }
-
-// ============================================================================
-// OCR Backend Lifecycle Tests
-// ============================================================================
 
 /// Test OCR backend registration succeeds
 #[wasm_bindgen_test]
@@ -512,10 +497,6 @@ fn test_list_ocr_backends_contains_registered() {
     assert!(arr.length() > 0, "Registered backend should appear in list");
 }
 
-// ============================================================================
-// Multi-Plugin and Pipeline Tests
-// ============================================================================
-
 /// Test multiple post-processors can coexist
 #[wasm_bindgen_test]
 fn test_multiple_post_processors_coexist() {
@@ -570,21 +551,17 @@ fn test_processor_lifecycle_register_unregister_reregister() {
 
     let name = "lifecycle-proc".to_string();
 
-    // Register
     let p1 = create_mock_processor(&name);
     assert!(register_post_processor(p1).is_ok(), "First registration should succeed");
 
-    // Unregister
     assert!(
         unregister_post_processor(name.clone()).is_ok(),
         "Unregistration should succeed"
     );
 
-    // Re-register with same name
     let p2 = create_mock_processor(&name);
     assert!(register_post_processor(p2).is_ok(), "Re-registration should succeed");
 
-    // Verify it's registered
     let list = list_post_processors().unwrap();
     assert!(list.length() > 0, "Processor should be re-registered");
 }
@@ -596,21 +573,17 @@ fn test_validator_lifecycle_register_unregister_reregister() {
 
     let name = "lifecycle-val".to_string();
 
-    // Register
     let v1 = create_mock_validator(&name);
     assert!(register_validator(v1).is_ok(), "First registration should succeed");
 
-    // Unregister
     assert!(
         unregister_validator(name.clone()).is_ok(),
         "Unregistration should succeed"
     );
 
-    // Re-register
     let v2 = create_mock_validator(&name);
     assert!(register_validator(v2).is_ok(), "Re-registration should succeed");
 
-    // Verify
     let list = list_validators().unwrap();
     assert!(list.length() > 0, "Validator should be re-registered");
 }
@@ -652,7 +625,6 @@ fn test_selective_unregister_preserves_others() {
     register_post_processor(p2).ok();
     register_post_processor(p3).ok();
 
-    // Unregister only middle one
     unregister_post_processor("selective-2".to_string()).ok();
 
     let list = list_post_processors().unwrap();
@@ -665,7 +637,6 @@ fn test_selective_unregister_preserves_others() {
 /// Test clear operations reset all registries independently
 #[wasm_bindgen_test]
 fn test_clear_operations_independent() {
-    // Setup all registries
     let proc = create_mock_processor("indep-proc");
     let val = create_mock_validator("indep-val");
     let backend = create_mock_ocr_backend("indep-ocr");
@@ -674,7 +645,6 @@ fn test_clear_operations_independent() {
     register_validator(val).ok();
     register_ocr_backend(backend).ok();
 
-    // Clear only processors
     clear_post_processors().ok();
 
     let proc_list = list_post_processors().unwrap_or_else(|_| js_sys::Array::new());
@@ -691,7 +661,6 @@ fn test_clear_operations_independent() {
 fn test_registration_order_independent() {
     clear_post_processors().ok();
 
-    // Register in sequence
     let p1 = create_mock_processor("order-1");
     register_post_processor(p1).ok();
 
@@ -721,10 +690,8 @@ fn test_plugin_names_case_sensitive() {
     let v1 = create_mock_validator("CaseSensitive");
     register_validator(v1).ok();
 
-    // Try to unregister with different case
     let result = unregister_validator("casesensitive".to_string());
 
-    // Should fail because name doesn't match exactly
     assert!(
         result.is_err() || result.is_ok(),
         "Case sensitivity should be consistent"

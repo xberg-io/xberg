@@ -22,14 +22,12 @@ RSpec.configure do |config|
   config.order = :random
   Kernel.srand config.seed
 
-  # Helpers
   config.include(Module.new do
     def fixture_path(filename)
       File.join(__dir__, 'fixtures', filename)
     end
 
     def test_document_path(relative_path)
-      # Go up from packages/ruby/spec to project root, then into test_documents
       File.expand_path(File.join(__dir__, '..', '..', '..', 'test_documents', relative_path))
     end
 

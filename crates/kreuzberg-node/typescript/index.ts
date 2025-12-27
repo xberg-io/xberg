@@ -237,7 +237,6 @@ function loadNativeBinding(): NativeBinding {
 
 	const loadedModule = localRequire("../index.js") as unknown;
 
-	// Validate that the loaded module is an object
 	if (typeof loadedModule !== "object" || loadedModule === null) {
 		throw new Error(
 			"Native binding is not a valid object. " + "Ensure the native module is properly built and compatible.",
@@ -246,7 +245,6 @@ function loadNativeBinding(): NativeBinding {
 
 	const module = loadedModule as Record<string, unknown>;
 
-	// Validate that the loaded module has the expected methods
 	const requiredMethods = [
 		"extractFileSync",
 		"extractFile",
@@ -285,7 +283,7 @@ function getBinding(): NativeBinding {
 			return binding;
 		}
 	} catch (error) {
-		bindingInitialized = true; // Mark as attempted even on failure
+		bindingInitialized = true;
 		throw createNativeBindingError(error);
 	}
 
@@ -464,7 +462,6 @@ function convertResult(rawResult: unknown): ExtractionResult {
 		pages: undefined as unknown as PageContent[] | null,
 	};
 
-	// Only add these properties if they have values
 	// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
 	const chunksData = result["chunks"];
 	if (Array.isArray(chunksData)) {
@@ -773,7 +770,6 @@ export function extractFileSync(
 	mimeTypeOrConfig?: string | null | ExtractionConfigType,
 	maybeConfig?: ExtractionConfigType | null,
 ): ExtractionResult {
-	// Smart parameter handling: if second param is an object, treat it as config
 	let mimeType: string | null = null;
 	let config: ExtractionConfigType | null = null;
 
@@ -781,11 +777,9 @@ export function extractFileSync(
 		mimeType = mimeTypeOrConfig;
 		config = maybeConfig ?? null;
 	} else if (mimeTypeOrConfig !== null && typeof mimeTypeOrConfig === "object") {
-		// Second param is config object
 		config = mimeTypeOrConfig;
 		mimeType = null;
 	} else {
-		// Second param is null or undefined
 		config = maybeConfig ?? null;
 		mimeType = null;
 	}
@@ -835,7 +829,6 @@ export async function extractFile(
 	mimeTypeOrConfig?: string | null | ExtractionConfigType,
 	maybeConfig?: ExtractionConfigType | null,
 ): Promise<ExtractionResult> {
-	// Smart parameter handling: if second param is an object, treat it as config
 	let mimeType: string | null = null;
 	let config: ExtractionConfigType | null = null;
 
@@ -843,11 +836,9 @@ export async function extractFile(
 		mimeType = mimeTypeOrConfig;
 		config = maybeConfig ?? null;
 	} else if (mimeTypeOrConfig !== null && typeof mimeTypeOrConfig === "object") {
-		// Second param is config object
 		config = mimeTypeOrConfig;
 		mimeType = null;
 	} else {
-		// Second param is null or undefined
 		config = maybeConfig ?? null;
 		mimeType = null;
 	}
@@ -889,13 +880,10 @@ export function extractBytesSync(
 	mimeType: string,
 	config: ExtractionConfigType | null = null,
 ): ExtractionResult {
-	// Handle case where a file path is passed instead of bytes
 	let data: Uint8Array;
 	if (typeof dataOrPath === "string") {
-		// File path was passed, read it
 		data = readFileSync(dataOrPath);
 	} else {
-		// Bytes were passed
 		data = dataOrPath;
 	}
 
@@ -937,13 +925,10 @@ export async function extractBytes(
 	mimeType: string,
 	config: ExtractionConfigType | null = null,
 ): Promise<ExtractionResult> {
-	// Handle case where a file path is passed instead of bytes
 	let data: Uint8Array;
 	if (typeof dataOrPath === "string") {
-		// File path was passed, read it
 		data = readFileSync(dataOrPath);
 	} else {
-		// Bytes were passed
 		data = dataOrPath;
 	}
 

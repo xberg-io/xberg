@@ -119,7 +119,6 @@ public final class ExtractionResult {
      * @since 4.0.0
      */
     public int getPageCount() {
-        // Return directly from metadata if available
         if (this.metadata != null) {
             Object pages = this.metadata.get("pages");
             if (pages instanceof Map) {
@@ -156,7 +155,6 @@ public final class ExtractionResult {
      * @since 4.0.0
      */
     public Optional<String> getDetectedLanguage() {
-        // Check metadata.language first
         if (this.metadata != null) {
             Object langObj = this.metadata.get("language");
             if (langObj instanceof String lang && !lang.isEmpty()) {
@@ -164,7 +162,6 @@ public final class ExtractionResult {
             }
         }
 
-        // Fall back to first detected language
         if (this.detectedLanguages != null && !this.detectedLanguages.isEmpty()) {
             return Optional.of(this.detectedLanguages.get(0));
         }
@@ -187,7 +184,6 @@ public final class ExtractionResult {
             throw new IllegalArgumentException("fieldName cannot be null or empty");
         }
 
-        // Direct field access without FFI for top-level metadata fields
         if ("title".equals(fieldName)) {
             return Optional.ofNullable(this.metadata.get("title"));
         }
@@ -219,7 +215,6 @@ public final class ExtractionResult {
             return Optional.ofNullable(this.metadata.get("pages"));
         }
 
-        // For unknown fields, return empty
         return Optional.empty();
     }
 

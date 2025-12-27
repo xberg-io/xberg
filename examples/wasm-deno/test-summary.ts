@@ -14,7 +14,6 @@ async function main() {
 	console.log("Kreuzberg WASM Integration Test Summary");
 	console.log("=".repeat(70));
 
-	// Initialize the WASM module
 	console.log("\n1. WASM Module Initialization");
 	console.log("-".repeat(70));
 	try {
@@ -25,7 +24,6 @@ async function main() {
 		Deno.exit(1);
 	}
 
-	// Test supported format: HTML
 	console.log("\n2. Testing Supported Format: HTML");
 	console.log("-".repeat(70));
 	try {
@@ -41,7 +39,6 @@ async function main() {
 		console.error("✗ HTML extraction failed:", error);
 	}
 
-	// Test unsupported format: PDF
 	console.log("\n3. Testing Unsupported Format: PDF");
 	console.log("-".repeat(70));
 	try {
@@ -60,7 +57,6 @@ async function main() {
 		}
 	}
 
-	// Summary of WASM-target features
 	console.log("\n4. WASM-Target Supported Features");
 	console.log("-".repeat(70));
 	const supportedFormats = [

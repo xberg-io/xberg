@@ -22,10 +22,8 @@ RSpec.configure do |config|
   config.order = :random
   Kernel.srand config.seed
 
-  # Helpers
   config.include(Module.new do
     def test_document_path(relative_path)
-      # Go up from test_apps/ruby/spec to project root, then into test_documents
       File.expand_path(File.join(__dir__, '..', '..', '..', 'test_documents', relative_path))
     end
 

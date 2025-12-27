@@ -1,9 +1,4 @@
 #!/usr/bin/env bash
-#
-# Test script for shell utility libraries
-#
-# Demonstrates usage of all library functions and verifies they work correctly
-#
 
 set -euo pipefail
 
@@ -14,7 +9,6 @@ echo "Testing Kreuzberg Shell Utility Libraries"
 echo "=========================================="
 echo ""
 
-# Test common.sh
 echo "[1/3] Testing common.sh..."
 source "$LIB_DIR/common.sh"
 
@@ -35,7 +29,6 @@ echo "    ✓ Function available (not calling to avoid exit)"
 
 echo ""
 
-# Test library-paths.sh
 echo "[2/3] Testing library-paths.sh..."
 source "$LIB_DIR/library-paths.sh"
 
@@ -62,7 +55,6 @@ echo "    Current platform separator: '$SEP'"
 
 echo ""
 
-# Test tessdata.sh
 echo "[3/3] Testing tessdata.sh..."
 source "$LIB_DIR/tessdata.sh"
 
