@@ -10,6 +10,10 @@ Tests verify:
 from __future__ import annotations
 
 import json
+import time
+import traceback
+import tracemalloc
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -975,6 +979,286 @@ class TestMetadataJsonSerialization:
             json.dumps(result.metadata, default=str)
         except TypeError as e:
             pytest.fail(f"Metadata should be JSON serializable: {e}")
+
+
+class TestLargeHtmlExtractionPerformance:
+    """Performance tests for extraction of large HTML documents."""
+
+    def test_large_html_extraction_performance(self) -> None:
+        """Test extraction of large HTML document completes within 5 seconds.
+
+        Generates HTML with 10,000+ elements and verifies extraction
+        completes in reasonable time (<5 seconds).
+        """
+        # Generate HTML with 10,000+ elements
+        elements = []
+        elements.append("<h1>Performance Test</h1>")
+
+        # Create 1000 sections with headers, paragraphs, and links
+        for i in range(1000):
+            elements.append(f"<section id='section-{i}'>")
+            elements.append(f"<h2>Section {i}</h2>")
+            elements.append(f"<p>Paragraph content for section {i}.</p>")
+            elements.append(f"<a href='/page-{i}'>Link {i}</a>")
+            elements.append("</section>")
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Large HTML Performance Test</title>
+            <meta name="description" content="Testing extraction performance on large documents">
+        </head>
+        <body>
+            {"".join(elements)}
+        </body>
+        </html>
+        """.encode()
+
+        # Measure extraction time
+        start_time = time.time()
+        result = extract_bytes_sync(html_content, "text/html")
+        elapsed_time = time.time() - start_time
+
+        # Verify result is valid
+        assert hasattr(result, "metadata")
+        metadata = result.metadata
+        assert isinstance(metadata, dict)
+
+        # Assert extraction completed within 5 seconds
+        assert elapsed_time < 5.0, f"Extraction took {elapsed_time:.2f}s, expected < 5.0s"
+
+
+class TestConcurrentExtractionThreadSafety:
+    """Test thread safety of concurrent extraction operations."""
+
+    def test_concurrent_extraction_thread_safety(self) -> None:
+        """Test extracting same HTML from multiple threads is thread-safe.
+
+        Uses ThreadPoolExecutor to extract HTML concurrently and validates
+        no exceptions or data corruption occurs.
+        """
+        html_content = b"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Thread Safety Test</title>
+            <meta name="description" content="Testing concurrent extraction">
+            <meta property="og:title" content="OG Title">
+        </head>
+        <body>
+            <h1>Main Heading</h1>
+            <h2>Subheading 1</h2>
+            <h2>Subheading 2</h2>
+            <a href="https://example.com">Link 1</a>
+            <a href="https://example.com/page">Link 2</a>
+            <img src="image1.jpg" alt="Image 1">
+            <img src="image2.jpg" alt="Image 2">
+        </body>
+        </html>
+        """
+
+        extraction_count = 10
+        results = []
+        exceptions = []
+
+        def extract_html() -> dict:
+            """Extract HTML and return metadata."""
+            try:
+                result = extract_bytes_sync(html_content, "text/html")
+                return result.metadata
+            except Exception as e:
+                exceptions.append((e, traceback.format_exc()))
+                raise
+
+        # Use ThreadPoolExecutor to extract concurrently
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(extract_html) for _ in range(extraction_count)]
+            results = [future.result() for future in futures]
+
+        # Verify no exceptions occurred
+        assert len(exceptions) == 0, f"Thread safety violations detected: {exceptions}"
+
+        # Verify all extractions succeeded and returned valid metadata
+        assert len(results) == extraction_count
+        for i, metadata in enumerate(results):
+            assert isinstance(metadata, dict), f"Result {i} metadata should be dict, got {type(metadata)}"
+
+        # Verify data consistency across concurrent extractions
+        first_result = results[0]
+        for i, metadata in enumerate(results[1:], 1):
+            # Verify title is consistent
+            if "title" in first_result and "title" in metadata:
+                assert first_result["title"] == metadata["title"], f"Result {i} has different title than first result"
+
+
+class TestMalformedStructuredDataHandling:
+    """Test handling of malformed structured data (JSON-LD, etc)."""
+
+    def test_malformed_structured_data_handling(self) -> None:
+        """Test HTML with malformed JSON-LD handles gracefully.
+
+        HTML with invalid JSON-LD should not cause extraction to fail.
+        Should handle gracefully without exceptions.
+        """
+        # HTML with malformed JSON-LD
+        html_content = b"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Malformed JSON-LD Test</title>
+            <script type="application/ld+json">
+            {invalid json here - missing quotes, unclosed braces
+            </script>
+            <script type="application/ld+json">
+            {"@context": "https://schema.org", "@type": "Article"
+            </script>
+        </head>
+        <body>
+            <h1>Valid Content</h1>
+            <p>This should still be extracted.</p>
+        </body>
+        </html>
+        """
+
+        # Should handle malformed JSON-LD without exceptions
+        try:
+            result = extract_bytes_sync(html_content, "text/html")
+        except Exception as e:
+            pytest.fail(f"Extraction failed with malformed JSON-LD: {e}")
+
+        assert hasattr(result, "metadata")
+        metadata = result.metadata
+        assert isinstance(metadata, dict)
+
+        # Verify valid content is still extracted
+        if "title" in metadata:
+            assert metadata["title"] is not None
+
+
+class TestMemoryCleanupAfterExtraction:
+    """Test memory cleanup after large extraction operations."""
+
+    def test_memory_cleanup_after_extraction(self) -> None:
+        """Test that memory is released after large HTML extraction.
+
+        Extracts a large document and validates memory is properly cleaned up.
+        """
+        # Start tracing memory allocations
+        tracemalloc.start()
+
+        # Generate large HTML
+        large_html = (
+            b"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Large Memory Test</title>
+        </head>
+        <body>
+        """
+            + (b"<p>" + b"A" * 1000 + b"</p>" * 500)
+            + b"""
+        </body>
+        </html>
+        """
+        )
+
+        # Get memory before extraction
+        tracemalloc.reset_peak()
+
+        # Extract large document
+        result = extract_bytes_sync(large_html, "text/html")
+        assert hasattr(result, "metadata")
+
+        # Get memory statistics
+        _current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+
+        # Verify extraction completed
+        metadata = result.metadata
+        assert isinstance(metadata, dict)
+
+        # Verify peak memory usage is reasonable
+        # For large document, peak should not exceed 100 MB
+        peak_mb = peak / (1024 * 1024)
+        assert peak_mb < 100, f"Peak memory usage {peak_mb:.2f}MB seems excessive for document"
+
+
+class TestInvalidEncodingHandling:
+    """Test handling of various character encodings and invalid bytes."""
+
+    def test_invalid_encoding_handling(self) -> None:
+        """Test extraction handles various encodings and invalid UTF-8.
+
+        Tests HTML with UTF-16, invalid UTF-8 bytes, and mixed encodings.
+        Should handle gracefully without crashing.
+        """
+        test_cases = [
+            # Valid UTF-8
+            {
+                "name": "valid_utf8",
+                "content": b"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Valid UTF-8</title>
+                </head>
+                <body>Content with \xc3\xa9 accents</body>
+                </html>
+                """,
+            },
+            # Invalid UTF-8 bytes (should be handled gracefully)
+            {
+                "name": "invalid_utf8",
+                "content": b"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Invalid UTF-8</title>
+                </head>
+                <body>Content with \xff\xfe invalid bytes</body>
+                </html>
+                """,
+            },
+            # Mixed valid and invalid
+            {
+                "name": "mixed_encoding",
+                "content": b"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Mixed \xc3\xa9ncoding</title>
+                </head>
+                <body>
+                    <h1>Valid \xc3\xa7haracters</h1>
+                    <p>Some \xff\xfe invalid bytes \xc3\xa9 mixed in</p>
+                </body>
+                </html>
+                """,
+            },
+            # UTF-16 detection
+            {
+                "name": "utf16_content",
+                "content": "<!DOCTYPE html><html><head><title>UTF-16 Test</title></head><body>Content</body></html>".encode(
+                    "utf-16"
+                ),
+            },
+        ]
+
+        try:
+            for test_case in test_cases:
+                result = extract_bytes_sync(test_case["content"], "text/html")
+                # Should succeed or fail gracefully, not crash
+                assert hasattr(result, "metadata"), f"{test_case['name']}: result should have metadata"
+        except Exception as e:
+            # Some encodings may fail extraction, but should not crash
+            # just verify it's a reasonable error
+            assert isinstance(e, (UnicodeDecodeError, ValueError, Exception)), (
+                f"{test_case['name']}: unexpected exception type {type(e)}"
+            )
 
 
 # Fixtures

@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Kreuzberg;
 using Xunit;
 
@@ -935,7 +938,8 @@ public class MetadataTypesTests
         Assert.IsType<List<StructuredData>>(deserializedMetadata.StructuredData);
 
         // Verify collections have same count
-        Assert.Equal(originalMetadata.Keywords.Count, deserializedMetadata.Keywords.Count);
+        Assert.NotNull(deserializedMetadata);
+        Assert.Equal(originalMetadata.Keywords.Count, deserializedMetadata!.Keywords.Count);
         Assert.Equal(originalMetadata.OpenGraph.Count, deserializedMetadata.OpenGraph.Count);
         Assert.Equal(originalMetadata.TwitterCard.Count, deserializedMetadata.TwitterCard.Count);
         Assert.Equal(originalMetadata.Headers.Count, deserializedMetadata.Headers.Count);
@@ -1129,6 +1133,373 @@ public class MetadataTypesTests
         Assert.Equal("", deserialized.Href);
         Assert.Equal("", deserialized.Text);
         Assert.Equal("", deserialized.LinkType);
+    }
+
+    #endregion
+
+    #region Critical Missing Tests
+
+    /// <summary>
+    /// Tests async HTML extraction by wrapping synchronous extraction in a Task.
+    /// Verifies that metadata extraction completes successfully when run asynchronously.
+    /// </summary>
+    [Fact]
+    public async Task ExtractHtml_AsyncExtraction_CompletesSuccessfully()
+    {
+        // Arrange
+        var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
+        var config = new ExtractionConfig
+        {
+            HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
+        };
+
+        // Act - Run extraction asynchronously using Task.Run
+        var result = await Task.Run(() => KreuzbergClient.ExtractFileSync(htmlPath, config));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.NotNull(result.Metadata);
+        Assert.NotNull(result.Metadata.Format);
+        Assert.NotNull(result.Metadata.Format.Html);
+        Assert.IsType<HtmlMetadata>(result.Metadata.Format.Html);
+
+        // Verify metadata collections are properly initialized
+        Assert.NotNull(result.Metadata.Format.Html.Keywords);
+        Assert.NotNull(result.Metadata.Format.Html.OpenGraph);
+        Assert.NotNull(result.Metadata.Format.Html.TwitterCard);
+        Assert.NotNull(result.Metadata.Format.Html.Headers);
+        Assert.NotNull(result.Metadata.Format.Html.Links);
+        Assert.NotNull(result.Metadata.Format.Html.Images);
+        Assert.NotNull(result.Metadata.Format.Html.StructuredData);
+    }
+
+    /// <summary>
+    /// Tests HTML extraction performance with a large document containing 10,000+ elements.
+    /// Validates that extraction completes within acceptable timeframe for large documents.
+    /// Measures extraction speed and verifies it performs within performance thresholds.
+    /// </summary>
+    [Fact]
+    public void ExtractHtml_LargeDocument_PerformanceAcceptable()
+    {
+        // Arrange - Create a large HTML document with 10,000+ elements
+        var largeHtml = BuildLargeHtmlDocument(10000);
+        var config = new ExtractionConfig
+        {
+            HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
+        };
+
+        // Temporarily write to file for extraction
+        var tempPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempPath, largeHtml);
+
+            // Act - Measure extraction time for large document
+            var stopwatch = Stopwatch.StartNew();
+            var result = KreuzbergClient.ExtractFileSync(tempPath, config);
+            stopwatch.Stop();
+
+            // Assert - Verify extraction succeeds
+            Assert.NotNull(result);
+            Assert.True(result.Success);
+            Assert.NotNull(result.Metadata.Format.Html);
+
+            // Performance assertion: extraction should complete within 30 seconds for large document
+            Assert.True(stopwatch.ElapsedMilliseconds < 30000,
+                $"Extraction took {stopwatch.ElapsedMilliseconds}ms, expected < 30000ms");
+
+            // Verify metadata was extracted
+            Assert.NotNull(result.Metadata.Format.Html.Keywords);
+            Assert.NotNull(result.Metadata.Format.Html.Headers);
+            Assert.NotNull(result.Metadata.Format.Html.Links);
+            Assert.NotNull(result.Metadata.Format.Html.Images);
+
+            // Content should be present from large document
+            Assert.NotEmpty(result.Content);
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tests thread safety of HTML extraction by performing concurrent extractions
+    /// from multiple threads using Parallel.ForEach. Verifies that the extraction
+    /// engine handles concurrent access without race conditions or data corruption.
+    /// </summary>
+    [Fact]
+    public void ExtractHtml_ConcurrentExtraction_ThreadSafe()
+    {
+        // Arrange
+        var htmlPath = NativeTestHelper.GetDocumentPath("web/html.html");
+        var config = new ExtractionConfig
+        {
+            HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
+        };
+
+        // Create results array to store concurrent extraction results
+        var results = new ExtractionResult[Environment.ProcessorCount * 2];
+        var exceptions = new List<Exception>();
+        var lockObj = new object();
+
+        // Act - Perform concurrent extractions
+        Parallel.ForEach(
+            Enumerable.Range(0, results.Length),
+            new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount * 2 },
+            i =>
+            {
+                try
+                {
+                    var result = KreuzbergClient.ExtractFileSync(htmlPath, config);
+                    results[i] = result;
+                }
+                catch (Exception ex)
+                {
+                    lock (lockObj)
+                    {
+                        exceptions.Add(ex);
+                    }
+                }
+            });
+
+        // Assert - Verify no exceptions occurred during concurrent extraction
+        Assert.Empty(exceptions);
+
+        // All extraction results should be successful
+        foreach (var result in results)
+        {
+            Assert.NotNull(result);
+            Assert.True(result.Success);
+            Assert.NotNull(result.Metadata);
+            Assert.NotNull(result.Metadata.Format.Html);
+        }
+
+        // Verify all results have consistent metadata structure
+        var firstMetadata = results[0].Metadata.Format.Html;
+        foreach (var result in results.Skip(1))
+        {
+            var currentMetadata = result.Metadata.Format?.Html;
+            Assert.NotNull(currentMetadata);
+            Assert.NotNull(currentMetadata!.Keywords);
+            Assert.NotNull(currentMetadata.OpenGraph);
+            Assert.NotNull(currentMetadata.TwitterCard);
+            Assert.NotNull(currentMetadata.Headers);
+            Assert.NotNull(currentMetadata.Links);
+            Assert.NotNull(currentMetadata.Images);
+            Assert.NotNull(currentMetadata.StructuredData);
+        }
+    }
+
+    /// <summary>
+    /// Tests error handling of HTML extraction with invalid input.
+    /// Verifies graceful handling of null input, empty strings, and extremely large HTML.
+    /// Ensures extraction engine doesn't crash with invalid data and provides appropriate feedback.
+    /// </summary>
+    [Fact]
+    public void ExtractHtml_InvalidInput_HandlesGracefully()
+    {
+        var config = new ExtractionConfig
+        {
+            HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
+        };
+
+        // Test 1: Empty file handling
+        var emptyPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(emptyPath, string.Empty);
+
+            // Should handle empty file gracefully
+            var result = KreuzbergClient.ExtractFileSync(emptyPath, config);
+            Assert.NotNull(result);
+            // Empty file may or may not be successful depending on implementation
+            // The key is it doesn't crash
+            Assert.NotNull(result.Metadata);
+        }
+        finally
+        {
+            if (File.Exists(emptyPath))
+            {
+                File.Delete(emptyPath);
+            }
+        }
+
+        // Test 2: Minimal HTML handling
+        var minimalPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(minimalPath, "<html><body></body></html>");
+
+            var result = KreuzbergClient.ExtractFileSync(minimalPath, config);
+            Assert.NotNull(result);
+            Assert.NotNull(result.Metadata.Format.Html);
+            Assert.NotNull(result.Metadata.Format.Html.Keywords);
+            Assert.NotNull(result.Metadata.Format.Html.Headers);
+        }
+        finally
+        {
+            if (File.Exists(minimalPath))
+            {
+                File.Delete(minimalPath);
+            }
+        }
+
+        // Test 3: Malformed HTML handling
+        var malformedPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(malformedPath, "<html><body><div unclosed><p>test");
+
+            // Should handle malformed HTML gracefully
+            var result = KreuzbergClient.ExtractFileSync(malformedPath, config);
+            Assert.NotNull(result);
+            Assert.NotNull(result.Metadata);
+            // Malformed HTML should still parse without crashing
+        }
+        finally
+        {
+            if (File.Exists(malformedPath))
+            {
+                File.Delete(malformedPath);
+            }
+        }
+
+        // Test 4: Very large HTML handling (50MB)
+        var veryLargePath = Path.GetTempFileName();
+        try
+        {
+            // Create a 50MB HTML document
+            var largeHtml = BuildLargeHtmlDocument(500000);
+            File.WriteAllText(veryLargePath, largeHtml);
+
+            // Should handle very large documents without running out of memory or crashing
+            var result = KreuzbergClient.ExtractFileSync(veryLargePath, config);
+            Assert.NotNull(result);
+            Assert.NotNull(result.Metadata);
+            // Verify structure is intact
+            Assert.NotNull(result.Metadata.Format.Html);
+        }
+        finally
+        {
+            if (File.Exists(veryLargePath))
+            {
+                File.Delete(veryLargePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tests memory management during large HTML extraction.
+    /// Verifies that the extraction process properly releases memory after completing,
+    /// testing the IDisposable pattern if applicable and ensuring no memory leaks.
+    /// </summary>
+    [Fact]
+    public void ExtractHtml_LargeExtraction_ReleasesMemory()
+    {
+        // Arrange
+        var config = new ExtractionConfig
+        {
+            HtmlOptions = new HtmlConversionOptions { ExtractMetadata = true }
+        };
+
+        // Capture initial memory
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        var initialMemory = GC.GetTotalMemory(false);
+
+        // Act - Perform extraction with large HTML
+        var largeHtml = BuildLargeHtmlDocument(50000);
+        var tempPath = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tempPath, largeHtml);
+
+            var result = KreuzbergClient.ExtractFileSync(tempPath, config);
+
+            // Verify extraction succeeded
+            Assert.NotNull(result);
+            Assert.True(result.Success);
+            Assert.NotNull(result.Metadata.Format.Html);
+
+            // Capture memory after successful extraction
+            var afterExtractionMemory = GC.GetTotalMemory(false);
+
+            // Force garbage collection to reclaim memory
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var finalMemory = GC.GetTotalMemory(false);
+
+            // Verify memory was released after cleanup
+            // Allow for some memory overhead (20% tolerance for runtime overhead)
+            var memoryGrowth = finalMemory - initialMemory;
+            var allowedGrowth = initialMemory * 0.20;
+
+            Assert.True(
+                memoryGrowth <= allowedGrowth,
+                $"Memory growth ({memoryGrowth} bytes) exceeds allowance ({allowedGrowth} bytes)");
+
+            // Verify metadata structure is intact
+            Assert.NotNull(result.Metadata.Format.Html.Keywords);
+            Assert.NotNull(result.Metadata.Format.Html.Headers);
+            Assert.NotNull(result.Metadata.Format.Html.Links);
+            Assert.NotNull(result.Metadata.Format.Html.Images);
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(tempPath))
+            {
+                File.Delete(tempPath);
+            }
+        }
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    /// <summary>
+    /// Builds a large HTML document with a specified number of elements.
+    /// Used for performance and stress testing.
+    /// </summary>
+    /// <param name="elementCount">Number of elements to generate in the HTML document</param>
+    /// <returns>HTML document as a string</returns>
+    private static string BuildLargeHtmlDocument(int elementCount)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("<!DOCTYPE html>");
+        sb.AppendLine("<html>");
+        sb.AppendLine("<head>");
+        sb.AppendLine("<title>Large Test Document</title>");
+        sb.AppendLine("<meta name=\"description\" content=\"Large document for performance testing\">");
+        sb.AppendLine("<meta name=\"keywords\" content=\"test, performance, large, document\">");
+        sb.AppendLine("</head>");
+        sb.AppendLine("<body>");
+        sb.AppendLine("<h1>Large Document Test</h1>");
+
+        // Generate specified number of elements
+        for (int i = 0; i < elementCount; i++)
+        {
+            sb.AppendLine($"<div class=\"item-{i % 100}\">");
+            sb.AppendLine($"<h{((i % 6) + 1)}>Header {i}</h{((i % 6) + 1)}>");
+            sb.AppendLine($"<p>Paragraph content {i}. This is a test paragraph with some content.</p>");
+            sb.AppendLine($"<a href=\"https://example.com/page-{i}\">Link {i}</a>");
+            sb.AppendLine($"<img src=\"image-{i}.jpg\" alt=\"Image {i}\" width=\"{100 + (i % 900)}\" height=\"{100 + ((i * 7) % 900)}\">");
+            sb.AppendLine("</div>");
+        }
+
+        sb.AppendLine("</body>");
+        sb.AppendLine("</html>");
+
+        return sb.ToString();
     }
 
     #endregion

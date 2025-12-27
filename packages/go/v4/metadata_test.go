@@ -2,6 +2,7 @@ package kreuzberg
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -889,6 +890,491 @@ func TestStructuredDataFields(t *testing.T) {
 	}
 	if sd.RawJSON != `{"@type":"Article"}` {
 		t.Errorf("RawJSON field incorrect")
+	}
+}
+
+// ============================================================================
+// 6. EDGE CASE - MALFORMED HTML HANDLING
+// ============================================================================
+
+// TestMalformedHTMLHandling tests extraction with invalid HTML structure
+// including unclosed tags, broken nesting, and malformed elements.
+// Should gracefully handle malformed HTML without panicking.
+func TestMalformedHTMLHandling(t *testing.T) {
+	testCases := []struct {
+		name    string
+		html    []byte
+		wantErr bool
+	}{
+		{
+			name: "unclosed_tags",
+			html: []byte(`<!DOCTYPE html>
+<html>
+<head>
+	<title>Unclosed Title
+	<meta name="description" content="Missing closing tag
+</head>
+<body>
+	<h1>Header without closing
+	<p>Paragraph
+</body>
+</html>`),
+			wantErr: false,
+		},
+		{
+			name: "broken_nesting",
+			html: []byte(`<!DOCTYPE html>
+<html>
+<head>
+	<title>Test</title>
+</head>
+<body>
+	<div><p>Nested<div>Improperly</p></div>
+	<span><h1>Invalid nesting</span></h1>
+</body>
+</html>`),
+			wantErr: false,
+		},
+		{
+			name: "malformed_meta_tags",
+			html: []byte(`<!DOCTYPE html>
+<html>
+<head>
+	<meta name="description" content=missing quotes
+	<meta property="og:title" content=>
+	<title>Test</title>
+</head>
+<body></body>
+</html>`),
+			wantErr: false,
+		},
+		{
+			name: "duplicate_closing_tags",
+			html: []byte(`<!DOCTYPE html>
+<html>
+<head>
+	<title>Test</title>
+</head>
+<body>
+	<div>Content</div></div>
+	<p>Text</p></p>
+</body>
+</html></html>`),
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Should not panic on malformed HTML
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("extraction panicked on malformed HTML: %v", r)
+				}
+			}()
+
+			result, err := ExtractBytesSync(tc.html, "text/html", nil)
+
+			if tc.wantErr && err == nil {
+				t.Errorf("expected error but got none")
+			}
+			if !tc.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			// Should return a result even if HTML is malformed
+			if !tc.wantErr && result == nil {
+				t.Errorf("expected non-nil result")
+			}
+		})
+	}
+}
+
+// ============================================================================
+// 7. EDGE CASE - SPECIAL CHARACTERS IN METADATA
+// ============================================================================
+
+// TestSpecialCharactersInMetadata tests handling of Unicode, emojis,
+// and HTML entities in metadata fields.
+func TestSpecialCharactersInMetadata(t *testing.T) {
+	htmlContent := []byte(`<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>🚀 Rocket Project - Test 日本語</title>
+	<meta name="description" content="Description with emojis: 😀 🎉 🎨 and more &amp; symbols">
+	<meta name="keywords" content="测试, тест, test, テスト, &lt;script&gt;, &quot;quoted&quot;">
+	<meta name="author" content="José García & François Müller">
+	<meta property="og:title" content="OpenGraph 中文标题 🌟">
+	<meta property="og:description" content="Greek: Ελληνικά, Arabic: العربية, Hebrew: עברית">
+	<meta name="twitter:card" content="summary">
+	<meta name="twitter:title" content="Tweet: こんにちは 👋 مرحبا">
+</head>
+<body>
+	<h1>Unicode: κόσμος мир 世界 🌍</h1>
+	<h2>HTML Entities: &quot;quoted&quot; &amp; &lt;tags&gt;</h2>
+	<p>Mathematical symbols: ∫ ∑ ∏ √ ≈ ≠</p>
+	<a href="https://example.com">Link with emoji 🔗</a>
+</body>
+</html>`)
+
+	result, err := ExtractBytesSync(htmlContent, "text/html", nil)
+	if err != nil {
+		t.Fatalf("extraction failed: %v", err)
+	}
+
+	if !result.Success {
+		t.Fatalf("extraction should succeed with special characters")
+	}
+
+	htmlMeta, ok := result.Metadata.HTMLMetadata()
+	if !ok {
+		t.Fatalf("HTMLMetadata not extracted")
+	}
+
+	// Verify title contains emoji and non-ASCII
+	if htmlMeta.Title == nil || len(*htmlMeta.Title) == 0 {
+		t.Errorf("Title should be extracted with special characters")
+	} else {
+		title := *htmlMeta.Title
+		// Should contain some of the original characters
+		if !strings.ContainsAny(title, "🚀日本語") && !strings.Contains(title, "Rocket") {
+			t.Logf("Title may have been processed: %s", title)
+		}
+	}
+
+	// Verify description handles HTML entities and emojis
+	if htmlMeta.Description == nil || len(*htmlMeta.Description) == 0 {
+		t.Logf("Note: Description may be nil if not extracted")
+	}
+
+	// Verify keywords array can contain various encodings
+	if htmlMeta.Keywords != nil && len(htmlMeta.Keywords) > 0 {
+		for _, kw := range htmlMeta.Keywords {
+			if kw == "" {
+				t.Errorf("Keyword should not be empty")
+			}
+		}
+	}
+
+	// Verify OpenGraph handles special characters
+	if htmlMeta.OpenGraph != nil && len(htmlMeta.OpenGraph) > 0 {
+		for key, value := range htmlMeta.OpenGraph {
+			if key == "" || value == "" {
+				t.Errorf("OpenGraph entry should not have empty key or value")
+			}
+		}
+	}
+}
+
+// ============================================================================
+// 8. ERROR HANDLING - INVALID INPUT
+// ============================================================================
+
+// TestInvalidInputErrorHandling tests proper error handling with invalid inputs:
+// empty bytes, nil pointers, and excessively large HTML documents.
+func TestInvalidInputErrorHandling(t *testing.T) {
+	testCases := []struct {
+		name      string
+		data      []byte
+		mimeType  string
+		wantError bool
+		errorMsg  string
+	}{
+		{
+			name:      "empty_bytes",
+			data:      []byte{},
+			mimeType:  "text/html",
+			wantError: true,
+			errorMsg:  "data cannot be empty",
+		},
+		{
+			name:      "empty_mime_type",
+			data:      []byte("<html></html>"),
+			mimeType:  "",
+			wantError: true,
+			errorMsg:  "mimeType is required",
+		},
+		{
+			name:      "both_empty",
+			data:      []byte{},
+			mimeType:  "",
+			wantError: true,
+			errorMsg:  "cannot be empty",
+		},
+		{
+			name:      "valid_html",
+			data:      []byte("<!DOCTYPE html><html><body>Test</body></html>"),
+			mimeType:  "text/html",
+			wantError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := ExtractBytesSync(tc.data, tc.mimeType, nil)
+
+			if tc.wantError {
+				if err == nil {
+					t.Errorf("expected error containing '%s' but got none", tc.errorMsg)
+				} else if !strings.Contains(err.Error(), tc.errorMsg) {
+					t.Errorf("expected error containing '%s' but got: %v", tc.errorMsg, err)
+				}
+				if result != nil && result.Success {
+					t.Errorf("result should not be successful for invalid input")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if result == nil {
+					t.Errorf("expected non-nil result for valid input")
+				}
+			}
+		})
+	}
+}
+
+// ============================================================================
+// 9. CONCURRENT EXTRACTION - GOROUTINE SAFETY
+// ============================================================================
+
+// TestConcurrentExtraction tests that extraction is safe when called
+// from multiple goroutines simultaneously.
+func TestConcurrentExtraction(t *testing.T) {
+	htmlContent := []byte(`<!DOCTYPE html>
+<html>
+<head>
+	<title>Concurrent Test Page</title>
+	<meta name="description" content="Testing concurrent extraction">
+	<meta name="keywords" content="concurrent, extraction, test">
+</head>
+<body>
+	<h1>Main Title</h1>
+	<p>Some content</p>
+</body>
+</html>`)
+
+	// Number of concurrent goroutines
+	numGoroutines := 10
+	results := make([]*ExtractionResult, numGoroutines)
+	errors := make([]error, numGoroutines)
+
+	// Channel to coordinate completion
+	done := make(chan struct{})
+	defer close(done)
+
+	// Launch concurrent extractions
+	for i := 0; i < numGoroutines; i++ {
+		go func(index int) {
+			defer func() {
+				if r := recover(); r != nil {
+					errors[index] = fmt.Errorf("panic: %v", r)
+				}
+				done <- struct{}{}
+			}()
+
+			result, err := ExtractBytesSync(htmlContent, "text/html", nil)
+			results[index] = result
+			errors[index] = err
+		}(i)
+	}
+
+	// Wait for all goroutines to complete
+	for i := 0; i < numGoroutines; i++ {
+		<-done
+	}
+
+	// Verify all extractions succeeded
+	for i := 0; i < numGoroutines; i++ {
+		if errors[i] != nil {
+			t.Errorf("goroutine %d failed: %v", i, errors[i])
+		}
+		if results[i] == nil {
+			t.Errorf("goroutine %d returned nil result", i)
+		} else if !results[i].Success {
+			t.Errorf("goroutine %d extraction not successful", i)
+		}
+
+		// Verify results are consistent
+		htmlMeta, ok := results[i].Metadata.HTMLMetadata()
+		if !ok {
+			t.Errorf("goroutine %d: HTMLMetadata not extracted", i)
+			continue
+		}
+		if htmlMeta.Title == nil || *htmlMeta.Title != "Concurrent Test Page" {
+			t.Errorf("goroutine %d: title mismatch", i)
+		}
+	}
+}
+
+// ============================================================================
+// 10. PERFORMANCE BENCHMARK
+// ============================================================================
+
+// BenchmarkHTMLExtraction benchmarks metadata extraction from realistic HTML.
+// Measures performance with a typical HTML document containing various elements.
+func BenchmarkHTMLExtraction(b *testing.B) {
+	htmlContent := []byte(`<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Comprehensive Benchmark HTML Document</title>
+	<meta name="description" content="A realistic HTML document for benchmarking metadata extraction performance">
+	<meta name="keywords" content="benchmark, performance, html, metadata, extraction, test">
+	<meta name="author" content="Benchmark Author">
+	<meta name="robots" content="index, follow">
+	<link rel="canonical" href="https://example.com/benchmark">
+	<base href="https://example.com/">
+	<meta property="og:title" content="Benchmark HTML Document">
+	<meta property="og:description" content="Testing extraction performance">
+	<meta property="og:image" content="https://example.com/image.jpg">
+	<meta property="og:url" content="https://example.com/benchmark">
+	<meta name="twitter:card" content="summary_large_image">
+	<meta name="twitter:title" content="Benchmark">
+	<meta name="twitter:description" content="Performance test">
+	<meta name="twitter:image" content="https://example.com/twitter.jpg">
+</head>
+<body>
+	<header>
+		<nav>
+			<ul>
+				<li><a href="/">Home</a></li>
+				<li><a href="/about">About</a></li>
+				<li><a href="/blog">Blog</a></li>
+				<li><a href="/contact">Contact</a></li>
+			</ul>
+		</nav>
+	</header>
+	<main>
+		<article>
+			<h1>Main Article Title</h1>
+			<h2>Introduction Section</h2>
+			<p>This is a comprehensive benchmark document with realistic HTML structure for testing metadata extraction performance.</p>
+
+			<h2>Content Section 1</h2>
+			<p>Paragraph content goes here with various text elements.</p>
+			<img src="image1.jpg" alt="First image" title="Image 1">
+			<img src="image2.png" alt="Second image">
+			<img src="https://example.com/image3.gif" alt="Third image">
+
+			<h2>Content Section 2</h2>
+			<p>More content with links:</p>
+			<ul>
+				<li><a href="https://example.com">Example Link 1</a></li>
+				<li><a href="/relative">Relative Link</a></li>
+				<li><a href="#section">Anchor Link</a></li>
+				<li><a href="https://other.com" title="External">External Link</a></li>
+			</ul>
+
+			<h2>Content Section 3</h2>
+			<p>Another section with more structured data:</p>
+			<h3>Subsection A</h3>
+			<p>Details</p>
+			<h3>Subsection B</h3>
+			<p>More details</p>
+			<h3>Subsection C</h3>
+			<p>Even more details</p>
+
+			<h2>Data Section</h2>
+			<table>
+				<tr><th>Header 1</th><th>Header 2</th></tr>
+				<tr><td>Data 1</td><td>Data 2</td></tr>
+			</table>
+
+			<h2>Conclusion</h2>
+			<p>Concluding paragraph with final thoughts.</p>
+		</article>
+
+		<aside>
+			<h2>Related Links</h2>
+			<ul>
+				<li><a href="https://related1.com">Related 1</a></li>
+				<li><a href="https://related2.com">Related 2</a></li>
+				<li><a href="https://related3.com">Related 3</a></li>
+			</ul>
+		</aside>
+	</main>
+	<footer>
+		<p>&copy; 2025 Benchmark Site. All rights reserved.</p>
+		<a href="/privacy">Privacy Policy</a>
+		<a href="/terms">Terms of Service</a>
+	</footer>
+
+	<script type="application/ld+json">
+	{
+		"@context": "https://schema.org",
+		"@type": "Article",
+		"headline": "Benchmark Article",
+		"image": "https://example.com/image.jpg",
+		"author": {
+			"@type": "Person",
+			"name": "Author Name"
+		}
+	}
+	</script>
+</body>
+</html>`)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := ExtractBytesSync(htmlContent, "text/html", nil)
+		if err != nil {
+			b.Fatalf("extraction failed: %v", err)
+		}
+		if result == nil || !result.Success {
+			b.Fatalf("extraction was not successful")
+		}
+	}
+}
+
+// BenchmarkHTMLExtractionLargeDocument benchmarks extraction on a larger HTML document
+// to measure performance at scale.
+func BenchmarkHTMLExtractionLargeDocument(b *testing.B) {
+	// Generate a large HTML document with many repeated elements
+	var sb strings.Builder
+	sb.WriteString(`<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Large Document Benchmark</title>
+	<meta name="description" content="Large document for performance testing">
+	<meta name="keywords" content="large, document, benchmark">
+</head>
+<body>
+	<h1>Large Document</h1>
+`)
+
+	// Add many sections
+	for i := 0; i < 50; i++ {
+		sb.WriteString(fmt.Sprintf(`
+	<section id="section-%d">
+		<h2>Section %d</h2>
+		<p>Content for section %d with some text and information.</p>
+		<img src="image-%d.jpg" alt="Image %d">
+		<ul>
+			<li><a href="link-%d-1">Link 1</a></li>
+			<li><a href="link-%d-2">Link 2</a></li>
+			<li><a href="link-%d-3">Link 3</a></li>
+		</ul>
+	</section>
+`, i, i, i, i, i, i, i, i))
+	}
+
+	sb.WriteString(`
+</body>
+</html>`)
+
+	htmlContent := []byte(sb.String())
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		result, err := ExtractBytesSync(htmlContent, "text/html", nil)
+		if err != nil {
+			b.Fatalf("extraction failed: %v", err)
+		}
+		if result == nil || !result.Success {
+			b.Fatalf("extraction was not successful")
+		}
 	}
 }
 

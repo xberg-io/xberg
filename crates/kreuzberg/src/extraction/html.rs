@@ -1604,4 +1604,381 @@ mod tests {
         assert!(!markdown.is_empty(), "Should generate Markdown from HTML");
         assert!(markdown.contains("Rust"), "Markdown should contain article content");
     }
+
+    // ========================================================================
+    // 6. CRITICAL MISSING TESTS
+    // ========================================================================
+
+    /// Test extraction of large HTML document (1MB+) for performance
+    /// Generates HTML with 10,000+ elements and validates extraction
+    /// completes within reasonable time (<30s) with no panics.
+    #[test]
+    fn test_large_html_performance() {
+        // Build a 1MB+ HTML document with 10,000+ elements
+        let mut html = String::with_capacity(2_000_000);
+        html.push_str(
+            r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Large HTML Performance Test</title>
+    <meta name="description" content="Testing extraction performance on large documents">
+</head>
+<body>
+    <h1>Large Document Test</h1>"#,
+        );
+
+        // Add 10,000+ list items with substantial content to create large HTML (~1.5MB)
+        for i in 0..10000 {
+            html.push_str(&format!(
+                "<article><h2>Article {}</h2><p>Content block {} with expanded text content to increase document size. \
+                This article contains multiple paragraphs describing various topics. \
+                The goal is to create sufficient HTML content to test performance on large documents. \
+                Here are some additional details: Section A covers fundamentals, Section B covers implementation, \
+                and Section C covers optimization. Each section has multiple subsections.</p>\
+                <p>Additional content paragraph {} to further expand the document.</p></article>\n",
+                i, i, i
+            ));
+        }
+        html.push_str("</body></html>");
+
+        // Verify document size is >1MB
+        let html_size_bytes = html.len();
+        assert!(
+            html_size_bytes > 1_000_000,
+            "Generated HTML should be >1MB (got {} bytes)",
+            html_size_bytes
+        );
+
+        // Time the extraction
+        let start = std::time::Instant::now();
+
+        // Should complete successfully without panics
+        let result = process_html(&html, None, false, 1024 * 1024);
+
+        let duration = start.elapsed();
+
+        // Verify successful extraction
+        assert!(
+            result.is_ok(),
+            "Large HTML extraction should succeed. Error: {:?}",
+            result.err()
+        );
+
+        let result = result.unwrap();
+        assert!(!result.markdown.is_empty(), "Markdown should be generated");
+
+        // Verify performance: should complete in <30 seconds (reasonable for large HTML)
+        assert!(
+            duration.as_secs() < 30,
+            "Large HTML extraction took too long: {:.2}s (must be <30s)",
+            duration.as_secs_f64()
+        );
+    }
+
+    /// Test WASM size boundary conditions
+    /// Tests HTML exactly at and around the 2MB limit to ensure
+    /// proper error handling and boundary detection.
+    #[test]
+    fn test_wasm_size_limit_boundary() {
+        // Test 1: HTML just under 2MB (1.8MB) - should succeed
+        let mut html_under = String::from(
+            r#"<!DOCTYPE html>
+<html>
+<head><title>Just Under Limit</title></head>
+<body><h1>Content</h1>"#,
+        );
+
+        // Add content to reach ~1.8MB (safely under the 2MB limit)
+        let target_size = 1_800_000;
+        while html_under.len() < target_size {
+            html_under.push_str("<p>Padding content for size testing. This is test data to reach the target document size. Lorem ipsum dolor sit amet.</p>\n");
+        }
+        html_under.truncate(target_size);
+        html_under.push_str("</body></html>");
+
+        // Verify size is under 2MB
+        assert!(
+            html_under.len() < 2 * 1024 * 1024,
+            "HTML should be under 2MB limit (got {} bytes)",
+            html_under.len()
+        );
+
+        // Should succeed for HTML under 2MB
+        let result = process_html(&html_under, None, false, 1024);
+        #[cfg(target_arch = "wasm32")]
+        assert!(result.is_ok(), "HTML under 2MB should be accepted in WASM");
+        #[cfg(not(target_arch = "wasm32"))]
+        assert!(result.is_ok(), "HTML under 2MB should always be accepted");
+
+        // Test 2: HTML just over 2MB (2.2MB) - WASM should fail
+        let mut html_over = String::from(
+            r#"<!DOCTYPE html>
+<html>
+<head><title>Over Limit</title></head>
+<body><h1>Content</h1>"#,
+        );
+
+        // Add content to reach ~2.2MB (safely over the 2MB limit)
+        let target_size = 2_200_000;
+        while html_over.len() < target_size {
+            html_over.push_str("<p>Oversized content for boundary testing. This section generates large HTML to exceed limits. Lorem ipsum dolor sit amet.</p>\n");
+        }
+        html_over.truncate(target_size);
+        html_over.push_str("</body></html>");
+
+        // Verify size is over 2MB
+        assert!(
+            html_over.len() > 2 * 1024 * 1024,
+            "HTML should be over 2MB limit (got {} bytes)",
+            html_over.len()
+        );
+
+        // Test result based on build target
+        let result = process_html(&html_over, None, false, 1024);
+        #[cfg(target_arch = "wasm32")]
+        {
+            assert!(result.is_err(), "HTML over 2MB should be rejected in WASM with error");
+            let error_msg = format!("{:?}", result.err());
+            assert!(
+                error_msg.contains("2MB") || error_msg.contains("WASM"),
+                "Error message should clearly indicate WASM size limit"
+            );
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            // Native builds should handle large HTML without strict 2MB limit
+            // May succeed or fail depending on conversion logic, but should not
+            // fail due to size check
+            if let Err(e) = result {
+                let msg = format!("{:?}", e);
+                assert!(
+                    !msg.contains("WASM") && !msg.contains("2MB"),
+                    "Native builds should not enforce WASM size limit"
+                );
+            }
+        }
+    }
+
+    /// Test graceful handling of malformed JSON-LD structured data
+    /// Validates that invalid JSON in script type="application/ld+json"
+    /// does not cause panics and is skipped gracefully.
+    #[test]
+    fn test_malformed_json_ld_graceful_handling() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Malformed JSON-LD Test</title>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "Test Article",
+      "author": "John Doe"
+      "datePublished": "2024-01-01"
+    }
+    </script>
+</head>
+<body>
+    <h1>Article Title</h1>
+    <p>This HTML contains invalid JSON-LD (missing comma after author field)</p>
+</body>
+</html>"#;
+
+        // Should not panic, should handle gracefully
+        let result = convert_html_to_markdown_with_metadata(html, None);
+
+        // Must succeed without panicking
+        assert!(
+            result.is_ok(),
+            "Malformed JSON-LD should not cause panic. Error: {:?}",
+            result.err()
+        );
+
+        let (markdown, metadata) = result.unwrap();
+
+        // Markdown should still be extracted even if JSON-LD is invalid
+        assert!(
+            !markdown.is_empty(),
+            "Markdown should be extracted despite invalid JSON-LD"
+        );
+        assert!(
+            markdown.contains("Article Title") || markdown.contains("Article"),
+            "Content should be properly converted to Markdown"
+        );
+
+        // Metadata may be partially extracted or empty, but should not panic
+        if let Some(meta) = metadata {
+            assert_eq!(
+                meta.title,
+                Some("Malformed JSON-LD Test".to_string()),
+                "Document metadata should be extracted from tags"
+            );
+            // Structured data might be empty or incomplete due to invalid JSON
+            // but that's acceptable - we just don't want a panic
+        }
+    }
+
+    /// Test XSS sanitization in metadata fields
+    /// Validates that script tags and malicious content in metadata
+    /// are properly handled and don't cause panics.
+    /// Note: The actual sanitization is done by the html-to-markdown-rs library,
+    /// which may escape, strip, or preserve content depending on context.
+    #[test]
+    fn test_metadata_xss_sanitization() {
+        let html = r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Safe Title &lt;script&gt;alert('xss')&lt;/script&gt;</title>
+    <meta name="description" content="Description with encoded content">
+    <meta name="author" content="Author Name">
+    <meta property="og:title" content="OG Title">
+    <meta property="og:description" content="OG Description">
+</head>
+<body>
+    <h1>Title Section</h1>
+    <p>Content here</p>
+</body>
+</html>"#;
+
+        // Should not panic when processing HTML with script-like content
+        let result = convert_html_to_markdown_with_metadata(html, None);
+        assert!(
+            result.is_ok(),
+            "HTML with script-like content should not cause error. Error: {:?}",
+            result.err()
+        );
+
+        let (markdown, metadata) = result.unwrap();
+
+        // Verify markdown was generated (main requirement)
+        assert!(!markdown.is_empty(), "Markdown should be generated");
+
+        if let Some(meta) = metadata {
+            // Title should be extracted
+            if let Some(title) = &meta.title {
+                assert!(!title.is_empty(), "Title should be extracted");
+                // Title should contain something sensible, even with encoded content
+                assert!(
+                    title.contains("Safe") || title.contains("script"),
+                    "Title should extract content from title tag: {}",
+                    title
+                );
+            }
+
+            // Description should be extracted
+            if let Some(desc) = &meta.description {
+                assert!(!desc.is_empty(), "Description should be extracted");
+            }
+
+            // Author should be extracted
+            if let Some(author) = &meta.author {
+                assert_eq!(author, "Author Name", "Author should be correctly extracted");
+            }
+
+            // Open Graph should be extracted
+            if !meta.open_graph.is_empty() {
+                // Just verify OG tags were extracted without errors
+                let og_count = meta.open_graph.len();
+                assert!(og_count > 0, "Open Graph tags should be extracted");
+            }
+        }
+    }
+
+    /// Test thread safety of HTML extraction with concurrent access
+    /// Validates that extracting the same HTML from multiple threads
+    /// does not cause panics, data races, or corruption.
+    #[test]
+    fn test_concurrent_html_extraction() {
+        use std::sync::Arc;
+
+        let html = Arc::new(
+            r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Concurrent Test Article</title>
+    <meta name="description" content="Testing concurrent extraction">
+    <meta name="author" content="Test Author">
+    <meta property="og:title" content="OG Title">
+    <meta property="og:description" content="OG Description">
+    <meta name="twitter:card" content="summary">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Article",
+      "headline": "Concurrent Test",
+      "author": "Test Author"
+    }
+    </script>
+</head>
+<body>
+    <h1>Concurrent Extraction Test</h1>
+    <h2>Section 1</h2>
+    <p>Content 1</p>
+    <h2>Section 2</h2>
+    <p>Content 2</p>
+    <a href="https://example.com">External Link</a>
+    <a href="/about">Internal Link</a>
+    <img src="https://example.com/image.jpg" alt="Test Image">
+</body>
+</html>"#,
+        );
+
+        let handles: Vec<_> = (0..10)
+            .map(|thread_id| {
+                let html = Arc::clone(&html);
+                std::thread::spawn(move || {
+                    // Each thread extracts the same HTML
+                    let result = convert_html_to_markdown_with_metadata(html.as_ref(), None);
+
+                    // Must succeed without panics
+                    assert!(
+                        result.is_ok(),
+                        "Thread {} extraction failed: {:?}",
+                        thread_id,
+                        result.err()
+                    );
+
+                    let (markdown, metadata) = result.unwrap();
+
+                    // Validate basic extraction succeeded
+                    assert!(
+                        !markdown.is_empty(),
+                        "Thread {} markdown should not be empty",
+                        thread_id
+                    );
+
+                    if let Some(meta) = metadata {
+                        assert_eq!(
+                            meta.title,
+                            Some("Concurrent Test Article".to_string()),
+                            "Thread {} should extract correct title",
+                            thread_id
+                        );
+
+                        // Verify consistent metadata extraction
+                        assert!(!meta.headers.is_empty(), "Thread {} should extract headers", thread_id);
+                        assert!(!meta.links.is_empty(), "Thread {} should extract links", thread_id);
+                        assert!(!meta.images.is_empty(), "Thread {} should extract images", thread_id);
+                        assert!(
+                            !meta.open_graph.is_empty(),
+                            "Thread {} should extract OG metadata",
+                            thread_id
+                        );
+                    }
+
+                    // Return validation flag
+                    true
+                })
+            })
+            .collect();
+
+        // Wait for all threads to complete and collect results
+        let all_succeeded = handles.into_iter().enumerate().all(|(i, handle)| {
+            let result = handle.join();
+            assert!(result.is_ok(), "Thread {} panicked: {:?}", i, result.err());
+            result.unwrap()
+        });
+
+        assert!(all_succeeded, "All concurrent extraction threads should succeed");
+    }
 }

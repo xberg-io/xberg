@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Kreuzberg\Tests\Unit;
 
+use Kreuzberg\Kreuzberg;
 use Kreuzberg\Types\Metadata\HeaderMetadata;
 use Kreuzberg\Types\Metadata\HtmlMetadata;
 use Kreuzberg\Types\Metadata\ImageMetadata;
 use Kreuzberg\Types\Metadata\LinkMetadata;
 use Kreuzberg\Types\Metadata\StructuredData;
 use PHPUnit\Framework\Attributes\CoversClass;
+use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
@@ -909,6 +911,428 @@ final class MetadataTypesTest extends TestCase
         foreach ($attributes as $key => $value) {
             $this->assertArrayHasKey($key, $link->attributes);
             $this->assertSame($value, $link->attributes[$key]);
+        }
+    }
+
+    // ========================================
+    // Integration Tests - Real HTML Extraction
+    // ========================================
+
+    #[Test]
+    #[RequiresPhpExtension('kreuzberg')]
+    public function testExtractHtmlReturnsMetadataObject(): void
+    {
+        // Test with actual Kreuzberg\extract_bytes() function
+        if (!extension_loaded('kreuzberg')) {
+            $this->markTestSkipped('Kreuzberg extension is not loaded');
+        }
+
+        $htmlContent = <<<'HTML'
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Test Page</title>
+                <meta name="keywords" content="testing,metadata,extraction">
+                <meta name="description" content="A test page for metadata extraction">
+                <link rel="canonical" href="https://example.com/test-page">
+                <meta property="og:title" content="Test Page OG">
+                <meta property="og:type" content="article">
+                <meta property="og:image" content="https://example.com/image.jpg">
+            </head>
+            <body>
+                <h1>Main Heading</h1>
+                <h2>Subheading</h2>
+                <p>Some content here.</p>
+                <a href="https://example.com">External Link</a>
+                <a href="/about">Internal Link</a>
+                <img src="https://example.com/photo.jpg" alt="Test Image">
+            </body>
+            </html>
+            HTML;
+
+        $kreuzberg = new Kreuzberg();
+        $result = $kreuzberg->extractBytes($htmlContent, 'text/html');
+
+        // Verify extraction was successful
+        $this->assertIsString($result->content);
+
+        // Verify metadata contains HtmlMetadata in custom field
+        if ($result->metadata->hasCustom('html_metadata')) {
+            $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
+            $this->assertIsArray($htmlMetadataArray);
+
+            $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
+            $this->assertInstanceOf(HtmlMetadata::class, $htmlMetadata);
+
+            // Verify basic structure
+            $this->assertIsArray($htmlMetadata->keywords);
+            $this->assertIsArray($htmlMetadata->openGraph);
+            $this->assertIsArray($htmlMetadata->headers);
+            $this->assertIsArray($htmlMetadata->links);
+            $this->assertIsArray($htmlMetadata->images);
+        }
+    }
+
+    #[Test]
+    #[RequiresPhpExtension('kreuzberg')]
+    public function testExtractComplexHtmlAllFields(): void
+    {
+        // Test with comprehensive real-world HTML containing all metadata fields
+        if (!extension_loaded('kreuzberg')) {
+            $this->markTestSkipped('Kreuzberg extension is not loaded');
+        }
+
+        $htmlContent = <<<'HTML'
+            <!DOCTYPE html>
+            <html lang="en" dir="ltr">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+                <title>Complete Article Test</title>
+                <meta name="description" content="A comprehensive test article with all metadata fields">
+                <meta name="keywords" content="article,testing,kreuzberg,php,metadata,extraction">
+                <meta name="author" content="Test Author">
+                <link rel="canonical" href="https://example.com/complete-article">
+
+                <!-- Open Graph -->
+                <meta property="og:title" content="Complete Article Test">
+                <meta property="og:type" content="article">
+                <meta property="og:description" content="A comprehensive test article">
+                <meta property="og:url" content="https://example.com/complete-article">
+                <meta property="og:image" content="https://example.com/og-image.jpg">
+                <meta property="og:site_name" content="Test Site">
+
+                <!-- Twitter Card -->
+                <meta name="twitter:card" content="summary_large_image">
+                <meta name="twitter:title" content="Complete Article Test">
+                <meta name="twitter:description" content="A comprehensive test article">
+                <meta name="twitter:image" content="https://example.com/twitter-image.jpg">
+                <meta name="twitter:site" content="@testsite">
+
+                <!-- Structured Data -->
+                <script type="application/ld+json">
+                {
+                    "@context": "https://schema.org",
+                    "@type": "Article",
+                    "headline": "Complete Article Test",
+                    "image": "https://example.com/article-image.jpg",
+                    "datePublished": "2024-01-01T08:00:00+00:00",
+                    "dateModified": "2024-01-15T09:00:00+00:00",
+                    "author": {
+                        "@type": "Person",
+                        "name": "Test Author"
+                    }
+                }
+                </script>
+            </head>
+            <body>
+                <header>
+                    <h1 id="main-title">Complete Article Test</h1>
+                    <p>Published by Test Author</p>
+                </header>
+
+                <article>
+                    <h2 id="introduction">Introduction</h2>
+                    <p>This is the introduction section with important content.</p>
+
+                    <h3 id="section-1">Section 1: Overview</h3>
+                    <p>Detailed overview of the topic.</p>
+
+                    <h3 id="section-2">Section 2: Details</h3>
+                    <p>More detailed information here.</p>
+
+                    <nav>
+                        <ul>
+                            <li><a href="/" title="Home Page">Home</a></li>
+                            <li><a href="/about" title="About Us">About</a></li>
+                            <li><a href="https://external.com" rel="noopener noreferrer">External Site</a></li>
+                        </ul>
+                    </nav>
+
+                    <figure>
+                        <img src="https://example.com/main-image.jpg" alt="Main Article Image" loading="lazy">
+                        <figcaption>Figure 1: Main article illustration</figcaption>
+                    </figure>
+
+                    <figure>
+                        <img src="/images/local-image.png" alt="Local Image" title="Local Illustration">
+                        <figcaption>Figure 2: Local image</figcaption>
+                    </figure>
+                </article>
+
+                <footer>
+                    <p>&copy; 2024 Test Site. All rights reserved.</p>
+                </footer>
+            </body>
+            </html>
+            HTML;
+
+        $kreuzberg = new Kreuzberg();
+        $result = $kreuzberg->extractBytes($htmlContent, 'text/html');
+
+        // Verify content extraction
+        $this->assertIsString($result->content);
+        $this->assertNotEmpty($result->content);
+
+        // Verify metadata structure
+        if ($result->metadata->hasCustom('html_metadata')) {
+            $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
+            $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
+
+            // Verify all fields are properly extracted
+            $this->assertIsArray($htmlMetadata->keywords);
+            $this->assertNotEmpty($htmlMetadata->keywords);
+
+            $this->assertIsNotNull($htmlMetadata->canonicalUrl);
+            $this->assertStringContainsString('example.com', $htmlMetadata->canonicalUrl);
+
+            // Verify Open Graph
+            $this->assertIsArray($htmlMetadata->openGraph);
+            $this->assertNotEmpty($htmlMetadata->openGraph);
+            $this->assertArrayHasKey('og:title', $htmlMetadata->openGraph);
+            $this->assertArrayHasKey('og:type', $htmlMetadata->openGraph);
+
+            // Verify Twitter Card
+            $this->assertIsArray($htmlMetadata->twitterCard);
+            $this->assertNotEmpty($htmlMetadata->twitterCard);
+            $this->assertArrayHasKey('twitter:card', $htmlMetadata->twitterCard);
+
+            // Verify language and direction
+            $this->assertSame('en', $htmlMetadata->language);
+            $this->assertSame('ltr', $htmlMetadata->textDirection);
+
+            // Verify meta tags
+            $this->assertIsArray($htmlMetadata->metaTags);
+
+            // Verify headers were extracted
+            $this->assertIsArray($htmlMetadata->headers);
+            $this->assertNotEmpty($htmlMetadata->headers);
+            $this->assertInstanceOf(HeaderMetadata::class, $htmlMetadata->headers[0]);
+
+            // Verify links were extracted
+            $this->assertIsArray($htmlMetadata->links);
+            $this->assertNotEmpty($htmlMetadata->links);
+            foreach ($htmlMetadata->links as $link) {
+                $this->assertInstanceOf(LinkMetadata::class, $link);
+            }
+
+            // Verify images were extracted
+            $this->assertIsArray($htmlMetadata->images);
+            $this->assertNotEmpty($htmlMetadata->images);
+            foreach ($htmlMetadata->images as $image) {
+                $this->assertInstanceOf(ImageMetadata::class, $image);
+            }
+
+            // Verify structured data
+            $this->assertIsArray($htmlMetadata->structuredData);
+            $this->assertNotEmpty($htmlMetadata->structuredData);
+            foreach ($htmlMetadata->structuredData as $sd) {
+                $this->assertInstanceOf(StructuredData::class, $sd);
+            }
+        }
+    }
+
+    #[Test]
+    #[RequiresPhpExtension('kreuzberg')]
+    public function testExtractInvalidHtmlHandlesGracefully(): void
+    {
+        // Test error handling with invalid/edge case HTML
+        if (!extension_loaded('kreuzberg')) {
+            $this->markTestSkipped('Kreuzberg extension is not loaded');
+        }
+
+        $kreuzberg = new Kreuzberg();
+
+        // Test 1: Empty HTML
+        $emptyHtml = '';
+        $result = $kreuzberg->extractBytes($emptyHtml, 'text/html');
+        $this->assertIsString($result->content);
+
+        // Test 2: Malformed HTML (unclosed tags)
+        $malformedHtml = <<<'HTML'
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Malformed Page
+                <meta name="description" content="Missing closing tags
+            </head>
+            <body>
+                <h1>Incomplete heading
+                <p>Paragraph without closing tag
+            </body>
+            HTML;
+
+        $result = $kreuzberg->extractBytes($malformedHtml, 'text/html');
+        $this->assertIsString($result->content);
+
+        // Verify metadata handling is graceful
+        if ($result->metadata->hasCustom('html_metadata')) {
+            $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
+            $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
+            $this->assertInstanceOf(HtmlMetadata::class, $htmlMetadata);
+        }
+
+        // Test 3: Large HTML with many elements
+        $largeHtml = '<!DOCTYPE html><html><head><title>Large Doc</title></head><body>';
+        for ($i = 0; $i < 1000; $i++) {
+            $largeHtml .= '<p>Paragraph ' . $i . '</p>';
+        }
+        for ($i = 0; $i < 100; $i++) {
+            $largeHtml .= '<a href="https://example.com/' . $i . '">Link ' . $i . '</a>';
+        }
+        $largeHtml .= '</body></html>';
+
+        $result = $kreuzberg->extractBytes($largeHtml, 'text/html');
+        $this->assertIsString($result->content);
+
+        if ($result->metadata->hasCustom('html_metadata')) {
+            $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
+            $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
+            $this->assertInstanceOf(HtmlMetadata::class, $htmlMetadata);
+        }
+    }
+
+    #[Test]
+    #[RequiresPhpExtension('kreuzberg')]
+    public function testExtractSpecialCharactersInMetadata(): void
+    {
+        // Test Unicode and special characters in metadata extraction
+        if (!extension_loaded('kreuzberg')) {
+            $this->markTestSkipped('Kreuzberg extension is not loaded');
+        }
+
+        $htmlContent = <<<'HTML'
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <title>Test with Special Characters: 你好, مرحبا, здравствуй</title>
+                <meta name="keywords" content="emoji 😀🎉, accents: café, naïve, résumé">
+                <meta name="description" content="Description with quotes: &quot;test&quot; and apostrophes: it's working">
+                <meta property="og:title" content="Special Chars: &lt;tag&gt; &amp; entities">
+                <meta property="og:description" content="Unicode: ™®©℠ and symbols: ±×÷">
+            </head>
+            <body>
+                <h1>测试标题 - Test Title - ٹیسٹ ٹائٹل</h1>
+                <h2>Café au Lait</h2>
+                <h3>Naïve approach to "testing"</h3>
+                <p>Content with special chars: &lt;script&gt;, &quot;quotes&quot;, &apos;apostrophe&apos;</p>
+                <a href="/page-with-é">Link with special char</a>
+                <a href="/emoji-😀">Link with emoji</a>
+                <img src="image.jpg" alt="Image of 北京 (Beijing) with café sign">
+                <img src="photo.png" alt="Photo: It's amazing™">
+            </body>
+            </html>
+            HTML;
+
+        $kreuzberg = new Kreuzberg();
+        $result = $kreuzberg->extractBytes($htmlContent, 'text/html');
+
+        // Verify extraction completed
+        $this->assertIsString($result->content);
+
+        if ($result->metadata->hasCustom('html_metadata')) {
+            $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
+            $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
+
+            // Verify special characters are preserved in keywords
+            $this->assertIsArray($htmlMetadata->keywords);
+
+            // Verify special characters in Open Graph
+            $this->assertIsArray($htmlMetadata->openGraph);
+
+            // Verify headers with Unicode are extracted
+            $this->assertIsArray($htmlMetadata->headers);
+
+            // Verify links with special characters
+            $this->assertIsArray($htmlMetadata->links);
+
+            // Verify images with special character descriptions
+            $this->assertIsArray($htmlMetadata->images);
+            foreach ($htmlMetadata->images as $image) {
+                $this->assertInstanceOf(ImageMetadata::class, $image);
+                // Verify alt text is preserved (may contain special chars)
+                if ($image->alt) {
+                    $this->assertIsString($image->alt);
+                }
+            }
+        }
+    }
+
+    #[Test]
+    #[RequiresPhpExtension('kreuzberg')]
+    public function testExtractLargeHtmlPerformance(): void
+    {
+        // Test performance with large HTML document
+        if (!extension_loaded('kreuzberg')) {
+            $this->markTestSkipped('Kreuzberg extension is not loaded');
+        }
+
+        // Generate a large HTML document
+        $htmlContent = <<<'HTML'
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <title>Large Document Performance Test</title>
+                <meta name="description" content="Performance test with large HTML">
+                <meta property="og:title" content="Large Document">
+            </head>
+            <body>
+            HTML;
+
+        // Add many headers
+        for ($i = 1; $i <= 500; $i++) {
+            $level = ($i % 6) + 1;
+            $htmlContent .= '<h' . $level . '>Header ' . $i . '</h' . $level . '>';
+        }
+
+        // Add many paragraphs with links
+        for ($i = 1; $i <= 2000; $i++) {
+            $htmlContent .= '<p>Paragraph ' . $i . ' with <a href="/link-' . $i . '">link</a> and ';
+            $htmlContent .= 'some <strong>bold</strong> content.</p>';
+        }
+
+        // Add many images
+        for ($i = 1; $i <= 500; $i++) {
+            $htmlContent .= '<img src="image-' . $i . '.jpg" alt="Image ' . $i . '" loading="lazy">';
+        }
+
+        $htmlContent .= '</body></html>';
+
+        $startTime = microtime(true);
+        $kreuzberg = new Kreuzberg();
+        $result = $kreuzberg->extractBytes($htmlContent, 'text/html');
+        $endTime = microtime(true);
+
+        // Verify extraction completed
+        $this->assertIsString($result->content);
+        $this->assertNotEmpty($result->content);
+
+        // Verify execution time is reasonable (< 30 seconds)
+        $duration = $endTime - $startTime;
+        $this->assertLessThan(30, $duration, 'Large HTML extraction took too long: ' . $duration . 's');
+
+        // Verify metadata extraction succeeded
+        if ($result->metadata->hasCustom('html_metadata')) {
+            $htmlMetadataArray = $result->metadata->getCustom('html_metadata');
+            $htmlMetadata = HtmlMetadata::fromArray($htmlMetadataArray);
+
+            // Verify headers were extracted
+            $this->assertIsArray($htmlMetadata->headers);
+            $this->assertGreaterThan(0, count($htmlMetadata->headers));
+
+            // Verify links were extracted
+            $this->assertIsArray($htmlMetadata->links);
+            $this->assertGreaterThan(0, count($htmlMetadata->links));
+
+            // Verify images were extracted
+            $this->assertIsArray($htmlMetadata->images);
+            $this->assertGreaterThan(0, count($htmlMetadata->images));
         }
     }
 }

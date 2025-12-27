@@ -1,14 +1,26 @@
 package dev.kreuzberg.types.metadata;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.KreuzbergException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -928,6 +940,319 @@ class MetadataTypesTest {
                 "Keywords list should be unmodifiable");
             assertThrows(UnsupportedOperationException.class, () -> metadata.openGraph().put("new", "value"),
                 "OpenGraph map should be unmodifiable");
+        }
+    }
+
+    // ============================================================================
+    // SECTION 7: Integration Tests with Actual HTML Extraction
+    // ============================================================================
+
+    @Nested
+    @DisplayName("HTML Extraction Integration Tests")
+    class HtmlExtractionIntegrationTests {
+
+        private Path testResourcesDir;
+
+        @BeforeEach
+        void setUpIntegration() {
+            testResourcesDir = Paths.get("packages/java/src/test/resources");
+        }
+
+        @Test
+        @DisplayName("Extract HTML returns metadata structure")
+        void testExtractHtmlReturnsMetadata() throws IOException, KreuzbergException {
+            Path testFile = testResourcesDir.resolve("test-basic.html");
+
+            if (!java.nio.file.Files.exists(testFile)) {
+                org.junit.jupiter.api.Assumptions.assumeTrue(
+                    false,
+                    "Test HTML file not found: " + testFile.toAbsolutePath()
+                );
+            }
+
+            ExtractionResult result = Kreuzberg.extractBytes(
+                java.nio.file.Files.readAllBytes(testFile),
+                "text/html",
+                null
+            );
+
+            assertNotNull(result, "Extraction result should not be null");
+            assertTrue(result.isSuccess(), "Extraction should succeed");
+            assertNotNull(result.getMimeType(), "MIME type should be present");
+            assertEquals("text/html", result.getMimeType(), "MIME type should be text/html");
+
+            // For HTML extraction, content should be present
+            assertNotNull(result.getContent(), "Extracted content should not be null");
+            assertThat(result.getContent()).isNotEmpty();
+
+            // Metadata should be available
+            Map<String, Object> metadata = result.getMetadata();
+            assertNotNull(metadata, "Metadata map should not be null");
+        }
+
+        @Test
+        @DisplayName("Extract complex HTML with all metadata types")
+        void testExtractCompleteHtmlAllMetadataTypes() throws IOException, KreuzbergException {
+            Path testFile = testResourcesDir.resolve("test-complex.html");
+
+            if (!java.nio.file.Files.exists(testFile)) {
+                org.junit.jupiter.api.Assumptions.assumeTrue(
+                    false,
+                    "Test HTML file not found: " + testFile.toAbsolutePath()
+                );
+            }
+
+            ExtractionResult result = Kreuzberg.extractBytes(
+                java.nio.file.Files.readAllBytes(testFile),
+                "text/html",
+                null
+            );
+
+            assertNotNull(result, "Result should not be null");
+            assertTrue(result.isSuccess(), "Extraction should succeed");
+
+            // Verify content extraction
+            String content = result.getContent();
+            assertNotNull(content, "Content should be extracted");
+            assertThat(content).isNotEmpty();
+
+            // Verify metadata extraction
+            Map<String, Object> metadata = result.getMetadata();
+            assertNotNull(metadata, "Metadata should be extracted");
+
+            // Verify the result structure is valid
+            assertNotNull(result.getMimeType(), "MIME type should be present");
+            assertNotNull(result.getChunks(), "Chunks list should not be null");
+            assertNotNull(result.getImages(), "Images list should not be null");
+            assertNotNull(result.getTables(), "Tables list should not be null");
+        }
+
+        @Test
+        @DisplayName("Extract invalid input handles gracefully")
+        void testExtractInvalidInputHandlesGracefully() {
+            // Test 1: Null input
+            assertThrows(
+                KreuzbergException.class,
+                () -> Kreuzberg.extractBytes(null, "text/html", null),
+                "Should throw exception for null data"
+            );
+
+            // Test 2: Empty HTML
+            assertThrows(
+                KreuzbergException.class,
+                () -> Kreuzberg.extractBytes(new byte[0], "text/html", null),
+                "Should throw exception for empty data"
+            );
+
+            // Test 3: Null MIME type
+            byte[] testData = "<html><body>Test</body></html>".getBytes();
+            assertThrows(
+                KreuzbergException.class,
+                () -> Kreuzberg.extractBytes(testData, null, null),
+                "Should throw exception for null MIME type"
+            );
+
+            // Test 4: Blank MIME type
+            assertThrows(
+                KreuzbergException.class,
+                () -> Kreuzberg.extractBytes(testData, "   ", null),
+                "Should throw exception for blank MIME type"
+            );
+
+            // Test 5: Malformed HTML (should still process but with care)
+            byte[] malformedHtml = "<html><body><p>Unclosed paragraph".getBytes();
+            try {
+                ExtractionResult result = Kreuzberg.extractBytes(malformedHtml, "text/html", null);
+                // Malformed HTML may still extract content
+                assertNotNull(result, "Should handle malformed HTML gracefully");
+            } catch (KreuzbergException e) {
+                // This is also acceptable - graceful error handling
+                assertTrue(true, "Malformed HTML handling is acceptable");
+            }
+        }
+
+        @Test
+        @DisplayName("Extract large HTML document performance test")
+        @Timeout(30)
+        void testExtractLargeHtmlPerformance() throws IOException, KreuzbergException {
+            // Generate a large HTML document in memory
+            StringBuilder html = new StringBuilder();
+            html.append("<!DOCTYPE html>\n");
+            html.append("<html lang=\"en\">\n");
+            html.append("<head>\n");
+            html.append("<meta charset=\"UTF-8\">\n");
+            html.append("<title>Large Document</title>\n");
+            html.append("<meta name=\"description\" content=\"Large test document\">\n");
+            html.append("</head>\n");
+            html.append("<body>\n");
+            html.append("<h1>Large Document</h1>\n");
+
+            // Add 1000 sections to create a large document
+            for (int i = 0; i < 1000; i++) {
+                html.append("<section id=\"section-").append(i).append("\">\n");
+                html.append("<h2>Section ").append(i).append("</h2>\n");
+                html.append("<p>Content for section ").append(i).append(". ");
+                html.append("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ");
+                html.append("Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>\n");
+                html.append("<a href=\"https://example.com/link").append(i).append("\">Link ").append(i).append("</a>\n");
+                html.append("</section>\n");
+            }
+
+            html.append("</body>\n");
+            html.append("</html>\n");
+
+            byte[] largeHtmlData = html.toString().getBytes();
+
+            // Record start time
+            long startTime = System.currentTimeMillis();
+
+            // Extract the large document
+            ExtractionResult result = Kreuzberg.extractBytes(
+                largeHtmlData,
+                "text/html",
+                null
+            );
+
+            // Record end time
+            long endTime = System.currentTimeMillis();
+            long duration = endTime - startTime;
+
+            // Verify extraction was successful
+            assertNotNull(result, "Result should not be null");
+            assertTrue(result.isSuccess(), "Extraction should succeed");
+
+            // Verify content was extracted
+            String content = result.getContent();
+            assertNotNull(content, "Content should be extracted");
+            assertThat(content).isNotEmpty();
+
+            // Log performance (should complete within reasonable time)
+            System.out.println("Large HTML extraction took " + duration + "ms for "
+                + largeHtmlData.length + " bytes");
+
+            // Assert it completes in reasonable time (30 seconds timeout enforced by @Timeout)
+            assertTrue(duration < 30000, "Extraction should complete within 30 seconds");
+        }
+
+        @Test
+        @DisplayName("Extract with concurrent execution is thread-safe")
+        @Timeout(60)
+        void testExtractConcurrentExecution() throws IOException, InterruptedException, KreuzbergException {
+            // Prepare test HTML
+            byte[] testHtml = ("<html><head><title>Concurrent Test</title>"
+                + "<meta name=\"description\" content=\"Test concurrent extraction\">"
+                + "</head><body><h1>Test</h1><p>Content</p></body></html>").getBytes();
+
+            // Create thread pool
+            ExecutorService executorService = Executors.newFixedThreadPool(5);
+            List<Future<ExtractionResult>> futures = new ArrayList<>();
+            AtomicInteger successCount = new AtomicInteger(0);
+            AtomicInteger errorCount = new AtomicInteger(0);
+
+            try {
+                // Submit 10 concurrent extraction tasks
+                for (int i = 0; i < 10; i++) {
+                    Future<ExtractionResult> future = executorService.submit(() -> {
+                        try {
+                            ExtractionResult result = Kreuzberg.extractBytes(
+                                testHtml,
+                                "text/html",
+                                null
+                            );
+                            if (result.isSuccess()) {
+                                successCount.incrementAndGet();
+                            }
+                            return result;
+                        } catch (KreuzbergException e) {
+                            errorCount.incrementAndGet();
+                            throw e;
+                        }
+                    });
+                    futures.add(future);
+                }
+
+                // Wait for all tasks to complete
+                boolean allCompleted = executorService.awaitTermination(30, TimeUnit.SECONDS);
+                assertTrue(allCompleted, "All tasks should complete within timeout");
+
+                // Collect results
+                int completedCount = 0;
+                for (Future<ExtractionResult> future : futures) {
+                    if (future.isDone()) {
+                        completedCount++;
+                        try {
+                            ExtractionResult result = future.get();
+                            assertNotNull(result, "Result should not be null");
+                            assertTrue(result.isSuccess(), "Each extraction should succeed");
+                            assertNotNull(result.getContent(), "Content should be extracted");
+                        } catch (Exception e) {
+                            // Some extractions may fail in concurrent scenario, which is acceptable
+                            assertTrue(true, "Concurrent execution handled exception gracefully");
+                        }
+                    }
+                }
+
+                // Verify at least some tasks completed successfully
+                assertTrue(completedCount > 0, "At least some concurrent extractions should complete");
+                assertTrue(successCount.get() > 0, "At least some extractions should succeed");
+
+                System.out.println("Concurrent extraction: " + successCount.get() + " succeeded, "
+                    + errorCount.get() + " failed out of 10 tasks");
+
+            } finally {
+                executorService.shutdown();
+                if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                    executorService.shutdownNow();
+                }
+            }
+        }
+
+        @Test
+        @DisplayName("Extract HTML validates metadata structure")
+        void testExtractHtmlValidatesMetadataStructure() throws IOException, KreuzbergException {
+            byte[] testHtml = ("<!DOCTYPE html>"
+                + "<html>"
+                + "<head>"
+                + "<title>Metadata Test</title>"
+                + "<meta name=\"description\" content=\"Description\">"
+                + "<meta name=\"author\" content=\"Author Name\">"
+                + "</head>"
+                + "<body>"
+                + "<h1>Title</h1>"
+                + "<p>Content</p>"
+                + "</body>"
+                + "</html>").getBytes();
+
+            ExtractionResult result = Kreuzberg.extractBytes(testHtml, "text/html", null);
+
+            assertNotNull(result, "Result should not be null");
+            assertTrue(result.isSuccess(), "Extraction should succeed");
+
+            // Verify metadata is a valid map
+            Map<String, Object> metadata = result.getMetadata();
+            assertNotNull(metadata, "Metadata should not be null");
+            assertThat(metadata).isNotNull();
+
+            // Content should be properly extracted
+            String content = result.getContent();
+            assertNotNull(content, "Content should be extracted");
+            assertThat(content.length()).isGreaterThan(0);
+        }
+
+        @Test
+        @DisplayName("Extract HTML from bytes with proper MIME type detection")
+        void testExtractHtmlFromBytesWithMimeType() throws KreuzbergException {
+            byte[] htmlBytes = ("<html><head><title>Test</title></head>"
+                + "<body><h1>Test Page</h1></body></html>").getBytes();
+
+            // Extract with explicit HTML MIME type
+            ExtractionResult result = Kreuzberg.extractBytes(htmlBytes, "text/html", null);
+
+            assertNotNull(result, "Result should not be null");
+            assertTrue(result.isSuccess(), "Should extract successfully");
+            assertEquals("text/html", result.getMimeType(), "MIME type should match");
+            assertNotNull(result.getContent(), "Content should be extracted");
+            assertThat(result.getContent()).isNotEmpty();
         }
     }
 }

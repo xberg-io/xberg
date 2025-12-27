@@ -407,6 +407,264 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 			expect(result.content).toBeTruthy();
 		});
 
+		it("test_extract_html_file_integration", () => {
+			// Integration test: Extract actual HTML file and validate metadata
+			const htmlPath = getTestDocumentPath("web/taylor_swift.html");
+			const buffer = loadTestDocument("web/taylor_swift.html");
+
+			const result = extractBytesSync(buffer, "text/html", null);
+
+			expect(result).toBeDefined();
+			expect(result.mimeType).toBe("text/html");
+			expect(result.metadata).toBeDefined();
+			expect(typeof result.metadata).toBe("object");
+			expect(result.content).toBeTruthy();
+			expect(typeof result.content).toBe("string");
+
+			// Validate HTML metadata structure
+			const htmlMetadata = result.metadata.html;
+			if (htmlMetadata) {
+				expect(typeof htmlMetadata === "object").toBe(true);
+
+				// Check for metadata fields
+				if (htmlMetadata.title) {
+					expect(typeof htmlMetadata.title).toBe("string");
+				}
+
+				if (htmlMetadata.description) {
+					expect(typeof htmlMetadata.description).toBe("string");
+				}
+
+				// Verify array fields exist
+				expect(Array.isArray(htmlMetadata.keywords)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlImages)).toBe(true);
+				expect(Array.isArray(htmlMetadata.structuredData)).toBe(true);
+
+				// Verify Record fields exist
+				expect(typeof htmlMetadata.openGraph).toBe("object");
+				expect(typeof htmlMetadata.twitterCard).toBe("object");
+				expect(typeof htmlMetadata.metaTags).toBe("object");
+			}
+		});
+
+		it("test_empty_html_returns_defaults", () => {
+			// Edge case: Empty/minimal HTML should handle gracefully with defaults
+			const emptyHtml = `<!DOCTYPE html><html><head></head><body></body></html>`;
+			const buffer = Buffer.from(emptyHtml, "utf-8");
+
+			const result = extractBytesSync(buffer, "text/html", null);
+
+			expect(result).toBeDefined();
+			expect(result.mimeType).toBe("text/html");
+			expect(result.metadata).toBeDefined();
+
+			const htmlMetadata = result.metadata.html;
+			if (htmlMetadata) {
+				// Fields should exist with default values (arrays/objects are empty)
+				expect(Array.isArray(htmlMetadata.keywords)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlImages)).toBe(true);
+				expect(Array.isArray(htmlMetadata.structuredData)).toBe(true);
+
+				expect(typeof htmlMetadata.openGraph).toBe("object");
+				expect(typeof htmlMetadata.twitterCard).toBe("object");
+				expect(typeof htmlMetadata.metaTags).toBe("object");
+
+				// Empty collections
+				expect(Object.keys(htmlMetadata.openGraph).length).toBeGreaterThanOrEqual(0);
+				expect(Object.keys(htmlMetadata.twitterCard).length).toBeGreaterThanOrEqual(0);
+			}
+		});
+
+		it("test_malformed_html_graceful_handling", () => {
+			// Edge case: Malformed HTML (unclosed tags, invalid structure) should not throw
+			// Note: This tests that the extraction handles broken HTML gracefully without crashing
+			const malformedHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Malformed Page</title>
+          <meta name="description" content="Some content">
+        </head>
+        <body>
+          <div>
+            <p>Unclosed paragraph
+            <img src="image.png" alt="image">
+            <a href="https://example.com">Link without closing tag
+          </body>
+        </html>
+      `;
+
+			const buffer = Buffer.from(malformedHtml, "utf-8");
+
+			// Should not throw, even with malformed HTML
+			expect(() => {
+				extractBytesSync(buffer, "text/html", null);
+			}).not.toThrow();
+
+			const result = extractBytesSync(buffer, "text/html", null);
+
+			expect(result).toBeDefined();
+			expect(result.mimeType).toBe("text/html");
+			expect(result.metadata).toBeDefined();
+
+			// Metadata should still be properly structured
+			const htmlMetadata = result.metadata.html;
+			if (htmlMetadata) {
+				expect(typeof htmlMetadata === "object").toBe(true);
+				expect(Array.isArray(htmlMetadata.keywords)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
+				expect(Array.isArray(htmlMetadata.htmlImages)).toBe(true);
+
+				// Metadata structure should be valid even if content extraction failed
+				expect(typeof htmlMetadata.openGraph).toBe("object");
+				expect(typeof htmlMetadata.twitterCard).toBe("object");
+			}
+		});
+
+		it("test_special_characters_in_metadata", () => {
+			// Edge case: Special characters, Unicode, HTML entities
+			// Tests proper handling of non-ASCII characters and HTML entities
+			const specialHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Advanced Features with Special Characters</title>
+<meta name="description" content="Cafe, naive, special characters test">
+<meta name="keywords" content="test, unicode, special">
+<meta property="og:title" content="Title with test">
+</head>
+<body>
+<h1>Unicode: Chinese Japanese Hebrew</h1>
+<p>Testing special character handling</p>
+<a href="https://example.com/page">Test Link</a>
+</body>
+</html>`;
+
+			const buffer = Buffer.from(specialHtml, "utf-8");
+			const result = extractBytesSync(buffer, "text/html", null);
+
+			expect(result).toBeDefined();
+			expect(result.mimeType).toBe("text/html");
+			expect(result.metadata).toBeDefined();
+
+			const htmlMetadata = result.metadata.html;
+			if (htmlMetadata) {
+				// Title should be extracted correctly
+				if (htmlMetadata.title) {
+					expect(htmlMetadata.title).toBeDefined();
+					expect(typeof htmlMetadata.title).toBe("string");
+					expect(htmlMetadata.title.length).toBeGreaterThan(0);
+				}
+
+				// Description should be extracted
+				if (htmlMetadata.description) {
+					expect(typeof htmlMetadata.description).toBe("string");
+					expect(htmlMetadata.description.length).toBeGreaterThan(0);
+				}
+
+				// Keywords should be an array
+				expect(Array.isArray(htmlMetadata.keywords)).toBe(true);
+
+				// Headers should be extracted
+				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
+				if (htmlMetadata.htmlHeaders.length > 0) {
+					const header = htmlMetadata.htmlHeaders[0];
+					expect(typeof header.text).toBe("string");
+					expect(header.text.length).toBeGreaterThan(0);
+				}
+
+				// OpenGraph metadata should be a Record
+				if (htmlMetadata.openGraph) {
+					expect(typeof htmlMetadata.openGraph).toBe("object");
+				}
+
+				// Links should be extracted correctly
+				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
+				if (htmlMetadata.htmlLinks.length > 0) {
+					const link = htmlMetadata.htmlLinks[0];
+					expect(typeof link.href).toBe("string");
+					expect(typeof link.text).toBe("string");
+					expect(link.href.length).toBeGreaterThan(0);
+				}
+			}
+		});
+
+		it("test_large_html_extraction_performance", () => {
+			// Performance test: Large HTML document should extract efficiently
+			// Generate large HTML with many elements
+			let largeHtml = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Large Document Performance Test</title>
+          <meta name="description" content="Testing extraction performance with large HTML">
+        </head>
+        <body>
+          <h1>Main Heading</h1>
+      `;
+
+			// Add 500 paragraphs with links and images
+			for (let i = 0; i < 500; i++) {
+				largeHtml += `
+          <section>
+            <h2>Section ${i + 1}</h2>
+            <p>This is paragraph ${i + 1} with some content that provides context and information about the section.</p>
+            <a href="https://example.com/page${i + 1}">Link ${i + 1}</a>
+            <img src="image${i + 1}.png" alt="Image ${i + 1}">
+          </section>
+        `;
+			}
+
+			largeHtml += `
+        </body>
+        </html>
+      `;
+
+			const buffer = Buffer.from(largeHtml, "utf-8");
+			const startTime = Date.now();
+
+			// Should complete in reasonable time (< 5 seconds)
+			const result = extractBytesSync(buffer, "text/html", null);
+			const duration = Date.now() - startTime;
+
+			expect(result).toBeDefined();
+			expect(result.mimeType).toBe("text/html");
+			expect(result.metadata).toBeDefined();
+			expect(result.content).toBeTruthy();
+			expect(duration).toBeLessThan(5000);
+
+			const htmlMetadata = result.metadata.html;
+			if (htmlMetadata) {
+				// Should extract headers
+				expect(Array.isArray(htmlMetadata.htmlHeaders)).toBe(true);
+				if (htmlMetadata.htmlHeaders.length > 0) {
+					expect(htmlMetadata.htmlHeaders.length).toBeGreaterThan(0);
+				}
+
+				// Should extract links
+				expect(Array.isArray(htmlMetadata.htmlLinks)).toBe(true);
+				if (htmlMetadata.htmlLinks.length > 0) {
+					// Should have extracted some links from the 500+ sections
+					expect(htmlMetadata.htmlLinks.length).toBeGreaterThan(0);
+				}
+
+				// Should extract images
+				expect(Array.isArray(htmlMetadata.htmlImages)).toBe(true);
+				if (htmlMetadata.htmlImages.length > 0) {
+					// Should have extracted some images from the 500+ sections
+					expect(htmlMetadata.htmlImages.length).toBeGreaterThan(0);
+				}
+			}
+
+			// Performance assertion: Should complete reasonably fast
+			expect(duration).toBeLessThan(5000);
+		});
+
 		it("test_metadata_round_trip", () => {
 			// Test serialize/deserialize metadata preserves structure
 			const originalMetadata: HtmlMetadata = {

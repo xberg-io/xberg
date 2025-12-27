@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complex HTML Page with All Metadata Types</title>
+    <meta name="description" content="A comprehensive test page with all metadata types">
+    <meta name="keywords" content="schema, structured, data, json-ld, microdata">
+    <meta name="author" content="Complex Test Author">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://example.com/complex-page">
+    <base href="https://example.com/">
+
+    <!-- Open Graph tags -->
+    <meta property="og:title" content="Complex Page OG Title">
+    <meta property="og:description" content="Complex OG Description">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://example.com/complex-page">
+    <meta property="og:image" content="https://example.com/og-image.jpg">
+    <meta property="og:site_name" content="Example Site">
+
+    <!-- Twitter Card tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Complex Twitter Title">
+    <meta name="twitter:description" content="Complex Twitter Description">
+    <meta name="twitter:image" content="https://example.com/twitter-image.jpg">
+    <meta name="twitter:creator" content="@example">
+
+    <!-- Structured Data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "Complex Article Headline",
+        "description": "Article description",
+        "author": {
+            "@type": "Person",
+            "name": "Article Author"
+        },
+        "datePublished": "2023-01-01",
+        "dateModified": "2023-12-01"
+    }
+    </script>
+
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Example Organization",
+        "url": "https://example.com",
+        "logo": "https://example.com/logo.png"
+    }
+    </script>
+</head>
+<body>
+    <header>
+        <h1 id="main-title">Main Article Title</h1>
+        <p class="subtitle">Subtitle content goes here</p>
+    </header>
+
+    <main>
+        <h2 id="section-1">First Major Section</h2>
+        <p>Content for section 1 with <strong>important</strong> text.</p>
+
+        <h3 id="subsection-1-1">Subsection 1.1</h3>
+        <p>Detailed subsection content.</p>
+
+        <h2 id="section-2">Second Major Section</h2>
+        <p>Content for section 2.</p>
+
+        <h3 id="subsection-2-1">Subsection 2.1</h3>
+        <p>More detailed content.</p>
+
+        <aside>
+            <h3>Related Links</h3>
+            <ul>
+                <li><a href="https://example.com/related1" rel="nofollow">Related Article 1</a></li>
+                <li><a href="https://example.com/related2" rel="nofollow external">Related Article 2</a></li>
+                <li><a href="https://example.com/external" target="_blank" rel="noopener">External Link</a></li>
+            </ul>
+        </aside>
+    </main>
+
+    <section id="gallery">
+        <h2>Image Gallery</h2>
+        <figure>
+            <img src="https://example.com/gallery/img1.jpg" alt="Gallery Image 1" title="First Gallery Image" width="800" height="600">
+            <figcaption>Caption for first image</figcaption>
+        </figure>
+        <figure>
+            <img src="https://example.com/gallery/img2.png" alt="Gallery Image 2" width="1024" height="768">
+            <figcaption>Caption for second image</figcaption>
+        </figure>
+        <img src="https://example.com/gallery/img3.webp" alt="Gallery Image 3" loading="lazy">
+    </section>
+
+    <footer>
+        <p>Footer content with <a href="https://example.com/privacy">Privacy Policy</a></p>
+    </footer>
+</body>
+</html>

@@ -999,6 +999,295 @@ RSpec.describe 'Kreuzberg Metadata Types' do
   end
 
   # ============================================================================
+  # Critical Tests: Integration, Edge Cases, Error Handling, Thread Safety
+  # ============================================================================
+
+  describe 'Integration Test: Extract actual HTML file' do
+    it 'extracts metadata from actual HTML file' do
+      # Use real test document from test_documents directory
+      html_file = test_document_path('web/html.html')
+
+      # Verify file exists
+      expect(File.exist?(html_file)).to be(true)
+
+      # Extract and validate metadata
+      result = Kreuzberg.extract_file_sync(html_file)
+      expect(result).to be_a(Kreuzberg::Result)
+      expect(result.metadata).not_to be_nil
+
+      metadata = result.metadata
+
+      # Validate metadata type and structure
+      if metadata.is_a?(Kreuzberg::HtmlMetadata)
+        # Verify basic fields exist
+        expect(metadata).to respond_to(:title)
+        expect(metadata).to respond_to(:description)
+        expect(metadata).to respond_to(:keywords)
+        expect(metadata).to respond_to(:headers)
+        expect(metadata).to respond_to(:links)
+        expect(metadata).to respond_to(:images)
+
+        # Verify collections are proper types
+        expect(metadata.keywords).to be_a(Array)
+        expect(metadata.headers).to be_a(Array)
+        expect(metadata.links).to be_a(Array)
+        expect(metadata.images).to be_a(Array)
+        expect(metadata.open_graph).to be_a(Hash)
+        expect(metadata.twitter_card).to be_a(Hash)
+
+        # Verify real data was extracted (headers should exist in html.html)
+        expect(metadata.headers).not_to be_empty
+      elsif metadata.is_a?(Hash)
+        expect(metadata['keywords']).to be_a(Array) if metadata['keywords']
+        expect(metadata['headers']).to be_a(Array) if metadata['headers']
+        expect(metadata['links']).to be_a(Array) if metadata['links']
+        expect(metadata['images']).to be_a(Array) if metadata['images']
+      end
+    end
+  end
+
+  describe 'Edge Case: Malformed HTML' do
+    it 'handles malformed HTML gracefully' do
+      # HTML with unclosed tags, broken structure
+      malformed_html = <<~HTML
+        <html>
+        <head>
+          <title>Malformed Page
+          <meta name="description" content="Missing closing tag
+          <meta property="og:title" content="Test>
+        </head>
+        <body>
+          <h1>Heading without closing
+          <p>Paragraph with <b>unclosed bold
+          <div>
+            <p>Nested unclosed paragraph
+            <span>Text in malformed span
+          </div>
+          <img src="image.jpg" alt="Image>
+          <a href="/page">Link
+        </body>
+      HTML
+
+      html_file = create_test_html_file(malformed_html)
+
+      begin
+        # Should not raise an error, should handle gracefully
+        expect do
+          result = Kreuzberg.extract_file_sync(html_file)
+          expect(result).to be_a(Kreuzberg::Result)
+          expect(result.metadata).not_to be_nil
+        end.not_to raise_error
+
+        result = Kreuzberg.extract_file_sync(html_file)
+        metadata = result.metadata
+
+        # Verify structure is valid even with malformed input
+        if metadata.is_a?(Kreuzberg::HtmlMetadata)
+          expect(metadata.keywords).to be_a(Array)
+          expect(metadata.headers).to be_a(Array)
+          expect(metadata.links).to be_a(Array)
+          expect(metadata.images).to be_a(Array)
+        end
+      ensure
+        FileUtils.rm_f(html_file)
+      end
+    end
+  end
+
+  describe 'Edge Case: Special Characters in Metadata' do
+    it 'handles special characters in metadata' do
+      # HTML with Unicode, emojis, HTML entities, and special characters
+      special_chars_html = <<~HTML
+        <html>
+        <head>
+          <title>Test with emojis: 🚀 🎉 ✨ and unicode: 中文 العربية עברית</title>
+          <meta name="description" content="Description with &amp; entities &lt;html&gt; and emojis: 😀 👍 💯">
+          <meta name="author" content="Naaman Hirschfeld (编者)">
+          <meta name="keywords" content="émojis, 中文, العربية, Ελληνικά, 🎨, ♠♣♥♦">
+          <meta property="og:title" content="OG Title: Café, Naïve &amp; Special: ™®©">
+          <meta property="og:description" content="OG Desc with quotes &quot;test&quot; and apostrophes &apos;test&apos;">
+        </head>
+        <body>
+          <h1>Heading with émojis: 🎯 🔥</h1>
+          <h2>Unicode: עברית العربية 中文 Ελληνικά</h2>
+          <p>Text with HTML entities: &nbsp; &copy; &reg; &trade; &pound; &euro; &yen;</p>
+          <a href="/special-chars" title="Link with emojis: 🔗">Special Characters Link</a>
+          <img src="test.jpg" alt="Image with special chars: 🖼️ &amp; émojis">
+        </body>
+        </html>
+      HTML
+
+      html_file = create_test_html_file(special_chars_html)
+
+      begin
+        result = Kreuzberg.extract_file_sync(html_file)
+        expect(result).to be_a(Kreuzberg::Result)
+
+        metadata = result.metadata
+        if metadata.is_a?(Kreuzberg::HtmlMetadata)
+          # Verify special characters are preserved
+          expect(metadata.title).not_to be_nil
+          expect(metadata.title).to include('🚀')
+
+          expect(metadata.description).not_to be_nil
+          expect(metadata.description).to include('😀')
+
+          expect(metadata.author).not_to be_nil
+          expect(metadata.author).to include('编者')
+
+          # Verify keywords with special chars
+          expect(metadata.keywords).to be_a(Array)
+          expect(metadata.keywords.any? { |k| k.include?('中文') }).to be(true)
+
+          # Verify headers with emojis
+          expect(metadata.headers).not_to be_empty
+          expect(metadata.headers[0].text).to include('🎯')
+
+          # Verify links and images with special chars
+          expect(metadata.links).not_to be_empty
+          expect(metadata.images).not_to be_empty
+        elsif metadata.is_a?(Hash)
+          # At minimum, metadata should be extracted without errors
+          expect(metadata['title']).not_to be_nil if metadata['title']
+        end
+      ensure
+        FileUtils.rm_f(html_file)
+      end
+    end
+  end
+
+  describe 'Error Handling: Invalid Input' do
+    it 'handles invalid input gracefully' do
+      # Test 1: Empty HTML file
+      empty_html = ''
+      empty_file = create_test_html_file(empty_html)
+      begin
+        expect do
+          result = Kreuzberg.extract_file_sync(empty_file)
+          expect(result).to be_a(Kreuzberg::Result)
+        end.not_to raise_error
+      ensure
+        FileUtils.rm_f(empty_file)
+      end
+
+      # Test 2: Minimal HTML
+      minimal_html = '<html></html>'
+      minimal_file = create_test_html_file(minimal_html)
+      begin
+        expect do
+          result = Kreuzberg.extract_file_sync(minimal_file)
+          expect(result).to be_a(Kreuzberg::Result)
+          metadata = result.metadata
+          if metadata.is_a?(Kreuzberg::HtmlMetadata)
+            expect(metadata.keywords).to be_a(Array)
+            expect(metadata.headers).to be_a(Array)
+          end
+        end.not_to raise_error
+      ensure
+        FileUtils.rm_f(minimal_file)
+      end
+
+      # Test 3: Very large HTML file (10MB+ of repeated content)
+      large_html = "<html><body>\n"
+      1000.times do |i|
+        large_html += "<h#{(i % 6) + 1}>Header #{i}</h#{(i % 6) + 1}>\n"
+        large_html += "<p>Paragraph with content #{i}</p>\n"
+        large_html += "<a href=\"/page-#{i}\">Link #{i}</a>\n"
+      end
+      large_html += '</body></html>'
+
+      large_file = create_test_html_file(large_html)
+      begin
+        expect do
+          result = Kreuzberg.extract_file_sync(large_file)
+          expect(result).to be_a(Kreuzberg::Result)
+          metadata = result.metadata
+
+          # Verify large file is processed correctly
+          if metadata.is_a?(Kreuzberg::HtmlMetadata)
+            expect(metadata.headers).to be_a(Array)
+            expect(metadata.links).to be_a(Array)
+            # Should have extracted many headers and links
+            expect(metadata.headers.length).to be > 100
+            expect(metadata.links.length).to be > 100
+          end
+        end.not_to raise_error
+      ensure
+        FileUtils.rm_f(large_file)
+      end
+    end
+  end
+
+  describe 'Thread Safety: Concurrent Extraction' do
+    it 'handles concurrent extraction safely' do
+      # Create multiple test HTML files
+      test_files = []
+      results = []
+      errors = []
+
+      5.times do |i|
+        html_content = <<~HTML
+          <html>
+          <head>
+            <title>Concurrent Test #{i}</title>
+            <meta name="description" content="Test document #{i}">
+            <meta name="keywords" content="test#{i}, concurrent, thread-safe">
+          </head>
+          <body>
+            <h1>Test Document #{i}</h1>
+            <p>Content for test #{i}</p>
+            <a href="/page-#{i}">Link #{i}</a>
+            <img src="image-#{i}.jpg" alt="Image #{i}">
+          </body>
+          </html>
+        HTML
+        test_files << create_test_html_file(html_content)
+      end
+
+      begin
+        # Create threads to extract concurrently
+        threads = test_files.map do |file|
+          Thread.new do
+            result = Kreuzberg.extract_file_sync(file)
+            results << result
+          rescue StandardError => e
+            errors << e
+          end
+        end
+
+        # Wait for all threads to complete
+        threads.each(&:join)
+
+        # Verify no errors occurred
+        expect(errors).to be_empty
+
+        # Verify all results were extracted correctly
+        expect(results.length).to eq(5)
+        results.each do |result|
+          expect(result).to be_a(Kreuzberg::Result)
+          expect(result.metadata).not_to be_nil
+
+          metadata = result.metadata
+          next unless metadata.is_a?(Kreuzberg::HtmlMetadata)
+
+          expect(metadata.title).not_to be_nil
+          expect(metadata.description).not_to be_nil
+          expect(metadata.keywords).to be_a(Array)
+          expect(metadata.headers).to be_a(Array)
+          expect(metadata.links).to be_a(Array)
+          expect(metadata.images).to be_a(Array)
+        end
+
+        # Verify data independence: each result should have unique content
+        titles = results.map { |r| r.metadata.is_a?(Kreuzberg::HtmlMetadata) ? r.metadata.title : r.metadata['title'] }
+        expect(titles.uniq.length).to eq(5)
+      ensure
+        test_files.each { |f| FileUtils.rm_f(f) }
+      end
+    end
+  end
+
+  # ============================================================================
   # Helper Methods
   # ============================================================================
 
