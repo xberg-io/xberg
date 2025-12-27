@@ -1,0 +1,70 @@
+version: "3"
+
+# Benchmark and profiling workflow tasks
+# These tasks support running benchmarks with profiling enabled
+
+vars:
+  FIXTURES_DIR: "tools/benchmark-harness/fixtures"
+  HARNESS_PATH: "./target/release/benchmark-harness"
+  BENCHMARK_RESULTS_DIR: "benchmark-results"
+  FLAMEGRAPH_DIR: "flamegraphs"
+
+tasks:
+  run:
+    desc: "Run benchmark harness with profiling support"
+    requires:
+      vars:
+        - FRAMEWORK
+        - MODE
+    vars:
+      ITERATIONS: '{{ .ITERATIONS | default "1" }}'
+      TIMEOUT: '{{ .TIMEOUT | default "900" }}'
+      MAX_CONCURRENT: '{{ if eq .MODE "single-file" }}1{{ else }}4{{ end }}'
+    env:
+      RUST_BACKTRACE: short
+    cmds:
+      - mkdir -p "{{.BENCHMARK_RESULTS_DIR}}/{{.FRAMEWORK}}-{{.MODE}}"
+      - |
+        {{.HARNESS_PATH}} \
+          run \
+          --fixtures "{{.FIXTURES_DIR}}" \
+          --frameworks "{{.FRAMEWORK}}" \
+          --output "{{.BENCHMARK_RESULTS_DIR}}/{{.FRAMEWORK}}-{{.MODE}}" \
+          --iterations "{{.ITERATIONS}}" \
+          --timeout "{{.TIMEOUT}}" \
+          --mode "{{.MODE}}" \
+          --max-concurrent "{{.MAX_CONCURRENT}}"
+
+  profile:
+    desc: "Run benchmark with flamegraph profiling enabled"
+    requires:
+      vars:
+        - FRAMEWORK
+        - MODE
+    vars:
+      ITERATIONS: '{{ .ITERATIONS | default "1" }}'
+      TIMEOUT: '{{ .TIMEOUT | default "900" }}'
+      MAX_CONCURRENT: '{{ if eq .MODE "single-file" }}1{{ else }}4{{ end }}'
+    env:
+      ENABLE_PROFILING: "true"
+      PROFILING_FIXTURES: "pdf_small,pdf_medium,docx_simple,html_simple,image_table,markdown_technical"
+      RUST_BACKTRACE: short
+    cmds:
+      - mkdir -p "{{.BENCHMARK_RESULTS_DIR}}/{{.FRAMEWORK}}-{{.MODE}}"
+      - mkdir -p "{{.FLAMEGRAPH_DIR}}"
+      - |
+        {{.HARNESS_PATH}} \
+          run \
+          --fixtures "{{.FIXTURES_DIR}}" \
+          --frameworks "{{.FRAMEWORK}}" \
+          --output "{{.BENCHMARK_RESULTS_DIR}}/{{.FRAMEWORK}}-{{.MODE}}" \
+          --iterations "{{.ITERATIONS}}" \
+          --timeout "{{.TIMEOUT}}" \
+          --mode "{{.MODE}}" \
+          --max-concurrent "{{.MAX_CONCURRENT}}"
+
+  clean-results:
+    desc: "Clean up benchmark results and profiles"
+    cmds:
+      - rm -rf "{{.BENCHMARK_RESULTS_DIR}}"
+      - rm -rf "{{.FLAMEGRAPH_DIR}}"

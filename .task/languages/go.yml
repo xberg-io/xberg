@@ -64,6 +64,11 @@ tasks:
     cmds:
       - go build ./...
 
+  build:bindings:
+    desc: Build Go bindings for benchmarking
+    cmds:
+      - bash scripts/benchmarks/build-go-bindings.sh
+
   # Test Tasks
   test:
     desc: Run Go tests

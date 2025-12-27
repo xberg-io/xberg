@@ -47,6 +47,11 @@ tasks:
     cmds:
       - pnpm exec napi build --platform --release
 
+  build:bindings:
+    desc: Build Node bindings for benchmarking
+    cmds:
+      - bash scripts/benchmarks/build-node-bindings.sh
+
   # Test Tasks
   test:
     desc: Run Node/TypeScript tests

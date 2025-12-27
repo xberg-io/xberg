@@ -84,6 +84,11 @@ tasks:
     cmds:
       - pnpm run build:all
 
+  build:bindings:
+    desc: Build WASM bindings for benchmarking
+    cmds:
+      - bash scripts/benchmarks/build-wasm-bindings.sh
+
   # Test Tasks
   test:
     desc: Run WASM unit tests with Vitest

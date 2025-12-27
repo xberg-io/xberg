@@ -56,7 +56,7 @@ env:
   CARGO_TARGET_DIR: target
   CARGO_LOG: cargo::core::compiler::fingerprint=info
   RUST_LOG: debug
-  BUILD_PROFILE: ci
+  BUILD_PROFILE: "ci"
 
 jobs:
   changes:
@@ -249,6 +249,9 @@ jobs:
           build-profile: release
           verbose: true
 
+      - name: Install Task
+        uses: ./.github/actions/install-task
+
       - name: Build PHP extension
         shell: bash
         run: task php:build:ci
@@ -268,9 +271,6 @@ jobs:
       - name: Build kreuzberg CLI binary
         shell: bash
         run: cargo build --release --package kreuzberg-cli
-
-      - name: Install Task
-        uses: ./.github/actions/install-task
 
       - name: Run E2E tests
         shell: bash

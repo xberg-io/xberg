@@ -55,6 +55,11 @@ tasks:
     cmds:
       - "{{.BUNDLE}} exec rake compile"
 
+  build:bindings:
+    desc: Build Ruby gem for benchmarking
+    cmds:
+      - bash scripts/benchmarks/build-ruby-gem.sh
+
   # Test Tasks
   test:
     desc: Run Ruby tests

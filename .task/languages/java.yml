@@ -50,6 +50,11 @@ tasks:
     cmds:
       - mvn clean package -DskipTests
 
+  build:bindings:
+    desc: Build Java bindings for benchmarking
+    cmds:
+      - bash scripts/benchmarks/build-java-package.sh
+
   # Test Tasks
   test:
     desc: Run Java tests

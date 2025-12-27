@@ -69,7 +69,7 @@ jobs:
       - name: Build workspace (native libs + harness with profiling)
         env:
           ENABLE_PROFILING: "true"
-        run: scripts/benchmarks/build-native-libs.sh
+        run: task rust:build:profiling
 
       - name: Log disk space before artifact upload
         run: scripts/ci/validate/show-disk-space.sh "Disk space before artifact upload"
@@ -135,7 +135,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -203,7 +203,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Build Python bindings
-        run: scripts/benchmarks/build-python-bindings.sh
+        run: task python:build:bindings
 
       - name: Run benchmark
         env:
@@ -212,7 +212,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -280,7 +280,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Build Python bindings
-        run: scripts/benchmarks/build-python-bindings.sh
+        run: task python:build:bindings
 
       - name: Run benchmark
         env:
@@ -289,7 +289,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -357,7 +357,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Build Python bindings
-        run: scripts/benchmarks/build-python-bindings.sh
+        run: task python:build:bindings
 
       - name: Run benchmark
         env:
@@ -366,7 +366,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -436,7 +436,7 @@ jobs:
       - name: Build Node bindings and install locally
         env:
           TARGET: x86_64-unknown-linux-gnu
-        run: scripts/benchmarks/build-node-bindings.sh
+        run: task node:build:bindings
 
       - name: Run benchmark
         env:
@@ -445,7 +445,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -515,7 +515,7 @@ jobs:
       - name: Build Node bindings and install locally
         env:
           TARGET: x86_64-unknown-linux-gnu
-        run: scripts/benchmarks/build-node-bindings.sh
+        run: task node:build:bindings
 
       - name: Run benchmark
         env:
@@ -524,7 +524,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -584,7 +584,7 @@ jobs:
         uses: ./.github/actions/setup-node-workspace
 
       - name: Build WASM bindings
-        run: scripts/benchmarks/build-wasm-bindings.sh
+        run: task wasm:build:bindings
 
       - name: Run benchmark
         env:
@@ -593,7 +593,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -653,7 +653,7 @@ jobs:
         uses: ./.github/actions/setup-node-workspace
 
       - name: Build WASM bindings
-        run: scripts/benchmarks/build-wasm-bindings.sh
+        run: task wasm:build:bindings
 
       - name: Run benchmark
         env:
@@ -662,7 +662,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -742,7 +742,7 @@ jobs:
       - name: Build Ruby native gem
         env:
           PLATFORM: x86_64-linux
-        run: scripts/benchmarks/build-ruby-gem.sh
+        run: task ruby:build:bindings
 
       - name: Compile Ruby native extension
         shell: bash
@@ -750,7 +750,7 @@ jobs:
 
       - name: Build kreuzberg CLI
         shell: bash
-        run: cargo build --release --package kreuzberg-cli
+        run: task rust:cli:build
 
       - name: Run benchmark
         env:
@@ -759,7 +759,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -839,7 +839,7 @@ jobs:
       - name: Build Ruby native gem
         env:
           PLATFORM: x86_64-linux
-        run: scripts/benchmarks/build-ruby-gem.sh
+        run: task ruby:build:bindings
 
       - name: Compile Ruby native extension
         shell: bash
@@ -847,7 +847,7 @@ jobs:
 
       - name: Build kreuzberg CLI
         shell: bash
-        run: cargo build --release --package kreuzberg-cli
+        run: task rust:cli:build
 
       - name: Run benchmark
         env:
@@ -856,7 +856,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -928,7 +928,7 @@ jobs:
         run: go mod download
 
       - name: Build Go bindings
-        run: scripts/benchmarks/build-go-bindings.sh
+        run: task go:build:bindings
 
       - name: Run benchmark
         env:
@@ -938,7 +938,7 @@ jobs:
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
           KREUZBERG_BENCHMARK_DEBUG: "true"
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -1010,7 +1010,7 @@ jobs:
         run: go mod download
 
       - name: Build Go bindings
-        run: scripts/benchmarks/build-go-bindings.sh
+        run: task go:build:bindings
 
       - name: Run benchmark
         env:
@@ -1020,7 +1020,7 @@ jobs:
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
           KREUZBERG_BENCHMARK_DEBUG: "true"
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -1091,7 +1091,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Build Java bindings
-        run: scripts/benchmarks/build-java-package.sh
+        run: task java:build:bindings
 
       - name: Run benchmark
         env:
@@ -1100,7 +1100,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()
@@ -1167,7 +1167,7 @@ jobs:
           ort-version: ${{ env.ORT_VERSION }}
 
       - name: Build C# bindings
-        run: scripts/benchmarks/build-csharp-benchmark.sh
+        run: task csharp:build:bindings
 
       - name: Run benchmark
         env:
@@ -1176,7 +1176,7 @@ jobs:
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
           PROFILING_FIXTURES: ${{ env.PROFILING_FIXTURES }}
-        run: scripts/benchmarks/run-benchmark.sh
+        run: task benchmark:run
 
       - name: Upload benchmark artifacts
         if: always()

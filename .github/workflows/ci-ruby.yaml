@@ -58,7 +58,7 @@ env:
   CARGO_TARGET_DIR: target
   CARGO_LOG: cargo::core::compiler::fingerprint=info
   RUST_LOG: debug
-  BUILD_PROFILE: ci
+  BUILD_PROFILE: "ci"
 
 jobs:
   changes:

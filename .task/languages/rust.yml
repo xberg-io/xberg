@@ -48,6 +48,16 @@ tasks:
     cmds:
       - cargo build --release --workspace --all-features
 
+  build:profiling:
+    desc: Build all Rust crates with profiling features (for flamegraph generation)
+    env:
+      ENABLE_PROFILING: 'true'
+      RUSTFLAGS: '-g'
+    cmds:
+      - cargo build --workspace --release --features full,profiling,api,mcp,otel
+      - cargo build --manifest-path tools/benchmark-harness/Cargo.toml --release --features profiling
+      # Builds are optimized for profiling with debug symbols
+
   # CLI-specific builds
   cli:build:
     desc: Build CLI binary
@@ -71,12 +81,12 @@ tasks:
   ffi:build:
     desc: Build FFI library for language bindings
     cmds:
-      - cargo build --release --package kreuzberg-ffi
+      - cargo build --release --package kreuzberg-ffi {{.CARGO_ARGS | default ""}}
 
   ffi:build:dev:
     desc: Build FFI library in debug mode
     cmds:
-      - cargo build --package kreuzberg-ffi
+      - cargo build --package kreuzberg-ffi {{.CARGO_ARGS | default ""}}
 
   # Test Tasks
   test:

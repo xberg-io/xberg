@@ -59,7 +59,7 @@ env:
   PDFIUM_WASM_VERSION: "7442b"
   MACOSX_DEPLOYMENT_TARGET: "14.0"
   WASM_RUSTFLAGS: "-C target-feature=+atomics,+bulk-memory -C link-arg=--shared-memory -C link-arg=--max-memory=2147483648 -C link-arg=--import-memory -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base"
-  BUILD_PROFILE: ci
+  BUILD_PROFILE: "ci"
 
 jobs:
   # ============================================================================
@@ -98,6 +98,9 @@ jobs:
       - name: Install wasm-pack
         shell: bash
         run: scripts/ci/wasm/install-wasm-pack.sh
+
+      - name: Install Task
+        uses: ./.github/actions/install-task
 
       - name: Run WASM tests
         shell: bash
@@ -148,6 +151,9 @@ jobs:
       - name: Install wasm-pack
         shell: bash
         run: scripts/ci/wasm/install-wasm-pack.sh
+
+      - name: Install Task
+        uses: ./.github/actions/install-task
 
       - name: Build WASM for all targets
         shell: bash
@@ -212,6 +218,9 @@ jobs:
         shell: bash
         run: scripts/ci/wasm/install-wasm-pack.sh
 
+      - name: Install Task
+        uses: ./.github/actions/install-task
+
       - name: Build WASM (required for type generation)
         shell: bash
         run: task wasm:build:bundler
@@ -221,6 +230,8 @@ jobs:
       - name: Type-check WASM
         shell: bash
         run: task wasm:typecheck
+        env:
+          NODE_ENV: production
 
       - name: Verify .d.ts files exist
         shell: bash
@@ -260,6 +271,9 @@ jobs:
           name: wasm-x86_64-unknown-linux-gnu
           path: crates/kreuzberg-wasm/
 
+      - name: Install Task
+        uses: ./.github/actions/install-task
+
       - name: Run WASM tests
         shell: bash
         run: task wasm:test:ci
@@ -294,6 +308,9 @@ jobs:
         shell: bash
         run: scripts/ci/wasm/install-wasm-pack.sh
 
+      - name: Install Task
+        uses: ./.github/actions/install-task
+
       - name: Install Deno
         uses: denoland/setup-deno@v2
         with:
@@ -308,6 +325,8 @@ jobs:
       - name: Generate Deno E2E tests
         shell: bash
         run: task wasm:e2e:deno:generate
+        env:
+          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
 
       - name: Run Deno E2E tests
         shell: bash
@@ -346,6 +365,9 @@ jobs:
       - name: Install wasm-pack
         run: scripts/ci/wasm/install-wasm-pack.sh
 
+      - name: Install Task
+        uses: ./.github/actions/install-task
+
       - name: Build WASM package (size-optimized)
         run: task wasm:build:bundler
         env:
@@ -356,6 +378,8 @@ jobs:
 
       - name: Generate Workers E2E tests
         run: task wasm:e2e:workers:generate
+        env:
+          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
 
       - name: Run Cloudflare Workers E2E tests
         run: task wasm:e2e:workers:test

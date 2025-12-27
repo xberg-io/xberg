@@ -54,6 +54,18 @@ tasks:
     cmds:
       - maturin sdist
 
+  build:bindings:
+    desc: Build Python bindings for benchmarking
+    dir: packages/python
+    cmds:
+      - bash ../../scripts/benchmarks/build-python-bindings.sh
+
+  build:sdist:publish:
+    desc: Build Python source distribution (sdist) for publishing to specified output directory
+    cmds:
+      - mkdir -p {{.DIST_DIR | default "dist"}}
+      - cd packages/python && uv build --sdist --out-dir ../../{{.DIST_DIR | default "dist"}}
+
   # Test Tasks
   test:
     desc: Run Python tests

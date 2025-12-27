@@ -51,6 +51,17 @@ tasks:
       - dotnet restore
       - dotnet build Kreuzberg/Kreuzberg.csproj -c Release
 
+  package:
+    desc: Pack C# NuGet package for publishing
+    dir: packages/csharp
+    cmds:
+      - dotnet pack Kreuzberg/Kreuzberg.csproj -c Release --no-build {{.CLI_ARGS | default ""}}
+
+  build:bindings:
+    desc: Build C# bindings for benchmarking
+    cmds:
+      - bash scripts/benchmarks/build-csharp-benchmark.sh
+
   # Test Tasks
   test:
     desc: Run C# tests

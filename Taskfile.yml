@@ -40,6 +40,8 @@ includes:
   _e2e_wf:
     taskfile: .task/workflows/e2e.yml
     internal: true
+  benchmark:
+    taskfile: .task/workflows/benchmark.yml
 
   # Tools (version-sync and pdfium namespaced, general flattened)
   version:

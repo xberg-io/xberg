@@ -588,7 +588,9 @@ jobs:
           cache-key-prefix: publish-python-sdist
 
       - name: Build sdist
-        run: scripts/build_python_sdist.sh dist
+        env:
+          DIST_DIR: dist
+        run: task python:build:sdist:publish
 
       - name: Upload sdist
         uses: actions/upload-artifact@v6
@@ -1068,11 +1070,11 @@ jobs:
 
       - name: Build kreuzberg-ffi (Unix)
         if: runner.os != 'Windows'
-        run: cargo build -p kreuzberg-ffi --release
+        run: task rust:ffi:build
 
       - name: Build kreuzberg-ffi (Windows)
         if: runner.os == 'Windows'
-        run: cargo build -p kreuzberg-ffi --release
+        run: task rust:ffi:build
 
       - name: Vendor kreuzberg core crate
         shell: bash
@@ -1082,7 +1084,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         working-directory: packages/ruby
-        run: bundle exec rake clean && bundle exec rake build
+        run: task ruby:build:release
 
       - name: Check disk space after build (Unix)
         if: runner.os != 'Windows'
@@ -1282,7 +1284,7 @@ jobs:
       - name: Build FFI library (Unix)
         if: matrix.settings.os != 'windows-latest'
         shell: bash
-        run: cargo build -p kreuzberg-ffi --release
+        run: task rust:ffi:build
 
       - name: Create artifact staging directory
         shell: bash
@@ -1392,7 +1394,7 @@ jobs:
 
       - name: Build FFI library
         shell: bash
-        run: cargo build -p kreuzberg-ffi --release
+        run: task rust:ffi:build
 
       - name: Fix macOS dylib references
         shell: bash
@@ -1499,7 +1501,7 @@ jobs:
 
       - name: Build and package
         working-directory: packages/java
-        run: mvn clean package -DskipTests
+        run: task java:build:release
 
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v6
@@ -1587,7 +1589,7 @@ jobs:
 
       - name: Build PHP extension (kreuzberg-ffi)
         shell: bash
-        run: cargo build -p kreuzberg-ffi --release
+        run: task rust:ffi:build
 
       - name: Build PIE package
         shell: bash
@@ -1666,14 +1668,12 @@ jobs:
             exit 1
           fi
 
-      - name: Restore C# dependencies
-        run: dotnet restore packages/csharp/Kreuzberg/Kreuzberg.csproj
-
+      # Note: dotnet restore is handled by task csharp:build:release
       - name: Build C# bindings
-        run: dotnet build packages/csharp/Kreuzberg/Kreuzberg.csproj -c Release --no-restore
+        run: task csharp:build:release
 
       - name: Pack NuGet package
-        run: dotnet pack packages/csharp/Kreuzberg/Kreuzberg.csproj -c Release --no-build -p:PackageVersion=${{ needs.prepare.outputs.version }} -o artifacts/csharp
+        run: task csharp:package -- -p:PackageVersion=${{ needs.prepare.outputs.version }} -o artifacts/csharp
 
       - name: Verify package contains native assets
         shell: bash
@@ -1767,7 +1767,7 @@ jobs:
 
       - name: Build FFI library
         shell: bash
-        run: cargo build -p kreuzberg-ffi --release --target "${{ matrix.rust_target }}"
+        run: task rust:ffi:build -- --target "${{ matrix.rust_target }}"
 
       - name: Assemble native assets for NuGet
         shell: bash
@@ -2180,7 +2180,7 @@ jobs:
       - name: Rebuild gems from source
         shell: bash
         working-directory: packages/ruby
-        run: bundle exec rake clean && bundle exec rake build
+        run: task ruby:build:release
 
       - name: Copy rebuilt gems to dist directory
         shell: bash
@@ -2339,19 +2339,19 @@ jobs:
         run: cargo install cargo-audit --locked
 
       - name: Build WASM for web target
-        run: wasm-pack build --target web --out-dir pkg-web --release
+        run: task wasm:build:web
         working-directory: crates/kreuzberg-wasm
 
       - name: Build WASM for bundler target
-        run: wasm-pack build --target bundler --out-dir pkg-bundler --release
+        run: task wasm:build:bundler
         working-directory: crates/kreuzberg-wasm
 
       - name: Build WASM for Node.js target
-        run: wasm-pack build --target nodejs --out-dir pkg-nodejs --release
+        run: task wasm:build:nodejs
         working-directory: crates/kreuzberg-wasm
 
       - name: Build WASM for Deno target
-        run: wasm-pack build --target deno --out-dir pkg-deno --release
+        run: task wasm:build:deno
         working-directory: crates/kreuzberg-wasm
 
       - name: Build TypeScript wrapper
