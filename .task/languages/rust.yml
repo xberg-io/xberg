@@ -32,19 +32,19 @@ tasks:
   build:dev:
     desc: Build all Rust crates in debug mode
     cmds:
-      - cargo build --workspace --all-features
+      - cargo build --workspace --all-features --exclude kreuzberg-php --exclude kreuzberg-node --exclude kreuzberg-wasm
 
   build:release:
     desc: Build all Rust crates in release mode (optimized)
     cmds:
-      - cargo build --release --workspace --all-features
+      - cargo build --release --workspace --all-features --exclude kreuzberg-php --exclude kreuzberg-node --exclude kreuzberg-wasm
 
   build:ci:
     desc: Build all Rust crates in CI mode (with debug info)
     env:
       RUSTFLAGS: '-C debuginfo=2'
     cmds:
-      - cargo build --release --workspace --all-features
+      - cargo build --release --workspace --all-features --exclude kreuzberg-php --exclude kreuzberg-node --exclude kreuzberg-wasm
 
   build:profiling:
     desc: Build all Rust crates with profiling features (for flamegraph generation)
@@ -52,13 +52,13 @@ tasks:
       ENABLE_PROFILING: 'true'
       RUSTFLAGS: '-g'
     cmds:
-      - cargo build --workspace --release --features full,profiling,api,mcp,otel
+      - cargo build --workspace --release --features full,profiling,api,mcp,otel --exclude kreuzberg-php --exclude kreuzberg-node --exclude kreuzberg-wasm
       - cargo build --manifest-path tools/benchmark-harness/Cargo.toml --release --features profiling
 
   cli:build:
     desc: Build CLI binary
     cmds:
-      - cargo build --release --package kreuzberg-cli
+      - cargo build --release --package kreuzberg-cli {{if .TARGET}}--target {{.TARGET}}{{end}}
 
   cli:build:dev:
     desc: Build CLI binary in debug mode
@@ -105,19 +105,19 @@ tasks:
   test:quick:
     desc: Run fast Rust tests (unit tests only)
     cmds:
-      - cargo test --lib --workspace
+      - cargo test --lib --workspace --exclude kreuzberg-php --exclude kreuzberg-node --exclude kreuzberg-wasm
 
   lint:
     desc: Auto-fix Rust code linting (cargo fmt + clippy)
     cmds:
       - cargo fmt --all
-      - cargo clippy --workspace --fix --allow-dirty --allow-staged
+      - cargo clippy --workspace --fix --allow-dirty --allow-staged --exclude kreuzberg-php --exclude kreuzberg-node --exclude kreuzberg-wasm
 
   lint:check:
     desc: Check Rust code linting without modifications
     cmds:
       - cargo fmt --all -- --check
-      - cargo clippy --workspace -- -D warnings
+      - cargo clippy --workspace --exclude kreuzberg-php --exclude kreuzberg-node --exclude kreuzberg-wasm -- -D warnings
 
   format:
     desc: Format Rust code with modifications (cargo fmt)

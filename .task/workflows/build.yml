@@ -5,6 +5,7 @@ tasks:
     desc: Build all bindings across all languages
     cmds:
       - task: rust:build
+      - task: rust:ffi:build
       - task: python:build
       - task: node:build
       - task: go:build
@@ -18,6 +19,7 @@ tasks:
     desc: Build all bindings in debug mode
     cmds:
       - task: rust:build:dev
+      - task: rust:ffi:build:dev
       - task: python:build:dev
       - task: node:build:dev
       - task: go:build:dev
@@ -31,6 +33,7 @@ tasks:
     desc: Build all bindings in release mode (optimized)
     cmds:
       - task: rust:build:release
+      - task: rust:ffi:build:release
       - task: python:build:release
       - task: node:build:release
       - task: go:build:release
@@ -44,6 +47,7 @@ tasks:
     desc: Build all bindings in CI mode
     cmds:
       - task: rust:build:ci
+      - task: rust:ffi:build:ci
       - task: python:build:ci
       - task: node:build:ci
       - task: go:build:ci
@@ -168,6 +172,7 @@ tasks:
     desc: Build systems languages (Rust, Go, C#)
     cmds:
       - task: rust:build
+      - task: rust:ffi:build
       - task: go:build
       - task: csharp:build
 
@@ -175,6 +180,7 @@ tasks:
     desc: Build systems languages in debug mode
     cmds:
       - task: rust:build:dev
+      - task: rust:ffi:build:dev
       - task: go:build:dev
       - task: csharp:build:dev
 
@@ -182,6 +188,7 @@ tasks:
     desc: Build systems languages in release mode
     cmds:
       - task: rust:build:release
+      - task: rust:ffi:build:release
       - task: go:build:release
       - task: csharp:build:release
 

@@ -835,7 +835,6 @@ mod tests {
             Some("main-title".to_string()),
             "H1 id attribute should be extracted"
         );
-        assert!(h1.unwrap().depth >= 0, "H1 depth should be non-negative");
         assert!(
             h1.unwrap().html_offset < 1000,
             "H1 html_offset should be within reasonable range"

@@ -461,7 +461,7 @@ jobs:
         run: scripts/ci/rust/pre-build-diagnostics-cli.sh "${{ matrix.target }}"
 
       - name: Build CLI
-        run: task rust:cli:build
+        run: task rust:cli:build TARGET=${{ matrix.target }}
         shell: bash
 
       - name: Package CLI (Unix)

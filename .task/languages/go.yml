@@ -23,9 +23,7 @@ tasks:
       - task: go:install
 
   build:
-    desc: Build Go bindings (depends on Rust FFI)
-    deps:
-      - rust:ffi:build
+    desc: Build Go bindings (requires Rust FFI to be built first)
     dir: packages/go/v4
     env:
       CGO_ENABLED: "1"
@@ -33,9 +31,7 @@ tasks:
       - go build ./...
 
   build:dev:
-    desc: Build Go bindings in debug mode
-    deps:
-      - rust:ffi:build
+    desc: Build Go bindings in debug mode (requires Rust FFI to be built first)
     dir: packages/go/v4
     env:
       CGO_ENABLED: "1"
@@ -43,9 +39,7 @@ tasks:
       - go build ./...
 
   build:release:
-    desc: Build Go bindings in release mode (optimized)
-    deps:
-      - rust:ffi:build
+    desc: Build Go bindings in release mode (optimized, requires Rust FFI to be built first)
     dir: packages/go/v4
     env:
       CGO_ENABLED: "1"
@@ -53,9 +47,7 @@ tasks:
       - go build -ldflags="-s -w" ./...
 
   build:ci:
-    desc: Build Go bindings in CI mode
-    deps:
-      - rust:ffi:build
+    desc: Build Go bindings in CI mode (requires Rust FFI to be built first)
     dir: packages/go/v4
     env:
       CGO_ENABLED: "1"
