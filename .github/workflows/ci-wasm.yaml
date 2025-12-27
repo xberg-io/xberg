@@ -301,9 +301,9 @@ jobs:
         with:
           deno-version: "2.x"
 
-      - name: Build WASM for Deno
+      - name: Build WASM (full build for E2E)
         shell: bash
-        run: task wasm:build:deno
+        run: task wasm:build
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
 
@@ -348,8 +348,8 @@ jobs:
       - name: Install Task
         uses: ./.github/actions/install-task
 
-      - name: Build WASM package (size-optimized)
-        run: task wasm:build:bundler
+      - name: Build WASM (full build for E2E)
+        run: task wasm:build
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
 
