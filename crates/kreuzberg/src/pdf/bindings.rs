@@ -10,6 +10,7 @@ enum InitializationState {
     Initialized {
         #[allow(dead_code)]
         lib_dir: Option<PathBuf>,
+        pdfium: Pdfium,
     },
     Failed(String),
 }
@@ -89,7 +90,10 @@ pub(crate) fn bind_pdfium(map_err: fn(String) -> PdfError, context: &'static str
         InitializationState::Uninitialized => match bind_pdfium_impl() {
             Ok((lib_dir, bindings)) => {
                 let pdfium = Pdfium::new(bindings);
-                *state = InitializationState::Initialized { lib_dir };
+                *state = InitializationState::Initialized {
+                    lib_dir,
+                    pdfium: pdfium.clone(),
+                };
                 Ok(pdfium)
             }
             Err(err) => {
@@ -101,7 +105,7 @@ pub(crate) fn bind_pdfium(map_err: fn(String) -> PdfError, context: &'static str
             "Pdfium initialization previously failed ({}): {}",
             context, err
         ))),
-        InitializationState::Initialized { .. } => Ok(Pdfium),
+        InitializationState::Initialized { pdfium, .. } => Ok(pdfium.clone()),
     }
 }
 
@@ -123,6 +127,38 @@ mod tests {
 
         assert!(result1.is_ok(), "First call should succeed");
         assert!(result2.is_ok(), "Second call should also succeed");
+    }
+
+    #[test]
+    fn test_bind_pdfium_concurrent_access() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::thread;
+
+        let success_count = Arc::new(AtomicUsize::new(0));
+        let mut handles = vec![];
+
+        // Simulate concurrent batch processing threads accessing PDFium
+        for _ in 0..4 {
+            let success = Arc::clone(&success_count);
+            let handle = thread::spawn(move || {
+                let result = bind_pdfium(PdfError::TextExtractionFailed, "concurrent test");
+                if result.is_ok() {
+                    success.fetch_add(1, Ordering::SeqCst);
+                }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        assert_eq!(
+            success_count.load(Ordering::SeqCst),
+            4,
+            "All concurrent threads should get valid Pdfium instances"
+        );
     }
 
     #[test]
