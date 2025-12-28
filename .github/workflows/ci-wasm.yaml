@@ -159,7 +159,6 @@ jobs:
           cache-paths: |
             crates/kreuzberg-wasm/pkg/
             crates/kreuzberg-wasm/dist/
-            crates/kreuzberg-wasm/*.wasm
           cache-version: v1
           rust-hash: "n/a"
           binding-files: |
