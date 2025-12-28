@@ -12,7 +12,7 @@ members = [
     "tools/e2e-generator",
     "e2e/rust",
 ]
-exclude = ["tests/test_apps/rust"]
+exclude = ["tests/test_apps/rust", "packages/elixir/native/kreuzberg_rustler"]
 default-members = ["crates/kreuzberg", "crates/kreuzberg-cli"]
 resolver = "2"
 

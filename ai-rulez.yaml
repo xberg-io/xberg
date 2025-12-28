@@ -3,7 +3,7 @@ $schema: https://github.com/Goldziher/ai-rulez/schema/ai-rules-v2.schema.json
 metadata:
   name: Kreuzberg
   version: 4.0.0-rc1
-  description: "Rust document intelligence library with polyglot bindings (Python/TypeScript/Ruby/Java/Go)"
+  description: "Rust document intelligence library with polyglot bindings (Python/TypeScript/Ruby/Java/Go/Elixir/C#/PHP)"
 
 presets:
   - claude
@@ -15,9 +15,9 @@ sections:
     priority: high
     content: |
       **Core**: crates/kreuzberg (Rust 2024, standalone library, Edition 2024)
-      **Bindings**: Python (PyO3/maturin), TypeScript (NAPI-RS/pnpm), Ruby (Magnus/rake), Java (FFM API/Maven), Go (cgo/go)
+      **Bindings**: Python (PyO3/maturin), TypeScript (NAPI-RS/pnpm), Ruby (Magnus/rake), Java (FFM API/Maven), Go (cgo/go), Elixir (Rustler/mix), C# (FFI/dotnet), PHP (FFI/composer)
       **Task Commands**: task setup, task build, task test, task lint, task format
-      **All E2E generated**: cargo run -p kreuzberg-e2e-generator -- generate --lang <rust|python|typescript|ruby|java|go>
+      **All E2E generated**: cargo run -p kreuzberg-e2e-generator -- generate --lang <rust|python|typescript|ruby|java|go|elixir>
       **Version sync**: task sync-versions (syncs Cargo.toml → all manifests)
 
   - name: Rust Latest Edition Standards
@@ -54,6 +54,79 @@ sections:
 
       **Core structure**: src/{api,cache,chunking,core,extraction,extractors,image,keywords,language_detection,mcp,ocr,pdf,plugins,stopwords,text,utils}.
       Plugin flow: File→MIME→Registry→Extractor→Pipeline→Result.
+
+  - name: Elixir 1.14+ with ExDoc & Credo
+    priority: critical
+    content: |
+      **Elixir 1.14+ · Functional-first · ExDoc · ExUnit · Rustler NIF**
+
+      - Target Elixir 1.14+ with .tool-versions file; use ASDF for version management
+      - Module structure: CamelCase for modules (e.g., Kreuzberg.Native), snake_case for functions/variables
+      - ExDoc for documentation: @moduledoc and @doc tags on all public APIs with examples
+      - ExUnit for testing: describe/test blocks, 80%+ test coverage, property-based testing with StreamData
+      - Credo for linting: strict mode enabled, no ignored warnings
+      - Type specifications: @spec, @type, @callback annotations on all public functions
+      - Guard clauses and pattern matching for control flow (avoid if/else chains)
+      - OTP principles: Supervision trees, GenServer for state, Agent for simple storage
+      - Erlang/OTP interoperability: understand BEAM VM concepts (processes, mailboxes, schedulers)
+      - Result tuples: {:ok, value} and {:error, reason} patterns (NEVER exceptions for control flow)
+      - Immutable data structures: pipelines with |> operator for transformations
+      - Pure functions: side effects isolated to GenServer/Agent/NIFs
+      - Naming: PascalCase (modules), snake_case (functions), SCREAMING_SNAKE_CASE (module attributes)
+      - Code quality: Functions concise (<20 lines), guard clauses, modules for logical organization
+      - Rustler NIF: Schedule CPU-intensive work on dirty schedulers (schedule = "DirtyCpu")
+      - Binary handling: Use Erlang binaries efficiently, avoid unnecessary copying
+      - CI: mix credo --strict, mix test with coverage, mix format --check-formatted, mix docs
+
+  - name: Elixir Kreuzberg Bindings (Rustler NIF)
+    priority: high
+    content: |
+      **Role**: Elixir bindings for Kreuzberg Rust core using Rustler NIF.
+
+      **Scope**:
+      - Rust NIF bridge: packages/elixir/native/kreuzberg_rustler/ (Rust crate with cdylib output)
+      - Elixir wrapper: packages/elixir/lib/kreuzberg/ (OTP application with public API)
+      - ExUnit tests: packages/elixir/test/
+
+      **Architecture**:
+      Elixir OTP application → Rustler NIF (kreuzberg_rustler.so) → Rust core (crates/kreuzberg)
+
+      Data flow: Elixir terms → NifMap encode → Rust types → Kreuzberg API → Rust types → NifMap decode → Elixir terms
+
+      **Commands**:
+      - mix deps.get (fetch dependencies)
+      - mix compile (compile Elixir + Rustler NIF)
+      - mix test (run ExUnit tests)
+      - mix credo (lint with Credo)
+      - mix format (format code)
+      - mix docs (generate ExDoc documentation)
+
+      **Build System**:
+      - mix.exs: Elixir project configuration with Rustler dependency
+      - Native crate: packages/elixir/native/kreuzberg_rustler/Cargo.toml
+      - Compiled NIF: priv/native/kreuzberg_rustler.so (loaded at runtime)
+      - Workspace exclusion: Native crate excluded from main Cargo workspace
+
+      **Critical**:
+      - Core extraction logic lives in Rust (crates/kreuzberg). Elixir only for bindings/wrappers and OTP integration.
+      - If core logic changes needed, coordinate with rust-core-engineer.
+      - Rustler handles serialization between Erlang terms and Rust types (NifMap, Binary, ResourceArc).
+      - Use dirty schedulers for CPU-intensive work to avoid blocking BEAM schedulers.
+      - Resource cleanup: Use ResourceArc for Rust objects that need garbage collection.
+
+      **NIF Patterns**:
+      - rustler::init!() macro registers NIFs with BEAM VM
+      - #[rustler::nif] attribute marks functions as NIFs
+      - #[rustler::nif(schedule = "DirtyCpu")] for CPU-intensive work
+      - NifMap derive for struct ↔ Elixir map conversion
+      - ResourceArc<T> for Rust objects with GC integration
+      - Binary/OwnedBinary for efficient binary data transfer
+
+      **Documentation**:
+      - All public modules and functions documented with ExDoc (@moduledoc, @doc)
+      - Include @spec annotations for all exported functions
+      - Examples in module documentation for common use cases
+      - README.md with installation, usage, and API overview
 
   - name: Python Modern & Performance Standards
     priority: critical

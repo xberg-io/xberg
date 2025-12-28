@@ -1,0 +1,16 @@
+[package]
+name = "kreuzberg_rustler"
+version = "4.0.0-rc.22"
+edition = "2024"
+license = "MIT"
+description = "Elixir bindings for Kreuzberg document intelligence library"
+repository = "https://github.com/kreuzberg-dev/kreuzberg"
+
+[lib]
+name = "kreuzberg_rustler"
+crate-type = ["cdylib"]
+
+[dependencies]
+kreuzberg = { path = "../../../../crates/kreuzberg", features = ["full"] }
+rustler = { version = "0.37" }
+serde_json = "1.0"

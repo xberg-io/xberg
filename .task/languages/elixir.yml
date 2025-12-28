@@ -1,0 +1,97 @@
+version: '3'
+
+tasks:
+  install:
+    desc: Install Elixir dependencies
+    dir: packages/elixir
+    cmds:
+      - mix deps.get
+
+  setup:
+    desc: Setup Elixir environment
+    cmds:
+      - task: install
+
+  build:
+    desc: Build Elixir package
+    dir: packages/elixir
+    cmds:
+      - mix compile
+
+  build:dev:
+    desc: Build Elixir package (dev mode)
+    dir: packages/elixir
+    cmds:
+      - mix compile
+
+  build:release:
+    desc: Build Elixir package (release mode)
+    dir: packages/elixir
+    env:
+      MIX_ENV: prod
+    cmds:
+      - mix compile
+
+  build:ci:
+    desc: Build Elixir package (CI mode)
+    dir: packages/elixir
+    env:
+      MIX_ENV: test
+    cmds:
+      - mix compile --warnings-as-errors
+
+  test:
+    desc: Run Elixir tests
+    dir: packages/elixir
+    cmds:
+      - mix test
+
+  test:ci:
+    desc: Run Elixir tests (CI mode)
+    dir: packages/elixir
+    cmds:
+      - mix test --warnings-as-errors
+
+  lint:
+    desc: Lint Elixir code with Credo
+    dir: packages/elixir
+    cmds:
+      - mix credo suggest --all --strict
+
+  lint:check:
+    desc: Check Elixir code with Credo (no fixes)
+    dir: packages/elixir
+    cmds:
+      - mix credo --strict
+
+  format:
+    desc: Format Elixir code
+    dir: packages/elixir
+    cmds:
+      - mix format
+
+  format:check:
+    desc: Check Elixir code formatting
+    dir: packages/elixir
+    cmds:
+      - mix format --check-formatted
+
+  clean:
+    desc: Clean Elixir build artifacts
+    dir: packages/elixir
+    cmds:
+      - mix clean
+      - rm -rf _build
+      - rm -rf deps
+
+  update:
+    desc: Update Elixir dependencies
+    dir: packages/elixir
+    cmds:
+      - mix deps.update --all
+
+  docs:
+    desc: Generate Elixir documentation
+    dir: packages/elixir
+    cmds:
+      - mix docs

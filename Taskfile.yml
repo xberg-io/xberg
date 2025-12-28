@@ -23,6 +23,8 @@ includes:
     taskfile: .task/languages/csharp.yml
   php:
     taskfile: .task/languages/php.yml
+  elixir:
+    taskfile: .task/languages/elixir.yml
 
   _build_wf:
     taskfile: .task/workflows/build.yml
@@ -78,6 +80,7 @@ tasks:
       - task: ruby:install
       - task: java:install
       - task: go:install
+      - task: elixir:install
       - task: csharp:install
       - task: php:install
       - echo "Setup complete - safe to re-run anytime"
@@ -92,6 +95,7 @@ tasks:
       - task: java:build
       - task: csharp:build
       - task: php:build
+      - task: elixir:build
 
   test:
     desc: Run test suites for all languages
@@ -104,6 +108,7 @@ tasks:
       - task: go:test
       - task: csharp:test
       - task: php:test
+      - task: elixir:test
 
 
   format:
@@ -118,6 +123,7 @@ tasks:
       - task: go:format
       - task: csharp:format
       - task: php:format
+      - task: elixir:format
 
   format:check:
     desc: Check code formatting without modifications
@@ -131,6 +137,7 @@ tasks:
       - task: go:format:check
       - task: csharp:format:check
       - task: php:format:check
+      - task: elixir:format:check
 
   check:
     desc: Run all checks without modifications (lint + format checks)
@@ -159,6 +166,8 @@ tasks:
       - task: csharp:update
       - echo "Updating PHP dependencies..."
       - task: php:update
+      - echo "Updating Elixir dependencies..."
+      - task: elixir:update
       - echo "All dependencies updated"
 
   clean:
@@ -172,6 +181,7 @@ tasks:
       - task: go:clean
       - task: csharp:clean
       - task: php:clean
+      - task: elixir:clean
       - task: wasm:clean
 
   build:all:
@@ -221,6 +231,7 @@ tasks:
       - task: wasm:lint
       - task: ruby:lint
       - task: php:lint
+      - task: elixir:lint
 
   lint:check:
     desc: Run all linters in check-only mode (no modifications)
@@ -234,6 +245,7 @@ tasks:
       - task: wasm:lint:check
       - task: ruby:lint:check
       - task: php:lint:check
+      - task: elixir:lint:check
 
   e2e:generate:all:
     desc: Generate all E2E tests from fixtures across all supported languages

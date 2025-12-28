@@ -13,6 +13,7 @@ tasks:
       - task: wasm:lint
       - task: ruby:lint
       - task: php:lint
+      - task: elixir:lint
 
   check:
     desc: Run all linters in check-only mode (no modifications)
@@ -26,6 +27,7 @@ tasks:
       - task: wasm:lint:check
       - task: ruby:lint:check
       - task: php:lint:check
+      - task: elixir:lint:check
 
   core:
     desc: Lint core Rust code with auto-fix
