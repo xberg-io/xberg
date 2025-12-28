@@ -113,6 +113,9 @@ for path in "$@"; do
 				((MISSING_COUNT++))
 			else
 				while IFS= read -r artifact; do
+					# Skip empty lines
+					[[ -z "$artifact" ]] && continue
+
 					# File exists, check size
 					SIZE=$(du -sh "$artifact" 2>/dev/null | cut -f1 || echo "unknown")
 					FILE_SIZE=$(get_file_size "$artifact")
@@ -141,6 +144,9 @@ for path in "$@"; do
 				((MISSING_COUNT++))
 			else
 				while IFS= read -r artifact; do
+					# Skip empty lines
+					[[ -z "$artifact" ]] && continue
+
 					# File exists, check size
 					SIZE=$(du -sh "$artifact" 2>/dev/null | cut -f1 || echo "unknown")
 					FILE_SIZE=$(get_file_size "$artifact")
@@ -169,6 +175,9 @@ for path in "$@"; do
 				((MISSING_COUNT++))
 			else
 				while IFS= read -r artifact; do
+					# Skip empty lines
+					[[ -z "$artifact" ]] && continue
+
 					# File exists, check size
 					SIZE=$(du -sh "$artifact" 2>/dev/null | cut -f1 || echo "unknown")
 					FILE_SIZE=$(get_file_size "$artifact")
