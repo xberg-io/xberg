@@ -15,7 +15,7 @@ defmodule Kreuzberg do
       result = Kreuzberg.extract!(pdf_binary, "application/pdf")
   """
 
-  alias Kreuzberg.{Error, ExtractionConfig, ExtractionResult, Native, Helpers}
+  alias Kreuzberg.{Error, ExtractionConfig, ExtractionResult, Helpers, Native}
 
   # Delegate batch operations to BatchAPI
   defdelegate batch_extract_files(paths, mime_type \\ nil, config \\ nil), to: Kreuzberg.BatchAPI
@@ -329,7 +329,7 @@ defmodule Kreuzberg do
   defp run_validators(validators) do
     Enum.reduce_while(validators, :ok, fn validator_module, _acc ->
       try do
-        case apply(validator_module, :validate, [nil]) do
+        case validator_module.validate(nil) do
           :ok -> {:cont, :ok}
           {:error, reason} -> {:halt, {:error, "Validator #{validator_module} failed: #{reason}"}}
         end
@@ -361,7 +361,7 @@ defmodule Kreuzberg do
   defp apply_processors_for_stage(result, processors) do
     Enum.reduce_while(processors, {:ok, result}, fn processor_module, {:ok, current_data} ->
       try do
-        case apply(processor_module, :process, [current_data, nil]) do
+        case processor_module.process(current_data, nil) do
           {:ok, processed} -> {:cont, {:ok, processed}}
           processed when is_struct(processed, ExtractionResult) -> {:cont, {:ok, processed}}
           {:error, reason} -> {:halt, {:error, "PostProcessor #{processor_module} failed: #{reason}"}}
@@ -379,7 +379,7 @@ defmodule Kreuzberg do
   defp run_final_validators(validators, result) do
     Enum.reduce_while(validators, :ok, fn validator_module, _acc ->
       try do
-        case apply(validator_module, :validate, [result]) do
+        case validator_module.validate(result) do
           :ok -> {:cont, :ok}
           {:error, reason} ->
             {:halt, {:error, "Final validator #{validator_module} failed: #{reason}"}}

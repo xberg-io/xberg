@@ -37,28 +37,28 @@ defmodule Kreuzberg.Test.ExampleOcrBackend do
   @behaviour Kreuzberg.Plugin.OcrBackend
 
   @impl true
-  def name() do
+  def name do
     "test_ocr"
   end
 
   @impl true
-  def version() do
+  def version do
     "1.0.0"
   end
 
   @impl true
-  def supported_languages() do
+  def supported_languages do
     ["eng", "deu", "fra"]
   end
 
   @impl true
-  def initialize() do
+  def initialize do
     # No special initialization needed for mock backend
     :ok
   end
 
   @impl true
-  def shutdown() do
+  def shutdown do
     # No cleanup needed for mock backend
     :ok
   end
@@ -105,7 +105,7 @@ defmodule Kreuzberg.Test.ExampleOcrBackend do
     end
   end
 
-  defp mock_text_english() do
+  defp mock_text_english do
     """
     Sample OCR extracted text in English.
 
@@ -117,7 +117,7 @@ defmodule Kreuzberg.Test.ExampleOcrBackend do
     |> String.trim()
   end
 
-  defp mock_text_german() do
+  defp mock_text_german do
     """
     Beispieltext von der OCR-Extraktion auf Deutsch.
 
@@ -129,7 +129,7 @@ defmodule Kreuzberg.Test.ExampleOcrBackend do
     |> String.trim()
   end
 
-  defp mock_text_french() do
+  defp mock_text_french do
     """
     Exemple de texte extrait par OCR en français.
 

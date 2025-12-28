@@ -40,6 +40,7 @@ defmodule Kreuzberg.MixProject do
     [
       licenses: ["MIT"],
       links: %{GitHub: @source_url},
+      organization: "kreuzberg_dev",
       files: ~w(
         lib
         native/kreuzberg_rustler/src

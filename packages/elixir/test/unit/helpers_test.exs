@@ -8,8 +8,8 @@ defmodule KreuzbergTest.Unit.HelpersTest do
 
   use ExUnit.Case
 
-  alias Kreuzberg.Helpers
   alias Kreuzberg.ExtractionConfig
+  alias Kreuzberg.Helpers
 
   describe "normalize_map_keys/1 - key normalization" do
     test "converts atom keys to strings" do

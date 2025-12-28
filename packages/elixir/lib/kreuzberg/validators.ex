@@ -71,7 +71,7 @@ defmodule Kreuzberg.Validators do
       {:error, "max_overlap (150) must be less than max_chars (100)"}
   """
 
-  alias Kreuzberg.{Native, Helpers}
+  alias Kreuzberg.{Helpers, Native}
 
   @doc """
   Validate chunking configuration parameters.

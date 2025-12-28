@@ -40,8 +40,8 @@ defmodule Kreuzberg.Native do
   def batch_extract_bytes_with_options(_bytes_list, _input_type, _options), do: :erlang.nif_error(:nif_not_loaded)
 
   # Cache operations
-  def cache_stats(), do: :erlang.nif_error(:nif_not_loaded)
-  def clear_cache(), do: :erlang.nif_error(:nif_not_loaded)
+  def cache_stats, do: :erlang.nif_error(:nif_not_loaded)
+  def clear_cache, do: :erlang.nif_error(:nif_not_loaded)
 
   # MIME type operations
   def detect_mime_type(_bytes), do: :erlang.nif_error(:nif_not_loaded)
@@ -50,7 +50,7 @@ defmodule Kreuzberg.Native do
   def get_extensions_for_mime(_mime_type), do: :erlang.nif_error(:nif_not_loaded)
 
   # Embedding operations
-  def list_embedding_presets(), do: :erlang.nif_error(:nif_not_loaded)
+  def list_embedding_presets, do: :erlang.nif_error(:nif_not_loaded)
   def get_embedding_preset(_preset_name), do: :erlang.nif_error(:nif_not_loaded)
 
   # Validation functions

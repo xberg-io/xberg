@@ -120,7 +120,7 @@ jobs:
           working-directory: packages/ruby
 
       - name: Setup Java with SDKMAN
-        uses: sdkman/sdkman-action@v1
+        uses: sdkman/sdkman-action@v1-preview-2
         id: sdkman
         with:
           candidate: java

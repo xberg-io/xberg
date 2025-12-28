@@ -1155,7 +1155,7 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
     test "post-processor API is consistent" do
       assert :ok = Kreuzberg.Plugin.register_post_processor(:proc, TestPostProcessorEarly)
       {:ok, processors} = Kreuzberg.Plugin.list_post_processors()
-      assert length(processors) > 0
+      assert [_ | _] = processors
       assert :ok = Kreuzberg.Plugin.unregister_post_processor(:proc)
     end
 
@@ -1163,7 +1163,7 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
     test "validator API is consistent" do
       assert :ok = Kreuzberg.Plugin.register_validator(TestValidatorCritical)
       {:ok, validators} = Kreuzberg.Plugin.list_validators()
-      assert length(validators) > 0
+      assert [_ | _] = validators
       assert :ok = Kreuzberg.Plugin.unregister_validator(TestValidatorCritical)
     end
 
@@ -1171,7 +1171,7 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
     test "OCR backend API is consistent" do
       assert :ok = Kreuzberg.Plugin.register_ocr_backend(TestOcrBackendEnglish)
       {:ok, backends} = Kreuzberg.Plugin.list_ocr_backends()
-      assert length(backends) > 0
+      assert [_ | _] = backends
       assert :ok = Kreuzberg.Plugin.unregister_ocr_backend(TestOcrBackendEnglish)
     end
   end
@@ -1187,9 +1187,9 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
       {:ok, validators} = Kreuzberg.Plugin.list_validators()
       {:ok, backends} = Kreuzberg.Plugin.list_ocr_backends()
 
-      assert length(processors) == 1
-      assert length(validators) == 1
-      assert length(backends) == 1
+      assert processors != [] and length(processors) == 1
+      assert validators != [] and length(validators) == 1
+      assert backends != [] and length(backends) == 1
     end
 
     @tag :unit
@@ -1258,7 +1258,7 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
       assert :ok = Kreuzberg.Plugin.register_post_processor(:p3, TestPostProcessorLate)
 
       {:ok, processors} = Kreuzberg.Plugin.list_post_processors()
-      assert length(processors) == 3
+      assert processors != [] and length(processors) == 3
     end
 
     @tag :unit
@@ -1298,7 +1298,7 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
       assert :ok = Kreuzberg.Plugin.register_validator(TestValidatorLowPriority)
 
       {:ok, validators} = Kreuzberg.Plugin.list_validators()
-      assert length(validators) == 3
+      assert validators != [] and length(validators) == 3
 
       # All validators should be available for validation
       valid_result = %{
@@ -1344,9 +1344,9 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
       {:ok, vals} = Kreuzberg.Plugin.list_validators()
       {:ok, backends} = Kreuzberg.Plugin.list_ocr_backends()
 
-      assert length(procs) > 0
-      assert length(vals) > 0
-      assert length(backends) > 0
+      assert [_ | _] = procs
+      assert [_ | _] = vals
+      assert [_ | _] = backends
 
       # Simulate extraction
       extraction_result = %{
@@ -1458,7 +1458,7 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
     test "OCR backend with empty languages list" do
       # Backends should always have at least some language support
       languages = TestOcrBackendEnglish.supported_languages()
-      assert length(languages) > 0
+      assert [_ | _] = languages
     end
   end
 
@@ -2261,8 +2261,10 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
     @tag :unit
     test "filters backends by language support" do
       Kreuzberg.Plugin.Registry.clear_ocr_backends()
-      Kreuzberg.Plugin.Registry.register_ocr_backend(TestOcrBackendEnglish)        # eng, deu
-      Kreuzberg.Plugin.Registry.register_ocr_backend(TestOcrBackendMultilingual)   # eng, deu, fra, spa, ita, jpn, chi, chi_tra
+      # eng, deu
+      Kreuzberg.Plugin.Registry.register_ocr_backend(TestOcrBackendEnglish)
+      # eng, deu, fra, spa, ita, jpn, chi, chi_tra
+      Kreuzberg.Plugin.Registry.register_ocr_backend(TestOcrBackendMultilingual)
 
       eng_backends = Kreuzberg.Plugin.Registry.get_ocr_backends_by_language("eng")
       assert map_size(eng_backends) == 2

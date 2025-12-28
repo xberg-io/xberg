@@ -80,7 +80,7 @@ defmodule Kreuzberg.CacheAPI do
       end
   """
 
-  alias Kreuzberg.{Error, Native, Helpers}
+  alias Kreuzberg.{Error, Helpers, Native}
 
   @doc """
   Retrieve statistics about the extraction cache.

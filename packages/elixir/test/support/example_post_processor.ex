@@ -27,28 +27,28 @@ defmodule Kreuzberg.Test.ExamplePostProcessor do
   @behaviour Kreuzberg.Plugin.PostProcessor
 
   @impl true
-  def name() do
+  def name do
     "text_normalizer"
   end
 
   @impl true
-  def version() do
+  def version do
     "1.0.0"
   end
 
   @impl true
-  def processing_stage() do
+  def processing_stage do
     :middle
   end
 
   @impl true
-  def initialize() do
+  def initialize do
     # No special initialization needed for this processor
     :ok
   end
 
   @impl true
-  def shutdown() do
+  def shutdown do
     # No cleanup needed for this processor
     :ok
   end

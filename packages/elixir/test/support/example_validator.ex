@@ -37,28 +37,28 @@ defmodule Kreuzberg.Test.ExampleValidator do
   @behaviour Kreuzberg.Plugin.Validator
 
   @impl true
-  def name() do
+  def name do
     "non_empty"
   end
 
   @impl true
-  def version() do
+  def version do
     "1.0.0"
   end
 
   @impl true
-  def priority() do
+  def priority do
     100
   end
 
   @impl true
-  def initialize() do
+  def initialize do
     # No special initialization needed
     :ok
   end
 
   @impl true
-  def shutdown() do
+  def shutdown do
     # No cleanup needed
     :ok
   end

@@ -329,7 +329,7 @@ defmodule Kreuzberg.Helpers do
   @spec run_validators([atom()], any() | nil) :: :ok | {:error, String.t()}
   def run_validators(validators, data \\ nil) do
     Enum.reduce_while(validators, :ok, fn validator_module, _acc ->
-      case apply(validator_module, :validate, [data]) do
+      case validator_module.validate(data) do
         :ok -> {:cont, :ok}
         {:error, reason} -> {:halt, {:error, "Validator #{validator_module} failed: #{reason}"}}
       end

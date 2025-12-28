@@ -1060,7 +1060,7 @@ jobs:
           cache-key-prefix: benchmarks-java-sync
 
       - name: Setup Java with SDKMAN
-        uses: sdkman/sdkman-action@v1
+        uses: sdkman/sdkman-action@v1-preview-2
         id: sdkman
         with:
           candidate: java
@@ -1520,7 +1520,7 @@ jobs:
           cache-key-prefix: benchmarks-tika-sync
 
       - name: Setup Java with SDKMAN
-        uses: sdkman/sdkman-action@v1
+        uses: sdkman/sdkman-action@v1-preview-2
         id: sdkman
         with:
           candidate: java
@@ -1595,7 +1595,7 @@ jobs:
           cache-key-prefix: benchmarks-tika-batch
 
       - name: Setup Java with SDKMAN
-        uses: sdkman/sdkman-action@v1
+        uses: sdkman/sdkman-action@v1-preview-2
         id: sdkman
         with:
           candidate: java
