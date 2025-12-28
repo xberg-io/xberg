@@ -39,6 +39,10 @@ Extract text from any supported document format:
 
     --8<-- "snippets/rust/api/extract_file_sync.md"
 
+=== "Elixir"
+
+    --8<-- "snippets/elixir/core/extract_file_sync.exs"
+
 === "TypeScript"
 
     --8<-- "snippets/typescript/getting-started/extract_file_sync.md"
@@ -78,6 +82,10 @@ For better performance with I/O-bound operations:
 === "Rust"
 
     --8<-- "snippets/rust/api/extract_file_async.md"
+
+=== "Elixir"
+
+    --8<-- "snippets/elixir/core/extract_file_async.exs"
 
 === "TypeScript"
 
@@ -121,6 +129,10 @@ Extract text from images and scanned documents:
 
     --8<-- "snippets/rust/ocr/ocr_extraction.md"
 
+=== "Elixir"
+
+    --8<-- "snippets/elixir/ocr/tesseract_basic.exs"
+
 === "TypeScript"
 
     --8<-- "snippets/typescript/ocr/ocr_extraction.md"
@@ -161,6 +173,10 @@ Process multiple files concurrently:
 
     --8<-- "snippets/rust/api/batch_extract_files_sync.md"
 
+=== "Elixir"
+
+    --8<-- "snippets/elixir/core/batch_extract_files_sync.exs"
+
 === "TypeScript"
 
     --8<-- "snippets/typescript/getting-started/batch_extract_files_sync.md"
@@ -200,6 +216,10 @@ When you already have file content in memory:
 === "Rust"
 
     --8<-- "snippets/rust/api/extract_bytes_sync.md"
+
+=== "Elixir"
+
+    --8<-- "snippets/elixir/core/extract_bytes_sync.exs"
 
 === "TypeScript"
 
@@ -252,6 +272,10 @@ Customize extraction behavior:
 === "Rust"
 
     --8<-- "snippets/rust/advanced/advanced_config.md"
+
+=== "Elixir"
+
+    --8<-- "snippets/elixir/configuration/config_basic.exs"
 
 === "TypeScript"
 
@@ -342,6 +366,10 @@ Access format-specific metadata from extracted documents:
 === "Rust"
 
     --8<-- "snippets/rust/metadata/metadata.md"
+
+=== "Elixir"
+
+    --8<-- "snippets/elixir/advanced/metadata_extraction.exs"
 
 === "TypeScript"
 
@@ -444,6 +472,10 @@ Extract and process tables from documents:
 
     --8<-- "snippets/rust/metadata/tables.md"
 
+=== "Elixir"
+
+    --8<-- "snippets/elixir/advanced/table_extraction.exs"
+
 === "TypeScript"
 
     --8<-- "snippets/typescript/api/tables.md"
@@ -520,6 +552,10 @@ Handle extraction errors gracefully:
 === "Rust"
 
     --8<-- "snippets/rust/api/error_handling.md"
+
+=== "Elixir"
+
+    --8<-- "snippets/elixir/core/error_handling.exs"
 
 === "TypeScript"
 

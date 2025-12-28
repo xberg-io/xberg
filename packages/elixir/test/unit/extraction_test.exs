@@ -476,4 +476,35 @@ defmodule KreuzbergTest.Unit.ExtractionTest do
       end
     end
   end
+
+  describe "cache operations via main Kreuzberg module" do
+    @tag :unit
+    test "cache_stats via Kreuzberg.cache_stats/0" do
+      result = Kreuzberg.cache_stats()
+
+      case result do
+        {:ok, _} -> assert true
+        {:error, _} -> assert true
+        _ -> flunk("Expected tuple result")
+      end
+    end
+
+    @tag :unit
+    test "cache_stats! via Kreuzberg.cache_stats!/0" do
+      result = Kreuzberg.cache_stats!()
+      assert is_map(result)
+    end
+
+    @tag :unit
+    test "clear_cache via Kreuzberg.clear_cache/0" do
+      result = Kreuzberg.clear_cache()
+      assert result == :ok or (is_tuple(result) and elem(result, 0) == :error)
+    end
+
+    @tag :unit
+    test "clear_cache! via Kreuzberg.clear_cache!/0" do
+      result = Kreuzberg.clear_cache!()
+      assert result == :ok
+    end
+  end
 end

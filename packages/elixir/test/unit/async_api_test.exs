@@ -21,6 +21,14 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
   alias Kreuzberg.AsyncAPI
   alias Kreuzberg.ExtractionConfig
 
+  # Helper function to create temporary directories
+  defp create_temp_dir do
+    base = System.tmp_dir!()
+    dir = Path.join(base, "kreuzberg_test_#{:erlang.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    {:ok, dir}
+  end
+
   # ===== extract_async/2-3 Tests =====
 
   describe "extract_async/2" do
@@ -172,7 +180,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
   describe "extract_file_async/2" do
     @tag :unit
     test "returns a Task struct" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Test content")
 
@@ -183,7 +191,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "Task resolves to {:ok, ExtractionResult} on success" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Test file content")
 
@@ -197,7 +205,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "auto-detects MIME type from file extension" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Auto-detect content")
 
@@ -221,7 +229,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "Task result has proper structure" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Content")
 
@@ -239,7 +247,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "can be called with Path.t() input" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Path.t() content")
 
@@ -255,7 +263,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts explicit MIME type" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Content with mime")
 
@@ -269,7 +277,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts ExtractionConfig struct" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Configured content")
 
@@ -283,7 +291,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts map configuration" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Map config content")
 
@@ -296,7 +304,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts nil MIME type for auto-detection" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "Auto-detect")
 
@@ -310,7 +318,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "handles configuration with force_ocr" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "test.txt")
       File.write!(file, "OCR content")
 
@@ -326,7 +334,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "multiple file tasks can be awaited concurrently" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
 
       file1 = Path.join(dir, "test1.txt")
       file2 = Path.join(dir, "test2.txt")
@@ -384,7 +392,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "Task resolves to {:ok, [ExtractionResult]} for multiple files" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
 
       file1 = Path.join(dir, "batch1.txt")
       file2 = Path.join(dir, "batch2.txt")
@@ -412,7 +420,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "batch result structure is valid" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "batch.txt")
       File.write!(file, "Batch content")
 
@@ -436,7 +444,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "Task resolves to error if any file fails" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       valid_file = Path.join(dir, "valid.txt")
       File.write!(valid_file, "Valid content")
 
@@ -450,7 +458,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "handles files with different content" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
 
       file1 = Path.join(dir, "short.txt")
       file2 = Path.join(dir, "long.txt")
@@ -470,7 +478,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts ExtractionConfig struct" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "config.txt")
       File.write!(file, "Config content")
 
@@ -485,7 +493,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts map configuration" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "map.txt")
       File.write!(file, "Map config")
 
@@ -499,7 +507,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts nil configuration (uses defaults)" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "nil.txt")
       File.write!(file, "Nil config")
 
@@ -513,7 +521,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "auto-detects MIME types when nil" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
 
       file1 = Path.join(dir, "auto1.txt")
       file2 = Path.join(dir, "auto2.txt")
@@ -530,7 +538,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts extract_images configuration" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "images.txt")
       File.write!(file, "Image content")
 
@@ -544,7 +552,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "accepts ocr configuration" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "ocr.txt")
       File.write!(file, "OCR content")
 
@@ -560,7 +568,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "all batch results are ExtractionResult structs" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
 
       file1 = Path.join(dir, "struct1.txt")
       file2 = Path.join(dir, "struct2.txt")
@@ -796,7 +804,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "mix of different async operations can run concurrently" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "mixed.txt")
       File.write!(file, "File content")
 
@@ -900,7 +908,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "batch_extract_files_async returns single Task for multiple files" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file1 = Path.join(dir, "batch_test1.txt")
       file2 = Path.join(dir, "batch_test2.txt")
       File.write!(file1, "Content 1")
@@ -941,7 +949,7 @@ defmodule KreuzbergTest.Unit.AsyncAPITest do
     @tag :unit
     @tag :integration
     test "batch_extract_files_async validates configuration on task execution" do
-      {:ok, dir} = Briefly.create(directory: true)
+      {:ok, dir} = create_temp_dir()
       file = Path.join(dir, "config_test.txt")
       File.write!(file, "Content")
 

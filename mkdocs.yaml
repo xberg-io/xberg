@@ -198,6 +198,7 @@ nav:
       - Java: reference/api-java.md
       - Rust: reference/api-rust.md
       - Ruby: reference/api-ruby.md
+      - Elixir: reference/api-elixir.md
       - Configuration: reference/configuration.md
       - Format Support: reference/formats.md
       - Types: reference/types.md

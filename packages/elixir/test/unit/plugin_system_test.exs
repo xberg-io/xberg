@@ -122,7 +122,7 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
 
     @impl true
     def should_validate?(%{"content" => content}) do
-      is_binary(content) and byte_size(content) > 0
+      is_binary(content) and byte_size(content) >= 10
     end
 
     def should_validate?(_), do: false
@@ -1933,13 +1933,14 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
     @tag :unit
     test "validator should_validate? can prevent validation" do
       # Create data that doesn't match validator conditions
+      # TestValidatorCritical.should_validate? returns false when content is not present or not binary
       result = %{
-        "content" => "short",  # Too short for critical validator
         "mime_type" => "text/plain"
+        # No content field
       }
 
       should_validate = TestValidatorCritical.should_validate?(result)
-      # This should be false because content is too short (less than 10 chars)
+      # This should be false because content is missing
       assert should_validate == false
     end
 
@@ -2027,7 +2028,9 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
       backend = TestOcrBackendEnglish
 
       result = backend.process_image("image_data", "eng")
-      assert is_binary(result)
+      assert match?({:ok, _}, result)
+      {:ok, text} = result
+      assert is_binary(text)
     end
 
     @tag :unit
@@ -2042,7 +2045,8 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
     @tag :unit
     test "final validator stage handles ExtractionResult struct" do
       # Final validators should work with ExtractionResult structures too
-      result = %{"content" => "test content", "mime_type" => "text/plain"}
+      # This validator requires "processed_by_late" to be true
+      result = %{"content" => "test content", "mime_type" => "text/plain", "processed_by_late" => true}
 
       validation = TestFinalValidatorFailure.validate(result)
       assert validation == :ok
@@ -2131,6 +2135,157 @@ defmodule KreuzbergTest.Unit.PluginSystemTest do
       # Verify descending order
       sorted = Enum.sort(priorities, :desc)
       assert sorted == priorities
+    end
+  end
+
+  # =============================================================================
+  # Additional Plugin.Registry Coverage Tests
+  # =============================================================================
+
+  describe "get_post_processor/1" do
+    @tag :unit
+    test "retrieves registered post-processor by name" do
+      Kreuzberg.Plugin.Registry.clear_post_processors()
+      Kreuzberg.Plugin.Registry.register_post_processor(TestPostProcessorEarly)
+
+      {:ok, metadata} = Kreuzberg.Plugin.Registry.get_post_processor("test_post_processor_early")
+      assert metadata.name == "test_post_processor_early"
+      assert metadata.stage == :early
+    end
+
+    @tag :unit
+    test "returns error for non-existent post-processor" do
+      Kreuzberg.Plugin.Registry.clear_post_processors()
+
+      result = Kreuzberg.Plugin.Registry.get_post_processor("nonexistent")
+      assert result == {:error, "Post-processor not found: nonexistent"}
+    end
+  end
+
+  describe "get_validator/1" do
+    @tag :unit
+    test "retrieves registered validator by name" do
+      Kreuzberg.Plugin.Registry.clear_validators()
+      Kreuzberg.Plugin.Registry.register_validator(TestValidatorCritical)
+
+      {:ok, metadata} = Kreuzberg.Plugin.Registry.get_validator("test_validator_critical")
+      assert metadata.name == "test_validator_critical"
+      assert metadata.priority == 100
+    end
+
+    @tag :unit
+    test "returns error for non-existent validator" do
+      Kreuzberg.Plugin.Registry.clear_validators()
+
+      result = Kreuzberg.Plugin.Registry.get_validator("nonexistent")
+      assert result == {:error, "Validator not found: nonexistent"}
+    end
+  end
+
+  describe "get_ocr_backend/1" do
+    @tag :unit
+    test "retrieves registered OCR backend by name" do
+      Kreuzberg.Plugin.Registry.clear_ocr_backends()
+      Kreuzberg.Plugin.Registry.register_ocr_backend(TestOcrBackendEnglish)
+
+      {:ok, metadata} = Kreuzberg.Plugin.Registry.get_ocr_backend("test_ocr_english")
+      assert metadata.name == "test_ocr_english"
+      assert "eng" in metadata.languages
+    end
+
+    @tag :unit
+    test "returns error for non-existent OCR backend" do
+      Kreuzberg.Plugin.Registry.clear_ocr_backends()
+
+      result = Kreuzberg.Plugin.Registry.get_ocr_backend("nonexistent")
+      assert result == {:error, "OCR backend not found: nonexistent"}
+    end
+  end
+
+  describe "get_post_processors_by_stage/1" do
+    @tag :unit
+    test "filters post-processors by stage" do
+      Kreuzberg.Plugin.Registry.clear_post_processors()
+      Kreuzberg.Plugin.Registry.register_post_processor(TestPostProcessorEarly)
+      Kreuzberg.Plugin.Registry.register_post_processor(TestPostProcessorMiddle)
+      Kreuzberg.Plugin.Registry.register_post_processor(TestPostProcessorLate)
+
+      early_processors = Kreuzberg.Plugin.Registry.get_post_processors_by_stage(:early)
+      assert map_size(early_processors) == 1
+      assert Map.has_key?(early_processors, "test_post_processor_early")
+
+      middle_processors = Kreuzberg.Plugin.Registry.get_post_processors_by_stage(:middle)
+      assert map_size(middle_processors) == 1
+      assert Map.has_key?(middle_processors, "test_post_processor_middle")
+
+      late_processors = Kreuzberg.Plugin.Registry.get_post_processors_by_stage(:late)
+      assert map_size(late_processors) == 1
+      assert Map.has_key?(late_processors, "test_post_processor_late")
+    end
+
+    @tag :unit
+    test "returns empty map for stage with no processors" do
+      Kreuzberg.Plugin.Registry.clear_post_processors()
+
+      processors = Kreuzberg.Plugin.Registry.get_post_processors_by_stage(:early)
+      assert processors == %{}
+    end
+  end
+
+  describe "get_validators_by_priority/0" do
+    @tag :unit
+    test "returns validators sorted by priority descending" do
+      Kreuzberg.Plugin.Registry.clear_validators()
+      Kreuzberg.Plugin.Registry.register_validator(TestValidatorCritical)      # priority: 100
+      Kreuzberg.Plugin.Registry.register_validator(TestValidatorNormal)        # priority: 50
+      Kreuzberg.Plugin.Registry.register_validator(TestValidatorLowPriority)   # priority: -10
+
+      validators = Kreuzberg.Plugin.Registry.get_validators_by_priority()
+
+      assert is_list(validators)
+      assert length(validators) == 3
+
+      # Should be in descending priority order
+      [first, second, third] = validators
+      {first_name, first_meta} = first
+      {second_name, second_meta} = second
+      {third_name, third_meta} = third
+
+      assert first_meta.priority == 100
+      assert second_meta.priority == 50
+      assert third_meta.priority == -10
+    end
+  end
+
+  describe "get_ocr_backends_by_language/1" do
+    @tag :unit
+    test "filters backends by language support" do
+      Kreuzberg.Plugin.Registry.clear_ocr_backends()
+      Kreuzberg.Plugin.Registry.register_ocr_backend(TestOcrBackendEnglish)        # eng, deu
+      Kreuzberg.Plugin.Registry.register_ocr_backend(TestOcrBackendMultilingual)   # eng, deu, fra, spa, ita, jpn, chi, chi_tra
+
+      eng_backends = Kreuzberg.Plugin.Registry.get_ocr_backends_by_language("eng")
+      assert map_size(eng_backends) == 2
+      assert Map.has_key?(eng_backends, "test_ocr_english")
+      assert Map.has_key?(eng_backends, "test_ocr_multilingual")
+
+      fra_backends = Kreuzberg.Plugin.Registry.get_ocr_backends_by_language("fra")
+      assert map_size(fra_backends) == 1
+      assert Map.has_key?(fra_backends, "test_ocr_multilingual")
+
+      deu_backends = Kreuzberg.Plugin.Registry.get_ocr_backends_by_language("deu")
+      assert map_size(deu_backends) == 2
+      assert Map.has_key?(deu_backends, "test_ocr_english")
+      assert Map.has_key?(deu_backends, "test_ocr_multilingual")
+    end
+
+    @tag :unit
+    test "returns empty map for unsupported language" do
+      Kreuzberg.Plugin.Registry.clear_ocr_backends()
+      Kreuzberg.Plugin.Registry.register_ocr_backend(TestOcrBackendEnglish)
+
+      backends = Kreuzberg.Plugin.Registry.get_ocr_backends_by_language("zho")
+      assert backends == %{}
     end
   end
 end

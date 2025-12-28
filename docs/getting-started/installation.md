@@ -13,6 +13,7 @@ Kreuzberg is available in multiple formats optimized for different runtimes: nat
 | **Cloudflare Workers** | `@kreuzberg/wasm` | ✓ Good (WASM) | Serverless functions, edge computing |
 | **Python** | `kreuzberg` | ⚡ Fastest (native) | Server-side Python, native performance |
 | **Ruby** | `kreuzberg` | ⚡ Fastest (native) | Ruby applications, native performance |
+| **Elixir** | `kreuzberg` | ⚡ Fastest (native) | Elixir/Phoenix apps, BEAM runtime |
 | **Rust** | `kreuzberg` crate | ⚡ Fastest (native) | Rust projects, full control |
 | **CLI/Docker** | `kreuzberg-cli` | ⚡ Fastest (native) | Command-line usage, batch processing |
 
@@ -210,7 +211,7 @@ WASM bindings work in:
 - Cloudflare Workers
 - Other JavaScript runtimes with WebAssembly support
 
-Next steps: [WASM Quick Start](quickstart.md#basic-extraction-wasm) • [WASM API Reference](../reference/api-wasm.md)
+Next steps: [WASM Quick Start](quickstart.md#basic-extraction) • [WASM API Reference](../reference/api-wasm.md)
 
 ## Ruby
 
@@ -248,6 +249,30 @@ cargo add kreuzberg --features "excel stopwords ocr"
 ```
 
 Next steps: [Rust API Reference](../reference/api-rust.md)
+
+## Elixir
+
+Add Kreuzberg to your `mix.exs`:
+
+```elixir title="mix.exs"
+def deps do
+  [
+    {:kreuzberg, "~> 4.0"}
+  ]
+end
+```
+
+Then install:
+
+```bash title="Terminal"
+mix deps.get
+```
+
+The package ships with prebuilt native binaries for Linux, macOS (Intel/Apple Silicon), and Windows via RustlerPrecompiled. If prebuilt binaries are unavailable for your platform, the package will automatically fall back to compiling from source, which requires Rust to be available on your PATH.
+
+**Performance**: Native NIF bindings provide ~100% performance through Rustler compiled bindings.
+
+Next steps: [Elixir Quick Start](quickstart.md) • [Elixir API Reference](../reference/api-elixir.md)
 
 ## CLI
 

@@ -1,5 +1,5 @@
 # Kreuzberg Documentation
-Kreuzberg is a document intelligence platform with a high‑performance Rust core and native bindings for Python, TypeScript/Node.js, C#, Ruby, Go, and Rust itself. Use it as an SDK, CLI, Docker image, REST API server, or MCP tool to extract text, tables, and metadata from 56 file formats (PDF, Office, images, HTML, XML, archives, email, and more) with optional OCR and post-processing pipelines.
+Kreuzberg is a document intelligence platform with a high‑performance Rust core and native bindings for Python, TypeScript/Node.js, C#, Ruby, Go, Elixir, and Rust itself. Use it as an SDK, CLI, Docker image, REST API server, or MCP tool to extract text, tables, and metadata from 56 file formats (PDF, Office, images, HTML, XML, archives, email, and more) with optional OCR and post-processing pipelines.
 
 ## What You Can Do
 
@@ -16,7 +16,7 @@ Kreuzberg is a document intelligence platform with a high‑performance Rust cor
 - **[Guides](guides/extraction.md)** – How to configure extraction, OCR, advanced features, plugins, and Docker/API deployments.
 - **[Concepts](concepts/architecture.md)** – Architecture, extraction pipeline, MIME detection, plugin runtime, and performance strategies.
 - **[Features directory](features.md)** – Exhaustive capability list per format/binding plus OCR and chunking options.
-- **[Reference](reference/api-python.md)** – Detailed API references (Python, TypeScript, Ruby, Rust), configuration schema, supported formats, types, and errors.
+- **[Reference](reference/api-python.md)** – API references for all supported languages, configuration schema, supported formats, types, and errors.
 - **[CLI](cli/usage.md)** – Command syntax, flags, exit codes, and automation tips.
 - **[API Server](guides/api-server.md)** – Running the REST service and integrating with MCP.
 - **[Migration](migration/v3-to-v4.md)** and **[Changelog](CHANGELOG.md)** – Track breaking changes and release history.
@@ -31,6 +31,7 @@ Kreuzberg is a document intelligence platform with a high‑performance Rust cor
 | C#                 | `dotnet add package Kreuzberg` | .NET applications, Windows servers | [C# API Reference](reference/api-csharp.md) |
 | Ruby               | `gem install kreuzberg` | Server-side, Rails applications | [Ruby API Reference](reference/api-ruby.md) |
 | Go                 | `go get github.com/kreuzberg-dev/kreuzberg/packages/go/v4@latest` | Server-side, systems tools | [Go API Reference](reference/api-go.md) |
+| Elixir             | `{:kreuzberg, "~> 4.0"}` | BEAM applications, Phoenix apps | [Elixir API Reference](reference/api-elixir.md) |
 | Rust               | `cargo add kreuzberg` | System libraries, performance-critical | [Rust API Reference](reference/api-rust.md) |
 | CLI                | `brew install kreuzberg-dev/tap/kreuzberg` or `cargo install kreuzberg-cli` | Terminal automation, scripting | [CLI Usage](cli/usage.md) |
 | API Server / MCP   | Docker image `goldziher/kreuzberg:core` | Containerized services, MCP integration | [API Server Guide](guides/api-server.md) |
