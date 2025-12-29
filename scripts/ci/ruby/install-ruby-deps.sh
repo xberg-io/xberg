@@ -12,6 +12,15 @@ validate_repo_root "$REPO_ROOT" || exit 1
 echo "=== Installing Ruby dependencies ==="
 cd "$REPO_ROOT/packages/ruby"
 
+if [[ -n "${GITHUB_ENV:-}" ]]; then
+  if [[ -z "${BUNDLE_GEMFILE:-}" ]]; then
+    echo "BUNDLE_GEMFILE=$REPO_ROOT/packages/ruby/Gemfile" >> "$GITHUB_ENV"
+  fi
+  if [[ -z "${BUNDLE_PATH:-}" ]]; then
+    echo "BUNDLE_PATH=$REPO_ROOT/packages/ruby/vendor/bundle" >> "$GITHUB_ENV"
+  fi
+fi
+
 bundle config set deployment false
 bundle config set path vendor/bundle
 bundle install --jobs 4

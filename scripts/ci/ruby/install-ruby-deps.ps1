@@ -40,6 +40,15 @@ Write-Host "Setting bundle config for Windows..."
 bundle config set deployment false
 bundle config set path vendor/bundle
 
+if ($env:GITHUB_ENV) {
+  if (-not $env:BUNDLE_GEMFILE) {
+    Add-Content -Path $env:GITHUB_ENV -Value "BUNDLE_GEMFILE=$PSScriptRoot\..\..\packages\ruby\Gemfile"
+  }
+  if (-not $env:BUNDLE_PATH) {
+    Add-Content -Path $env:GITHUB_ENV -Value "BUNDLE_PATH=$PSScriptRoot\..\..\packages\ruby\vendor\bundle"
+  }
+}
+
 Write-Host ""
 Write-Host "=== Bundle Configuration (current) ===" -ForegroundColor Yellow
 bundle config list
