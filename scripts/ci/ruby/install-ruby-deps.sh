@@ -15,12 +15,12 @@ cd "$REPO_ROOT/packages/ruby"
 bundle_path="${BUNDLE_PATH:-$REPO_ROOT/packages/ruby/.bundle/bundle}"
 
 if [[ -n "${GITHUB_ENV:-}" ]]; then
-  if [[ -z "${BUNDLE_GEMFILE:-}" ]]; then
-    echo "BUNDLE_GEMFILE=$REPO_ROOT/packages/ruby/Gemfile" >> "$GITHUB_ENV"
-  fi
-  if [[ -z "${BUNDLE_PATH:-}" ]]; then
-    echo "BUNDLE_PATH=$bundle_path" >> "$GITHUB_ENV"
-  fi
+	if [[ -z "${BUNDLE_GEMFILE:-}" ]]; then
+		echo "BUNDLE_GEMFILE=$REPO_ROOT/packages/ruby/Gemfile" >>"$GITHUB_ENV"
+	fi
+	if [[ -z "${BUNDLE_PATH:-}" ]]; then
+		echo "BUNDLE_PATH=$bundle_path" >>"$GITHUB_ENV"
+	fi
 fi
 
 bundle config set deployment false

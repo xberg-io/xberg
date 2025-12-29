@@ -15,6 +15,9 @@ namespace Kreuzberg\Types;
  * @property-read array<Chunk>|null $chunks Text chunks with embeddings and metadata
  * @property-read array<ExtractedImage>|null $images Extracted images (with nested OCR results)
  * @property-read array<PageContent>|null $pages Per-page content when page extraction is enabled
+ * @property-read array<mixed, mixed>|null $embeddings Generated embeddings if enabled
+ * @property-read array<mixed, mixed>|null $keywords Extracted keywords if enabled
+ * @property-read array<mixed, mixed>|null $tesseract Tesseract OCR configuration results if enabled
  */
 readonly class ExtractionResult
 {
@@ -24,6 +27,9 @@ readonly class ExtractionResult
      * @param array<Chunk>|null $chunks
      * @param array<ExtractedImage>|null $images
      * @param array<PageContent>|null $pages
+     * @param array<mixed, mixed>|null $embeddings
+     * @param array<mixed, mixed>|null $keywords
+     * @param array<mixed, mixed>|null $tesseract
      */
     public function __construct(
         public string $content,
@@ -34,6 +40,9 @@ readonly class ExtractionResult
         public ?array $chunks = null,
         public ?array $images = null,
         public ?array $pages = null,
+        public ?array $embeddings = null,
+        public ?array $keywords = null,
+        public ?array $tesseract = null,
     ) {
     }
 
@@ -92,6 +101,21 @@ readonly class ExtractionResult
             );
         }
 
+        $embeddings = $data['embeddings'] ?? null;
+        if (!is_array($embeddings)) {
+            $embeddings = null;
+        }
+
+        $keywords = $data['keywords'] ?? null;
+        if (!is_array($keywords)) {
+            $keywords = null;
+        }
+
+        $tesseract = $data['tesseract'] ?? null;
+        if (!is_array($tesseract)) {
+            $tesseract = null;
+        }
+
         return new self(
             content: $content,
             mimeType: $mimeType,
@@ -105,6 +129,9 @@ readonly class ExtractionResult
             chunks: $chunks,
             images: $images,
             pages: $pages,
+            embeddings: $embeddings,
+            keywords: $keywords,
+            tesseract: $tesseract,
         );
     }
 }

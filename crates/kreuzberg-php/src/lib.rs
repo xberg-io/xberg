@@ -12,6 +12,7 @@
 #![cfg_attr(windows, feature(abi_vectorcall))]
 #![allow(dead_code, unused_imports)]
 
+use ext_php_rs::builders::FunctionBuilder;
 use ext_php_rs::prelude::*;
 use ext_php_rs::types::Zval;
 

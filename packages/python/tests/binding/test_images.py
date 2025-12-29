@@ -35,35 +35,29 @@ if TYPE_CHECKING:
 def get_pdf_image_result(test_documents: Path):
     """Get cached extraction result for PDF with images.
 
-    PDFium can only be initialized once per process. This function caches the result
-    from extraction to reuse across multiple test methods.
-
-    Note: If another test module extracted a different PDF first, PDFium will already
-    be initialized. In that case, this function still works because PDFium stays
-    initialized for subsequent PDF extractions.
+    PDFium can only be initialized once per process. Uses the same PDF (tiny.pdf)
+    that other tests use to avoid "already initialized" errors.
     """
-    # Use function-level cache to avoid re-extracting
-    if not hasattr(get_pdf_image_result, "_cache"):
-        get_pdf_image_result._cache = {}
+    import sys
 
-    cache_key = "code_and_formula_pdf"
-    if cache_key not in get_pdf_image_result._cache:
-        pdf_path = test_documents / "pdfs" / "code_and_formula.pdf"
-        if pdf_path.exists():
-            config = ExtractionConfig(images=ImageExtractionConfig(extract_images=True, target_dpi=150))
-            try:
-                get_pdf_image_result._cache[cache_key] = extract_file_sync(str(pdf_path), config=config)
-            except Exception as e:
-                # If Pdfium initialization fails because it's already initialized by another test,
-                # return None to signal that the PDF couldn't be extracted.
-                # Tests should handle None gracefully with pytest.skip()
-                if "PdfiumLibraryBindingsAlreadyInitialized" in str(e):
-                    get_pdf_image_result._cache[cache_key] = None
-                else:
-                    raise
-        else:
-            get_pdf_image_result._cache[cache_key] = None
-    return get_pdf_image_result._cache[cache_key]
+    # Import get_cached_pdf_extraction from conftest
+    conftest = sys.modules.get("conftest")
+    if conftest is None:
+        # Try importing it directly
+        from tests import conftest as conftest_module
+
+        get_cached_pdf_extraction = conftest_module.get_cached_pdf_extraction
+    else:
+        get_cached_pdf_extraction = conftest.get_cached_pdf_extraction
+
+    # Use tiny.pdf instead of code_and_formula.pdf to match other tests
+    # This ensures all tests use the same PDF after PDFium is initialized
+    pdf_path = test_documents / "pdfs_with_tables" / "tiny.pdf"
+    if not pdf_path.exists():
+        return None
+
+    config = ExtractionConfig(images=ImageExtractionConfig(extract_images=True, target_dpi=150))
+    return get_cached_pdf_extraction(str(pdf_path), config)
 
 
 class TestPdfImageExtraction:

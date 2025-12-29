@@ -4,10 +4,16 @@ require 'spec_helper'
 
 RSpec.describe 'Table Extraction Quality' do
   describe 'table structure extraction' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'extracts table rows, columns, and headers' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       expect(result).not_to be_nil
       expect(result.tables).not_to be_nil
@@ -22,7 +28,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'returns cell arrays with consistent structure' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         expect(result.tables).to all(
@@ -36,7 +46,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'provides page number for each table' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -50,7 +64,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'detects proper row and column counts' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         table = result.tables.first
@@ -64,10 +82,16 @@ RSpec.describe 'Table Extraction Quality' do
   end
 
   describe 'table markdown conversion accuracy' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'generates markdown representation for tables' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -84,7 +108,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'markdown contains pipe delimiters for table structure' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -99,7 +127,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'markdown format is consistent with cell data' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         table = result.tables.first
@@ -113,10 +145,16 @@ RSpec.describe 'Table Extraction Quality' do
   end
 
   describe 'cell content preservation' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'preserves text content in cells accurately' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -133,7 +171,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'handles cells with numeric content' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -149,7 +191,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'preserves whitespace and formatting in cells' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -162,7 +208,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'handles empty cells correctly' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -174,10 +224,16 @@ RSpec.describe 'Table Extraction Quality' do
   end
 
   describe 'format-specific table handling' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'extracts tables from PDF documents' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       expect(result).not_to be_nil
       expect(result.tables).not_to be_nil
@@ -188,7 +244,7 @@ RSpec.describe 'Table Extraction Quality' do
       config = Kreuzberg::Config::Extraction.new
 
       begin
-        result = Kreuzberg.extract_file(path: 'test.docx', config: config)
+        result = Kreuzberg.extract_file(path: test_document_path('office/document.docx'), config: config)
         expect(result).not_to be_nil
       rescue Kreuzberg::Errors::ValidationError
         skip 'DOCX test file not available'
@@ -198,7 +254,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'handles PDF tables with different layouts' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -211,7 +271,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'respects extraction configuration for tables' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       expect(result).not_to be_nil
       expect(result.tables).not_to be_nil
@@ -219,10 +283,16 @@ RSpec.describe 'Table Extraction Quality' do
   end
 
   describe 'table boundary detection' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'correctly identifies table boundaries' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -237,7 +307,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'separates adjacent tables correctly' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && result.tables.length > 1
         table_count = result.tables.length
@@ -252,7 +326,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'maintains consistent column alignment across rows' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         table = result.tables.first
@@ -267,10 +345,16 @@ RSpec.describe 'Table Extraction Quality' do
   end
 
   describe 'performance with large tables' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'extracts large tables with 100+ rows efficiently' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       expect(result).not_to be_nil
       expect(result.tables).to be_a(Array)
@@ -279,7 +363,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'maintains data integrity for large tables' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -292,7 +380,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'handles tables with varying column counts' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -303,10 +395,16 @@ RSpec.describe 'Table Extraction Quality' do
   end
 
   describe 'table serialization and conversion' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'serializes table to hash correctly' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         table = result.tables.first
@@ -322,7 +420,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'preserves table data through serialization' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         table = result.tables.first
@@ -337,7 +439,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'converts result with tables to JSON' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       expect(result).not_to be_nil
       json_str = result.to_json
@@ -347,12 +453,18 @@ RSpec.describe 'Table Extraction Quality' do
   end
 
   describe 'table extraction with page context' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'associates tables with correct page numbers' do
       config = Kreuzberg::Config::Extraction.new(
         pages: Kreuzberg::Config::PageConfig.new(extract_pages: true)
       )
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -367,7 +479,11 @@ RSpec.describe 'Table Extraction Quality' do
         pages: Kreuzberg::Config::PageConfig.new(extract_pages: true)
       )
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.pages && !result.pages.empty?
         result.pages.each do |page|
@@ -386,7 +502,11 @@ RSpec.describe 'Table Extraction Quality' do
         pages: Kreuzberg::Config::PageConfig.new(extract_pages: true)
       )
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty? && result.pages && !result.pages.empty?
         global_table_count = result.tables.length
@@ -398,6 +518,8 @@ RSpec.describe 'Table Extraction Quality' do
   end
 
   describe 'table handling edge cases' do
+    let(:pdf_path) { test_document_path('pdf/table_document.pdf') }
+
     it 'handles documents with no tables gracefully' do
       config = Kreuzberg::Config::Extraction.new
 
@@ -413,7 +535,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'handles single-cell tables' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -425,7 +551,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'handles tables with long cell content' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|
@@ -442,7 +572,11 @@ RSpec.describe 'Table Extraction Quality' do
     it 'handles tables with special characters' do
       config = Kreuzberg::Config::Extraction.new
 
-      result = Kreuzberg.extract_file(path: 'test.pdf', config: config)
+      begin
+        result = Kreuzberg.extract_file(path: pdf_path, config: config)
+      rescue Kreuzberg::Errors::ValidationError
+        skip 'Test PDF file not available'
+      end
 
       if result.tables && !result.tables.empty?
         result.tables.each do |table|

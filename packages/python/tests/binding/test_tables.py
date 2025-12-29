@@ -36,35 +36,30 @@ from kreuzberg import (
 def get_tiny_pdf_result(test_documents: Path):
     """Get cached extraction result for tiny PDF (primary test document).
 
-    PDFium can only be initialized once per process. This function caches the result
-    from extraction to reuse across multiple test methods.
+    PDFium can only be initialized once per process. This function uses the global
+    cache from conftest.py to reuse PDF extraction results across test modules.
 
     Note: If another test module extracted a different PDF first, PDFium will already
-    be initialized. In that case, this function still works because PDFium stays
-    initialized for subsequent PDF extractions.
+    be initialized. In that case, this function returns the cached result.
     """
-    # Use function-level cache to avoid re-extracting
-    if not hasattr(get_tiny_pdf_result, "_cache"):
-        get_tiny_pdf_result._cache = {}
+    import sys
+
+    # Import get_cached_pdf_extraction from conftest
+    conftest = sys.modules.get("conftest")
+    if conftest is None:
+        # Try importing it directly
+        from tests import conftest as conftest_module
+
+        get_cached_pdf_extraction = conftest_module.get_cached_pdf_extraction
+    else:
+        get_cached_pdf_extraction = conftest.get_cached_pdf_extraction
 
     pdf_path = str(test_documents / "pdfs_with_tables" / "tiny.pdf")
-    cache_key = pdf_path
-    if cache_key not in get_tiny_pdf_result._cache:
-        if Path(pdf_path).exists():
-            config = ExtractionConfig()
-            try:
-                get_tiny_pdf_result._cache[cache_key] = extract_file_sync(pdf_path, config=config)
-            except Exception as e:
-                # If Pdfium initialization fails because it's already initialized by another test,
-                # return None to signal that the PDF couldn't be extracted.
-                # Tests should handle None gracefully with pytest.skip()
-                if "PdfiumLibraryBindingsAlreadyInitialized" in str(e):
-                    get_tiny_pdf_result._cache[cache_key] = None
-                else:
-                    raise
-        else:
-            get_tiny_pdf_result._cache[cache_key] = None
-    return get_tiny_pdf_result._cache[cache_key]
+    if not Path(pdf_path).exists():
+        return None
+
+    config = ExtractionConfig()
+    return get_cached_pdf_extraction(pdf_path, config)
 
 
 class TestTableStructureExtraction:
