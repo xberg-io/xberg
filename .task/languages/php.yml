@@ -44,11 +44,11 @@ tasks:
 
   build:ci:
     desc: Build PHP extension in CI mode (with debug info)
-    env:
-      RUSTFLAGS: '-C debuginfo=2'
     cmds:
       - cmd: cargo build --release --package kreuzberg-php
         platforms: [linux, darwin, windows]
+        env:
+          RUSTFLAGS: '{{.RUSTFLAGS | default ""}} -C debuginfo=2'
 
   test:
     desc: Run PHP tests with PHPUnit
