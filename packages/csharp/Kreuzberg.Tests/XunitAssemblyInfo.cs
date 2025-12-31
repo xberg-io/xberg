@@ -48,6 +48,10 @@ internal static class PdfiumInitializer
                 // Pdfium will be initialized on first PDF extraction call from Rust
                 NativeTestHelper.EnsureNativeLibraryLoaded();
 
+                // Register cleanup handler to run when AppDomain unloads
+                AppDomain.CurrentDomain.ProcessExit += (sender, e) => CleanupAllRegistrations();
+                AppDomain.CurrentDomain.DomainUnload += (sender, e) => CleanupAllRegistrations();
+
                 System.Console.WriteLine("[Test Init] Native library loaded. Pdfium will initialize lazily on first use.");
                 s_initialized = true;
             }
@@ -56,6 +60,22 @@ internal static class PdfiumInitializer
                 System.Console.WriteLine($"[Test Init] Warning: {ex.Message}");
                 s_initialized = true; // Mark as initialized to avoid repeated attempts
             }
+        }
+    }
+
+    private static void CleanupAllRegistrations()
+    {
+        try
+        {
+            System.Console.WriteLine("[Test Cleanup] Cleaning up registered callbacks...");
+            KreuzbergClient.ClearPostProcessors();
+            KreuzbergClient.ClearValidators();
+            KreuzbergClient.ClearOcrBackends();
+            System.Console.WriteLine("[Test Cleanup] Cleanup complete.");
+        }
+        catch (Exception ex)
+        {
+            System.Console.WriteLine($"[Test Cleanup] Warning during cleanup: {ex.Message}");
         }
     }
 }

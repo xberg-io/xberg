@@ -182,7 +182,7 @@ defmodule KreuzbergTest.ErrorHandlingTest do
       assert byte_size(message) > 0
       # Validate error message is meaningful
       assert String.contains?(message, "not found") or
-               String.contains?(message, "file") or
+               String.contains?(message, "does not exist") or
                String.contains?(message, "No such"),
              "Error should indicate file not found: #{message}"
     end
@@ -248,7 +248,7 @@ defmodule KreuzbergTest.ErrorHandlingTest do
       assert is_binary(message)
       # Error should be descriptive about file operations
       assert String.contains?(message, "not found") or
-               String.contains?(message, "file") or
+               String.contains?(message, "does not exist") or
                String.contains?(message, "No such")
     end
 

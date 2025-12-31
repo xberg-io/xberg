@@ -1,4 +1,4 @@
-use super::bindings::bind_pdfium;
+use super::bindings::{bind_pdfium, PdfiumHandle};
 use super::error::{PdfError, Result};
 use image::DynamicImage;
 use pdfium_render::prelude::*;
@@ -28,7 +28,7 @@ impl Default for PageRenderOptions {
 }
 
 pub struct PdfRenderer {
-    pdfium: Pdfium,
+    pdfium: PdfiumHandle,
 }
 
 impl PdfRenderer {

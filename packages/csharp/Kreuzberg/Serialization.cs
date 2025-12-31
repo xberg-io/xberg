@@ -376,7 +376,8 @@ internal class MetadataConverter : JsonConverter<Metadata>
                 case "json_schema":
                     if (reader.TokenType != JsonTokenType.Null)
                     {
-                        metadata.JsonSchema = JsonNode.Parse(JsonDocument.Parse(ref reader).RootElement.GetRawText());
+                        using var jsonSchemaDoc = JsonDocument.ParseValue(ref reader);
+                        metadata.JsonSchema = JsonNode.Parse(jsonSchemaDoc.RootElement.GetRawText());
                     }
                     break;
                 case "error":
@@ -395,12 +396,12 @@ internal class MetadataConverter : JsonConverter<Metadata>
                     // Store format-specific fields
                     if (reader.TokenType == JsonTokenType.StartObject)
                     {
-                        using var doc = JsonDocument.Parse(ref reader);
+                        using var doc = JsonDocument.ParseValue(ref reader);
                         formatFields[propertyName!] = JsonNode.Parse(doc.RootElement.GetRawText());
                     }
                     else if (reader.TokenType == JsonTokenType.StartArray)
                     {
-                        using var doc = JsonDocument.Parse(ref reader);
+                        using var doc = JsonDocument.ParseValue(ref reader);
                         formatFields[propertyName!] = JsonNode.Parse(doc.RootElement.GetRawText());
                     }
                     else if (reader.TokenType != JsonTokenType.Null)
@@ -758,7 +759,7 @@ internal static class Serialization
             PropertyNameCaseInsensitive = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = false,
-            Converters = { new ByteArrayConverter() },
+            Converters = { new MetadataConverter(), new ByteArrayConverter() },
             TypeInfoResolver = KreuzbergJsonContext.Default
         };
         return options;

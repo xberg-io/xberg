@@ -18,6 +18,11 @@ public class ComprehensiveErrorHandlingTests
     public ComprehensiveErrorHandlingTests()
     {
         NativeTestHelper.EnsureNativeLibraryLoaded();
+
+        // Clean up any registered callbacks from previous tests to prevent GCHandle accumulation
+        try { KreuzbergClient.ClearPostProcessors(); } catch { }
+        try { KreuzbergClient.ClearValidators(); } catch { }
+        try { KreuzbergClient.ClearOcrBackends(); } catch { }
     }
 
     #region KreuzbergException Hierarchy Tests

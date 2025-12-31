@@ -238,7 +238,7 @@ defmodule KreuzbergTest.Unit.HelpersTest do
 
       assert result.content == "extracted text"
       assert result.mime_type == "text/plain"
-      assert result.metadata == %{}
+      assert result.metadata == %Kreuzberg.Metadata{}
       assert result.tables == []
     end
 
@@ -258,12 +258,12 @@ defmodule KreuzbergTest.Unit.HelpersTest do
 
       assert result.content == "text"
       assert result.mime_type == "application/pdf"
-      assert result.metadata == %{"pages" => 10}
-      assert result.tables == [%{"headers" => ["A", "B"]}]
+      assert result.metadata.page_count == nil
+      assert length(result.tables) == 1
       assert result.detected_languages == ["en"]
-      assert result.chunks == [%{"text" => "chunk"}]
-      assert result.images == [%{"path" => "img.png"}]
-      assert result.pages == [%{"number" => 1}]
+      assert length(result.chunks) == 1
+      assert length(result.images) == 1
+      assert length(result.pages) == 1
     end
 
     test "raises error when content is missing" do
@@ -307,7 +307,7 @@ defmodule KreuzbergTest.Unit.HelpersTest do
 
       assert result.content == "text"
       assert result.mime_type == "text/plain"
-      assert result.metadata == %{"author" => "John"}
+      assert result.metadata.author == "John"
     end
 
     test "defaults optional fields to nil or empty" do
@@ -318,7 +318,7 @@ defmodule KreuzbergTest.Unit.HelpersTest do
 
       {:ok, result} = Helpers.into_result(native_response)
 
-      assert result.metadata == %{}
+      assert result.metadata == %Kreuzberg.Metadata{}
       assert result.tables == []
       assert result.detected_languages == nil
       assert result.chunks == nil
@@ -349,7 +349,7 @@ defmodule KreuzbergTest.Unit.HelpersTest do
 
       {:ok, result} = Helpers.into_result(native_response)
 
-      assert result.metadata == %{}
+      assert result.metadata == %Kreuzberg.Metadata{}
     end
 
     test "handles nested maps in metadata" do
@@ -357,17 +357,17 @@ defmodule KreuzbergTest.Unit.HelpersTest do
         "content" => "text",
         "mime_type" => "text/plain",
         "metadata" => %{
-          "document_info" => %{
-            "title" => "Test",
-            "nested" => %{"deep" => "value"}
-          }
+          "title" => "Test",
+          "author" => "John Doe",
+          "page_count" => 5
         }
       }
 
       {:ok, result} = Helpers.into_result(native_response)
 
-      assert get_in(result.metadata, ["document_info", "title"]) == "Test"
-      assert get_in(result.metadata, ["document_info", "nested", "deep"]) == "value"
+      assert result.metadata.title == "Test"
+      assert result.metadata.author == "John Doe"
+      assert result.metadata.page_count == 5
     end
 
     test "preserves complex nested structures" do

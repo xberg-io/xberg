@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from types import ModuleType
 
 
-def _import_paddleocr_or_skip() -> ModuleType:
+def _import_paddleocr_or_skip() -> ModuleType:  # type: ignore[return]
     try:
         return importlib.import_module("paddleocr")
     except ModuleNotFoundError:

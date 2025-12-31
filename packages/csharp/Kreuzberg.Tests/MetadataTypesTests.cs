@@ -20,6 +20,11 @@ public class MetadataTypesTests
     public MetadataTypesTests()
     {
         NativeTestHelper.EnsureNativeLibraryLoaded();
+
+        // Clean up any registered callbacks from previous tests to prevent GCHandle accumulation
+        try { KreuzbergClient.ClearPostProcessors(); } catch { }
+        try { KreuzbergClient.ClearValidators(); } catch { }
+        try { KreuzbergClient.ClearOcrBackends(); } catch { }
     }
 
     #region Type Structure Tests

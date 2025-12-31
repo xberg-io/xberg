@@ -342,7 +342,9 @@ defmodule Kreuzberg.ExtractionConfig do
            validate_boolean_field(config.enable_quality_processing, "enable_quality_processing"),
          :ok <- validate_boolean_field(config.force_ocr, "force_ocr"),
          :ok <- validate_nested_field(config.chunking, "chunking"),
+         :ok <- validate_chunking_config(config.chunking),
          :ok <- validate_nested_field(config.ocr, "ocr"),
+         :ok <- validate_ocr_config(config.ocr),
          :ok <- validate_nested_field(config.language_detection, "language_detection"),
          :ok <- validate_nested_field(config.postprocessor, "postprocessor"),
          :ok <- validate_nested_field(config.images, "images"),
@@ -518,6 +520,104 @@ defmodule Kreuzberg.ExtractionConfig do
       is_map(value) -> "map"
       is_atom(value) -> "atom"
       true -> "unknown"
+    end
+  end
+
+  @doc false
+  defp validate_chunking_config(nil), do: :ok
+
+  @doc false
+  defp validate_chunking_config(config) when is_map(config) do
+    with :ok <- validate_positive_integer(config, "max_chars"),
+         :ok <- validate_positive_integer(config, "max_overlap"),
+         :ok <- validate_overlap_not_exceeding_max_chars(config) do
+      :ok
+    end
+  end
+
+  @doc false
+  defp validate_ocr_config(nil), do: :ok
+
+  @doc false
+  defp validate_ocr_config(config) when is_map(config) do
+    with :ok <- validate_confidence_range(config),
+         :ok <- validate_dpi_range(config) do
+      :ok
+    end
+  end
+
+  @doc false
+  defp validate_positive_integer(config, key) do
+    case Map.get(config, key) || Map.get(config, String.to_atom(key)) do
+      nil ->
+        :ok
+
+      value when is_integer(value) and value > 0 ->
+        :ok
+
+      value when is_integer(value) and value <= 0 ->
+        {:error, "Field '#{key}' must be a positive integer, got: #{value}"}
+
+      value ->
+        {:error, "Field '#{key}' must be a positive integer, got: #{type_name(value)}"}
+    end
+  end
+
+  @doc false
+  defp validate_overlap_not_exceeding_max_chars(config) do
+    max_chars = Map.get(config, "max_chars") || Map.get(config, :max_chars)
+    max_overlap = Map.get(config, "max_overlap") || Map.get(config, :max_overlap)
+
+    cond do
+      is_nil(max_chars) or is_nil(max_overlap) ->
+        :ok
+
+      is_integer(max_overlap) and is_integer(max_chars) and max_overlap > max_chars ->
+        {:error, "Field 'max_overlap' (#{max_overlap}) cannot exceed 'max_chars' (#{max_chars})"}
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc false
+  defp validate_confidence_range(config) do
+    confidence = Map.get(config, "confidence") || Map.get(config, :confidence)
+
+    case confidence do
+      nil ->
+        :ok
+
+      value when is_number(value) and value >= 0.0 and value <= 1.0 ->
+        :ok
+
+      value when is_number(value) ->
+        {:error, "Field 'confidence' must be between 0.0 and 1.0, got: #{value}"}
+
+      value ->
+        {:error, "Field 'confidence' must be a number between 0.0 and 1.0, got: #{type_name(value)}"}
+    end
+  end
+
+  @doc false
+  defp validate_dpi_range(config) do
+    dpi = Map.get(config, "dpi") || Map.get(config, :dpi)
+
+    case dpi do
+      nil ->
+        :ok
+
+      value when is_integer(value) and value > 0 and value <= 2400 ->
+        :ok
+
+      value when is_integer(value) and value <= 0 ->
+        {:error, "Field 'dpi' must be a positive integer, got: #{value}"}
+
+      value when is_integer(value) and value > 2400 ->
+        {:error, "Field 'dpi' must be at most 2400, got: #{value}"}
+
+      value ->
+        {:error, "Field 'dpi' must be a positive integer, got: #{type_name(value)}"}
     end
   end
 end
