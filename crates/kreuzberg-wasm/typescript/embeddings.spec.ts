@@ -13,7 +13,7 @@
  */
 
 import { beforeAll, describe, expect, it } from "vitest";
-import { extractBytesSync, initWasm } from "./index.js";
+import { extractBytes, extractBytesSync, initWasm } from "./index.js";
 import type { ExtractionConfig } from "./types.js";
 
 /**
@@ -57,7 +57,7 @@ beforeAll(async () => {
 
 describe("Embedding Generation (WASM Bindings)", () => {
 	describe("embedding generation with balanced model", () => {
-		it("should generate embeddings with valid dimensions", () => {
+		it("should generate embeddings with valid dimensions", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -67,7 +67,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Machine learning transforms technology through artificial intelligence.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			expect(result).toBeDefined();
 			expect(result.chunks).toBeDefined();
@@ -92,7 +92,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should generate consistent embeddings for same input", () => {
+		it("should generate consistent embeddings for same input", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -103,8 +103,8 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			const text = "Consistent embeddings ensure reproducible semantic operations.";
 			const textBytes = new TextEncoder().encode(text);
 
-			const result1 = extractBytesSync(textBytes, "text/plain", config);
-			const result2 = extractBytesSync(textBytes, "text/plain", config);
+			const result1 = await extractBytes(textBytes, "text/plain", config);
+			const result2 = await extractBytes(textBytes, "text/plain", config);
 
 			expect(result1.chunks).toBeDefined();
 			expect(result2.chunks).toBeDefined();
@@ -119,7 +119,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should produce non-zero vectors for non-empty text", () => {
+		it("should produce non-zero vectors for non-empty text", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -129,7 +129,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Neural networks learn representations of data.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 0) {
 				for (const chunk of result.chunks) {
@@ -146,7 +146,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should produce different vectors for different texts", () => {
+		it("should produce different vectors for different texts", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -157,8 +157,8 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			const text1 = "Machine learning is revolutionizing AI development.";
 			const text2 = "Cats are fluffy animals that like to sleep.";
 
-			const result1 = extractBytesSync(new TextEncoder().encode(text1), "text/plain", config);
-			const result2 = extractBytesSync(new TextEncoder().encode(text2), "text/plain", config);
+			const result1 = await extractBytes(new TextEncoder().encode(text1), "text/plain", config);
+			const result2 = await extractBytes(new TextEncoder().encode(text2), "text/plain", config);
 
 			let embedding1: number[] | null = null;
 			let embedding2: number[] | null = null;
@@ -183,7 +183,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 	});
 
 	describe("dimension validation", () => {
-		it("should maintain consistent dimensions across chunks", () => {
+		it("should maintain consistent dimensions across chunks", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 100,
@@ -197,7 +197,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 				"Consistency matters for downstream processing.";
 
 			const textBytes = new TextEncoder().encode(longText);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 1) {
 				let firstDimension: number | null = null;
@@ -217,7 +217,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should support 384-dimension embeddings", () => {
+		it("should support 384-dimension embeddings", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -227,7 +227,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Testing embedding dimensions for 384-dim vectors.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks) {
 				for (const chunk of result.chunks) {
@@ -239,7 +239,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should support 512-dimension embeddings", () => {
+		it("should support 512-dimension embeddings", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -249,7 +249,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Testing 512-dimensional embedding vectors.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks) {
 				for (const chunk of result.chunks) {
@@ -260,7 +260,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should support 768-dimension embeddings", () => {
+		it("should support 768-dimension embeddings", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -270,7 +270,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Testing 768-dimensional vector space embeddings.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks) {
 				for (const chunk of result.chunks) {
@@ -281,7 +281,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should support 1024-dimension embeddings", () => {
+		it("should support 1024-dimension embeddings", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -291,7 +291,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Testing high-dimensional 1024-vector embeddings.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks) {
 				for (const chunk of result.chunks) {
@@ -304,7 +304,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 	});
 
 	describe("normalization verification", () => {
-		it("should produce unit-normalized vectors", () => {
+		it("should produce unit-normalized vectors", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -314,7 +314,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "L2 normalization ensures unit vector magnitude.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 0) {
 				for (const chunk of result.chunks) {
@@ -327,7 +327,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should verify L2 norm is approximately 1.0", () => {
+		it("should verify L2 norm is approximately 1.0", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -337,7 +337,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Verify L2 normalization for vector magnitude.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 0) {
 				for (const chunk of result.chunks) {
@@ -349,7 +349,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should maintain consistent normalization across batches", () => {
+		it("should maintain consistent normalization across batches", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 100,
@@ -363,7 +363,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 				"This ensures uniform downstream processing.";
 
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 1) {
 				const norms: number[] = [];
@@ -384,7 +384,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should verify no invalid floating-point values", () => {
+		it("should verify no invalid floating-point values", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -394,7 +394,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Validate floating-point properties of embeddings.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 0) {
 				for (const chunk of result.chunks) {
@@ -413,7 +413,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 	});
 
 	describe("batch embeddings", () => {
-		it("should process batch with consistent quality", () => {
+		it("should process batch with consistent quality", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -427,7 +427,9 @@ describe("Embedding Generation (WASM Bindings)", () => {
 				"Deep neural networks learn complex patterns.",
 			];
 
-			const results = texts.map((text) => extractBytesSync(new TextEncoder().encode(text), "text/plain", config));
+			const results = await Promise.all(
+				texts.map((text) => extractBytes(new TextEncoder().encode(text), "text/plain", config))
+			);
 
 			let embeddingDimension: number | null = null;
 
@@ -449,7 +451,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should handle multiple chunks with embeddings", () => {
+		it("should handle multiple chunks with embeddings", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 100,
@@ -458,7 +460,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			};
 
 			const text = "Chunk one. Chunk two. Chunk three. Chunk four. Chunk five.";
-			const result = extractBytesSync(new TextEncoder().encode(text), "text/plain", config);
+			const result = await extractBytes(new TextEncoder().encode(text), "text/plain", config);
 
 			expect(result).toBeDefined();
 			if (result.chunks) {
@@ -471,7 +473,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should maintain batch consistency across runs", () => {
+		it("should maintain batch consistency across runs", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 150,
@@ -490,7 +492,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			// First batch
 			for (const text of texts) {
-				const result = extractBytesSync(new TextEncoder().encode(text), "text/plain", config);
+				const result = await extractBytes(new TextEncoder().encode(text), "text/plain", config);
 				if (result.chunks) {
 					for (const chunk of result.chunks) {
 						if (chunk.embedding) {
@@ -502,7 +504,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			// Second batch
 			for (const text of texts) {
-				const result = extractBytesSync(new TextEncoder().encode(text), "text/plain", config);
+				const result = await extractBytes(new TextEncoder().encode(text), "text/plain", config);
 				if (result.chunks) {
 					for (const chunk of result.chunks) {
 						if (chunk.embedding) {
@@ -518,7 +520,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 	});
 
 	describe("edge cases", () => {
-		it("should handle empty content gracefully", () => {
+		it("should handle empty content gracefully", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -527,13 +529,11 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			};
 
 			const textBytes = new TextEncoder().encode("");
-			const result = extractBytesSync(textBytes, "text/plain", config);
-
-			expect(result).toBeDefined();
-			expect(result.chunks).toBeDefined();
+			// Empty content should be rejected by the WASM module
+			await expect(extractBytes(textBytes, "text/plain", config)).rejects.toThrow("Document data cannot be empty");
 		});
 
-		it("should handle very long text", () => {
+		it("should handle very long text", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 200,
@@ -543,7 +543,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const longText = "This is a comprehensive document. ".repeat(100);
 			const textBytes = new TextEncoder().encode(longText);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			expect(result.chunks).toBeDefined();
 
@@ -558,7 +558,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should handle whitespace-only content", () => {
+		it("should handle whitespace-only content", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -568,13 +568,13 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "   \n\t  \n  ";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			expect(result).toBeDefined();
 			expect(result.chunks).toBeDefined();
 		});
 
-		it("should handle special characters in text", () => {
+		it("should handle special characters in text", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -584,13 +584,13 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Special: !@#$%^&*() []{} <> and symbols work.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			expect(result).toBeDefined();
 			expect(result.chunks).toBeDefined();
 		});
 
-		it("should handle numeric content", () => {
+		it("should handle numeric content", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -600,13 +600,13 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "123.456 789 1000 2000 3000 statistics and data.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			expect(result).toBeDefined();
 			expect(result.chunks).toBeDefined();
 		});
 
-		it("should handle UTF-8 encoded multilingual text", () => {
+		it("should handle UTF-8 encoded multilingual text", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -616,13 +616,13 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Café, naïve, résumé - UTF-8 text with accents.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			expect(result).toBeDefined();
 			expect(result.chunks).toBeDefined();
 		});
 
-		it("should not produce all-zero vectors", () => {
+		it("should not produce all-zero vectors", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -632,7 +632,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Testing for dead embeddings and zero vectors.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 0) {
 				for (const chunk of result.chunks) {
@@ -644,7 +644,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should produce unit similarity for identical vectors", () => {
+		it("should produce unit similarity for identical vectors", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -654,7 +654,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			const text = "Testing identical vector similarity.";
 			const textBytes = new TextEncoder().encode(text);
-			const result = extractBytesSync(textBytes, "text/plain", config);
+			const result = await extractBytes(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 0) {
 				for (const chunk of result.chunks) {
@@ -669,7 +669,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 	});
 
 	describe("semantic similarity", () => {
-		it("should produce high similarity for related texts", () => {
+		it("should produce high similarity for related texts", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -680,8 +680,8 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			const text1 = "Machine learning is a subset of artificial intelligence.";
 			const text2 = "AI uses machine learning as a core technology.";
 
-			const result1 = extractBytesSync(new TextEncoder().encode(text1), "text/plain", config);
-			const result2 = extractBytesSync(new TextEncoder().encode(text2), "text/plain", config);
+			const result1 = await extractBytes(new TextEncoder().encode(text1), "text/plain", config);
+			const result2 = await extractBytes(new TextEncoder().encode(text2), "text/plain", config);
 
 			let embedding1: number[] | null = null;
 			let embedding2: number[] | null = null;
@@ -701,7 +701,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should produce valid cosine similarity values", () => {
+		it("should produce valid cosine similarity values", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -717,8 +717,8 @@ describe("Embedding Generation (WASM Bindings)", () => {
 
 			for (let i = 0; i < texts.length; i++) {
 				for (let j = i + 1; j < texts.length; j++) {
-					const result1 = extractBytesSync(new TextEncoder().encode(texts[i]), "text/plain", config);
-					const result2 = extractBytesSync(new TextEncoder().encode(texts[j]), "text/plain", config);
+					const result1 = await extractBytes(new TextEncoder().encode(texts[i]), "text/plain", config);
+					const result2 = await extractBytes(new TextEncoder().encode(texts[j]), "text/plain", config);
 
 					let embedding1: number[] | null = null;
 					let embedding2: number[] | null = null;
@@ -743,7 +743,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 	});
 
 	describe("determinism", () => {
-		it("should be deterministic across multiple runs", () => {
+		it("should be deterministic across multiple runs", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -754,8 +754,8 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			const text = "Testing deterministic embedding generation.";
 			const textBytes = new TextEncoder().encode(text);
 
-			const result1 = extractBytesSync(textBytes, "text/plain", config);
-			const result2 = extractBytesSync(textBytes, "text/plain", config);
+			const result1 = await extractBytes(textBytes, "text/plain", config);
+			const result2 = await extractBytes(textBytes, "text/plain", config);
 
 			if (result1.chunks && result2.chunks && result1.chunks.length > 0 && result2.chunks.length > 0) {
 				const emb1 = result1.chunks[0].embedding;
@@ -767,7 +767,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			}
 		});
 
-		it("should produce identical embeddings on repeated calls", () => {
+		it("should produce identical embeddings on repeated calls", async () => {
 			const config: ExtractionConfig = {
 				chunking: {
 					maxChars: 500,
@@ -781,7 +781,7 @@ describe("Embedding Generation (WASM Bindings)", () => {
 			const embeddings: (number[] | undefined)[] = [];
 
 			for (let i = 0; i < 3; i++) {
-				const result = extractBytesSync(textBytes, "text/plain", config);
+				const result = await extractBytes(textBytes, "text/plain", config);
 				if (result.chunks && result.chunks.length > 0) {
 					embeddings.push(result.chunks[0].embedding);
 				}

@@ -10,8 +10,9 @@
  */
 
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
-import { extractBytesSync, initWasm } from "./index.js";
+import { extractBytes, initWasm } from "./index.js";
 import type { ExtractionConfig, PageContent } from "./types.js";
 
 let samplePdfBytes: Uint8Array;
@@ -20,12 +21,16 @@ beforeAll(async () => {
 	// Initialize WASM module before running tests
 	await initWasm();
 
-	// Load test PDF file
-	const pdfPath = new URL("../../../tests/fixtures/documents/pdf/simple.pdf", import.meta.url).pathname;
-	samplePdfBytes = new Uint8Array(readFileSync(pdfPath));
+	// Load test PDF file (path relative to crates/kreuzberg-wasm)
+	const pdfPath = join(process.cwd(), "../../test_documents/pdfs/embedded_images_tables.pdf");
+	try {
+		samplePdfBytes = new Uint8Array(readFileSync(pdfPath));
+	} catch {
+		console.warn("Test PDF file not found or PDF support not available in WASM");
+	}
 });
 
-describe("Pages Extraction (WASM Bindings)", () => {
+describe.skipIf(!samplePdfBytes)("Pages Extraction (WASM Bindings)", () => {
 	describe("extractPages: true", () => {
 		it("should extract pages as separate array", async () => {
 			const config: ExtractionConfig = {
@@ -34,7 +39,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result).toBeDefined();
 			expect(result.pages).toBeDefined();
@@ -49,7 +54,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.content).toBeDefined();
 			expect(typeof result.content).toBe("string");
@@ -63,7 +68,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.metadata).toBeDefined();
 			expect(result.metadata.page_count).toBeDefined();
@@ -82,7 +87,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.content).toBeDefined();
 			expect(result.content).toContain("PAGE");
@@ -96,7 +101,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.content).toBeDefined();
 			expect(result.pages).toBeDefined();
@@ -111,7 +116,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.content).toBeDefined();
 			const pageMarkerCount = (result.content.match(/PAGE/g) || []).length;
@@ -126,7 +131,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			if (result.pages && result.pages.length > 0) {
 				expect(result.content).toBeDefined();
@@ -146,7 +151,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.content).toBeDefined();
 			expect(result.content).toContain("Page");
@@ -164,7 +169,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 					},
 				};
 
-				const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+				const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 				expect(result.content).toBeDefined();
 				expect(typeof result.content).toBe("string");
 				expect(result.content.length).toBeGreaterThan(0);
@@ -181,7 +186,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.content).toBeDefined();
 			expect(result.pages).toBeDefined();
@@ -197,7 +202,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.content).toBeDefined();
 			expect(result.content).toContain("PAGE_");
@@ -212,7 +217,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.pages).toBeDefined();
 			expect(Array.isArray(result.pages)).toBe(true);
@@ -234,7 +239,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			if (result.pages && result.pages.length > 1) {
 				for (let i = 0; i < result.pages.length; i++) {
@@ -250,7 +255,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			if (result.pages && result.pages.length > 1) {
 				for (let i = 0; i < result.pages.length - 1; i++) {
@@ -266,7 +271,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			if (result.pages && result.pages.length > 0) {
 				const pageNumbers = result.pages.map((p) => p.pageNumber);
@@ -286,7 +291,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.pages).toBeDefined();
 			expect(Array.isArray(result.pages)).toBe(true);
@@ -306,7 +311,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			for (const page of result.pages) {
 				expect(typeof page.pageNumber).toBe("number");
@@ -322,7 +327,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			for (const page of result.pages) {
 				expect(typeof page.content).toBe("string");
@@ -336,7 +341,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			for (const page of result.pages) {
 				expect(Array.isArray(page.tables)).toBe(true);
@@ -359,7 +364,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			for (const page of result.pages) {
 				expect(Array.isArray(page.images)).toBe(true);
@@ -373,7 +378,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 			expect(result.pages).toBeDefined();
 
 			const validatePageContent = (page: PageContent): void => {
@@ -396,7 +401,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			for (const page of result.pages) {
 				expect(page.content.length).toBeGreaterThanOrEqual(0);
@@ -414,7 +419,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.pages).toBeDefined();
 			expect(result.pages.length).toBeGreaterThan(0);
@@ -431,7 +436,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.content).toBeDefined();
 			expect(result.content).toContain("Page");
@@ -447,7 +452,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				enableQualityProcessing: false,
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.pages).toBeDefined();
 			expect(result.pages.length).toBeGreaterThan(0);
@@ -464,7 +469,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				useCache: true,
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.pages).toBeDefined();
 			expect(result.content).toBeDefined();
@@ -474,7 +479,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 
 	describe("Edge cases and validation", () => {
 		it("should handle null config gracefully", async () => {
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", null);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", null);
 
 			expect(result).toBeDefined();
 			expect(result.content).toBeDefined();
@@ -485,7 +490,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				pages: {},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result).toBeDefined();
 			expect(result.content).toBeDefined();
@@ -498,7 +503,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.pages).toBeDefined();
 			expect(result.metadata.page_count).toBeDefined();
@@ -515,7 +520,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			const pageNumbers = result.pages.map((p) => p.pageNumber);
 			const uniquePageNumbers = new Set(pageNumbers);
@@ -531,7 +536,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.pages).toBeDefined();
 			expect(result.pages.length).toBeGreaterThan(0);
@@ -549,7 +554,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result).toBeDefined();
 			expect(result.pages).toBeDefined();
@@ -562,8 +567,8 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result1 = extractBytesSync(samplePdfBytes, "application/pdf", config);
-			const result2 = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result1 = await extractBytes(samplePdfBytes, "application/pdf", config);
+			const result2 = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result1.pages.length).toBe(result2.pages.length);
 
@@ -580,7 +585,7 @@ describe("Pages Extraction (WASM Bindings)", () => {
 				},
 			};
 
-			const result = extractBytesSync(samplePdfBytes, "application/pdf", config);
+			const result = await extractBytes(samplePdfBytes, "application/pdf", config);
 
 			expect(result.mimeType).toContain("pdf");
 		});

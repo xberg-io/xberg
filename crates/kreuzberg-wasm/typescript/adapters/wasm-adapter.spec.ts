@@ -367,7 +367,7 @@ describe("WASM Adapter", () => {
 				],
 			};
 
-			expect(() => jsToExtractionResult(jsValue)).toThrow("charStart must be a number");
+			expect(() => jsToExtractionResult(jsValue)).toThrow("charStart must be a valid number");
 		});
 
 		it("should throw if image data is not Uint8Array", () => {

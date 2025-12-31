@@ -233,31 +233,59 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 					embedding = c.embedding;
 				}
 
-				if (typeof metadata.charStart !== "number") {
-					throw new Error("Invalid chunk metadata: charStart must be a number");
-				}
-				if (typeof metadata.charEnd !== "number") {
-					throw new Error("Invalid chunk metadata: charEnd must be a number");
-				}
-				if (!isNumberOrNull(metadata.tokenCount)) {
-					throw new Error("Invalid chunk metadata: tokenCount must be a number or null");
-				}
-				if (typeof metadata.chunkIndex !== "number") {
-					throw new Error("Invalid chunk metadata: chunkIndex must be a number");
-				}
-				if (typeof metadata.totalChunks !== "number") {
-					throw new Error("Invalid chunk metadata: totalChunks must be a number");
+				// Coerce numeric values - handle BigInt, strings, and numbers
+				const coerceToNumber = (value: unknown, fieldName: string): number => {
+					if (typeof value === "number") {
+						return value;
+					}
+					if (typeof value === "bigint") {
+						return Number(value);
+					}
+					if (typeof value === "string") {
+						const parsed = parseInt(value, 10);
+						if (isNaN(parsed)) {
+							throw new Error(`Invalid chunk metadata: ${fieldName} must be a valid number, got "${value}"`);
+						}
+						return parsed;
+					}
+					throw new Error(`Invalid chunk metadata: ${fieldName} must be a number, got ${typeof value}`);
+				};
+
+				// The Rust code uses snake_case field names (byte_start, byte_end, etc)
+				// but TypeScript expects camelCase (charStart, charEnd, etc)
+				// For now, treat byte offsets as character offsets since the content is UTF-8
+				const charStart = coerceToNumber(
+					metadata.charStart ?? metadata.char_start ?? metadata.byteStart ?? metadata.byte_start,
+					"charStart"
+				);
+				const charEnd = coerceToNumber(
+					metadata.charEnd ?? metadata.char_end ?? metadata.byteEnd ?? metadata.byte_end,
+					"charEnd"
+				);
+				const chunkIndex = coerceToNumber(
+					metadata.chunkIndex ?? metadata.chunk_index,
+					"chunkIndex"
+				);
+				const totalChunks = coerceToNumber(
+					metadata.totalChunks ?? metadata.total_chunks,
+					"totalChunks"
+				);
+
+				let tokenCount: number | null = null;
+				const tokenCountValue = metadata.tokenCount ?? metadata.token_count;
+				if (tokenCountValue !== null && tokenCountValue !== undefined) {
+					tokenCount = coerceToNumber(tokenCountValue, "tokenCount");
 				}
 
 				return {
 					content: c.content,
 					embedding,
 					metadata: {
-						charStart: metadata.charStart,
-						charEnd: metadata.charEnd,
-						tokenCount: metadata.tokenCount,
-						chunkIndex: metadata.chunkIndex,
-						totalChunks: metadata.totalChunks,
+						charStart,
+						charEnd,
+						tokenCount,
+						chunkIndex,
+						totalChunks,
 					},
 				};
 			})
