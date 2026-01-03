@@ -329,9 +329,13 @@ defmodule KreuzbergTest.Integration.AsyncOperationsTest do
       try do
         Task.await(task, 1)
       rescue
-        e ->
+        _e ->
           # Timeout exception expected
-          assert is_exception(e)
+          assert true
+      catch
+        :exit, _e ->
+          # Task exit (timeout) is also acceptable
+          assert true
       end
     end
   end
@@ -492,13 +496,13 @@ defmodule KreuzbergTest.Integration.AsyncOperationsTest do
         Task.await(task, 100)
         # If it doesn't fail, that's also acceptable behavior
         assert true
-      catch
-        :exit, _e ->
-          # Expected - task already awaited or timeout
-          assert true
       rescue
         _e ->
           # Timeout exception is expected
+          assert true
+      catch
+        :exit, _e ->
+          # Expected - task already awaited or timeout
           assert true
       end
 
