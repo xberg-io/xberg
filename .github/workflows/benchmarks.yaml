@@ -1683,6 +1683,9 @@ jobs:
           name: benchmark-harness-binary
           path: target/release
 
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
         with:
@@ -1732,6 +1735,9 @@ jobs:
         with:
           name: benchmark-harness-binary
           path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
 
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
@@ -1783,6 +1789,9 @@ jobs:
           name: benchmark-harness-binary
           path: target/release
 
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
         with:
@@ -1832,6 +1841,9 @@ jobs:
         with:
           name: benchmark-harness-binary
           path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
 
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
@@ -1889,6 +1901,9 @@ jobs:
           name: benchmark-harness-binary
           path: target/release
 
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
         with:
@@ -1939,6 +1954,9 @@ jobs:
           name: benchmark-harness-binary
           path: target/release
 
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
       - name: Setup Java
         uses: actions/setup-java@v4
         id: setup-java
@@ -1987,6 +2005,9 @@ jobs:
           name: benchmark-harness-binary
           path: target/release
 
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
       - name: Setup Java
         uses: actions/setup-java@v4
         id: setup-java
@@ -2034,6 +2055,9 @@ jobs:
         with:
           name: benchmark-harness-binary
           path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
 
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
@@ -2085,6 +2109,9 @@ jobs:
           name: benchmark-harness-binary
           path: target/release
 
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
         with:
@@ -2134,6 +2161,9 @@ jobs:
         with:
           name: benchmark-harness-binary
           path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
 
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
@@ -2185,6 +2215,9 @@ jobs:
           name: benchmark-harness-binary
           path: target/release
 
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
         with:
@@ -2234,6 +2267,9 @@ jobs:
         with:
           name: benchmark-harness-binary
           path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
 
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
