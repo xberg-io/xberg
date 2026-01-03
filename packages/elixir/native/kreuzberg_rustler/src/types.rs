@@ -79,25 +79,16 @@ impl<'a> MapBuilder<'a> {
     /// The value must implement `Encoder`. Key can be an Atom or any encodable term.
     /// Returns `self` for method chaining.
     pub fn put<K: Encoder, T: Encoder>(mut self, key: K, value: T) -> NifResult<Self> {
-        self.map = self
-            .map
-            .map_put(key.encode(self.env), value.encode(self.env))?;
+        self.map = self.map.map_put(key.encode(self.env), value.encode(self.env))?;
         Ok(self)
     }
 
     /// Put a key-value pair only if the condition is true.
     ///
     /// Useful for optional fields that need encoding.
-    pub fn put_if<K: Encoder, T: Encoder>(
-        mut self,
-        condition: bool,
-        key: K,
-        value: T,
-    ) -> NifResult<Self> {
+    pub fn put_if<K: Encoder, T: Encoder>(mut self, condition: bool, key: K, value: T) -> NifResult<Self> {
         if condition {
-            self.map = self
-                .map
-                .map_put(key.encode(self.env), value.encode(self.env))?;
+            self.map = self.map.map_put(key.encode(self.env), value.encode(self.env))?;
         }
         Ok(self)
     }
@@ -107,10 +98,9 @@ impl<'a> MapBuilder<'a> {
     /// Automatically casts usize to u64 for encoding, preventing integer overflow
     /// issues when converting Rust usize to Elixir integers.
     pub fn put_usize<K: Encoder>(mut self, key: K, value: usize) -> NifResult<Self> {
-        self.map = self.map.map_put(
-            key.encode(self.env),
-            (value as u64).encode(self.env),
-        )?;
+        self.map = self
+            .map
+            .map_put(key.encode(self.env), (value as u64).encode(self.env))?;
         Ok(self)
     }
 
@@ -138,10 +128,7 @@ impl<'a> MapBuilder<'a> {
 ///
 /// Term representing an Elixir map or an error
 #[allow(dead_code)]
-pub fn hashmap_to_term<'a>(
-    env: Env<'a>,
-    map: &HashMap<String, String>,
-) -> NifResult<Term<'a>> {
+pub fn hashmap_to_term<'a>(env: Env<'a>, map: &HashMap<String, String>) -> NifResult<Term<'a>> {
     map.iter().try_fold(rustler::types::map::map_new(env), |m, (k, v)| {
         m.map_put(k.encode(env), v.encode(env))
     })
@@ -163,10 +150,7 @@ pub fn hashmap_to_term<'a>(
 ///
 /// Term representing an Elixir map or an error
 #[allow(dead_code)]
-pub fn btreemap_to_term<'a>(
-    env: Env<'a>,
-    map: &BTreeMap<String, String>,
-) -> NifResult<Term<'a>> {
+pub fn btreemap_to_term<'a>(env: Env<'a>, map: &BTreeMap<String, String>) -> NifResult<Term<'a>> {
     map.iter().try_fold(rustler::types::map::map_new(env), |m, (k, v)| {
         m.map_put(k.encode(env), v.encode(env))
     })
@@ -310,11 +294,7 @@ pub fn validate_collection_sizes(
     chunks_len: usize,
     pages_len: usize,
 ) -> NifResult<()> {
-    if tables_len > MAX_TABLES
-        || images_len > MAX_IMAGES
-        || chunks_len > MAX_CHUNKS
-        || pages_len > MAX_PAGES
-    {
+    if tables_len > MAX_TABLES || images_len > MAX_IMAGES || chunks_len > MAX_CHUNKS || pages_len > MAX_PAGES {
         Err(Error::BadArg)
     } else {
         Ok(())

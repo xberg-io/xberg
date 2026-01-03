@@ -34,6 +34,7 @@ function Retry-Command {
 }
 
 $tesseractCacheHit = $env:TESSERACT_CACHE_HIT -eq "true"
+$llvmCacheHit = $env:LLVM_CACHE_HIT -eq "true"
 $libreofficeInstalled = Test-Path "C:\Program Files\LibreOffice\program\soffice.exe"
 
 if (-not $tesseractCacheHit) {
@@ -76,6 +77,19 @@ else {
   Write-Host "✓ LibreOffice already installed"
 }
 
+if (-not $llvmCacheHit) {
+  Write-Host "LLVM cache miss, installing LLVM/Clang (required for bindgen)..."
+  if (-not (Retry-Command { choco install -y llvm --no-progress } -MaxAttempts 3)) {
+    Write-Host "::warning::Failed to install LLVM/Clang via Chocolatey"
+  }
+  else {
+    Write-Host "✓ LLVM/Clang installed"
+  }
+}
+else {
+  Write-Host "✓ LLVM/Clang found in cache"
+}
+
 Write-Host "Installing PHP..."
 $phpInstalled = $false
 try {
@@ -98,6 +112,7 @@ Write-Host "Configuring PATH..."
 $paths = @(
   "C:\Program Files\LibreOffice\program",
   "C:\Program Files\Tesseract-OCR",
+  "C:\Program Files\LLVM\bin",
   "C:\tools\php",
   "C:\Program Files\PHP"
 )
@@ -138,6 +153,16 @@ if ($tesseractPath) {
 }
 else {
   Write-Host "  ⚠ Could not determine tesseract path"
+}
+
+Write-Host ""
+Write-Host "Clang:"
+try {
+  & clang --version
+  Write-Host "✓ Clang available"
+}
+catch {
+  Write-Host "⚠ Warning: Clang not currently available on PATH"
 }
 
 Write-Host ""

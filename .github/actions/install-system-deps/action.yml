@@ -96,9 +96,20 @@ runs:
           C:\ProgramData\chocolatey\lib\libreoffice
         key: libreoffice-windows-${{ runner.arch }}-v3
 
+    - name: Cache LLVM (Windows)
+      if: runner.os == 'Windows'
+      id: cache-llvm-windows
+      uses: actions/cache@v5
+      with:
+        path: |
+          C:\Program Files\LLVM
+          C:\ProgramData\chocolatey\lib\llvm
+        key: llvm-windows-${{ runner.arch }}-v1
+
     - name: Install dependencies (Windows)
       if: runner.os == 'Windows'
       shell: pwsh
       env:
         TESSERACT_CACHE_HIT: ${{ steps.cache-tesseract-windows.outputs.cache-hit }}
+        LLVM_CACHE_HIT: ${{ steps.cache-llvm-windows.outputs.cache-hit }}
       run: pwsh -File scripts/ci/install-system-deps/install-windows.ps1

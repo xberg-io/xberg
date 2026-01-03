@@ -68,9 +68,7 @@ fn extract<'a>(env: Env<'a>, input: Binary<'a>, mime_type: String) -> NifResult<
                 Err(e) => Ok((atoms::error(), format!("Failed to encode result: {}", e)).encode(env)),
             }
         }
-        Err(e) => {
-            Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env)),
     }
 }
 
@@ -115,9 +113,7 @@ fn extract_with_options<'a>(
                 Err(e) => Ok((atoms::error(), format!("Failed to encode result: {}", e)).encode(env)),
             }
         }
-        Err(e) => {
-            Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env)),
     }
 }
 
@@ -131,11 +127,7 @@ fn extract_with_options<'a>(
 /// * `{:ok, result_map}` - Map containing extraction results
 /// * `{:error, reason}` - Error tuple with reason string
 #[rustler::nif(schedule = "DirtyCpu")]
-fn extract_file<'a>(
-    env: Env<'a>,
-    path: String,
-    mime_type: Option<String>,
-) -> NifResult<Term<'a>> {
+fn extract_file<'a>(env: Env<'a>, path: String, mime_type: Option<String>) -> NifResult<Term<'a>> {
     // Create default extraction config
     let config = kreuzberg::core::config::ExtractionConfig::default();
 
@@ -148,9 +140,7 @@ fn extract_file<'a>(
                 Err(e) => Ok((atoms::error(), format!("Failed to encode result: {}", e)).encode(env)),
             }
         }
-        Err(e) => {
-            Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env)),
     }
 }
 
@@ -186,9 +176,7 @@ fn extract_file_with_options<'a>(
                 Err(e) => Ok((atoms::error(), format!("Failed to encode result: {}", e)).encode(env)),
             }
         }
-        Err(e) => {
-            Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env)),
     }
 }
 
@@ -201,12 +189,10 @@ fn convert_extraction_result_to_term<'a>(
     result: &kreuzberg::types::ExtractionResult,
 ) -> Result<Term<'a>, String> {
     // Create a JSON representation and convert to Elixir term
-    let result_json = serde_json::to_value(result)
-        .map_err(|e| format!("Failed to serialize result: {}", e))?;
+    let result_json = serde_json::to_value(result).map_err(|e| format!("Failed to serialize result: {}", e))?;
 
     // Convert JSON to Elixir term
-    let term = json_to_term(env, &result_json)
-        .map_err(|e| format!("Failed to convert to Elixir term: {}", e))?;
+    let term = json_to_term(env, &result_json).map_err(|e| format!("Failed to convert to Elixir term: {}", e))?;
 
     Ok(term)
 }
@@ -279,9 +265,7 @@ fn term_to_json(term: Term) -> Result<serde_json::Value, String> {
 
     // Handle integers
     if let Ok(i) = term.decode::<i64>() {
-        return Ok(serde_json::Value::Number(
-            serde_json::Number::from(i)
-        ));
+        return Ok(serde_json::Value::Number(serde_json::Number::from(i)));
     }
 
     // Handle floats
@@ -298,10 +282,7 @@ fn term_to_json(term: Term) -> Result<serde_json::Value, String> {
 
     // Handle lists
     if let Ok(list) = term.decode::<Vec<Term>>() {
-        let items: Result<Vec<_>, _> = list
-            .into_iter()
-            .map(term_to_json)
-            .collect();
+        let items: Result<Vec<_>, _> = list.into_iter().map(term_to_json).collect();
         return Ok(serde_json::Value::Array(items?));
     }
 
@@ -373,8 +354,17 @@ fn parse_extraction_config(_env: Env, options: Term) -> Result<kreuzberg::core::
 
     // Define field categories for validation
     let boolean_fields = ["use_cache", "enable_quality_processing", "force_ocr"];
-    let nested_fields = ["ocr", "chunking", "images", "pages", "language_detection",
-                         "postprocessor", "token_reduction", "keywords", "pdf_options"];
+    let nested_fields = [
+        "ocr",
+        "chunking",
+        "images",
+        "pages",
+        "language_detection",
+        "postprocessor",
+        "token_reduction",
+        "keywords",
+        "pdf_options",
+    ];
 
     // Process each key in the map with validation
     for (key, value) in opts_map.iter() {
@@ -434,8 +424,8 @@ fn parse_extraction_config(_env: Env, options: Term) -> Result<kreuzberg::core::
     }
 
     // Now attempt full deserialization using serde_json for nested structures
-    let json_value = term_to_json(options)
-        .map_err(|e| format!("Invalid configuration: failed to parse options - {}", e))?;
+    let json_value =
+        term_to_json(options).map_err(|e| format!("Invalid configuration: failed to parse options - {}", e))?;
 
     // Deserialize using serde_json - this handles nested structures automatically
     match serde_json::from_value::<kreuzberg::core::config::ExtractionConfig>(json_value) {
@@ -522,11 +512,7 @@ fn validate_extraction_config(config: &kreuzberg::core::config::ExtractionConfig
 /// * `{:ok, [result_map]}` - List of extraction result maps
 /// * `{:error, reason}` - Error tuple with reason string
 #[rustler::nif(schedule = "DirtyCpu")]
-fn batch_extract_files<'a>(
-    env: Env<'a>,
-    paths: Vec<String>,
-    mime_type: Option<String>,
-) -> NifResult<Term<'a>> {
+fn batch_extract_files<'a>(env: Env<'a>, paths: Vec<String>, mime_type: Option<String>) -> NifResult<Term<'a>> {
     if paths.is_empty() {
         return Ok((atoms::error(), "File paths list cannot be empty").encode(env));
     }
@@ -539,25 +525,13 @@ fn batch_extract_files<'a>(
     // Process each file
     for path in paths {
         match kreuzberg::extract_file_sync(&path, mime_ref, &config) {
-            Ok(result) => {
-                match convert_extraction_result_to_term(env, &result) {
-                    Ok(term) => results.push(term),
-                    Err(e) => {
-                        return Ok((
-                            atoms::error(),
-                            format!("Failed to encode result for '{}': {}", path, e),
-                        )
-                            .encode(env))
-                    }
+            Ok(result) => match convert_extraction_result_to_term(env, &result) {
+                Ok(term) => results.push(term),
+                Err(e) => {
+                    return Ok((atoms::error(), format!("Failed to encode result for '{}': {}", path, e)).encode(env))
                 }
-            }
-            Err(e) => {
-                return Ok((
-                    atoms::error(),
-                    format!("Extraction failed for '{}': {}", path, e),
-                )
-                    .encode(env))
-            }
+            },
+            Err(e) => return Ok((atoms::error(), format!("Extraction failed for '{}': {}", path, e)).encode(env)),
         }
     }
 
@@ -597,25 +571,13 @@ fn batch_extract_files_with_options<'a>(
     // Process each file
     for path in paths {
         match kreuzberg::extract_file_sync(&path, mime_ref, &config) {
-            Ok(result) => {
-                match convert_extraction_result_to_term(env, &result) {
-                    Ok(term) => results.push(term),
-                    Err(e) => {
-                        return Ok((
-                            atoms::error(),
-                            format!("Failed to encode result for '{}': {}", path, e),
-                        )
-                            .encode(env))
-                    }
+            Ok(result) => match convert_extraction_result_to_term(env, &result) {
+                Ok(term) => results.push(term),
+                Err(e) => {
+                    return Ok((atoms::error(), format!("Failed to encode result for '{}': {}", path, e)).encode(env))
                 }
-            }
-            Err(e) => {
-                return Ok((
-                    atoms::error(),
-                    format!("Extraction failed for '{}': {}", path, e),
-                )
-                    .encode(env))
-            }
+            },
+            Err(e) => return Ok((atoms::error(), format!("Extraction failed for '{}': {}", path, e)).encode(env)),
         }
     }
 
@@ -632,11 +594,7 @@ fn batch_extract_files_with_options<'a>(
 /// * `{:ok, [result_map]}` - List of extraction result maps
 /// * `{:error, reason}` - Error tuple with reason string
 #[rustler::nif(schedule = "DirtyCpu")]
-fn batch_extract_bytes<'a>(
-    env: Env<'a>,
-    data_list: Vec<Binary<'a>>,
-    mime_types: Vec<String>,
-) -> NifResult<Term<'a>> {
+fn batch_extract_bytes<'a>(env: Env<'a>, data_list: Vec<Binary<'a>>, mime_types: Vec<String>) -> NifResult<Term<'a>> {
     if data_list.is_empty() {
         return Ok((atoms::error(), "Data list cannot be empty").encode(env));
     }
@@ -659,44 +617,29 @@ fn batch_extract_bytes<'a>(
     // Process each binary input with its corresponding MIME type
     for (idx, (data, mime_type)) in data_list.iter().zip(mime_types.iter()).enumerate() {
         if data.is_empty() {
-            return Ok((
-                atoms::error(),
-                format!("Binary input at index {} cannot be empty", idx),
-            )
-                .encode(env));
+            return Ok((atoms::error(), format!("Binary input at index {} cannot be empty", idx)).encode(env));
         }
 
         if data.len() > MAX_BINARY_SIZE {
             return Ok((
                 atoms::error(),
-                format!(
-                    "Binary input at index {} exceeds maximum size of 500MB",
-                    idx
-                ),
+                format!("Binary input at index {} exceeds maximum size of 500MB", idx),
             )
                 .encode(env));
         }
 
         match kreuzberg::extract_bytes_sync(data.as_slice(), mime_type, &config) {
-            Ok(result) => {
-                match convert_extraction_result_to_term(env, &result) {
-                    Ok(term) => results.push(term),
-                    Err(e) => {
-                        return Ok((
-                            atoms::error(),
-                            format!("Failed to encode result at index {}: {}", idx, e),
-                        )
-                            .encode(env))
-                    }
+            Ok(result) => match convert_extraction_result_to_term(env, &result) {
+                Ok(term) => results.push(term),
+                Err(e) => {
+                    return Ok((
+                        atoms::error(),
+                        format!("Failed to encode result at index {}: {}", idx, e),
+                    )
+                        .encode(env))
                 }
-            }
-            Err(e) => {
-                return Ok((
-                    atoms::error(),
-                    format!("Extraction failed at index {}: {}", idx, e),
-                )
-                    .encode(env))
-            }
+            },
+            Err(e) => return Ok((atoms::error(), format!("Extraction failed at index {}: {}", idx, e)).encode(env)),
         }
     }
 
@@ -747,44 +690,29 @@ fn batch_extract_bytes_with_options<'a>(
     // Process each binary input with its corresponding MIME type
     for (idx, (data, mime_type)) in data_list.iter().zip(mime_types.iter()).enumerate() {
         if data.is_empty() {
-            return Ok((
-                atoms::error(),
-                format!("Binary input at index {} cannot be empty", idx),
-            )
-                .encode(env));
+            return Ok((atoms::error(), format!("Binary input at index {} cannot be empty", idx)).encode(env));
         }
 
         if data.len() > MAX_BINARY_SIZE {
             return Ok((
                 atoms::error(),
-                format!(
-                    "Binary input at index {} exceeds maximum size of 500MB",
-                    idx
-                ),
+                format!("Binary input at index {} exceeds maximum size of 500MB", idx),
             )
                 .encode(env));
         }
 
         match kreuzberg::extract_bytes_sync(data.as_slice(), mime_type, &config) {
-            Ok(result) => {
-                match convert_extraction_result_to_term(env, &result) {
-                    Ok(term) => results.push(term),
-                    Err(e) => {
-                        return Ok((
-                            atoms::error(),
-                            format!("Failed to encode result at index {}: {}", idx, e),
-                        )
-                            .encode(env))
-                    }
+            Ok(result) => match convert_extraction_result_to_term(env, &result) {
+                Ok(term) => results.push(term),
+                Err(e) => {
+                    return Ok((
+                        atoms::error(),
+                        format!("Failed to encode result at index {}: {}", idx, e),
+                    )
+                        .encode(env))
                 }
-            }
-            Err(e) => {
-                return Ok((
-                    atoms::error(),
-                    format!("Extraction failed at index {}: {}", idx, e),
-                )
-                    .encode(env))
-            }
+            },
+            Err(e) => return Ok((atoms::error(), format!("Extraction failed at index {}: {}", idx, e)).encode(env)),
         }
     }
 
@@ -805,11 +733,7 @@ fn batch_extract_bytes_with_options<'a>(
 /// * `:ok` - If parameters are valid
 /// * `{:error, reason}` - If parameters are invalid
 #[rustler::nif]
-fn validate_chunking_params<'a>(
-    env: Env<'a>,
-    max_chars: usize,
-    max_overlap: usize,
-) -> NifResult<Term<'a>> {
+fn validate_chunking_params<'a>(env: Env<'a>, max_chars: usize, max_overlap: usize) -> NifResult<Term<'a>> {
     match kreuzberg::core::config_validation::validate_chunking_params(max_chars, max_overlap) {
         Ok(_) => Ok(atoms::ok().encode(env)),
         Err(e) => {
@@ -1028,9 +952,7 @@ fn get_extensions_for_mime<'a>(env: Env<'a>, mime_type: String) -> NifResult<Ter
 
     match kreuzberg::get_extensions_for_mime(&mime_type) {
         Ok(extensions) => Ok((atoms::ok(), extensions).encode(env)),
-        Err(e) => {
-            Ok((atoms::error(), format!("Failed to get extensions: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Failed to get extensions: {}", e)).encode(env)),
     }
 }
 
@@ -1139,30 +1061,21 @@ fn cache_stats<'a>(env: Env<'a>) -> NifResult<Term<'a>> {
             let mut map = map_new(env);
 
             // Add all statistics to the map
-            map = match map.map_put(
-                "total_files".encode(env),
-                (stats.total_files as i64).encode(env),
-            ) {
+            map = match map.map_put("total_files".encode(env), (stats.total_files as i64).encode(env)) {
                 Ok(m) => m,
                 Err(_) => {
                     return Ok((atoms::error(), "Failed to encode cache statistics").encode(env));
                 }
             };
 
-            map = match map.map_put(
-                "total_size_mb".encode(env),
-                stats.total_size_mb.encode(env),
-            ) {
+            map = match map.map_put("total_size_mb".encode(env), stats.total_size_mb.encode(env)) {
                 Ok(m) => m,
                 Err(_) => {
                     return Ok((atoms::error(), "Failed to encode cache statistics").encode(env));
                 }
             };
 
-            map = match map.map_put(
-                "available_space_mb".encode(env),
-                stats.available_space_mb.encode(env),
-            ) {
+            map = match map.map_put("available_space_mb".encode(env), stats.available_space_mb.encode(env)) {
                 Ok(m) => m,
                 Err(_) => {
                     return Ok((atoms::error(), "Failed to encode cache statistics").encode(env));
@@ -1191,9 +1104,7 @@ fn cache_stats<'a>(env: Env<'a>) -> NifResult<Term<'a>> {
 
             Ok((atoms::ok(), map).encode(env))
         }
-        Err(e) => {
-            Ok((atoms::error(), format!("Failed to get cache statistics: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Failed to get cache statistics: {}", e)).encode(env)),
     }
 }
 
@@ -1237,9 +1148,7 @@ fn clear_cache<'a>(env: Env<'a>) -> NifResult<Term<'a>> {
             let _ = (removed_count, removed_size_mb);
             Ok(atoms::ok().encode(env))
         }
-        Err(e) => {
-            Ok((atoms::error(), format!("Failed to clear cache: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Failed to clear cache: {}", e)).encode(env)),
     }
 }
 
@@ -1264,21 +1173,15 @@ fn config_discover<'a>(env: Env<'a>) -> NifResult<Term<'a>> {
         Ok(Some(config)) => {
             // Convert config to JSON string
             match serde_json::to_string(&config) {
-                Ok(json) => {
-                    Ok((atoms::ok(), json).encode(env))
-                }
-                Err(e) => {
-                    Ok((atoms::error(), format!("Failed to serialize config: {}", e)).encode(env))
-                }
+                Ok(json) => Ok((atoms::ok(), json).encode(env)),
+                Err(e) => Ok((atoms::error(), format!("Failed to serialize config: {}", e)).encode(env)),
             }
         }
         Ok(None) => {
             // No config found - return error with :not_found atom
             Ok((atoms::error(), atoms::not_found()).encode(env))
         }
-        Err(e) => {
-            Ok((atoms::error(), format!("Failed to discover config: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Failed to discover config: {}", e)).encode(env)),
     }
 }
 
@@ -1303,16 +1206,10 @@ fn config_from_file<'a>(env: Env<'a>, file_path: String) -> NifResult<Term<'a>> 
         Ok(config) => {
             // Convert config to JSON string
             match serde_json::to_string(&config) {
-                Ok(json) => {
-                    Ok((atoms::ok(), json).encode(env))
-                }
-                Err(e) => {
-                    Ok((atoms::error(), format!("Failed to serialize config: {}", e)).encode(env))
-                }
+                Ok(json) => Ok((atoms::ok(), json).encode(env)),
+                Err(e) => Ok((atoms::error(), format!("Failed to serialize config: {}", e)).encode(env)),
             }
         }
-        Err(e) => {
-            Ok((atoms::error(), format!("Failed to load config from file: {}", e)).encode(env))
-        }
+        Err(e) => Ok((atoms::error(), format!("Failed to load config from file: {}", e)).encode(env)),
     }
 }

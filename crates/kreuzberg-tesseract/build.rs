@@ -574,26 +574,34 @@ mod build_tesseract {
     }
 
     fn download_and_extract(target_dir: &Path, url: &str, name: &str) -> PathBuf {
-        use std::io::Read;
         use zip::ZipArchive;
 
         fs::create_dir_all(target_dir).expect("Failed to create target directory");
 
-        let agent = ureq::AgentBuilder::new()
+        let client = reqwest::blocking::Client::builder()
             .timeout(std::time::Duration::from_secs(300))
-            .build();
+            .build()
+            .expect("Failed to create HTTP client");
 
         println!("cargo:warning=Downloading {} from {}", name, url);
         let max_attempts = 5;
-        let mut response = None;
+        let mut content = None;
 
         for attempt in 1..=max_attempts {
-            let err_msg = match agent.get(url).call() {
+            let err_msg = match client.get(url).send() {
                 Ok(resp) => {
-                    response = Some(resp);
-                    break;
+                    if resp.status().is_success() {
+                        match resp.bytes() {
+                            Ok(bytes) => {
+                                content = Some(bytes.to_vec());
+                                break;
+                            }
+                            Err(err) => format!("Failed to read response: {}", err),
+                        }
+                    } else {
+                        format!("HTTP {}", resp.status().as_u16())
+                    }
                 }
-                Err(ureq::Error::Status(code, _)) => format!("HTTP {}", code),
                 Err(err) => err.to_string(),
             };
 
@@ -612,13 +620,7 @@ mod build_tesseract {
             std::thread::sleep(std::time::Duration::from_secs(backoff));
         }
 
-        let response = response.expect("unreachable: download loop must either succeed or panic");
-
-        let mut content = Vec::new();
-        response
-            .into_reader()
-            .read_to_end(&mut content)
-            .expect("Failed to read archive content");
+        let content = content.expect("unreachable: download loop must either succeed or panic");
 
         println!("cargo:warning=Downloaded {} bytes for {}", content.len(), name);
 

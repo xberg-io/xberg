@@ -36,8 +36,63 @@ Write-Host ""
 $includeRoot = $includeRoot -replace '\\','/'
 $compatForward = $compat -replace '\\','/'
 
+# Detect MinGW GCC include paths for C standard library headers
+Write-Host "Detecting MinGW GCC include paths:" -ForegroundColor Yellow
+$gccIncludePaths = @()
+
+try {
+    # Get GCC's built-in include search paths
+    $gccOutput = & gcc -v -E -x c - 2>&1 | Out-String
+
+    # Extract include paths from the output
+    $inIncludeSection = $false
+    foreach ($line in $gccOutput -split "`n") {
+        if ($line -match '#include <\.\.\.> search starts here:') {
+            $inIncludeSection = $true
+            continue
+        }
+        if ($line -match 'End of search list') {
+            break
+        }
+        if ($inIncludeSection -and $line.Trim() -ne '') {
+            $path = $line.Trim()
+            # Convert Windows paths to forward slashes
+            $path = $path -replace '\\','/'
+            $gccIncludePaths += $path
+            Write-Host "  Found: $path" -ForegroundColor Green
+        }
+    }
+
+    if ($gccIncludePaths.Count -eq 0) {
+        Write-Host "  [WARN] No GCC include paths detected via -v flag" -ForegroundColor Yellow
+    }
+} catch {
+    Write-Host "  [WARN] Failed to detect GCC include paths: $_" -ForegroundColor Yellow
+}
+
+# Also try to get GCC's resource directory for compiler-specific headers (stdarg.h, stddef.h, etc.)
+try {
+    $gccResourceDir = & gcc -print-file-name=include 2>&1
+    if ($gccResourceDir -and (Test-Path $gccResourceDir)) {
+        $gccResourceDir = $gccResourceDir -replace '\\','/'
+        if ($gccResourceDir -notin $gccIncludePaths) {
+            $gccIncludePaths += $gccResourceDir
+            Write-Host "  GCC resource dir: $gccResourceDir" -ForegroundColor Green
+        }
+    }
+} catch {
+    Write-Host "  [WARN] Failed to get GCC resource directory: $_" -ForegroundColor Yellow
+}
+
+Write-Host ""
+
 # Build the extra clang args with all necessary paths and flags
 $extra = "-I$includeRoot -I$compatForward -fms-extensions -fstack-protector-strong -fno-omit-frame-pointer -fno-fast-math"
+
+# Add all detected GCC include paths
+foreach ($path in $gccIncludePaths) {
+    $extra += " -isystem$path"
+}
 
 # Check for MSYS2/MinGW sysroot
 if ($env:MSYSTEM_PREFIX) {

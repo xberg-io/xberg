@@ -53,13 +53,16 @@ else
 fi
 
 # Create the ini file with absolute path
+# We load the Kreuzberg extension with its full path to avoid overriding extension_dir
+# This allows core PHP extensions to be loaded from their default location
 if cat >"$INI_FILE" <<EOF; then
 ; Kreuzberg PHP Extension Configuration for CI Testing
 ; This file is generated automatically by create-ci-php-ini.sh
 ; It allows loading the locally-built extension without system-wide installation
 
-extension_dir="$DISPLAY_DIR"
-extension="$EXT_FILE"
+; Load the Kreuzberg PHP extension using full path
+; This avoids overriding extension_dir which would prevent core extensions from loading
+extension="$DISPLAY_DIR/$EXT_FILE"
 EOF
   echo "✓ INI file created: $INI_FILE"
   echo ""
@@ -67,10 +70,9 @@ EOF
   cat "$INI_FILE"
   echo ""
   echo "To use this file with PHPUnit:"
-  echo "  php -c $INI_FILE vendor/bin/phpunit"
+  echo "  php -n -c $INI_FILE vendor/bin/phpunit"
   echo ""
   echo "Or pass it to task:"
-  echo "  export PHP_INI_FILE=$INI_FILE"
   echo "  task php:test:ci"
 else
   echo "✗ Failed to create INI file"

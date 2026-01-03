@@ -26,13 +26,13 @@ image = { workspace = true }
 [build-dependencies]
 cc = { version = "^1.2.51", optional = true }
 cmake = { version = "0.1.57", optional = true }
-ureq = { version = "2.12", default-features = false, features = ["tls"], optional = true }
+reqwest = { workspace = true, features = ["blocking", "rustls-tls"], optional = true }
 zip = { version = "7.0.0", optional = true }
 
 [features]
 default = ["static-linking"]
-build-tesseract = ["cc", "cmake", "ureq", "zip"]
-build-tesseract-wasm = ["cmake", "ureq", "zip"]
+build-tesseract = ["cc", "cmake", "reqwest", "zip"]
+build-tesseract-wasm = ["cmake", "reqwest", "zip"]
 static-linking = ["build-tesseract"]
 dynamic-linking = []
 
