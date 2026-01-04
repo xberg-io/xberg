@@ -133,7 +133,7 @@ jobs:
   check-pypi:
     name: Check if Python package exists on PyPI
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_python == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_python == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -150,7 +150,7 @@ jobs:
   check-npm:
     name: Check if Node package exists on npm
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_node == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_node == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -164,10 +164,27 @@ jobs:
         id: check
         run: scripts/publish/check_npm.sh "${{ needs.prepare.outputs.version }}" >> "$GITHUB_OUTPUT"
 
+  check-wasm:
+    name: Check if WASM package exists on npm
+    needs: prepare
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_wasm == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check npm for existing WASM package
+        id: check
+        run: scripts/publish/check_wasm.sh "${{ needs.prepare.outputs.version }}" >> "$GITHUB_OUTPUT"
+
   check-rubygems:
     name: Check if Ruby gem exists on RubyGems
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_ruby == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_ruby == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -184,7 +201,7 @@ jobs:
   check-maven:
     name: Check if Java package exists on Maven Central
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_java == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_java == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -201,7 +218,7 @@ jobs:
   check-nuget:
     name: Check if C# package exists on NuGet
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_csharp == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_csharp == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -218,7 +235,7 @@ jobs:
   check-packagist:
     name: Check if PHP package exists on Packagist
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_php == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_php == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -235,7 +252,7 @@ jobs:
   check-cli:
     name: Check if CLI assets already published
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_cli == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_cli == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -264,7 +281,7 @@ jobs:
   check-go:
     name: Check if Go FFI assets already published
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_go == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_go == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -313,7 +330,7 @@ jobs:
   check-hex:
     name: Check if Elixir package exists on Hex.pm
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_elixir == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_elixir == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -342,7 +359,7 @@ jobs:
   check-homebrew:
     name: Check if Homebrew formula already published
     needs: prepare
-    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_homebrew == 'true' && needs.prepare.outputs.force_republish != 'true' }}
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_homebrew == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -370,7 +387,7 @@ jobs:
   python-wheels:
     name: Build Python wheels (${{ matrix.label }})
     needs: [prepare, check-pypi]
-    if: ${{ needs.prepare.outputs.release_python == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-pypi.outputs.exists != 'true') }}
+    if: ${{ needs.prepare.outputs.release_python == 'true' && needs.check-pypi.outputs.exists != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     permissions:
@@ -553,7 +570,7 @@ jobs:
   python-sdist:
     name: Build Python sdist
     needs: [prepare, check-pypi]
-    if: ${{ needs.prepare.outputs.release_python == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-pypi.outputs.exists != 'true') }}
+    if: ${{ needs.prepare.outputs.release_python == 'true' && needs.check-pypi.outputs.exists != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -605,7 +622,7 @@ jobs:
   node-bindings:
     name: Build Node bindings (${{ matrix.settings.target }})
     needs: [prepare, check-npm]
-    if: ${{ needs.prepare.outputs.release_node == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-npm.outputs.exists != 'true') }}
+    if: ${{ needs.prepare.outputs.release_node == 'true' && needs.check-npm.outputs.exists != 'true' }}
     runs-on: ${{ matrix.settings.os }}
     timeout-minutes: 180
     permissions:
@@ -755,7 +772,7 @@ jobs:
   cli-binaries:
     name: Build CLI binaries (${{ matrix.target }})
     needs: [prepare, check-cli]
-    if: ${{ needs.prepare.outputs.release_cli == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.dry_run == 'true') }}
+    if: ${{ needs.prepare.outputs.release_cli == 'true' && (needs.check-cli.outputs.exists != 'true' || needs.prepare.outputs.dry_run == 'true') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     permissions:
@@ -852,7 +869,7 @@ jobs:
     needs: [prepare, check-homebrew]
     if: |
       needs.prepare.outputs.release_homebrew == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-homebrew.outputs.exists != 'true')
+      needs.check-homebrew.outputs.exists != 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
     permissions:
@@ -941,7 +958,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_homebrew == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-homebrew.outputs.exists != 'true') &&
+      needs.check-homebrew.outputs.exists != 'true' &&
       needs.homebrew-bottles.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -972,7 +989,7 @@ jobs:
   ruby-gem:
     name: Build Ruby gem (${{ matrix.label }})
     needs: [prepare, check-rubygems]
-    if: ${{ needs.prepare.outputs.release_ruby == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-rubygems.outputs.exists != 'true') }}
+    if: ${{ needs.prepare.outputs.release_ruby == 'true' && needs.check-rubygems.outputs.exists != 'true' }}
     permissions:
       contents: read
     strategy:
@@ -1219,7 +1236,7 @@ jobs:
   go-ffi-libraries:
     name: Build Go FFI libraries (${{ matrix.settings.label }})
     needs: [prepare, check-go]
-    if: ${{ needs.prepare.outputs.release_go == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-go.outputs.exists != 'true' || needs.prepare.outputs.dry_run == 'true') }}
+    if: ${{ needs.prepare.outputs.release_go == 'true' && (needs.check-go.outputs.exists != 'true' || needs.prepare.outputs.dry_run == 'true') }}
     runs-on: ${{ matrix.settings.os }}
     timeout-minutes: 180
     permissions:
@@ -1370,7 +1387,7 @@ jobs:
   java-natives:
     name: Build Java native libs (${{ matrix.settings.label }})
     needs: [prepare, check-maven]
-    if: ${{ needs.prepare.outputs.release_java == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-maven.outputs.exists != 'true' || needs.prepare.outputs.dry_run == 'true') }}
+    if: ${{ needs.prepare.outputs.release_java == 'true' && (needs.check-maven.outputs.exists != 'true' || needs.prepare.outputs.dry_run == 'true') }}
     runs-on: ${{ matrix.settings.os }}
     timeout-minutes: 180
     permissions:
@@ -1468,7 +1485,7 @@ jobs:
   java-package:
     name: Build Java package
     needs: [prepare, check-maven, java-natives]
-    if: ${{ needs.prepare.outputs.release_java == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-maven.outputs.exists != 'true') }}
+    if: ${{ needs.prepare.outputs.release_java == 'true' && needs.check-maven.outputs.exists != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1572,7 +1589,7 @@ jobs:
   php-package:
     name: Build PHP PIE package (${{ matrix.settings.label }})
     needs: [prepare, check-packagist]
-    if: ${{ needs.prepare.outputs.release_php == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-packagist.outputs.exists != 'true') }}
+    if: ${{ needs.prepare.outputs.release_php == 'true' && needs.check-packagist.outputs.exists != 'true' }}
     runs-on: ${{ matrix.settings.os }}
     timeout-minutes: 60
     permissions:
@@ -1679,7 +1696,7 @@ jobs:
   csharp-package:
     name: Build C# package
     needs: [prepare, check-nuget, csharp-native-assets]
-    if: ${{ needs.prepare.outputs.release_csharp == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-nuget.outputs.exists != 'true') }}
+    if: ${{ needs.prepare.outputs.release_csharp == 'true' && needs.check-nuget.outputs.exists != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -1766,7 +1783,7 @@ jobs:
   csharp-native-assets:
     name: Build C# native assets (${{ matrix.rid }})
     needs: [prepare, check-nuget]
-    if: ${{ needs.prepare.outputs.release_csharp == 'true' && (needs.prepare.outputs.force_republish == 'true' || needs.check-nuget.outputs.exists != 'true') }}
+    if: ${{ needs.prepare.outputs.release_csharp == 'true' && needs.check-nuget.outputs.exists != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 180
     permissions:
@@ -1884,7 +1901,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_cli == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-cli.outputs.exists != 'true') &&
+      needs.check-cli.outputs.exists != 'true' &&
       needs.cli-binaries.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -1920,7 +1937,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_go == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-go.outputs.exists != 'true') &&
+      needs.check-go.outputs.exists != 'true' &&
       needs.go-ffi-libraries.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -1957,7 +1974,7 @@ jobs:
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_rust == 'true' &&
       needs.check-cratesio.result == 'success' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-cratesio.outputs.exists != 'true')
+      needs.check-cratesio.outputs.exists != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -2024,7 +2041,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_elixir == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-hex.outputs.exists != 'true')
+      needs.check-hex.outputs.exists != 'true'
     runs-on: ubuntu-latest
     environment: hex
     permissions:
@@ -2073,7 +2090,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_python == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-pypi.outputs.exists != 'true') &&
+      needs.check-pypi.outputs.exists != 'true' &&
       needs.python-wheels.result == 'success' &&
       needs.python-sdist.result == 'success'
     runs-on: ubuntu-latest
@@ -2117,7 +2134,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_ruby == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-rubygems.outputs.exists != 'true') &&
+      needs.check-rubygems.outputs.exists != 'true' &&
       needs.ruby-gem.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -2209,7 +2226,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_node == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-npm.outputs.exists != 'true') &&
+      needs.check-npm.outputs.exists != 'true' &&
       needs.node-bindings.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -2290,13 +2307,13 @@ jobs:
 
   publish-wasm:
     name: Publish WASM package
-    needs: [prepare, validate-versions, check-npm, publish-node]
+    needs: [prepare, validate-versions, check-wasm, publish-node]
     if: |
       always() &&
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_wasm == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-npm.outputs.exists != 'true')
+      needs.check-wasm.outputs.exists != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -2399,7 +2416,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_java == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-maven.outputs.exists != 'true') &&
+      needs.check-maven.outputs.exists != 'true' &&
       needs.java-package.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -2534,7 +2551,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_csharp == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-nuget.outputs.exists != 'true') &&
+      needs.check-nuget.outputs.exists != 'true' &&
       needs.csharp-package.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -2576,7 +2593,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_php == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-packagist.outputs.exists != 'true') &&
+      needs.check-packagist.outputs.exists != 'true' &&
       needs.php-package.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -2652,7 +2669,7 @@ jobs:
       needs.prepare.outputs.dry_run != 'true' &&
       needs.prepare.outputs.is_tag == 'true' &&
       needs.prepare.outputs.release_homebrew == 'true' &&
-      (needs.prepare.outputs.force_republish == 'true' || needs.check-homebrew.outputs.exists != 'true') &&
+      needs.check-homebrew.outputs.exists != 'true' &&
       needs.upload-cli-release.result == 'success' &&
       needs.upload-homebrew-bottles.result == 'success'
     runs-on: ubuntu-latest
