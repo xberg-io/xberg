@@ -45,23 +45,7 @@ jobs:
       - name: Configure Git for mike
         run: scripts/ci/docs/configure-git-for-mike.sh
 
-      - name: Find latest benchmark workflow run
-        id: find-benchmark
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/ci/docs/find-latest-benchmark-run.sh
-
-      - name: Download benchmark visualization artifact
-        id: download-viz
-        if: steps.find-benchmark.outcome == 'success'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: scripts/ci/docs/download-benchmark-visualization.sh "${{ steps.find-benchmark.outputs.run_id }}"
-
       - name: Ensure benchmark placeholder files exist
-        if: steps.download-viz.outcome != 'success'
         run: scripts/ci/docs/create-benchmark-placeholders.sh
 
       - name: Build v4 documentation with mike

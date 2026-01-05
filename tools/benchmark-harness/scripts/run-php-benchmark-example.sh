@@ -78,7 +78,7 @@ echo "Example 1: PHP sync adapter on small PDFs"
   --output "$OUTPUT_DIR/sync-small-pdf" \
   --mode single-file \
   --iterations 3 \
-  --format both
+  --format json
 
 echo ""
 echo "Results: $OUTPUT_DIR/sync-small-pdf/"
@@ -91,7 +91,7 @@ echo "Example 2: PHP batch adapter on multiple document types"
   --output "$OUTPUT_DIR/batch-all-types" \
   --mode batch \
   --iterations 3 \
-  --format both
+  --format json
 
 echo ""
 echo "Results: $OUTPUT_DIR/batch-all-types/"
@@ -104,11 +104,10 @@ echo "Example 3: Compare PHP with Python, Ruby, and Node"
   --output "$OUTPUT_DIR/language-comparison" \
   --mode single-file \
   --iterations 5 \
-  --format both
+  --format json
 
 echo ""
 echo "Results: $OUTPUT_DIR/language-comparison/"
-echo "View HTML report: open $OUTPUT_DIR/language-comparison/index.html"
 echo ""
 
 echo "=== Benchmarks Complete ==="
@@ -117,5 +116,4 @@ echo "All results saved to: $OUTPUT_DIR"
 echo ""
 echo "To view results:"
 echo "  - JSON: cat $OUTPUT_DIR/*/results.json"
-echo "  - HTML: open $OUTPUT_DIR/*/index.html"
 echo ""

@@ -23,10 +23,6 @@ enum CliMode {
 enum OutputFormat {
     /// JSON format (default)
     Json,
-    /// HTML format with interactive visualizations
-    Html,
-    /// Both JSON and HTML formats
-    Both,
 }
 
 impl From<CliMode> for BenchmarkMode {
@@ -103,15 +99,6 @@ enum Commands {
         /// Enable quality assessment
         #[arg(long, default_value = "true")]
         measure_quality: bool,
-
-        /// Output format: json, html, or both
-        #[arg(long, value_enum, default_value = "json")]
-        format: OutputFormat,
-
-        /// Benchmark execution date (e.g., "2025-12-13 14:30:00 UTC")
-        /// Used for marking when the benchmark was run in the HTML output
-        #[arg(long)]
-        benchmark_date: Option<String>,
     },
 
     /// Consolidate multiple benchmark runs
@@ -123,10 +110,6 @@ enum Commands {
         /// Output directory for consolidated results
         #[arg(short, long)]
         output: PathBuf,
-
-        /// Output format: json, html, or both
-        #[arg(long, value_enum, default_value = "both")]
-        format: OutputFormat,
 
         /// Baseline framework for delta calculations (not used but provided for compatibility)
         #[arg(long, default_value = "kreuzberg-native")]
@@ -185,8 +168,6 @@ async fn main() -> Result<()> {
             iterations,
             ocr,
             measure_quality,
-            format: _,
-            benchmark_date: _,
         } => {
             use benchmark_harness::{AdapterRegistry, BenchmarkRunner, NativeAdapter};
             use kreuzberg::{ExtractionConfig, OcrConfig};
@@ -366,7 +347,6 @@ async fn main() -> Result<()> {
         Commands::Consolidate {
             inputs,
             output,
-            format: _,
             baseline: _baseline,
         } => {
             use benchmark_harness::{consolidate_runs, load_run_results, write_consolidated_json};
