@@ -46,8 +46,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 500,
-            chunkOverlap: 50,
+            maxChars: 500,
+            maxOverlap: 50,
             respectSentences: true,
         );
 
@@ -84,8 +84,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
 
         $maxChunkSize = 300;
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: $maxChunkSize,
-            chunkOverlap: 20,
+            maxChars: $maxChunkSize,
+            maxOverlap: 20,
             respectSentences: false,
         );
 
@@ -118,8 +118,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 400,
-            chunkOverlap: 100,
+            maxChars: 400,
+            maxOverlap: 100,
             respectSentences: true,
         );
 
@@ -147,8 +147,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 300,
-            chunkOverlap: 50,
+            maxChars: 300,
+            maxOverlap: 50,
             respectSentences: true,
         );
 
@@ -176,8 +176,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 500,
-            chunkOverlap: 50,
+            maxChars: 500,
+            maxOverlap: 50,
         );
 
         $embeddingConfig = new EmbeddingConfig(
@@ -225,8 +225,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 500,
-            chunkOverlap: 50,
+            maxChars: 500,
+            maxOverlap: 50,
         );
 
         $config = new ExtractionConfig(chunking: $chunkingConfig);
@@ -258,8 +258,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 400,
-            chunkOverlap: 40,
+            maxChars: 400,
+            maxOverlap: 40,
         );
 
         $config = new ExtractionConfig(
@@ -295,8 +295,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 10000,
-            chunkOverlap: 100,
+            maxChars: 10000,
+            maxOverlap: 100,
         );
 
         $config = new ExtractionConfig(chunking: $chunkingConfig);
@@ -321,7 +321,7 @@ final class ChunkingAndEmbeddingsTest extends TestCase
             $this->markTestSkipped("Test file not found: {$filePath}");
         }
 
-        $chunkingConfig = new ChunkingConfig(maxChunkSize: 500);
+        $chunkingConfig = new ChunkingConfig(maxChars: 500);
 
         $embeddingConfig = new EmbeddingConfig(
             model: 'all-minilm-l6-v2',
@@ -365,8 +365,8 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         }
 
         $chunkingConfig = new ChunkingConfig(
-            maxChunkSize: 500,
-            chunkOverlap: 50,
+            maxChars: 500,
+            maxOverlap: 50,
         );
 
         $config = new ExtractionConfig(chunking: $chunkingConfig);
@@ -398,7 +398,7 @@ final class ChunkingAndEmbeddingsTest extends TestCase
             $this->markTestSkipped("Test file not found: {$filePath}");
         }
 
-        $chunkingConfig = new ChunkingConfig(maxChunkSize: 400);
+        $chunkingConfig = new ChunkingConfig(maxChars: 400);
         $config = new ExtractionConfig(chunking: $chunkingConfig);
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($filePath);

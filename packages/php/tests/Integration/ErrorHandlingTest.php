@@ -57,7 +57,7 @@ final class ErrorHandlingTest extends TestCase
 
             // Invalid negative maxChunkSize should be rejected
             $config = new ExtractionConfig(
-                chunking: new ChunkingConfig(maxChunkSize: -100),
+                chunking: new ChunkingConfig(maxChars: -100),
             );
 
             $kreuzberg = new Kreuzberg($config);
@@ -219,8 +219,8 @@ final class ErrorHandlingTest extends TestCase
         // Create config with excessive chunk overlap (>100% of chunk size)
         $config = new ExtractionConfig(
             chunking: new ChunkingConfig(
-                maxChunkSize: 100,
-                chunkOverlap: 150, // Overlap larger than chunk size
+                maxChars: 100,
+                maxOverlap: 150, // Overlap larger than chunk size
             ),
         );
 
@@ -329,17 +329,17 @@ final class ErrorHandlingTest extends TestCase
     public function it_enforces_readonly_chunking_config(): void
     {
         $config = new ChunkingConfig(
-            maxChunkSize: 512,
-            chunkOverlap: 50,
+            maxChars: 512,
+            maxOverlap: 50,
         );
 
-        $this->assertEquals(512, $config->maxChunkSize);
-        $this->assertEquals(50, $config->chunkOverlap);
+        $this->assertEquals(512, $config->maxChars);
+        $this->assertEquals(50, $config->maxOverlap);
 
         // Attempting to modify should fail due to readonly property
         $this->expectError();
         // @phpstan-ignore-next-line
-        $config->maxChunkSize = 1024; // This should error
+        $config->maxChars = 1024; // This should error
     }
 
     /**

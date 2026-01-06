@@ -211,7 +211,6 @@ jobs:
         run: |
           {
             echo "AWS_LC_SYS_CMAKE_BUILDER=1"
-            echo "AWS_LC_SYS_NO_ASM=1"
             echo "CMAKE_BUILD_PARALLEL_LEVEL=1"
           } >> "$GITHUB_ENV"
 

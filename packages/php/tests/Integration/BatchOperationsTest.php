@@ -136,7 +136,7 @@ final class BatchOperationsTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            chunking: new ChunkingConfig(maxChunkSize: 300),
+            chunking: new ChunkingConfig(maxChars: 300),
         );
 
         $kreuzberg = new Kreuzberg();
@@ -342,8 +342,8 @@ final class BatchOperationsTest extends TestCase
 
         $config = new ExtractionConfig(
             chunking: new ChunkingConfig(
-                maxChunkSize: 250,
-                chunkOverlap: 25,
+                maxChars: 250,
+                maxOverlap: 25,
                 respectSentences: true,
             ),
         );
