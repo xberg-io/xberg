@@ -53,20 +53,22 @@ export function WorkloadSelector({
   const handleViewRecommendations = useCallback(() => {
     if (!isValid) return
 
-    // Build query string with selected parameters
-    const params = new URLSearchParams()
-    params.append('fileType', selectedFileType)
-    params.append('ocrMode', selectedOCRMode)
+    // Build search parameters object for navigation
+    const searchParams: Record<string, string> = {
+      fileType: selectedFileType,
+      ocrMode: selectedOCRMode,
+    }
+
     if (selectedPriority) {
-      params.append('priority', selectedPriority)
+      searchParams.priority = selectedPriority
     }
     if (selectedEnvironment) {
-      params.append('environment', selectedEnvironment)
+      searchParams.environment = selectedEnvironment
     }
 
     navigate({
       to: '/charts',
-      search: (params.toString()),
+      search: searchParams,
     })
   }, [navigate, selectedFileType, selectedOCRMode, selectedPriority, selectedEnvironment, isValid])
 
