@@ -404,6 +404,14 @@ jobs:
             python: "3.10"
             needs_qemu: false
             extra_args: ""
+          - label: linux-aarch64
+            os: ubuntu-24.04-arm
+            artifact: python-wheels-linux-aarch64
+            rust_target: aarch64-unknown-linux-gnu
+            manylinux: auto
+            python: "3.10"
+            needs_qemu: false
+            extra_args: ""
           - label: macos-arm64
             os: macos-latest
             artifact: python-wheels-macos
@@ -636,12 +644,16 @@ jobs:
             rust_target: ""
             use_cross: false
             use_napi_cross: false
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            rust_target: ""
+            use_cross: false
+            use_napi_cross: false
           - os: macos-latest
             target: aarch64-apple-darwin
             rust_target: ""
             use_cross: false
             use_napi_cross: false
-          # TODO: Re-enable additional Linux targets once cross-compilation pipeline matches test-build
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             rust_target: ""
