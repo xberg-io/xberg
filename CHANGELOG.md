@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Returns embeddings with model info, dimensions, and embedding count
   - Supports all embedding presets (fast, balanced, quality, multilingual)
   - Includes comprehensive test coverage and Docker integration tests
+- **Server Configuration**: Added comprehensive `ServerConfig` type for API server settings
+  - File-based configuration (TOML/YAML/JSON) for host, port, CORS origins, and upload limits
+  - Environment variable overrides for all server settings (KREUZBERG_HOST, KREUZBERG_PORT, KREUZBERG_CORS_ORIGINS, etc.)
+  - Configuration precedence: CLI args > Environment variables > Config file > Defaults
+  - Separate server config examples (server.toml/yaml/json)
 
 #### Observability
 - **OpenTelemetry**: Added tracing instrumentation to all API endpoints (`api.extract`, `api.embed`, `api.health`, `api.info`, `api.cache_stats`, `api.cache_clear`)
@@ -23,14 +28,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-#### PHP
-- **Table Extraction**: Fixed `extract_tables` config flag to properly filter table results
+#### API Server & CLI
+- **CLI ServerConfig Integration**: Fixed CLI to properly use ServerConfig from config files
+  - CLI now respects CORS origins from configuration files (previously ignored)
+  - CLI now respects upload size limits from configuration files (previously re-parsed from env only)
+  - Added new `serve_with_server_config()` function for proper config handling
+- **Clippy Warnings**: Fixed manual ceiling division by using stdlib `div_ceil()` method
+- **Integration Tests**: Added `#[cfg(feature = "api")]` gate to prevent import errors when api feature disabled
+
+#### Docker & CI
+- **Docker Test Script**: Fixed critical infinite recursion bug in `get_image_name()` function
+- **Docker Entrypoint**: Fixed wrong binary path in custom config test (/app/kreuzberg → /usr/local/bin/kreuzberg)
+- **Docker Command**: Added missing 'serve' subcommand to custom config test
+- **CI Artifact Upload**: Made test results artifact upload conditional on file existence
+
+#### Configuration Examples
+- **Server Section**: Removed misplaced `[server]` section from extraction config examples
+- **Keyword Params**: Fixed YAKE/RAKE parameter examples to match actual source code
+  - YAKE: Only `window_size` parameter exists (removed non-existent deduplication fields)
+  - RAKE: Only `min_word_length` and `max_words_per_phrase` exist (removed non-existent stopwords/delimiters)
+- **Security**: Changed default host from `0.0.0.0` to `127.0.0.1` for safer defaults
 
 #### Documentation
+- **ServerConfig**: Removed incorrect `show_download_progress` field from ServerConfig example (belongs to EmbeddingConfig)
+- **PdfConfig**: Added missing `hierarchy` field to PdfConfig documentation table
+- **TypeScript Snippets**: Converted all WASM snippets from JavaScript to TypeScript with proper type annotations
 - **Go Installation**: Updated README with correct `go get` instructions for monorepo structure ([#264](https://github.com/kreuzberg-dev/kreuzberg/issues/264))
   - Clarified that `@latest` doesn't work due to Go module discovery limitations
   - Added explicit version tag examples and version discovery command
   - Recommended automated installer script as primary installation method
+
+#### PHP
+- **Table Extraction**: Fixed `extract_tables` config flag to properly filter table results
 
 ## [4.0.0-rc.27] - 2026-01-04
 
