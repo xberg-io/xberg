@@ -83,9 +83,19 @@ jobs:
       - name: Integrate visualizer into docs
         run: |
           mkdir -p docs/benchmarks/app
+          mkdir -p docs/benchmarks/data
           cp -r tools/benchmark-visualizer/dist-final/* docs/benchmarks/app/
+
+          # Also copy data files to docs/benchmarks/data/ for direct API access
+          if [ -f tools/benchmark-visualizer/dist-final/aggregated.json ]; then
+            cp tools/benchmark-visualizer/dist-final/aggregated.json docs/benchmarks/data/
+            cp tools/benchmark-visualizer/dist-final/metadata.json docs/benchmarks/data/ 2>/dev/null || true
+          fi
+
           echo "Visualizer copied to docs/benchmarks/app/"
+          echo "Data copied to docs/benchmarks/data/"
           ls -lh docs/benchmarks/app/
+          ls -lh docs/benchmarks/data/
 
       - name: Build v4 documentation with mike
         run: scripts/ci/docs/build-v4-docs.sh
