@@ -142,7 +142,7 @@ rmp-serde = "1.3"
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 uuid = { version = "1.19.0", features = ["v4", "js"] }
-indexmap = "2.12.1"
+indexmap = "2.13.0"
 tracing = { workspace = true }
 pdfium-render = { package = "kreuzberg-pdfium-render", version = "0.9.0", features = [
     "thread_safe",
