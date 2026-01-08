@@ -57,6 +57,16 @@ echo "::endgroup::"
 
 echo "::group::Verifying Linux installations"
 
+echo "CMake:"
+if command -v cmake >/dev/null 2>&1; then
+  cmake --version | head -1
+  echo "✓ CMake available"
+else
+  echo "::error::CMake not found after installation"
+  exit 1
+fi
+
+echo ""
 echo "LibreOffice:"
 if soffice --version 2>/dev/null; then
   echo "✓ LibreOffice available"

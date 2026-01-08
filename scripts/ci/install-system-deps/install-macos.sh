@@ -15,6 +15,21 @@ if [[ -d "/usr/local/bin" ]]; then
   export PATH="/usr/local/bin:/usr/local/sbin:${PATH}"
 fi
 
+if ! brew list cmake &>/dev/null; then
+  echo "Installing CMake..."
+  retry_with_backoff brew install cmake || {
+    echo "::error::Failed to install CMake after retries"
+    exit 1
+  }
+else
+  echo "✓ CMake already installed"
+fi
+
+if ! command -v cmake >/dev/null 2>&1; then
+  echo "CMake not on PATH after install; attempting brew link..."
+  brew link --overwrite cmake >/dev/null 2>&1 || true
+fi
+
 if ! brew list tesseract &>/dev/null; then
   echo "Installing Tesseract..."
   retry_with_backoff brew install tesseract || {
@@ -75,6 +90,17 @@ echo "::endgroup::"
 
 echo "::group::Verifying macOS installations"
 
+echo "CMake:"
+if command -v cmake >/dev/null 2>&1; then
+  cmake --version | head -1
+else
+  echo "::error::CMake not found on PATH after installation"
+  echo "PATH=$PATH"
+  brew --prefix cmake 2>/dev/null || true
+  exit 1
+fi
+
+echo ""
 echo "Tesseract:"
 if command -v tesseract >/dev/null 2>&1; then
   tesseract --version | head -1
