@@ -50,7 +50,7 @@ serde_json = { version = "1.0.149" }
 
 thiserror = "2.0.17"
 anyhow = "1.0"
-libc = "0.2.179"
+libc = "0.2.180"
 
 async-trait = "0.1.89"
 
