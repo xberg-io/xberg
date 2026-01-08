@@ -316,6 +316,7 @@ jobs:
 
       - name: Upload coverage
         if: matrix.coverage
+        continue-on-error: true
         uses: deepsourcelabs/test-coverage-action@master
         with:
           key: python

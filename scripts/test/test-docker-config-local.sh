@@ -186,10 +186,11 @@ create_toml_config() {
   local file_path="$1"
   local port="${2:-8000}"
 
+  # Always use port 8000 inside container (mapped from host port via -p flag)
   cat >"$file_path" <<EOF
 [server]
 host = "0.0.0.0"
-port = $port
+port = 8000
 max_upload_mb = 100
 request_timeout_secs = 30
 
@@ -212,10 +213,11 @@ create_yaml_config() {
   local file_path="$1"
   local port="${2:-8000}"
 
+  # Always use port 8000 inside container (mapped from host port via -p flag)
   cat >"$file_path" <<EOF
 server:
   host: "0.0.0.0"
-  port: $port
+  port: 8000
   max_upload_mb: 100
   request_timeout_secs: 30
 
@@ -238,11 +240,12 @@ create_json_config() {
   local file_path="$1"
   local port="${2:-8000}"
 
+  # Always use port 8000 inside container (mapped from host port via -p flag)
   cat >"$file_path" <<EOF
 {
   "server": {
     "host": "0.0.0.0",
-    "port": $port,
+    "port": 8000,
     "max_upload_mb": 100,
     "request_timeout_secs": 30
   },
