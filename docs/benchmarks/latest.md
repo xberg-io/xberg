@@ -16,14 +16,14 @@ The charts below are generated from the most recent benchmark workflow run.
 <div class="full-width" markdown="1">
 
 <!-- Embedded React Visualizer -->
-<iframe src="../app/index.html"
+<iframe src="/benchmarks/app/"
         width="100%"
         height="2000px"
         frameborder="0"
         sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
         style="border: 1px solid var(--md-default-fg-color--lightest); border-radius: 4px;"
         title="Interactive Benchmark Visualizer">
-  <p>Your browser does not support iframes. Please visit the <a href="../app/index.html">interactive benchmark visualizer</a> directly.</p>
+  <p>Your browser does not support iframes. Please visit the <a href="/benchmarks/app/">interactive benchmark visualizer</a> directly.</p>
 </iframe>
 
 </div>
