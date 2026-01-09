@@ -43,7 +43,7 @@ export const FileTypeMetricsSchema = z.object({
  */
 export const FrameworkModeDataSchema = z.object({
   framework: z.string().min(1),
-  mode: z.enum(['single', 'batch', 'sync', 'async']),
+  mode: z.enum(['single', 'batch']),
   cold_start: ColdStartMetricsSchema.nullable(),
   by_file_type: z.record(z.string(), FileTypeMetricsSchema),
 })

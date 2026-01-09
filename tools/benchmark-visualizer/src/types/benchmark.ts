@@ -26,7 +26,7 @@ export interface FileTypeMetrics {
 
 export interface FrameworkModeData {
   framework: string
-  mode: 'single' | 'batch' | 'sync' | 'async'
+  mode: 'single' | 'batch'
   cold_start: ColdStartMetrics | null
   by_file_type: Record<string, FileTypeMetrics>
 }

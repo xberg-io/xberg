@@ -1,10 +1,15 @@
 //! Kreuzberg language binding adapters
 //!
 //! Factory functions for creating adapters for different language bindings and modes:
-//! - Python: sync, async, batch
-//! - TypeScript/Node: async, batch
-//! - Ruby: sync, batch
-//! - Elixir: sync, batch
+//! - Python: single, batch
+//! - TypeScript/Node: single, batch
+//! - Ruby: single, batch
+//! - Elixir: single, batch
+//! - PHP: single, batch
+//! - Go: single, batch
+//! - Java: single, batch
+//! - C#: single, batch
+//! - WASM: single, batch
 
 use crate::Result;
 use crate::adapters::subprocess::SubprocessAdapter;
@@ -207,26 +212,15 @@ fn build_library_env() -> Result<Vec<(String, String)>> {
     Ok(envs)
 }
 
-/// Create Python sync adapter (extract_file)
-pub fn create_python_sync_adapter() -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.py")?;
-    let (command, mut args) = find_python()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push("sync".to_string());
-
-    Ok(SubprocessAdapter::new("kreuzberg-python-sync", command, args, vec![]))
-}
-
-/// Create Python async adapter (extract_file_async)
-pub fn create_python_async_adapter() -> Result<SubprocessAdapter> {
+/// Create Python adapter (extract_file_async)
+pub fn create_python_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract.py")?;
     let (command, mut args) = find_python()?;
 
     args.push(script_path.to_string_lossy().to_string());
     args.push("async".to_string());
 
-    Ok(SubprocessAdapter::new("kreuzberg-python-async", command, args, vec![]))
+    Ok(SubprocessAdapter::new("kreuzberg-python", command, args, vec![]))
 }
 
 /// Create Python batch adapter (batch_extract_file)
@@ -245,15 +239,15 @@ pub fn create_python_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
-/// Create Node async adapter (extractFile)
-pub fn create_node_async_adapter() -> Result<SubprocessAdapter> {
+/// Create Node adapter (extractFile)
+pub fn create_node_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract.ts")?;
     let (command, mut args) = find_node()?;
 
     args.push(script_path.to_string_lossy().to_string());
     args.push("async".to_string());
 
-    Ok(SubprocessAdapter::new("kreuzberg-node-async", command, args, vec![]))
+    Ok(SubprocessAdapter::new("kreuzberg-node", command, args, vec![]))
 }
 
 /// Create Node batch adapter (batchExtractFile)
@@ -272,31 +266,15 @@ pub fn create_node_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
-/// Create Node async-batch adapter (Promise.all extractFile)
-pub fn create_node_async_batch_adapter() -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.ts")?;
-    let (command, mut args) = find_node()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push("async-batch".to_string());
-
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-node-async-batch",
-        command,
-        args,
-        vec![],
-    ))
-}
-
-/// Create WASM async adapter (extractFile via @kreuzberg/wasm)
-pub fn create_wasm_async_adapter() -> Result<SubprocessAdapter> {
+/// Create WASM adapter (extractFile via @kreuzberg/wasm)
+pub fn create_wasm_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract_wasm.ts")?;
     let (command, mut args) = find_node()?;
 
     args.push(script_path.to_string_lossy().to_string());
     args.push("async".to_string());
 
-    Ok(SubprocessAdapter::new("kreuzberg-wasm-async", command, args, vec![]))
+    Ok(SubprocessAdapter::new("kreuzberg-wasm", command, args, vec![]))
 }
 
 /// Create WASM batch adapter (Promise.all extractFile via @kreuzberg/wasm)
@@ -315,8 +293,8 @@ pub fn create_wasm_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
-/// Create Ruby sync adapter (extract_file)
-pub fn create_ruby_sync_adapter() -> Result<SubprocessAdapter> {
+/// Create Ruby adapter (extract_file)
+pub fn create_ruby_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract.rb")?;
     let (command, mut args) = find_ruby()?;
 
@@ -329,7 +307,7 @@ pub fn create_ruby_sync_adapter() -> Result<SubprocessAdapter> {
     args.push("sync".to_string());
 
     let env = build_library_env()?;
-    Ok(SubprocessAdapter::new("kreuzberg-ruby-sync", command, args, env))
+    Ok(SubprocessAdapter::new("kreuzberg-ruby", command, args, env))
 }
 
 /// Create Ruby batch adapter (batch_extract_file)
@@ -354,8 +332,8 @@ pub fn create_ruby_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
-/// Create Go sync adapter
-pub fn create_go_sync_adapter() -> Result<SubprocessAdapter> {
+/// Create Go adapter
+pub fn create_go_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract_go.go")?;
     let scripts_dir = script_path
         .parent()
@@ -371,7 +349,7 @@ pub fn create_go_sync_adapter() -> Result<SubprocessAdapter> {
     if env::var("KREUZBERG_BENCHMARK_DEBUG").is_ok() {
         env.push(("KREUZBERG_BENCHMARK_DEBUG".to_string(), "true".to_string()));
     }
-    let mut adapter = SubprocessAdapter::new("kreuzberg-go-sync", command, args, env);
+    let mut adapter = SubprocessAdapter::new("kreuzberg-go", command, args, env);
     adapter.set_working_dir(scripts_dir);
     Ok(adapter)
 }
@@ -398,8 +376,8 @@ pub fn create_go_batch_adapter() -> Result<SubprocessAdapter> {
     Ok(adapter)
 }
 
-/// Create Java sync adapter with warmup phase
-pub fn create_java_sync_adapter() -> Result<SubprocessAdapter> {
+/// Create Java adapter with warmup phase
+pub fn create_java_adapter() -> Result<SubprocessAdapter> {
     let _script_path = get_script_path("KreuzbergExtractJava.java")?;
     let command = find_java()?;
     let classpath = workspace_root()?.join("packages/java/target/classes");
@@ -421,7 +399,7 @@ pub fn create_java_sync_adapter() -> Result<SubprocessAdapter> {
         "KreuzbergExtractJava".to_string(),
         "sync".to_string(),
     ];
-    Ok(SubprocessAdapter::new("kreuzberg-java-sync", command, args, env))
+    Ok(SubprocessAdapter::new("kreuzberg-java", command, args, env))
 }
 
 /// Create Java batch adapter
@@ -455,8 +433,8 @@ pub fn create_java_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
-/// Create C# sync adapter
-pub fn create_csharp_sync_adapter() -> Result<SubprocessAdapter> {
+/// Create C# adapter
+pub fn create_csharp_adapter() -> Result<SubprocessAdapter> {
     let command = find_dotnet()?;
     let project = workspace_root()?.join("packages/csharp/Benchmark/Benchmark.csproj");
     if !project.exists() {
@@ -475,7 +453,7 @@ pub fn create_csharp_sync_adapter() -> Result<SubprocessAdapter> {
     let lib_dir = native_library_dir()?;
     let mut env = build_library_env()?;
     env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir.to_string_lossy().to_string()));
-    Ok(SubprocessAdapter::new("kreuzberg-csharp-sync", command, args, env))
+    Ok(SubprocessAdapter::new("kreuzberg-csharp", command, args, env))
 }
 
 /// Create C# batch adapter
@@ -506,8 +484,8 @@ pub fn create_csharp_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
-/// Create PHP sync adapter (extract_file)
-pub fn create_php_sync_adapter() -> Result<SubprocessAdapter> {
+/// Create PHP adapter (extract_file)
+pub fn create_php_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract.php")?;
     let (command, mut args) = find_php()?;
 
@@ -515,7 +493,7 @@ pub fn create_php_sync_adapter() -> Result<SubprocessAdapter> {
     args.push("sync".to_string());
 
     let env = build_library_env()?;
-    Ok(SubprocessAdapter::new("kreuzberg-php-sync", command, args, env))
+    Ok(SubprocessAdapter::new("kreuzberg-php", command, args, env))
 }
 
 /// Create PHP batch adapter (batch_extract_files)
@@ -535,8 +513,8 @@ pub fn create_php_batch_adapter() -> Result<SubprocessAdapter> {
     ))
 }
 
-/// Create Elixir sync adapter (extract_file)
-pub fn create_elixir_sync_adapter() -> Result<SubprocessAdapter> {
+/// Create Elixir adapter (extract_file)
+pub fn create_elixir_adapter() -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract.exs")?;
     let command = find_elixir()?;
 
@@ -566,7 +544,7 @@ pub fn create_elixir_sync_adapter() -> Result<SubprocessAdapter> {
         }
     }
 
-    Ok(SubprocessAdapter::new("kreuzberg-elixir-sync", command, args, env))
+    Ok(SubprocessAdapter::new("kreuzberg-elixir", command, args, env))
 }
 
 /// Create Elixir batch adapter (batch_extract_files)

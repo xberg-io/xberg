@@ -31,18 +31,18 @@ KREUZBERG_BENCHMARK_DEBUG=true php kreuzberg_extract.php sync /path/to/document.
 ### 2. Adapter Functions
 **Location**: `/tools/benchmark-harness/src/adapters/kreuzberg.rs`
 
-Two new adapter factory functions were added:
-- `create_php_sync_adapter()` - Creates adapter for synchronous PHP extraction
+Two adapter factory functions were added:
+- `create_php_adapter()` - Creates adapter for PHP extraction (single mode)
 - `create_php_batch_adapter()` - Creates adapter for batch PHP extraction
 
 ### 3. Main Registration
 **Location**: `/tools/benchmark-harness/src/main.rs`
 
 PHP adapters are now registered alongside other language bindings during benchmark initialization:
-- `kreuzberg-php-sync` - Synchronous single-file extraction
+- `kreuzberg-php` - Single-file extraction
 - `kreuzberg-php-batch` - Batch multi-file extraction
 
-The total available Kreuzberg bindings count has been updated from 13 to 15.
+Each adapter runs with a matrix of [single-file, batch] execution modes for comprehensive performance testing.
 
 ## Prerequisites
 
@@ -105,13 +105,13 @@ cargo build --release -p benchmark-harness
 # Run benchmarks for all Kreuzberg bindings (including PHP)
 ./target/release/benchmark-harness run \
     --fixtures tools/benchmark-harness/fixtures \
-    --frameworks kreuzberg-php-sync,kreuzberg-php-batch \
+    --frameworks kreuzberg-php,kreuzberg-php-batch \
     --output results/php-benchmark
 
 # Run comparison across multiple bindings
 ./target/release/benchmark-harness run \
     --fixtures tools/benchmark-harness/fixtures \
-    --frameworks kreuzberg-native,kreuzberg-python-sync,kreuzberg-ruby-sync,kreuzberg-php-sync,kreuzberg-node-async \
+    --frameworks kreuzberg-native,kreuzberg-python,kreuzberg-ruby,kreuzberg-php,kreuzberg-node \
     --output results/multi-language
 ```
 
@@ -121,7 +121,7 @@ cargo build --release -p benchmark-harness
 ```bash
 ./target/release/benchmark-harness run \
     --fixtures tools/benchmark-harness/fixtures/pdf_small.json \
-    --frameworks kreuzberg-php-sync \
+    --frameworks kreuzberg-php \
     --mode single-file \
     --output results/php-latency
 ```
@@ -183,7 +183,7 @@ To compare PHP performance with other language bindings:
 ```bash
 ./target/release/benchmark-harness run \
     --fixtures tools/benchmark-harness/fixtures \
-    --frameworks kreuzberg-native,kreuzberg-python-sync,kreuzberg-ruby-sync,kreuzberg-php-sync,kreuzberg-node-async,kreuzberg-go-sync \
+    --frameworks kreuzberg-native,kreuzberg-python,kreuzberg-ruby,kreuzberg-php,kreuzberg-node,kreuzberg-go \
     --output results/language-comparison \
     --format both
 ```
@@ -209,7 +209,7 @@ Error: Could not find autoload.php
 
 ### PHP Not Found
 ```
-[adapter] ✗ kreuzberg-php-sync (initialization failed: PHP not found)
+[adapter] ✗ kreuzberg-php (initialization failed: PHP not found)
 ```
 **Solution**: Install PHP 8.2+ and ensure it's in your PATH
 

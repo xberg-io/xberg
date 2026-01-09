@@ -324,19 +324,24 @@ fn aggregate_cold_starts(results: &[&BenchmarkResult]) -> Option<DurationPercent
 /// Extract framework name and mode from framework string
 ///
 /// Returns (framework_name, mode) where mode is one of:
-/// - "sync" if ends with "-sync"
-/// - "async" if ends with "-async"
-/// - "batch" if ends with "-batch"
+/// - "batch" if ends with "-batch" (after normalizing -sync/-async)
 /// - "single" otherwise (default)
+///
+/// The -sync/-async suffixes are stripped as they represent implementation details
+/// (blocking vs non-blocking execution), not distinct benchmark modes.
+/// We benchmark only the best/default implementation per language.
 fn extract_framework_and_mode(framework_name: &str) -> (&str, &str) {
-    if let Some(base) = framework_name.strip_suffix("-sync") {
-        (base, "sync")
-    } else if let Some(base) = framework_name.strip_suffix("-async") {
-        (base, "async")
-    } else if let Some(base) = framework_name.strip_suffix("-batch") {
+    // First, normalize by stripping -sync/-async suffixes (implementation detail, not a mode)
+    let normalized = framework_name
+        .strip_suffix("-sync")
+        .or_else(|| framework_name.strip_suffix("-async"))
+        .unwrap_or(framework_name);
+
+    // Now check for batch mode
+    if let Some(base) = normalized.strip_suffix("-batch") {
         (base, "batch")
     } else {
-        (framework_name, "single")
+        (normalized, "single")
     }
 }
 
@@ -412,10 +417,19 @@ mod tests {
 
     #[test]
     fn test_extract_framework_and_mode() {
-        assert_eq!(extract_framework_and_mode("kreuzberg-sync"), ("kreuzberg", "sync"));
-        assert_eq!(extract_framework_and_mode("kreuzberg-async"), ("kreuzberg", "async"));
+        // Sync/async suffixes are normalized to "single" mode
+        assert_eq!(extract_framework_and_mode("kreuzberg-sync"), ("kreuzberg", "single"));
+        assert_eq!(extract_framework_and_mode("kreuzberg-async"), ("kreuzberg", "single"));
+        assert_eq!(extract_framework_and_mode("python-sync"), ("python", "single"));
+        assert_eq!(extract_framework_and_mode("python-async"), ("python", "single"));
+
+        // Batch mode is preserved
         assert_eq!(extract_framework_and_mode("kreuzberg-batch"), ("kreuzberg", "batch"));
+        assert_eq!(extract_framework_and_mode("python-batch"), ("python", "batch"));
+
+        // No suffix defaults to single mode
         assert_eq!(extract_framework_and_mode("kreuzberg"), ("kreuzberg", "single"));
+        assert_eq!(extract_framework_and_mode("docling"), ("docling", "single"));
     }
 
     #[test]
@@ -452,15 +466,16 @@ mod tests {
         let aggregated = aggregate_new_format(&results);
 
         assert_eq!(aggregated.by_framework_mode.len(), 2);
-        assert!(aggregated.by_framework_mode.contains_key("kreuzberg:sync"));
+        // "kreuzberg-sync" is normalized to "kreuzberg:single"
+        assert!(aggregated.by_framework_mode.contains_key("kreuzberg:single"));
         assert!(aggregated.by_framework_mode.contains_key("kreuzberg:batch"));
 
-        let sync_agg = &aggregated.by_framework_mode["kreuzberg:sync"];
-        assert_eq!(sync_agg.framework, "kreuzberg");
-        assert_eq!(sync_agg.mode, "sync");
-        assert!(sync_agg.cold_start.is_some());
+        let single_agg = &aggregated.by_framework_mode["kreuzberg:single"];
+        assert_eq!(single_agg.framework, "kreuzberg");
+        assert_eq!(single_agg.mode, "single");
+        assert!(single_agg.cold_start.is_some());
 
-        let pdf_agg = &sync_agg.by_file_type["pdf"];
+        let pdf_agg = &single_agg.by_file_type["pdf"];
         assert!(pdf_agg.no_ocr.is_some());
         assert!(pdf_agg.with_ocr.is_some());
 

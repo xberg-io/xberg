@@ -4,6 +4,15 @@
 //! document extraction, with percentile calculations for performance analysis.
 //! When the "memory-profiling" feature is enabled, provides additional allocation
 //! hotspot analysis and heap snapshot tracking.
+//!
+//! # Memory Measurement Methodology
+//!
+//! Memory measurements include the entire process tree (parent + all child processes).
+//! This is critical for accurate measurement of extraction frameworks that spawn
+//! subprocesses (e.g., pandoc, tika). Without this, measurements would only capture
+//! the ~12MB wrapper process memory, not the actual extraction work.
+//!
+//! Changed in v4.0.0-rc.30: Previously only measured parent process memory.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -84,6 +93,78 @@ pub struct ResourceSample {
     pub timestamp_ms: u64,
 }
 
+/// Collect all child process IDs for a given parent process
+///
+/// Recursively finds all descendants in the process tree by iterating through
+/// all system processes and checking parent PIDs.
+fn get_child_processes(parent_pid: Pid, system: &System) -> Vec<Pid> {
+    system
+        .processes()
+        .iter()
+        .filter_map(|(pid, proc)| {
+            if proc.parent() == Some(parent_pid) {
+                Some(*pid)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Collect total memory usage from a process and all its descendants
+///
+/// Recursively traverses the process tree, summing RSS memory from the parent
+/// and all child processes. This is essential for accurately measuring frameworks
+/// that spawn subprocesses for extraction work.
+///
+/// # Arguments
+/// * `pid` - The root process ID to measure
+/// * `system` - System instance with refreshed process information
+///
+/// # Returns
+/// Total RSS memory in bytes for the entire process tree
+fn collect_process_tree_memory(pid: Pid, system: &System) -> u64 {
+    let mut total = 0;
+
+    // Add parent process memory
+    if let Some(proc) = system.process(pid) {
+        total += proc.memory();
+
+        // Recursively add all child processes
+        for child_pid in get_child_processes(pid, system) {
+            total += collect_process_tree_memory(child_pid, system);
+        }
+    }
+
+    total
+}
+
+/// Collect total virtual memory usage from a process and all its descendants
+///
+/// Similar to collect_process_tree_memory but for virtual memory size.
+///
+/// # Arguments
+/// * `pid` - The root process ID to measure
+/// * `system` - System instance with refreshed process information
+///
+/// # Returns
+/// Total virtual memory in bytes for the entire process tree
+fn collect_process_tree_vm(pid: Pid, system: &System) -> u64 {
+    let mut total = 0;
+
+    // Add parent process VM
+    if let Some(proc) = system.process(pid) {
+        total += proc.virtual_memory();
+
+        // Recursively add all child processes
+        for child_pid in get_child_processes(pid, system) {
+            total += collect_process_tree_vm(child_pid, system);
+        }
+    }
+
+    total
+}
+
 /// Resource monitor that samples CPU and memory usage periodically
 ///
 /// Tracks both low-level CPU/memory metrics and optional heap allocation data.
@@ -152,7 +233,9 @@ impl ResourceMonitor {
             while running.load(Ordering::SeqCst) {
                 system.refresh_cpu_usage();
 
-                system.refresh_processes_specifics(ProcessesToUpdate::Some(&[pid]), false, refresh_kind);
+                // Refresh all processes to track child processes spawned by the benchmark
+                // This is critical for accurate memory measurement of subprocess-based frameworks
+                system.refresh_processes_specifics(ProcessesToUpdate::All, false, refresh_kind);
 
                 if let Some(process) = system.process(pid) {
                     let elapsed = start.elapsed();
@@ -160,9 +243,13 @@ impl ResourceMonitor {
                     let cpu_count = num_cpus::get() as f64;
                     let normalized_cpu_percent = (process.cpu_usage() as f64) / cpu_count;
 
+                    // Collect memory from entire process tree (parent + all children)
+                    let tree_memory = collect_process_tree_memory(pid, &system);
+                    let tree_vm = collect_process_tree_vm(pid, &system);
+
                     let sample = ResourceSample {
-                        memory_bytes: process.memory(),
-                        vm_size_bytes: process.virtual_memory(),
+                        memory_bytes: tree_memory,
+                        vm_size_bytes: tree_vm,
                         page_faults: 0,
                         cpu_percent: normalized_cpu_percent,
                         timestamp_ms: elapsed.as_millis() as u64,
@@ -174,10 +261,9 @@ impl ResourceMonitor {
                     let _heap_allocated: Option<u64> = None;
 
                     #[cfg(feature = "memory-profiling")]
-                    let snapshot =
-                        MemorySnapshot::new(elapsed, process.memory(), process.virtual_memory(), 0, heap_allocated);
+                    let snapshot = MemorySnapshot::new(elapsed, tree_memory, tree_vm, 0, heap_allocated);
                     #[cfg(not(feature = "memory-profiling"))]
-                    let snapshot = MemorySnapshot::new(elapsed, process.memory(), process.virtual_memory(), 0);
+                    let snapshot = MemorySnapshot::new(elapsed, tree_memory, tree_vm, 0);
 
                     samples.lock().await.push(sample);
                     snapshots.lock().await.push(snapshot);

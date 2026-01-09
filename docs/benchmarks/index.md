@@ -35,6 +35,37 @@ The charts below are generated from the most recent benchmark workflow run.
   <p>Your browser does not support iframes. Please visit the <a href="/benchmarks/app/">interactive benchmark visualizer</a> directly.</p>
 </iframe>
 
+<script>
+(function() {
+  const iframe = document.querySelector('iframe[title="Interactive Benchmark Visualizer"]');
+  if (!iframe) return;
+
+  const sendTheme = () => {
+    const scheme = document.body.getAttribute('data-md-color-scheme');
+    const isDark = scheme === 'slate';
+    iframe.contentWindow.postMessage({
+      type: 'theme',
+      value: isDark ? 'dark' : 'light'
+    }, '*');
+  };
+
+  // Send theme when iframe loads
+  iframe.addEventListener('load', () => setTimeout(sendTheme, 100));
+
+  // Send theme if iframe already loaded
+  if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') {
+    setTimeout(sendTheme, 100);
+  }
+
+  // Watch for theme changes
+  const observer = new MutationObserver(sendTheme);
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: ['data-md-color-scheme']
+  });
+})();
+</script>
+
 </div>
 
 ## Direct Data Access

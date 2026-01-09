@@ -71,17 +71,17 @@ echo ""
 
 mkdir -p "$OUTPUT_DIR"
 
-echo "Example 1: PHP sync adapter on small PDFs"
+echo "Example 1: PHP adapter on small PDFs"
 "$BENCHMARK_BIN" run \
   --fixtures "$FIXTURES_DIR/pdf_small.json" \
-  --frameworks kreuzberg-php-sync \
-  --output "$OUTPUT_DIR/sync-small-pdf" \
+  --frameworks kreuzberg-php \
+  --output "$OUTPUT_DIR/php-small-pdf" \
   --mode single-file \
   --iterations 3 \
   --format json
 
 echo ""
-echo "Results: $OUTPUT_DIR/sync-small-pdf/"
+echo "Results: $OUTPUT_DIR/php-small-pdf/"
 echo ""
 
 echo "Example 2: PHP batch adapter on multiple document types"
@@ -100,7 +100,7 @@ echo ""
 echo "Example 3: Compare PHP with Python, Ruby, and Node"
 "$BENCHMARK_BIN" run \
   --fixtures "$FIXTURES_DIR/pdf_medium.json" \
-  --frameworks kreuzberg-php-sync,kreuzberg-python-sync,kreuzberg-ruby-sync,kreuzberg-node-async \
+  --frameworks kreuzberg-php,kreuzberg-python,kreuzberg-ruby,kreuzberg-node \
   --output "$OUTPUT_DIR/language-comparison" \
   --mode single-file \
   --iterations 5 \

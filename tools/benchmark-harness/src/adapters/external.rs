@@ -158,7 +158,7 @@ fn get_tika_jar_path() -> Result<PathBuf> {
 }
 
 /// Creates a subprocess adapter for Apache Tika (single-file mode)
-pub fn create_tika_sync_adapter() -> Result<SubprocessAdapter> {
+pub fn create_tika_adapter() -> Result<SubprocessAdapter> {
     let jar_path = get_tika_jar_path()?;
     let script_path = get_script_path("TikaExtract.java")?;
     let command = find_java()?;
@@ -170,7 +170,7 @@ pub fn create_tika_sync_adapter() -> Result<SubprocessAdapter> {
         "sync".to_string(),
     ];
 
-    Ok(SubprocessAdapter::new("tika-sync", command, args, vec![]))
+    Ok(SubprocessAdapter::new("tika", command, args, vec![]))
 }
 
 /// Creates a subprocess adapter for Apache Tika (batch mode)
@@ -269,7 +269,7 @@ mod tests {
         let _ = create_unstructured_adapter();
         let _ = create_markitdown_adapter();
         let _ = create_pandoc_adapter();
-        let _ = create_tika_sync_adapter();
+        let _ = create_tika_adapter();
         let _ = create_tika_batch_adapter();
         let _ = create_pymupdf4llm_adapter();
         let _ = create_pdfplumber_adapter();

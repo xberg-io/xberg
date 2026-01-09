@@ -11,11 +11,13 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Select } from '@/components/ui/select'
 import { FileTypeFilter } from '@/components/filters/FileTypeFilter'
 import { formatFramework } from '@/transformers/chartTransformers'
-import { getFrameworkCapabilities, filterFrameworksByFileType } from '@/utils/frameworkCapabilities'
+import { getFrameworkCapabilities } from '@/utils/frameworkCapabilities'
 
-type SortField = 'framework' | 'mode' | 'fileType' | 'ocrMode' | 'throughputP50' | 'throughputP95' | 'throughputP99' | 'memoryP50' | 'memoryP95' | 'memoryP99' | 'durationP50' | 'durationP95' | 'durationP99' | 'coldStart' | 'diskSize'
+type MetricView = 'throughput' | 'duration' | 'memory' | 'all'
+type SortField = 'framework' | 'mode' | 'fileType' | 'ocrMode' | 'throughputP50' | 'throughputP95' | 'throughputP99' | 'memoryP50' | 'memoryP95' | 'memoryP99' | 'durationP50' | 'durationP95' | 'durationP99' | 'coldStart' | 'diskSize' | 'successRate'
 type SortOrder = 'asc' | 'desc'
 
 interface TableRow {
@@ -35,12 +37,14 @@ interface TableRow {
   durationP99: number
   coldStart: number | null
   diskSize: number | null
+  successRate: number
 }
 
 const ROWS_PER_PAGE = 50
 
 export function DetailedComparisonsPage() {
   const { data, loading, error } = useBenchmark()
+  const [metricView, setMetricView] = useState<MetricView>('throughput')
   const [sortField, setSortField] = useState<SortField>('framework')
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
   const [selectedFileTypes, setSelectedFileTypes] = useState<string[]>([])
@@ -94,6 +98,7 @@ export function DetailedComparisonsPage() {
             durationP99: fileTypeMetrics.no_ocr.duration.p99,
             coldStart: frameworkData.cold_start?.p50_ms ?? null,
             diskSize: data.disk_sizes[frameworkData.framework]?.size_bytes ?? null,
+            successRate: fileTypeMetrics.no_ocr.success_rate_percent ?? 100,
           })
         }
 
@@ -116,6 +121,7 @@ export function DetailedComparisonsPage() {
             durationP99: fileTypeMetrics.with_ocr.duration.p99,
             coldStart: frameworkData.cold_start?.p50_ms ?? null,
             diskSize: data.disk_sizes[frameworkData.framework]?.size_bytes ?? null,
+            successRate: fileTypeMetrics.with_ocr.success_rate_percent ?? 100,
           })
         }
       })
@@ -188,6 +194,11 @@ export function DetailedComparisonsPage() {
     setCurrentPage(1) // Reset to first page on filter
   }, [])
 
+  const handleMetricViewChange = useCallback((value: string) => {
+    setMetricView(value as MetricView)
+    setCurrentPage(1) // Reset to first page on view change
+  }, [])
+
   if (loading) {
     return (
       <div className="container mx-auto p-4">
@@ -216,40 +227,69 @@ export function DetailedComparisonsPage() {
       <h1 className="text-4xl font-bold mb-6">Detailed Comparisons</h1>
 
       {/* Filter Section */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end">
-        <FileTypeFilter
-          selectedFileTypes={selectedFileTypes}
-          onFileTypesChange={handleFileTypesChange}
-          data-testid="filters-file-type"
-        />
-        <div className="flex-1">
-          <label htmlFor="framework-search" className="block text-sm font-medium mb-2 text-foreground">
-            Search Framework
-          </label>
-          <input
-            id="framework-search"
-            type="text"
-            placeholder="Filter by framework name..."
-            value={frameworkFilter}
-            onChange={(e) => handleFrameworkFilterChange(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            data-testid="framework-search-input"
+      <div className="mb-6 flex flex-col gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <FileTypeFilter
+            selectedFileTypes={selectedFileTypes}
+            onFileTypesChange={handleFileTypesChange}
+            data-testid="filters-file-type"
           />
+          <div className="flex-1">
+            <label htmlFor="framework-search" className="block text-sm font-medium mb-2 text-foreground">
+              Search Framework
+            </label>
+            <input
+              id="framework-search"
+              type="text"
+              placeholder="Filter by framework name..."
+              value={frameworkFilter}
+              onChange={(e) => handleFrameworkFilterChange(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-input rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              data-testid="framework-search-input"
+            />
+          </div>
+          {(selectedFileTypes.length > 0 || frameworkFilter) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedFileTypes([])
+                setFrameworkFilter('')
+                setCurrentPage(1)
+              }}
+              data-testid="clear-filters-button"
+            >
+              Clear Filters
+            </Button>
+          )}
         </div>
-        {(selectedFileTypes.length > 0 || frameworkFilter) && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setSelectedFileTypes([])
-              setFrameworkFilter('')
-              setCurrentPage(1)
-            }}
-            data-testid="clear-filters-button"
-          >
-            Clear Filters
-          </Button>
-        )}
+
+        {/* Metric View Selector */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="metric-view" className="block text-sm font-medium text-foreground">
+            View Metrics
+          </label>
+          <div className="flex flex-col sm:flex-row gap-4 items-start">
+            <Select
+              id="metric-view"
+              value={metricView}
+              onChange={(e) => handleMetricViewChange(e.target.value)}
+              data-testid="metric-view-selector"
+              className="w-full sm:w-64"
+            >
+              <option value="throughput">Throughput</option>
+              <option value="duration">Duration</option>
+              <option value="memory">Memory</option>
+              <option value="all">All Metrics</option>
+            </Select>
+            <div className="text-sm text-muted-foreground flex-1">
+              {metricView === 'throughput' && 'Focus on processing speed (MB/s) and success rate'}
+              {metricView === 'duration' && 'Focus on processing time (ms), including cold start'}
+              {metricView === 'memory' && 'Focus on memory usage (MB) and disk footprint'}
+              {metricView === 'all' && 'View all available metrics across all categories'}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Results Count */}
@@ -270,7 +310,7 @@ export function DetailedComparisonsPage() {
         <div className="overflow-x-auto">
           <Table data-testid="table-comparisons" className="w-full">
             <TableHeader className="bg-background dark:bg-background sticky top-0 z-10 border-b-2 border-border">
-              <TableRow className="">
+              <TableRow>
                 <TableHead data-testid="table-header-framework" className="min-w-32 font-semibold text-foreground">
                   <SortButton field="framework" label="Framework" />
                 </TableHead>
@@ -283,45 +323,70 @@ export function DetailedComparisonsPage() {
                 <TableHead data-testid="table-header-ocr-mode" className="min-w-24 font-semibold text-foreground">
                   <SortButton field="ocrMode" label="OCR Mode" />
                 </TableHead>
-                <TableHead data-testid="table-header-throughput-p50" className="min-w-32 text-right font-semibold text-foreground">
-                  <SortButton field="throughputP50" label="Throughput p50 (MB/s)" />
-                </TableHead>
-                <TableHead data-testid="table-header-throughput-p95" className="min-w-32 text-right font-semibold text-foreground">
-                  <SortButton field="throughputP95" label="Throughput p95 (MB/s)" />
-                </TableHead>
-                <TableHead data-testid="table-header-throughput-p99" className="min-w-32 text-right font-semibold text-foreground">
-                  <SortButton field="throughputP99" label="Throughput p99 (MB/s)" />
-                </TableHead>
-                <TableHead data-testid="table-header-memory-p50" className="min-w-28 text-right font-semibold text-foreground">
-                  <SortButton field="memoryP50" label="Memory p50 (MB)" />
-                </TableHead>
-                <TableHead data-testid="table-header-memory-p95" className="min-w-28 text-right font-semibold text-foreground">
-                  <SortButton field="memoryP95" label="Memory p95 (MB)" />
-                </TableHead>
-                <TableHead data-testid="table-header-memory-p99" className="min-w-28 text-right font-semibold text-foreground">
-                  <SortButton field="memoryP99" label="Memory p99 (MB)" />
-                </TableHead>
-                <TableHead data-testid="table-header-duration-p50" className="min-w-28 text-right font-semibold text-foreground">
-                  <SortButton field="durationP50" label="Duration p50 (ms)" />
-                </TableHead>
-                <TableHead data-testid="table-header-duration-p95" className="min-w-28 text-right font-semibold text-foreground">
-                  <SortButton field="durationP95" label="Duration p95 (ms)" />
-                </TableHead>
-                <TableHead data-testid="table-header-duration-p99" className="min-w-28 text-right font-semibold text-foreground">
-                  <SortButton field="durationP99" label="Duration p99 (ms)" />
-                </TableHead>
-                <TableHead data-testid="table-header-cold-start" className="min-w-28 text-right font-semibold text-foreground">
-                  <SortButton field="coldStart" label="Cold Start (ms)" />
-                </TableHead>
-                <TableHead data-testid="table-header-disk-size" className="min-w-24 text-right font-semibold text-foreground">
-                  <SortButton field="diskSize" label="Disk Size" />
-                </TableHead>
+
+                {/* Throughput View */}
+                {(metricView === 'throughput' || metricView === 'all') && (
+                  <>
+                    <TableHead data-testid="table-header-throughput-p50" className="min-w-32 text-right font-semibold text-foreground">
+                      <SortButton field="throughputP50" label="Throughput p50 (MB/s)" />
+                    </TableHead>
+                    <TableHead data-testid="table-header-throughput-p95" className="min-w-32 text-right font-semibold text-foreground">
+                      <SortButton field="throughputP95" label="Throughput p95 (MB/s)" />
+                    </TableHead>
+                    <TableHead data-testid="table-header-throughput-p99" className="min-w-32 text-right font-semibold text-foreground">
+                      <SortButton field="throughputP99" label="Throughput p99 (MB/s)" />
+                    </TableHead>
+                  </>
+                )}
+
+                {/* Duration View */}
+                {(metricView === 'duration' || metricView === 'all') && (
+                  <>
+                    <TableHead data-testid="table-header-duration-p50" className="min-w-28 text-right font-semibold text-foreground">
+                      <SortButton field="durationP50" label="Duration p50 (ms)" />
+                    </TableHead>
+                    <TableHead data-testid="table-header-duration-p95" className="min-w-28 text-right font-semibold text-foreground">
+                      <SortButton field="durationP95" label="Duration p95 (ms)" />
+                    </TableHead>
+                    <TableHead data-testid="table-header-duration-p99" className="min-w-28 text-right font-semibold text-foreground">
+                      <SortButton field="durationP99" label="Duration p99 (ms)" />
+                    </TableHead>
+                    <TableHead data-testid="table-header-cold-start" className="min-w-28 text-right font-semibold text-foreground">
+                      <SortButton field="coldStart" label="Cold Start (ms)" />
+                    </TableHead>
+                  </>
+                )}
+
+                {/* Memory View */}
+                {(metricView === 'memory' || metricView === 'all') && (
+                  <>
+                    <TableHead data-testid="table-header-memory-p50" className="min-w-28 text-right font-semibold text-foreground">
+                      <SortButton field="memoryP50" label="Memory p50 (MB)" />
+                    </TableHead>
+                    <TableHead data-testid="table-header-memory-p95" className="min-w-28 text-right font-semibold text-foreground">
+                      <SortButton field="memoryP95" label="Memory p95 (MB)" />
+                    </TableHead>
+                    <TableHead data-testid="table-header-memory-p99" className="min-w-28 text-right font-semibold text-foreground">
+                      <SortButton field="memoryP99" label="Memory p99 (MB)" />
+                    </TableHead>
+                    <TableHead data-testid="table-header-disk-size" className="min-w-24 text-right font-semibold text-foreground">
+                      <SortButton field="diskSize" label="Disk Size" />
+                    </TableHead>
+                  </>
+                )}
+
+                {/* Success Rate - shown in all focused views but not in "all" */}
+                {metricView !== 'all' && (
+                  <TableHead data-testid="table-header-success-rate" className="min-w-28 text-right font-semibold text-foreground">
+                    <SortButton field="successRate" label="Success Rate (%)" />
+                  </TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedData.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={15} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={metricView === 'all' ? 15 : 8} className="text-center text-muted-foreground py-8">
                     {totalRows === 0
                       ? 'No benchmark data available'
                       : 'No results match your filter criteria'}
@@ -340,39 +405,64 @@ export function DetailedComparisonsPage() {
                     <TableCell data-testid={`cell-mode-${row.key}`}>{row.mode}</TableCell>
                     <TableCell data-testid={`cell-fileType-${row.key}`}>{row.fileType}</TableCell>
                     <TableCell data-testid={`cell-ocrMode-${row.key}`}>{row.ocrMode === 'no_ocr' ? 'No OCR' : 'With OCR'}</TableCell>
-                    <TableCell className="text-right" data-testid={`cell-throughputP50-${row.key}`}>
-                      {row.throughputP50.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-throughputP95-${row.key}`}>
-                      {row.throughputP95.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-throughputP99-${row.key}`}>
-                      {row.throughputP99.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-memoryP50-${row.key}`}>
-                      {row.memoryP50.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-memoryP95-${row.key}`}>
-                      {row.memoryP95.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-memoryP99-${row.key}`}>
-                      {row.memoryP99.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-durationP50-${row.key}`}>
-                      {row.durationP50.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-durationP95-${row.key}`}>
-                      {row.durationP95.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-durationP99-${row.key}`}>
-                      {row.durationP99.toFixed(2)}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-coldStart-${row.key}`}>
-                      {row.coldStart !== null ? row.coldStart.toFixed(2) : '—'}
-                    </TableCell>
-                    <TableCell className="text-right" data-testid={`cell-diskSize-${row.key}`}>
-                      {row.diskSize !== null ? formatBytes(row.diskSize) : '—'}
-                    </TableCell>
+
+                    {/* Throughput Cells */}
+                    {(metricView === 'throughput' || metricView === 'all') && (
+                      <>
+                        <TableCell className="text-right" data-testid={`cell-throughputP50-${row.key}`}>
+                          {row.throughputP50.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`cell-throughputP95-${row.key}`}>
+                          {row.throughputP95.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`cell-throughputP99-${row.key}`}>
+                          {row.throughputP99.toFixed(2)}
+                        </TableCell>
+                      </>
+                    )}
+
+                    {/* Duration Cells */}
+                    {(metricView === 'duration' || metricView === 'all') && (
+                      <>
+                        <TableCell className="text-right" data-testid={`cell-durationP50-${row.key}`}>
+                          {row.durationP50.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`cell-durationP95-${row.key}`}>
+                          {row.durationP95.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`cell-durationP99-${row.key}`}>
+                          {row.durationP99.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`cell-coldStart-${row.key}`}>
+                          {row.coldStart !== null ? row.coldStart.toFixed(2) : '—'}
+                        </TableCell>
+                      </>
+                    )}
+
+                    {/* Memory Cells */}
+                    {(metricView === 'memory' || metricView === 'all') && (
+                      <>
+                        <TableCell className="text-right" data-testid={`cell-memoryP50-${row.key}`}>
+                          {row.memoryP50.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`cell-memoryP95-${row.key}`}>
+                          {row.memoryP95.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`cell-memoryP99-${row.key}`}>
+                          {row.memoryP99.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`cell-diskSize-${row.key}`}>
+                          {row.diskSize !== null ? formatBytes(row.diskSize) : '—'}
+                        </TableCell>
+                      </>
+                    )}
+
+                    {/* Success Rate - shown in focused views only */}
+                    {metricView !== 'all' && (
+                      <TableCell className="text-right" data-testid={`cell-successRate-${row.key}`}>
+                        {row.successRate.toFixed(2)}%
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}

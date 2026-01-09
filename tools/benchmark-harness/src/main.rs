@@ -235,33 +235,33 @@ async fn main() -> Result<()> {
             }
 
             use benchmark_harness::adapters::{
-                create_csharp_sync_adapter, create_elixir_batch_adapter, create_elixir_sync_adapter,
-                create_go_batch_adapter, create_go_sync_adapter, create_java_sync_adapter, create_node_async_adapter,
-                create_node_batch_adapter, create_php_batch_adapter, create_php_sync_adapter,
-                create_python_async_adapter, create_python_batch_adapter, create_python_sync_adapter,
-                create_ruby_batch_adapter, create_ruby_sync_adapter, create_wasm_async_adapter,
-                create_wasm_batch_adapter,
+                create_csharp_adapter, create_csharp_batch_adapter, create_elixir_adapter, create_elixir_batch_adapter,
+                create_go_adapter, create_go_batch_adapter, create_java_adapter, create_java_batch_adapter,
+                create_node_adapter, create_node_batch_adapter, create_php_adapter, create_php_batch_adapter,
+                create_python_adapter, create_python_batch_adapter, create_ruby_adapter, create_ruby_batch_adapter,
+                create_wasm_adapter, create_wasm_batch_adapter,
             };
 
-            try_register!("kreuzberg-python-sync", create_python_sync_adapter, kreuzberg_count);
-            try_register!("kreuzberg-python-async", create_python_async_adapter, kreuzberg_count);
+            try_register!("kreuzberg-python", create_python_adapter, kreuzberg_count);
             try_register!("kreuzberg-python-batch", create_python_batch_adapter, kreuzberg_count);
-            try_register!("kreuzberg-go-sync", create_go_sync_adapter, kreuzberg_count);
+            try_register!("kreuzberg-go", create_go_adapter, kreuzberg_count);
             try_register!("kreuzberg-go-batch", create_go_batch_adapter, kreuzberg_count);
-            try_register!("kreuzberg-node-async", create_node_async_adapter, kreuzberg_count);
+            try_register!("kreuzberg-node", create_node_adapter, kreuzberg_count);
             try_register!("kreuzberg-node-batch", create_node_batch_adapter, kreuzberg_count);
-            try_register!("kreuzberg-wasm-async", create_wasm_async_adapter, kreuzberg_count);
+            try_register!("kreuzberg-wasm", create_wasm_adapter, kreuzberg_count);
             try_register!("kreuzberg-wasm-batch", create_wasm_batch_adapter, kreuzberg_count);
-            try_register!("kreuzberg-ruby-sync", create_ruby_sync_adapter, kreuzberg_count);
+            try_register!("kreuzberg-ruby", create_ruby_adapter, kreuzberg_count);
             try_register!("kreuzberg-ruby-batch", create_ruby_batch_adapter, kreuzberg_count);
-            try_register!("kreuzberg-java-sync", create_java_sync_adapter, kreuzberg_count);
-            try_register!("kreuzberg-csharp-sync", create_csharp_sync_adapter, kreuzberg_count);
-            try_register!("kreuzberg-php-sync", create_php_sync_adapter, kreuzberg_count);
+            try_register!("kreuzberg-java", create_java_adapter, kreuzberg_count);
+            try_register!("kreuzberg-java-batch", create_java_batch_adapter, kreuzberg_count);
+            try_register!("kreuzberg-csharp", create_csharp_adapter, kreuzberg_count);
+            try_register!("kreuzberg-csharp-batch", create_csharp_batch_adapter, kreuzberg_count);
+            try_register!("kreuzberg-php", create_php_adapter, kreuzberg_count);
             try_register!("kreuzberg-php-batch", create_php_batch_adapter, kreuzberg_count);
-            try_register!("kreuzberg-elixir-sync", create_elixir_sync_adapter, kreuzberg_count);
+            try_register!("kreuzberg-elixir", create_elixir_adapter, kreuzberg_count);
             try_register!("kreuzberg-elixir-batch", create_elixir_batch_adapter, kreuzberg_count);
 
-            let total_requested = if frameworks.is_empty() { 18 } else { frameworks.len() };
+            let total_requested = if frameworks.is_empty() { 19 } else { frameworks.len() };
             eprintln!(
                 "[adapter] Kreuzberg bindings: {}/{} available",
                 kreuzberg_count, total_requested
@@ -270,8 +270,8 @@ async fn main() -> Result<()> {
             use benchmark_harness::adapters::{
                 create_docling_adapter, create_docling_batch_adapter, create_markitdown_adapter, create_mineru_adapter,
                 create_mineru_batch_adapter, create_pandoc_adapter, create_pdfplumber_adapter,
-                create_pdfplumber_batch_adapter, create_pymupdf4llm_adapter, create_tika_batch_adapter,
-                create_tika_sync_adapter, create_unstructured_adapter,
+                create_pdfplumber_batch_adapter, create_pymupdf4llm_adapter, create_tika_adapter,
+                create_tika_batch_adapter, create_unstructured_adapter,
             };
 
             let mut external_count = 0;
@@ -281,7 +281,7 @@ async fn main() -> Result<()> {
             try_register!("markitdown", create_markitdown_adapter, external_count);
             try_register!("pandoc", create_pandoc_adapter, external_count);
             try_register!("unstructured", create_unstructured_adapter, external_count);
-            try_register!("tika-sync", create_tika_sync_adapter, external_count);
+            try_register!("tika", create_tika_adapter, external_count);
             try_register!("tika-batch", create_tika_batch_adapter, external_count);
             try_register!("pymupdf4llm", create_pymupdf4llm_adapter, external_count);
             try_register!("pdfplumber", create_pdfplumber_adapter, external_count);

@@ -157,7 +157,7 @@ jobs:
           retention-days: 7
 
   bench-python-sync:
-    name: kreuzberg-python-sync (${{ matrix.mode }}) [profiling]
+    name: kreuzberg-python (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -213,7 +213,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-python-sync
+          FRAMEWORK: kreuzberg-python
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
@@ -224,7 +224,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: profiling-results-kreuzberg-python-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: profiling-results-kreuzberg-python-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 7
 
@@ -232,12 +232,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flamegraphs-kreuzberg-python-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: flamegraphs-kreuzberg-python-${{ matrix.mode }}-${{ github.run_id }}
           path: flamegraphs/
           retention-days: 7
 
   bench-python-async:
-    name: kreuzberg-python-async (${{ matrix.mode }}) [profiling]
+    name: kreuzberg-python-async-OLD (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -293,7 +293,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-python-async
+          FRAMEWORK: kreuzberg-python-async-OLD
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
@@ -397,7 +397,7 @@ jobs:
           retention-days: 7
 
   bench-node-async:
-    name: kreuzberg-node-async (${{ matrix.mode }}) [profiling]
+    name: kreuzberg-node (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -455,7 +455,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-node-async
+          FRAMEWORK: kreuzberg-node
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
@@ -466,7 +466,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: profiling-results-kreuzberg-node-async-${{ matrix.mode }}-${{ github.run_id }}
+          name: profiling-results-kreuzberg-node-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 7
 
@@ -474,7 +474,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flamegraphs-kreuzberg-node-async-${{ matrix.mode }}-${{ github.run_id }}
+          name: flamegraphs-kreuzberg-node-${{ matrix.mode }}-${{ github.run_id }}
           path: flamegraphs/
           retention-days: 7
 
@@ -705,7 +705,7 @@ jobs:
           retention-days: 7
 
   bench-ruby-sync:
-    name: kreuzberg-ruby-sync (${{ matrix.mode }}) [profiling]
+    name: kreuzberg-ruby (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -781,7 +781,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-ruby-sync
+          FRAMEWORK: kreuzberg-ruby
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
@@ -792,7 +792,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: profiling-results-kreuzberg-ruby-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: profiling-results-kreuzberg-ruby-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 7
 
@@ -800,7 +800,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flamegraphs-kreuzberg-ruby-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: flamegraphs-kreuzberg-ruby-${{ matrix.mode }}-${{ github.run_id }}
           path: flamegraphs/
           retention-days: 7
 

@@ -181,8 +181,8 @@ jobs:
           path: benchmark-results/
           retention-days: 30
 
-  bench-python-sync:
-    name: kreuzberg-python-sync (${{ matrix.mode }})
+  bench-python:
+    name: kreuzberg-python (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -218,7 +218,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-python-sync
+          cache-key-prefix: benchmarks-python
 
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
@@ -239,7 +239,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-python-sync
+          FRAMEWORK: kreuzberg-python
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -249,12 +249,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-python-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-python-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
-  bench-python-async:
-    name: kreuzberg-python-async (${{ matrix.mode }})
+
+
+  bench-node:
+    name: kreuzberg-node (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -290,157 +292,13 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-python-async
-
-      - name: Setup Python
-        uses: ./.github/actions/setup-python-env
-        with:
-          python-version: "3.11"
-          cache-prefix: benchmark-python
-
-      - name: Setup ONNX Runtime
-        uses: ./.github/actions/setup-onnx-runtime
-        with:
-          ort-version: ${{ env.ORT_VERSION }}
-
-      - name: Install Task
-        uses: ./.github/actions/install-task
-
-      - name: Build Python bindings
-        run: task python:build:bindings
-
-      - name: Run benchmark
-        env:
-          FRAMEWORK: kreuzberg-python-async
-          MODE: ${{ matrix.mode }}
-          ITERATIONS: ${{ env.ITERATIONS }}
-          TIMEOUT: ${{ github.event.inputs.timeout }}
-        run: scripts/benchmarks/run-benchmark.sh
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmarks-kreuzberg-python-async-${{ matrix.mode }}-${{ github.run_id }}
-          path: benchmark-results/
-          retention-days: 30
-
-  bench-python-batch:
-    name: kreuzberg-python-batch (${{ matrix.mode }})
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [single-file, batch]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
-
-      - name: Free disk space
-        run: scripts/ci/benchmarks/free-disk-space.sh
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.setup.outputs.artifact-name }}
-          path: target/release
-
-      - name: Restore benchmark binary permissions
-        run: scripts/benchmarks/restore-binary-permissions.sh
-
-      - name: Install system dependencies
-        uses: ./.github/actions/install-system-deps
-
-      - name: Setup OpenSSL
-        uses: ./.github/actions/setup-openssl
-
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup-rust
-        with:
-          cache-key-prefix: benchmarks-python-batch
-
-      - name: Setup Python
-        uses: ./.github/actions/setup-python-env
-        with:
-          python-version: "3.11"
-          cache-prefix: benchmark-python
-
-      - name: Setup ONNX Runtime
-        uses: ./.github/actions/setup-onnx-runtime
-        with:
-          ort-version: ${{ env.ORT_VERSION }}
-
-      - name: Install Task
-        uses: ./.github/actions/install-task
-
-      - name: Build Python bindings
-        run: task python:build:bindings
-
-      - name: Run benchmark
-        env:
-          FRAMEWORK: kreuzberg-python-batch
-          MODE: ${{ matrix.mode }}
-          ITERATIONS: ${{ env.ITERATIONS }}
-          TIMEOUT: ${{ github.event.inputs.timeout }}
-        run: scripts/benchmarks/run-benchmark.sh
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmarks-kreuzberg-python-batch-${{ matrix.mode }}-${{ github.run_id }}
-          path: benchmark-results/
-          retention-days: 30
-
-  bench-node-async:
-    name: kreuzberg-node-async (${{ matrix.mode }})
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [single-file, batch]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
-
-      - name: Free disk space
-        run: scripts/ci/benchmarks/free-disk-space.sh
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.setup.outputs.artifact-name }}
-          path: target/release
-
-      - name: Restore benchmark binary permissions
-        run: scripts/benchmarks/restore-binary-permissions.sh
-
-      - name: Install system dependencies
-        uses: ./.github/actions/install-system-deps
-
-      - name: Setup OpenSSL
-        uses: ./.github/actions/setup-openssl
-
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup-rust
-        with:
-          cache-key-prefix: benchmarks-node-async
+          cache-key-prefix: benchmarks-node
           use-sccache: 'false'
 
       - name: Setup Node
         uses: ./.github/actions/setup-node-workspace
 
-      - name: Verify Node setup (async)
+      - name: Verify Node setup
         run: scripts/ci/benchmarks/verify-node-setup.sh "Node setup (async)"
 
       - name: Setup ONNX Runtime
@@ -458,7 +316,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-node-async
+          FRAMEWORK: kreuzberg-node
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -468,12 +326,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-node-async-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-node-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
-  bench-node-batch:
-    name: kreuzberg-node-batch (${{ matrix.mode }})
+
+  bench-wasm:
+    name: kreuzberg-wasm (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -509,82 +368,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-node-batch
-          use-sccache: 'false'
-
-      - name: Setup Node
-        uses: ./.github/actions/setup-node-workspace
-
-      - name: Verify Node setup (batch)
-        run: scripts/ci/benchmarks/verify-node-setup.sh "Node setup (batch)"
-
-      - name: Setup ONNX Runtime
-        uses: ./.github/actions/setup-onnx-runtime
-        with:
-          ort-version: ${{ env.ORT_VERSION }}
-
-      - name: Install Task
-        uses: ./.github/actions/install-task
-
-      - name: Build Node bindings and install locally
-        env:
-          TARGET: x86_64-unknown-linux-gnu
-        run: task node:build:bindings
-
-      - name: Run benchmark
-        env:
-          FRAMEWORK: kreuzberg-node-batch
-          MODE: ${{ matrix.mode }}
-          ITERATIONS: ${{ env.ITERATIONS }}
-          TIMEOUT: ${{ github.event.inputs.timeout }}
-        run: scripts/benchmarks/run-benchmark.sh
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmarks-kreuzberg-node-batch-${{ matrix.mode }}-${{ github.run_id }}
-          path: benchmark-results/
-          retention-days: 30
-
-  bench-wasm-async:
-    name: kreuzberg-wasm-async (${{ matrix.mode }})
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [single-file, batch]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
-
-      - name: Free disk space
-        run: scripts/ci/benchmarks/free-disk-space.sh
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.setup.outputs.artifact-name }}
-          path: target/release
-
-      - name: Restore benchmark binary permissions
-        run: scripts/benchmarks/restore-binary-permissions.sh
-
-      - name: Install system dependencies
-        uses: ./.github/actions/install-system-deps
-
-      - name: Setup OpenSSL
-        uses: ./.github/actions/setup-openssl
-
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup-rust
-        with:
-          cache-key-prefix: benchmarks-wasm-async
+          cache-key-prefix: benchmarks-wasm
 
       - name: Setup Node
         uses: ./.github/actions/setup-node-workspace
@@ -597,7 +381,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-wasm-async
+          FRAMEWORK: kreuzberg-wasm
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -607,12 +391,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-wasm-async-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-wasm-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
-  bench-wasm-batch:
-    name: kreuzberg-wasm-batch (${{ matrix.mode }})
+
+  bench-ruby:
+    name: kreuzberg-ruby (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -648,71 +433,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-wasm-batch
-
-      - name: Setup Node
-        uses: ./.github/actions/setup-node-workspace
-
-      - name: Install Task
-        uses: ./.github/actions/install-task
-
-      - name: Build WASM bindings
-        run: task wasm:build:bindings
-
-      - name: Run benchmark
-        env:
-          FRAMEWORK: kreuzberg-wasm-batch
-          MODE: ${{ matrix.mode }}
-          ITERATIONS: ${{ env.ITERATIONS }}
-          TIMEOUT: ${{ github.event.inputs.timeout }}
-        run: scripts/benchmarks/run-benchmark.sh
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmarks-kreuzberg-wasm-batch-${{ matrix.mode }}-${{ github.run_id }}
-          path: benchmark-results/
-          retention-days: 30
-
-  bench-ruby-sync:
-    name: kreuzberg-ruby-sync (${{ matrix.mode }})
-    needs: setup
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [single-file, batch]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
-
-      - name: Free disk space
-        run: scripts/ci/benchmarks/free-disk-space.sh
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ needs.setup.outputs.artifact-name }}
-          path: target/release
-
-      - name: Restore benchmark binary permissions
-        run: scripts/benchmarks/restore-binary-permissions.sh
-
-      - name: Install system dependencies
-        uses: ./.github/actions/install-system-deps
-
-      - name: Setup OpenSSL
-        uses: ./.github/actions/setup-openssl
-
-      - name: Setup Rust toolchain
-        uses: ./.github/actions/setup-rust
-        with:
-          cache-key-prefix: benchmarks-ruby-sync
+          cache-key-prefix: benchmarks-ruby
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -766,7 +487,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-ruby-sync
+          FRAMEWORK: kreuzberg-ruby
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -776,7 +497,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-ruby-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-ruby-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
@@ -885,8 +606,8 @@ jobs:
           path: benchmark-results/
           retention-days: 30
 
-  bench-go-sync:
-    name: kreuzberg-go-sync (${{ matrix.mode }})
+  bench-go:
+    name: kreuzberg-go (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -922,7 +643,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-go-sync
+          cache-key-prefix: benchmarks-go
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -980,7 +701,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-go-sync
+          FRAMEWORK: kreuzberg-go
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           KREUZBERG_BENCHMARK_DEBUG: "true"
@@ -991,7 +712,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-go-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-go-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
@@ -1105,8 +826,8 @@ jobs:
           path: benchmark-results/
           retention-days: 30
 
-  bench-java-sync:
-    name: kreuzberg-java-sync (${{ matrix.mode }})
+  bench-java:
+    name: kreuzberg-java (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -1142,7 +863,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-java-sync
+          cache-key-prefix: benchmarks-java
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -1193,7 +914,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-java-sync
+          FRAMEWORK: kreuzberg-java
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -1203,12 +924,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-java-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-java-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
-  bench-csharp-sync:
-    name: kreuzberg-csharp-sync (${{ matrix.mode }})
+  bench-csharp:
+    name: kreuzberg-csharp (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -1244,7 +965,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-csharp-sync
+          cache-key-prefix: benchmarks-csharp
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
@@ -1293,7 +1014,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-csharp-sync
+          FRAMEWORK: kreuzberg-csharp
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -1303,12 +1024,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-csharp-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-csharp-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
-  bench-elixir-sync:
-    name: kreuzberg-elixir-sync (${{ matrix.mode }})
+  bench-elixir:
+    name: kreuzberg-elixir (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -1344,7 +1065,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-elixir-sync
+          cache-key-prefix: benchmarks-elixir
 
       - name: Setup Elixir
         uses: erlef/setup-beam@v1
@@ -1367,7 +1088,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-elixir-sync
+          FRAMEWORK: kreuzberg-elixir
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -1377,7 +1098,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-elixir-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-elixir-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
@@ -1455,8 +1176,8 @@ jobs:
           path: benchmark-results/
           retention-days: 30
 
-  bench-php-sync:
-    name: kreuzberg-php-sync (${{ matrix.mode }})
+  bench-php:
+    name: kreuzberg-php (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -1492,7 +1213,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup-rust
         with:
-          cache-key-prefix: benchmarks-php-sync
+          cache-key-prefix: benchmarks-php
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -1542,7 +1263,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-php-sync
+          FRAMEWORK: kreuzberg-php
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -1552,7 +1273,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-php-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-php-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
@@ -1929,8 +1650,8 @@ jobs:
           path: benchmark-results/
           retention-days: 30
 
-  bench-tika-sync:
-    name: tika-sync (${{ matrix.mode }})
+  bench-tika:
+    name: tika (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -1966,7 +1687,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: tika-sync
+          FRAMEWORK: tika
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -1976,7 +1697,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-tika-sync-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-tika-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 
@@ -2298,7 +2019,7 @@ jobs:
 
   aggregate-and-publish:
     name: Aggregate & Publish Results
-    needs: [setup, bench-native, bench-python-sync, bench-python-async, bench-python-batch, bench-node-async, bench-node-batch, bench-wasm-async, bench-wasm-batch, bench-ruby-sync, bench-ruby-batch, bench-go-sync, bench-go-batch, bench-java-sync, bench-csharp-sync, bench-elixir-sync, bench-elixir-batch, bench-php-sync, bench-php-batch, bench-docling, bench-docling-batch, bench-markitdown, bench-pandoc, bench-unstructured, bench-tika-sync, bench-tika-batch, bench-pymupdf4llm, bench-pdfplumber, bench-pdfplumber-batch, bench-mineru, bench-mineru-batch]
+    needs: [setup, bench-native, bench-python, bench-node, bench-wasm, bench-ruby, bench-ruby-batch, bench-go, bench-go-batch, bench-java, bench-csharp, bench-elixir, bench-elixir-batch, bench-php, bench-php-batch, bench-docling, bench-docling-batch, bench-markitdown, bench-pandoc, bench-unstructured, bench-tika, bench-tika-batch, bench-pymupdf4llm, bench-pdfplumber, bench-pdfplumber-batch, bench-mineru, bench-mineru-batch]
     runs-on: ubuntu-latest
     if: always() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch')
     permissions:
