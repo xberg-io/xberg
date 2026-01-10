@@ -9,6 +9,7 @@ tasks:
   typecheck:
     desc: Run TypeScript type checking across all projects (uses pnpm workspace typecheck)
     cmds:
+      - task: wasm:build:ci
       - pnpm typecheck
 
   typecheck:check:

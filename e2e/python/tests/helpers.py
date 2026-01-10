@@ -194,21 +194,27 @@ def _lookup_path(metadata: Mapping[str, Any] | None, path: str) -> Any:
     if not isinstance(metadata, Mapping):
         return None
 
-    def _lookup(source: Mapping[str, Any]) -> Any:
+    def _lookup(source: Mapping[str, Any], lookup_path: str) -> Any:
         current: Any = source
-        for segment in path.split("."):
+        for segment in lookup_path.split("."):
             if not isinstance(current, Mapping) or segment not in current:
                 return None
             current = current[segment]
         return current
 
-    direct = _lookup(metadata)
+    direct = _lookup(metadata, path)
     if direct is not None:
         return direct
 
-    format_metadata = metadata.get("format")
+    # If the path starts with a key that exists in metadata and is a Mapping,
+    # try looking up the same path within that nested structure
+    first_segment = path.split(".")[0]
+    format_metadata = metadata.get(first_segment)
     if isinstance(format_metadata, Mapping):
-        return _lookup(format_metadata)
+        # Try to look up the full path within the nested metadata
+        result = _lookup(format_metadata, path)
+        if result is not None:
+            return result
     return None
 
 
