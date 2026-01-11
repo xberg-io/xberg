@@ -46,8 +46,8 @@ const mockBenchmarkData: AggregatedBenchmarkData = {
 		},
 	},
 	by_framework_mode: {
-		"kreuzberg-native-single": {
-			framework: "kreuzberg-native",
+		"kreuzberg-rust-single": {
+			framework: "kreuzberg-rust",
 			mode: "single",
 			cold_start: { sample_count: 10, p50_ms: 50, p95_ms: 100, p99_ms: 150 },
 			by_file_type: {
@@ -337,7 +337,7 @@ describe("LandingPage", () => {
 
 			render(<LandingPage />);
 
-			// pandoc-single has no OCR, kreuzberg-native has OCR
+			// pandoc-single has no OCR, kreuzberg-rust has OCR
 			expect(screen.getByText("OCR Coverage")).toBeInTheDocument();
 			const page = screen.getByTestId("page-landing");
 			expect(page.textContent).toMatch(/OCR Coverage/);

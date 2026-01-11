@@ -89,7 +89,7 @@ jobs:
         run: scripts/ci/validate/show-disk-space.sh "Disk space after artifact upload"
 
   bench-native:
-    name: kreuzberg-native (${{ matrix.mode }}) [profiling]
+    name: kreuzberg-rust (${{ matrix.mode }}) [profiling]
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -133,7 +133,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-native
+          FRAMEWORK: kreuzberg-rust
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           ENABLE_PROFILING: ${{ env.ENABLE_PROFILING }}
@@ -144,7 +144,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: profiling-results-kreuzberg-native-${{ matrix.mode }}-${{ github.run_id }}
+          name: profiling-results-kreuzberg-rust-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 7
 
@@ -152,7 +152,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: flamegraphs-kreuzberg-native-${{ matrix.mode }}-${{ github.run_id }}
+          name: flamegraphs-kreuzberg-rust-${{ matrix.mode }}-${{ github.run_id }}
           path: flamegraphs/
           retention-days: 7
 

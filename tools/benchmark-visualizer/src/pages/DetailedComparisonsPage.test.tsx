@@ -60,7 +60,7 @@ vi.mock("@/transformers/chartTransformers", () => ({
 vi.mock("@/utils/frameworkCapabilities", () => ({
 	getFrameworkCapabilities: () =>
 		new Map([
-			["kreuzberg-native-single", new Set(["pdf", "docx"])],
+			["kreuzberg-rust-single", new Set(["pdf", "docx"])],
 			["pandoc-single", new Set(["pdf", "docx"])],
 		]),
 }));
@@ -73,7 +73,7 @@ const mockBenchmarkData: AggregatedBenchmarkData = {
 		timestamp: "2024-01-09T12:00:00Z",
 	},
 	disk_sizes: {
-		"kreuzberg-native": {
+		"kreuzberg-rust": {
 			size_bytes: 5242880,
 			method: "du",
 			description: "Binary size",
@@ -81,8 +81,8 @@ const mockBenchmarkData: AggregatedBenchmarkData = {
 		pandoc: { size_bytes: 10485760, method: "du", description: "Binary size" },
 	},
 	by_framework_mode: {
-		"kreuzberg-native-single": {
-			framework: "kreuzberg-native",
+		"kreuzberg-rust-single": {
+			framework: "kreuzberg-rust",
 			mode: "single",
 			cold_start: { sample_count: 10, p50_ms: 50, p95_ms: 100, p99_ms: 150 },
 			by_file_type: {

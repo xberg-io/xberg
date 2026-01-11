@@ -65,7 +65,7 @@ vi.mock("@/components/filters/FileTypeFilter", () => ({
 vi.mock("@/components/filters/FrameworkFilter", () => ({
 	FrameworkFilter: ({ selectedFrameworks, onFrameworksChange }: any) => (
 		<div data-testid="filters-framework">
-			<button onClick={() => onFrameworksChange(["kreuzberg-native"])} data-testid="filter-kreuzberg">
+			<button onClick={() => onFrameworksChange(["kreuzberg-rust"])} data-testid="filter-kreuzberg">
 				Kreuzberg
 			</button>
 			<span>{selectedFrameworks.join(",")}</span>
@@ -95,7 +95,7 @@ vi.mock("@/utils/frameworkCapabilities", () => ({
 	},
 	getFrameworkCapabilities: () =>
 		new Map([
-			["kreuzberg-native-single", new Set(["pdf", "docx", "pptx", "xlsx", "jpg", "png"])],
+			["kreuzberg-rust-single", new Set(["pdf", "docx", "pptx", "xlsx", "jpg", "png"])],
 			["pandoc-single", new Set(["pdf", "docx", "pptx"])],
 			["tika-single", new Set(["pdf", "docx", "xlsx"])],
 		]),
@@ -109,7 +109,7 @@ const mockBenchmarkData: AggregatedBenchmarkData = {
 		timestamp: "2024-01-09T12:00:00Z",
 	},
 	disk_sizes: {
-		"kreuzberg-native": {
+		"kreuzberg-rust": {
 			size_bytes: 5242880,
 			method: "du",
 			description: "Binary size",
@@ -118,8 +118,8 @@ const mockBenchmarkData: AggregatedBenchmarkData = {
 		tika: { size_bytes: 20971520, method: "du", description: "JAR size" },
 	},
 	by_framework_mode: {
-		"kreuzberg-native-single": {
-			framework: "kreuzberg-native",
+		"kreuzberg-rust-single": {
+			framework: "kreuzberg-rust",
 			mode: "single",
 			cold_start: { sample_count: 10, p50_ms: 50, p95_ms: 100, p99_ms: 150 },
 			by_file_type: {
@@ -409,7 +409,7 @@ describe("PerformanceChartsPage", () => {
 			await user.click(kreuzbergButton);
 
 			const frameworkFilter = screen.getByTestId("filters-framework");
-			expect(frameworkFilter).toHaveTextContent("kreuzberg-native");
+			expect(frameworkFilter).toHaveTextContent("kreuzberg-rust");
 		});
 
 		it("should update charts when filters change", async () => {

@@ -122,7 +122,7 @@ jobs:
         run: scripts/ci/validate/show-disk-space.sh "Disk space after artifact upload"
 
   bench-native:
-    name: kreuzberg-native (${{ matrix.mode }})
+    name: kreuzberg-rust (${{ matrix.mode }})
     needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -167,7 +167,7 @@ jobs:
 
       - name: Run benchmark
         env:
-          FRAMEWORK: kreuzberg-native
+          FRAMEWORK: kreuzberg-rust
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
@@ -177,7 +177,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmarks-kreuzberg-native-${{ matrix.mode }}-${{ github.run_id }}
+          name: benchmarks-kreuzberg-rust-${{ matrix.mode }}-${{ github.run_id }}
           path: benchmark-results/
           retention-days: 30
 

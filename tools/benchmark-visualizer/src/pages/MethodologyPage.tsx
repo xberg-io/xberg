@@ -119,7 +119,7 @@ export function MethodologyPage() {
 								PNG) or spreadsheets (XLSX)
 							</li>
 							<li>
-								<strong>Image processing</strong> requires OCR capabilities (kreuzberg-native, some external tools)
+								<strong>Image processing</strong> requires OCR capabilities (kreuzberg-rust, some external tools)
 							</li>
 							<li>
 								The visualizer automatically filters frameworks based on timeout detection to show only supported
@@ -230,7 +230,7 @@ export function MethodologyPage() {
 							<div className="mt-3 text-muted-foreground"># Run benchmarks</div>
 							<div>./target/release/benchmark-harness run \</div>
 							<div className="ml-4">--fixtures tools/benchmark-harness/fixtures/ \</div>
-							<div className="ml-4">--frameworks kreuzberg-native,docling \</div>
+							<div className="ml-4">--frameworks kreuzberg-rust,docling \</div>
 							<div className="ml-4">--output ./benchmark-output \</div>
 							<div className="ml-4">--format html</div>
 							<div className="mt-3 text-muted-foreground"># Open results</div>

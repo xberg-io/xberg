@@ -112,7 +112,7 @@ enum Commands {
         output: PathBuf,
 
         /// Baseline framework for delta calculations (not used but provided for compatibility)
-        #[arg(long, default_value = "kreuzberg-native")]
+        #[arg(long, default_value = "kreuzberg-rust")]
         baseline: String,
     },
 }
@@ -228,9 +228,9 @@ async fn main() -> Result<()> {
 
             // Always register native adapter if requested or no specific frameworks specified
             let mut kreuzberg_count = 0;
-            if should_init("kreuzberg-native") {
+            if should_init("kreuzberg-rust") {
                 registry.register(Arc::new(NativeAdapter::with_config(extraction_config)))?;
-                eprintln!("[adapter] ✓ kreuzberg-native (registered)");
+                eprintln!("[adapter] ✓ kreuzberg-rust (registered)");
                 kreuzberg_count += 1;
             }
 

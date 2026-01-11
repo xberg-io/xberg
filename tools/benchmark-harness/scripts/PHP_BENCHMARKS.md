@@ -111,7 +111,7 @@ cargo build --release -p benchmark-harness
 # Run comparison across multiple bindings
 ./target/release/benchmark-harness run \
     --fixtures tools/benchmark-harness/fixtures \
-    --frameworks kreuzberg-native,kreuzberg-python,kreuzberg-ruby,kreuzberg-php,kreuzberg-node \
+    --frameworks kreuzberg-rust,kreuzberg-python,kreuzberg-ruby,kreuzberg-php,kreuzberg-node \
     --output results/multi-language
 ```
 
@@ -183,7 +183,7 @@ To compare PHP performance with other language bindings:
 ```bash
 ./target/release/benchmark-harness run \
     --fixtures tools/benchmark-harness/fixtures \
-    --frameworks kreuzberg-native,kreuzberg-python,kreuzberg-ruby,kreuzberg-php,kreuzberg-node,kreuzberg-go \
+    --frameworks kreuzberg-rust,kreuzberg-python,kreuzberg-ruby,kreuzberg-php,kreuzberg-node,kreuzberg-go \
     --output results/language-comparison \
     --format both
 ```

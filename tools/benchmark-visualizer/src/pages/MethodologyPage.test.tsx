@@ -171,7 +171,7 @@ describe("MethodologyPage", () => {
 		it("should show run command with flags", () => {
 			render(<MethodologyPage />);
 
-			expect(screen.getByText(/--frameworks kreuzberg-native,docling/)).toBeInTheDocument();
+			expect(screen.getByText(/--frameworks kreuzberg-rust,docling/)).toBeInTheDocument();
 			expect(screen.getByText(/--output \.\/benchmark-output/)).toBeInTheDocument();
 		});
 	});

@@ -15,7 +15,7 @@ use std::time::Duration;
 /// different extraction frameworks (Kreuzberg language bindings and open source alternatives).
 #[async_trait]
 pub trait FrameworkAdapter: Send + Sync {
-    /// Get the framework name (e.g., "kreuzberg-native", "kreuzberg-python")
+    /// Get the framework name (e.g., "kreuzberg-rust", "kreuzberg-python")
     fn name(&self) -> &str;
 
     /// Check if this adapter supports the given file type
