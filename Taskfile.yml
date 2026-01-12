@@ -25,6 +25,8 @@ includes:
     taskfile: .task/languages/php.yml
   elixir:
     taskfile: .task/languages/elixir.yml
+  perl:
+    taskfile: .task/languages/perl.yml
 
   _build_wf:
     taskfile: .task/workflows/build.yml
@@ -87,6 +89,7 @@ tasks:
       - task: elixir:install
       - task: csharp:install
       - task: php:install
+      - task: perl:install
       - echo "Setup complete - safe to re-run anytime"
 
   build:
@@ -100,6 +103,7 @@ tasks:
       - task: csharp:build
       - task: php:build
       - task: elixir:build
+      - task: perl:build
 
   test:
     desc: Run test suites for all languages
@@ -113,6 +117,7 @@ tasks:
       - task: csharp:test
       - task: php:test
       - task: elixir:test
+      - task: perl:test
 
 
   check:
@@ -143,6 +148,8 @@ tasks:
       - task: php:update
       - echo "Updating Elixir dependencies..."
       - task: elixir:update
+      - echo "Updating Perl dependencies..."
+      - task: perl:update
       - echo "All dependencies updated"
 
   clean:
@@ -157,6 +164,7 @@ tasks:
       - task: csharp:clean
       - task: php:clean
       - task: elixir:clean
+      - task: perl:clean
       - task: wasm:clean
 
   build:all:

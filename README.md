@@ -33,6 +33,9 @@
   <a href="https://rubygems.org/gems/kreuzberg">
     <img src="https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6" alt="Ruby">
   </a>
+  <a href="https://metacpan.org/pod/Kreuzberg">
+    <img src="https://img.shields.io/cpan/v/Kreuzberg?label=Perl&color=007ec6" alt="Perl">
+  </a>
 
   <!-- Project Info -->
   <a href="https://github.com/kreuzberg-dev/kreuzberg/blob/main/LICENSE">
@@ -58,7 +61,7 @@ Extract text and metadata from a wide range of file formats (56+), generate embe
 ## Key Features
 
 - **Extensible architecture** – Plugin system for custom OCR backends, validators, post-processors, and document extractors
-- **Polyglot** – Native bindings for Rust, Python, TypeScript/Node.js, Ruby, Go, Java, C#, PHP, and Elixir
+- **Polyglot** – Native bindings for Rust, Python, TypeScript/Node.js, Ruby, Perl, Go, Java, C#, PHP, and Elixir
 - **56 file formats** – PDF, Office documents, images, HTML, XML, emails, archives, academic formats across 8 categories
 - **OCR support** – Tesseract (all languages via native binding), EasyOCR/PaddleOCR (Python), Guten (Node.js), extensible via plugin API
 - **High performance** – Rust core with native PDFium, SIMD optimizations and full parallelism
@@ -74,6 +77,7 @@ Each language binding provides comprehensive documentation with examples and bes
 **Scripting Languages:**
 - **[Python](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/python)** – PyPI package, async/sync APIs, OCR backends (Tesseract, EasyOCR, PaddleOCR)
 - **[Ruby](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/ruby)** – RubyGems package, idiomatic Ruby API, native bindings
+- **[Perl](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/perl)** – CPAN module, FFI bindings, Perl 5.20+ support
 - **[PHP](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/php)** – Composer package, modern PHP 8.2+ support, type-safe API
 - **[Elixir](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/elixir)** – Hex package, OTP integration, concurrent processing
 
@@ -109,6 +113,7 @@ Complete architecture coverage across all language bindings:
 | Python | ✅ | ✅ | ✅ | ✅ |
 | Node.js | ✅ | ✅ | ✅ | ✅ |
 | Ruby | ✅ | ✅ | ✅ | - |
+| Perl | ✅ | ✅ | ✅ | - |
 | Elixir | ✅ | ✅ | ✅ | ✅ |
 | Go | ✅ | ✅ | ✅ | ✅ |
 | Java | ✅ | ✅ | ✅ | ✅ |

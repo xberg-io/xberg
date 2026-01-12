@@ -1,0 +1,20 @@
+# Build artifacts
+Makefile
+Makefile.old
+MYMETA.json
+MYMETA.yml
+blib/
+pm_to_blib
+
+# Test artifacts
+*.bak
+
+# Compiled extensions
+*.o
+*.so
+*.dylib
+*.dll
+*.bs
+
+# Distribution artifacts
+Kreuzberg-*.tar.gz

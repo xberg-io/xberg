@@ -1,0 +1,227 @@
+name: CI Perl
+
+'on':
+  push:
+    branches: [main]
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/ci-perl.yaml'
+      - '.cargo/config.toml'
+      - 'rust-toolchain.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/kreuzberg/**'
+      - 'crates/kreuzberg-ffi/**'
+      - 'crates/kreuzberg-tesseract/**'
+      - 'packages/perl/**'
+      - 'test_documents/**'
+      - 'fixtures/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/ci-perl.yaml'
+      - '.cargo/config.toml'
+      - 'rust-toolchain.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/kreuzberg/**'
+      - 'crates/kreuzberg-ffi/**'
+      - 'crates/kreuzberg-tesseract/**'
+      - 'packages/perl/**'
+      - 'test_documents/**'
+      - 'fixtures/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-perl-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  RUST_BACKTRACE: full
+  RUST_MIN_STACK: 16777216
+  PDFIUM_VERSION: "7578"
+  ORT_VERSION: "1.23.2"
+  MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+jobs:
+  build-ffi:
+    name: Build FFI (${{ matrix.os }})
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            lib_name: libkreuzberg_ffi.so
+          - os: ubuntu-24.04-arm
+            lib_name: libkreuzberg_ffi.so
+          - os: macos-latest
+            lib_name: libkreuzberg_ffi.dylib
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Free disk space before setup
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: ./.github/actions/free-disk-space-linux
+        with:
+          show-initial: "true"
+          show-final: "true"
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Install Task
+        uses: ./.github/actions/install-task
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: perl-${{ matrix.os }}
+
+      - name: Cache PDFium
+        uses: ./.github/actions/cache-pdfium
+        with:
+          pdfium-version: ${{ env.PDFIUM_VERSION }}
+
+      - name: Download PDFium
+        uses: ./.github/actions/download-pdfium
+        with:
+          pdfium-version: ${{ env.PDFIUM_VERSION }}
+
+      - name: Stage PDFium runtime
+        uses: ./.github/actions/stage-pdfium-runtime
+        with:
+          destination: target/release
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Build FFI library
+        shell: bash
+        run: |
+          echo "=== Building FFI Library ==="
+          cargo build --release --package kreuzberg-ffi
+          echo "=== FFI Build Complete ==="
+          ls -lh target/release/${{ matrix.lib_name }}
+
+      - name: Upload FFI library
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffi-${{ matrix.os }}
+          path: target/release/${{ matrix.lib_name }}
+          retention-days: 7
+
+      - name: Cleanup Rust cache
+        if: always()
+        uses: ./.github/actions/cleanup-rust-cache
+
+  test-perl:
+    name: Perl Tests (${{ matrix.os }}, Perl ${{ matrix.perl }})
+    needs: build-ffi
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        perl: ['5.32', '5.34', '5.38']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl }}
+
+      - name: Download FFI library
+        uses: actions/download-artifact@v4
+        with:
+          name: ffi-${{ matrix.os }}
+          path: target/release/
+
+      - name: Set library path
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            echo "DYLD_LIBRARY_PATH=${{ github.workspace }}/target/release:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+            echo "KREUZBERG_LIB_PATH=${{ github.workspace }}/target/release/libkreuzberg_ffi.dylib" >> $GITHUB_ENV
+          else
+            echo "LD_LIBRARY_PATH=${{ github.workspace }}/target/release:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+            echo "KREUZBERG_LIB_PATH=${{ github.workspace }}/target/release/libkreuzberg_ffi.so" >> $GITHUB_ENV
+          fi
+
+      - name: Install CPAN dependencies
+        working-directory: packages/perl
+        run: |
+          cpanm --notest FFI::Platypus
+          cpanm --notest Test::More Test::Exception JSON::PP
+
+      - name: Run unit tests (non-FFI)
+        working-directory: packages/perl
+        run: |
+          perl Makefile.PL
+          make
+          prove -lv t/00-load.t t/01-config.t t/03-result.t
+
+      - name: Run FFI tests
+        working-directory: packages/perl
+        run: |
+          prove -lv t/02-ffi.t t/04-extraction.t
+
+  lint-perl:
+    name: Perl Lint
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: '5.38'
+
+      - name: Install Perl::Critic and Perl::Tidy
+        run: cpanm --notest Perl::Critic Perl::Tidy
+
+      - name: Run Perl::Critic
+        working-directory: packages/perl
+        run: |
+          perlcritic --severity 4 lib/ || true
+          echo "Lint completed (warnings allowed for now)"
+
+      - name: Run Perl::Tidy
+        working-directory: packages/perl
+        run: |
+          echo "=== Checking Perl::Tidy formatting ==="
+          find lib t -name '*.pm' -o -name '*.t' | while read file; do
+            perltidy -b "$file"
+            if [ -f "${file}.bak" ]; then
+              if ! diff -q "$file" "${file}.bak" > /dev/null 2>&1; then
+                echo "File needs formatting: $file"
+                diff -u "${file}.bak" "$file" || true
+              fi
+              rm -f "${file}.bak"
+            fi
+          done
+          echo "Perl::Tidy check completed"
+
+      - name: Check POD
+        working-directory: packages/perl
+        run: |
+          cpanm --notest Pod::Checker
+          podchecker lib/Kreuzberg.pm || true
+          podchecker lib/Kreuzberg/Config.pm || true
+          podchecker lib/Kreuzberg/Result.pm || true

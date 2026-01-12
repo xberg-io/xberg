@@ -16,9 +16,9 @@ tasks:
     desc: Install Java dependencies
     dir: packages/java
     cmds:
-      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean install -DskipTests'
+      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean install -DskipTests -Dgpg.skip=true'
         platforms: [linux, darwin]
-      - cmd: mvn clean install -DskipTests
+      - cmd: mvn clean install -DskipTests -Dgpg.skip=true
         platforms: [windows]
 
   setup:
@@ -31,36 +31,36 @@ tasks:
     desc: Build Java package (depends on Rust FFI)
     dir: packages/java
     cmds:
-      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean package -DskipTests'
+      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean package -DskipTests -Dgpg.skip=true'
         platforms: [linux, darwin]
-      - cmd: mvn clean package -DskipTests
+      - cmd: mvn clean package -DskipTests -Dgpg.skip=true
         platforms: [windows]
 
   build:dev:
     desc: Build Java package in debug mode
     dir: packages/java
     cmds:
-      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean package -DskipTests -DdebugMode=true'
+      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean package -DskipTests -DdebugMode=true -Dgpg.skip=true'
         platforms: [linux, darwin]
-      - cmd: mvn clean package -DskipTests -DdebugMode=true
+      - cmd: mvn clean package -DskipTests -DdebugMode=true -Dgpg.skip=true
         platforms: [windows]
 
   build:release:
     desc: Build Java package in release mode (optimized)
     dir: packages/java
     cmds:
-      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean package -DskipTests -Pproduction'
+      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean package -DskipTests -Pproduction -Dgpg.skip=true'
         platforms: [linux, darwin]
-      - cmd: mvn clean package -DskipTests -Pproduction
+      - cmd: mvn clean package -DskipTests -Pproduction -Dgpg.skip=true
         platforms: [windows]
 
   build:ci:
     desc: Build Java package in CI mode
     dir: packages/java
     cmds:
-      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean package -DskipTests'
+      - cmd: bash -c 'if [ -f ~/.sdkman/bin/sdkman-init.sh ]; then source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.1-tem && sdk use maven 3.9.11; fi && mvn clean package -DskipTests -Dgpg.skip=true'
         platforms: [linux, darwin]
-      - cmd: mvn clean package -DskipTests
+      - cmd: mvn clean package -DskipTests -Dgpg.skip=true
         platforms: [windows]
 
   build:bindings:

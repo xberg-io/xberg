@@ -1,0 +1,124 @@
+version: "3"
+
+includes:
+  _cfg:
+    taskfile: ../config/vars.yml
+    internal: true
+  _platforms:
+    taskfile: ../config/platforms.yml
+    internal: true
+
+vars:
+  PERL: perl
+  PROVE: prove
+  CPANM: cpanm
+
+tasks:
+  install:
+    desc: Install Perl dependencies
+    dir: packages/perl
+    cmds:
+      # FFI::Platypus tests can fail on some platforms but the module works fine
+      - "{{.CPANM}} --notest FFI::Platypus"
+      - "{{.CPANM}} --installdeps ."
+
+  setup:
+    desc: Alias for install
+    dir: packages/perl
+    cmds:
+      - task: perl:install
+
+  build:
+    desc: Build Perl module
+    dir: packages/perl
+    cmds:
+      - "{{.PERL}} Makefile.PL"
+      - make
+
+  build:dev:
+    desc: Build Perl module in debug mode
+    dir: packages/perl
+    cmds:
+      - "{{.PERL}} Makefile.PL"
+      - make
+
+  build:release:
+    desc: Build Perl module in release mode
+    dir: packages/perl
+    cmds:
+      - "{{.PERL}} Makefile.PL"
+      - make
+
+  build:ci:
+    desc: Build Perl module in CI mode
+    dir: packages/perl
+    cmds:
+      - "{{.PERL}} Makefile.PL"
+      - make
+
+  test:
+    desc: Run Perl tests
+    dir: packages/perl
+    cmds:
+      - "{{.PROVE}} -lv t/"
+
+  test:ci:
+    desc: Run Perl tests in CI mode
+    dir: packages/perl
+    cmds:
+      - "{{.PROVE}} -lv t/"
+
+  test:verbose:
+    desc: Run Perl tests with detailed output
+    dir: packages/perl
+    cmds:
+      - "{{.PROVE}} -lv --timer t/"
+
+  lint:
+    desc: Run Perl linting (perlcritic)
+    dir: packages/perl
+    cmds:
+      - perlcritic --severity 4 lib/
+
+  lint:check:
+    desc: Check Perl code linting without modifications
+    dir: packages/perl
+    cmds:
+      - perlcritic --severity 4 lib/
+
+  format:
+    desc: Format Perl code with perltidy
+    dir: packages/perl
+    cmds:
+      - find lib t -name '*.pm' -o -name '*.t' | xargs -I {} perltidy -b {}
+      - find lib t -name '*.bak' -delete
+
+  format:check:
+    desc: Check Perl code formatting without modifications
+    dir: packages/perl
+    cmds:
+      - |
+        find lib t -name '*.pm' -o -name '*.t' | while read file; do
+          perltidy "$file" -st | diff -q "$file" - > /dev/null || echo "Needs formatting: $file"
+        done
+
+  clean:
+    desc: Clean Perl build artifacts
+    dir: packages/perl
+    cmds:
+      - make clean 2>/dev/null || true
+      - rm -f Makefile.old
+      - find . -name '*.bak' -delete
+
+  update:
+    desc: Update Perl dependencies
+    dir: packages/perl
+    cmds:
+      - echo "Updating Perl dependencies..."
+      - "{{.CPANM}} --installdeps ."
+
+  console:
+    desc: Open Perl debugger with Kreuzberg loaded
+    dir: packages/perl
+    cmds:
+      - "{{.PERL}} -d -I lib -MKreuzberg -e '1'"
