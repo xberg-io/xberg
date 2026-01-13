@@ -74,7 +74,8 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        # TODO: Re-enable ubuntu-24.04-arm once cargo fingerprint issues on ARM64 are resolved
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     # Note: BUNDLE_GEMFILE is set per-step to avoid Windows path issues.
     # On Windows, github.workspace paths like D:/a/... get mangled to D:/d/a/... in bash shells.
@@ -491,7 +492,8 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        # TODO: Re-enable ubuntu-24.04-arm once cargo fingerprint issues on ARM64 are resolved
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
       RUSTC_WRAPPER: ""

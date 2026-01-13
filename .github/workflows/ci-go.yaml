@@ -192,6 +192,51 @@ jobs:
           echo "Build exit code: $BUILD_EXIT"
           exit $BUILD_EXIT
 
+      - name: Verify FFI header generation
+        if: always()
+        shell: bash
+        run: |
+          echo "=== FFI Header Verification ==="
+          echo "Platform: ${{ runner.os }}"
+          echo ""
+          echo "--- Checking for kreuzberg.h header file ---"
+          HEADER_PATH="crates/kreuzberg-ffi/kreuzberg.h"
+          if [ -f "$HEADER_PATH" ]; then
+            echo "✓ FFI header found: $HEADER_PATH"
+            echo "  File size: $(stat -f%z "$HEADER_PATH" 2>/dev/null || stat -c%s "$HEADER_PATH" 2>/dev/null || echo "unknown")"
+            echo "  Line count: $(wc -l < "$HEADER_PATH")"
+            echo ""
+            echo "--- Header file preview (first 20 lines) ---"
+            head -20 "$HEADER_PATH"
+          else
+            echo "✗ FFI header NOT found at: $HEADER_PATH"
+            echo ""
+            echo "--- Searching for header files in crates/kreuzberg-ffi/ ---"
+            find crates/kreuzberg-ffi -name "*.h" -o -name "*.hpp" 2>/dev/null || echo "  No header files found"
+            echo ""
+            echo "--- Checking cbindgen in build logs ---"
+            echo "This may indicate cbindgen failed during build.rs execution."
+            if [ "${{ runner.os }}" = "Windows" ]; then
+              echo ""
+              echo "--- Windows-specific checks ---"
+              echo "Checking if cbindgen.exe is available..."
+              where cbindgen 2>/dev/null || echo "  cbindgen not found in PATH"
+              echo ""
+              echo "Checking for cbindgen installation..."
+              cargo install --list | grep cbindgen || echo "  cbindgen not installed via cargo"
+            fi
+            exit 1
+          fi
+          echo ""
+          echo "--- Checking cbindgen.toml config ---"
+          if [ -f "crates/kreuzberg-ffi/cbindgen.toml" ]; then
+            echo "✓ cbindgen.toml found"
+            echo "  Config preview:"
+            head -30 crates/kreuzberg-ffi/cbindgen.toml
+          else
+            echo "✗ cbindgen.toml NOT found"
+          fi
+
       - name: Setup Go CGO environment
         uses: ./.github/actions/setup-go-cgo-env
         with:
