@@ -25,7 +25,7 @@ serde_json = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 once_cell = { workspace = true }
-html-to-markdown-rs = { version = "2.22.0", default-features = false }
+html-to-markdown-rs = { version = "2.22.2", default-features = false }
 lazy_static = "1.5"
 num_cpus = "1.17"
 crossbeam-channel = "0.5"

@@ -2360,6 +2360,10 @@ jobs:
         working-directory: packages/elixir
         run: mix deps.get
 
+      - name: Generate checksums for precompiled NIFs
+        working-directory: packages/elixir
+        run: mix rustler_precompiled.download Kreuzberg.Native --all --print
+
       - name: Build documentation
         working-directory: packages/elixir
         env:

@@ -28,7 +28,7 @@ serde_json = { workspace = true }
 serde = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
-html-to-markdown-rs = { version = "2.22.0", default-features = false }
+html-to-markdown-rs = { version = "2.22.2", default-features = false }
 rayon = { version = "1.11", optional = true }
 
 [target.'cfg(all(windows, target_env = "gnu"))'.dependencies]
