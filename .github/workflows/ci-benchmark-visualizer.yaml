@@ -1,6 +1,9 @@
 name: CI Benchmark Visualizer
 
 on:
+  workflow_run:
+    workflows: ["Publish Release"]
+    types: [completed]
   push:
     branches: [main]
     paths:

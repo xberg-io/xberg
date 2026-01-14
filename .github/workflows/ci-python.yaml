@@ -1,6 +1,9 @@
 name: CI Python
 
 on:
+  workflow_run:
+    workflows: ["Publish Release"]
+    types: [completed]
   push:
     branches: [main]
     paths:
