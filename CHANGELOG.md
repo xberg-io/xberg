@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.0.6] - 2026-01-14
+
+### Fixed
+
+#### Publish Workflow
+- **Cargo publish version requirements**: Added version specifications to path dependencies in `kreuzberg` and `kreuzberg-cli` crates to resolve crates.io publishing failures
+  - `kreuzberg-tesseract` now includes `version = "4.0"` alongside path dependency
+  - `kreuzberg` dependency in CLI now includes version requirement
+  - Resolves "all dependencies must have a version requirement specified when publishing" error
+
+#### Elixir
+- **Hex.pm publish checksums**: Fixed checksum file generation for precompiled NIFs during Hex.pm publishing
+  - Renamed checksum file to `checksum-Elixir.Kreuzberg.Native.exs` to match rustler_precompiled expectations
+  - Added `mix compile --force` step before checksum generation to create required metadata
+  - Updated `mix.exs` to reference correct checksum filename
+  - Resolves "precompiled NIF file does not exist in the checksum file" error during Hex.pm publish
+
+#### PHP
+- **ext-php-rs class registration**: Fixed runtime panic by registering missing `ChunkMetadata` and `Keyword` classes
+  - Both classes are now properly registered in `get_module()` before their containing types
+  - Resolves "Attempted to retrieve class entry before it has been stored" panic
+  - Users can now access chunk metadata and keyword objects in PHP without errors
+
+---
+
 ## [4.0.5] - 2026-01-14
 
 ### Added

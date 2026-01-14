@@ -17,5 +17,5 @@
     "@vitest/ui": "~3.2.0",
     "vitest": "~3.2.0"
   },
-  "version": "4.0.5"
+  "version": "4.0.6"
 }

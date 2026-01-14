@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   kreuzberg-core:
-    image: goldziher/kreuzberg:4.0.5
+    image: goldziher/kreuzberg:4.0.6
     container_name: kreuzberg-core-test
     ports:
       - "8000:8000"
@@ -26,7 +26,7 @@ services:
       - all
 
   kreuzberg-full:
-    image: goldziher/kreuzberg:4.0.5
+    image: goldziher/kreuzberg:4.0.6
     container_name: kreuzberg-full-test
     ports:
       - "8001:8000"

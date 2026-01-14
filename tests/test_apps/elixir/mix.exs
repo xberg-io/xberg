@@ -4,7 +4,7 @@ defmodule KreuzbergTestApp.MixProject do
   def project do
     [
       app: :kreuzberg_test_app,
-      version: "4.0.4",
+      version: "4.0.6",
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -21,7 +21,7 @@ defmodule KreuzbergTestApp.MixProject do
 
   defp deps do
     [
-      {:kreuzberg, "~> 4.0.4"},
+      {:kreuzberg, "~> 4.0.6"},
       {:rustler, ">= 0.0.0", optional: true}
     ]
   end
