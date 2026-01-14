@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 
 {% block extrahead %}
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-8G4NQW55PF"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-8G4NQW55PF');
+    gtag('config', 'AW-17853694443');
+  </script>
+
   <meta property="og:type" content="website" />
   <meta property="og:title" content="{{ config.site_name }}{% if page and page.title and not page.is_homepage %} - {{ page.title | striptags }}{% endif %}" />
   <meta property="og:description" content="{% if page and page.meta and page.meta.description %}{{ page.meta.description }}{% else %}{{ config.site_description }}{% endif %}" />
