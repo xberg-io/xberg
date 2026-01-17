@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+#### Python
+- **Type completions now working**: Fixed missing `_internal_bindings.pyi` type stub file in Python wheels ([#298](https://github.com/kreuzberg-dev/kreuzberg/issues/298))
+  - Added `.pyi` file to Maturin include configuration in `pyproject.toml`
+  - Removed redundant `MANIFEST.in` (Maturin uses `pyproject.toml` include list)
+  - IDEs and type checkers now have full type information for all Rust bindings
+  - Resolves "Type completions not working" error in PyCharm, VS Code, and mypy
+
+#### Homebrew
+- **Bottle checksum mismatches**: Fixed formula update script to download bottles from GitHub Release and compute checksums from actual uploaded files
+  - Formula checksums now match what users download, preventing "Bottle reports different checksum" errors
+  - Script downloads bottles from release instead of using local artifacts that may differ
+  - Ensures checksums are accurate even when bottles are re-uploaded with `--clobber` flag
+
+---
+
 ## [4.0.6] - 2026-01-14
 
 ### Fixed

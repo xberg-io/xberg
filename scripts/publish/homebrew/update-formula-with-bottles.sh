@@ -47,23 +47,36 @@ compute_sha256() {
   echo "$sha256"
 }
 
-# Process bottle artifacts with validation
+# Download and process bottles from GitHub Release to ensure checksums match uploaded files
+echo "Downloading bottles from GitHub Release to compute checksums..."
+temp_bottles_dir=$(mktemp -d)
+
+# Get list of expected bottles from local artifacts
 for bottle in "$artifacts_dir"/kreuzberg-*.bottle.tar.gz; do
   if [ -f "$bottle" ]; then
     filename="$(basename "$bottle")"
     without_suffix="${filename%.bottle.tar.gz}"
     bottle_tag="${without_suffix##*.}"
 
-    echo "Processing bottle: $filename"
+    echo "Downloading bottle from release: $filename"
+    bottle_url="https://github.com/kreuzberg-dev/kreuzberg/releases/download/$tag/$filename"
+    downloaded_bottle="$temp_bottles_dir/$filename"
 
-    # Verify file integrity before hashing
-    if ! tar -tzf "$bottle" >/dev/null 2>&1; then
-      echo "Error: Bottle file is corrupted or not a valid tar.gz: $bottle" >&2
+    # Download the actual uploaded bottle
+    if ! download_with_retry "$bottle_url" "$downloaded_bottle"; then
+      echo "Error: Failed to download bottle from $bottle_url" >&2
       exit 1
     fi
 
-    if ! sha256=$(compute_sha256 "$bottle"); then
-      echo "Error: Failed to compute SHA256 for $bottle" >&2
+    # Verify downloaded file integrity
+    if ! tar -tzf "$downloaded_bottle" >/dev/null 2>&1; then
+      echo "Error: Downloaded bottle is corrupted or not a valid tar.gz: $downloaded_bottle" >&2
+      exit 1
+    fi
+
+    # Compute checksum from the DOWNLOADED file (matches what users will get)
+    if ! sha256=$(compute_sha256 "$downloaded_bottle"); then
+      echo "Error: Failed to compute SHA256 for downloaded bottle" >&2
       exit 1
     fi
 
@@ -129,7 +142,7 @@ download_with_retry() {
 echo "Fetching SHA256 of source tarball..."
 tarball_url="https://github.com/kreuzberg-dev/kreuzberg/archive/$tag.tar.gz"
 tarball_temp=$(mktemp)
-trap 'rm -f "$tarball_temp"' EXIT
+trap 'rm -f "$tarball_temp"; rm -rf "$temp_bottles_dir"' EXIT
 
 if ! download_with_retry "$tarball_url" "$tarball_temp"; then
   echo "Error: Failed to download source tarball from $tarball_url" >&2

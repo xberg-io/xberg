@@ -6,7 +6,7 @@ exclude: ^docs/snippets/|vendor/|node_modules/|target/|invalid*|dist/|artifacts/
 repos:
   # Commit message linting
   - repo: https://github.com/Goldziher/gitfluff
-    rev: v0.7.0
+    rev: v0.7.1
     hooks:
       - id: gitfluff-lint
         args: ["--write"]

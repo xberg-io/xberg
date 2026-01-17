@@ -84,6 +84,7 @@ scripts.kreuzberg = "kreuzberg.__main__:main"
 module-name = "kreuzberg._internal_bindings"
 manifest-path = "../../crates/kreuzberg-py/Cargo.toml"
 include = [
+    { path = "kreuzberg/_internal_bindings.pyi", format = "wheel" },
     { path = "kreuzberg/kreuzberg-cli", format = "wheel" },
     { path = "kreuzberg/kreuzberg-cli.exe", format = "wheel" },
 ]
