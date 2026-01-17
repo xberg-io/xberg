@@ -80,6 +80,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # =============================================================================
 FROM debian:trixie-slim
 
+# OCI labels for container metadata
+LABEL org.opencontainers.image.source="https://github.com/kreuzberg-dev/kreuzberg"
+LABEL org.opencontainers.image.description="Kreuzberg document intelligence - core variant"
+LABEL org.opencontainers.image.licenses="MIT"
+
 WORKDIR /app
 
 # Download and install dependencies (Core version - without LibreOffice)

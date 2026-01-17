@@ -621,7 +621,7 @@ version: '3.8'
 
 services:
   kreuzberg-api:
-    image: goldziher/kreuzberg:latest
+    image: ghcr.io/kreuzberg-dev/kreuzberg:latest
     ports:
       - "8000:8000"
     environment:
@@ -671,7 +671,7 @@ spec:
     spec:
       containers:
       - name: kreuzberg
-        image: goldziher/kreuzberg:latest
+        image: ghcr.io/kreuzberg-dev/kreuzberg:latest
         ports:
         - containerPort: 8000
         env:

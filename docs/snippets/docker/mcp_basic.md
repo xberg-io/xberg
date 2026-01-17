@@ -1,4 +1,4 @@
 ```bash title="Bash"
 # Start MCP server
-docker run goldziher/kreuzberg:latest mcp
+docker run ghcr.io/kreuzberg-dev/kreuzberg:latest mcp
 ```

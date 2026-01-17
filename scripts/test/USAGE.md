@@ -19,14 +19,14 @@ Before running tests, build the Docker images:
 cd .
 
 # Build core variant
-docker build -f docker/Dockerfile.core -t goldziher/kreuzberg:core .
+docker build -f docker/Dockerfile.core -t kreuzberg:core .
 
 # Build full variant
-docker build -f docker/Dockerfile.full -t goldziher/kreuzberg:full .
+docker build -f docker/Dockerfile.full -t kreuzberg:full .
 
 # Or build both
-docker build -f docker/Dockerfile.core -t goldziher/kreuzberg:core . && \
-docker build -f docker/Dockerfile.full -t goldziher/kreuzberg:full .
+docker build -f docker/Dockerfile.core -t kreuzberg:core . && \
+docker build -f docker/Dockerfile.full -t kreuzberg:full .
 ```
 
 ## Running Tests
@@ -74,7 +74,7 @@ Test all variants with default settings:
 
 **Docker command**:
 ```bash
-docker run -v /local/config.toml:/etc/kreuzberg/kreuzberg.toml:ro goldziher/kreuzberg:full
+docker run -v /local/config.toml:/etc/kreuzberg/kreuzberg.toml:ro kreuzberg:full
 ```
 
 **Expected**: Container reads config from standard system location
@@ -87,7 +87,7 @@ docker run -v /local/config.toml:/etc/kreuzberg/kreuzberg.toml:ro goldziher/kreu
 
 **Docker command**:
 ```bash
-docker run -v /local/config.toml:/app/.config/kreuzberg/config.toml:ro goldziher/kreuzberg:full
+docker run -v /local/config.toml:/app/.config/kreuzberg/config.toml:ro kreuzberg:full
 ```
 
 **Expected**: Container reads config from user application directory
@@ -103,7 +103,7 @@ docker run -v /local/config.toml:/app/.config/kreuzberg/config.toml:ro goldziher
 docker run \
   -v /local/config.toml:/app/custom-config.toml:ro \
   --entrypoint "/app/kreuzberg" \
-  goldziher/kreuzberg:full \
+  kreuzberg:full \
   --config /app/custom-config.toml
 ```
 
@@ -120,7 +120,7 @@ docker run \
 docker run \
   -v /local/config.toml:/etc/kreuzberg/kreuzberg.toml:ro \
   -e KREUZBERG_SERVER_PORT=8000 \
-  goldziher/kreuzberg:full
+  kreuzberg:full
 ```
 
 **Expected**: Environment variable takes precedence over config file
@@ -196,7 +196,7 @@ ocr:
 
 **Docker command**:
 ```bash
-docker run -v /local/config.toml:/etc/kreuzberg/kreuzberg.toml:ro goldziher/kreuzberg:full
+docker run -v /local/config.toml:/etc/kreuzberg/kreuzberg.toml:ro kreuzberg:full
 ```
 
 **Expected**: Container works with read-only volumes, application doesn't attempt to modify config
@@ -246,8 +246,8 @@ Failed Tests:  0
 Pass Rate:     100%
 
 Tested Variants:
-  - goldziher/kreuzberg:core
-  - goldziher/kreuzberg:full
+  - kreuzberg:core
+  - kreuzberg:full
 ```
 
 ## Debugging Failed Tests
@@ -295,7 +295,7 @@ docker run -d \
   --name test-container \
   -p 8000:8000 \
   -v /path/to/config.toml:/etc/kreuzberg/kreuzberg.toml:ro \
-  goldziher/kreuzberg:full
+  kreuzberg:full
 
 # Wait for startup
 sleep 3
@@ -354,7 +354,7 @@ docker ps
 **Solution**: Build the image
 
 ```bash
-docker build -f docker/Dockerfile.full -t goldziher/kreuzberg:full .
+docker build -f docker/Dockerfile.full -t kreuzberg:full .
 ```
 
 ### Port Already in Use
@@ -420,8 +420,8 @@ jobs:
 
       - name: Build Docker images
         run: |
-          docker build -f docker/Dockerfile.core -t goldziher/kreuzberg:core .
-          docker build -f docker/Dockerfile.full -t goldziher/kreuzberg:full .
+          docker build -f docker/Dockerfile.core -t kreuzberg:core .
+          docker build -f docker/Dockerfile.full -t kreuzberg:full .
 
       - name: Run configuration tests
         run: ./scripts/test/test-docker-config-local.sh --variant all
@@ -436,8 +436,8 @@ docker-config-tests:
   services:
     - docker:dind
   script:
-    - docker build -f docker/Dockerfile.core -t goldziher/kreuzberg:core .
-    - docker build -f docker/Dockerfile.full -t goldziher/kreuzberg:full .
+    - docker build -f docker/Dockerfile.core -t kreuzberg:core .
+    - docker build -f docker/Dockerfile.full -t kreuzberg:full .
     - ./scripts/test/test-docker-config-local.sh --variant all
 ```
 

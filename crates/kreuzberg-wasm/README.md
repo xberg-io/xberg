@@ -33,6 +33,9 @@
   <a href="https://rubygems.org/gems/kreuzberg">
     <img src="https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6" alt="Ruby">
   </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg">
+    <img src="https://img.shields.io/badge/Docker-007ec6?logo=docker&logoColor=white" alt="Docker">
+  </a>
 
   <!-- Project Info -->
   <a href="https://github.com/kreuzberg-dev/kreuzberg/blob/main/LICENSE">
@@ -184,7 +187,7 @@ interface DocumentJob {
 	mimeType: string;
 }
 
-async function processBatch(documents: DocumentJob[], concurrency: number = 3) {
+async function _processBatch(documents: DocumentJob[], concurrency: number = 3) {
 	await initWasm();
 
 	const results: Record<string, string> = {};
@@ -441,7 +444,7 @@ interface DocumentJob {
 	mimeType: string;
 }
 
-async function processBatch(documents: DocumentJob[], concurrency: number = 3) {
+async function _processBatch(documents: DocumentJob[], concurrency: number = 3) {
 	await initWasm();
 
 	const results: Record<string, string> = {};

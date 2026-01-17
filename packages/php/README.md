@@ -33,6 +33,9 @@
   <a href="https://rubygems.org/gems/kreuzberg">
     <img src="https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6" alt="Ruby">
   </a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg">
+    <img src="https://img.shields.io/badge/Docker-007ec6?logo=docker&logoColor=white" alt="Docker">
+  </a>
 
   <!-- Project Info -->
   <a href="https://github.com/kreuzberg-dev/kreuzberg/blob/main/LICENSE">
@@ -85,7 +88,7 @@ composer require kreuzberg/kreuzberg
 
 Extract text, metadata, and structure from any supported document format:
 
-```php
+```php title="basic_extraction_oop.php"
 <?php
 
 declare(strict_types=1);
@@ -135,7 +138,7 @@ Most use cases benefit from configuration to control extraction behavior:
 
 **With OCR (for scanned documents):**
 
-```php
+```php title="basic_ocr.php"
 <?php
 
 declare(strict_types=1);
@@ -276,7 +279,7 @@ See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) f
 #### Processing Multiple Files
 
 
-```php
+```php title="batch_processing.php"
 <?php
 
 declare(strict_types=1);
@@ -537,7 +540,7 @@ Kreuzberg supports multiple OCR backends for extracting text from scanned docume
 
 ### OCR Configuration Example
 
-```php
+```php title="basic_ocr.php"
 <?php
 
 declare(strict_types=1);
@@ -690,7 +693,7 @@ Generate vector embeddings for extracted text using the built-in ONNX Runtime su
 
 Process multiple documents efficiently:
 
-```php
+```php title="batch_processing.php"
 <?php
 
 declare(strict_types=1);

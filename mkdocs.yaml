@@ -140,8 +140,8 @@ extra:
       link: https://pypi.org/project/kreuzberg/
       name: View on PyPI
     - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/r/goldziher/kreuzberg
-      name: View on Docker Hub
+      link: https://github.com/kreuzberg-dev/kreuzberg/pkgs/container/kreuzberg
+      name: View on GitHub Container Registry
     - icon: fontawesome/brands/npm
       link: https://www.npmjs.com/package/kreuzberg
       name: View on npm

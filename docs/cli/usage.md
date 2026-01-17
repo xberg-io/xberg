@@ -386,11 +386,11 @@ kreuzberg detect document.pdf
 
 ```bash title="Terminal"
 # Extract document using Docker with mounted directory
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/document.pdf
 
 # Extract and save output to host directory using shell redirection
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/document.pdf > output.txt
 ```
 
@@ -398,7 +398,7 @@ docker run -v $(pwd):/data goldziher/kreuzberg:latest \
 
 ```bash title="Terminal"
 # Extract with OCR using Docker
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/scanned.pdf --ocr true
 ```
 
@@ -411,7 +411,7 @@ version: '3.8'
 
 services:
   kreuzberg:
-    image: goldziher/kreuzberg:latest
+    image: ghcr.io/kreuzberg-dev/kreuzberg:latest
     volumes:
       - ./documents:/input
     command: extract /input/document.pdf --ocr true

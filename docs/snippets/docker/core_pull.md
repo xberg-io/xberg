@@ -1,3 +1,3 @@
 ```bash title="Bash"
-docker pull goldziher/kreuzberg:latest
+docker pull ghcr.io/kreuzberg-dev/kreuzberg:core
 ```

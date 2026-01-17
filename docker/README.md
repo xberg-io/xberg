@@ -107,10 +107,13 @@ IMAGE_NAME=kreuzberg:full ./scripts/test_docker.sh
 
 ## GitHub Actions
 
-The `.github/workflows/docker.yaml` workflow builds and publishes both variants:
-- `kreuzberg:v4-core` - Core image without LibreOffice
-- `kreuzberg:v4-full` - Full image with LibreOffice
-- `kreuzberg:v4`, `kreuzberg:latest` - Aliases for full image
+The `.github/workflows/publish-docker.yaml` workflow builds and publishes both variants to GitHub Container Registry:
+- `ghcr.io/kreuzberg-dev/kreuzberg:VERSION-core` - Core image without LibreOffice
+- `ghcr.io/kreuzberg-dev/kreuzberg:core` - Latest core image
+- `ghcr.io/kreuzberg-dev/kreuzberg:VERSION` - Full image with LibreOffice
+- `ghcr.io/kreuzberg-dev/kreuzberg:latest` - Latest full image
+
+For local development, use the local tags shown in the build commands above.
 
 ## Recommendations
 

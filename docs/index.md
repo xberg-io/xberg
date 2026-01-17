@@ -36,7 +36,7 @@ Kreuzberg is a document intelligence platform with a high‑performance Rust cor
 | Elixir             | `{:kreuzberg, "~> 4.0"}` | BEAM applications, Phoenix apps | [Elixir API Reference](reference/api-elixir.md) |
 | Rust               | `cargo add kreuzberg` | System libraries, performance-critical | [Rust API Reference](reference/api-rust.md) |
 | CLI                | `brew install kreuzberg-dev/tap/kreuzberg` or `cargo install kreuzberg-cli` | Terminal automation, scripting | [CLI Usage](cli/usage.md) |
-| API Server / MCP   | Docker image `goldziher/kreuzberg:core` | Containerized services, MCP integration | [API Server Guide](guides/api-server.md) |
+| API Server / MCP   | Docker image `ghcr.io/kreuzberg-dev/kreuzberg:core` | Containerized services, MCP integration | [API Server Guide](guides/api-server.md) |
 
 ### Choosing Between TypeScript Packages
 

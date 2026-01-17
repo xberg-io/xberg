@@ -880,12 +880,12 @@ choco install tesseract libreoffice
 Pre-built Docker images available on Docker Hub:
 
 **Variants:**
-- `goldziher/kreuzberg:latest` - Core + Tesseract
-- `goldziher/kreuzberg:latest-all` - All features
+- `ghcr.io/kreuzberg-dev/kreuzberg:latest` - Core + Tesseract
+- `ghcr.io/kreuzberg-dev/kreuzberg:latest` - All features
 
 **Usage:**
 ```bash title="Terminal"
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/document.pdf --ocr
 ```
 

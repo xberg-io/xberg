@@ -9,7 +9,7 @@ Kreuzberg offers two Docker image variants optimized for different use cases:
 ### Core Image
 
 **Size:** ~1.0-1.3GB
-**Image:** `goldziher/kreuzberg:latest`
+**Image:** `ghcr.io/kreuzberg-dev/kreuzberg:latest`
 
 **Included Features:**
 - Tesseract OCR with 12 language packs (eng, spa, fra, deu, ita, por, chi-sim, chi-tra, jpn, ara, rus, hin)
@@ -32,7 +32,7 @@ Kreuzberg offers two Docker image variants optimized for different use cases:
 ### Full Image
 
 **Size:** ~1.5-2.1GB
-**Image:** `goldziher/kreuzberg:latest-all`
+**Image:** `ghcr.io/kreuzberg-dev/kreuzberg:latest`
 
 **Included Features:**
 - All Core image features
@@ -85,25 +85,25 @@ The default mode starts an HTTP REST API server.
 
 **Default Behavior:**
 ```bash title="Terminal"
-docker run -p 8000:8000 goldziher/kreuzberg:latest
+docker run -p 8000:8000 ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 
 **Custom Configuration:**
 ```bash title="Terminal"
 # Change host and port
-docker run -p 9000:9000 goldziher/kreuzberg:latest \
+docker run -p 9000:9000 ghcr.io/kreuzberg-dev/kreuzberg:latest \
   serve --host 0.0.0.0 --port 9000
 
 # With environment variables
 docker run -p 8000:8000 \
   -e KREUZBERG_CORS_ORIGINS="https://myapp.com" \
   -e KREUZBERG_MAX_UPLOAD_SIZE_MB=200 \
-  goldziher/kreuzberg:latest
+  ghcr.io/kreuzberg-dev/kreuzberg:latest
 
 # With configuration file
 docker run -p 8000:8000 \
   -v $(pwd)/kreuzberg.toml:/config/kreuzberg.toml \
-  goldziher/kreuzberg:latest \
+  ghcr.io/kreuzberg-dev/kreuzberg:latest \
   serve --config /config/kreuzberg.toml
 ```
 
@@ -116,42 +116,42 @@ Run Kreuzberg as a command-line tool for file processing.
 **Extract Files:**
 ```bash title="Terminal"
 # Mount directory and extract file
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/document.pdf
 
 # Extract with OCR
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/scanned.pdf --ocr true
 
 # Output as JSON
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/document.pdf --output-format json > result.json
 ```
 
 **Batch Processing:**
 ```bash title="Terminal"
 # Process multiple files
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   batch /data/*.pdf --output-format json
 
 # With custom concurrency
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   batch /data/*.pdf --concurrency 8
 ```
 
 **MIME Detection:**
 ```bash title="Terminal"
-docker run -v $(pwd):/data goldziher/kreuzberg:latest \
+docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   detect /data/unknown-file.bin
 ```
 
 **Cache Management:**
 ```bash title="Terminal"
 # View cache statistics
-docker run goldziher/kreuzberg:latest cache stats
+docker run ghcr.io/kreuzberg-dev/kreuzberg:latest cache stats
 
 # Clear cache
-docker run goldziher/kreuzberg:latest cache clear
+docker run ghcr.io/kreuzberg-dev/kreuzberg:latest cache clear
 ```
 
 See [CLI Usage Guide](../cli/usage.md) for complete CLI documentation.
@@ -162,14 +162,14 @@ Run Kreuzberg as a Model Context Protocol server for AI agent integration.
 
 **Start MCP Server:**
 ```bash title="Terminal"
-docker run goldziher/kreuzberg:latest mcp
+docker run ghcr.io/kreuzberg-dev/kreuzberg:latest mcp
 ```
 
 **With Configuration:**
 ```bash title="Terminal"
 docker run \
   -v $(pwd)/kreuzberg.toml:/config/kreuzberg.toml \
-  goldziher/kreuzberg:latest \
+  ghcr.io/kreuzberg-dev/kreuzberg:latest \
   mcp --config /config/kreuzberg.toml
 ```
 
@@ -221,7 +221,7 @@ docker run --security-opt no-new-privileges \
   --read-only \
   --tmpfs /tmp \
   -p 8000:8000 \
-  goldziher/kreuzberg:latest
+  ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 
 ## Production Deployment
@@ -235,7 +235,7 @@ version: '3.8'
 
 services:
   kreuzberg-api:
-    image: goldziher/kreuzberg:latest
+    image: ghcr.io/kreuzberg-dev/kreuzberg:latest
     ports:
       - "8000:8000"
     environment:
@@ -263,7 +263,7 @@ volumes:
 ```yaml title="docker-compose.yaml"
 services:
   kreuzberg-full:
-    image: goldziher/kreuzberg:latest-all
+    image: ghcr.io/kreuzberg-dev/kreuzberg:latest
     ports:
       - "8000:8000"
     environment:
@@ -301,7 +301,7 @@ spec:
     spec:
       containers:
       - name: kreuzberg
-        image: goldziher/kreuzberg:latest
+        image: ghcr.io/kreuzberg-dev/kreuzberg:latest
         ports:
         - containerPort: 8000
           name: http
@@ -388,7 +388,7 @@ RUST_LOG=info                    # Logging level (error, warn, info, debug, trac
 # Mount cache directory for persistence
 docker run -p 8000:8000 \
   -v kreuzberg-cache:/app/.kreuzberg \
-  goldziher/kreuzberg:latest
+  ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 
 **Configuration Files:**
@@ -396,7 +396,7 @@ docker run -p 8000:8000 \
 # Mount configuration file
 docker run -p 8000:8000 \
   -v $(pwd)/kreuzberg.toml:/config/kreuzberg.toml \
-  goldziher/kreuzberg:latest \
+  ghcr.io/kreuzberg-dev/kreuzberg:latest \
   serve --config /config/kreuzberg.toml
 ```
 
@@ -404,7 +404,7 @@ docker run -p 8000:8000 \
 ```bash title="Terminal"
 # Mount documents directory (read-only)
 docker run -v $(pwd)/documents:/data:ro \
-  goldziher/kreuzberg:latest \
+  ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/document.pdf
 ```
 
@@ -440,7 +440,7 @@ Clone the repository and build:
 Create a custom Dockerfile based on official images:
 
 ```dockerfile title="Dockerfile"
-FROM goldziher/kreuzberg:latest
+FROM ghcr.io/kreuzberg-dev/kreuzberg:latest
 
 # Install additional system dependencies
 USER root
@@ -477,14 +477,14 @@ CMD ["serve", "--config", "/app/kreuzberg.toml"]
 docker run -p 8000:8000 \
   --memory=1g \
   --cpus=1 \
-  goldziher/kreuzberg:latest
+  ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 
 **Docker Compose:**
 ```yaml title="docker-compose.yaml"
 services:
   kreuzberg:
-    image: goldziher/kreuzberg:latest
+    image: ghcr.io/kreuzberg-dev/kreuzberg:latest
     deploy:
       resources:
         limits:
@@ -540,14 +540,14 @@ chown -R 1000:1000 /path/to/mounted/directory
 ```bash title="Terminal"
 docker run -p 8000:8000 \
   --memory=4g \
-  goldziher/kreuzberg:latest
+  ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 
 **Increase upload size:**
 ```bash title="Terminal"
 docker run -p 8000:8000 \
   -e KREUZBERG_MAX_UPLOAD_SIZE_MB=1000 \
-  goldziher/kreuzberg:latest
+  ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 
 ### LibreOffice Not Available
@@ -556,8 +556,8 @@ LibreOffice is only available in the **Full** image variant. If you need legacy 
 
 ```bash title="Terminal"
 # Switch to full image
-docker pull goldziher/kreuzberg:latest-all
-docker run -p 8000:8000 goldziher/kreuzberg:latest-all
+docker pull ghcr.io/kreuzberg-dev/kreuzberg:latest
+docker run -p 8000:8000 ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 
 ## Next Steps

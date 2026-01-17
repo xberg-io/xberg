@@ -279,7 +279,7 @@ cargo tree | grep tokio
 ## Related Files
 
 - Main Kreuzberg crate: https://crates.io/crates/kreuzberg
-- Source repository: https://github.com/goldziher/kreuzberg
+- Source repository: https://github.com/kreuzberg-dev/kreuzberg
 - Python test app: `/test_apps/python`
 - TypeScript test app: `/test_apps/node`
 - Go test app: `/test_apps/go`
@@ -319,5 +319,5 @@ async fn test_extract_file_async_with_valid_pdf_returns_result() {
 ## See Also
 
 - Main Kreuzberg repository: https://github.com/kreuzberg-dev/kreuzberg
-- Documentation: https://goldziher.github.io/kreuzberg/
+- Documentation: https://docs.kreuzberg.dev
 - Issues: https://github.com/kreuzberg-dev/kreuzberg/issues

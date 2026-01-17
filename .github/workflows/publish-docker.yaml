@@ -117,6 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      packages: read
     outputs:
       core_exists: ${{ steps.core.outputs.exists }}
       full_exists: ${{ steps.full.outputs.exists }}
@@ -126,17 +127,24 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.tag }}
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check core image tag
         id: core
         env:
-          DOCKER_TAG: ${{ 'goldziher/kreuzberg' }}:${{ needs.prepare.outputs.version }}-core
+          DOCKER_TAG: ghcr.io/kreuzberg-dev/kreuzberg:${{ needs.prepare.outputs.version }}-core
           SUMMARY_LABEL: core
         run: scripts/publish/check-docker-tag.sh
 
       - name: Check full image tag
         id: full
         env:
-          DOCKER_TAG: ${{ 'goldziher/kreuzberg' }}:${{ needs.prepare.outputs.version }}
+          DOCKER_TAG: ghcr.io/kreuzberg-dev/kreuzberg:${{ needs.prepare.outputs.version }}
           SUMMARY_LABEL: full
         run: scripts/publish/check-docker-tag.sh
 
@@ -156,12 +164,12 @@ jobs:
         include:
           - variant: core
             dockerfile: docker/Dockerfile.core
-            image: goldziher/kreuzberg
+            image: ghcr.io/kreuzberg-dev/kreuzberg
             tag_suffix: "-core"
             extra_tag: "core"
           - variant: full
             dockerfile: docker/Dockerfile.full
-            image: goldziher/kreuzberg
+            image: ghcr.io/kreuzberg-dev/kreuzberg
             tag_suffix: ""
             extra_tag: "latest"
     if: ${{ needs.prepare.outputs.release_docker == 'true' }}
@@ -198,12 +206,13 @@ jobs:
         if: ${{ needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true') }}
         run: ./scripts/test_docker.sh --skip-build --image kreuzberg-publish:${{ matrix.variant }}-test --variant ${{ matrix.variant }} --verbose
 
-      - name: Log in to Docker Hub
+      - name: Log in to GitHub Container Registry
         if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true')) }}
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker metadata
         if: ${{ needs.prepare.outputs.dry_run != 'true' && (needs.prepare.outputs.force_republish == 'true' || (matrix.variant == 'core' && needs.check-docker.outputs.core_exists != 'true') || (matrix.variant == 'full' && needs.check-docker.outputs.full_exists != 'true')) }}
@@ -226,7 +235,11 @@ jobs:
             PDFIUM_VERSION=${{ env.PDFIUM_VERSION }}
             ONNXRUNTIME_VERSION=${{ env.ORT_VERSION }}
           tags: ${{ steps.docker_meta.outputs.tags }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
+          labels: |
+            ${{ steps.docker_meta.outputs.labels }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.description=Kreuzberg document intelligence - ${{ matrix.variant }} variant
+            org.opencontainers.image.licenses=MIT
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max,scope=publish-docker-${{ matrix.variant }}

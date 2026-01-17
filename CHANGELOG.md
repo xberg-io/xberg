@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### Docker
+- **Docker registry migration**: Migrated from Docker Hub to GitHub Container Registry
+  - New image location: `ghcr.io/kreuzberg-dev/kreuzberg` (was `goldziher/kreuzberg`)
+  - Core variant: `ghcr.io/kreuzberg-dev/kreuzberg:VERSION-core` or `:core`
+  - Full variant: `ghcr.io/kreuzberg-dev/kreuzberg:VERSION` or `:latest`
+  - Added OCI labels for better container metadata and repository linking
+  - Updated all documentation, examples, and test configurations
+  - Images remain publicly accessible and support linux/amd64 and linux/arm64
+
+---
+
+## [4.0.8] - 2026-01-17
+
 ### Fixed
 
 #### CI/CD

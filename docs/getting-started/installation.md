@@ -379,8 +379,8 @@ cargo install kreuzberg-cli
 Docker image:
 
 ```bash title="Terminal"
-docker pull goldziher/kreuzberg:latest       # Core image with essential features
-docker pull goldziher/kreuzberg:latest-all   # Full image with all extensions
+docker pull ghcr.io/kreuzberg-dev/kreuzberg:latest       # Core image with essential features
+docker pull ghcr.io/kreuzberg-dev/kreuzberg:latest   # Full image with all extensions
 ```
 
 Next steps: [CLI Usage](../cli/usage.md) • [API Server Guide](../guides/api-server.md)

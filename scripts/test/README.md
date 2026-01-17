@@ -21,7 +21,7 @@ Tests Docker configuration in various scenarios:
 #### Requirements
 
 - Docker installed and running
-- Docker images pre-built (`goldziher/kreuzberg:core` and/or `goldziher/kreuzberg:full`)
+- Docker images pre-built (`kreuzberg:core` and/or `kreuzberg:full`)
 - Port range 18100-18199 available for testing
 
 #### Usage
@@ -143,8 +143,8 @@ Failed Tests:  0
 Pass Rate:     100%
 
 Tested Variants:
-  - goldziher/kreuzberg:core
-  - goldziher/kreuzberg:full
+  - kreuzberg:core
+  - kreuzberg:full
 ```
 
 #### Troubleshooting
@@ -161,8 +161,8 @@ Tested Variants:
 - Build the required image(s):
   ```bash
   cd /path/to/kreuzberg
-  docker build -f docker/Dockerfile.core -t goldziher/kreuzberg:core .
-  docker build -f docker/Dockerfile.full -t goldziher/kreuzberg:full .
+  docker build -f docker/Dockerfile.core -t kreuzberg:core .
+  docker build -f docker/Dockerfile.full -t kreuzberg:full .
   ```
 
 **Tests timing out**
@@ -220,8 +220,8 @@ The script can be integrated into CI/CD pipelines:
 set -e
 
 # Build images
-docker build -f docker/Dockerfile.core -t goldziher/kreuzberg:core .
-docker build -f docker/Dockerfile.full -t goldziher/kreuzberg:full .
+docker build -f docker/Dockerfile.core -t kreuzberg:core .
+docker build -f docker/Dockerfile.full -t kreuzberg:full .
 
 # Run tests
 ./scripts/test/test-docker-config-local.sh --variant all
@@ -234,7 +234,7 @@ echo "Configuration tests passed!"
 - Requires Docker to be installed and running
 - Tests only configuration volume mounts (not other volume types)
 - Tests only health endpoint (basic connectivity validation)
-- Assumes `goldziher/kreuzberg:*` image naming convention
+- Assumes `kreuzberg:*` image naming convention
 - Tests run sequentially (not parallelized)
 
 #### Future Enhancements
