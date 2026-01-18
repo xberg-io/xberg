@@ -17,7 +17,8 @@ use crate::{ExtractionConfig, Result, core::ServerConfig};
 
 use super::{
     handlers::{
-        cache_clear_handler, cache_stats_handler, embed_handler, extract_handler, health_handler, info_handler,
+        cache_clear_handler, cache_stats_handler, chunk_handler, embed_handler, extract_handler, health_handler,
+        info_handler,
     },
     types::{ApiSizeLimits, ApiState},
 };
@@ -221,6 +222,7 @@ pub fn create_router_with_limits_and_server_config(
     Router::new()
         .route("/extract", post(extract_handler))
         .route("/embed", post(embed_handler))
+        .route("/chunk", post(chunk_handler))
         .route("/health", get(health_handler))
         .route("/info", get(info_handler))
         .route("/cache/stats", get(cache_stats_handler))

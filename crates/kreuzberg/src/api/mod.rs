@@ -7,6 +7,7 @@
 //!
 //! - `POST /extract` - Extract text from uploaded files (multipart form data)
 //! - `POST /embed` - Generate embeddings for text (JSON body with texts array)
+//! - `POST /chunk` - Chunk text into smaller pieces (JSON body with text and config)
 //! - `GET /health` - Health check endpoint
 //! - `GET /info` - Server information
 //! - `GET /cache/stats` - Get cache statistics
@@ -76,6 +77,11 @@
 //! curl -X POST http://localhost:8000/embed \
 //!      -H "Content-Type: application/json" \
 //!      -d '{"texts":["Hello world","Second text"]}'
+//!
+//! # Chunk text
+//! curl -X POST http://localhost:8000/chunk \
+//!      -H "Content-Type: application/json" \
+//!      -d '{"text":"Long text to chunk...","chunker_type":"text"}'
 //! ```
 
 mod error;
@@ -89,6 +95,6 @@ pub use server::{
     serve_default, serve_with_config, serve_with_config_and_limits, serve_with_server_config,
 };
 pub use types::{
-    ApiSizeLimits, ApiState, CacheClearResponse, CacheStatsResponse, EmbedRequest, EmbedResponse, ErrorResponse,
-    ExtractResponse, HealthResponse, InfoResponse,
+    ApiSizeLimits, ApiState, CacheClearResponse, CacheStatsResponse, ChunkRequest, ChunkResponse, EmbedRequest,
+    EmbedResponse, ErrorResponse, ExtractResponse, HealthResponse, InfoResponse,
 };

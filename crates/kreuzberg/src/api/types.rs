@@ -204,3 +204,81 @@ pub struct EmbedResponse {
     /// Number of embeddings generated
     pub count: usize,
 }
+
+/// Default chunker type.
+fn default_chunker_type() -> String {
+    "text".to_string()
+}
+
+/// Chunk request with text and configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkRequest {
+    /// Text to chunk
+    pub text: String,
+    /// Optional chunking configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<ChunkingConfigRequest>,
+    /// Chunker type (text or markdown)
+    #[serde(default = "default_chunker_type")]
+    pub chunker_type: String,
+}
+
+/// Chunking configuration request.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ChunkingConfigRequest {
+    /// Maximum characters per chunk
+    pub max_characters: Option<usize>,
+    /// Overlap between chunks in characters
+    pub overlap: Option<usize>,
+    /// Whether to trim whitespace
+    pub trim: Option<bool>,
+}
+
+/// Chunk response with chunks and metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkResponse {
+    /// List of chunks
+    pub chunks: Vec<ChunkItem>,
+    /// Total number of chunks
+    pub chunk_count: usize,
+    /// Configuration used for chunking
+    pub config: ChunkingConfigResponse,
+    /// Input text size in bytes
+    pub input_size_bytes: usize,
+    /// Chunker type used for chunking
+    pub chunker_type: String,
+}
+
+/// Individual chunk item with metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkItem {
+    /// Chunk content
+    pub content: String,
+    /// Byte offset start position
+    pub byte_start: usize,
+    /// Byte offset end position
+    pub byte_end: usize,
+    /// Index of this chunk (0-based)
+    pub chunk_index: usize,
+    /// Total number of chunks
+    pub total_chunks: usize,
+    /// First page number (optional, for PDF chunking)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub first_page: Option<usize>,
+    /// Last page number (optional, for PDF chunking)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_page: Option<usize>,
+}
+
+/// Chunking configuration response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkingConfigResponse {
+    /// Maximum characters per chunk
+    pub max_characters: usize,
+    /// Overlap between chunks in characters
+    pub overlap: usize,
+    /// Whether whitespace was trimmed
+    pub trim: bool,
+    /// Type of chunker used
+    pub chunker_type: String,
+}

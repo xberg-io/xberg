@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### API
+- **POST /chunk endpoint**: New text chunking endpoint for breaking text into smaller pieces
+  - Accepts JSON body with `text`, `chunker_type` (text/markdown), and optional `config`
+  - Returns chunks with byte offsets, indices, and metadata
+  - Configuration options: `max_characters` (default: 2000), `overlap` (default: 100), `trim` (default: true)
+  - Supports both text and markdown chunking strategies
+  - Case-insensitive chunker_type parameter
+  - Comprehensive error handling for invalid inputs
+
 #### Core
 - **Element-based output format**: New `OutputFormat::ElementBased` option provides Unstructured.io-compatible semantic element extraction
   - Extracts structured elements: titles, paragraphs, lists, tables, images, page breaks, headings, code blocks, block quotes, headers, footers

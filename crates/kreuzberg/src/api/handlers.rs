@@ -10,8 +10,8 @@ use crate::{batch_extract_bytes, cache, extract_bytes};
 use super::{
     error::ApiError,
     types::{
-        ApiState, CacheClearResponse, CacheStatsResponse, EmbedRequest, EmbedResponse, ExtractResponse, HealthResponse,
-        InfoResponse,
+        ApiState, CacheClearResponse, CacheStatsResponse, ChunkRequest, ChunkResponse, EmbedRequest, EmbedResponse,
+        ExtractResponse, HealthResponse, InfoResponse,
     },
 };
 
@@ -334,4 +334,82 @@ pub async fn embed_handler(Json(_request): Json<EmbedRequest>) -> Result<Json<Em
     Err(ApiError::internal(crate::error::KreuzbergError::MissingDependency(
         "Embeddings feature is not enabled. Rebuild with --features embeddings".to_string(),
     )))
+}
+
+/// Chunk text endpoint handler.
+///
+/// POST /chunk
+///
+/// Accepts JSON body with text and optional configuration.
+/// Returns chunks with metadata.
+#[cfg_attr(
+    feature = "otel",
+    tracing::instrument(
+        name = "api.chunk",
+        skip(request),
+        fields(text_length = request.text.len(), chunker_type = request.chunker_type.as_str())
+    )
+)]
+pub async fn chunk_handler(Json(request): Json<ChunkRequest>) -> Result<Json<ChunkResponse>, ApiError> {
+    use super::types::{ChunkItem, ChunkingConfigResponse};
+    use crate::chunking::{ChunkerType, ChunkingConfig, chunk_text};
+
+    // Validate input
+    if request.text.is_empty() {
+        return Err(ApiError::validation(crate::error::KreuzbergError::validation(
+            "Text cannot be empty",
+        )));
+    }
+
+    // Parse chunker_type
+    let chunker_type = match request.chunker_type.to_lowercase().as_str() {
+        "text" | "" => ChunkerType::Text,
+        "markdown" => ChunkerType::Markdown,
+        other => {
+            return Err(ApiError::validation(crate::error::KreuzbergError::validation(format!(
+                "Invalid chunker_type: '{}'. Valid values: 'text', 'markdown'",
+                other
+            ))));
+        }
+    };
+
+    // Build config with defaults
+    let cfg = request.config.unwrap_or_default();
+    let config = ChunkingConfig {
+        max_characters: cfg.max_characters.unwrap_or(2000),
+        overlap: cfg.overlap.unwrap_or(100),
+        trim: cfg.trim.unwrap_or(true),
+        chunker_type,
+    };
+
+    // Perform chunking
+    let result = chunk_text(&request.text, &config, None).map_err(ApiError::internal)?;
+
+    // Transform to response
+    let chunks = result
+        .chunks
+        .into_iter()
+        .map(|chunk| ChunkItem {
+            content: chunk.content,
+            byte_start: chunk.metadata.byte_start,
+            byte_end: chunk.metadata.byte_end,
+            chunk_index: chunk.metadata.chunk_index,
+            total_chunks: chunk.metadata.total_chunks,
+            first_page: chunk.metadata.first_page,
+            last_page: chunk.metadata.last_page,
+        })
+        .collect();
+
+    Ok(Json(ChunkResponse {
+        chunks,
+        chunk_count: result.chunk_count,
+        config: ChunkingConfigResponse {
+            max_characters: config.max_characters,
+            overlap: config.overlap,
+            trim: config.trim,
+            chunker_type: format!("{:?}", config.chunker_type).to_lowercase(),
+        },
+        input_size_bytes: request.text.len(),
+        chunker_type: request.chunker_type.to_lowercase(),
+    }))
 }
