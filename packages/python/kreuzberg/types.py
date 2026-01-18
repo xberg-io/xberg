@@ -265,6 +265,73 @@ class PageContent(TypedDict):
     images: list[ExtractedImage]
 
 
+ElementType = Literal[
+    "title",
+    "narrative_text",
+    "heading",
+    "list_item",
+    "table",
+    "image",
+    "page_break",
+    "code_block",
+    "block_quote",
+    "footer",
+    "header",
+]
+"""Semantic element type classification.
+
+Classifies extracted document elements into semantic categories
+compatible with Unstructured.io element types.
+"""
+
+
+class BoundingBox(TypedDict):
+    """Bounding box coordinates for an element."""
+
+    x0: float  # Left x-coordinate
+    y0: float  # Bottom y-coordinate
+    x1: float  # Right x-coordinate
+    y1: float  # Top y-coordinate
+
+
+class ElementMetadata(TypedDict, total=False):
+    """Metadata for a semantic element.
+
+    Attributes:
+        page_number: Page number (1-indexed)
+        filename: Source filename or document name
+        coordinates: Bounding box coordinates if available
+        element_index: Position index in the element sequence
+        additional: Additional custom metadata fields
+    """
+
+    page_number: int | None
+    filename: str | None
+    coordinates: BoundingBox | None
+    element_index: int | None
+    additional: dict[str, str]
+
+
+class Element(TypedDict):
+    """Semantic element extracted from document.
+
+    Represents a logical unit of content with semantic classification,
+    unique identifier, and metadata for tracking origin and position.
+    Compatible with Unstructured.io element format when output_format='element_based'.
+
+    Attributes:
+        element_id: Unique identifier (deterministic hash-based ID)
+        element_type: Semantic type classification
+        text: Content string
+        metadata: Element metadata including page number, coordinates, etc.
+    """
+
+    element_id: str
+    element_type: ElementType
+    text: str
+    metadata: ElementMetadata
+
+
 class Chunk(TypedDict, total=False):
     """Text chunk with optional embedding vector."""
 
@@ -466,6 +533,7 @@ class ExtractionResult(TypedDict):
         chunks: Optional list of text chunks with embeddings and metadata
         images: Optional list of extracted images (with nested OCR results)
         pages: Optional list of per-page content when page extraction is enabled
+        elements: Optional list of semantic elements when output_format='element_based'
     """
 
     content: str
@@ -476,18 +544,24 @@ class ExtractionResult(TypedDict):
     chunks: list[Chunk] | None
     images: list[ExtractedImage] | None
     pages: list[PageContent] | None
+    elements: list[Element] | None
 
 
 __all__ = [
     "ArchiveMetadata",
+    "BoundingBox",
     "Chunk",
     "ChunkMetadata",
+    "Element",
+    "ElementMetadata",
+    "ElementType",
     "EmailMetadata",
     "ErrorMetadata",
     "ExcelMetadata",
     "ExtractedImage",
     "ExtractionResult",
     "HeaderMetadata",
+    "HtmlImageMetadata",
     "HtmlMetadata",
     "ImageMetadata",
     "ImagePreprocessingMetadata",
