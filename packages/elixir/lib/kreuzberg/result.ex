@@ -262,10 +262,18 @@ defmodule Kreuzberg.ExtractionResult do
   end
 
   @doc false
-  @spec normalize_keywords(list() | nil) :: list(map()) | nil
+  @spec normalize_keywords(list() | String.t() | nil) :: list(map()) | nil
   defp normalize_keywords(nil), do: nil
   defp normalize_keywords([]), do: []
   defp normalize_keywords(keywords) when is_list(keywords), do: keywords
+
+  defp normalize_keywords(keywords) when is_binary(keywords) do
+    keywords
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.map(fn text -> %{"text" => text, "score" => 1.0} end)
+  end
 
   @doc false
   @spec normalize_elements(list() | nil) :: list(Kreuzberg.Element.t()) | nil

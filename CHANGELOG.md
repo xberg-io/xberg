@@ -93,6 +93,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Total 32 public types now properly exported for IDE autocomplete and type checking
   - Resolves import failures where types were defined but not accessible
 
+#### Elixir
+- **DOCX keyword extraction**: Fixed `FunctionClauseError` when extracting DOCX files with keywords metadata ([#309](https://github.com/kreuzberg-dev/kreuzberg/issues/309))
+  - DOCX extractor now parses comma-separated keyword strings into `Vec<String>` and stores in typed `Metadata.keywords` field
+  - Added defensive string handling to `normalize_keywords/1` in Elixir binding
+  - Resolves crash when extracting DOCX files containing keywords in `cp:keywords` or `dc:subject` metadata fields
+  - Added comprehensive unit tests for keyword string parsing in both Rust and Elixir
+
 ---
 
 ## [4.0.8] - 2026-01-17

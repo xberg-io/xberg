@@ -182,6 +182,7 @@ impl DocumentExtractor for DocxExtractor {
         };
 
         let mut metadata_map = std::collections::HashMap::new();
+        let mut parsed_keywords: Option<Vec<String>> = None;
 
         if let Ok(core) = office_metadata::extract_core_properties(&mut archive) {
             if let Some(title) = core.title {
@@ -198,7 +199,14 @@ impl DocumentExtractor for DocxExtractor {
                 metadata_map.insert("subject".to_string(), serde_json::Value::String(subject));
             }
             if let Some(keywords) = core.keywords {
-                metadata_map.insert("keywords".to_string(), serde_json::Value::String(keywords));
+                // Parse comma-separated keywords into Vec<String>
+                parsed_keywords = Some(
+                    keywords
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect(),
+                );
             }
             if let Some(description) = core.description {
                 metadata_map.insert("description".to_string(), serde_json::Value::String(description));
@@ -296,6 +304,7 @@ impl DocumentExtractor for DocxExtractor {
             mime_type: mime_type.to_string(),
             metadata: Metadata {
                 pages: page_structure,
+                keywords: parsed_keywords,
                 additional: metadata_map,
                 ..Default::default()
             },

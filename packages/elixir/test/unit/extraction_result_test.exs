@@ -407,4 +407,91 @@ defmodule KreuzbergTest.Unit.ExtractionResultTest do
       assert Enum.uniq(contents) == contents
     end
   end
+
+  describe "normalize_keywords/1 - keyword string parsing (GitHub issue #309)" do
+    test "parses comma-separated keyword string from DOCX metadata" do
+      # This test addresses GitHub issue #309: DOCX files return keywords
+      # as comma-separated strings from metadata, which caused FunctionClauseError
+      # before the fix was implemented.
+      keywords_string = "calibre, docs, ebook, conversion"
+
+      result = ExtractionResult.new("content", "text/plain", %{}, [], keywords: keywords_string)
+
+      assert is_list(result.keywords)
+      assert length(result.keywords) == 4
+
+      assert Enum.at(result.keywords, 0) == %{"text" => "calibre", "score" => 1.0}
+      assert Enum.at(result.keywords, 1) == %{"text" => "docs", "score" => 1.0}
+      assert Enum.at(result.keywords, 2) == %{"text" => "ebook", "score" => 1.0}
+      assert Enum.at(result.keywords, 3) == %{"text" => "conversion", "score" => 1.0}
+    end
+
+    test "parses keyword string with extra whitespace" do
+      keywords_string = "  keyword1  ,   keyword2   , keyword3  "
+
+      result = ExtractionResult.new("content", "text/plain", %{}, [], keywords: keywords_string)
+
+      assert is_list(result.keywords)
+      assert length(result.keywords) == 3
+
+      # Verify whitespace is properly trimmed
+      assert Enum.at(result.keywords, 0) == %{"text" => "keyword1", "score" => 1.0}
+      assert Enum.at(result.keywords, 1) == %{"text" => "keyword2", "score" => 1.0}
+      assert Enum.at(result.keywords, 2) == %{"text" => "keyword3", "score" => 1.0}
+    end
+
+    test "handles keyword string with trailing/leading commas" do
+      keywords_string = ",keyword1,keyword2,"
+
+      result = ExtractionResult.new("content", "text/plain", %{}, [], keywords: keywords_string)
+
+      assert is_list(result.keywords)
+      # Empty strings from leading/trailing commas should be filtered out
+      assert length(result.keywords) == 2
+      assert Enum.at(result.keywords, 0) == %{"text" => "keyword1", "score" => 1.0}
+      assert Enum.at(result.keywords, 1) == %{"text" => "keyword2", "score" => 1.0}
+    end
+
+    test "handles empty keyword string" do
+      result = ExtractionResult.new("content", "text/plain", %{}, [], keywords: "")
+
+      assert result.keywords == []
+    end
+
+    test "handles keyword string with only whitespace" do
+      result = ExtractionResult.new("content", "text/plain", %{}, [], keywords: "   ")
+
+      assert result.keywords == []
+    end
+
+    test "handles single keyword in string" do
+      result = ExtractionResult.new("content", "text/plain", %{}, [], keywords: "single")
+
+      assert is_list(result.keywords)
+      assert length(result.keywords) == 1
+      assert Enum.at(result.keywords, 0) == %{"text" => "single", "score" => 1.0}
+    end
+
+    test "assigns default score of 1.0 to parsed keywords" do
+      # Keywords from DOCX metadata don't have scores, so we assign default 1.0
+      keywords_string = "keyword1, keyword2"
+
+      result = ExtractionResult.new("content", "text/plain", %{}, [], keywords: keywords_string)
+
+      Enum.each(result.keywords, fn keyword ->
+        assert keyword["score"] == 1.0
+      end)
+    end
+
+    test "preserves keyword order from string" do
+      keywords_string = "first, second, third, fourth"
+
+      result = ExtractionResult.new("content", "text/plain", %{}, [], keywords: keywords_string)
+
+      assert Enum.at(result.keywords, 0)["text"] == "first"
+      assert Enum.at(result.keywords, 1)["text"] == "second"
+      assert Enum.at(result.keywords, 2)["text"] == "third"
+      assert Enum.at(result.keywords, 3)["text"] == "fourth"
+    end
+  end
 end
