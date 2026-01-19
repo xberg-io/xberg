@@ -1,27 +1,29 @@
 use crate::error::{KreuzbergError, Result};
 use crate::stopwords::STOPWORDS;
 use crate::text::token_reduction::config::TokenReductionConfig;
-use crate::text::utf8_validation;
 use ahash::{AHashMap, AHashSet};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::sync::Arc;
 
-static HTML_COMMENT_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"<!--.*?-->").expect("HTML comment regex pattern is valid and should compile"));
-static EXCESSIVE_NEWLINES_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\n{3,}").expect("Excessive newlines regex pattern is valid and should compile"));
-static MULTIPLE_SPACES_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r" {2,}").expect("Multiple spaces regex pattern is valid and should compile"));
-static MARKDOWN_CODE_BLOCK_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"```[\s\S]*?```").expect("Markdown code block regex pattern is valid and should compile"));
-static MARKDOWN_INLINE_CODE_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"`[^`\n]+`").expect("Markdown inline code regex pattern is valid and should compile"));
-static MARKDOWN_HEADERS_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^#{1,6}\s+").expect("Markdown headers regex pattern is valid and should compile"));
-static MARKDOWN_LISTS_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[ \t]*[-*+]\s+").expect("Markdown lists regex pattern is valid and should compile"));
+// Import filter modules
+mod general;
+mod html;
+mod markdown;
 
+// Re-export all filter functions for backward compatibility
+pub use general::{normalize_newlines, normalize_spaces, remove_stopwords, should_preserve_word, split_word_boundaries};
+pub use html::remove_html_comments;
+pub use markdown::{
+    extract_and_preserve_code, is_markdown_header, is_markdown_list, is_markdown_table, preserve_markdown_structure,
+    restore_preserved_blocks,
+};
+
+/// Main filter pipeline orchestrator that coordinates various text filtering operations.
+///
+/// The `FilterPipeline` provides a high-level interface for applying different levels
+/// of text filtering, from light cleaning (HTML comments, whitespace) to moderate
+/// filtering (stopword removal) while respecting preservation rules for code,
+/// markdown, and custom patterns.
 pub struct FilterPipeline {
     config: Arc<TokenReductionConfig>,
     stopwords: AHashSet<String>,
@@ -30,6 +32,17 @@ pub struct FilterPipeline {
 }
 
 impl FilterPipeline {
+    /// Creates a new `FilterPipeline` with the specified configuration and language.
+    ///
+    /// # Arguments
+    /// * `config` - Token reduction configuration
+    /// * `language` - Language code for stopword selection (e.g., "en", "es", "de")
+    ///
+    /// # Returns
+    /// A `Result` containing the new `FilterPipeline` or an error if regex patterns are invalid
+    ///
+    /// # Errors
+    /// Returns a `KreuzbergError::Validation` if any preserve patterns are invalid regex
     pub fn new(config: &Arc<TokenReductionConfig>, language: &str) -> Result<Self> {
         let mut stopwords = STOPWORDS.get(language).cloned().unwrap_or_else(|| {
             STOPWORDS
@@ -63,251 +76,139 @@ impl FilterPipeline {
         })
     }
 
+    /// Applies light filtering to text, removing HTML comments and normalizing whitespace.
+    ///
+    /// Light filters include:
+    /// - HTML comment removal
+    /// - Multiple space normalization
+    /// - Excessive newline reduction
+    /// - Markdown structure preservation (if enabled)
+    /// - Code preservation (if enabled)
+    ///
+    /// # Arguments
+    /// * `text` - The input text to filter
+    ///
+    /// # Returns
+    /// A new `String` with light filters applied
     pub fn apply_light_filters(&self, text: &str) -> String {
         use std::borrow::Cow;
 
         let mut result = Cow::Borrowed(text);
 
+        // Preserve markdown code blocks if configured
         let mut preserved_blocks: Option<AHashMap<String, String>> = None;
         if self.config.preserve_markdown {
             let mut blocks = AHashMap::new();
-            result = Cow::Owned(self.extract_and_preserve_code(result.as_ref(), &mut blocks));
+            result = Cow::Owned(extract_and_preserve_code(result.as_ref(), &mut blocks));
             preserved_blocks = Some(blocks);
         }
 
-        if HTML_COMMENT_REGEX.is_match(&result) {
-            result = Cow::Owned(HTML_COMMENT_REGEX.replace_all(&result, "").into_owned());
-        }
+        // Remove HTML comments
+        result = Cow::Owned(remove_html_comments(&result));
 
-        if MULTIPLE_SPACES_REGEX.is_match(&result) {
-            result = Cow::Owned(MULTIPLE_SPACES_REGEX.replace_all(&result, " ").into_owned());
-        }
+        // Normalize whitespace
+        result = Cow::Owned(normalize_spaces(&result));
+        result = Cow::Owned(normalize_newlines(&result));
 
-        if EXCESSIVE_NEWLINES_REGEX.is_match(&result) {
-            result = Cow::Owned(EXCESSIVE_NEWLINES_REGEX.replace_all(&result, "\n\n").into_owned());
-        }
-
+        // Preserve markdown structure if configured
         if self.config.preserve_markdown {
-            result = Cow::Owned(self.preserve_markdown_structure(&result));
+            result = Cow::Owned(preserve_markdown_structure(&result));
         }
 
+        // Restore preserved code blocks
         if let Some(blocks) = &preserved_blocks {
-            result = Cow::Owned(self.restore_preserved_blocks(&result, blocks));
+            result = Cow::Owned(restore_preserved_blocks(&result, blocks));
         }
 
         result.into_owned()
     }
 
+    /// Applies moderate filtering to text, including stopword removal.
+    ///
+    /// Moderate filters include all light filters plus:
+    /// - Stopword removal (with markdown awareness if enabled)
+    /// - Code preservation during stopword removal
+    ///
+    /// # Arguments
+    /// * `text` - The input text to filter
+    ///
+    /// # Returns
+    /// A new `String` with moderate filters applied
     pub fn apply_moderate_filters(&self, text: &str) -> String {
         let mut result = self.apply_light_filters(text);
 
+        // Preserve code blocks during stopword removal if configured
         let mut preserved_blocks: Option<AHashMap<String, String>> = None;
         if self.config.preserve_code {
             let mut blocks = AHashMap::new();
-            result = self.extract_and_preserve_code(&result, &mut blocks);
+            result = extract_and_preserve_code(&result, &mut blocks);
             preserved_blocks = Some(blocks);
         }
 
+        // Remove stopwords with markdown awareness if configured
         if self.config.preserve_markdown {
             result = self.remove_stopwords_preserving_markdown(&result);
         } else {
-            result = self.remove_stopwords(&result);
+            result = remove_stopwords(&result, &self.stopwords, &self.preserve_patterns);
         }
 
+        // Restore preserved code blocks
         if let Some(blocks) = &preserved_blocks {
-            result = self.restore_preserved_blocks(&result, blocks);
+            result = restore_preserved_blocks(&result, blocks);
         }
 
         result
     }
 
+    /// Removes stopwords while preserving markdown structural elements.
+    ///
+    /// This function processes text line-by-line, preserving:
+    /// - Markdown headers
+    /// - List items
+    /// - Table rows
+    ///
+    /// # Arguments
+    /// * `text` - The input text to filter
+    ///
+    /// # Returns
+    /// A new `String` with stopwords removed but markdown structure preserved
     fn remove_stopwords_preserving_markdown(&self, text: &str) -> String {
         let lines: Vec<&str> = text.lines().collect();
         let mut processed_lines = Vec::with_capacity(lines.len());
 
         for line in lines {
-            if MARKDOWN_HEADERS_REGEX.is_match(line) {
+            // Preserve markdown headers
+            if is_markdown_header(line) {
                 processed_lines.push(line.to_string());
                 continue;
             }
 
-            if MARKDOWN_LISTS_REGEX.is_match(line) {
+            // Preserve markdown list items
+            if is_markdown_list(line) {
                 processed_lines.push(line.to_string());
                 continue;
             }
 
-            if line.trim().starts_with('|') && line.trim().ends_with('|') {
+            // Preserve markdown table rows
+            if is_markdown_table(line) {
                 processed_lines.push(line.to_string());
                 continue;
             }
 
-            let processed_line = self.remove_stopwords(line);
+            // Apply stopword removal to regular text lines
+            let processed_line = remove_stopwords(line, &self.stopwords, &self.preserve_patterns);
             processed_lines.push(processed_line);
         }
 
         processed_lines.join("\n")
     }
 
-    fn remove_stopwords(&self, text: &str) -> String {
-        let words: Vec<&str> = text.split_whitespace().collect();
-        let mut filtered_words = Vec::with_capacity((words.len() as f32 * 0.7).ceil() as usize);
-
-        for word in words {
-            if word.is_empty() {
-                continue;
-            }
-
-            if self.should_preserve_word(word) {
-                filtered_words.push(word);
-                continue;
-            }
-
-            if word.len() > 1 && word.bytes().all(|b| b.is_ascii_uppercase() || !b.is_ascii_alphabetic()) {
-                filtered_words.push(word);
-                continue;
-            }
-
-            if word.bytes().any(|b| b.is_ascii_digit()) {
-                filtered_words.push(word);
-                continue;
-            }
-
-            let clean_word = if word.is_ascii() {
-                let clean_bytes: Vec<u8> = word
-                    .bytes()
-                    .filter(|&b| b.is_ascii_alphabetic())
-                    .map(|b| b.to_ascii_lowercase())
-                    .collect();
-                utf8_validation::string_from_utf8(clean_bytes).unwrap_or_else(|_| {
-                    word.chars()
-                        .filter(|c| c.is_alphabetic())
-                        .collect::<String>()
-                        .to_lowercase()
-                })
-            } else {
-                word.chars()
-                    .filter(|c| c.is_alphabetic())
-                    .collect::<String>()
-                    .to_lowercase()
-            };
-
-            if clean_word.is_empty() {
-                filtered_words.push(word);
-                continue;
-            }
-
-            if clean_word.len() <= 1 {
-                filtered_words.push(word);
-                continue;
-            }
-
-            if !self.stopwords.contains(&clean_word) {
-                filtered_words.push(word);
-            }
-        }
-
-        filtered_words.join(" ")
-    }
-
-    /// Get the language code for this filter pipeline.
+    /// Gets the language code for this filter pipeline.
     ///
     /// Primarily useful for testing and debugging to verify language configuration.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn language(&self) -> &str {
         &self.language
-    }
-
-    /// Check if a word should be preserved based on configured patterns.
-    fn should_preserve_word(&self, word: &str) -> bool {
-        self.preserve_patterns.iter().any(|pattern| pattern.is_match(word))
-    }
-
-    /// Split a word into prefix (non-alphanumeric), core (alphanumeric), and suffix (non-alphanumeric).
-    ///
-    /// This is useful for handling punctuation-wrapped words like "(hello)" or "world!".
-    /// Currently used in tests; reserved for future word boundary-aware filtering.
-    #[cfg_attr(not(test), allow(dead_code))]
-    fn split_word_boundaries(&self, word: &str) -> (String, String, String) {
-        let chars: Vec<char> = word.chars().collect();
-        let mut start = 0;
-        let mut end = chars.len();
-
-        while start < chars.len() && !chars[start].is_alphanumeric() {
-            start += 1;
-        }
-
-        while end > start && !chars[end - 1].is_alphanumeric() {
-            end -= 1;
-        }
-
-        let prefix: String = chars[..start].iter().collect();
-        let core: String = chars[start..end].iter().collect();
-        let suffix: String = chars[end..].iter().collect();
-
-        (prefix, core, suffix)
-    }
-
-    fn preserve_markdown_structure(&self, text: &str) -> String {
-        let lines: Vec<&str> = text.lines().collect();
-        let mut processed_lines = Vec::with_capacity(lines.len());
-
-        for line in lines {
-            if MARKDOWN_HEADERS_REGEX.is_match(line) {
-                processed_lines.push(line);
-                continue;
-            }
-
-            if MARKDOWN_LISTS_REGEX.is_match(line) {
-                processed_lines.push(line);
-                continue;
-            }
-
-            processed_lines.push(line);
-        }
-
-        processed_lines.join("\n")
-    }
-
-    fn extract_and_preserve_code(&self, text: &str, preserved: &mut AHashMap<String, String>) -> String {
-        let mut result = text.to_string();
-        let mut code_block_id = 0;
-        let mut inline_code_id = 0;
-
-        result = MARKDOWN_CODE_BLOCK_REGEX
-            .replace_all(&result, |caps: &regex::Captures| {
-                let code_block = caps[0].to_string();
-                let placeholder = format!("__CODEBLOCK_{}__", code_block_id);
-                code_block_id += 1;
-                preserved.insert(placeholder.clone(), code_block);
-                placeholder
-            })
-            .to_string();
-
-        result = MARKDOWN_INLINE_CODE_REGEX
-            .replace_all(&result, |caps: &regex::Captures| {
-                let inline_code = caps[0].to_string();
-                let placeholder = format!("__INLINECODE_{}__", inline_code_id);
-                inline_code_id += 1;
-                preserved.insert(placeholder.clone(), inline_code);
-                placeholder
-            })
-            .to_string();
-
-        result
-    }
-
-    fn restore_preserved_blocks(&self, text: &str, preserved: &AHashMap<String, String>) -> String {
-        if preserved.is_empty() {
-            return text.to_string();
-        }
-
-        let mut result = text.to_string();
-
-        for (placeholder, original_content) in preserved {
-            result = result.replace(placeholder, original_content);
-        }
-
-        result
     }
 }
 
@@ -321,7 +222,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "The quick brown fox is jumping over the lazy dog";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(!result.contains(" the "));
         assert!(!result.contains(" is "));
@@ -341,7 +242,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "The NASA mission is a success";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(result.contains("NASA"));
         assert!(result.contains("mission"));
@@ -411,7 +312,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "The API is working WITH the SDK";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(result.contains("API"));
         assert!(result.contains("SDK"));
@@ -426,7 +327,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "The version is 3.14 and the count is 42";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(result.contains("3.14"));
         assert!(result.contains("42"));
@@ -441,7 +342,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "Hello, the world! This is great.";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(result.contains("Hello,"));
         assert!(result.contains("world!"));
@@ -465,7 +366,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "This is a custom word test";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(!result.contains("custom"));
         assert!(!result.contains("word"));
@@ -478,7 +379,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "es").unwrap();
 
         let input = "El perro grande bonito tiene";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(result.contains("perro"));
         assert!(result.contains("grande"));
@@ -495,7 +396,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "unknown").unwrap();
 
         let input = "The quick test with unknown language";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(!result.contains("The "));
         assert!(result.contains("quick"));
@@ -565,7 +466,7 @@ mod tests {
 
         let mut preserved = AHashMap::new();
         let input = "Text before\n```rust\nfn main() {}\n```\nText after";
-        let result = pipeline.extract_and_preserve_code(input, &mut preserved);
+        let result = extract_and_preserve_code(input, &mut preserved);
 
         assert_eq!(preserved.len(), 1);
         assert!(preserved.values().any(|v| v.contains("fn main()")));
@@ -582,7 +483,7 @@ mod tests {
 
         let mut preserved = AHashMap::new();
         let input = "Use the `println!` macro";
-        let result = pipeline.extract_and_preserve_code(input, &mut preserved);
+        let result = extract_and_preserve_code(input, &mut preserved);
 
         assert_eq!(preserved.len(), 1);
         assert!(preserved.values().any(|v| v == "`println!`"));
@@ -598,7 +499,7 @@ mod tests {
         preserved.insert("__CODEBLOCK_0__".to_string(), "```code```".to_string());
         preserved.insert("__INLINECODE_0__".to_string(), "`inline`".to_string());
         let input = "Text __CODEBLOCK_0__ and __INLINECODE_0__ here";
-        let result = pipeline.restore_preserved_blocks(input, &preserved);
+        let result = restore_preserved_blocks(input, &preserved);
 
         assert!(result.contains("```code```"));
         assert!(result.contains("`inline`"));
@@ -654,7 +555,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "I a x test";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(result.contains("I"));
         assert!(result.contains("x"));
@@ -667,23 +568,12 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "The Test Is Working";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(!result.contains("The"));
         assert!(!result.contains("Is"));
         assert!(result.contains("Test"));
         assert!(result.contains("Working"));
-    }
-
-    #[test]
-    fn test_lazy_regex_initialization() {
-        let _ = &*HTML_COMMENT_REGEX;
-        let _ = &*EXCESSIVE_NEWLINES_REGEX;
-        let _ = &*MULTIPLE_SPACES_REGEX;
-        let _ = &*MARKDOWN_CODE_BLOCK_REGEX;
-        let _ = &*MARKDOWN_INLINE_CODE_REGEX;
-        let _ = &*MARKDOWN_HEADERS_REGEX;
-        let _ = &*MARKDOWN_LISTS_REGEX;
     }
 
     #[test]
@@ -697,7 +587,7 @@ mod tests {
         let input =
             "Start ```rust\nlet x = 1;\n``` middle `inline1` text ```python\nprint('hi')\n``` and `inline2` end";
         let mut preserved = AHashMap::new();
-        let result = pipeline.extract_and_preserve_code(input, &mut preserved);
+        let result = extract_and_preserve_code(input, &mut preserved);
 
         assert_eq!(preserved.len(), 4);
         assert!(preserved.contains_key("__CODEBLOCK_0__"));
@@ -710,7 +600,7 @@ mod tests {
         assert_eq!(preserved.get("__INLINECODE_0__").unwrap(), "`inline1`");
         assert_eq!(preserved.get("__INLINECODE_1__").unwrap(), "`inline2`");
 
-        let restored = pipeline.restore_preserved_blocks(&result, &preserved);
+        let restored = restore_preserved_blocks(&result, &preserved);
         assert!(restored.contains("```rust\nlet x = 1;\n```"));
         assert!(restored.contains("```python\nprint('hi')\n```"));
         assert!(restored.contains("`inline1`"));
@@ -729,10 +619,10 @@ mod tests {
 
         let input = "Text `a` and `b` and `c` here";
         let mut preserved = AHashMap::new();
-        let result = pipeline.extract_and_preserve_code(input, &mut preserved);
+        let result = extract_and_preserve_code(input, &mut preserved);
 
         assert_eq!(preserved.len(), 3);
-        let restored = pipeline.restore_preserved_blocks(&result, &preserved);
+        let restored = restore_preserved_blocks(&result, &preserved);
 
         assert!(restored.contains("`a`"));
         assert!(restored.contains("`b`"));
@@ -755,7 +645,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "The NASA and HTTP protocols version 1.2.3 by @john";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(result.contains("NASA"));
         assert!(result.contains("HTTP"));
@@ -774,7 +664,7 @@ mod tests {
         assert_eq!(pipeline_en.language(), "en");
 
         let input_en = "the quick brown fox";
-        let result_en = pipeline_en.remove_stopwords(input_en);
+        let result_en = remove_stopwords(input_en, &pipeline_en.stopwords, &pipeline_en.preserve_patterns);
         assert!(!result_en.contains(" the "));
 
         let config_de = Arc::new(TokenReductionConfig::default());
@@ -782,7 +672,7 @@ mod tests {
         assert_eq!(pipeline_de.language(), "de");
 
         let input_de = "der schnelle braune fuchs";
-        let result_de = pipeline_de.remove_stopwords(input_de);
+        let result_de = remove_stopwords(input_de, &pipeline_de.stopwords, &pipeline_de.preserve_patterns);
         assert!(!result_de.contains(" der "));
         assert!(result_de.contains("schnelle"));
     }
@@ -795,7 +685,7 @@ mod tests {
         assert_eq!(pipeline.language(), "unsupported_lang");
 
         let input = "the quick brown fox";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(!result.contains(" the "));
         assert!(result.contains("quick"));
@@ -803,30 +693,27 @@ mod tests {
 
     #[test]
     fn test_split_word_boundaries() {
-        let config = Arc::new(TokenReductionConfig::default());
-        let pipeline = FilterPipeline::new(&config, "en").unwrap();
-
-        let (prefix, core, suffix) = pipeline.split_word_boundaries("(hello)");
+        let (prefix, core, suffix) = split_word_boundaries("(hello)");
         assert_eq!(prefix, "(");
         assert_eq!(core, "hello");
         assert_eq!(suffix, ")");
 
-        let (prefix2, core2, suffix2) = pipeline.split_word_boundaries("world!");
+        let (prefix2, core2, suffix2) = split_word_boundaries("world!");
         assert_eq!(prefix2, "");
         assert_eq!(core2, "world");
         assert_eq!(suffix2, "!");
 
-        let (prefix3, core3, suffix3) = pipeline.split_word_boundaries("'test");
+        let (prefix3, core3, suffix3) = split_word_boundaries("'test");
         assert_eq!(prefix3, "'");
         assert_eq!(core3, "test");
         assert_eq!(suffix3, "");
 
-        let (prefix4, core4, suffix4) = pipeline.split_word_boundaries("simple");
+        let (prefix4, core4, suffix4) = split_word_boundaries("simple");
         assert_eq!(prefix4, "");
         assert_eq!(core4, "simple");
         assert_eq!(suffix4, "");
 
-        let (prefix5, core5, suffix5) = pipeline.split_word_boundaries("\"example!!!\"");
+        let (prefix5, core5, suffix5) = split_word_boundaries("\"example!!!\"");
         assert_eq!(prefix5, "\"");
         assert_eq!(core5, "example");
         assert_eq!(suffix5, "!!!\"");
@@ -834,25 +721,22 @@ mod tests {
 
     #[test]
     fn test_split_word_boundaries_edge_cases() {
-        let config = Arc::new(TokenReductionConfig::default());
-        let pipeline = FilterPipeline::new(&config, "en").unwrap();
-
-        let (prefix, core, suffix) = pipeline.split_word_boundaries("!!!");
+        let (prefix, core, suffix) = split_word_boundaries("!!!");
         assert_eq!(prefix, "!!!");
         assert_eq!(core, "");
         assert_eq!(suffix, "");
 
-        let (prefix2, core2, suffix2) = pipeline.split_word_boundaries("");
+        let (prefix2, core2, suffix2) = split_word_boundaries("");
         assert_eq!(prefix2, "");
         assert_eq!(core2, "");
         assert_eq!(suffix2, "");
 
-        let (prefix3, core3, suffix3) = pipeline.split_word_boundaries("a");
+        let (prefix3, core3, suffix3) = split_word_boundaries("a");
         assert_eq!(prefix3, "");
         assert_eq!(core3, "a");
         assert_eq!(suffix3, "");
 
-        let (prefix4, core4, suffix4) = pipeline.split_word_boundaries("(café)");
+        let (prefix4, core4, suffix4) = split_word_boundaries("(café)");
         assert_eq!(prefix4, "(");
         assert_eq!(core4, "café");
         assert_eq!(suffix4, ")");
@@ -874,7 +758,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "this is a custom stopword test";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(!result.contains(" custom "));
         assert!(!result.contains(" stopword "));
@@ -894,7 +778,7 @@ mod tests {
         let pipeline = FilterPipeline::new(&config, "en").unwrap();
 
         let input = "The quick brown fox";
-        let result = pipeline.remove_stopwords(input);
+        let result = remove_stopwords(input, &pipeline.stopwords, &pipeline.preserve_patterns);
 
         assert!(!result.contains(" The "));
         assert!(result.contains("quick"));
