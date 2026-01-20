@@ -811,8 +811,15 @@ struct ConfigBuilder *kreuzberg_config_builder_new(void);
  * # Returns
  *
  * 0 on success, -1 on error (NULL builder)
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - The pointer must be properly aligned and point to a valid ConfigBuilder instance
  */
-int32_t kreuzberg_config_builder_set_use_cache(struct ConfigBuilder *builder, int32_t use_cache);
+int32_t kreuzberg_config_builder_set_use_cache(struct ConfigBuilder *builder,
+                                               int32_t use_cache);
 
 /**
  * Set OCR configuration from JSON.
@@ -825,8 +832,17 @@ int32_t kreuzberg_config_builder_set_use_cache(struct ConfigBuilder *builder, in
  * # Returns
  *
  * 0 on success, -1 on error (check kreuzberg_last_error)
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+ * - `ocr_json` must be a valid, non-null pointer to a null-terminated UTF-8 string
+ * - The string pointer must remain valid for the duration of the function call
  */
-int32_t kreuzberg_config_builder_set_ocr(struct ConfigBuilder *builder, const char *ocr_json);
+int32_t kreuzberg_config_builder_set_ocr(struct ConfigBuilder *builder,
+                                         const char *ocr_json);
 
 /**
  * Set PDF configuration from JSON.
@@ -839,8 +855,17 @@ int32_t kreuzberg_config_builder_set_ocr(struct ConfigBuilder *builder, const ch
  * # Returns
  *
  * 0 on success, -1 on error
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+ * - `pdf_json` must be a valid, non-null pointer to a null-terminated UTF-8 string
+ * - The string pointer must remain valid for the duration of the function call
  */
-int32_t kreuzberg_config_builder_set_pdf(struct ConfigBuilder *builder, const char *pdf_json);
+int32_t kreuzberg_config_builder_set_pdf(struct ConfigBuilder *builder,
+                                         const char *pdf_json);
 
 /**
  * Set chunking configuration from JSON.
@@ -853,6 +878,14 @@ int32_t kreuzberg_config_builder_set_pdf(struct ConfigBuilder *builder, const ch
  * # Returns
  *
  * 0 on success, -1 on error
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+ * - `chunking_json` must be a valid, non-null pointer to a null-terminated UTF-8 string
+ * - The string pointer must remain valid for the duration of the function call
  */
 int32_t kreuzberg_config_builder_set_chunking(struct ConfigBuilder *builder,
                                               const char *chunking_json);
@@ -868,6 +901,14 @@ int32_t kreuzberg_config_builder_set_chunking(struct ConfigBuilder *builder,
  * # Returns
  *
  * 0 on success, -1 on error
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+ * - `image_json` must be a valid, non-null pointer to a null-terminated UTF-8 string
+ * - The string pointer must remain valid for the duration of the function call
  */
 int32_t kreuzberg_config_builder_set_image_extraction(struct ConfigBuilder *builder,
                                                       const char *image_json);
@@ -883,6 +924,14 @@ int32_t kreuzberg_config_builder_set_image_extraction(struct ConfigBuilder *buil
  * # Returns
  *
  * 0 on success, -1 on error
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+ * - `pp_json` must be a valid, non-null pointer to a null-terminated UTF-8 string
+ * - The string pointer must remain valid for the duration of the function call
  */
 int32_t kreuzberg_config_builder_set_post_processor(struct ConfigBuilder *builder,
                                                     const char *pp_json);
@@ -898,6 +947,14 @@ int32_t kreuzberg_config_builder_set_post_processor(struct ConfigBuilder *builde
  * # Returns
  *
  * 0 on success, -1 on error
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+ * - `ld_json` must be a valid, non-null pointer to a null-terminated UTF-8 string
+ * - The string pointer must remain valid for the duration of the function call
  */
 int32_t kreuzberg_config_builder_set_language_detection(struct ConfigBuilder *builder,
                                                         const char *ld_json);

@@ -6,6 +6,7 @@ use crate::config::JsExtractionConfig;
 use crate::error_handling::convert_error;
 use crate::result::{JsExtractionResult, resolve_config};
 
+#[napi]
 pub fn extract_file_sync(
     file_path: String,
     mime_type: Option<String>,

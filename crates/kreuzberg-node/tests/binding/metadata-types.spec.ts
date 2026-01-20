@@ -22,6 +22,7 @@ import type {
 	Metadata as NapiMetadata,
 	PdfMetadata as NapiPdfMetadata,
 } from "../../../../crates/kreuzberg/metadata";
+import { extractBytesSync, extractFileSync } from "../../dist/index.js";
 import type {
 	ArchiveMetadata,
 	EmailMetadata,
@@ -41,7 +42,6 @@ import type {
 	TextMetadata,
 	XmlMetadata,
 } from "../../src/types";
-import { extractBytesSync, extractFileSync } from "../../typescript/index.js";
 import { createTempFile, getTestDocumentPath, loadTestDocument } from "../helpers/test-utils.js";
 
 type AssertMetadataCompatible = Metadata extends NapiMetadata ? true : never;

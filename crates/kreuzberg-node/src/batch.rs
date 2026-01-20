@@ -6,6 +6,7 @@ use crate::config::JsExtractionConfig;
 use crate::error_handling::convert_error;
 use crate::result::{JsExtractionResult, resolve_config};
 
+#[napi]
 pub fn batch_extract_files_sync(
     paths: Vec<String>,
     config: Option<JsExtractionConfig>,

@@ -9,7 +9,7 @@ export default defineConfig({
 		"typescript/ocr/guten-ocr.ts",
 	],
 	format: ["esm", "cjs"],
-	bundle: false,
+	bundle: true,
 	dts: {
 		compilerOptions: {
 			skipLibCheck: true,
@@ -22,5 +22,13 @@ export default defineConfig({
 	shims: false,
 	platform: "node",
 	target: "node22",
-	external: ["sharp", "@gutenye/ocr-node", /\.node$/, /@kreuzberg\/node-.*/, "./index.js", "../index.js"],
+	external: [
+		"sharp",
+		"@gutenye/ocr-node",
+		/\.node$/,
+		/@kreuzberg\/node-.*/,
+		"./index.js",
+		"../index.js",
+		"../../index.js",
+	],
 });
