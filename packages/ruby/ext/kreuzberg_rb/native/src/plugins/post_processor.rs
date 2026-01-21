@@ -1,7 +1,7 @@
 //! Post-processor plugin registration and management
 
-use crate::{error_handling::{kreuzberg_error, runtime_error}, gc_guarded_value::GcGuardedValue, helpers::{get_kw, set_hash_entry}};
-use magnus::{Error, RHash, Ruby, Value, scan_args::scan_args, TryConvert};
+use crate::{error_handling::{kreuzberg_error, runtime_error}, gc_guarded_value::GcGuardedValue, helpers::get_kw};
+use magnus::{Error, Ruby, Value, scan_args::scan_args, TryConvert};
 use magnus::value::ReprValue;
 use std::sync::Arc;
 

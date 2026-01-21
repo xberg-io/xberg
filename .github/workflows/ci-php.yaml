@@ -227,6 +227,8 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           cache-key-prefix: php-test-${{ matrix.os }}
+          # TODO: Consider disabling cache on Windows due to fingerprint corruption
+          # See: https://github.com/kreuzberg-dev/kreuzberg/pull/316
 
       - name: Detect partial cache hit and clean stale fingerprints
         shell: bash

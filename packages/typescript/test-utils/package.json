@@ -17,34 +17,34 @@
   },
   "license": "MIT",
   "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
     "./config-mapping": {
       "types": "./dist/config-mapping/index.d.ts",
-      "import": "./dist/config-mapping/index.mjs",
-      "require": "./dist/config-mapping/index.js"
+      "import": "./dist/config-mapping/index.js",
+      "require": "./dist/config-mapping/index.cjs"
     },
     "./assertions": {
       "types": "./dist/assertions/index.d.ts",
-      "import": "./dist/assertions/index.mjs",
-      "require": "./dist/assertions/index.js"
+      "import": "./dist/assertions/index.js",
+      "require": "./dist/assertions/index.cjs"
     },
     "./fixtures": {
       "types": "./dist/fixtures/index.d.ts",
-      "import": "./dist/fixtures/index.mjs",
-      "require": "./dist/fixtures/index.js"
+      "import": "./dist/fixtures/index.js",
+      "require": "./dist/fixtures/index.cjs"
     },
     "./paths": {
       "types": "./dist/paths/index.d.ts",
-      "import": "./dist/paths/index.mjs",
-      "require": "./dist/paths/index.js"
+      "import": "./dist/paths/index.js",
+      "require": "./dist/paths/index.cjs"
     }
   },
   "files": [

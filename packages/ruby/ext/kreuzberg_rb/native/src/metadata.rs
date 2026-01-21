@@ -3,7 +3,7 @@
 //! Provides utilities for MIME type detection, format validation, and extension mapping.
 
 use crate::error_handling::runtime_error;
-use magnus::{Error, Ruby};
+use magnus::Error;
 
 /// Detect MIME type from bytes
 pub fn detect_mime_type_from_bytes(bytes: String) -> Result<String, Error> {

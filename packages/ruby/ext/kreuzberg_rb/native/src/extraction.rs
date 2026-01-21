@@ -6,7 +6,7 @@ use crate::config::parse_extraction_config;
 use crate::error_handling::kreuzberg_error;
 use crate::result::extraction_result_to_ruby;
 
-use magnus::{Error, RArray, RHash, RString, Ruby, Value, function, scan_args::scan_args};
+use magnus::{Error, RHash, RString, Ruby, Value, scan_args::scan_args};
 
 /// Extract content from a file (synchronous)
 pub fn extract_file_sync(args: &[Value]) -> Result<RHash, Error> {

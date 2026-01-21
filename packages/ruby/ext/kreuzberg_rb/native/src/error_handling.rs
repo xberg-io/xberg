@@ -8,8 +8,7 @@ use magnus::{Error, exception::ExceptionClass, Ruby};
 use std::ffi::CStr;
 
 pub use kreuzberg_ffi::{
-    get_last_error_code, get_last_error_message, get_last_panic_context,
-    kreuzberg_free_string, kreuzberg_last_error, kreuzberg_last_error_code,
+    kreuzberg_free_string, kreuzberg_last_error_code,
     kreuzberg_last_panic_context,
 };
 

@@ -12,9 +12,7 @@ pub use validator::register_validator;
 pub use ocr_backend::{register_ocr_backend, unregister_ocr_backend, list_ocr_backends, clear_ocr_backends};
 
 // Plugin registry functions
-pub use kreuzberg::{
-    get_post_processor_registry, get_validator_registry,
-};
+pub use kreuzberg::get_post_processor_registry;
 
 use magnus::Error;
 use kreuzberg::plugins::{
@@ -25,9 +23,6 @@ use kreuzberg::plugins::{
     list_extractors as kz_list_extractors,
     unregister_extractor as kz_unregister_extractor,
     clear_extractors as kz_clear_extractors,
-    unregister_ocr_backend as kz_unregister_ocr_backend,
-    list_ocr_backends as kz_list_ocr_backends,
-    clear_ocr_backends as kz_clear_ocr_backends,
 };
 
 /// Unregister a post-processor plugin by name

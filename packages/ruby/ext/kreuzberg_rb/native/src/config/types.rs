@@ -8,7 +8,7 @@ use crate::helpers::{get_kw, json_value_to_ruby, ruby_value_to_json, symbol_to_s
 
 use html_to_markdown_rs::options::{
     CodeBlockStyle, ConversionOptions, HeadingStyle, HighlightStyle, ListIndentType, NewlineStyle,
-    PreprocessingPreset, PreprocessingOptions,
+    PreprocessingPreset,
 };
 use html_to_markdown_rs::WhitespaceMode;
 use kreuzberg::core::config::PageConfig;
@@ -25,7 +25,6 @@ use kreuzberg::{
 use magnus::{Error, RArray, RHash, Ruby, TryConvert, Value};
 use magnus::value::ReprValue;
 use std::fs;
-use std::path::PathBuf;
 
 /// Parse OcrConfig from Ruby Hash
 pub fn parse_ocr_config(ruby: &Ruby, hash: RHash) -> Result<OcrConfig, Error> {
@@ -676,6 +675,7 @@ pub fn parse_html_options(ruby: &Ruby, hash: RHash) -> Result<ConversionOptions,
 }
 
 /// Convert KeywordAlgorithm to string
+#[allow(dead_code)]
 pub fn keyword_algorithm_to_str(algo: RustKeywordAlgorithm) -> &'static str {
     match algo {
         RustKeywordAlgorithm::Yake => "yake",
@@ -684,6 +684,7 @@ pub fn keyword_algorithm_to_str(algo: RustKeywordAlgorithm) -> &'static str {
 }
 
 /// Convert KeywordConfig to Ruby Hash
+#[allow(dead_code)]
 pub fn keyword_config_to_ruby_hash(ruby: &Ruby, config: &RustKeywordConfig) -> Result<RHash, Error> {
     let hash = ruby.hash_new();
     hash.aset("algorithm", keyword_algorithm_to_str(config.algorithm))?;
@@ -713,6 +714,7 @@ pub fn keyword_config_to_ruby_hash(ruby: &Ruby, config: &RustKeywordConfig) -> R
 }
 
 /// Convert HTML conversion options to Ruby Hash
+#[allow(dead_code)]
 pub fn html_options_to_ruby_hash(ruby: &Ruby, options: &ConversionOptions) -> Result<RHash, Error> {
     let hash = ruby.hash_new();
     hash.aset(

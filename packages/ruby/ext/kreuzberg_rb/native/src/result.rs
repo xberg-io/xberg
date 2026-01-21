@@ -7,7 +7,7 @@ use crate::error_handling::runtime_error;
 use crate::helpers::{json_value_to_ruby, set_hash_entry};
 
 use kreuzberg::ExtractionResult as RustExtractionResult;
-use magnus::{Error, RArray, RHash, Ruby, Value, IntoValue};
+use magnus::{Error, RHash, Ruby, IntoValue};
 use magnus::value::ReprValue;
 
 /// Convert Kreuzberg ExtractionResult to Ruby Hash

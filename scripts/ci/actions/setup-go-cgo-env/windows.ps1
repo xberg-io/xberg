@@ -84,10 +84,14 @@ $cgoEnabled = "1"
 $cgoCflags = "-I$msys2IncludePath"
 $importLibName = "libkreuzberg_ffi.dll.a"
 $importLibPath = Join-Path $ffiPath $importLibName
+# FIXME: Verbose linker flags (-Wl,-v) cause "invalid flag in go:cgo_ldflag" errors on Windows
+# These flags are incompatible with Windows Go CGO compilation
+# See: https://github.com/kreuzberg-dev/kreuzberg/pull/316
 $linkerVerboseFlags = ""
-if ($env:KREUZBERG_GO_LINKER_VERBOSE -eq "1") {
-  $linkerVerboseFlags = "-Wl,-v -Wl,--verbose"
-}
+# Temporarily disabled due to Go Windows CGO incompatibility
+# if ($env:KREUZBERG_GO_LINKER_VERBOSE -eq "1") {
+#   $linkerVerboseFlags = "-Wl,-v -Wl,--verbose"
+# }
 # Only set the library search path (-L) here. The ffi.go CGO directives
 # already specify -lkreuzberg_ffi and Windows system libraries (-lws2_32, etc)
 # Environment variable flags are prepended to CGO directive flags, so we just need -L
