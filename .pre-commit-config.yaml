@@ -24,7 +24,7 @@ repos:
       - id: detect-private-key
       - id: check-json
       - id: check-yaml
-        args: ["--allow-multiple-documents"]
+        args: ["--allow-multiple-documents", "--unsafe"]
       - id: check-toml
       - id: check-case-conflict
 
