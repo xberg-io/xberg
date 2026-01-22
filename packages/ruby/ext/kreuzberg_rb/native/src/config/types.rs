@@ -3,7 +3,7 @@
 //! Handles conversion between Ruby Hash configurations and Rust config types.
 //! Includes parsing for all nested configuration structures.
 
-use crate::error_handling::runtime_error;
+use crate::error_handling::{runtime_error, validation_error};
 use crate::helpers::{get_kw, json_value_to_ruby, ruby_value_to_json, symbol_to_string};
 
 use html_to_markdown_rs::options::{
@@ -977,16 +977,52 @@ pub fn parse_extraction_config(ruby: &Ruby, opts: Option<RHash>) -> Result<Extra
 }
 
 /// Load extraction config from file
+///
+/// Supports TOML, YAML, and JSON file formats. The format is detected from the file extension.
 pub fn config_from_file(path: String) -> Result<RHash, Error> {
-    let ruby = Ruby::get().expect("Ruby not initialized");
-    let json_str = fs::read_to_string(&path)
-        .map_err(|e| runtime_error(format!("Failed to read config file '{}': {}", path, e)))?;
+    use std::path::Path;
 
-    let json_value: serde_json::Value = serde_json::from_str(&json_str)
-        .map_err(|e| runtime_error(format!("Invalid JSON in config file: {}", e)))?;
+    let ruby = Ruby::get().expect("Ruby not initialized");
+    let file_path = Path::new(&path);
+
+    let content = fs::read_to_string(&path)
+        .map_err(|e| validation_error(format!("Failed to read config file '{}': {}", path, e)))?;
+
+    // Detect file format from extension
+    let extension = file_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|s| s.to_lowercase());
+
+    let json_value: serde_json::Value = match extension.as_deref() {
+        Some("toml") => {
+            toml::from_str(&content)
+                .map_err(|e| validation_error(format!("Invalid TOML in config file '{}': {}", path, e)))?
+        }
+        Some("yaml") | Some("yml") => {
+            serde_yaml_ng::from_str(&content)
+                .map_err(|e| validation_error(format!("Invalid YAML in config file '{}': {}", path, e)))?
+        }
+        Some("json") => {
+            serde_json::from_str(&content)
+                .map_err(|e| validation_error(format!("Invalid JSON in config file '{}': {}", path, e)))?
+        }
+        Some(ext) => {
+            return Err(validation_error(format!(
+                "Unsupported config file format: .{}. Supported formats: .toml, .yaml, .yml, .json",
+                ext
+            )));
+        }
+        None => {
+            return Err(validation_error(format!(
+                "Cannot determine file format: no extension found in '{}'",
+                path
+            )));
+        }
+    };
 
     json_value_to_ruby(&ruby, &json_value)
-        .and_then(|v| magnus::RHash::try_convert(v).map_err(|_| runtime_error("Config must be a Hash")))
+        .and_then(|v| magnus::RHash::try_convert(v).map_err(|_| validation_error("Config must be a Hash")))
 }
 
 /// Discover extraction config from current directory
@@ -994,12 +1030,25 @@ pub fn config_discover() -> Result<Value, Error> {
     let ruby = Ruby::get().expect("Ruby not initialized");
 
     // Search for config files in order of precedence
-    let config_names = vec!["kreuzberg.json", ".kreuzbergrc", "kreuzberg.yaml"];
+    let config_files = vec![
+        ("kreuzberg.toml", "toml"),
+        ("kreuzberg.yaml", "yaml"),
+        ("kreuzberg.yml", "yaml"),
+        ("kreuzberg.json", "json"),
+        (".kreuzbergrc", "json"),
+    ];
 
-    for name in config_names {
-        if let Ok(json_str) = fs::read_to_string(name) {
-            let json_value: serde_json::Value = serde_json::from_str(&json_str)
-                .map_err(|e| runtime_error(format!("Invalid JSON in {}: {}", name, e)))?;
+    for (name, format) in config_files {
+        if let Ok(content) = fs::read_to_string(name) {
+            let json_value: serde_json::Value = match format {
+                "toml" => toml::from_str(&content)
+                    .map_err(|e| validation_error(format!("Invalid TOML in {}: {}", name, e)))?,
+                "yaml" => serde_yaml_ng::from_str(&content)
+                    .map_err(|e| validation_error(format!("Invalid YAML in {}: {}", name, e)))?,
+                "json" => serde_json::from_str(&content)
+                    .map_err(|e| validation_error(format!("Invalid JSON in {}: {}", name, e)))?,
+                _ => unreachable!(),
+            };
             return json_value_to_ruby(&ruby, &json_value);
         }
     }

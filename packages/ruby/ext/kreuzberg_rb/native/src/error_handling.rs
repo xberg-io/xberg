@@ -110,3 +110,16 @@ pub fn runtime_error(message: impl Into<String>) -> Error {
     let ruby = Ruby::get().expect("Ruby not initialized");
     Error::new(ruby.exception_runtime_error(), message.into())
 }
+
+/// Create a validation error (Kreuzberg::Errors::ValidationError)
+pub fn validation_error(message: impl Into<String>) -> Error {
+    let ruby = Ruby::get().expect("Ruby not initialized");
+
+    // Try to get the ValidationError class from Ruby
+    if let Ok(class) = ruby.eval::<ExceptionClass>("Kreuzberg::Errors::ValidationError") {
+        Error::new(class, message.into())
+    } else {
+        // Fall back to ArgumentError if the class doesn't exist
+        Error::new(ruby.exception_arg_error(), message.into())
+    }
+}

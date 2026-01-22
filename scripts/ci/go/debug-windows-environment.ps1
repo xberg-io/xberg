@@ -218,7 +218,7 @@ if (Test-Path $ffiDir) {
 	Write-Status "FAIL" "FFI directory not found"
 }
 
-$ffiHeader = Join-Path $ffiDir "include\kreuzberg.h"
+$ffiHeader = Join-Path $ffiDir "kreuzberg.h"
 if (Test-Path $ffiHeader) {
 	Write-Status "OK" "FFI header exists: kreuzberg.h"
 	$lineCount = (Get-Content $ffiHeader).Count

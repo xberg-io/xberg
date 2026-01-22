@@ -905,6 +905,72 @@ module Kreuzberg
         self
       end
 
+      # Set a configuration field using hash-like syntax
+      #
+      # @param key [Symbol, String] Field name to set
+      # @param value [Object] Value to set
+      # @return [Object] The value that was set
+      #
+      # @example
+      #   config = Extraction.new(use_cache: true)
+      #   config[:use_cache] = false
+      #   config[:force_ocr] = true
+      #
+      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
+      def []=(key, value)
+        key_sym = key.to_sym
+        case key_sym
+        when :use_cache
+          @use_cache = value ? true : false
+        when :enable_quality_processing
+          @enable_quality_processing = value ? true : false
+        when :force_ocr
+          @force_ocr = value ? true : false
+        when :ocr
+          @ocr = normalize_config(value, OCR)
+        when :chunking
+          @chunking = normalize_config(value, Chunking)
+        when :language_detection
+          @language_detection = normalize_config(value, LanguageDetection)
+        when :pdf_options
+          @pdf_options = normalize_config(value, PDF)
+        when :image_extraction
+          @image_extraction = normalize_config(value, ImageExtraction)
+        when :image_preprocessing
+          @image_preprocessing = normalize_config(value, ImagePreprocessing)
+        when :postprocessor
+          @postprocessor = normalize_config(value, PostProcessor)
+        when :token_reduction
+          @token_reduction = normalize_config(value, TokenReduction)
+        when :keywords
+          @keywords = normalize_config(value, Keywords)
+        when :html_options
+          @html_options = normalize_config(value, HtmlOptions)
+        when :pages
+          @pages = normalize_config(value, PageConfig)
+        when :max_concurrent_extractions
+          @max_concurrent_extractions = value&.to_i
+        else
+          raise ArgumentError, "Unknown configuration key: #{key}"
+        end
+      end
+      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
+
+      # Get a configuration field using hash-like syntax
+      #
+      # @param key [Symbol, String] Field name to get
+      # @return [Object, nil] The field value
+      #
+      # @example
+      #   config = Extraction.new(use_cache: true)
+      #   config[:use_cache]  # => true
+      #
+      def [](key)
+        send(key.to_sym)
+      rescue NoMethodError
+        nil
+      end
+
       private
 
       def normalize_config(value, klass)

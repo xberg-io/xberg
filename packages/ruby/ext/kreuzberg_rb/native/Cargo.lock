@@ -2627,7 +2627,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg"
-version = "4.0.8"
+version = "4.1.0"
 dependencies = [
  "ahash",
  "async-trait",
@@ -2711,7 +2711,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-ffi"
-version = "4.0.8"
+version = "4.1.0"
 dependencies = [
  "async-trait",
  "cbindgen",
@@ -2760,12 +2760,14 @@ dependencies = [
  "pretty_assertions",
  "rb-sys",
  "serde_json",
+ "serde_yaml_ng",
  "tokio",
+ "toml 0.8.23",
 ]
 
 [[package]]
 name = "kreuzberg-tesseract"
-version = "4.0.8"
+version = "4.1.0"
 dependencies = [
  "cc",
  "cmake",

@@ -1,34 +1,18 @@
-//go:build kreuzberg_dev
-// +build kreuzberg_dev
-
 package kreuzberg
 
 /*
-// Kreuzberg FFI - Development Build Configuration
+// Kreuzberg FFI - CGO Configuration
 //
-// This file is used for development builds within the monorepo.
-// It requires the "kreuzberg_dev" build tag to be enabled.
+// This file provides the CGO include directive for the FFI header.
+// Library linking is configured via:
+//   - CI: CGO_CFLAGS and CGO_LDFLAGS environment variables set by setup-go-cgo-env action
+//   - Development: Use -tags kreuzberg_dev for monorepo builds with hardcoded paths
+//   - Production: Run go generate to download FFI and generate cgo_flags.go
 //
-// For production/external usage, run:
-//   go generate github.com/kreuzberg-dev/kreuzberg/packages/go/v4
-//
-// This will download the FFI library and generate cgo_flags.go with
-// the correct CGO directives for your platform.
-//
-// Build locations used:
-//   Development: ${SRCDIR}/../../../target/release/ (monorepo builds)
+// The CFLAGS directive below provides the include path for the header file.
+// LDFLAGS must be provided externally (via env vars or cgo_flags.go).
 
-// macOS: Direct path to static library (Apple ld does not support -Bstatic)
-#cgo darwin CFLAGS: -I${SRCDIR}/internal/ffi
-#cgo darwin LDFLAGS: ${SRCDIR}/../../../target/release/libkreuzberg_ffi.a -framework CoreFoundation -framework CoreServices -framework SystemConfiguration -framework Security -lc++
-
-// Linux: Use GNU ld static/dynamic switching
-#cgo linux CFLAGS: -I${SRCDIR}/internal/ffi
-#cgo linux LDFLAGS: -L${SRCDIR}/../../../target/release -Wl,-Bstatic -lkreuzberg_ffi -Wl,-Bdynamic -lpthread -ldl -lm -lstdc++
-
-// Windows: Static library with Windows system libs
-#cgo windows CFLAGS: -I${SRCDIR}/internal/ffi
-#cgo windows LDFLAGS: -L${SRCDIR}/../../../target/release -lkreuzberg_ffi -lws2_32 -luserenv -lbcrypt -lntdll -static-libgcc -static-libstdc++
+#cgo CFLAGS: -I${SRCDIR}/internal/ffi
 
 #include "internal/ffi/kreuzberg.h"
 #include <stdlib.h>
