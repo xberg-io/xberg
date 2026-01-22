@@ -23,7 +23,7 @@ kreuzberg-tesseract = { path = "crates/kreuzberg-tesseract" }
 
 [workspace.package]
 version = "4.1.0"
-edition = "2024"
+edition = "2021"
 rust-version = "1.91"
 authors = ["Na'aman Hirschfeld <nhirschfeld@gmail.com>"]
 license = "MIT"
