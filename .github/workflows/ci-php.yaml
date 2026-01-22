@@ -227,21 +227,14 @@ jobs:
         uses: ./.github/actions/setup-rust
         with:
           cache-key-prefix: php-test-${{ matrix.os }}
-          # TODO: Consider disabling cache on Windows due to fingerprint corruption
-          # See: https://github.com/kreuzberg-dev/kreuzberg/pull/316
+          # Disable cache on Windows due to fingerprint corruption issues
+          disable-cache: ${{ matrix.os == 'windows-latest' }}
 
       - name: Detect partial cache hit and clean stale fingerprints
         shell: bash
         run: |
-          # Check if cache was a partial hit (restored from fallback key)
-          # For now, we'll do a more conservative check: always clean before build
-          # since the current Cargo.lock changes frequently
           echo "Preparing clean Rust build environment..."
-
-          # Run comprehensive fingerprint cleanup
           scripts/ci/actions/setup-rust/cleanup-fingerprints.sh
-
-          # Also perform full clean for critical packages to ensure consistency
           cargo clean --release -p kreuzberg-ffi 2>/dev/null || true
           cargo clean --release -p kreuzberg 2>/dev/null || true
 

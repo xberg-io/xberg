@@ -25,6 +25,10 @@ inputs:
     description: Enable sccache as the Rust compiler wrapper
     required: false
     default: 'true'
+  disable-cache:
+    description: Disable build artifact caching (useful for Windows where fingerprints get corrupted)
+    required: false
+    default: 'false'
 
 outputs:
   cache-hit:
@@ -60,6 +64,7 @@ runs:
 
     - name: Cache Rust build artifacts
       id: cache-rust
+      if: inputs.disable-cache != 'true'
       uses: actions/cache@v5
       with:
         path: |

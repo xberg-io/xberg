@@ -364,8 +364,8 @@ jobs:
           use-sccache: ${{ matrix.os != 'windows-latest' }}
           target: ${{ matrix.os == 'windows-latest' && 'x86_64-pc-windows-gnu' || '' }}
           toolchain: ${{ matrix.os == 'windows-latest' && 'stable-x86_64-pc-windows-gnu' || '' }}
-          # TODO: Consider disabling cache on Windows due to fingerprint corruption and CGO issues
-          # See: https://github.com/kreuzberg-dev/kreuzberg/pull/316
+          # Disable cache on Windows due to fingerprint corruption and CGO issues
+          disable-cache: ${{ matrix.os == 'windows-latest' }}
 
       - name: Clean stale fingerprints (test job)
         shell: bash
