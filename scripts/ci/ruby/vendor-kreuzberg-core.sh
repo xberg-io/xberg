@@ -101,20 +101,44 @@ rm -f "$REPO_ROOT/packages/ruby/vendor/kreuzberg/Cargo.toml.bak"
 echo "Updating native extension paths to vendored crates..."
 NATIVE_CARGO_TOML="$REPO_ROOT/packages/ruby/ext/kreuzberg_rb/native/Cargo.toml"
 if [ -f "$NATIVE_CARGO_TOML" ]; then
-  # Update kreuzberg path (5 parent dirs: ../../../../../crates/kreuzberg)
-  sed -i.bak \
-    's|path = "\.\./\.\./\.\./\.\./\.\./crates/kreuzberg"|path = "../../../vendor/kreuzberg"|g' \
-    "$NATIVE_CARGO_TOML"
+  echo "  Original Cargo.toml paths:"
+  grep -E 'path = "\.\./|path = "\.\./' "$NATIVE_CARGO_TOML" || true
 
-  # Update kreuzberg-ffi path (5 parent dirs: ../../../../../crates/kreuzberg-ffi)
-  sed -i.bak \
-    's|path = "\.\./\.\./\.\./\.\./\.\./crates/kreuzberg-ffi"|path = "../../../vendor/kreuzberg-ffi"|g' \
-    "$NATIVE_CARGO_TOML"
+  # Use perl for more reliable path replacement (handles escaping better than sed)
+  # Update kreuzberg path: ../../../../../crates/kreuzberg -> ../../../vendor/kreuzberg
+  perl -i.bak -pe 's{path = "\.\./\.\./\.\./\.\./\.\./crates/kreuzberg"}{path = "../../../vendor/kreuzberg"}g' "$NATIVE_CARGO_TOML"
+
+  # Update kreuzberg-ffi path: ../../../../../crates/kreuzberg-ffi -> ../../../vendor/kreuzberg-ffi
+  perl -i.bak -pe 's{path = "\.\./\.\./\.\./\.\./\.\./crates/kreuzberg-ffi"}{path = "../../../vendor/kreuzberg-ffi"}g' "$NATIVE_CARGO_TOML"
 
   rm -f "$NATIVE_CARGO_TOML.bak"
+
+  # Verify the replacements worked
+  echo "  Updated Cargo.toml paths:"
+  grep -E 'path = "\.\./|path = "\.\./' "$NATIVE_CARGO_TOML" || true
+
+  # Validate that no original paths remain (use -F for fixed string matching)
+  if grep -qF 'path = "../../../../../' "$NATIVE_CARGO_TOML"; then
+    echo "::error::Failed to replace all crate paths - original 5-level paths still present"
+    echo "  Remaining original paths:"
+    grep -F 'path = "../../../../../' "$NATIVE_CARGO_TOML" || true
+    exit 1
+  fi
+
+  # Validate that both vendored paths are present
+  if ! grep -qF 'path = "../../../vendor/kreuzberg"' "$NATIVE_CARGO_TOML"; then
+    echo "::error::Vendor path replacement failed - kreuzberg vendor path not found"
+    exit 1
+  fi
+  if ! grep -qF 'path = "../../../vendor/kreuzberg-ffi"' "$NATIVE_CARGO_TOML"; then
+    echo "::error::Vendor path replacement failed - kreuzberg-ffi vendor path not found"
+    exit 1
+  fi
+
   echo "✓ Updated native extension paths to use vendor directory"
 else
-  echo "⚠ Warning: native Cargo.toml not found at $NATIVE_CARGO_TOML"
+  echo "::error::Native Cargo.toml not found at $NATIVE_CARGO_TOML"
+  exit 1
 fi
 
 # Generate vendor workspace Cargo.toml with extracted versions

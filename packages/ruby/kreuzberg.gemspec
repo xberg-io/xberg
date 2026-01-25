@@ -130,10 +130,22 @@ vendor_files = Dir.chdir(__dir__) do
   kreuzberg_files + kreuzberg_ffi_files + kreuzberg_tesseract_files + rb_sys_files + workspace_toml
 end
 
+# When vendor files exist, get ext/ files from filesystem (to include modified Cargo.toml
+# with vendor paths) instead of from git (which has original 5-level crate paths)
+ext_files_from_fs = Dir.chdir(__dir__) do
+  Dir.glob('ext/**/*', File::FNM_DOTMATCH)
+     .reject { |f| File.directory?(f) }
+     .reject { |f| f.include?('/target/') }
+     .grep_v(/\.(swp|bak|tmp)$/)
+     .grep_v(/~$/)
+end
+
 files = if (ruby_files + core_files + ffi_files).empty?
           fallback_files
         elsif vendor_files.any?
-          ruby_files + vendor_files
+          # Use ext/ files from filesystem (modified by vendor script) + non-ext ruby files from git
+          non_ext_ruby_files = ruby_files.reject { |f| f.start_with?('ext/') }
+          non_ext_ruby_files + ext_files_from_fs + vendor_files
         else
           ruby_files + core_files + ffi_files
         end
