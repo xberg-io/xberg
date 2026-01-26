@@ -404,7 +404,7 @@ jobs:
             os: ubuntu-24.04-arm
             artifact: python-wheels-linux-aarch64
             rust_target: aarch64-unknown-linux-gnu
-            manylinux: auto
+            manylinux: manylinux_2_28
             python: "3.10"
             needs_qemu: false
             extra_args: ""
