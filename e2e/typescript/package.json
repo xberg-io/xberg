@@ -1,6 +1,6 @@
 {
   "name": "@kreuzberg/e2e-tests",
-  "version": "4.2.0",
+  "version": "4.2.1",
   "type": "module",
   "description": "End-to-end tests for Kreuzberg TypeScript bindings config parity",
   "scripts": {
@@ -9,7 +9,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "@kreuzberg/node": "4.1.2"
+    "@kreuzberg/node": "4.2.1"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",

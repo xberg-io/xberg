@@ -206,6 +206,7 @@ mod extractor;
 mod ocr;
 mod processor;
 pub mod registry;
+pub mod startup_validation;
 mod traits;
 mod validator;
 

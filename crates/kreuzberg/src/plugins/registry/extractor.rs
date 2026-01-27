@@ -43,9 +43,26 @@ impl DocumentExtractorRegistry {
         let priority = extractor.priority();
         let mime_types: Vec<String> = extractor.supported_mime_types().iter().map(|s| s.to_string()).collect();
 
-        super::validate_plugin_name(&name)?;
+        if let Err(e) = super::validate_plugin_name(&name) {
+            tracing::warn!(
+                "Failed to validate document extractor name '{}': {}. \
+                 Registration aborted. Plugin names must be non-empty and contain only alphanumeric characters, hyphens, and underscores.",
+                name,
+                e
+            );
+            return Err(e);
+        }
 
-        extractor.initialize()?;
+        if let Err(e) = extractor.initialize() {
+            tracing::error!(
+                "Failed to initialize document extractor '{}': {}. \
+                 Extraction for MIME types {:?} will be unavailable.",
+                name,
+                e,
+                mime_types
+            );
+            return Err(e);
+        }
 
         let mut index_entries = Vec::new();
 
@@ -57,7 +74,13 @@ impl DocumentExtractorRegistry {
             index_entries.push((mime_type.clone(), priority));
         }
 
-        self.name_index.insert(name, index_entries);
+        self.name_index.insert(name.clone(), index_entries);
+        tracing::debug!(
+            "Registered document extractor '{}' with priority {} for MIME types: {:?}",
+            name,
+            priority,
+            mime_types
+        );
 
         Ok(())
     }
@@ -128,7 +151,13 @@ impl DocumentExtractorRegistry {
     pub fn remove(&mut self, name: &str) -> Result<()> {
         let index_entries = match self.name_index.remove(name) {
             Some(entries) => entries,
-            None => return Ok(()),
+            None => {
+                tracing::debug!(
+                    "Document extractor '{}' not found in registry (already removed or never registered)",
+                    name
+                );
+                return Ok(());
+            }
         };
 
         let mut extractor_to_shutdown: Option<Arc<dyn DocumentExtractor>> = None;
@@ -148,7 +177,16 @@ impl DocumentExtractorRegistry {
         }
 
         if let Some(extractor) = extractor_to_shutdown {
-            extractor.shutdown()?;
+            if let Err(e) = extractor.shutdown() {
+                tracing::warn!(
+                    "Failed to shutdown document extractor '{}': {}. \
+                     Resources may not have been properly released.",
+                    name,
+                    e
+                );
+                return Err(e);
+            }
+            tracing::debug!("Successfully removed and shut down document extractor '{}'", name);
         }
 
         Ok(())
@@ -157,8 +195,18 @@ impl DocumentExtractorRegistry {
     /// Shutdown all extractors and clear the registry.
     pub fn shutdown_all(&mut self) -> Result<()> {
         let names = self.list();
+        let count = names.len();
+
+        if count > 0 {
+            tracing::debug!("Shutting down {} document extractors", count);
+        }
+
         for name in names {
             self.remove(&name)?;
+        }
+
+        if count > 0 {
+            tracing::debug!("Successfully shut down all {} document extractors", count);
         }
         Ok(())
     }
@@ -412,5 +460,203 @@ mod tests {
         assert_eq!(registry.get("text/plain").unwrap().name(), "multi-extractor");
         assert_eq!(registry.get("text/markdown").unwrap().name(), "multi-extractor");
         assert_eq!(registry.get("text/html").unwrap().name(), "multi-extractor");
+    }
+
+    struct FailingExtractor {
+        name: String,
+        fail_on_init: bool,
+    }
+
+    impl Plugin for FailingExtractor {
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> Result<()> {
+            if self.fail_on_init {
+                Err(KreuzbergError::Plugin {
+                    message: "Extractor initialization failed".to_string(),
+                    plugin_name: self.name.clone(),
+                })
+            } else {
+                Ok(())
+            }
+        }
+        fn shutdown(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl DocumentExtractor for FailingExtractor {
+        async fn extract_bytes(&self, _: &[u8], _: &str, _: &ExtractionConfig) -> Result<ExtractionResult> {
+            Ok(ExtractionResult {
+                content: "test".to_string(),
+                mime_type: "text/plain".to_string(),
+                metadata: crate::types::Metadata::default(),
+                tables: vec![],
+                detected_languages: None,
+                chunks: None,
+                images: None,
+                djot_content: None,
+                pages: None,
+                elements: None,
+            })
+        }
+
+        fn supported_mime_types(&self) -> &[&str] {
+            &["text/plain"]
+        }
+
+        fn priority(&self) -> i32 {
+            50
+        }
+    }
+
+    #[test]
+    fn test_document_extractor_initialization_failure_logs_error() {
+        let mut registry = DocumentExtractorRegistry::new();
+
+        let extractor = Arc::new(FailingExtractor {
+            name: "failing-extractor".to_string(),
+            fail_on_init: true,
+        });
+
+        let result = registry.register(extractor);
+        assert!(result.is_err());
+        assert_eq!(registry.list().len(), 0);
+    }
+
+    #[test]
+    fn test_document_extractor_invalid_name_empty_logs_warning() {
+        let mut registry = DocumentExtractorRegistry::new();
+
+        let extractor = Arc::new(MockExtractor {
+            name: "".to_string(),
+            mime_types: &["text/plain"],
+            priority: 50,
+        });
+
+        let result = registry.register(extractor);
+        assert!(matches!(result, Err(KreuzbergError::Validation { .. })));
+    }
+
+    #[test]
+    fn test_document_extractor_invalid_name_with_spaces_logs_warning() {
+        let mut registry = DocumentExtractorRegistry::new();
+
+        let extractor = Arc::new(MockExtractor {
+            name: "invalid extractor".to_string(),
+            mime_types: &["text/plain"],
+            priority: 50,
+        });
+
+        let result = registry.register(extractor);
+        assert!(matches!(result, Err(KreuzbergError::Validation { .. })));
+    }
+
+    #[test]
+    fn test_document_extractor_successful_registration_logs_debug() {
+        let mut registry = DocumentExtractorRegistry::new();
+
+        let extractor = Arc::new(MockExtractor {
+            name: "valid-pdf-extractor".to_string(),
+            mime_types: &["application/pdf"],
+            priority: 100,
+        });
+
+        let result = registry.register(extractor);
+        assert!(result.is_ok());
+        assert_eq!(registry.list().len(), 1);
+    }
+
+    #[test]
+    fn test_document_extractor_remove_nonexistent_logs_debug() {
+        let mut registry = DocumentExtractorRegistry::new();
+
+        let result = registry.remove("nonexistent-extractor");
+        assert!(result.is_ok());
+        assert_eq!(registry.list().len(), 0);
+    }
+
+    #[test]
+    fn test_document_extractor_shutdown_empty_registry() {
+        let mut registry = DocumentExtractorRegistry::new();
+        let result = registry.shutdown_all();
+        assert!(result.is_ok());
+        assert_eq!(registry.list().len(), 0);
+    }
+
+    #[test]
+    fn test_document_extractor_shutdown_with_multiple_extractors() {
+        let mut registry = DocumentExtractorRegistry::new();
+
+        let extractor1 = Arc::new(MockExtractor {
+            name: "extractor1".to_string(),
+            mime_types: &["text/plain"],
+            priority: 50,
+        });
+
+        let extractor2 = Arc::new(MockExtractor {
+            name: "extractor2".to_string(),
+            mime_types: &["application/pdf"],
+            priority: 100,
+        });
+
+        let extractor3 = Arc::new(MockExtractor {
+            name: "extractor3".to_string(),
+            mime_types: &["image/png"],
+            priority: 75,
+        });
+
+        registry.register(extractor1).unwrap();
+        registry.register(extractor2).unwrap();
+        registry.register(extractor3).unwrap();
+
+        assert_eq!(registry.list().len(), 3);
+
+        registry.shutdown_all().unwrap();
+        assert_eq!(registry.list().len(), 0);
+    }
+
+    #[test]
+    fn test_document_extractor_priority_ordering_complex() {
+        let mut registry = DocumentExtractorRegistry::new();
+
+        let extractors = vec![
+            (
+                Arc::new(MockExtractor {
+                    name: "priority-1".to_string(),
+                    mime_types: &["application/pdf"],
+                    priority: 1,
+                }),
+                1,
+            ),
+            (
+                Arc::new(MockExtractor {
+                    name: "priority-100".to_string(),
+                    mime_types: &["application/pdf"],
+                    priority: 100,
+                }),
+                100,
+            ),
+            (
+                Arc::new(MockExtractor {
+                    name: "priority-50".to_string(),
+                    mime_types: &["application/pdf"],
+                    priority: 50,
+                }),
+                50,
+            ),
+        ];
+
+        for (extractor, _priority) in &extractors {
+            registry.register(extractor.clone()).unwrap();
+        }
+
+        let retrieved = registry.get("application/pdf").unwrap();
+        assert_eq!(retrieved.name(), "priority-100");
     }
 }

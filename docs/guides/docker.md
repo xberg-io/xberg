@@ -280,7 +280,9 @@ docker-compose up -d
 
 ### Kubernetes Deployment
 
-**Deployment Manifest:**
+For complete Kubernetes deployment guidance including OCR configuration, permissions, and troubleshooting, see the [Kubernetes Deployment Guide](kubernetes.md).
+
+**Quick Deployment Example:**
 
 ```yaml title="kubernetes-deployment.yaml"
 apiVersion: apps/v1
@@ -312,12 +314,13 @@ spec:
           value: "500"
         - name: RUST_LOG
           value: "info"
+        - name: TESSDATA_PREFIX
+          value: "/usr/share/tesseract-ocr/4.00/tessdata"
         args: ["serve", "--host", "0.0.0.0", "--port", "8000"]
         livenessProbe:
-          exec:
-            command:
-            - kreuzberg
-            - --version
+          httpGet:
+            path: /health
+            port: 8000
           initialDelaySeconds: 10
           periodSeconds: 30
         readinessProbe:
@@ -358,6 +361,9 @@ spec:
 ```bash title="Terminal"
 kubectl apply -f kreuzberg-deployment.yaml
 ```
+
+!!! important "Kubernetes-Specific Configuration"
+    This quick example includes the critical `TESSDATA_PREFIX` environment variable needed for OCR. For production deployments with custom configurations, permissions handling, and health checks, refer to the [comprehensive Kubernetes guide](kubernetes.md).
 
 ### Environment Variables
 
@@ -562,6 +568,7 @@ docker run -p 8000:8000 ghcr.io/kreuzberg-dev/kreuzberg:latest
 
 ## Next Steps
 
+- [Kubernetes Deployment](kubernetes.md) - Production Kubernetes deployments with OCR configuration and troubleshooting
 - [API Server Guide](api-server.md) - Complete API documentation
 - [CLI Usage](../cli/usage.md) - Command-line interface
 - [Configuration](configuration.md) - Configuration options

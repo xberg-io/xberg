@@ -1,7 +1,7 @@
 [project]
 name = "kreuzberg-test-app-python"
-version = "4.2.0"
-description = "Comprehensive API coverage test for Kreuzberg 4.2.0 Python bindings"
+version = "4.2.1"
+description = "Comprehensive API coverage test for Kreuzberg 4.2.1 Python bindings"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [

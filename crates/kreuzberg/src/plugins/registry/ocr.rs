@@ -31,6 +31,8 @@ impl OcrBackendRegistry {
     /// Create a new OCR backend registry with default backends.
     ///
     /// Registers the Tesseract backend by default if the "ocr" feature is enabled.
+    /// Logs warnings if backend initialization fails (common in containerized environments
+    /// with missing dependencies or permission issues).
     pub fn new() -> Self {
         #[cfg(feature = "ocr")]
         let mut registry = Self {
@@ -45,8 +47,27 @@ impl OcrBackendRegistry {
         #[cfg(feature = "ocr")]
         {
             use crate::ocr::tesseract_backend::TesseractBackend;
-            if let Ok(backend) = TesseractBackend::new() {
-                let _ = registry.register(Arc::new(backend));
+            match TesseractBackend::new() {
+                Ok(backend) => {
+                    if let Err(e) = registry.register(Arc::new(backend)) {
+                        tracing::error!(
+                            "Failed to register Tesseract OCR backend: {}. \
+                             OCR functionality will be unavailable. \
+                             Check TESSDATA_PREFIX environment variable and tessdata file permissions.",
+                            e
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Tesseract OCR backend initialization failed: {}. \
+                         OCR functionality will be unavailable. \
+                         Common causes: missing TESSDATA_PREFIX env var, \
+                         tessdata files not found, or permission issues in containerized environments. \
+                         See https://docs.kreuzberg.dev/guides/docker/ for Kubernetes troubleshooting.",
+                        e
+                    );
+                }
             }
         }
 
@@ -289,5 +310,132 @@ mod tests {
 
         registry.shutdown_all().unwrap();
         assert_eq!(registry.list().len(), 0);
+    }
+
+    struct FailingOcrBackend {
+        name: String,
+        fail_on_init: bool,
+    }
+
+    impl Plugin for FailingOcrBackend {
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn version(&self) -> String {
+            "1.0.0".to_string()
+        }
+        fn initialize(&self) -> Result<()> {
+            if self.fail_on_init {
+                Err(KreuzbergError::Plugin {
+                    message: "Backend initialization failed".to_string(),
+                    plugin_name: self.name.clone(),
+                })
+            } else {
+                Ok(())
+            }
+        }
+        fn shutdown(&self) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl OcrBackend for FailingOcrBackend {
+        async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractionResult> {
+            Ok(ExtractionResult {
+                content: "test".to_string(),
+                mime_type: "text/plain".to_string(),
+                metadata: crate::types::Metadata::default(),
+                tables: vec![],
+                detected_languages: None,
+                chunks: None,
+                images: None,
+                djot_content: None,
+                pages: None,
+                elements: None,
+            })
+        }
+
+        fn supports_language(&self, _lang: &str) -> bool {
+            false
+        }
+
+        fn backend_type(&self) -> crate::plugins::ocr::OcrBackendType {
+            crate::plugins::ocr::OcrBackendType::Custom
+        }
+    }
+
+    #[test]
+    fn test_ocr_backend_initialization_failure_logs_error() {
+        let mut registry = OcrBackendRegistry::new_empty();
+
+        let backend = Arc::new(FailingOcrBackend {
+            name: "failing-ocr".to_string(),
+            fail_on_init: true,
+        });
+
+        let result = registry.register(backend);
+        assert!(result.is_err());
+        assert_eq!(registry.list().len(), 0);
+    }
+
+    #[test]
+    fn test_ocr_backend_invalid_name_empty_logs_warning() {
+        let mut registry = OcrBackendRegistry::new_empty();
+
+        let backend = Arc::new(MockOcrBackend {
+            name: "".to_string(),
+            languages: vec!["eng".to_string()],
+        });
+
+        let result = registry.register(backend);
+        assert!(matches!(result, Err(KreuzbergError::Validation { .. })));
+    }
+
+    #[test]
+    fn test_ocr_backend_invalid_name_with_spaces_logs_warning() {
+        let mut registry = OcrBackendRegistry::new_empty();
+
+        let backend = Arc::new(MockOcrBackend {
+            name: "invalid ocr backend".to_string(),
+            languages: vec!["eng".to_string()],
+        });
+
+        let result = registry.register(backend);
+        assert!(matches!(result, Err(KreuzbergError::Validation { .. })));
+    }
+
+    #[test]
+    fn test_ocr_backend_successful_registration_logs_debug() {
+        let mut registry = OcrBackendRegistry::new_empty();
+
+        let backend = Arc::new(MockOcrBackend {
+            name: "valid-ocr".to_string(),
+            languages: vec!["eng".to_string()],
+        });
+
+        let result = registry.register(backend);
+        assert!(result.is_ok());
+        assert_eq!(registry.list().len(), 1);
+    }
+
+    #[test]
+    fn test_ocr_backend_multiple_registrations() {
+        let mut registry = OcrBackendRegistry::new_empty();
+
+        let backend1 = Arc::new(MockOcrBackend {
+            name: "ocr-backend-1".to_string(),
+            languages: vec!["eng".to_string()],
+        });
+
+        let backend2 = Arc::new(MockOcrBackend {
+            name: "ocr-backend-2".to_string(),
+            languages: vec!["deu".to_string()],
+        });
+
+        registry.register(backend1).unwrap();
+        registry.register(backend2).unwrap();
+
+        assert_eq!(registry.list().len(), 2);
     }
 }

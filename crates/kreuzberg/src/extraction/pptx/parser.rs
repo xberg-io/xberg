@@ -384,5 +384,11 @@ pub(super) fn parse_presentation_rels(rels_data: &[u8]) -> Result<Vec<String>> {
         }
     }
 
+    // Sort slide paths to ensure correct ordering regardless of XML order.
+    // PowerPoint doesn't guarantee relationship order in the rels file.
+    // GitHub Issue #329: Without sorting, slides can be processed in wrong order,
+    // causing images to have incorrect page numbers.
+    slide_paths.sort();
+
     Ok(slide_paths)
 }

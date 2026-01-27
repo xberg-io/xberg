@@ -4,7 +4,7 @@ requires = ["hatchling"]
 
 [project]
 name = "kreuzberg-examples-python"
-version = "4.2.0"
+version = "4.2.1"
 description = "Kreuzberg Python binding examples"
 requires-python = ">=3.10"
 

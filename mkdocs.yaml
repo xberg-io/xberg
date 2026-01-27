@@ -180,6 +180,7 @@ nav:
       - Element-Based Output: guides/element-based-output.md
       - Advanced Features: guides/advanced.md
       - Docker Deployment: guides/docker.md
+      - Kubernetes Deployment: guides/kubernetes.md
       - API Server: guides/api-server.md
       - Creating Plugins: guides/plugins.md
       - C# Bindings: guides/csharp.md

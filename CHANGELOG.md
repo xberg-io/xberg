@@ -11,6 +11,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.2.1] - 2026-01-27
+
+**Patch Release: API Parity Fixes and CI Reliability Improvements**
+
+This patch release fixes API validation issues, adds missing format aliases, and improves backward compatibility across all language bindings.
+
+### Fixed
+
+#### Rust Core
+- **PPTX image page numbers**: Fixed reversed page numbers when extracting images from PPTX files ([#329](https://github.com/kreuzberg-dev/kreuzberg/issues/329))
+  - Images on slide 1 were incorrectly reported with `page_number=2` due to unsorted slide paths from presentation.xml.rels
+  - Now sorts slide paths after parsing to ensure correct ordering regardless of XML element order
+- **Plugin registry error logging**: Added comprehensive error logging for silent plugin failures ([#328](https://github.com/kreuzberg-dev/kreuzberg/issues/328))
+  - OCR registry now logs errors and warnings when plugins fail to initialize
+  - Extractor registry logs plugin load failures for troubleshooting
+  - PostProcessor registry tracks plugin status changes
+  - Validator registry records plugin validation errors
+  - New `startup_validation.rs` module provides plugin status verification
+  - Server startup logs all active plugins and their initialization status (fixes Kubernetes deployment visibility)
+- **Output format validation**: Extended `VALID_OUTPUT_FORMATS` to include all valid aliases (`plain`, `text`, `markdown`, `md`, `djot`, `html`)
+- **Error type consistency**: `validate_file_exists()` now returns `Io` error instead of `Validation` error for file-not-found cases
+
+#### Go Bindings
+- **Format constants**: Added `OutputFormatText` and `OutputFormatMd` as aliases for `plain` and `markdown`
+- **Documentation**: Fixed default format comment (default is `plain`, not `markdown`)
+
+#### Elixir Bindings
+- **Format validation**: Added `text` and `md` aliases to `validate_output_format` function
+- **Config validation**: Updated error messages to list all valid format options
+
+#### Ruby Bindings
+- **CLI backward compatibility**: `extract` and `detect` methods now accept both positional and keyword arguments
+- **Config field naming**: Renamed `image_extraction` to `images` (canonical name) with backward-compatible alias
+- **Spec fixes**: Updated test expectations to match actual implementation behavior
+
+#### PHP Bindings
+- **Config field naming**: Renamed fields to canonical names (`images`, `pages`, `pdfOptions`, `postprocessor`, `tokenReduction`)
+- **API parity**: Added missing `postprocessor` and `tokenReduction` fields
+
+#### Java Bindings
+- **API parity**: Added `getImages()` and `images()` builder methods as aliases for `getImageExtraction()`
+
+#### WASM Bindings
+- **TypeScript types**: Added `outputFormat`, `resultFormat`, and `htmlOptions` to `ExtractionConfig` interface
+
+#### Python E2E Tests
+- **Case sensitivity**: Fixed tests to use lowercase format strings (`plain`, `unified`, `element_based`)
+- **API usage**: Updated to use module-level functions (`config_to_json`, `config_merge`) instead of instance methods
+
+#### CI/CD
+- **Go test app**: Fixed build by adding `-tags kreuzberg_dev` flag for FFI linking
+- **Go tests**: Fixed flawed pointer test that made incorrect assumptions about Go's memory model
+
+### Changed
+
+#### API Verification
+- **Parity script**: Improved `scripts/verify_api_parity.py` to correctly parse all language bindings
+  - TypeScript: Better handling of multi-line interfaces with JSDoc
+  - Python: Correct parsing of `.pyi` stub files
+  - Java: Extract field names from `toMap()` serialization
+  - C#: Extract `JsonPropertyName` attributes for canonical names
+  - WASM: Dedicated extractor for TypeScript type definitions
+
+### Documentation
+
+- **Kubernetes deployment guide**: New comprehensive guide for deploying Kreuzberg in Kubernetes ([#328](https://github.com/kreuzberg-dev/kreuzberg/issues/328))
+  - Complete K8s architecture overview with StatefulSet, Service, and ConfigMap examples
+  - Health check configuration for plugin readiness and liveness probes
+  - Logging aggregation best practices for plugin status visibility
+  - Troubleshooting section for silent plugin failures in containerized environments
+  - Updated Docker guide with K8s deployment references
+  - Location: `docs/guides/kubernetes.md`
+
+---
+
 ## [4.2.0] - 2026-01-26
 
 **Major Release: Complete API Consistency Across All 10 Language Bindings**

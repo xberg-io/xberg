@@ -20,7 +20,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-merge-conflict
       - id: check-added-large-files
-        exclude: uv.lock|docs/benchmarks/app/
+        exclude: uv.lock|docs/benchmarks/app/|test_documents/presentations/
       - id: detect-private-key
       - id: check-json
       - id: check-yaml

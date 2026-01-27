@@ -1,7 +1,7 @@
 {
   "name": "browser-vite-svelte",
   "private": true,
-  "version": "4.2.0",
+  "version": "4.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,6 +20,6 @@
     "vite": "^7.2.4"
   },
   "dependencies": {
-    "@kreuzberg/wasm": "4.2.0"
+    "@kreuzberg/wasm": "4.2.1"
   }
 }

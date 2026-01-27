@@ -196,20 +196,20 @@ async fn test_chunking_overlap_creates_overlap() {
         .await
         .expect("Should extract successfully");
 
-    if let Some(chunks) = result.chunks {
-        if chunks.len() >= 2 {
-            // Check if adjacent chunks have overlapping text
-            let chunk1_end = &chunks[0].content[chunks[0].content.len().saturating_sub(15)..];
-            let chunk2_start = &chunks[1].content[..chunks[1].content.len().min(15)];
+    if let Some(chunks) = result.chunks
+        && chunks.len() >= 2
+    {
+        // Check if adjacent chunks have overlapping text
+        let chunk1_end = &chunks[0].content[chunks[0].content.len().saturating_sub(15)..];
+        let chunk2_start = &chunks[1].content[..chunks[1].content.len().min(15)];
 
-            // There should be some overlap in the text
-            let overlap_found = chunk1_end.chars().any(|c| c != ' ') && chunk2_start.chars().any(|c| c != ' ');
+        // There should be some overlap in the text
+        let overlap_found = chunk1_end.chars().any(|c| c != ' ') && chunk2_start.chars().any(|c| c != ' ');
 
-            assert!(
-                overlap_found,
-                "Adjacent chunks should have overlapping non-whitespace text"
-            );
-        }
+        assert!(
+            overlap_found,
+            "Adjacent chunks should have overlapping non-whitespace text"
+        );
     }
 }
 

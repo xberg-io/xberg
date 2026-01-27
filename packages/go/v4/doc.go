@@ -317,5 +317,5 @@
 //
 // # Version
 //
-// This binding targets Kreuzberg 4.2.0 (https://github.com/kreuzberg-dev/kreuzberg).
+// This binding targets Kreuzberg 4.2.1 (https://github.com/kreuzberg-dev/kreuzberg).
 package kreuzberg

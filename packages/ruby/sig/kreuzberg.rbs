@@ -417,14 +417,23 @@ module Kreuzberg
       attr_reader plain_text: String
       attr_reader blocks: Array[DjotContent::FormattedBlock]
       attr_reader metadata: Hash[untyped, untyped]
-      attr_reader tables: Array[Table]
+      attr_reader metadata_json: String
+      attr_reader tables: Array[untyped]
       attr_reader images: Array[DjotContent::DjotImage]
       attr_reader links: Array[DjotContent::DjotLink]
       attr_reader footnotes: Array[DjotContent::Footnote]
       attr_reader attributes: Hash[String, untyped]?
 
-      def initialize: (djot_content_hash hash) -> void
-      def to_h: () -> djot_content_hash
+      def initialize: (untyped hash) -> void
+      def to_h: () -> Hash[Symbol, untyped]
+
+      private
+
+      def parse_metadata: (String metadata_json) -> Hash[untyped, untyped]
+      def parse_blocks: (Array[untyped] blocks_data) -> Array[FormattedBlock]
+      def parse_images: (Array[untyped] images_data) -> Array[DjotImage]
+      def parse_links: (Array[untyped] links_data) -> Array[DjotLink]
+      def parse_footnotes: (Array[untyped] footnotes_data) -> Array[Footnote]
 
       class FormattedBlock
         attr_reader block_type: String
@@ -433,28 +442,31 @@ module Kreuzberg
         attr_reader children: Array[FormattedBlock]?
         attr_reader attributes: Hash[String, untyped]?
 
-        def initialize: (formatted_block_hash hash) -> void
-        def to_h: () -> formatted_block_hash
+        def initialize: (?untyped hash_or_type, ?children: untyped, ?attributes: untyped, ?content: untyped, ?level: untyped, ?block_type: untyped) -> void
+        def to_h: () -> Hash[Symbol, untyped]
       end
 
       class DjotImage
         attr_reader url: String
         attr_reader alt: String?
         attr_reader title: String?
-        attr_reader attributes: Hash[String, untyped]?
+        attr_reader width: Integer?
+        attr_reader height: Integer?
 
-        def initialize: (djot_image_hash hash) -> void
-        def to_h: () -> djot_image_hash
+        def initialize: (?untyped hash_or_url, ?alt: untyped, ?title: untyped, ?width: untyped, ?height: untyped, ?url: untyped, ?src: untyped) -> void
+        def src: () -> String
+        def to_h: () -> Hash[Symbol, untyped]
       end
 
       class DjotLink
         attr_reader url: String
-        attr_reader text: String
+        attr_reader text: String?
         attr_reader title: String?
         attr_reader link_type: String?
 
-        def initialize: (djot_link_hash hash) -> void
-        def to_h: () -> djot_link_hash
+        def initialize: (?untyped hash_or_url, ?text: untyped, ?title: untyped, ?url: untyped, ?href: untyped, ?link_type: untyped) -> void
+        def href: () -> String
+        def to_h: () -> Hash[Symbol, untyped]
       end
 
       class Footnote

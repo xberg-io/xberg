@@ -1,7 +1,7 @@
 {
     "name": "kreuzberg/kreuzberg",
     "description": "High-performance document intelligence for PHP. Extract text, metadata, and structured information from PDFs, Office documents, images, and 56 formats. Powered by Rust core for 10-50x speed improvements.",
-    "version": "4.2.0",
+    "version": "4.2.1",
     "type": "php-ext",
     "license": "MIT",
     "keywords": [
