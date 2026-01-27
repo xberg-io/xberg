@@ -1,54 +1,54 @@
 {
-  "name": "@kreuzberg/node-linux-arm-gnueabihf",
-  "version": "4.2.2",
-  "cpu": [
-    "arm"
-  ],
-  "main": "kreuzberg-node.linux-arm-gnueabihf.node",
-  "files": [
-    "kreuzberg-node.linux-arm-gnueabihf.node"
-  ],
-  "description": "Kreuzberg document intelligence - Node.js native bindings",
-  "keywords": [
-    "document-intelligence",
-    "document-extraction",
-    "text-extraction",
-    "pdf-extraction",
-    "ocr",
-    "pdf",
-    "docx",
-    "xlsx",
-    "pptx",
-    "office-documents",
-    "table-extraction",
-    "metadata-extraction",
-    "rust",
-    "napi",
-    "native",
-    "nodejs"
-  ],
-  "author": {
-    "name": "Na'aman Hirschfeld",
-    "email": "nhirschfeld@gmail.com",
-    "url": "https://kreuzberg.dev"
-  },
-  "homepage": "https://kreuzberg.dev",
-  "license": "MIT",
-  "engines": {
-    "node": ">= 22"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kreuzberg-dev/kreuzberg.git"
-  },
-  "bugs": {
-    "url": "https://github.com/kreuzberg-dev/kreuzberg/issues"
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/",
-    "access": "public"
-  },
-  "os": [
-    "linux"
-  ]
+	"name": "@kreuzberg/node-linux-arm-gnueabihf",
+	"version": "4.2.2",
+	"cpu": [
+		"arm"
+	],
+	"main": "kreuzberg-node.linux-arm-gnueabihf.node",
+	"files": [
+		"kreuzberg-node.linux-arm-gnueabihf.node"
+	],
+	"description": "Kreuzberg document intelligence - Node.js native bindings",
+	"keywords": [
+		"document-intelligence",
+		"document-extraction",
+		"text-extraction",
+		"pdf-extraction",
+		"ocr",
+		"pdf",
+		"docx",
+		"xlsx",
+		"pptx",
+		"office-documents",
+		"table-extraction",
+		"metadata-extraction",
+		"rust",
+		"napi",
+		"native",
+		"nodejs"
+	],
+	"author": {
+		"name": "Na'aman Hirschfeld",
+		"email": "nhirschfeld@gmail.com",
+		"url": "https://kreuzberg.dev"
+	},
+	"homepage": "https://kreuzberg.dev",
+	"license": "MIT",
+	"engines": {
+		"node": ">= 22"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/kreuzberg-dev/kreuzberg.git"
+	},
+	"bugs": {
+		"url": "https://github.com/kreuzberg-dev/kreuzberg/issues"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org/",
+		"access": "public"
+	},
+	"os": [
+		"linux"
+	]
 }

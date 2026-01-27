@@ -1,121 +1,121 @@
 {
-  "name": "@kreuzberg/node",
-  "version": "4.2.2",
-  "description": "Kreuzberg document intelligence - Node.js native bindings",
-  "author": {
-    "name": "Na'aman Hirschfeld",
-    "email": "nhirschfeld@gmail.com",
-    "url": "https://kreuzberg.dev"
-  },
-  "homepage": "https://kreuzberg.dev",
-  "bugs": {
-    "url": "https://github.com/kreuzberg-dev/kreuzberg/issues"
-  },
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
-    },
-    "./cli": {
-      "types": "./dist/cli.d.ts",
-      "import": "./dist/cli.mjs",
-      "require": "./dist/cli.js"
-    }
-  },
-  "bin": {
-    "kreuzberg": "dist/cli.js"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kreuzberg-dev/kreuzberg.git"
-  },
-  "license": "MIT",
-  "keywords": [
-    "document-intelligence",
-    "document-extraction",
-    "text-extraction",
-    "pdf-extraction",
-    "ocr",
-    "pdf",
-    "docx",
-    "xlsx",
-    "pptx",
-    "office-documents",
-    "table-extraction",
-    "metadata-extraction",
-    "rust",
-    "napi",
-    "native",
-    "nodejs"
-  ],
-  "files": [
-    "dist",
-    "index.js",
-    "*.cjs",
-    "*.d.ts",
-    "*.node",
-    "*.dylib",
-    "*.so",
-    "*.dll",
-    "README.md"
-  ],
-  "napi": {
-    "binaryName": "kreuzberg-node",
-    "package": {
-      "name": "@kreuzberg/node"
-    },
-    "targets": [
-      "aarch64-apple-darwin",
-      "aarch64-unknown-linux-gnu",
-      "x86_64-pc-windows-msvc",
-      "x86_64-unknown-linux-gnu"
-    ]
-  },
-  "engines": {
-    "node": ">= 22"
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/",
-    "access": "public"
-  },
-  "scripts": {
-    "artifacts": "napi artifacts",
-    "build": "napi build --platform --release && tsup",
-    "build:debug": "napi build --platform",
-    "build:ts": "tsup",
-    "prepare": "tsup",
-    "test": "pnpm test:smoke && pnpm test:binding",
-    "test:smoke": "vitest run tests/smoke/",
-    "test:binding": "vitest run tests/binding/",
-    "test:cli": "vitest run tests/cli/",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage tests/binding/ tests/smoke/",
-    "typecheck": "tsc --noEmit",
-    "lint": "biome check typescript && oxlint typescript",
-    "lint:fix": "biome check --write typescript",
-    "format": "biome format --write typescript",
-    "prepublishOnly": "napi prepublish -t npm",
-    "universal": "napi universal",
-    "version": "napi version"
-  },
-  "devDependencies": {
-    "@napi-rs/cli": "^3.5.1",
-    "@types/archiver": "^7.0.0",
-    "@types/node": "^25.0.10",
-    "@types/which": "^3.0.4",
-    "@vitest/coverage-v8": "^4.0.18",
-    "archiver": "^7.0.1",
-    "oxlint": "^1.42.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
-  },
-  "dependencies": {
-    "@emnapi/runtime": "1.8.1",
-    "which": "^6.0.0"
-  }
+	"name": "@kreuzberg/node",
+	"version": "4.2.2",
+	"description": "Kreuzberg document intelligence - Node.js native bindings",
+	"author": {
+		"name": "Na'aman Hirschfeld",
+		"email": "nhirschfeld@gmail.com",
+		"url": "https://kreuzberg.dev"
+	},
+	"homepage": "https://kreuzberg.dev",
+	"bugs": {
+		"url": "https://github.com/kreuzberg-dev/kreuzberg/issues"
+	},
+	"main": "dist/index.js",
+	"module": "dist/index.mjs",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.mjs",
+			"require": "./dist/index.js"
+		},
+		"./cli": {
+			"types": "./dist/cli.d.ts",
+			"import": "./dist/cli.mjs",
+			"require": "./dist/cli.js"
+		}
+	},
+	"bin": {
+		"kreuzberg": "dist/cli.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/kreuzberg-dev/kreuzberg.git"
+	},
+	"license": "MIT",
+	"keywords": [
+		"document-intelligence",
+		"document-extraction",
+		"text-extraction",
+		"pdf-extraction",
+		"ocr",
+		"pdf",
+		"docx",
+		"xlsx",
+		"pptx",
+		"office-documents",
+		"table-extraction",
+		"metadata-extraction",
+		"rust",
+		"napi",
+		"native",
+		"nodejs"
+	],
+	"files": [
+		"dist",
+		"index.js",
+		"*.cjs",
+		"*.d.ts",
+		"*.node",
+		"*.dylib",
+		"*.so",
+		"*.dll",
+		"README.md"
+	],
+	"napi": {
+		"binaryName": "kreuzberg-node",
+		"package": {
+			"name": "@kreuzberg/node"
+		},
+		"targets": [
+			"aarch64-apple-darwin",
+			"aarch64-unknown-linux-gnu",
+			"x86_64-pc-windows-msvc",
+			"x86_64-unknown-linux-gnu"
+		]
+	},
+	"engines": {
+		"node": ">= 22"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org/",
+		"access": "public"
+	},
+	"scripts": {
+		"artifacts": "napi artifacts",
+		"build": "napi build --platform --release && tsup",
+		"build:debug": "napi build --platform",
+		"build:ts": "tsup",
+		"prepare": "tsup",
+		"test": "pnpm test:smoke && pnpm test:binding",
+		"test:smoke": "vitest run tests/smoke/",
+		"test:binding": "vitest run tests/binding/",
+		"test:cli": "vitest run tests/cli/",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage tests/binding/ tests/smoke/",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check typescript && oxlint typescript",
+		"lint:fix": "biome check --write typescript",
+		"format": "biome format --write typescript",
+		"prepublishOnly": "napi prepublish -t npm",
+		"universal": "napi universal",
+		"version": "napi version"
+	},
+	"devDependencies": {
+		"@napi-rs/cli": "^3.5.1",
+		"@types/archiver": "^7.0.0",
+		"@types/node": "^25.0.10",
+		"@types/which": "^3.0.4",
+		"@vitest/coverage-v8": "^4.0.18",
+		"archiver": "^7.0.1",
+		"oxlint": "^1.42.0",
+		"tsup": "^8.5.1",
+		"typescript": "^5.9.3",
+		"vitest": "^4.0.18"
+	},
+	"dependencies": {
+		"@emnapi/runtime": "1.8.1",
+		"which": "^6.0.0"
+	}
 }

@@ -1,121 +1,121 @@
 {
-  "name": "@kreuzberg/wasm",
-  "version": "4.2.2",
-  "type": "module",
-  "packageManager": "pnpm@10.17.0",
-  "description": "Kreuzberg document intelligence - WebAssembly bindings",
-  "author": {
-    "name": "Na'aman Hirschfeld",
-    "email": "nhirschfeld@gmail.com",
-    "url": "https://kreuzberg.dev"
-  },
-  "homepage": "https://kreuzberg.dev",
-  "bugs": {
-    "url": "https://github.com/kreuzberg-dev/kreuzberg/issues"
-  },
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
-    },
-    "./dist/pkg/*": "./dist/pkg/*",
-    "./dist/kreuzberg_wasm.js": "./dist/kreuzberg_wasm.js",
-    "./runtime": {
-      "types": "./dist/runtime.d.ts",
-      "import": "./dist/runtime.js",
-      "default": "./dist/runtime.js"
-    },
-    "./adapters/wasm-adapter": {
-      "types": "./dist/adapters/wasm-adapter.d.ts",
-      "import": "./dist/adapters/wasm-adapter.js",
-      "default": "./dist/adapters/wasm-adapter.js"
-    },
-    "./ocr/registry": {
-      "types": "./dist/ocr/registry.d.ts",
-      "import": "./dist/ocr/registry.js",
-      "default": "./dist/ocr/registry.js"
-    },
-    "./ocr/tesseract-wasm-backend": {
-      "types": "./dist/ocr/tesseract-wasm-backend.d.ts",
-      "import": "./dist/ocr/tesseract-wasm-backend.js",
-      "default": "./dist/ocr/tesseract-wasm-backend.js"
-    }
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kreuzberg-dev/kreuzberg.git"
-  },
-  "license": "MIT",
-  "keywords": [
-    "wasm",
-    "webassembly",
-    "document-intelligence",
-    "document-extraction",
-    "text-extraction",
-    "pdf-extraction",
-    "ocr",
-    "pdf",
-    "docx",
-    "xlsx",
-    "pptx",
-    "office-documents",
-    "table-extraction",
-    "metadata-extraction",
-    "rust",
-    "binding",
-    "typescript"
-  ],
-  "files": [
-    "dist",
-    "pkg",
-    "*.wasm",
-    "*.d.ts",
-    "pdfium.js",
-    "README.md"
-  ],
-  "engines": {
-    "node": ">= 16"
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/",
-    "access": "public"
-  },
-  "scripts": {
-    "build:wasm:web": "wasm-pack build --target web --out-dir pkg --release",
-    "build:wasm:bundler": "wasm-pack build --target bundler --out-dir pkg --release",
-    "build:wasm:nodejs": "wasm-pack build --target nodejs --out-dir pkg-nodejs --release",
-    "build:wasm:deno": "wasm-pack build --target deno --out-dir pkg --release",
-    "build:ts": "tsup && tsc --emitDeclarationOnly && node scripts/fix-type-exports.js",
-    "build:ts:minify": "tsup --minify && tsc --emitDeclarationOnly && node scripts/fix-type-exports.js",
-    "copy:pkg": "node scripts/copy-pkg.js",
-    "build": "npm run build:wasm:web && npm run build:ts && npm run copy:pkg",
-    "build:ci": "npm run build:wasm:web && npm run build:ts:minify && npm run copy:pkg",
-    "build:all": "npm run build:wasm:web && npm run build:wasm:bundler && npm run build:wasm:nodejs && npm run build:wasm:deno && npm run build:ts && npm run copy:pkg",
-    "typecheck": "tsc --noEmit",
-    "lint": "biome check typescript && oxlint typescript",
-    "lint:fix": "biome check --write typescript",
-    "format": "biome format --write typescript",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:ui": "vitest --ui",
-    "prepublishOnly": "npm run build"
-  },
-  "devDependencies": {
-    "@types/node": "^25.0.10",
-    "@vitest/coverage-v8": "^4.0.18",
-    "@vitest/ui": "^4.0.18",
-    "jsdom": "^27.4.0",
-    "oxlint": "^1.42.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
-  },
-  "optionalDependencies": {
-    "tesseract-wasm": "^0.11.0"
-  }
+	"name": "@kreuzberg/wasm",
+	"version": "4.2.2",
+	"type": "module",
+	"packageManager": "pnpm@10.17.0",
+	"description": "Kreuzberg document intelligence - WebAssembly bindings",
+	"author": {
+		"name": "Na'aman Hirschfeld",
+		"email": "nhirschfeld@gmail.com",
+		"url": "https://kreuzberg.dev"
+	},
+	"homepage": "https://kreuzberg.dev",
+	"bugs": {
+		"url": "https://github.com/kreuzberg-dev/kreuzberg/issues"
+	},
+	"main": "dist/index.js",
+	"module": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		},
+		"./dist/pkg/*": "./dist/pkg/*",
+		"./dist/kreuzberg_wasm.js": "./dist/kreuzberg_wasm.js",
+		"./runtime": {
+			"types": "./dist/runtime.d.ts",
+			"import": "./dist/runtime.js",
+			"default": "./dist/runtime.js"
+		},
+		"./adapters/wasm-adapter": {
+			"types": "./dist/adapters/wasm-adapter.d.ts",
+			"import": "./dist/adapters/wasm-adapter.js",
+			"default": "./dist/adapters/wasm-adapter.js"
+		},
+		"./ocr/registry": {
+			"types": "./dist/ocr/registry.d.ts",
+			"import": "./dist/ocr/registry.js",
+			"default": "./dist/ocr/registry.js"
+		},
+		"./ocr/tesseract-wasm-backend": {
+			"types": "./dist/ocr/tesseract-wasm-backend.d.ts",
+			"import": "./dist/ocr/tesseract-wasm-backend.js",
+			"default": "./dist/ocr/tesseract-wasm-backend.js"
+		}
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kreuzberg-dev/kreuzberg.git"
+	},
+	"license": "MIT",
+	"keywords": [
+		"wasm",
+		"webassembly",
+		"document-intelligence",
+		"document-extraction",
+		"text-extraction",
+		"pdf-extraction",
+		"ocr",
+		"pdf",
+		"docx",
+		"xlsx",
+		"pptx",
+		"office-documents",
+		"table-extraction",
+		"metadata-extraction",
+		"rust",
+		"binding",
+		"typescript"
+	],
+	"files": [
+		"dist",
+		"pkg",
+		"*.wasm",
+		"*.d.ts",
+		"pdfium.js",
+		"README.md"
+	],
+	"engines": {
+		"node": ">= 16"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org/",
+		"access": "public"
+	},
+	"scripts": {
+		"build:wasm:web": "wasm-pack build --target web --out-dir pkg --release",
+		"build:wasm:bundler": "wasm-pack build --target bundler --out-dir pkg --release",
+		"build:wasm:nodejs": "wasm-pack build --target nodejs --out-dir pkg-nodejs --release",
+		"build:wasm:deno": "wasm-pack build --target deno --out-dir pkg --release",
+		"build:ts": "tsup && tsc --emitDeclarationOnly && node scripts/fix-type-exports.js",
+		"build:ts:minify": "tsup --minify && tsc --emitDeclarationOnly && node scripts/fix-type-exports.js",
+		"copy:pkg": "node scripts/copy-pkg.js",
+		"build": "npm run build:wasm:web && npm run build:ts && npm run copy:pkg",
+		"build:ci": "npm run build:wasm:web && npm run build:ts:minify && npm run copy:pkg",
+		"build:all": "npm run build:wasm:web && npm run build:wasm:bundler && npm run build:wasm:nodejs && npm run build:wasm:deno && npm run build:ts && npm run copy:pkg",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check typescript && oxlint typescript",
+		"lint:fix": "biome check --write typescript",
+		"format": "biome format --write typescript",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"test:ui": "vitest --ui",
+		"prepublishOnly": "npm run build"
+	},
+	"devDependencies": {
+		"@types/node": "^25.0.10",
+		"@vitest/coverage-v8": "^4.0.18",
+		"@vitest/ui": "^4.0.18",
+		"jsdom": "^27.4.0",
+		"oxlint": "^1.42.0",
+		"tsup": "^8.5.1",
+		"typescript": "^5.9.3",
+		"vitest": "^4.0.18"
+	},
+	"optionalDependencies": {
+		"tesseract-wasm": "^0.11.0"
+	}
 }
