@@ -188,7 +188,7 @@ jobs:
         shell: bash
 
       - name: Run prek hooks
-        uses: j178/prek-action@v1.0.12
+        uses: j178/prek-action@v1.1.0
         with:
           extra-args: --all-files
 
