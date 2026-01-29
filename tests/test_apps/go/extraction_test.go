@@ -18,7 +18,6 @@ func TestTypeVerificationExtractionResult(t *testing.T) {
 	result := &kreuzberg.ExtractionResult{
 		Content:  "test",
 		MimeType: "text/plain",
-		Success:  true,
 		Metadata: kreuzberg.Metadata{},
 		Tables:   []kreuzberg.Table{},
 		Chunks:   []kreuzberg.Chunk{},
@@ -28,7 +27,7 @@ func TestTypeVerificationExtractionResult(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, "test", result.Content)
 	assert.Equal(t, "text/plain", result.MimeType)
-	assert.True(t, result.Success)
+	assert.NotEmpty(t, result.Content)
 }
 
 // TestTypeVerificationExtractionConfig verifies ExtractionConfig type is accessible.
@@ -136,7 +135,7 @@ func TestExtractFileSyncPDFValid(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(pdfPath, nil)
 	assert.NoError(t, err, "should extract PDF without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 	assert.Equal(t, "application/pdf", result.MimeType, "mime type should be PDF")
 	assert.NotEmpty(t, result.Content, "content should not be empty")
 }
@@ -148,7 +147,7 @@ func TestExtractFileSyncDOCXValid(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(docxPath, nil)
 	assert.NoError(t, err, "should extract DOCX without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 	assert.Equal(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", result.MimeType)
 	assert.NotEmpty(t, result.Content, "content should not be empty")
 }
@@ -160,7 +159,7 @@ func TestExtractFileSyncXLSXValid(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(xlsxPath, nil)
 	assert.NoError(t, err, "should extract XLSX without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 	assert.NotEmpty(t, result.Content, "content should not be empty")
 }
 
@@ -171,7 +170,7 @@ func TestExtractFileSyncImageJPGValid(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(imgPath, nil)
 	assert.NoError(t, err, "should extract JPG without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 	assert.Equal(t, "image/jpeg", result.MimeType)
 }
 
@@ -182,7 +181,7 @@ func TestExtractFileSyncImagePNGValid(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(imgPath, nil)
 	assert.NoError(t, err, "should extract PNG without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 	assert.Equal(t, "image/png", result.MimeType)
 }
 
@@ -193,7 +192,7 @@ func TestExtractFileSyncODTValid(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(odtPath, nil)
 	assert.NoError(t, err, "should extract ODT without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 }
 
 // TestExtractFileSyncMarkdownValid extracts text from a valid Markdown file.
@@ -203,7 +202,7 @@ func TestExtractFileSyncMarkdownValid(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(mdPath, nil)
 	assert.NoError(t, err, "should extract Markdown without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 	assert.NotEmpty(t, result.Content, "content should not be empty")
 }
 
@@ -232,7 +231,7 @@ func TestExtractFileSyncWithConfig(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(pdfPath, config)
 	assert.NoError(t, err, "should extract with config without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 }
 
 // TestExtractBytesSyncPDFValid extracts text from PDF bytes.
@@ -244,7 +243,7 @@ func TestExtractBytesSyncPDFValid(t *testing.T) {
 	result, err := kreuzberg.ExtractBytesSync(data, "application/pdf", nil)
 	assert.NoError(t, err, "should extract PDF bytes without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 	assert.Equal(t, "application/pdf", result.MimeType)
 	assert.NotEmpty(t, result.Content, "content should not be empty")
 }
@@ -258,7 +257,7 @@ func TestExtractBytesSyncDOCXValid(t *testing.T) {
 	result, err := kreuzberg.ExtractBytesSync(data, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", nil)
 	assert.NoError(t, err, "should extract DOCX bytes without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 }
 
 // TestExtractBytesSyncXLSXValid extracts text from XLSX bytes.
@@ -270,7 +269,7 @@ func TestExtractBytesSyncXLSXValid(t *testing.T) {
 	result, err := kreuzberg.ExtractBytesSync(data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", nil)
 	assert.NoError(t, err, "should extract XLSX bytes without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 }
 
 // TestExtractBytesSyncImageJPGValid extracts text from JPG bytes.
@@ -282,7 +281,7 @@ func TestExtractBytesSyncImageJPGValid(t *testing.T) {
 	result, err := kreuzberg.ExtractBytesSync(data, "image/jpeg", nil)
 	assert.NoError(t, err, "should extract JPG bytes without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 	assert.Equal(t, "image/jpeg", result.MimeType)
 }
 
@@ -295,7 +294,7 @@ func TestExtractBytesSyncImagePNGValid(t *testing.T) {
 	result, err := kreuzberg.ExtractBytesSync(data, "image/png", nil)
 	assert.NoError(t, err, "should extract PNG bytes without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 }
 
 // TestExtractBytesSyncODTValid extracts text from ODT bytes.
@@ -307,7 +306,7 @@ func TestExtractBytesSyncODTValid(t *testing.T) {
 	result, err := kreuzberg.ExtractBytesSync(data, "application/vnd.oasis.opendocument.text", nil)
 	assert.NoError(t, err, "should extract ODT bytes without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 }
 
 // TestExtractBytesSyncMarkdownValid extracts text from Markdown bytes.
@@ -319,7 +318,7 @@ func TestExtractBytesSyncMarkdownValid(t *testing.T) {
 	result, err := kreuzberg.ExtractBytesSync(data, "text/markdown", nil)
 	assert.NoError(t, err, "should extract Markdown bytes without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 }
 
 // TestExtractBytesSyncEmptyData tests validation of empty data.
@@ -351,7 +350,7 @@ func TestExtractBytesSyncWithConfig(t *testing.T) {
 	result, err := kreuzberg.ExtractBytesSync(data, "application/pdf", config)
 	assert.NoError(t, err, "should extract with config without error")
 	assert.NotNil(t, result, "result should not be nil")
-	assert.True(t, result.Success, "extraction should succeed")
+	assert.NotEmpty(t, result.Content, "extraction should succeed")
 }
 
 // TestBatchExtractFilesSync tests batch extraction of multiple PDF files.
@@ -485,7 +484,7 @@ func TestExtractionResultValidation(t *testing.T) {
 
 	assert.NotEmpty(t, result.MimeType, "should have MIME type")
 	assert.NotEmpty(t, result.Content, "should have content")
-	assert.True(t, result.Success, "should be successful")
+	assert.NotEmpty(t, result.Content, "should be successful")
 	assert.NotNil(t, result.Metadata, "should have metadata")
 }
 
@@ -571,7 +570,7 @@ func TestFileTypeCoveragePDFs(t *testing.T) {
 			result, err := kreuzberg.ExtractFileSync(fullPath, nil)
 			assert.NoError(t, err, fmt.Sprintf("should extract %s without error", tt.name))
 			assert.NotNil(t, result, fmt.Sprintf("%s result should not be nil", tt.name))
-			assert.True(t, result.Success, fmt.Sprintf("%s extraction should succeed", tt.name))
+			assert.NotEmpty(t, result.Content, fmt.Sprintf("%s extraction should succeed", tt.name))
 		})
 	}
 }
@@ -593,7 +592,7 @@ func TestFileTypeCoverageDOCX(t *testing.T) {
 			result, err := kreuzberg.ExtractFileSync(fullPath, nil)
 			assert.NoError(t, err, fmt.Sprintf("should extract %s without error", tt.name))
 			assert.NotNil(t, result, fmt.Sprintf("%s result should not be nil", tt.name))
-			assert.True(t, result.Success, fmt.Sprintf("%s extraction should succeed", tt.name))
+			assert.NotEmpty(t, result.Content, fmt.Sprintf("%s extraction should succeed", tt.name))
 		})
 	}
 }
@@ -605,7 +604,7 @@ func TestFileTypeCoverageXLSX(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(xlsxPath, nil)
 	assert.NoError(t, err, "should extract XLSX without error")
 	assert.NotNil(t, result, "XLSX result should not be nil")
-	assert.True(t, result.Success, "XLSX extraction should succeed")
+	assert.NotEmpty(t, result.Content, "XLSX extraction should succeed")
 }
 
 // TestFileTypeCoverageImages tests image extraction coverage.
@@ -636,7 +635,7 @@ func TestFileTypeCoverageODT(t *testing.T) {
 	result, err := kreuzberg.ExtractFileSync(odtPath, nil)
 	assert.NoError(t, err, "should extract ODT without error")
 	assert.NotNil(t, result, "ODT result should not be nil")
-	assert.True(t, result.Success, "ODT extraction should succeed")
+	assert.NotEmpty(t, result.Content, "ODT extraction should succeed")
 }
 
 // TestFileTypeCoverageMarkdown tests Markdown extraction coverage.
@@ -659,7 +658,7 @@ func TestResultStructureValidation(t *testing.T) {
 
 	assert.NotEmpty(t, result.Content, "content field should be populated")
 	assert.NotEmpty(t, result.MimeType, "mime_type field should be populated")
-	assert.True(t, result.Success, "success field should be true")
+	assert.NotEmpty(t, result.Content, "success field should be true")
 	assert.NotNil(t, result.Metadata, "metadata field should be populated")
 }
 
@@ -1710,7 +1709,6 @@ func TestResultToJSON(t *testing.T) {
 	result := &kreuzberg.ExtractionResult{
 		Content:  "test content",
 		MimeType: "text/plain",
-		Success:  true,
 	}
 	jsonStr, err := kreuzberg.ResultToJSON(result)
 	assert.NoError(t, err)
@@ -1726,7 +1724,7 @@ func TestResultFromJSON(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, "test", result.Content)
 	assert.Equal(t, "text/plain", result.MimeType)
-	assert.True(t, result.Success)
+	assert.NotEmpty(t, result.Content)
 }
 
 // TestResultJSONRoundTrip tests serialization and deserialization round-trip.
@@ -1734,7 +1732,6 @@ func TestResultJSONRoundTrip(t *testing.T) {
 	original := &kreuzberg.ExtractionResult{
 		Content:  "sample content",
 		MimeType: "application/pdf",
-		Success:  true,
 	}
 	jsonStr, err := kreuzberg.ResultToJSON(original)
 	assert.NoError(t, err)
@@ -1743,7 +1740,7 @@ func TestResultJSONRoundTrip(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, original.Content, restored.Content)
 	assert.Equal(t, original.MimeType, restored.MimeType)
-	assert.Equal(t, original.Success, restored.Success)
+	assert.Equal(t, original.Content, restored.Content)
 }
 
 // ============================================================================

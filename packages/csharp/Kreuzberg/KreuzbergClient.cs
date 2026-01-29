@@ -630,7 +630,7 @@ public static class KreuzbergClient
     /// <summary>
     /// Returns the version string of the native Kreuzberg library.
     /// </summary>
-    /// <returns>Version string in format "4.2.3" or similar</returns>
+    /// <returns>Version string in format "4.2.4" or similar</returns>
     /// <example>
     /// <code>
     /// var version = KreuzbergClient.GetVersion();

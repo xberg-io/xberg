@@ -71,6 +71,10 @@ namespace Kreuzberg;
 [JsonSerializable(typeof(List<PageInfo>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(Dictionary<string, object?>))]
+[JsonSerializable(typeof(Element))]
+[JsonSerializable(typeof(ElementMetadata))]
+[JsonSerializable(typeof(BoundingBox))]
+[JsonSerializable(typeof(List<Element>))]
 internal partial class KreuzbergJsonContext : JsonSerializerContext
 {
     /// <summary>

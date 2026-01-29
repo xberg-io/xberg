@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   kreuzberg-core:
-    image: ghcr.io/kreuzberg-dev/kreuzberg:4.2.3-core
+    image: ghcr.io/kreuzberg-dev/kreuzberg:4.2.4-core
     container_name: kreuzberg-core-test
     ports:
       - "8000:8000"
@@ -26,7 +26,7 @@ services:
       - all
 
   kreuzberg-full:
-    image: ghcr.io/kreuzberg-dev/kreuzberg:4.2.3
+    image: ghcr.io/kreuzberg-dev/kreuzberg:4.2.4
     container_name: kreuzberg-full-test
     ports:
       - "8001:8000"

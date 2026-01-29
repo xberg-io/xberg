@@ -15,7 +15,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.11.3</junit.version>
         <jackson.version>2.18.2</jackson.version>
-        <kreuzberg.version>4.2.3</kreuzberg.version>
+        <kreuzberg.version>4.2.4</kreuzberg.version>
     </properties>
 
     <dependencies>

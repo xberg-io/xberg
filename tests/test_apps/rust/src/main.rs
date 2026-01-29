@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_lines)]
 #![warn(missing_docs)]
 
-//! Comprehensive test suite for Kreuzberg 4.2.3 Rust library.
+//! Comprehensive test suite for Kreuzberg 4.2.4 Rust library.
 //!
 //! Tests ALL exported functions and public types.
 //! Validates:
@@ -101,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut runner = TestRunner::new();
 
-    println!("\nVersion: kreuzberg 4.2.3");
+    println!("\nVersion: kreuzberg 4.2.4");
     println!("Edition: Rust 2024");
     println!("Test App: kreuzberg-test-app-rust");
 
@@ -341,7 +341,7 @@ fn test_validation_functions(runner: &mut TestRunner) {
 
     runner.test("test_known_formats_available", { !kreuzberg::KNOWN_FORMATS.is_empty() });
 
-    runner.test("test_format_validation", { kreuzberg::is_valid_format_field("pdf") });
+    runner.test("test_format_validation", { kreuzberg::is_valid_format_field("title") });
 }
 
 /// Test advanced features and concurrent operations.

@@ -483,16 +483,16 @@ const JAVA_POM_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.11.3</junit.version>
         <jackson.version>2.18.2</jackson.version>
-        <kreuzberg.version>4.2.3</kreuzberg.version>
+        <kreuzberg.version>4.2.4</kreuzberg.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>dev.kreuzberg</groupId>
             <artifactId>kreuzberg</artifactId>
-            <version>4.2.3</version>
+            <version>4.2.4</version>
             <scope>system</scope>
-            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.2.3.jar</systemPath>
+            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.2.4.jar</systemPath>
         </dependency>
 
         <dependency>

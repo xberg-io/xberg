@@ -1,6 +1,6 @@
 {
   "name": "@kreuzberg/test-app-wasm",
-  "version": "4.2.3",
+  "version": "4.2.4",
   "private": true,
   "type": "module",
   "description": "Comprehensive WASM test suite for Kreuzberg",
@@ -19,7 +19,7 @@
     "document-extraction"
   ],
   "devDependencies": {
-    "@kreuzberg/wasm": "4.2.3",
+    "@kreuzberg/wasm": "4.2.4",
     "@types/node": "^20",
     "vitest": "^4.0.16"
   }

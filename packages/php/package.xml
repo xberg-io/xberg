@@ -18,12 +18,12 @@
   <date>2025-01-01</date>
   <time>00:00:00</time>
   <version>
-    <release>4.2.3</release>
-    <api>4.2.3</api>
+    <release>4.2.4</release>
+    <api>4.2.4</api>
   </version>
   <stability>
-    <release>4.2.3</release>
-    <api>4.2.3</api>
+    <release>4.2.4</release>
+    <api>4.2.4</api>
   </stability>
   <license uri="https://opensource.org/licenses/MIT">MIT</license>
   <notes>
@@ -113,12 +113,12 @@
   <changelog>
     <release>
       <version>
-        <release>4.2.3</release>
-        <api>4.2.3</api>
+        <release>4.2.4</release>
+        <api>4.2.4</api>
       </version>
       <stability>
-        <release>4.2.3</release>
-        <api>4.2.3</api>
+        <release>4.2.4</release>
+        <api>4.2.4</api>
       </stability>
       <date>2025-01-01</date>
       <license uri="https://opensource.org/licenses/MIT">MIT</license>

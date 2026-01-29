@@ -506,7 +506,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "benchmark-harness"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "ahash",
  "async-trait",
@@ -1668,7 +1668,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "e2e-rust"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "async-trait",
  "hex",
@@ -2808,7 +2808,7 @@ dependencies = [
  "rayon",
  "tiff 0.10.3",
  "zune-core 0.5.1",
- "zune-jpeg 0.5.11",
+ "zune-jpeg 0.5.12",
 ]
 
 [[package]]
@@ -3084,7 +3084,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3178,7 +3178,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-cli"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3194,7 +3194,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-e2e-generator"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3212,7 +3212,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-ffi"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "async-trait",
  "cbindgen",
@@ -3229,7 +3229,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-node"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3265,7 +3265,7 @@ dependencies = [
  "image",
  "itertools 0.14.0",
  "js-sys",
- "libloading 0.8.9",
+ "libloading 0.9.0",
  "log",
  "maybe-owned",
  "once_cell",
@@ -3278,7 +3278,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-php"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "async-trait",
  "ctor",
@@ -3292,7 +3292,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-py"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "async-trait",
  "html-to-markdown-rs",
@@ -3308,7 +3308,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-tesseract"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "cc",
  "cmake",
@@ -3321,7 +3321,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-wasm"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3345,7 +3345,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg_rustler"
-version = "4.2.3"
+version = "4.2.4"
 dependencies = [
  "kreuzberg",
  "rustler",
@@ -7057,7 +7057,7 @@ dependencies = [
  "half",
  "quick-error",
  "weezl",
- "zune-jpeg 0.5.11",
+ "zune-jpeg 0.5.12",
 ]
 
 [[package]]
@@ -8892,9 +8892,9 @@ dependencies = [
 
 [[package]]
 name = "zune-jpeg"
-version = "0.5.11"
+version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2959ca473aae96a14ecedf501d20b3608d2825ba280d5adb57d651721885b0c2"
+checksum = "410e9ecef634c709e3831c2cfdb8d9c32164fae1c67496d5b68fff728eec37fe"
 dependencies = [
  "zune-core 0.5.1",
 ]

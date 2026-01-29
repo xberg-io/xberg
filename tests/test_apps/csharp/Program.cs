@@ -260,9 +260,9 @@ internal sealed class Program
             Console.WriteLine("FAIL (should have thrown exception)");
             allPassed = false;
         }
-        catch (KreuzbergValidationException)
+        catch (KreuzbergIOException)
         {
-            Console.WriteLine("OK   (caught KreuzbergValidationException)");
+            Console.WriteLine("OK   (caught KreuzbergIOException)");
         }
         catch (Exception ex)
         {

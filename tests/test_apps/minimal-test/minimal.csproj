@@ -4,6 +4,6 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Kreuzberg" Version="4.2.3" />
+    <PackageReference Include="Kreuzberg" Version="4.2.4" />
   </ItemGroup>
 </Project>

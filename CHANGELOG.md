@@ -7,13 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [4.2.4] - 2026-01-29
 
 ### Fixed
 
 #### TypeScript/Node Bindings
 - **Missing `elements` field**: Added `Element`, `ElementType`, `BoundingBox`, and `ElementMetadata` types to the TypeScript API surface, and `elements` field to `ExtractionResult`
 - **Batch function export name**: Fixed `batchExtractFile` (singular) reference in benchmark harness to `batchExtractFiles` (plural), matching the actual export
+
+#### Rust Core
+- **Keyword config deserialization**: Added `#[serde(default)]` to `KeywordConfig` fields (`algorithm`, `max_keywords`, `min_score`, `ngram_range`) so partial configs deserialize without errors
+
+#### C# Bindings
+- **Element serialization**: Added `JsonSerializable` attributes for `Element`, `ElementMetadata`, `BoundingBox`, and `List<Element>` to support `element_based` result format deserialization
+
+#### Go Bindings
+- **Removed deprecated `Success` field**: Cleaned up test references to non-existent `Success` field on `ExtractionResult`
+
+#### Elixir Bindings
+- **Jason.Encoder**: Derived `Jason.Encoder` for `ExtractionConfig` struct
 
 ---
 
