@@ -103,13 +103,18 @@ jobs:
       - name: Log disk space before artifact upload
         run: scripts/ci/validate/show-disk-space.sh "Disk space before artifact upload"
 
-      - name: Upload full build artifacts (for Kreuzberg jobs)
+      - name: Upload build artifacts (harness binary + FFI shared lib)
         uses: actions/upload-artifact@v4
         with:
           name: benchmarks-target
           path: |
-            target/release
+            target/release/benchmark-harness
+            target/release/libkreuzberg_ffi.so
+            target/release/libkreuzberg_ffi.dylib
+            target/release/kreuzberg_ffi.dll
+            target/release/libkreuzberg_ffi.a
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload benchmark harness binary (for third-party jobs)
         uses: actions/upload-artifact@v4
