@@ -43,7 +43,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -62,7 +62,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -97,7 +97,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -125,7 +125,7 @@ final class TableExtractionTest extends TestCase
     }
 
     #[Test]
-    public function it_disables_table_extraction_when_configured(): void
+    public function it_uses_default_config_for_table_extraction(): void
     {
         $pdfFiles = glob($this->testDocumentsPath . '/pdfs_with_tables/*.pdf');
 
@@ -133,27 +133,25 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        // Extract with tables disabled
-        $config = new ExtractionConfig(extractTables: false);
+        // Extract with default config
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
-        // Extract with tables enabled for comparison
-        $configEnabled = new ExtractionConfig(extractTables: true);
-        $resultEnabled = (new Kreuzberg($configEnabled))->extractFile($pdfFiles[0]);
+        // Extract with explicit config for comparison
+        $configExplicit = new ExtractionConfig(useCache: true);
+        $resultExplicit = (new Kreuzberg($configExplicit))->extractFile($pdfFiles[0]);
 
         // Verify both extractions returned valid results
-        $this->assertIsArray($result->tables, 'Result with tables disabled should have tables array');
-        $this->assertIsArray($resultEnabled->tables, 'Result with tables enabled should have tables array');
+        $this->assertIsArray($result->tables, 'Result with default config should have tables array');
+        $this->assertIsArray($resultExplicit->tables, 'Result with explicit config should have tables array');
 
-        // When disabled, should have empty or fewer tables than enabled
-        if (!empty($resultEnabled->tables)) {
-            $this->assertLessThanOrEqual(
-                count($resultEnabled->tables),
-                count($result->tables ?? []),
-                'Tables extraction disabled should yield fewer or equal tables than enabled',
-            );
-        }
+        // Both should extract tables since they are always enabled
+        $this->assertCount(
+            count($resultExplicit->tables),
+            $result->tables,
+            'Default and explicit config should extract same number of tables',
+        );
     }
 
     #[Test]
@@ -165,7 +163,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped("Test file not found: {$filePath}");
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($filePath);
 
@@ -184,7 +182,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped("Test file not found: {$filePath}");
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($filePath);
 
@@ -207,7 +205,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
 
         $found = false;
@@ -244,7 +242,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -275,7 +273,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped("Test file not found: {$filePath}");
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($filePath);
 
@@ -296,7 +294,7 @@ final class TableExtractionTest extends TestCase
 
         $files = array_slice($pdfFiles, 0, 2);
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $results = $kreuzberg->batchExtractFiles($files);
 
@@ -323,7 +321,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -359,7 +357,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -392,7 +390,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -449,7 +447,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -506,7 +504,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -563,7 +561,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
 
         foreach ($pdfFiles as $pdfFile) {
@@ -622,7 +620,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -681,7 +679,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
 
         // Extract from same file twice
@@ -741,7 +739,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -788,7 +786,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -854,7 +852,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($pdfFiles[0]);
 
@@ -915,7 +913,7 @@ final class TableExtractionTest extends TestCase
             $this->markTestSkipped('No PDF files with tables found');
         }
 
-        $config = new ExtractionConfig(extractTables: true);
+        $config = new ExtractionConfig();
         $kreuzberg = new Kreuzberg($config);
 
         foreach ($pdfFiles as $pdfFile) {

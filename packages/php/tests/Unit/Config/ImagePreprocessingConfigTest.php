@@ -14,19 +14,7 @@ use PHPUnit\Framework\TestCase;
  * Unit tests for ImagePreprocessingConfig readonly class.
  *
  * Tests construction, serialization, factory methods, readonly enforcement,
- * and handling of mixed property types (int, bool).
- *
- * Test Coverage:
- * - Construction with default values
- * - Construction with custom values
- * - toArray() serialization
- * - fromArray() factory method
- * - fromJson() factory method
- * - toJson() serialization
- * - Readonly enforcement
- * - Type coercion
- * - Invalid JSON handling
- * - Round-trip serialization
+ * and handling of mixed property types (int, bool, string).
  */
 #[CoversClass(ImagePreprocessingConfig::class)]
 #[Group('unit')]
@@ -39,11 +27,12 @@ final class ImagePreprocessingConfigTest extends TestCase
         $config = new ImagePreprocessingConfig();
 
         $this->assertSame(300, $config->targetDpi);
-        $this->assertSame(90, $config->quality);
-        $this->assertFalse($config->grayscale);
+        $this->assertTrue($config->autoRotate);
+        $this->assertTrue($config->deskew);
         $this->assertFalse($config->denoise);
-        $this->assertFalse($config->deskew);
-        $this->assertFalse($config->removeBackground);
+        $this->assertFalse($config->contrastEnhance);
+        $this->assertSame('otsu', $config->binarizationMethod);
+        $this->assertFalse($config->invertColors);
     }
 
     #[Test]
@@ -51,19 +40,21 @@ final class ImagePreprocessingConfigTest extends TestCase
     {
         $config = new ImagePreprocessingConfig(
             targetDpi: 600,
-            quality: 95,
-            grayscale: true,
+            autoRotate: false,
+            deskew: false,
             denoise: true,
-            deskew: true,
-            removeBackground: true,
+            contrastEnhance: true,
+            binarizationMethod: 'sauvola',
+            invertColors: true,
         );
 
         $this->assertSame(600, $config->targetDpi);
-        $this->assertSame(95, $config->quality);
-        $this->assertTrue($config->grayscale);
+        $this->assertFalse($config->autoRotate);
+        $this->assertFalse($config->deskew);
         $this->assertTrue($config->denoise);
-        $this->assertTrue($config->deskew);
-        $this->assertTrue($config->removeBackground);
+        $this->assertTrue($config->contrastEnhance);
+        $this->assertSame('sauvola', $config->binarizationMethod);
+        $this->assertTrue($config->invertColors);
     }
 
     #[Test]
@@ -71,18 +62,22 @@ final class ImagePreprocessingConfigTest extends TestCase
     {
         $config = new ImagePreprocessingConfig(
             targetDpi: 200,
-            quality: 80,
             denoise: true,
+            binarizationMethod: 'adaptive',
         );
         $array = $config->toArray();
 
         $this->assertIsArray($array);
         $this->assertArrayHasKey('target_dpi', $array);
-        $this->assertArrayHasKey('quality', $array);
+        $this->assertArrayHasKey('auto_rotate', $array);
+        $this->assertArrayHasKey('deskew', $array);
         $this->assertArrayHasKey('denoise', $array);
+        $this->assertArrayHasKey('contrast_enhance', $array);
+        $this->assertArrayHasKey('binarization_method', $array);
+        $this->assertArrayHasKey('invert_colors', $array);
         $this->assertSame(200, $array['target_dpi']);
-        $this->assertSame(80, $array['quality']);
         $this->assertTrue($array['denoise']);
+        $this->assertSame('adaptive', $array['binarization_method']);
     }
 
     #[Test]
@@ -91,9 +86,12 @@ final class ImagePreprocessingConfigTest extends TestCase
         $config = ImagePreprocessingConfig::fromArray([]);
 
         $this->assertSame(300, $config->targetDpi);
-        $this->assertSame(90, $config->quality);
-        $this->assertFalse($config->grayscale);
-        $this->assertFalse($config->deskew);
+        $this->assertTrue($config->autoRotate);
+        $this->assertTrue($config->deskew);
+        $this->assertFalse($config->denoise);
+        $this->assertFalse($config->contrastEnhance);
+        $this->assertSame('otsu', $config->binarizationMethod);
+        $this->assertFalse($config->invertColors);
     }
 
     #[Test]
@@ -101,20 +99,22 @@ final class ImagePreprocessingConfigTest extends TestCase
     {
         $data = [
             'target_dpi' => 600,
-            'quality' => 95,
-            'grayscale' => true,
+            'auto_rotate' => false,
+            'deskew' => false,
             'denoise' => true,
-            'deskew' => true,
-            'remove_background' => true,
+            'contrast_enhance' => true,
+            'binarization_method' => 'sauvola',
+            'invert_colors' => true,
         ];
         $config = ImagePreprocessingConfig::fromArray($data);
 
         $this->assertSame(600, $config->targetDpi);
-        $this->assertSame(95, $config->quality);
-        $this->assertTrue($config->grayscale);
+        $this->assertFalse($config->autoRotate);
+        $this->assertFalse($config->deskew);
         $this->assertTrue($config->denoise);
-        $this->assertTrue($config->deskew);
-        $this->assertTrue($config->removeBackground);
+        $this->assertTrue($config->contrastEnhance);
+        $this->assertSame('sauvola', $config->binarizationMethod);
+        $this->assertTrue($config->invertColors);
     }
 
     #[Test]
@@ -122,9 +122,8 @@ final class ImagePreprocessingConfigTest extends TestCase
     {
         $config = new ImagePreprocessingConfig(
             targetDpi: 300,
-            quality: 85,
-            grayscale: true,
             denoise: true,
+            contrastEnhance: true,
         );
         $json = $config->toJson();
 
@@ -132,9 +131,8 @@ final class ImagePreprocessingConfigTest extends TestCase
         $decoded = json_decode($json, true);
 
         $this->assertSame(300, $decoded['target_dpi']);
-        $this->assertSame(85, $decoded['quality']);
-        $this->assertTrue($decoded['grayscale']);
         $this->assertTrue($decoded['denoise']);
+        $this->assertTrue($decoded['contrast_enhance']);
     }
 
     #[Test]
@@ -142,39 +140,41 @@ final class ImagePreprocessingConfigTest extends TestCase
     {
         $json = json_encode([
             'target_dpi' => 150,
-            'quality' => 75,
-            'deskew' => true,
+            'deskew' => false,
             'denoise' => true,
+            'binarization_method' => 'adaptive',
         ]);
         $config = ImagePreprocessingConfig::fromJson($json);
 
         $this->assertSame(150, $config->targetDpi);
-        $this->assertSame(75, $config->quality);
-        $this->assertTrue($config->deskew);
+        $this->assertFalse($config->deskew);
         $this->assertTrue($config->denoise);
+        $this->assertSame('adaptive', $config->binarizationMethod);
     }
 
     #[Test]
     public function it_round_trips_through_json(): void
     {
         $original = new ImagePreprocessingConfig(
-            targetDpi: 300,
-            quality: 90,
-            grayscale: true,
+            targetDpi: 600,
+            autoRotate: false,
+            deskew: false,
             denoise: true,
-            deskew: true,
-            removeBackground: true,
+            contrastEnhance: true,
+            binarizationMethod: 'sauvola',
+            invertColors: true,
         );
 
         $json = $original->toJson();
         $restored = ImagePreprocessingConfig::fromJson($json);
 
         $this->assertSame($original->targetDpi, $restored->targetDpi);
-        $this->assertSame($original->quality, $restored->quality);
-        $this->assertSame($original->grayscale, $restored->grayscale);
-        $this->assertSame($original->denoise, $restored->denoise);
+        $this->assertSame($original->autoRotate, $restored->autoRotate);
         $this->assertSame($original->deskew, $restored->deskew);
-        $this->assertSame($original->removeBackground, $restored->removeBackground);
+        $this->assertSame($original->denoise, $restored->denoise);
+        $this->assertSame($original->contrastEnhance, $restored->contrastEnhance);
+        $this->assertSame($original->binarizationMethod, $restored->binarizationMethod);
+        $this->assertSame($original->invertColors, $restored->invertColors);
     }
 
     #[Test]
@@ -196,21 +196,21 @@ final class ImagePreprocessingConfigTest extends TestCase
     }
 
     #[Test]
-    public function it_enforces_readonly_on_quality_property(): void
+    public function it_enforces_readonly_on_auto_rotate_property(): void
     {
         $this->expectException(\Error::class);
 
-        $config = new ImagePreprocessingConfig(quality: 90);
-        $config->quality = 80;
+        $config = new ImagePreprocessingConfig(autoRotate: true);
+        $config->autoRotate = false;
     }
 
     #[Test]
-    public function it_enforces_readonly_on_grayscale_property(): void
+    public function it_enforces_readonly_on_binarization_method_property(): void
     {
         $this->expectException(\Error::class);
 
-        $config = new ImagePreprocessingConfig(grayscale: true);
-        $config->grayscale = false;
+        $config = new ImagePreprocessingConfig(binarizationMethod: 'otsu');
+        $config->binarizationMethod = 'sauvola';
     }
 
     #[Test]
@@ -224,13 +224,15 @@ final class ImagePreprocessingConfigTest extends TestCase
         try {
             file_put_contents($tempFile, json_encode([
                 'target_dpi' => 300,
-                'quality' => 85,
+                'auto_rotate' => false,
+                'binarization_method' => 'adaptive',
             ]));
 
             $config = ImagePreprocessingConfig::fromFile($tempFile);
 
             $this->assertSame(300, $config->targetDpi);
-            $this->assertSame(85, $config->quality);
+            $this->assertFalse($config->autoRotate);
+            $this->assertSame('adaptive', $config->binarizationMethod);
         } finally {
             if (file_exists($tempFile)) {
                 unlink($tempFile);
@@ -258,27 +260,17 @@ final class ImagePreprocessingConfigTest extends TestCase
     }
 
     #[Test]
-    public function it_handles_type_coercion_for_quality(): void
-    {
-        $data = ['quality' => '80'];
-        $config = ImagePreprocessingConfig::fromArray($data);
-
-        $this->assertIsInt($config->quality);
-        $this->assertSame(80, $config->quality);
-    }
-
-    #[Test]
     public function it_handles_type_coercion_for_bool_values(): void
     {
         $data = [
-            'grayscale' => 1,
+            'auto_rotate' => 0,
             'denoise' => '1',
             'deskew' => 'true',
         ];
         $config = ImagePreprocessingConfig::fromArray($data);
 
-        $this->assertIsBool($config->grayscale);
-        $this->assertTrue($config->grayscale);
+        $this->assertIsBool($config->autoRotate);
+        $this->assertFalse($config->autoRotate);
         $this->assertIsBool($config->denoise);
         $this->assertTrue($config->denoise);
         $this->assertIsBool($config->deskew);

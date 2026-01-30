@@ -122,16 +122,16 @@ final class ConfigTest extends TestCase
     {
         $config = new PdfConfig(
             extractImages: true,
-            extractMetadata: true,
-            ocrFallback: false,
+            extractMetadata: false,
+            passwords: ['test'],
         );
 
         $array = $config->toArray();
 
         $this->assertIsArray($array);
         $this->assertTrue($array['extract_images']);
-        $this->assertTrue($array['extract_metadata']);
-        $this->assertFalse($array['ocr_fallback']);
+        $this->assertFalse($array['extract_metadata']);
+        $this->assertSame(['test'], $array['passwords']);
     }
 
     #[Test]
@@ -277,15 +277,13 @@ final class ConfigTest extends TestCase
     {
         $imageExtractionConfig = new ImageExtractionConfig(
             extractImages: true,
-            performOcr: true,
-            minWidth: 100,
-            minHeight: 100,
+            targetDpi: 200,
+            maxImageDimension: 3000,
         );
 
         $this->assertTrue($imageExtractionConfig->extractImages);
-        $this->assertSame(100, $imageExtractionConfig->minWidth);
-        $this->assertSame(100, $imageExtractionConfig->minHeight);
-        $this->assertTrue($imageExtractionConfig->performOcr);
+        $this->assertSame(200, $imageExtractionConfig->targetDpi);
+        $this->assertSame(3000, $imageExtractionConfig->maxImageDimension);
     }
 
     #[Test]

@@ -18,53 +18,62 @@ readonly class ImageExtractionConfig
          * or stored for later retrieval.
          *
          * @var bool
-         * @default false
+         * @default true
          */
-        public bool $extractImages = false,
+        public bool $extractImages = true,
 
         /**
-         * Perform OCR on extracted images.
+         * Target DPI for image extraction.
          *
-         * When enabled, extracted images are processed with OCR to extract any
-         * text content they contain. Useful for images with embedded text,
-         * diagrams with labels, or scanned images.
+         * Controls the resolution at which images are extracted. Higher DPI
+         * results in better quality but larger file sizes.
+         *
+         * @var int
+         * @default 300
+         */
+        public int $targetDpi = 300,
+
+        /**
+         * Maximum image dimension (width or height).
+         *
+         * Images larger than this will be scaled down. Helps prevent
+         * memory issues with very large images.
+         *
+         * @var int
+         * @default 4096
+         */
+        public int $maxImageDimension = 4096,
+
+        /**
+         * Automatically adjust DPI based on image characteristics.
+         *
+         * When enabled, the extractor may adjust DPI up or down based on
+         * the source image to optimize quality and performance.
          *
          * @var bool
-         * @default false
+         * @default true
          */
-        public bool $performOcr = false,
+        public bool $autoAdjustDpi = true,
 
         /**
-         * Minimum image width for extraction.
+         * Minimum DPI for extraction.
          *
-         * Images narrower than this threshold are skipped during extraction.
-         * Helps reduce noise from small decorative images while preserving
-         * content-relevant images.
+         * When auto-adjusting DPI, this is the lower bound.
          *
-         * Valid range: 1-unlimited pixels
-         * Recommended values:
-         * - 0-50: Extract small images and icons
-         * - 50-200: Extract medium-sized images
-         * - 200+: Extract only large, content-relevant images
-         *
-         * @var int|null
-         * @default null (no minimum)
+         * @var int
+         * @default 72
          */
-        public ?int $minWidth = null,
+        public int $minDpi = 72,
 
         /**
-         * Minimum image height for extraction.
+         * Maximum DPI for extraction.
          *
-         * Images shorter than this threshold are skipped during extraction.
-         * Combined with minWidth to filter based on image dimensions.
+         * When auto-adjusting DPI, this is the upper bound.
          *
-         * Valid range: 1-unlimited pixels
-         * Recommended values: Same as $minWidth for square aspect ratio filtering
-         *
-         * @var int|null
-         * @default null (no minimum)
+         * @var int
+         * @default 600
          */
-        public ?int $minHeight = null,
+        public int $maxDpi = 600,
     ) {
     }
 
@@ -76,38 +85,54 @@ readonly class ImageExtractionConfig
     public static function fromArray(array $data): self
     {
         /** @var bool $extractImages */
-        $extractImages = $data['extract_images'] ?? false;
+        $extractImages = $data['extract_images'] ?? true;
         if (!is_bool($extractImages)) {
             /** @var bool $extractImages */
             $extractImages = (bool) $extractImages;
         }
 
-        /** @var bool $performOcr */
-        $performOcr = $data['perform_ocr'] ?? false;
-        if (!is_bool($performOcr)) {
-            /** @var bool $performOcr */
-            $performOcr = (bool) $performOcr;
+        /** @var int $targetDpi */
+        $targetDpi = $data['target_dpi'] ?? 300;
+        if (!is_int($targetDpi)) {
+            /** @var int $targetDpi */
+            $targetDpi = (int) $targetDpi;
         }
 
-        /** @var int|null $minWidth */
-        $minWidth = $data['min_width'] ?? null;
-        if ($minWidth !== null && !is_int($minWidth)) {
-            /** @var int $minWidth */
-            $minWidth = (int) $minWidth;
+        /** @var int $maxImageDimension */
+        $maxImageDimension = $data['max_image_dimension'] ?? 4096;
+        if (!is_int($maxImageDimension)) {
+            /** @var int $maxImageDimension */
+            $maxImageDimension = (int) $maxImageDimension;
         }
 
-        /** @var int|null $minHeight */
-        $minHeight = $data['min_height'] ?? null;
-        if ($minHeight !== null && !is_int($minHeight)) {
-            /** @var int $minHeight */
-            $minHeight = (int) $minHeight;
+        /** @var bool $autoAdjustDpi */
+        $autoAdjustDpi = $data['auto_adjust_dpi'] ?? true;
+        if (!is_bool($autoAdjustDpi)) {
+            /** @var bool $autoAdjustDpi */
+            $autoAdjustDpi = (bool) $autoAdjustDpi;
+        }
+
+        /** @var int $minDpi */
+        $minDpi = $data['min_dpi'] ?? 72;
+        if (!is_int($minDpi)) {
+            /** @var int $minDpi */
+            $minDpi = (int) $minDpi;
+        }
+
+        /** @var int $maxDpi */
+        $maxDpi = $data['max_dpi'] ?? 600;
+        if (!is_int($maxDpi)) {
+            /** @var int $maxDpi */
+            $maxDpi = (int) $maxDpi;
         }
 
         return new self(
             extractImages: $extractImages,
-            performOcr: $performOcr,
-            minWidth: $minWidth,
-            minHeight: $minHeight,
+            targetDpi: $targetDpi,
+            maxImageDimension: $maxImageDimension,
+            autoAdjustDpi: $autoAdjustDpi,
+            minDpi: $minDpi,
+            maxDpi: $maxDpi,
         );
     }
 
@@ -147,12 +172,14 @@ readonly class ImageExtractionConfig
      */
     public function toArray(): array
     {
-        return array_filter([
+        return [
             'extract_images' => $this->extractImages,
-            'perform_ocr' => $this->performOcr,
-            'min_width' => $this->minWidth,
-            'min_height' => $this->minHeight,
-        ], static fn ($value): bool => $value !== null);
+            'target_dpi' => $this->targetDpi,
+            'max_image_dimension' => $this->maxImageDimension,
+            'auto_adjust_dpi' => $this->autoAdjustDpi,
+            'min_dpi' => $this->minDpi,
+            'max_dpi' => $this->maxDpi,
+        ];
     }
 
     /**

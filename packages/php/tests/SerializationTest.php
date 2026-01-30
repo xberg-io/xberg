@@ -36,7 +36,7 @@ class SerializationTest extends TestCase
     public function testCustomValuesSerialization(): void
     {
         $config = new ExtractionConfig(
-            useCache: true,
+            useCache: false,
             enableQualityProcessing: false,
             forceOcr: true,
         );
@@ -44,9 +44,10 @@ class SerializationTest extends TestCase
         $json = $config->toJson();
         $parsed = json_decode($json, associative: true);
 
-        // useCache is non-default (true), so it should be in the output
-        $this->assertEquals(true, $parsed['use_cache']);
-        // enableQualityProcessing is default (false), so it may not be in the output
+        // useCache is non-default (false), so it should be in the output
+        $this->assertEquals(false, $parsed['use_cache']);
+        // enableQualityProcessing is non-default (false), so it should be in the output
+        $this->assertEquals(false, $parsed['enable_quality_processing']);
         // forceOcr is non-default (true), so it should be in the output
         $this->assertEquals(true, $parsed['force_ocr']);
     }
@@ -64,10 +65,11 @@ class SerializationTest extends TestCase
         $json = $config->toJson();
         $parsed = json_decode($json, associative: true);
 
-        // useCache is default (false), so it should not be in the output
-        $this->assertArrayNotHasKey('use_cache', $parsed);
-        // enableQualityProcessing is non-default (true), so it should be in the output
-        $this->assertEquals(true, $parsed['enable_quality_processing']);
+        // useCache is non-default (false), so it should be in the output
+        $this->assertArrayHasKey('use_cache', $parsed);
+        $this->assertEquals(false, $parsed['use_cache']);
+        // enableQualityProcessing is default (true), so it should not be in the output
+        $this->assertArrayNotHasKey('enable_quality_processing', $parsed);
     }
 
     /**
@@ -93,7 +95,7 @@ class SerializationTest extends TestCase
      */
     public function testSnakeCaseFieldNames(): void
     {
-        $config = new ExtractionConfig(useCache: true);
+        $config = new ExtractionConfig(useCache: false);
         $json = $config->toJson();
 
         $this->assertStringContainsString('use_cache', $json);
@@ -183,7 +185,7 @@ class SerializationTest extends TestCase
      */
     public function testPrettyPrint(): void
     {
-        $config = new ExtractionConfig(useCache: true);
+        $config = new ExtractionConfig(forceOcr: true);
         $json = $config->toJson();
 
         // Should have newlines (toJson uses JSON_PRETTY_PRINT)

@@ -64,7 +64,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -140,7 +140,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -184,7 +184,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -248,7 +248,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -315,7 +315,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -379,7 +379,7 @@ final class ImageExtractionTest extends TestCase
         $files = array_slice($pdfFiles, 0, 2);
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -441,11 +441,8 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            imageExtraction: new ImageExtractionConfig(
+            images: new ImageExtractionConfig(
                 extractImages: true,
-                performOcr: false,
-                minWidth: null,
-                minHeight: null,
             ),
         );
 
@@ -479,7 +476,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -536,7 +533,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -576,7 +573,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: false,
+            images: new ImageExtractionConfig(extractImages: false),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -612,7 +609,7 @@ final class ImageExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
         );
 
         $kreuzberg = new Kreuzberg($config);

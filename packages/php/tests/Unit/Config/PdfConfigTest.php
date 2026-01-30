@@ -14,20 +14,7 @@ use PHPUnit\Framework\TestCase;
  * Unit tests for PdfConfig readonly class.
  *
  * Tests construction, serialization, factory methods, readonly enforcement,
- * and handling of boolean and nullable integer properties.
- *
- * Test Coverage:
- * - Construction with default values
- * - Construction with custom values
- * - toArray() serialization with optional field inclusion
- * - fromArray() factory method
- * - fromJson() factory method
- * - toJson() serialization
- * - Readonly enforcement
- * - Page range handling
- * - Null handling
- * - Invalid JSON handling
- * - Round-trip serialization
+ * and handling of boolean and nullable properties.
  */
 #[CoversClass(PdfConfig::class)]
 #[Group('unit')]
@@ -41,9 +28,8 @@ final class PdfConfigTest extends TestCase
 
         $this->assertFalse($config->extractImages);
         $this->assertTrue($config->extractMetadata);
-        $this->assertFalse($config->ocrFallback);
-        $this->assertNull($config->startPage);
-        $this->assertNull($config->endPage);
+        $this->assertNull($config->passwords);
+        $this->assertNull($config->hierarchy);
     }
 
     #[Test]
@@ -52,16 +38,12 @@ final class PdfConfigTest extends TestCase
         $config = new PdfConfig(
             extractImages: true,
             extractMetadata: false,
-            ocrFallback: true,
-            startPage: 1,
-            endPage: 10,
+            passwords: ['password123'],
         );
 
         $this->assertTrue($config->extractImages);
         $this->assertFalse($config->extractMetadata);
-        $this->assertTrue($config->ocrFallback);
-        $this->assertSame(1, $config->startPage);
-        $this->assertSame(10, $config->endPage);
+        $this->assertSame(['password123'], $config->passwords);
     }
 
     #[Test]
@@ -73,24 +55,6 @@ final class PdfConfigTest extends TestCase
         $this->assertIsArray($array);
         $this->assertTrue($array['extract_images']);
         $this->assertTrue($array['extract_metadata']);
-        $this->assertFalse($array['ocr_fallback']);
-        $this->assertArrayNotHasKey('start_page', $array);
-        $this->assertArrayNotHasKey('end_page', $array);
-    }
-
-    #[Test]
-    public function it_includes_page_range_in_array_when_set(): void
-    {
-        $config = new PdfConfig(
-            startPage: 5,
-            endPage: 15,
-        );
-        $array = $config->toArray();
-
-        $this->assertArrayHasKey('start_page', $array);
-        $this->assertArrayHasKey('end_page', $array);
-        $this->assertSame(5, $array['start_page']);
-        $this->assertSame(15, $array['end_page']);
     }
 
     #[Test]
@@ -100,9 +64,7 @@ final class PdfConfigTest extends TestCase
 
         $this->assertFalse($config->extractImages);
         $this->assertTrue($config->extractMetadata);
-        $this->assertFalse($config->ocrFallback);
-        $this->assertNull($config->startPage);
-        $this->assertNull($config->endPage);
+        $this->assertNull($config->passwords);
     }
 
     #[Test]
@@ -111,17 +73,13 @@ final class PdfConfigTest extends TestCase
         $data = [
             'extract_images' => true,
             'extract_metadata' => false,
-            'ocr_fallback' => true,
-            'start_page' => 2,
-            'end_page' => 50,
+            'passwords' => ['pass1', 'pass2'],
         ];
         $config = PdfConfig::fromArray($data);
 
         $this->assertTrue($config->extractImages);
         $this->assertFalse($config->extractMetadata);
-        $this->assertTrue($config->ocrFallback);
-        $this->assertSame(2, $config->startPage);
-        $this->assertSame(50, $config->endPage);
+        $this->assertSame(['pass1', 'pass2'], $config->passwords);
     }
 
     #[Test]
@@ -130,9 +88,7 @@ final class PdfConfigTest extends TestCase
         $config = new PdfConfig(
             extractImages: true,
             extractMetadata: true,
-            ocrFallback: false,
-            startPage: 1,
-            endPage: 20,
+            passwords: ['mypass'],
         );
         $json = $config->toJson();
 
@@ -141,9 +97,7 @@ final class PdfConfigTest extends TestCase
 
         $this->assertTrue($decoded['extract_images']);
         $this->assertTrue($decoded['extract_metadata']);
-        $this->assertFalse($decoded['ocr_fallback']);
-        $this->assertSame(1, $decoded['start_page']);
-        $this->assertSame(20, $decoded['end_page']);
+        $this->assertSame(['mypass'], $decoded['passwords']);
     }
 
     #[Test]
@@ -152,17 +106,13 @@ final class PdfConfigTest extends TestCase
         $json = json_encode([
             'extract_images' => false,
             'extract_metadata' => true,
-            'ocr_fallback' => true,
-            'start_page' => 3,
-            'end_page' => 25,
+            'passwords' => ['test'],
         ]);
         $config = PdfConfig::fromJson($json);
 
         $this->assertFalse($config->extractImages);
         $this->assertTrue($config->extractMetadata);
-        $this->assertTrue($config->ocrFallback);
-        $this->assertSame(3, $config->startPage);
-        $this->assertSame(25, $config->endPage);
+        $this->assertSame(['test'], $config->passwords);
     }
 
     #[Test]
@@ -171,9 +121,7 @@ final class PdfConfigTest extends TestCase
         $original = new PdfConfig(
             extractImages: true,
             extractMetadata: false,
-            ocrFallback: true,
-            startPage: 10,
-            endPage: 100,
+            passwords: ['abc', 'def'],
         );
 
         $json = $original->toJson();
@@ -181,9 +129,7 @@ final class PdfConfigTest extends TestCase
 
         $this->assertSame($original->extractImages, $restored->extractImages);
         $this->assertSame($original->extractMetadata, $restored->extractMetadata);
-        $this->assertSame($original->ocrFallback, $restored->ocrFallback);
-        $this->assertSame($original->startPage, $restored->startPage);
-        $this->assertSame($original->endPage, $restored->endPage);
+        $this->assertSame($original->passwords, $restored->passwords);
     }
 
     #[Test]
@@ -205,21 +151,12 @@ final class PdfConfigTest extends TestCase
     }
 
     #[Test]
-    public function it_enforces_readonly_on_ocr_fallback_property(): void
+    public function it_enforces_readonly_on_extract_metadata_property(): void
     {
         $this->expectException(\Error::class);
 
-        $config = new PdfConfig(ocrFallback: true);
-        $config->ocrFallback = false;
-    }
-
-    #[Test]
-    public function it_enforces_readonly_on_start_page_property(): void
-    {
-        $this->expectException(\Error::class);
-
-        $config = new PdfConfig(startPage: 1);
-        $config->startPage = 10;
+        $config = new PdfConfig(extractMetadata: true);
+        $config->extractMetadata = false;
     }
 
     #[Test]
@@ -233,15 +170,13 @@ final class PdfConfigTest extends TestCase
         try {
             file_put_contents($tempFile, json_encode([
                 'extract_images' => true,
-                'start_page' => 1,
-                'end_page' => 10,
+                'passwords' => ['test123'],
             ]));
 
             $config = PdfConfig::fromFile($tempFile);
 
             $this->assertTrue($config->extractImages);
-            $this->assertSame(1, $config->startPage);
-            $this->assertSame(10, $config->endPage);
+            $this->assertSame(['test123'], $config->passwords);
         } finally {
             if (file_exists($tempFile)) {
                 unlink($tempFile);
@@ -269,48 +204,18 @@ final class PdfConfigTest extends TestCase
     }
 
     #[Test]
-    public function it_handles_type_coercion_for_start_page(): void
+    public function it_handles_null_passwords(): void
     {
-        $data = ['start_page' => '5'];
-        $config = PdfConfig::fromArray($data);
+        $config = new PdfConfig(passwords: null);
 
-        $this->assertIsInt($config->startPage);
-        $this->assertSame(5, $config->startPage);
+        $this->assertNull($config->passwords);
     }
 
     #[Test]
-    public function it_handles_type_coercion_for_end_page(): void
+    public function it_handles_empty_passwords_array(): void
     {
-        $data = ['end_page' => '50'];
-        $config = PdfConfig::fromArray($data);
+        $config = new PdfConfig(passwords: []);
 
-        $this->assertIsInt($config->endPage);
-        $this->assertSame(50, $config->endPage);
-    }
-
-    #[Test]
-    public function it_supports_only_start_page(): void
-    {
-        $config = new PdfConfig(startPage: 1);
-
-        $this->assertSame(1, $config->startPage);
-        $this->assertNull($config->endPage);
-
-        $array = $config->toArray();
-        $this->assertArrayHasKey('start_page', $array);
-        $this->assertArrayNotHasKey('end_page', $array);
-    }
-
-    #[Test]
-    public function it_supports_only_end_page(): void
-    {
-        $config = new PdfConfig(endPage: 100);
-
-        $this->assertNull($config->startPage);
-        $this->assertSame(100, $config->endPage);
-
-        $array = $config->toArray();
-        $this->assertArrayNotHasKey('start_page', $array);
-        $this->assertArrayHasKey('end_page', $array);
+        $this->assertSame([], $config->passwords);
     }
 }

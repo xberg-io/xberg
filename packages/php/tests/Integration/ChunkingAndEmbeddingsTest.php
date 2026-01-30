@@ -186,19 +186,19 @@ final class ChunkingAndEmbeddingsTest extends TestCase
             $this->markTestSkipped("Test file not found: {$filePath}");
         }
 
-        $chunkingConfig = new ChunkingConfig(
-            maxChars: 500,
-            maxOverlap: 50,
-        );
-
         $embeddingConfig = new EmbeddingConfig(
             model: 'balanced',
             normalize: true,
         );
 
+        $chunkingConfig = new ChunkingConfig(
+            maxChars: 500,
+            maxOverlap: 50,
+            embedding: $embeddingConfig,
+        );
+
         $config = new ExtractionConfig(
             chunking: $chunkingConfig,
-            embedding: $embeddingConfig,
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -278,11 +278,11 @@ final class ChunkingAndEmbeddingsTest extends TestCase
         $chunkingConfig = new ChunkingConfig(
             maxChars: 400,
             maxOverlap: 40,
+            embedding: null,
         );
 
         $config = new ExtractionConfig(
             chunking: $chunkingConfig,
-            embedding: null,
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -338,16 +338,18 @@ final class ChunkingAndEmbeddingsTest extends TestCase
             $this->markTestSkipped("Test file not found: {$filePath}");
         }
 
-        $chunkingConfig = new ChunkingConfig(maxChars: 500);
-
         $embeddingConfig = new EmbeddingConfig(
             model: 'balanced',
             normalize: true,
         );
 
+        $chunkingConfig = new ChunkingConfig(
+            maxChars: 500,
+            embedding: $embeddingConfig,
+        );
+
         $config = new ExtractionConfig(
             chunking: $chunkingConfig,
-            embedding: $embeddingConfig,
         );
 
         $kreuzberg = new Kreuzberg($config);

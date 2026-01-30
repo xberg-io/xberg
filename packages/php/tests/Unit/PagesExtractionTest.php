@@ -29,7 +29,7 @@ final class PagesExtractionTest extends TestCase
     public function testExtractPagesReturnsPageArray(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 extractPages: true,
             ),
         );
@@ -48,7 +48,7 @@ final class PagesExtractionTest extends TestCase
     public function testPageArrayContainsRequiredFields(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 extractPages: true,
             ),
         );
@@ -73,7 +73,7 @@ final class PagesExtractionTest extends TestCase
     public function testInsertPageMarkersAppearsInContent(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 insertPageMarkers: true,
             ),
         );
@@ -95,7 +95,7 @@ final class PagesExtractionTest extends TestCase
     public function testCustomMarkerFormatWorks(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 insertPageMarkers: true,
                 markerFormat: '=== Page {page_num} ===',
             ),
@@ -117,7 +117,7 @@ final class PagesExtractionTest extends TestCase
     public function testMarkerFormatPageNumberReplacement(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 insertPageMarkers: true,
                 markerFormat: '--- BEGIN PAGE {page_num} ---',
             ),
@@ -139,7 +139,7 @@ final class PagesExtractionTest extends TestCase
     public function testMultiPagePDFProducesMultiplePages(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 extractPages: true,
             ),
         );
@@ -157,7 +157,7 @@ final class PagesExtractionTest extends TestCase
     public function testPageContentStructureValidation(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 extractPages: true,
             ),
         );
@@ -183,7 +183,7 @@ final class PagesExtractionTest extends TestCase
     public function testPageNumbersAreSequential(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 extractPages: true,
             ),
         );
@@ -209,7 +209,7 @@ final class PagesExtractionTest extends TestCase
     public function testExtractPagesAndInsertMarkersTogethers(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 extractPages: true,
                 insertPageMarkers: true,
                 markerFormat: '[Page {page_num}]',
@@ -250,7 +250,7 @@ final class PagesExtractionTest extends TestCase
     public function testMarkdownStyleMarkers(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 insertPageMarkers: true,
                 markerFormat: '## Page {page_num}',
             ),
@@ -268,7 +268,7 @@ final class PagesExtractionTest extends TestCase
     public function testSeparatorStyleMarkers(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 insertPageMarkers: true,
                 markerFormat: '---page-{page_num}---',
             ),
@@ -286,7 +286,7 @@ final class PagesExtractionTest extends TestCase
     public function testCommentStyleMarkers(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 insertPageMarkers: true,
                 markerFormat: '<!-- PAGE {page_num} -->',
             ),
@@ -309,7 +309,7 @@ final class PagesExtractionTest extends TestCase
     public function testPageConfigWithOnlyExtractPages(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(extractPages: true),
+            pages: new PageConfig(extractPages: true),
         );
 
         $testPdfBytes = $this->getTestPdfBytes();
@@ -326,7 +326,7 @@ final class PagesExtractionTest extends TestCase
     public function testPageConfigWithOnlyInsertMarkers(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(insertPageMarkers: true),
+            pages: new PageConfig(insertPageMarkers: true),
         );
 
         $testPdfBytes = $this->getTestPdfBytes();
@@ -341,7 +341,7 @@ final class PagesExtractionTest extends TestCase
     public function testPageConfigWithOnlyMarkerFormat(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(markerFormat: '>> Page {page_num} <<'),
+            pages: new PageConfig(markerFormat: '>> Page {page_num} <<'),
         );
 
         $testPdfBytes = $this->getTestPdfBytes();
@@ -356,7 +356,7 @@ final class PagesExtractionTest extends TestCase
     public function testPageContentMayBeEmpty(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 extractPages: true,
             ),
         );
@@ -379,7 +379,7 @@ final class PagesExtractionTest extends TestCase
     public function testMarkersAndExtractedPagesConsistency(): void
     {
         $config = new ExtractionConfig(
-            page: new PageConfig(
+            pages: new PageConfig(
                 extractPages: true,
                 insertPageMarkers: true,
             ),

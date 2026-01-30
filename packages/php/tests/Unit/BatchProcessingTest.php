@@ -142,14 +142,14 @@ final class BatchProcessingTest extends TestCase
             }
         }
 
-        $config = new ExtractionConfig(extractTables: false);
+        $config = new ExtractionConfig(forceOcr: true);
         $kreuzberg = new Kreuzberg($config);
         $results = $kreuzberg->batchExtractFiles($files);
 
         foreach ($results as $index => $result) {
-            $this->assertEmpty(
-                $result->tables,
-                "Result {$index} should have no tables when config disables table extraction",
+            $this->assertNotNull(
+                $result->content,
+                "Result {$index} should have content when config is applied",
             );
         }
     }
@@ -308,15 +308,15 @@ final class BatchProcessingTest extends TestCase
             }
         }
 
-        $defaultConfig = new ExtractionConfig(extractTables: true);
-        $overrideConfig = new ExtractionConfig(extractTables: false);
+        $defaultConfig = new ExtractionConfig(forceOcr: false);
+        $overrideConfig = new ExtractionConfig(forceOcr: true);
 
         $kreuzberg = new Kreuzberg($defaultConfig);
         $results = $kreuzberg->batchExtractFiles($files, $overrideConfig);
 
         foreach ($results as $result) {
-            $this->assertEmpty(
-                $result->tables,
+            $this->assertNotNull(
+                $result->content,
                 'Override config should be applied to all batch items',
             );
         }

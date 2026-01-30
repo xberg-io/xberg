@@ -80,6 +80,35 @@ pub struct JsChunk {
     pub metadata: JsChunkMetadata,
 }
 
+#[napi(object)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct JsBoundingBox {
+    pub x0: f64,
+    pub y0: f64,
+    pub x1: f64,
+    pub y1: f64,
+}
+
+#[napi(object)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct JsElementMetadata {
+    pub page_number: Option<u32>,
+    pub filename: Option<String>,
+    pub coordinates: Option<JsBoundingBox>,
+    pub element_index: Option<u32>,
+    #[napi(ts_type = "Record<string, string> | undefined")]
+    pub additional: Option<serde_json::Value>,
+}
+
+#[napi(object)]
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct JsElement {
+    pub element_id: String,
+    pub element_type: String,
+    pub text: String,
+    pub metadata: JsElementMetadata,
+}
+
 fn usize_to_u32(value: usize, field: &str) -> Result<u32> {
     u32::try_from(value).map_err(|_| {
         Error::new(
@@ -110,6 +139,7 @@ pub struct JsExtractionResult {
     pub images: Option<Vec<JsExtractedImage>>,
     #[serde(skip)]
     pub pages: Option<Vec<JsPageContent>>,
+    pub elements: Option<Vec<JsElement>>,
 }
 
 impl TryFrom<RustExtractionResult> for JsExtractionResult {
@@ -235,6 +265,39 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
             None
         };
 
+        let elements = val.elements.map(|elems| {
+            elems
+                .into_iter()
+                .map(|e| {
+                    let additional = if e.metadata.additional.is_empty() {
+                        None
+                    } else {
+                        serde_json::to_value(&e.metadata.additional).ok()
+                    };
+                    JsElement {
+                        element_id: e.element_id.to_string(),
+                        element_type: serde_json::to_value(e.element_type)
+                            .ok()
+                            .and_then(|v| v.as_str().map(String::from))
+                            .unwrap_or_default(),
+                        text: e.text,
+                        metadata: JsElementMetadata {
+                            page_number: e.metadata.page_number.map(|p| p as u32),
+                            filename: e.metadata.filename,
+                            coordinates: e.metadata.coordinates.map(|c| JsBoundingBox {
+                                x0: c.x0,
+                                y0: c.y0,
+                                x1: c.x1,
+                                y1: c.y1,
+                            }),
+                            element_index: e.metadata.element_index.map(|i| i as u32),
+                            additional,
+                        },
+                    }
+                })
+                .collect()
+        });
+
         Ok(JsExtractionResult {
             content: val.content,
             mime_type: val.mime_type,
@@ -281,6 +344,7 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
             },
             images,
             pages,
+            elements,
         })
     }
 }
@@ -437,7 +501,38 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
             chunks,
             images,
             pages: None,
-            elements: None,
+            elements: val.elements.map(|elems| {
+                elems
+                    .into_iter()
+                    .filter_map(|e| {
+                        let element_id = kreuzberg::types::ElementId::new(e.element_id).ok()?;
+                        let element_type: kreuzberg::types::ElementType =
+                            serde_json::from_value(serde_json::Value::String(e.element_type)).ok()?;
+                        let additional = e
+                            .metadata
+                            .additional
+                            .and_then(|v| serde_json::from_value(v).ok())
+                            .unwrap_or_default();
+                        Some(kreuzberg::types::Element {
+                            element_id,
+                            element_type,
+                            text: e.text,
+                            metadata: kreuzberg::types::ElementMetadata {
+                                page_number: e.metadata.page_number.map(|p| p as usize),
+                                filename: e.metadata.filename,
+                                coordinates: e.metadata.coordinates.map(|c| kreuzberg::types::BoundingBox {
+                                    x0: c.x0,
+                                    y0: c.y0,
+                                    x1: c.x1,
+                                    y1: c.y1,
+                                }),
+                                element_index: e.metadata.element_index.map(|i| i as usize),
+                                additional,
+                            },
+                        })
+                    })
+                    .collect()
+            }),
             djot_content: None,
         })
     }

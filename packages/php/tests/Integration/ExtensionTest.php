@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kreuzberg\Tests\Integration;
 
 use Kreuzberg\Config\ExtractionConfig;
+use Kreuzberg\Config\ImageExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\PdfConfig;
 use Kreuzberg\Exceptions\KreuzbergException;
@@ -110,16 +111,16 @@ final class ExtensionTest extends TestCase
     {
         $config = new ExtractionConfig(
             ocr: new OcrConfig(backend: 'tesseract', language: 'eng'),
-            pdf: new PdfConfig(extractImages: true),
-            extractTables: false,  // Set to false to ensure it appears in array
+            pdfOptions: new PdfConfig(extractImages: true),
+            useCache: false,  // Set to false to ensure it appears in array
         );
 
         $array = $config->toArray();
 
         $this->assertIsArray($array);
         $this->assertArrayHasKey('ocr', $array);
-        $this->assertArrayHasKey('pdf', $array);
-        $this->assertFalse($array['extract_tables']);
+        $this->assertArrayHasKey('pdf_options', $array);
+        $this->assertFalse($array['use_cache']);
     }
 
     #[Test]
@@ -134,9 +135,8 @@ final class ExtensionTest extends TestCase
     public function it_creates_kreuzberg_instance_with_custom_config(): void
     {
         $config = new ExtractionConfig(
-            extractImages: true,
-            extractTables: false,
-            preserveFormatting: true,
+            images: new ImageExtractionConfig(extractImages: true),
+            useCache: true,
         );
 
         $kreuzberg = new Kreuzberg($config);

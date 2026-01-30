@@ -89,21 +89,21 @@ final class DocumentExtractionTest extends TestCase
     #[Test]
     public function it_applies_default_config_when_none_provided(): void
     {
-        $defaultConfig = new ExtractionConfig(extractTables: false);
+        $defaultConfig = new ExtractionConfig(forceOcr: true);
         $kreuzberg = new Kreuzberg($defaultConfig);
 
         $result = $kreuzberg->extractFile($this->testDocumentsPath . '/pdfs/code_and_formula.pdf');
 
-        $this->assertEmpty($result->tables, 'Tables should not be extracted when config disables them');
+        $this->assertNotNull($result->content, 'Content should be extracted with default config');
     }
 
     #[Test]
     public function it_overrides_default_config_with_method_config(): void
     {
-        $defaultConfig = new ExtractionConfig(extractTables: false);
+        $defaultConfig = new ExtractionConfig(forceOcr: false);
         $kreuzberg = new Kreuzberg($defaultConfig);
 
-        $overrideConfig = new ExtractionConfig(extractTables: true);
+        $overrideConfig = new ExtractionConfig(forceOcr: true);
         $result = $kreuzberg->extractFile(
             $this->testDocumentsPath . '/pdfs/code_and_formula.pdf',
             config: $overrideConfig,

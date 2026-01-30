@@ -315,9 +315,11 @@ final class ErrorHandlingTest extends TestCase
 
         // Config with tiny batch size to test resource handling
         $config = new ExtractionConfig(
-            embedding: new EmbeddingConfig(
-                model: 'fast',
-                batchSize: 1, // Very small batch size
+            chunking: new ChunkingConfig(
+                embedding: new EmbeddingConfig(
+                    model: 'fast',
+                    batchSize: 1, // Very small batch size
+                ),
             ),
         );
 
@@ -363,17 +365,17 @@ final class ErrorHandlingTest extends TestCase
     public function it_enforces_readonly_extraction_config(): void
     {
         $config = new ExtractionConfig(
-            extractImages: true,
-            extractTables: false,
+            useCache: true,
+            forceOcr: false,
         );
 
-        $this->assertTrue($config->extractImages);
-        $this->assertFalse($config->extractTables);
+        $this->assertTrue($config->useCache);
+        $this->assertFalse($config->forceOcr);
 
         // Attempting to modify should fail due to readonly property
         $this->expectError();
         // @phpstan-ignore-next-line
-        $config->extractImages = false; // This should error
+        $config->useCache = false; // This should error
     }
 
     /**
@@ -590,9 +592,11 @@ final class ErrorHandlingTest extends TestCase
 
         // Create embedding config with negative batch size (edge case)
         $config = new ExtractionConfig(
-            embedding: new EmbeddingConfig(
-                model: 'fast',
-                batchSize: -1, // Invalid
+            chunking: new ChunkingConfig(
+                embedding: new EmbeddingConfig(
+                    model: 'fast',
+                    batchSize: -1, // Invalid
+                ),
             ),
         );
 

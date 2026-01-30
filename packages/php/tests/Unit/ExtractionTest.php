@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kreuzberg\Tests\Unit;
 
 use Kreuzberg\Config\ExtractionConfig;
+use Kreuzberg\Config\ImageExtractionConfig;
 use Kreuzberg\Kreuzberg;
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
@@ -41,8 +42,8 @@ final class ExtractionTest extends TestCase
     public function it_creates_kreuzberg_instance_with_config(): void
     {
         $config = new ExtractionConfig(
-            extractImages: true,
-            extractTables: false,
+            images: new ImageExtractionConfig(extractImages: true),
+            useCache: false,
         );
 
         $kreuzberg = new Kreuzberg($config);

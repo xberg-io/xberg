@@ -38,55 +38,57 @@ final class ImageExtractionConfigTest extends TestCase
     {
         $config = new ImageExtractionConfig();
 
-        $this->assertFalse($config->extractImages);
-        $this->assertFalse($config->performOcr);
-        $this->assertNull($config->minWidth);
-        $this->assertNull($config->minHeight);
+        $this->assertTrue($config->extractImages);
+        $this->assertSame(300, $config->targetDpi);
+        $this->assertSame(4096, $config->maxImageDimension);
+        $this->assertTrue($config->autoAdjustDpi);
+        $this->assertSame(72, $config->minDpi);
+        $this->assertSame(600, $config->maxDpi);
     }
 
     #[Test]
     public function it_creates_with_custom_values(): void
     {
         $config = new ImageExtractionConfig(
-            extractImages: true,
-            performOcr: true,
-            minWidth: 100,
-            minHeight: 200,
+            extractImages: false,
+            targetDpi: 150,
+            maxImageDimension: 2048,
+            autoAdjustDpi: false,
         );
 
-        $this->assertTrue($config->extractImages);
-        $this->assertTrue($config->performOcr);
-        $this->assertSame(100, $config->minWidth);
-        $this->assertSame(200, $config->minHeight);
+        $this->assertFalse($config->extractImages);
+        $this->assertSame(150, $config->targetDpi);
+        $this->assertSame(2048, $config->maxImageDimension);
+        $this->assertFalse($config->autoAdjustDpi);
     }
 
     #[Test]
-    public function it_serializes_to_array_with_only_non_null_values(): void
+    public function it_serializes_to_array_with_all_values(): void
     {
-        $config = new ImageExtractionConfig(extractImages: true);
+        $config = new ImageExtractionConfig(extractImages: true, targetDpi: 200);
         $array = $config->toArray();
 
         $this->assertIsArray($array);
         $this->assertTrue($array['extract_images']);
-        $this->assertFalse($array['perform_ocr']);
-        $this->assertArrayNotHasKey('min_width', $array);
-        $this->assertArrayNotHasKey('min_height', $array);
+        $this->assertSame(200, $array['target_dpi']);
+        $this->assertArrayHasKey('max_image_dimension', $array);
+        $this->assertArrayHasKey('auto_adjust_dpi', $array);
     }
 
     #[Test]
-    public function it_includes_dimensions_in_array_when_set(): void
+    public function it_includes_dpi_settings_in_array(): void
     {
         $config = new ImageExtractionConfig(
             extractImages: true,
-            minWidth: 150,
-            minHeight: 250,
+            minDpi: 100,
+            maxDpi: 400,
         );
         $array = $config->toArray();
 
-        $this->assertArrayHasKey('min_width', $array);
-        $this->assertArrayHasKey('min_height', $array);
-        $this->assertSame(150, $array['min_width']);
-        $this->assertSame(250, $array['min_height']);
+        $this->assertArrayHasKey('min_dpi', $array);
+        $this->assertArrayHasKey('max_dpi', $array);
+        $this->assertSame(100, $array['min_dpi']);
+        $this->assertSame(400, $array['max_dpi']);
     }
 
     #[Test]
@@ -94,27 +96,31 @@ final class ImageExtractionConfigTest extends TestCase
     {
         $config = ImageExtractionConfig::fromArray([]);
 
-        $this->assertFalse($config->extractImages);
-        $this->assertFalse($config->performOcr);
-        $this->assertNull($config->minWidth);
-        $this->assertNull($config->minHeight);
+        $this->assertTrue($config->extractImages);
+        $this->assertSame(300, $config->targetDpi);
+        $this->assertSame(4096, $config->maxImageDimension);
+        $this->assertTrue($config->autoAdjustDpi);
     }
 
     #[Test]
     public function it_creates_from_array_with_all_fields(): void
     {
         $data = [
-            'extract_images' => true,
-            'perform_ocr' => true,
-            'min_width' => 300,
-            'min_height' => 400,
+            'extract_images' => false,
+            'target_dpi' => 150,
+            'max_image_dimension' => 2048,
+            'auto_adjust_dpi' => false,
+            'min_dpi' => 50,
+            'max_dpi' => 300,
         ];
         $config = ImageExtractionConfig::fromArray($data);
 
-        $this->assertTrue($config->extractImages);
-        $this->assertTrue($config->performOcr);
-        $this->assertSame(300, $config->minWidth);
-        $this->assertSame(400, $config->minHeight);
+        $this->assertFalse($config->extractImages);
+        $this->assertSame(150, $config->targetDpi);
+        $this->assertSame(2048, $config->maxImageDimension);
+        $this->assertFalse($config->autoAdjustDpi);
+        $this->assertSame(50, $config->minDpi);
+        $this->assertSame(300, $config->maxDpi);
     }
 
     #[Test]
@@ -122,8 +128,8 @@ final class ImageExtractionConfigTest extends TestCase
     {
         $config = new ImageExtractionConfig(
             extractImages: true,
-            performOcr: false,
-            minWidth: 200,
+            targetDpi: 200,
+            maxImageDimension: 3000,
         );
         $json = $config->toJson();
 
@@ -131,8 +137,8 @@ final class ImageExtractionConfigTest extends TestCase
         $decoded = json_decode($json, true);
 
         $this->assertTrue($decoded['extract_images']);
-        $this->assertFalse($decoded['perform_ocr']);
-        $this->assertSame(200, $decoded['min_width']);
+        $this->assertSame(200, $decoded['target_dpi']);
+        $this->assertSame(3000, $decoded['max_image_dimension']);
     }
 
     #[Test]
@@ -140,16 +146,16 @@ final class ImageExtractionConfigTest extends TestCase
     {
         $json = json_encode([
             'extract_images' => false,
-            'perform_ocr' => true,
-            'min_width' => 150,
-            'min_height' => 150,
+            'target_dpi' => 250,
+            'max_image_dimension' => 2500,
+            'auto_adjust_dpi' => false,
         ]);
         $config = ImageExtractionConfig::fromJson($json);
 
         $this->assertFalse($config->extractImages);
-        $this->assertTrue($config->performOcr);
-        $this->assertSame(150, $config->minWidth);
-        $this->assertSame(150, $config->minHeight);
+        $this->assertSame(250, $config->targetDpi);
+        $this->assertSame(2500, $config->maxImageDimension);
+        $this->assertFalse($config->autoAdjustDpi);
     }
 
     #[Test]
@@ -157,18 +163,22 @@ final class ImageExtractionConfigTest extends TestCase
     {
         $original = new ImageExtractionConfig(
             extractImages: true,
-            performOcr: true,
-            minWidth: 500,
-            minHeight: 600,
+            targetDpi: 350,
+            maxImageDimension: 5000,
+            autoAdjustDpi: false,
+            minDpi: 80,
+            maxDpi: 500,
         );
 
         $json = $original->toJson();
         $restored = ImageExtractionConfig::fromJson($json);
 
         $this->assertSame($original->extractImages, $restored->extractImages);
-        $this->assertSame($original->performOcr, $restored->performOcr);
-        $this->assertSame($original->minWidth, $restored->minWidth);
-        $this->assertSame($original->minHeight, $restored->minHeight);
+        $this->assertSame($original->targetDpi, $restored->targetDpi);
+        $this->assertSame($original->maxImageDimension, $restored->maxImageDimension);
+        $this->assertSame($original->autoAdjustDpi, $restored->autoAdjustDpi);
+        $this->assertSame($original->minDpi, $restored->minDpi);
+        $this->assertSame($original->maxDpi, $restored->maxDpi);
     }
 
     #[Test]
@@ -190,12 +200,12 @@ final class ImageExtractionConfigTest extends TestCase
     }
 
     #[Test]
-    public function it_enforces_readonly_on_min_width_property(): void
+    public function it_enforces_readonly_on_target_dpi_property(): void
     {
         $this->expectException(\Error::class);
 
-        $config = new ImageExtractionConfig(minWidth: 100);
-        $config->minWidth = 200;
+        $config = new ImageExtractionConfig(targetDpi: 100);
+        $config->targetDpi = 200;
     }
 
     #[Test]
@@ -209,13 +219,13 @@ final class ImageExtractionConfigTest extends TestCase
         try {
             file_put_contents($tempFile, json_encode([
                 'extract_images' => true,
-                'min_width' => 100,
+                'target_dpi' => 250,
             ]));
 
             $config = ImageExtractionConfig::fromFile($tempFile);
 
             $this->assertTrue($config->extractImages);
-            $this->assertSame(100, $config->minWidth);
+            $this->assertSame(250, $config->targetDpi);
         } finally {
             if (file_exists($tempFile)) {
                 unlink($tempFile);
@@ -243,21 +253,21 @@ final class ImageExtractionConfigTest extends TestCase
     }
 
     #[Test]
-    public function it_handles_type_coercion_for_min_width(): void
+    public function it_handles_type_coercion_for_target_dpi(): void
     {
-        $data = ['min_width' => '250'];
+        $data = ['target_dpi' => '250'];
         $config = ImageExtractionConfig::fromArray($data);
 
-        $this->assertIsInt($config->minWidth);
-        $this->assertSame(250, $config->minWidth);
+        $this->assertIsInt($config->targetDpi);
+        $this->assertSame(250, $config->targetDpi);
     }
 
     #[Test]
-    public function it_handles_empty_string_as_null(): void
+    public function it_uses_default_dpi_values(): void
     {
-        $config = new ImageExtractionConfig(minWidth: null, minHeight: null);
+        $config = new ImageExtractionConfig();
 
-        $this->assertNull($config->minWidth);
-        $this->assertNull($config->minHeight);
+        $this->assertSame(72, $config->minDpi);
+        $this->assertSame(600, $config->maxDpi);
     }
 }

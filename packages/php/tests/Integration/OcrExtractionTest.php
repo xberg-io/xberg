@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kreuzberg\Tests\Integration;
 
 use Kreuzberg\Config\ExtractionConfig;
+use Kreuzberg\Config\ImageExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\TesseractConfig;
 use Kreuzberg\Kreuzberg;
@@ -137,7 +138,6 @@ final class OcrExtractionTest extends TestCase
                 language: 'eng',
                 tesseractConfig: $tesseractConfig,
             ),
-            extractTables: true,
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -188,7 +188,6 @@ final class OcrExtractionTest extends TestCase
                 backend: 'tesseract',
                 language: 'eng',
             ),
-            extractTables: true,
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -260,7 +259,7 @@ final class OcrExtractionTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            extractImages: true,
+            images: new ImageExtractionConfig(extractImages: true),
             ocr: new OcrConfig(
                 backend: 'tesseract',
                 language: 'eng',

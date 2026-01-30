@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kreuzberg\Tests\Integration;
 
+use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\EmbeddingConfig;
 use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Kreuzberg;
@@ -66,7 +67,7 @@ final class EmbeddingGenerationTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            embedding: new EmbeddingConfig(),
+            chunking: new ChunkingConfig(embedding: new EmbeddingConfig()),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -89,7 +90,7 @@ final class EmbeddingGenerationTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            embedding: new EmbeddingConfig(),
+            chunking: new ChunkingConfig(embedding: new EmbeddingConfig()),
         );
 
         $kreuzberg = new Kreuzberg($config);
@@ -280,7 +281,7 @@ final class EmbeddingGenerationTest extends TestCase
         }
 
         $config = new ExtractionConfig(
-            embedding: new EmbeddingConfig(normalize: true),
+            chunking: new ChunkingConfig(embedding: new EmbeddingConfig(normalize: true)),
         );
 
         $kreuzberg = new Kreuzberg();
