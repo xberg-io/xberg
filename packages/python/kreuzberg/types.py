@@ -8,7 +8,48 @@ the Rust core via PyO3 bindings.
 # ruff: noqa: A005
 from __future__ import annotations
 
+import sys
 from typing import Any, Literal, TypedDict
+
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    from enum import Enum
+
+    class StrEnum(str, Enum):
+        """Backport of StrEnum for Python 3.10."""
+
+
+class OutputFormat(StrEnum):
+    """Output content format for extraction results.
+
+    Controls the format of the extracted content in ExtractionConfig.
+
+    Values:
+        PLAIN: Plain text content only (default)
+        MARKDOWN: Markdown format
+        DJOT: Djot markup format
+        HTML: HTML format
+    """
+
+    PLAIN = "plain"
+    MARKDOWN = "markdown"
+    DJOT = "djot"
+    HTML = "html"
+
+
+class ResultFormat(StrEnum):
+    """Result structure format for extraction output.
+
+    Controls whether results use unified format or element-based format.
+
+    Values:
+        UNIFIED: All content in a single content field (default)
+        ELEMENT_BASED: Semantic elements for Unstructured-compatible output
+    """
+
+    UNIFIED = "unified"
+    ELEMENT_BASED = "element_based"
 
 
 class ExcelMetadata(TypedDict, total=False):
@@ -684,6 +725,7 @@ __all__ = [
     "LinkMetadata",
     "Metadata",
     "OcrMetadata",
+    "OutputFormat",
     "PageBoundary",
     "PageConfig",
     "PageContent",
@@ -693,6 +735,7 @@ __all__ = [
     "PageUnitType",
     "PdfMetadata",
     "PptxMetadata",
+    "ResultFormat",
     "StructuredData",
     "Table",
     "TextMetadata",

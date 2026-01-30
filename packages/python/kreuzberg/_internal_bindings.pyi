@@ -1,6 +1,17 @@
 from collections.abc import Awaitable
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Literal, Protocol, TypedDict, overload
+from typing import Any, Literal, Protocol, TypeAlias, TypedDict, overload
+
+class OutputFormat(StrEnum):
+    PLAIN = "plain"
+    MARKDOWN = "markdown"
+    DJOT = "djot"
+    HTML = "html"
+
+class ResultFormat(StrEnum):
+    UNIFIED = "unified"
+    ELEMENT_BASED = "element_based"
 
 __all__ = [
     "ChunkingConfig",
@@ -1305,6 +1316,49 @@ class Footnote(TypedDict, total=False):
     label: str
     content: str
 
+class BoundingBox(TypedDict):
+    x0: float
+    y0: float
+    x1: float
+    y1: float
+
+ElementType: TypeAlias = Literal[
+    "title",
+    "narrative_text",
+    "heading",
+    "list_item",
+    "table",
+    "image",
+    "page_break",
+    "code_block",
+    "block_quote",
+    "footer",
+    "header",
+]
+
+class ElementMetadata(TypedDict, total=False):
+    page_number: int | None
+    filename: str | None
+    coordinates: BoundingBox | None
+    element_index: int | None
+    additional: dict[str, str]
+
+class Element(TypedDict):
+    element_id: str
+    element_type: ElementType
+    text: str
+    metadata: ElementMetadata
+
+class HierarchicalBlock(TypedDict, total=False):
+    text: str
+    font_size: float
+    level: str
+    bbox: tuple[float, float, float, float] | None
+
+class PageHierarchy(TypedDict, total=False):
+    block_count: int
+    blocks: list[HierarchicalBlock]
+
 class ExtractionResult:
     content: str
     mime_type: str
@@ -1314,6 +1368,7 @@ class ExtractionResult:
     chunks: list[Chunk] | None
     images: list[ExtractedImage] | None
     pages: list[PageContent] | None
+    elements: list[Element] | None
     djot_content: DjotContent | None
     def get_page_count(self) -> int: ...
     def get_chunk_count(self) -> int: ...
@@ -1325,6 +1380,7 @@ class PageContent(TypedDict):
     content: str
     tables: list[ExtractedTable]
     images: list[ExtractedImage]
+    hierarchy: PageHierarchy | None
 
 class ExtractedTable:
     cells: list[list[str]]

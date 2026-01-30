@@ -162,7 +162,7 @@ from kreuzberg.exceptions import (
     ValidationError,
 )
 from kreuzberg.postprocessors.protocol import PostProcessorProtocol
-from kreuzberg.types import Chunk, ChunkMetadata, ExtractedImage, Metadata
+from kreuzberg.types import Chunk, ChunkMetadata, ExtractedImage, Metadata, OutputFormat, ResultFormat
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -197,6 +197,7 @@ __all__ = [
     "MissingDependencyError",
     "OCRError",
     "OcrConfig",
+    "OutputFormat",
     "PageConfig",
     "PanicContext",
     "ParsingError",
@@ -205,6 +206,7 @@ __all__ = [
     "PostProcessorConfig",
     "PostProcessorProtocol",
     "RakeParams",
+    "ResultFormat",
     "TesseractConfig",
     "TokenReductionConfig",
     "ValidationError",
