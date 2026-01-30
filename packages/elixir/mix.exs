@@ -1,7 +1,7 @@
 defmodule Kreuzberg.MixProject do
   use Mix.Project
 
-  @version "4.2.4"
+  @version "4.2.5"
   @source_url "https://github.com/kreuzberg-dev/kreuzberg"
 
   def project do

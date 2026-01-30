@@ -1,7 +1,7 @@
 {
   "name": "kreuzberg-wasm-cloudflare-workers",
   "description": "Cloudflare Workers WASM example with Kreuzberg document intelligence",
-  "version": "4.2.4",
+  "version": "4.2.5",
   "type": "module",
   "private": true,
   "scripts": {

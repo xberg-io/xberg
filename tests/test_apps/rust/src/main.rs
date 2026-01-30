@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_lines)]
 #![warn(missing_docs)]
 
-//! Comprehensive test suite for Kreuzberg 4.2.4 Rust library.
+//! Comprehensive test suite for Kreuzberg 4.2.5 Rust library.
 //!
 //! Tests ALL exported functions and public types.
 //! Validates:
@@ -101,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut runner = TestRunner::new();
 
-    println!("\nVersion: kreuzberg 4.2.4");
+    println!("\nVersion: kreuzberg 4.2.5");
     println!("Edition: Rust 2024");
     println!("Test App: kreuzberg-test-app-rust");
 

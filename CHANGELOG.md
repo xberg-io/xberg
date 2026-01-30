@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.2.5] - 2026-01-30
+
+### Fixed
+
+#### Python Bindings
+- **Missing `OutputFormat`/`ResultFormat` exports**: Added `OutputFormat` and `ResultFormat` StrEnum classes to the Python package, fixing e2e test `ImportError` when importing from `kreuzberg`
+- **`.pyi` stub alignment**: Added missing `elements` field to `ExtractionResult`, `Element`/`ElementMetadata`/`BoundingBox`/`ElementType` type stubs, `hierarchy` field to `PageContent`, and `PageHierarchy`/`HierarchicalBlock` types
+- **Python 3.10 compatibility**: `StrEnum` backport for Python 3.10 (native `StrEnum` is 3.11+)
+
+#### PHP Bindings
+- **Config alignment with Rust core**: Updated `ImageExtractionConfig`, `PdfConfig`, `ImagePreprocessingConfig`, and `ExtractionConfig` to match Rust field names and defaults
+- **Removed phantom parameters**: Removed `extractTables`, `quality`, `grayscale`, `removeBackground`, `ocrFallback`, `startPage`, `endPage` and other non-existent config fields from tests
+- **Serialization test fixes**: Fixed default value assumptions (`useCache` defaults to `true`, `enableQualityProcessing` defaults to `true`)
+- **PHPStan compliance**: Fixed `array_filter` with always-true predicates on non-nullable types
+
+#### TypeScript/Node Bindings
+- **Missing `elements` field**: Added `JsElement`, `JsElementMetadata`, `JsBoundingBox` structs and `elements` field to `JsExtractionResult` in NAPI-RS bindings
+- **Serialization test fix**: Fixed `serialization.spec.ts` import path and changed from class instantiation to object literals (since `ExtractionConfig` is an interface)
+
+#### C# Bindings
+- **Enum serialization**: Use `JsonStringEnumMemberName` for .NET 9+ enum serialization
+- **Test exception alignment**: Aligned test exception types with Rust core behavior
+
+#### Elixir Bindings
+- **Windows CI fix**: Fixed test failure and cleaned up warnings
+- **E2e generator**: Added Elixir backend to e2e-generator
+
+#### Node Bindings
+- **Bun runtime support**: Added Bun runtime support
+
+### Changed
+
+#### CI/Build
+- **Benchmark artifact size**: Reduced benchmark CI artifact from ~1.5GB (entire `target/release`) to only essential files (harness binary + FFI shared lib)
+- **Benchmark harness**: Enhanced extraction scripts with OCR, cache, and server mode; improved statistical correctness and test coverage
+
+#### All Bindings
+- **PageContent parity**: Achieved PageContent field parity across all language bindings
+
+#### E2e
+- **Bytes signatures**: Fixed bytes signatures and batch names in e2e-generator
+
+---
+
 ## [4.2.4] - 2026-01-29
 
 ### Fixed
