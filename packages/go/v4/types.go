@@ -182,7 +182,7 @@ type PdfMetadata struct {
 
 // ExcelMetadata lists sheets inside spreadsheet documents.
 type ExcelMetadata struct {
-	SheetCount int      `json:"sheet_count"`
+	SheetCount uint64   `json:"sheet_count"`
 	SheetNames []string `json:"sheet_names"`
 }
 
@@ -199,11 +199,11 @@ type EmailMetadata struct {
 
 // ArchiveMetadata summarizes archive contents.
 type ArchiveMetadata struct {
-	Format         string   `json:"format"`
-	FileCount      int      `json:"file_count"`
-	FileList       []string `json:"file_list"`
-	TotalSize      int      `json:"total_size"`
-	CompressedSize *int     `json:"compressed_size,omitempty"`
+	Format         string    `json:"format"`
+	FileCount      uint64    `json:"file_count"`
+	FileList       []string  `json:"file_list"`
+	TotalSize      uint64    `json:"total_size"`
+	CompressedSize *uint64   `json:"compressed_size,omitempty"`
 }
 
 // ImageMetadata describes standalone image documents.
@@ -216,15 +216,15 @@ type ImageMetadata struct {
 
 // XMLMetadata provides statistics for XML documents.
 type XMLMetadata struct {
-	ElementCount   int      `json:"element_count"`
+	ElementCount   uint64   `json:"element_count"`
 	UniqueElements []string `json:"unique_elements"`
 }
 
 // TextMetadata contains counts for plain text and Markdown documents.
 type TextMetadata struct {
-	LineCount      int         `json:"line_count"`
-	WordCount      int         `json:"word_count"`
-	CharacterCount int         `json:"character_count"`
+	LineCount      uint64      `json:"line_count"`
+	WordCount      uint64      `json:"word_count"`
+	CharacterCount uint64      `json:"character_count"`
 	Headers        []string    `json:"headers,omitempty"`
 	Links          [][2]string `json:"links,omitempty"`
 	CodeBlocks     [][2]string `json:"code_blocks,omitempty"`
@@ -345,14 +345,14 @@ type OcrMetadata struct {
 type ImagePreprocessingMetadata struct {
 	OriginalDimensions [2]uint64     `json:"original_dimensions"`
 	OriginalDPI        [2]float64    `json:"original_dpi"`
-	TargetDPI          uint64        `json:"target_dpi"`
+	TargetDPI          int32         `json:"target_dpi"`
 	ScaleFactor        float64       `json:"scale_factor"`
 	AutoAdjusted       bool          `json:"auto_adjusted"`
-	FinalDPI           uint64        `json:"final_dpi"`
+	FinalDPI           int32         `json:"final_dpi"`
 	NewDimensions      *[2]uint64    `json:"new_dimensions,omitempty"`
 	ResampleMethod     string        `json:"resample_method"`
 	DimensionClamped   bool          `json:"dimension_clamped"`
-	CalculatedDPI      *uint64       `json:"calculated_dpi,omitempty"`
+	CalculatedDPI      *int32        `json:"calculated_dpi,omitempty"`
 	SkippedResize      bool          `json:"skipped_resize"`
 	ResizeError        *string       `json:"resize_error,omitempty"`
 }
@@ -490,6 +490,15 @@ type Element struct {
 	Metadata ElementMetadata `json:"metadata"`
 }
 
+// DjotAttributeEntry represents a single element identifier to attributes mapping.
+// Mirrors Rust's (String, Attributes) tuple in Vec<(String, Attributes)>.
+type DjotAttributeEntry struct {
+	// Name is the element identifier.
+	Name string `json:"name"`
+	// Attrs contains the element attributes.
+	Attrs Attributes `json:"attrs"`
+}
+
 // DjotContent represents a comprehensive Djot document structure with semantic preservation.
 // This type captures the full richness of Djot markup, including block-level structures,
 // inline formatting, attributes, links, images, footnotes, and math expressions.
@@ -498,8 +507,8 @@ type DjotContent struct {
 	PlainText string `json:"plain_text"`
 	// Blocks contains structured block-level content.
 	Blocks []FormattedBlock `json:"blocks"`
-	// Metadata contains metadata from YAML frontmatter.
-	Metadata *Metadata `json:"metadata,omitempty"`
+	// Metadata contains metadata from YAML frontmatter (required, non-optional).
+	Metadata Metadata `json:"metadata"`
 	// Tables contains extracted tables as structured data.
 	Tables []Table `json:"tables,omitempty"`
 	// Images contains extracted images with metadata.
@@ -508,8 +517,8 @@ type DjotContent struct {
 	Links []DjotLink `json:"links,omitempty"`
 	// Footnotes contains footnote definitions.
 	Footnotes []Footnote `json:"footnotes,omitempty"`
-	// Attributes maps elements by identifier (if present).
-	Attributes [][2]interface{} `json:"attributes,omitempty"`
+	// Attributes maps element identifiers to their attribute sets.
+	Attributes []DjotAttributeEntry `json:"attributes,omitempty"`
 }
 
 // FormattedBlock represents a block-level element in a Djot document.
@@ -517,8 +526,8 @@ type DjotContent struct {
 type FormattedBlock struct {
 	// BlockType is the type of block element.
 	BlockType BlockType `json:"block_type"`
-	// Level is the heading level (1-6) for headings, or nesting level for lists.
-	Level *uint `json:"level,omitempty"`
+	// Level is the heading level (1-6) for headings, or nesting level for lists (optional).
+	Level *uint64 `json:"level,omitempty"`
 	// InlineContent contains inline content within the block.
 	InlineContent []InlineElement `json:"inline_content"`
 	// Attributes contains element attributes (classes, IDs, key-value pairs).
