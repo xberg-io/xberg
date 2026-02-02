@@ -222,9 +222,9 @@ public final class E2EHelpers {
                     String.format("Expected languages %s to be in %s", expected, languages));
 
             if (minConfidence != null) {
-                Map<String, Object> metadata = result.getMetadata();
-                if (metadata != null && metadata.containsKey("confidence")) {
-                    Object confObj = metadata.get("confidence");
+                Map<String, Object> metadataMap = result.getMetadataMap();
+                if (metadataMap != null && metadataMap.containsKey("confidence")) {
+                    Object confObj = metadataMap.get("confidence");
                     double confidence = confObj instanceof Number
                             ? ((Number) confObj).doubleValue()
                             : 0.0;
@@ -239,7 +239,7 @@ public final class E2EHelpers {
                 String path,
                 Map<String, Object> expectation
         ) {
-            Map<String, Object> metadata = result.getMetadata();
+            Map<String, Object> metadata = result.getMetadataMap();
             Object value = fetchMetadataValue(metadata, path);
             assertNotNull(value, String.format("Metadata path '%s' missing", path));
 
@@ -442,7 +442,7 @@ public final class E2EHelpers {
             }
             if (elements != null && typesInclude != null && !typesInclude.isEmpty()) {
                 var types = elements.stream()
-                        .map(el -> el.getType())
+                        .map(el -> el.getElementType().name())
                         .filter(t -> t != null)
                         .toList();
                 for (String expected : typesInclude) {
