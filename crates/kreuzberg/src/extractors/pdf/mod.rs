@@ -375,6 +375,159 @@ mod tests {
         assert!(ocr::evaluate_native_text_for_ocr(sample, Some(2)).fallback);
     }
 
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_no_boundaries_falls_back_to_whole_doc() {
+        let text = "This document has enough meaningful words for evaluation purposes here.";
+        let decision = ocr::evaluate_per_page_ocr(text, None, Some(1));
+        assert!(!decision.fallback);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_empty_boundaries_falls_back_to_whole_doc() {
+        let text = "This document has enough meaningful words for evaluation purposes here.";
+        let decision = ocr::evaluate_per_page_ocr(text, Some(&[]), Some(1));
+        assert!(!decision.fallback);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_all_pages_good() {
+        use crate::types::PageBoundary;
+
+        let page1 = "This first page has plenty of meaningful searchable text content here.";
+        let page2 = "This second page also has plenty of meaningful searchable text content.";
+        let text = format!("{}{}", page1, page2);
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: page1.len(),
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: page1.len(),
+                byte_end: text.len(),
+                page_number: 2,
+            },
+        ];
+
+        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2));
+        assert!(!decision.fallback);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_one_bad_page_triggers_fallback() {
+        use crate::types::PageBoundary;
+
+        let good_page = "This page has plenty of meaningful searchable text content for extraction.";
+        let bad_page = " . ; ";
+        let text = format!("{}{}", good_page, bad_page);
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: good_page.len(),
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: good_page.len(),
+                byte_end: text.len(),
+                page_number: 2,
+            },
+        ];
+
+        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2));
+        assert!(decision.fallback);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_empty_page_triggers_fallback() {
+        use crate::types::PageBoundary;
+
+        let good_page = "This page has plenty of meaningful searchable text content for extraction.";
+        let empty_page = "";
+        let text = format!("{}{}", good_page, empty_page);
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: good_page.len(),
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: good_page.len(),
+                byte_end: text.len(),
+                page_number: 2,
+            },
+        ];
+
+        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2));
+        assert!(decision.fallback);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_preserves_document_stats_on_fallback() {
+        use crate::types::PageBoundary;
+
+        let good_page = "This page has plenty of meaningful searchable text content for extraction.";
+        let bad_page = " . ; ";
+        let text = format!("{}{}", good_page, bad_page);
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: good_page.len(),
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: good_page.len(),
+                byte_end: text.len(),
+                page_number: 2,
+            },
+        ];
+
+        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2));
+        assert!(decision.fallback);
+        assert!(decision.stats.non_whitespace > 0);
+        assert!(decision.stats.meaningful_words > 0);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_invalid_boundaries_skipped() {
+        use crate::types::PageBoundary;
+
+        let text = "This page has plenty of meaningful searchable text content for extraction.";
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: text.len(),
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: 999,
+                byte_end: 9999,
+                page_number: 2,
+            },
+        ];
+
+        let decision = ocr::evaluate_per_page_ocr(text, Some(&boundaries), Some(1));
+        assert!(!decision.fallback);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[test]
+    fn test_per_page_ocr_multi_page_correct_page_count() {
+        let text = "ab cd ef";
+        let decision_wrong = ocr::evaluate_native_text_for_ocr(text, None);
+        let decision_correct = ocr::evaluate_native_text_for_ocr(text, Some(20));
+        assert!(
+            decision_correct.avg_non_whitespace < decision_wrong.avg_non_whitespace,
+            "Correct page count should produce lower per-page averages"
+        );
+    }
+
     #[tokio::test]
     #[cfg(feature = "pdf")]
     async fn test_pdf_batch_mode_validates_page_config_enabled() {
