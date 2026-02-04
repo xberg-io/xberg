@@ -317,6 +317,7 @@ jobs:
     outputs:
       kreuzberg_exists: ${{ steps.check.outputs.kreuzberg_exists }}
       tesseract_exists: ${{ steps.check.outputs.tesseract_exists }}
+      paddle_exists: ${{ steps.check.outputs.paddle_exists }}
       cli_exists: ${{ steps.check.outputs.cli_exists }}
       exists: ${{ steps.check.outputs.all_exist }}
     steps:
@@ -2072,6 +2073,16 @@ jobs:
       - name: Wait for tesseract indexing
         if: ${{ steps.crate_check.outputs.tesseract_exists != 'true' && needs.prepare.outputs.dry_run != 'true' }}
         run: scripts/publish/wait-for-package.sh cratesio "kreuzberg-tesseract" "${{ needs.prepare.outputs.version }}" 10
+
+      - name: Publish kreuzberg-paddle-ocr
+        if: ${{ steps.crate_check.outputs.paddle_exists != 'true' && needs.prepare.outputs.dry_run != 'true' }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.oidc.outputs.token }}
+        run: scripts/publish/publish-cargo-crate.sh kreuzberg-paddle-ocr
+
+      - name: Wait for paddle-ocr indexing
+        if: ${{ steps.crate_check.outputs.paddle_exists != 'true' && needs.prepare.outputs.dry_run != 'true' }}
+        run: scripts/publish/wait-for-package.sh cratesio "kreuzberg-paddle-ocr" "${{ needs.prepare.outputs.version }}" 10
 
       - name: Publish kreuzberg
         if: ${{ steps.crate_check.outputs.core_exists != 'true' && needs.prepare.outputs.dry_run != 'true' }}

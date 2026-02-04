@@ -5,6 +5,7 @@ members = [
     "crates/kreuzberg-php",
     "crates/kreuzberg-ffi",
     "crates/kreuzberg-tesseract",
+    "crates/kreuzberg-paddle-ocr",
     "crates/kreuzberg-cli",
     "crates/kreuzberg-node",
     "crates/kreuzberg-wasm",
@@ -20,6 +21,7 @@ resolver = "2"
 [patch.crates-io]
 kreuzberg = { path = "crates/kreuzberg" }
 kreuzberg-tesseract = { path = "crates/kreuzberg-tesseract" }
+kreuzberg-paddle-ocr = { path = "crates/kreuzberg-paddle-ocr" }
 
 [workspace.package]
 version = "4.2.15"

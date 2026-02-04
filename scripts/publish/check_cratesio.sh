@@ -23,6 +23,7 @@ version = os.environ["VERSION"]
 crates = [
     ("kreuzberg", "kreuzberg_exists"),
     ("kreuzberg-tesseract", "tesseract_exists"),
+    ("kreuzberg-paddle-ocr", "paddle_exists"),
     ("kreuzberg-cli", "cli_exists"),
 ]
 

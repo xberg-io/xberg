@@ -81,15 +81,16 @@ impl PaddleOcrBackend {
     /// Uses `tokio::task::spawn_blocking` to run the CPU-intensive OCR operation
     /// without blocking the async runtime.
     async fn do_ocr(&self, image_bytes: &[u8], _language: &str) -> Result<String> {
-        // Ensure models are loaded
-        let models = self.get_or_init_models()?;
-
-        if models.is_none() {
-            return Err(crate::KreuzbergError::Ocr {
-                message: "Failed to initialize PaddleOCR models".to_string(),
-                source: None,
-            });
-        }
+        // Ensure models are loaded - drop the guard before await
+        {
+            let models = self.get_or_init_models()?;
+            if models.is_none() {
+                return Err(crate::KreuzbergError::Ocr {
+                    message: "Failed to initialize PaddleOCR models".to_string(),
+                    source: None,
+                });
+            }
+        } // MutexGuard dropped here
 
         let image_bytes_owned = image_bytes.to_vec();
 
@@ -119,7 +120,7 @@ impl PaddleOcrBackend {
     /// 1. Decode image bytes to RGB8 using the `image` crate
     /// 2. Call the OcrLite engine to perform text detection and recognition
     /// 3. Format results into a single text string
-    fn perform_ocr(image_bytes: &[u8]) -> Result<String> {
+    fn perform_ocr(_image_bytes: &[u8]) -> Result<String> {
         // TODO: Implement when paddle-ocr-rs is available
         // 1. Decode image:
         //    let img = image::load_from_memory(image_bytes)
@@ -190,8 +191,8 @@ impl OcrBackend for PaddleOcrBackend {
         let metadata = Metadata {
             format: Some(FormatMetadata::Ocr(OcrMetadata {
                 language: config.language.clone(),
-                psm: None,
-                output_format: None,
+                psm: 3, // PSM_AUTO (default)
+                output_format: "text".to_string(),
                 table_count: 0,
                 table_rows: None,
                 table_cols: None,
@@ -216,11 +217,7 @@ impl OcrBackend for PaddleOcrBackend {
 
     async fn process_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
         // Read file and delegate to process_image
-        let bytes = tokio::fs::read(path).await.map_err(|e| crate::KreuzbergError::Io {
-            message: format!("Failed to read image file: {}", e),
-            path: Some(path.to_path_buf()),
-            source: Some(Box::new(e)),
-        })?;
+        let bytes = tokio::fs::read(path).await?;
 
         self.process_image(&bytes, config).await
     }
@@ -314,8 +311,8 @@ mod tests {
 
         assert_eq!(backend.name(), "paddle-ocr", "Name should be 'paddle-ocr'");
         assert!(!backend.version().is_empty(), "Version should not be empty");
-        assert_eq!(backend.initialize(), Ok(()), "Initialize should succeed");
-        assert_eq!(backend.shutdown(), Ok(()), "Shutdown should succeed");
+        assert!(backend.initialize().is_ok(), "Initialize should succeed");
+        assert!(backend.shutdown().is_ok(), "Shutdown should succeed");
     }
 
     #[test]

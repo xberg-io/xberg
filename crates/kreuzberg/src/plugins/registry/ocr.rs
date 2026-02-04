@@ -34,12 +34,12 @@ impl OcrBackendRegistry {
     /// Logs warnings if backend initialization fails (common in containerized environments
     /// with missing dependencies or permission issues).
     pub fn new() -> Self {
-        #[cfg(feature = "ocr")]
+        #[cfg(any(feature = "ocr", feature = "paddle-ocr"))]
         let mut registry = Self {
             backends: HashMap::new(),
         };
 
-        #[cfg(not(feature = "ocr"))]
+        #[cfg(not(any(feature = "ocr", feature = "paddle-ocr")))]
         let registry = Self {
             backends: HashMap::new(),
         };
@@ -73,7 +73,7 @@ impl OcrBackendRegistry {
 
         #[cfg(feature = "paddle-ocr")]
         {
-            use crate::ocr::paddle::PaddleOcrBackend;
+            use crate::paddle_ocr::PaddleOcrBackend;
             match PaddleOcrBackend::new() {
                 Ok(backend) => {
                     if let Err(e) = registry.register(Arc::new(backend)) {

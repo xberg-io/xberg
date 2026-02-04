@@ -1,0 +1,41 @@
+[package]
+name = "kreuzberg-paddle-ocr"
+version.workspace = true
+edition = "2024"
+rust-version.workspace = true
+authors.workspace = true
+description = "PaddleOCR via ONNX Runtime for Kreuzberg - high-performance text recognition"
+license.workspace = true
+repository.workspace = true
+homepage = "https://kreuzberg.dev"
+documentation = "https://docs.rs/kreuzberg-paddle-ocr"
+readme = "README.md"
+keywords = ["paddle", "ocr", "onnx", "recognition", "detection"]
+categories = ["computer-vision", "text-processing"]
+exclude = ["tests/*", ".github/*"]
+
+[lib]
+name = "kreuzberg_paddle_ocr"
+crate-type = ["lib"]
+
+[dependencies]
+# Workspace dependencies
+serde_json = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+image = { workspace = true }
+
+# Crate-specific dependencies (not in workspace)
+imageproc = "0.25"
+ndarray = "0.17"
+ort = { version = "2.0.0-rc.10", default-features = false, features = ["ndarray"] }
+geo-types = "0.7"
+geo-clipper = "0.9"
+
+[features]
+default = ["load-dynamic"]
+load-dynamic = ["ort/load-dynamic"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

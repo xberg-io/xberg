@@ -99,6 +99,45 @@ DOCX XML parser vendored into `crates/kreuzberg/src/extraction/docx/parser.rs`:
 
 ---
 
+## paddle-ocr-rs
+
+Vendored source code from the paddle-ocr-rs crate for PaddleOCR via ONNX Runtime integration:
+
+- **Source**: https://github.com/mg-chao/paddle-ocr-rs
+- **Original License**: Apache-2.0
+- **Author**: mg-chao (chao@mgchao.top)
+- **Vendored Version**: 0.6.1
+- **Location**: `crates/kreuzberg-paddle-ocr/`
+- **Purpose**: Text detection and recognition using PaddlePaddle's OCR models via ONNX Runtime
+
+### Vendored Files
+
+The following source files were vendored from paddle-ocr-rs:
+
+- `ocr_lite.rs` - Core OCR pipeline and high-level API
+- `db_net.rs` - DBNet text detection network
+- `crnn_net.rs` - CRNN text recognition network
+- `angle_net.rs` - Text angle detection network
+- `base_net.rs` - Base network trait
+- `ocr_utils.rs` - Image preprocessing utilities
+- `ocr_result.rs` - Result type definitions
+- `scale_param.rs` - Scaling parameter calculations
+- `ocr_error.rs` - Error type definitions
+
+### Modifications
+
+The vendored code has been modified for Kreuzberg integration:
+
+- Updated to Rust 2024 edition
+- Aligned with Kreuzberg workspace dependencies
+- License changed to MIT with dual copyright (original author retained)
+
+### License Compatibility
+
+The original Apache-2.0 license is compatible with MIT relicensing. The original copyright and attribution are preserved in the vendored crate's LICENSE file.
+
+---
+
 **Last Updated**: February 6, 2026
 **Pandoc Version Used**: 3.8.3
 **Baseline Generation Date**: December 6, 2025

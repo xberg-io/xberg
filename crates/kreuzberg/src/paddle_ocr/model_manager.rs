@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 use crate::error::KreuzbergError;
 
 /// Base URL for PaddleOCR model downloads.
+#[allow(dead_code)]
 const MODEL_BASE_URL: &str = "https://paddleocr.bj.bcebos.com/";
 
 /// Model definitions: (model_type, relative_path, sha256_checksum).
@@ -159,8 +160,7 @@ impl ModelManager {
     /// ```
     pub fn ensure_models_exist(&self) -> Result<ModelPaths, KreuzbergError> {
         // Create cache directory if it doesn't exist
-        fs::create_dir_all(&self.cache_dir)
-            .map_err(|e| KreuzbergError::Io(format!("Failed to create cache directory: {}", e)))?;
+        fs::create_dir_all(&self.cache_dir)?;
 
         let det_model = self.model_path("det");
         let cls_model = self.model_path("cls");
@@ -274,8 +274,7 @@ impl ModelManager {
     /// ```
     pub fn clear_cache(&self) -> Result<(), KreuzbergError> {
         if self.cache_dir.exists() {
-            fs::remove_dir_all(&self.cache_dir)
-                .map_err(|e| KreuzbergError::Io(format!("Failed to clear cache directory: {}", e)))?;
+            fs::remove_dir_all(&self.cache_dir)?;
             tracing::info!(?self.cache_dir, "Cache directory cleared");
         }
         Ok(())
@@ -306,10 +305,8 @@ impl ModelManager {
         let mut model_count = 0usize;
 
         if self.cache_dir.exists() {
-            for entry in fs::read_dir(&self.cache_dir)
-                .map_err(|e| KreuzbergError::Io(format!("Failed to read cache directory: {}", e)))?
-            {
-                let entry = entry.map_err(|e| KreuzbergError::Io(format!("Failed to read cache entry: {}", e)))?;
+            for entry in fs::read_dir(&self.cache_dir)? {
+                let entry = entry?;
 
                 let path = entry.path();
                 if path.is_dir() {

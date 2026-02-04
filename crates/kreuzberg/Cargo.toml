@@ -63,7 +63,7 @@ ocr = [
     "html",
 ]
 # PaddleOCR via ONNX Runtime (independent feature, NOT in 'full')
-paddle-ocr = ["dep:paddle-ocr-rs", "dep:sha2", "dep:image", "html", "tokio-runtime"]
+paddle-ocr = ["dep:kreuzberg-paddle-ocr", "dep:sha2", "dep:image", "html", "tokio-runtime"]
 language-detection = ["dep:whatlang"]
 chunking = ["dep:text-splitter"]
 embeddings = ["dep:fastembed", "dep:reqwest", "chunking", "tokio-runtime"]
@@ -246,8 +246,8 @@ image = { workspace = true, default-features = false, features = ["png"] }
 
 [target.'cfg(all(not(target_os = "windows"), not(target_arch = "wasm32")))'.dependencies]
 pprof = { version = "0.15.0", features = ["flamegraph"], optional = true }
-# PaddleOCR via ONNX Runtime - not available on WASM
-paddle-ocr-rs = { version = "0.6", optional = true }
+# PaddleOCR via ONNX Runtime - not available on WASM (vendored from paddle-ocr-rs)
+kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", optional = true }
 # Use rustls on non-Windows platforms (Linux, macOS)
 reqwest = { workspace = true, default-features = false, features = [
     "json",
@@ -263,8 +263,8 @@ ureq = { version = "3.2", default-features = false, features = ["rustls", "json"
 
 # Use native-tls on Windows to avoid aws-lc-sys CMake build issues with MinGW
 [target.'cfg(all(target_os = "windows", not(target_arch = "wasm32")))'.dependencies]
-# PaddleOCR via ONNX Runtime - not available on WASM
-paddle-ocr-rs = { version = "0.6", optional = true }
+# PaddleOCR via ONNX Runtime - not available on WASM (vendored from paddle-ocr-rs)
+kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", optional = true }
 reqwest = { workspace = true, default-features = false, features = [
     "json",
     "native-tls",

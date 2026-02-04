@@ -32,6 +32,7 @@ allow = [
     "MPL-2.0",
     "BSL-1.0",
     "OpenSSL",
+    "NCSA",
 ]
 confidence-threshold = 0.8
 exceptions = []
