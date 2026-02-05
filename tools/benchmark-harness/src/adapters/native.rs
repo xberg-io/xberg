@@ -287,33 +287,54 @@ impl FrameworkAdapter for NativeAdapter {
             return Ok(failure_results);
         }
 
-        // Create one result per file instead of a single aggregated result
-        // Since batch processing doesn't give us per-file timing, we use average duration
+        // Get the actual extraction results with per-file timing from metadata
+        let extraction_results = batch_result.unwrap();
+
+        // Fallback duration if metadata doesn't have timing (shouldn't happen with new code)
         let num_files = file_paths.len() as f64;
         let avg_duration_per_file = Duration::from_secs_f64(total_duration.as_secs_f64() / num_files.max(1.0));
 
+        // Create one result per file using actual per-file timing from extraction metadata
         let results: Vec<BenchmarkResult> = file_paths
             .iter()
-            .map(|file_path| {
+            .zip(extraction_results.iter())
+            .map(|(file_path, extraction_result)| {
                 let file_size = std::fs::metadata(file_path).map(|m| m.len()).unwrap_or(0);
 
-                let file_throughput = if avg_duration_per_file > Duration::from_secs(0) {
-                    file_size as f64 / avg_duration_per_file.as_secs_f64()
+                // Read per-file extraction timing from metadata, fallback to average
+                let extraction_duration = extraction_result
+                    .metadata
+                    .extraction_duration_ms
+                    .map(Duration::from_millis)
+                    .unwrap_or(avg_duration_per_file);
+
+                let file_throughput = if extraction_duration > Duration::from_secs(0) {
+                    file_size as f64 / extraction_duration.as_secs_f64()
                 } else {
                     0.0
                 };
 
                 let file_extension = file_path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string();
 
+                // Check if this specific extraction had an error
+                let (success, error_message) = if extraction_result.metadata.error.is_some() {
+                    (
+                        false,
+                        extraction_result.metadata.error.as_ref().map(|e| e.message.clone()),
+                    )
+                } else {
+                    (true, None)
+                };
+
                 BenchmarkResult {
                     framework: self.name().to_string(),
                     file_path: file_path.to_path_buf(),
                     file_size,
-                    success: true,
-                    error_message: None,
-                    duration: avg_duration_per_file,
-                    extraction_duration: Some(avg_duration_per_file), // For native, extraction = total
-                    subprocess_overhead: Some(Duration::ZERO),        // No subprocess for native Rust
+                    success,
+                    error_message,
+                    duration: extraction_duration,
+                    extraction_duration: Some(extraction_duration),
+                    subprocess_overhead: Some(Duration::ZERO), // No subprocess for native Rust
                     metrics: PerformanceMetrics {
                         peak_memory_bytes: resource_stats.peak_memory_bytes,
                         avg_cpu_percent: resource_stats.avg_cpu_percent,
@@ -330,7 +351,7 @@ impl FrameworkAdapter for NativeAdapter {
                     framework_capabilities: FrameworkCapabilities::default(),
                     pdf_metadata: None,
                     ocr_status: self.get_ocr_status(),
-                    extracted_text: None,
+                    extracted_text: Some(extraction_result.content.clone()),
                 }
             })
             .collect();

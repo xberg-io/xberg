@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::time::Duration;
 
 /// Validate a benchmark result for invalid states
 ///
@@ -20,14 +19,8 @@ use std::time::Duration;
 /// # Returns
 /// * `Ok(())` if valid, `Err` with description if invalid
 pub fn validate_result(result: &BenchmarkResult) -> Result<()> {
-    // Check for invalid state: success=true with zero duration
-    if result.success && result.duration == Duration::from_secs(0) {
-        return Err(Error::Benchmark(format!(
-            "Invalid result state for {}/{}: success=true but duration=0",
-            result.framework,
-            result.file_path.display()
-        )));
-    }
+    // Note: duration=0 is valid for sub-millisecond extractions (e.g., simple JSON files).
+    // We only record millisecond precision, so very fast extractions show as 0ms.
 
     // Check for invalid state: success=true with error message
     if result.success && result.error_message.is_some() {

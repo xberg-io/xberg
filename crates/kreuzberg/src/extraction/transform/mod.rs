@@ -253,6 +253,7 @@ mod tests {
             image_preprocessing: None,
             json_schema: None,
             error: None,
+            extraction_duration_ms: None,
             additional: Default::default(),
         }
     }

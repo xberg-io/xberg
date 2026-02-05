@@ -9,6 +9,7 @@ use crate::{KreuzbergError, Result};
 use std::borrow::Cow;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 
 use super::bytes::extract_bytes;
 use super::file::extract_file;
@@ -82,10 +83,18 @@ pub async fn batch_extract_file(
 
         tasks.spawn(async move {
             let _permit = semaphore_clone.acquire().await.unwrap();
-            let result =
+            let start = Instant::now();
+            let mut result =
                 crate::core::batch_mode::with_batch_mode(async { extract_file(&path_buf, None, &config_clone).await })
                     .await;
-            (index, result)
+            let elapsed_ms = start.elapsed().as_millis() as u64;
+
+            // Add extraction timing to result metadata for benchmarking
+            if let Ok(ref mut r) = result {
+                r.metadata.extraction_duration_ms = Some(elapsed_ms);
+            }
+
+            (index, result, elapsed_ms)
         });
     }
 
@@ -93,10 +102,11 @@ pub async fn batch_extract_file(
 
     while let Some(task_result) = tasks.join_next().await {
         match task_result {
-            Ok((index, Ok(result))) => {
+            Ok((index, Ok(result), _elapsed_ms)) => {
+                // Timing already added to result.metadata.extraction_duration_ms
                 results[index] = Some(result);
             }
-            Ok((index, Err(e))) => {
+            Ok((index, Err(e), elapsed_ms)) => {
                 // All errors (including Io) should create error results
                 // instead of causing early return that abandons running tasks
                 let metadata = Metadata {
@@ -104,6 +114,7 @@ pub async fn batch_extract_file(
                         error_type: format!("{:?}", e),
                         message: e.to_string(),
                     }),
+                    extraction_duration_ms: Some(elapsed_ms),
                     ..Default::default()
                 };
 
@@ -196,11 +207,19 @@ pub async fn batch_extract_bytes(
 
         tasks.spawn(async move {
             let _permit = semaphore_clone.acquire().await.unwrap();
-            let result = crate::core::batch_mode::with_batch_mode(async {
+            let start = Instant::now();
+            let mut result = crate::core::batch_mode::with_batch_mode(async {
                 extract_bytes(&bytes, &mime_type, &config_clone).await
             })
             .await;
-            (index, result)
+            let elapsed_ms = start.elapsed().as_millis() as u64;
+
+            // Add extraction timing to result metadata for benchmarking
+            if let Ok(ref mut r) = result {
+                r.metadata.extraction_duration_ms = Some(elapsed_ms);
+            }
+
+            (index, result, elapsed_ms)
         });
     }
 
@@ -208,10 +227,11 @@ pub async fn batch_extract_bytes(
 
     while let Some(task_result) = tasks.join_next().await {
         match task_result {
-            Ok((index, Ok(result))) => {
+            Ok((index, Ok(result), _elapsed_ms)) => {
+                // Timing already added to result.metadata.extraction_duration_ms
                 results[index] = Some(result);
             }
-            Ok((index, Err(e))) => {
+            Ok((index, Err(e), elapsed_ms)) => {
                 // All errors (including Io) should create error results
                 // instead of causing early return that abandons running tasks
                 let metadata = Metadata {
@@ -219,6 +239,7 @@ pub async fn batch_extract_bytes(
                         error_type: format!("{:?}", e),
                         message: e.to_string(),
                     }),
+                    extraction_duration_ms: Some(elapsed_ms),
                     ..Default::default()
                 };
 

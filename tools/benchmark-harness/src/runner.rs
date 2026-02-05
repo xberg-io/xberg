@@ -185,13 +185,38 @@ pub struct BenchmarkRunner {
 impl BenchmarkRunner {
     /// Create a new benchmark runner
     pub fn new(config: BenchmarkConfig, registry: AdapterRegistry) -> Self {
-        // Try to load framework sizes, fall back to empty if not found
-        let framework_sizes =
-            crate::config::load_framework_sizes(Path::new("tools/benchmark-harness/config/framework_sizes.json"))
-                .unwrap_or_else(|e| {
-                    eprintln!("Warning: Failed to load framework sizes: {}", e);
-                    HashMap::new()
-                });
+        // Measure actual framework sizes instead of loading from static config
+        // This ensures accurate disk size reporting in benchmark results
+        let framework_sizes = match crate::sizes::measure_framework_sizes() {
+            Ok(sizes) => {
+                if !sizes.is_empty() {
+                    eprintln!("Measured disk sizes for {} frameworks", sizes.len());
+                }
+                // Convert FrameworkSize to DiskSizeInfo (drop deprecated `estimated` field)
+                sizes
+                    .into_iter()
+                    .map(|(name, fs)| {
+                        (
+                            name,
+                            DiskSizeInfo {
+                                size_bytes: fs.size_bytes,
+                                method: fs.method,
+                                description: fs.description,
+                            },
+                        )
+                    })
+                    .collect()
+            }
+            Err(e) => {
+                eprintln!("Warning: Failed to measure framework sizes: {}", e);
+                // Fall back to static config if measurement fails entirely
+                crate::config::load_framework_sizes(Path::new("tools/benchmark-harness/config/framework_sizes.json"))
+                    .unwrap_or_else(|e2| {
+                        eprintln!("Warning: Also failed to load static framework sizes: {}", e2);
+                        HashMap::new()
+                    })
+            }
+        };
 
         Self {
             config,

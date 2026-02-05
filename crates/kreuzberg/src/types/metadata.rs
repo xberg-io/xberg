@@ -132,6 +132,13 @@ pub struct Metadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<ErrorMetadata>,
 
+    /// Extraction duration in milliseconds (for benchmarking).
+    ///
+    /// This field is populated by batch extraction to provide per-file timing
+    /// information. It's `None` for single-file extraction (which uses external timing).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extraction_duration_ms: Option<u64>,
+
     /// Additional custom fields from postprocessors.
     ///
     /// This flattened map allows Python/TypeScript postprocessors to add
