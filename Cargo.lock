@@ -3128,7 +3128,7 @@ dependencies = [
  "fastembed",
  "fb2",
  "filetime",
- "getrandom 0.3.4",
+ "getrandom 0.4.1",
  "hex",
  "html-to-markdown-rs",
  "image",

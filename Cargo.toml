@@ -78,7 +78,7 @@ lzma-rust2 = { version = "0.15.7" }
 
 # Fix for WASM builds: ensure getrandom has wasm_js feature enabled
 # This is needed because ring/rustls depend on getrandom without the wasm_js feature
-getrandom = { version = "0.3.4", features = ["wasm_js"] }
+getrandom = { version = "0.4.1", features = ["wasm_js"] }
 
 [profile.release]
 lto = "thin"
