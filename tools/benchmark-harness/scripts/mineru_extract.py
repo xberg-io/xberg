@@ -1,7 +1,7 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "mineru>=2.6.7",
+#     "mineru[pipeline]>=2.6.7",
 #     "onnxruntime",
 # ]
 # ///
@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import os
 
-# Force CPU-only ONNX runtime to avoid GPU discovery errors in CI
+# Force CPU-only mode to avoid GPU discovery errors in CI
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+os.environ.setdefault("ONNXRUNTIME_PROVIDERS", "CPUExecutionProvider")
+os.environ.setdefault("MINERU_DEVICE_MODE", "cpu")
 
 import json
 import subprocess
@@ -42,7 +44,7 @@ except ImportError:
 
 def _extract_via_cli(file_path: str, ocr_enabled: bool) -> str:
     """Extract using MinerU CLI (fallback)."""
-    cmd = ["mineru", "-p", file_path]
+    cmd = ["mineru", "-p", file_path, "-b", "pipeline", "-d", "cpu"]
     if not ocr_enabled:
         cmd.extend(["--method", "txt"])
 
@@ -57,14 +59,16 @@ def _extract_via_cli(file_path: str, ocr_enabled: bool) -> str:
             check=False,
         )
 
+        # Check for output files first — ONNX Runtime may emit warnings to
+        # stderr even when extraction succeeds.
+        md_files = list(output_dir.rglob("*.md"))
+        if md_files:
+            return md_files[0].read_text(encoding="utf-8")
+
         if result.returncode != 0:
             raise RuntimeError(f"MinerU extraction failed: {result.stderr}")
 
-        md_files = list(output_dir.rglob("*.md"))
-        if not md_files:
-            raise RuntimeError("No markdown output found from MinerU")
-
-        return md_files[0].read_text(encoding="utf-8")
+        raise RuntimeError("No markdown output found from MinerU")
 
 
 def _extract_via_api(file_path: str, ocr_enabled: bool) -> str:

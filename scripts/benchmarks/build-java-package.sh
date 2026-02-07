@@ -18,3 +18,18 @@ mvn -q -B -U package \
   -Dcheckstyle.skip=true \
   -Dpmd.skip=true \
   -Djacoco.skip=true
+
+# Copy runtime dependencies (e.g. Jackson) to target/dependency/ for benchmark classpath
+mvn -q -B dependency:copy-dependencies \
+  -DincludeScope=runtime \
+  -DoutputDirectory=target/dependency
+
+# Compile the benchmark wrapper class into target/classes
+BENCH_SCRIPT="$REPO_ROOT/tools/benchmark-harness/scripts/KreuzbergExtractJava.java"
+if [ -f "$BENCH_SCRIPT" ]; then
+  CP="target/classes"
+  for jar in target/dependency/*.jar; do
+    [ -f "$jar" ] && CP="$CP:$jar"
+  done
+  javac -cp "$CP" -d target/classes "$BENCH_SCRIPT"
+fi

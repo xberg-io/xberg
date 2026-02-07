@@ -58,7 +58,7 @@ defmodule KreuzbergExtract do
     start_wall = DateTime.utc_now()
     debug_log("Timing start (monotonic): #{start_time}, wall: #{DateTime.to_iso8601(start_wall)}")
 
-    result = Kreuzberg.extract_file(file_path, config)
+    result = Kreuzberg.extract_file(file_path, nil, config)
 
     end_time = System.monotonic_time(:millisecond)
     end_wall = DateTime.utc_now()
@@ -111,7 +111,7 @@ defmodule KreuzbergExtract do
     start_wall = DateTime.utc_now()
     debug_log("Timing start (monotonic): #{start_time}, wall: #{DateTime.to_iso8601(start_wall)}")
 
-    result = Kreuzberg.batch_extract_files(file_paths, config)
+    result = Kreuzberg.batch_extract_files(file_paths, nil, config)
 
     end_time = System.monotonic_time(:millisecond)
     end_wall = DateTime.utc_now()
@@ -163,7 +163,7 @@ defmodule KreuzbergExtract do
   def run_server(config \\ %{}) do
     debug_log("=== SERVER MODE START ===")
 
-    IO.stream(:stdin, :line)
+    IO.stream(:stdio, :line)
     |> Stream.map(&String.trim/1)
     |> Stream.reject(&(&1 == ""))
     |> Stream.each(fn file_path ->

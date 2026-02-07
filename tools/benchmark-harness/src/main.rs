@@ -299,6 +299,21 @@ async fn main() -> Result<()> {
                 kreuzberg_count, total_requested
             );
 
+            // Track which requested frameworks failed to initialize
+            let mut failed_frameworks = Vec::new();
+            for name in &frameworks {
+                if !registry.contains(name) {
+                    failed_frameworks.push(name.clone());
+                }
+            }
+            if !failed_frameworks.is_empty() {
+                eprintln!(
+                    "[adapter] WARNING: {} requested kreuzberg framework(s) failed to initialize: {}",
+                    failed_frameworks.len(),
+                    failed_frameworks.join(", ")
+                );
+            }
+
             use benchmark_harness::adapters::{
                 create_docling_adapter, create_markitdown_adapter, create_mineru_adapter, create_pandoc_adapter,
                 create_pdfplumber_adapter, create_pymupdf4llm_adapter, create_tika_adapter,
@@ -400,6 +415,22 @@ async fn main() -> Result<()> {
             let by_ext_file = output.join("by-extension.json");
             write_by_extension_analysis(&results, &by_ext_file)?;
             println!("Per-extension analysis written to: {}", by_ext_file.display());
+
+            // Fail if any requested frameworks failed to initialize
+            if !failed_frameworks.is_empty() {
+                return Err(benchmark_harness::Error::Benchmark(format!(
+                    "Requested framework(s) failed to initialize: {}",
+                    failed_frameworks.join(", ")
+                )));
+            }
+
+            // Fail if no extractions succeeded (binding compile/link/runtime failure)
+            if !results.is_empty() && success_count == 0 {
+                return Err(benchmark_harness::Error::Benchmark(format!(
+                    "All {} extraction(s) failed. The framework likely failed to compile, link, or start.",
+                    results.len()
+                )));
+            }
 
             Ok(())
         }

@@ -1000,7 +1000,9 @@ impl FrameworkAdapter for SubprocessAdapter {
         }
         cmd.stdin(Stdio::piped());
         cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        // Inherit stderr so persistent process crash messages are visible in CI logs
+        // and the OS pipe buffer doesn't fill up causing broken pipe errors.
+        cmd.stderr(Stdio::inherit());
 
         let mut child = cmd
             .spawn()

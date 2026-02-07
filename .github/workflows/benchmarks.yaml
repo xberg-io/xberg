@@ -863,6 +863,7 @@ jobs:
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
+          KREUZBERG_BUILD: "1"
         run: scripts/benchmarks/run-benchmark.sh
 
       - name: Upload artifacts
@@ -1156,7 +1157,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libmagic-dev
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libmagic-dev poppler-utils libreoffice pandoc
 
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
@@ -1263,12 +1264,16 @@ jobs:
       - name: Restore benchmark binary permissions
         run: scripts/benchmarks/restore-binary-permissions.sh
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libjpeg-dev libpng-dev libtiff-dev
+
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
         with:
           python-version: "3.11"
           cache-prefix: benchmark-python
-
 
       - name: Run benchmark
         env:
@@ -1276,6 +1281,7 @@ jobs:
           MODE: ${{ matrix.mode }}
           ITERATIONS: ${{ env.ITERATIONS }}
           TIMEOUT: ${{ github.event.inputs.timeout }}
+          TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
         run: scripts/benchmarks/run-benchmark.sh
 
       - name: Upload artifacts

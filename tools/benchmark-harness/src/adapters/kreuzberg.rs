@@ -141,10 +141,12 @@ fn find_python() -> Result<(PathBuf, Vec<String>)> {
 }
 
 /// Helper to find Node/TypeScript interpreter (tsx)
+///
+/// Prefers `pnpm exec tsx` because it correctly resolves pnpm workspace-linked
+/// packages (e.g. `@kreuzberg/wasm`). Bun cannot resolve these workspace deps.
 fn find_node() -> Result<(PathBuf, Vec<String>)> {
-    // Prefer Bun for faster startup and better JS execution performance
-    if which::which("bun").is_ok() {
-        return Ok((PathBuf::from("bun"), vec!["run".to_string()]));
+    if which::which("pnpm").is_ok() {
+        return Ok((PathBuf::from("pnpm"), vec!["exec".to_string(), "tsx".to_string()]));
     }
 
     if which::which("tsx").is_ok() {
@@ -153,10 +155,6 @@ fn find_node() -> Result<(PathBuf, Vec<String>)> {
 
     if which::which("ts-node").is_ok() {
         return Ok((PathBuf::from("ts-node"), vec![]));
-    }
-
-    if which::which("pnpm").is_ok() {
-        return Ok((PathBuf::from("pnpm"), vec!["exec".to_string(), "tsx".to_string()]));
     }
 
     Err(crate::Error::Config(
@@ -225,6 +223,38 @@ fn find_go() -> Result<PathBuf> {
 /// Helper to find Java runtime
 fn find_java() -> Result<PathBuf> {
     which::which("java").map_err(|_| crate::Error::Config("Java runtime not found".to_string()))
+}
+
+/// Build Java classpath including compiled classes and dependency JARs.
+///
+/// Returns a colon-separated (Unix) or semicolon-separated (Windows) classpath string
+/// containing `target/classes` and all JARs in `target/dependency/`.
+fn build_java_classpath() -> Result<String> {
+    let root = workspace_root()?;
+    let classes_dir = root.join("packages/java/target/classes");
+    if !classes_dir.exists() {
+        return Err(crate::Error::Config(format!(
+            "Java classes not found at {} – run `task java:build:bindings` first",
+            classes_dir.display()
+        )));
+    }
+
+    let sep = if cfg!(target_os = "windows") { ";" } else { ":" };
+    let mut parts = vec![classes_dir.to_string_lossy().to_string()];
+
+    let dep_dir = root.join("packages/java/target/dependency");
+    if dep_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&dep_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|ext| ext == "jar") {
+                    parts.push(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+
+    Ok(parts.join(sep))
 }
 
 fn find_dotnet() -> Result<PathBuf> {
@@ -379,6 +409,42 @@ pub fn create_node_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter>
     ))
 }
 
+/// Get supported formats for Kreuzberg WASM bindings.
+///
+/// The WASM build uses the `wasm-target` feature which enables: pdf, html, xml, email,
+/// language-detection, chunking, quality. It does NOT include: excel, office, archives,
+/// ocr/images. Additionally, PDFium does not initialize in Node.js environments, so PDF
+/// extraction is excluded from benchmarks until browser-based benchmarking is supported.
+fn get_kreuzberg_wasm_supported_formats() -> Vec<String> {
+    vec![
+        // Text formats (always available, no feature gate)
+        "txt",
+        "md",
+        "markdown",
+        "commonmark",
+        // HTML (html feature)
+        "html",
+        "htm",
+        // XML (xml feature)
+        "xml",
+        // Data formats (always available)
+        "json",
+        "toml",
+        "csv",
+        "tsv",
+        "yaml",
+        "yml",
+        // Email (email feature)
+        "eml",
+        "msg",
+        // SVG (always available as text/xml)
+        "svg",
+    ]
+    .into_iter()
+    .map(|s| s.to_string())
+    .collect()
+}
+
 /// Create WASM adapter (persistent server mode)
 pub fn create_wasm_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let script_path = get_script_path("kreuzberg_extract_wasm.ts")?;
@@ -388,7 +454,7 @@ pub fn create_wasm_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     args.push(ocr_flag(ocr_enabled));
     args.push("server".to_string());
 
-    let supported_formats = get_kreuzberg_supported_formats();
+    let supported_formats = get_kreuzberg_wasm_supported_formats();
     Ok(SubprocessAdapter::with_persistent_mode(
         "kreuzberg-wasm",
         command,
@@ -407,7 +473,7 @@ pub fn create_wasm_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter>
     args.push(ocr_flag(ocr_enabled));
     args.push("batch".to_string());
 
-    let supported_formats = get_kreuzberg_supported_formats();
+    let supported_formats = get_kreuzberg_wasm_supported_formats();
     Ok(SubprocessAdapter::with_batch_support(
         "kreuzberg-wasm-batch",
         command,
@@ -477,6 +543,8 @@ pub fn create_go_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let command = find_go()?;
     let args = vec![
         "run".to_string(),
+        "-tags".to_string(),
+        "kreuzberg_dev".to_string(),
         "kreuzberg_extract_go.go".to_string(),
         ocr_flag(ocr_enabled),
         "server".to_string(),
@@ -501,6 +569,8 @@ pub fn create_go_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let command = find_go()?;
     let args = vec![
         "run".to_string(),
+        "-tags".to_string(),
+        "kreuzberg_dev".to_string(),
         "kreuzberg_extract_go.go".to_string(),
         ocr_flag(ocr_enabled),
         "batch".to_string(),
@@ -522,13 +592,7 @@ pub fn create_go_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
 pub fn create_java_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let _script_path = get_script_path("KreuzbergExtractJava.java")?;
     let command = find_java()?;
-    let classpath = workspace_root()?.join("packages/java/target/classes");
-    if !classpath.exists() {
-        return Err(crate::Error::Config(format!(
-            "Java classes not found at {} – run `mvn package` inside packages/java first",
-            classpath.display()
-        )));
-    }
+    let classpath = build_java_classpath()?;
     let lib_dir = native_library_dir()?;
     let lib_dir_str = lib_dir.to_string_lossy().to_string();
     let mut env = build_library_env()?;
@@ -537,7 +601,7 @@ pub fn create_java_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
         "--enable-native-access=ALL-UNNAMED".to_string(),
         format!("-Djava.library.path={}", lib_dir.display()),
         "--class-path".to_string(),
-        classpath.to_string_lossy().to_string(),
+        classpath,
         "KreuzbergExtractJava".to_string(),
         ocr_flag(ocr_enabled),
         "server".to_string(),
@@ -556,13 +620,7 @@ pub fn create_java_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
 pub fn create_java_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let _script_path = get_script_path("KreuzbergExtractJava.java")?;
     let command = find_java()?;
-    let classpath = workspace_root()?.join("packages/java/target/classes");
-    if !classpath.exists() {
-        return Err(crate::Error::Config(format!(
-            "Java classes not found at {} – run `mvn package` inside packages/java first",
-            classpath.display()
-        )));
-    }
+    let classpath = build_java_classpath()?;
     let lib_dir = native_library_dir()?;
     let lib_dir_str = lib_dir.to_string_lossy().to_string();
     let mut env = build_library_env()?;
@@ -571,7 +629,7 @@ pub fn create_java_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter>
         "--enable-native-access=ALL-UNNAMED".to_string(),
         format!("-Djava.library.path={}", lib_dir.display()),
         "--class-path".to_string(),
-        classpath.to_string_lossy().to_string(),
+        classpath,
         "KreuzbergExtractJava".to_string(),
         ocr_flag(ocr_enabled),
         "batch".to_string(),

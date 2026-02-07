@@ -29,6 +29,8 @@ if (!$autoloaded) {
     exit(1);
 }
 
+use Kreuzberg\Config\ExtractionConfig;
+use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Exceptions\KreuzbergException;
 
 define('DEBUG', getenv('KREUZBERG_BENCHMARK_DEBUG') === 'true');
@@ -47,7 +49,7 @@ function debug_log(string $message): void
 /**
  * Extract a single file synchronously
  */
-function extract_sync(string $filePath, array $config = []): array
+function extract_sync(string $filePath, ?ExtractionConfig $config = null): array
 {
     debug_log("=== SYNC EXTRACTION START ===");
     debug_log("Input: file_path={$filePath}");
@@ -60,7 +62,7 @@ function extract_sync(string $filePath, array $config = []): array
     debug_log("Timing start: {$start}");
 
     try {
-        $result = Kreuzberg\extract_file($filePath, $config);
+        $result = Kreuzberg\extract_file($filePath, null, $config);
     } catch (KreuzbergException $e) {
         debug_log("ERROR during sync extraction: " . get_class($e) . " - " . $e->getMessage());
         throw $e;
@@ -91,7 +93,7 @@ function extract_sync(string $filePath, array $config = []): array
 /**
  * Extract multiple files in batch
  */
-function extract_batch(array $filePaths, array $config = []): array
+function extract_batch(array $filePaths, ?ExtractionConfig $config = null): array
 {
     debug_log("=== BATCH EXTRACTION START ===");
     debug_log("Input: " . count($filePaths) . " files");
@@ -141,7 +143,7 @@ function extract_batch(array $filePaths, array $config = []): array
 /**
  * Server mode: read paths from stdin, write JSON to stdout
  */
-function run_server(array $config = []): void
+function run_server(?ExtractionConfig $config = null): void
 {
     debug_log("=== SERVER MODE START ===");
 
@@ -160,7 +162,7 @@ function run_server(array $config = []): void
 
         try {
             $start = microtime(true);
-            $result = Kreuzberg\extract_file($filePath, $config);
+            $result = Kreuzberg\extract_file($filePath, null, $config);
             $durationMs = (microtime(true) - $start) * 1000.0;
 
             $payload = [
@@ -218,12 +220,10 @@ function main(): void
 
     $mode = $args[0];
     $filePaths = array_slice($args, 1);
-    $config = [
-        'use_cache' => false,
-    ];
-    if ($ocrEnabled) {
-        $config['ocr'] = ['enabled' => true];
-    }
+    $config = new ExtractionConfig(
+        useCache: false,
+        ocr: $ocrEnabled ? new OcrConfig() : null,
+    );
 
     debug_log("Mode: {$mode}");
     debug_log("OCR enabled: " . ($ocrEnabled ? 'true' : 'false'));

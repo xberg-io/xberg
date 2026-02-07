@@ -3,6 +3,7 @@
 # dependencies = [
 #     "pymupdf4llm>=0.0.17",
 #     "pymupdf-layout>=0.0.1",
+#     "Pillow>=10.0.0",
 # ]
 # ///
 """PyMuPDF4LLM extraction wrapper for benchmark harness."""

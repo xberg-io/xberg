@@ -97,14 +97,14 @@ func getWorkingDir() string {
 	return pwd
 }
 
+func boolPtr(v bool) *bool { return &v }
+
 func createConfig(ocrEnabled bool) *kz.ExtractionConfig {
 	config := &kz.ExtractionConfig{
-		UseCache: false,
+		UseCache: boolPtr(false),
 	}
 	if ocrEnabled {
-		config.OCR = &kz.OcrConfig{
-			Enabled: true,
-		}
+		config.OCR = &kz.OCRConfig{}
 	}
 	return config
 }

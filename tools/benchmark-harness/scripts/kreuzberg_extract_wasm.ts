@@ -1,5 +1,6 @@
 #!/usr/bin/env tsx
 import * as readline from "readline";
+import * as path from "path";
 import { extractFile, initWasm, ExtractionConfig } from "@kreuzberg/wasm";
 
 interface ExtractionOutput {
@@ -7,6 +8,46 @@ interface ExtractionOutput {
 	metadata: Record<string, unknown>;
 	_extraction_time_ms: number;
 	_batch_total_ms?: number;
+}
+
+/** Map file extension to MIME type so we don't rely on byte-level detection. */
+const MIME_MAP: Record<string, string> = {
+	".txt": "text/plain",
+	".md": "text/markdown",
+	".markdown": "text/markdown",
+	".commonmark": "text/markdown",
+	".html": "text/html",
+	".htm": "text/html",
+	".xml": "application/xml",
+	".json": "application/json",
+	".yaml": "application/yaml",
+	".yml": "application/yaml",
+	".toml": "application/toml",
+	".csv": "text/csv",
+	".tsv": "text/tab-separated-values",
+	".eml": "message/rfc822",
+	".msg": "application/vnd.ms-outlook",
+	".svg": "image/svg+xml",
+	".pdf": "application/pdf",
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	".rtf": "application/rtf",
+	".epub": "application/epub+zip",
+	".rst": "text/x-rst",
+	".org": "text/x-org",
+	".bib": "application/x-bibtex",
+	".tex": "application/x-latex",
+	".latex": "application/x-latex",
+	".ipynb": "application/x-ipynb+json",
+	".typst": "application/x-typst",
+	".typ": "application/x-typst",
+	".djot": "text/djot",
+};
+
+function guessMimeType(filePath: string): string | null {
+	const ext = path.extname(filePath).toLowerCase();
+	return MIME_MAP[ext] ?? null;
 }
 
 function createConfig(ocrEnabled: boolean): ExtractionConfig {
@@ -18,8 +59,9 @@ function createConfig(ocrEnabled: boolean): ExtractionConfig {
 
 async function extractAsync(filePath: string, ocrEnabled: boolean): Promise<ExtractionOutput> {
 	const config = createConfig(ocrEnabled);
+	const mimeType = guessMimeType(filePath);
 	const start = performance.now();
-	const result = await extractFile(filePath, null, config);
+	const result = await extractFile(filePath, mimeType, config);
 	const durationMs = performance.now() - start;
 
 	return {
@@ -32,7 +74,9 @@ async function extractAsync(filePath: string, ocrEnabled: boolean): Promise<Extr
 async function extractBatch(filePaths: string[], ocrEnabled: boolean): Promise<ExtractionOutput[]> {
 	const config = createConfig(ocrEnabled);
 	const start = performance.now();
-	const results = await Promise.all(filePaths.map((path) => extractFile(path, null, config)));
+	const results = await Promise.all(
+		filePaths.map((fp) => extractFile(fp, guessMimeType(fp), config)),
+	);
 	const totalDurationMs = performance.now() - start;
 
 	const perFileDurationMs = filePaths.length > 0 ? totalDurationMs / filePaths.length : 0;

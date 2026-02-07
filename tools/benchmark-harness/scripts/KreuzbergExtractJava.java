@@ -14,7 +14,7 @@ public final class KreuzbergExtractJava {
 
     private KreuzbergExtractJava() { }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         boolean ocrEnabled = false;
         List<String> positionalArgs = new ArrayList<>();
 
@@ -221,6 +221,18 @@ public final class KreuzbergExtractJava {
         builder.append("\"date\":").append(optionalToJson(result.getDate())).append(',');
         builder.append("\"subject\":").append(optionalToJson(result.getSubject()));
         builder.append("},\"_extraction_time_ms\":").append(String.format("%.3f", elapsedMs));
+        builder.append('}');
+        return builder.toString();
+    }
+
+    private static String toJsonWithBatch(ExtractionResult result, double perFileMs, double batchTotalMs) {
+        StringBuilder builder = new StringBuilder();
+        builder.append('{');
+        builder.append("\"content\":").append(quote(result.getContent())).append(',');
+        builder.append("\"metadata\":{");
+        builder.append("\"mimeType\":").append(quote(result.getMimeType()));
+        builder.append("},\"_extraction_time_ms\":").append(String.format("%.3f", perFileMs));
+        builder.append(",\"_batch_total_ms\":").append(String.format("%.3f", batchTotalMs));
         builder.append('}');
         return builder.toString();
     }
