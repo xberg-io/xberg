@@ -48,7 +48,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ORT_VERSION: "1.23.2"
+  ORT_VERSION: "1.24.1"
 
 jobs:
   test-docker:

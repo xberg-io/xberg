@@ -65,7 +65,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### PDF Error Handling Regression
 - Reverted incorrect change from v4.2.14 that silently returned empty results for corrupted/malformed PDFs instead of propagating errors. Corrupted PDFs now correctly return `PdfError::InvalidPdf` and password-protected PDFs return `PdfError::PasswordRequired` as expected.
 
+#### PaddleOCR Model URLs
+- Fixed incorrect detection model filename in Docker and CI action (`en_PP-OCRv4_det_infer.onnx` → `ch_PP-OCRv4_det_infer.onnx`).
+
+#### Python Bindings
+- Fixed `OcrConfig` constructor silently ignoring `paddle_ocr_config` and `element_config` keyword arguments.
+
 ### Changed
+
+#### ONNX Runtime
+- Bumped ONNX Runtime from 1.23.2 to 1.24.1 across CI, Docker images, and documentation. Minimum supported ORT version is 1.23+.
 
 #### API Parity
 - Added `security_limits` field to all 9 language bindings (TypeScript, Go, Python, Ruby, PHP, Java, C#, WASM, Elixir) for API parity with Rust core `ExtractionConfig`.

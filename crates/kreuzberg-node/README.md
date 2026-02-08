@@ -95,7 +95,7 @@ yarn add @kreuzberg/node
 ### System Requirements
 
 - **Node.js 22+** required (NAPI-RS native bindings)
-- Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.22.x for embeddings support
+- Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.23+ for embeddings support
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 
 - Optional: [LibreOffice](https://www.libreoffice.org/download/download/) for legacy Office formats (DOC, XLS, PPT, RTF, ODT, ODS, ODP)

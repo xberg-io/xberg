@@ -14,7 +14,7 @@ vars:
   BUILD_PROFILE: '{{.BUILD_PROFILE | default "release"}}'
 
   PDFIUM_VERSION: "7578"
-  ORT_VERSION: "1.23.2"
+  ORT_VERSION: "1.24.1"
   GOLANGCI_LINT_VERSION: "2.8.0"
 
   ROOT: "{{.ROOT}}"

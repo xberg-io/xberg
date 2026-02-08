@@ -5,10 +5,10 @@ target="${1:?target required}"
 
 case "$target" in
 aarch64-apple-darwin)
-  ort_url="https://cdn.pyke.io/0/pyke:ort-rs/ms@1.23.2/aarch64-apple-darwin.tgz"
+  ort_url="https://cdn.pyke.io/0/pyke:ort-rs/ms@1.24.1/aarch64-apple-darwin.tgz"
   ;;
 x86_64-apple-darwin)
-  ort_url="https://cdn.pyke.io/0/pyke:ort-rs/ms@1.23.2/x86_64-apple-darwin.tgz"
+  ort_url="https://cdn.pyke.io/0/pyke:ort-rs/ms@1.24.1/x86_64-apple-darwin.tgz"
   ;;
 *)
   echo "setup-prebuilt-onnx does not support target $target" >&2
