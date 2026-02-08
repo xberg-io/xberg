@@ -1,0 +1,108 @@
+name: CI musl
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/ci-musl.yaml'
+      - '.cargo/config.toml'
+      - 'rust-toolchain.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/kreuzberg/**'
+      - 'crates/kreuzberg-tesseract/**'
+      - 'crates/kreuzberg-paddle-ocr/**'
+      - 'crates/kreuzberg-cli/**'
+      - 'crates/kreuzberg-node/**'
+      - 'scripts/publish/cli/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/actions/**'
+      - '.github/workflows/ci-musl.yaml'
+      - '.cargo/config.toml'
+      - 'rust-toolchain.toml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/kreuzberg/**'
+      - 'crates/kreuzberg-tesseract/**'
+      - 'crates/kreuzberg-paddle-ocr/**'
+      - 'crates/kreuzberg-cli/**'
+      - 'crates/kreuzberg-node/**'
+      - 'scripts/publish/cli/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-musl-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
+  RUST_BACKTRACE: short
+  RUST_MIN_STACK: 16777216
+  PDFIUM_VERSION: "7578"
+  ORT_VERSION: "1.24.1"
+  IS_CI: "true"
+
+jobs:
+  cli-musl:
+    name: CLI musl (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+          cache-key-prefix: ci-musl-cli-${{ matrix.target }}
+
+      - name: Add musl target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Install musl build dependencies
+        env:
+          CLI_TARGET: ${{ matrix.target }}
+        run: scripts/publish/cli/install-build-deps.sh
+
+      - name: Configure musl linker
+        env:
+          CLI_TARGET: ${{ matrix.target }}
+        run: scripts/publish/cli/configure-musl-linker.sh
+
+      - name: Build CLI
+        run: cargo build --release --target ${{ matrix.target }} --package kreuzberg-cli
+
+      - name: Smoke test - version
+        run: |
+          binary="target/${{ matrix.target }}/release/kreuzberg"
+          echo "Binary: $binary"
+          file "$binary"
+          "$binary" --version
+
+      - name: Smoke test - extract text file
+        run: |
+          echo "Hello from musl build" > /tmp/test.txt
+          target/${{ matrix.target }}/release/kreuzberg extract /tmp/test.txt
+
+      - name: Smoke test - Alpine container
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          docker run --rm \
+            -v "$PWD/target/${{ matrix.target }}/release/kreuzberg:/usr/local/bin/kreuzberg:ro" \
+            -v "/tmp/test.txt:/tmp/test.txt:ro" \
+            alpine:latest \
+            sh -c "kreuzberg --version && kreuzberg extract /tmp/test.txt"

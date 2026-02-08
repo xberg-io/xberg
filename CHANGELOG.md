@@ -31,6 +31,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### CI
 - **PaddleOCR CI integration**: Added PaddleOCR to the CI/publish pipelines with dedicated test jobs and model caching.
 
+#### musl Linux Support
+- **Re-enabled musl targets**: Added `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` targets for CLI binaries, Python wheels (musllinux), and Node.js native bindings. Resolves glibc 2.38+ requirement for prebuilt CLI binaries on older distros like Ubuntu 22.04 (#364).
+- **musl CI workflows**: Added dedicated `ci-musl.yaml` workflow for CLI musl build validation with Alpine container smoke tests, and musllinux Python wheel builds to `ci-python.yaml`.
+- **PDFium musl awareness**: Build script now downloads musl-specific PDFium binaries and uses correct C++ standard library (`libc++`) for musl targets.
+
 ### Removed
 
 #### Node.js Bindings

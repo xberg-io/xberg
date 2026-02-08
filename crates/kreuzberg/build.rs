@@ -267,7 +267,8 @@ fn get_pdfium_url_and_lib(target: &str) -> (String, String) {
         } else {
             "x64"
         };
-        ("linux", arch)
+        let platform = if target.contains("musl") { "linux-musl" } else { "linux" };
+        (platform, arch)
     } else if target.contains("windows") {
         let arch = if target.contains("aarch64") {
             "arm64"
@@ -600,7 +601,9 @@ fn link_statically(pdfium_dir: &Path, target: &str) {
 
         if target.contains("linux") {
             println!("cargo:rustc-link-lib=dylib=pthread");
-            println!("cargo:rustc-link-lib=dylib=dl");
+            if !target.contains("musl") {
+                println!("cargo:rustc-link-lib=dylib=dl");
+            }
         } else if target.contains("windows") {
             println!("cargo:rustc-link-lib=dylib=ws2_32");
             println!("cargo:rustc-link-lib=dylib=userenv");
@@ -661,7 +664,9 @@ fn link_statically(pdfium_dir: &Path, target: &str) {
 
     if target.contains("linux") {
         println!("cargo:rustc-link-lib=dylib=pthread");
-        println!("cargo:rustc-link-lib=dylib=dl");
+        if !target.contains("musl") {
+            println!("cargo:rustc-link-lib=dylib=dl");
+        }
     } else if target.contains("windows") {
         println!("cargo:rustc-link-lib=dylib=ws2_32");
         println!("cargo:rustc-link-lib=dylib=userenv");
@@ -772,7 +777,11 @@ fn link_system_frameworks(target: &str) {
         println!("cargo:rustc-link-lib=framework=AppKit");
         println!("cargo:rustc-link-lib=dylib=c++");
     } else if target.contains("linux") {
-        println!("cargo:rustc-link-lib=dylib=stdc++");
+        if target.contains("musl") {
+            println!("cargo:rustc-link-lib=dylib=c++");
+        } else {
+            println!("cargo:rustc-link-lib=dylib=stdc++");
+        }
         println!("cargo:rustc-link-lib=dylib=m");
     } else if target.contains("windows") {
         println!("cargo:rustc-link-lib=dylib=gdi32");

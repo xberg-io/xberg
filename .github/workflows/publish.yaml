@@ -273,7 +273,9 @@ jobs:
           REQUIRED_ASSETS: |
             kreuzberg-cli-aarch64-apple-darwin.tar.gz
             kreuzberg-cli-aarch64-unknown-linux-gnu.tar.gz
+            kreuzberg-cli-aarch64-unknown-linux-musl.tar.gz
             kreuzberg-cli-x86_64-unknown-linux-gnu.tar.gz
+            kreuzberg-cli-x86_64-unknown-linux-musl.tar.gz
             kreuzberg-cli-x86_64-pc-windows-msvc.zip
           SUMMARY_LABEL: CLI
         run: scripts/publish/check-release-assets.sh
@@ -409,6 +411,22 @@ jobs:
             python: "3.10"
             needs_qemu: false
             extra_args: ""
+          - label: linux-x86_64-musllinux
+            os: ubuntu-latest
+            artifact: python-wheels-linux-x86_64-musllinux
+            rust_target: x86_64-unknown-linux-musl
+            manylinux: musllinux_1_2
+            python: "3.10"
+            needs_qemu: false
+            extra_args: ""
+          - label: linux-aarch64-musllinux
+            os: ubuntu-24.04-arm
+            artifact: python-wheels-linux-aarch64-musllinux
+            rust_target: aarch64-unknown-linux-musl
+            manylinux: musllinux_1_2
+            python: "3.10"
+            needs_qemu: false
+            extra_args: ""
           - label: macos-arm64
             os: macos-latest
             artifact: python-wheels-macos
@@ -486,7 +504,7 @@ jobs:
           rust-target: ${{ matrix.rust_target }}
 
       - name: Setup Rust toolchain (native)
-        if: matrix.os != 'ubuntu-latest'
+        if: runner.os != 'Linux'
         uses: ./.github/actions/setup-rust
         with:
           cache-key-prefix: python-wheels-${{ matrix.label }}
@@ -497,7 +515,7 @@ jobs:
         run: rm -rf target/wheels target/maturin && rm -f packages/python/kreuzberg/_internal_bindings.*
 
       - name: Build CLI binary (native)
-        if: matrix.os != 'ubuntu-latest'
+        if: runner.os != 'Linux'
         shell: bash
         run: |
           echo "=== Building CLI Binary ==="
@@ -510,7 +528,7 @@ jobs:
           fi
 
       - name: Build Linux wheels
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -523,17 +541,22 @@ jobs:
           before-script-linux: |
             set -euo pipefail
             rustup component add rust-src || true
-            # Ensure OpenSSL is available inside the manylinux container for openssl-sys
-            if command -v yum >/dev/null 2>&1; then
+            # Install dependencies based on the container distro
+            if command -v apk >/dev/null 2>&1; then
+              # Alpine (musllinux containers)
+              apk add --no-cache openssl-dev pkgconf clang clang-dev libc++-dev musl-dev cmake make build-base
+            elif command -v yum >/dev/null 2>&1; then
+              # CentOS/RHEL (manylinux containers)
               yum install -y openssl openssl-devel pkgconfig
               export OPENSSL_LIB_DIR=/usr/lib64
               export OPENSSL_INCLUDE_DIR=/usr/include
             elif command -v apt-get >/dev/null 2>&1; then
+              # Debian/Ubuntu
               apt-get update && apt-get install -y pkg-config libssl-dev
               export OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
               export OPENSSL_INCLUDE_DIR=/usr/include
             fi
-            # Build CLI binary inside manylinux container
+            # Build CLI binary inside container
             # Note: before-script-linux CWD is the working-directory (packages/python),
             # but cargo outputs to the workspace root's target/ dir
             echo "=== Building CLI Binary (Linux) ==="
@@ -542,7 +565,7 @@ jobs:
             cp ../../target/release/kreuzberg kreuzberg/kreuzberg-cli
 
       - name: Build wheels (native)
-        if: matrix.os != 'ubuntu-latest'
+        if: runner.os != 'Linux'
         uses: PyO3/maturin-action@v1
         with:
           command: build
@@ -578,6 +601,7 @@ jobs:
           python-version: '3.10'
 
       - name: Smoke test wheel
+        if: ${{ !contains(matrix.manylinux, 'musllinux') }}
         shell: bash
         run: scripts/ci/python/smoke-test-wheel.sh
 
@@ -676,6 +700,16 @@ jobs:
             rust_target: ""
             use_cross: false
             use_napi_cross: false
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            rust_target: x86_64-unknown-linux-musl
+            use_cross: false
+            use_napi_cross: true
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            rust_target: aarch64-unknown-linux-musl
+            use_cross: false
+            use_napi_cross: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -816,7 +850,12 @@ jobs:
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
             use_cross: false
-          # TODO: Re-enable x86_64-unknown-linux-musl once build issues are resolved
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            use_cross: false
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+            use_cross: false
           - os: macos-latest
             target: aarch64-apple-darwin
             use_cross: false
@@ -861,6 +900,12 @@ jobs:
       - name: Configure cross linker
         if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
         run: scripts/publish/cli/configure-cross-linker.sh
+
+      - name: Configure musl linker
+        if: ${{ contains(matrix.target, 'musl') }}
+        env:
+          CLI_TARGET: ${{ matrix.target }}
+        run: scripts/publish/cli/configure-musl-linker.sh
 
       - name: Build CLI
         shell: bash

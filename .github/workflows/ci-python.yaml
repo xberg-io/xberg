@@ -208,6 +208,62 @@ jobs:
         shell: bash
         run: scripts/ci/python/smoke-test-wheel.sh
 
+  build-musllinux-python:
+    name: Python musllinux Build (${{ matrix.label }})
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux-x86_64-musllinux
+            rust_target: x86_64-unknown-linux-musl
+            manylinux: musllinux_1_2
+          - os: ubuntu-24.04-arm
+            label: linux-aarch64-musllinux
+            rust_target: aarch64-unknown-linux-musl
+            manylinux: musllinux_1_2
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space before setup
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./.github/actions/free-disk-space-linux
+        with:
+          show-initial: "true"
+          show-final: "true"
+
+      - name: Build musllinux wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release -i python3.10 --out ../../target/wheels
+          target: ${{ matrix.rust_target }}
+          manylinux: ${{ matrix.manylinux }}
+          working-directory: packages/python
+          sccache: false
+          before-script-linux: |
+            set -euo pipefail
+            rustup component add rust-src || true
+            apk add --no-cache openssl-dev pkgconf clang clang-dev libc++-dev musl-dev cmake make build-base
+            echo "=== Building CLI Binary (musllinux) ==="
+            cargo build --release --package kreuzberg-cli --features all
+            mkdir -p kreuzberg
+            cp ../../target/release/kreuzberg kreuzberg/kreuzberg-cli
+
+      - name: List built wheels
+        shell: bash
+        run: ls -lh target/wheels
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.label }}
+          path: target/wheels/*.whl
+          retention-days: 7
+
   build-python-sdist:
     name: Python Sdist
     if: ${{ github.actor != 'dependabot[bot]' }}
