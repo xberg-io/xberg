@@ -607,6 +607,30 @@ kreuzberg mcp
 }
 ```
 
+## AI Coding Assistants
+
+Kreuzberg ships with an [Agent Skill](https://agentskills.io) that teaches AI coding assistants how to use the library correctly. The skill is located at `skills/kreuzberg/SKILL.md` and is automatically discovered by supported tools.
+
+**Supported Tools:**
+
+- Claude Code, Codex, Gemini CLI, Cursor, VS Code, Amp, Goose, Roo Code, and any tool supporting the [Agent Skills](https://agentskills.io) open standard.
+
+**What It Covers:**
+
+- Complete API knowledge for Python, Node.js/TypeScript, Rust, and CLI
+- Extraction flows (sync/async, file/bytes, single/batch)
+- Configuration (OCR, chunking, output format, PDF options)
+- Embedding generation and RAG pipeline setup
+- Error handling patterns per language
+- Plugin system (post-processors, validators, OCR backends)
+- Correct field names and signatures (avoids common pitfalls)
+
+**Reference Files:**
+
+The skill includes 8 detailed reference files covering Python API, Node.js API, Rust API, CLI commands, configuration schema, supported formats, advanced features, and other language bindings (Go, Ruby, Java, C#, PHP, Elixir).
+
+See [AI Coding Assistants Guide](guides/agent-skills.md) for details.
+
 ## Language Binding Comparison
 
 ### Feature Availability

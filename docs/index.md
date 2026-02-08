@@ -8,6 +8,7 @@ Kreuzberg is a document intelligence platform with a high‑performance Rust cor
 - **Multi-engine OCR** – Built-in Tesseract support everywhere, with EasyOCR and PaddleOCR extensions for Python.
 - **Plugin ecosystem** – Register post-processors, validators, OCR backends, and run them from any binding or via the CLI/API server.
 - **Deployment flexibility** – Ship as a library, run the CLI, or host the API server/MCP adapter inside containers.
+- **AI coding assistant support** – Ships with an [Agent Skill](https://agentskills.io) for Claude Code, Codex, Gemini CLI, Cursor, and other AI tools.
 
 ## Documentation Map
 
@@ -19,6 +20,7 @@ Kreuzberg is a document intelligence platform with a high‑performance Rust cor
 - **[Reference](reference/api-python.md)** – API references for all supported languages, configuration schema, supported formats, types, and errors.
 - **[CLI](cli/usage.md)** – Command syntax, flags, exit codes, and automation tips.
 - **[API Server](guides/api-server.md)** – Running the REST service and integrating with MCP.
+- **[AI Coding Assistants](guides/agent-skills.md)** – Agent Skill for Claude Code, Codex, Gemini CLI, Cursor, and more.
 - **[Migration](migration/v3-to-v4.md)** and **[Changelog](CHANGELOG.md)** – Track breaking changes and release history.
 
 ## Supported Platforms

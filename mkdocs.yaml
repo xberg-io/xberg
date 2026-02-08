@@ -183,6 +183,7 @@ nav:
       - Kubernetes Deployment: guides/kubernetes.md
       - API Server: guides/api-server.md
       - Creating Plugins: guides/plugins.md
+      - AI Coding Assistants: guides/agent-skills.md
       - C# Bindings: guides/csharp.md
   - CLI: cli/usage.md
   - API Reference:
