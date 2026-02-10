@@ -181,7 +181,7 @@ export function buildConfig(raw: unknown): ExtractionConfig {
 	assignBooleanField(target, source, "use_cache", "useCache");
 	assignBooleanField(target, source, "enable_quality_processing", "enableQualityProcessing");
 	assignBooleanField(target, source, "force_ocr", "forceOcr");
-	assignBooleanField(target, source, "include_document_structure", "include_document_structure");
+	assignBooleanField(target, source, "include_document_structure", "includeDocumentStructure");
 	assignNumberField(target, source, "max_concurrent_extractions", "maxConcurrentExtractions");
 
 	if (isPlainRecord(source.ocr)) {
@@ -256,48 +256,8 @@ export function shouldSkipFixture(
 
 	return false;
 }
-interface Assertions {
-	assertExpectedMime(result: ExtractionResult, expected: string[]): void;
-	assertMinContentLength(result: ExtractionResult, minimum: number): void;
-	assertMaxContentLength(result: ExtractionResult, maximum: number): void;
-	assertContentContainsAny(result: ExtractionResult, snippets: string[]): void;
-	assertContentContainsAll(result: ExtractionResult, snippets: string[]): void;
-	assertTableCount(result: ExtractionResult, minimum?: number | null, maximum?: number | null): void;
-	assertDetectedLanguages(result: ExtractionResult, expected: string[], minConfidence?: number | null): void;
-	assertMetadataExpectation(result: ExtractionResult, path: string, expectation: PlainRecord): void;
-	assertChunks(
-		result: ExtractionResult,
-		minCount?: number | null,
-		maxCount?: number | null,
-		eachHasContent?: boolean | null,
-		eachHasEmbedding?: boolean | null,
-	): void;
-	assertImages(
-		result: ExtractionResult,
-		minCount?: number | null,
-		maxCount?: number | null,
-		formatsInclude?: string[] | null,
-	): void;
-	assertPages(result: ExtractionResult, minCount?: number | null, exactCount?: number | null): void;
-	assertElements(result: ExtractionResult, minCount?: number | null, typesInclude?: string[] | null): void;
-	assertOcrElements(
-		result: ExtractionResult,
-		hasElements?: boolean | null,
-		elementsHaveGeometry?: boolean | null,
-		elementsHaveConfidence?: boolean | null,
-		minCount?: number | null,
-	): void;
-	assertDocument(
-		result: ExtractionResult,
-		hasDocument?: boolean,
-		minNodeCount?: number | null,
-		nodeTypesInclude?: string[] | null,
-		hasGroups?: boolean | null,
-	): void;
-}
 
-
-export const assertions: Assertions = {
+export const assertions = {
 	assertExpectedMime(result: ExtractionResult, expected: string[]): void {
 		if (!expected.length) {
 			return;
@@ -490,78 +450,18 @@ export const assertions: Assertions = {
 		}
 	},
 
-	assertOcrElements(
-		result: ExtractionResult,
-		hasElements?: boolean | null,
-		elementsHaveGeometry?: boolean | null,
-		elementsHaveConfidence?: boolean | null,
-		minCount?: number | null,
-	): void {
-		const ocrElements = (result as unknown as PlainRecord).ocrElements as unknown[] | undefined;
-		if (hasElements) {
-			assertExists(ocrElements, "Expected ocrElements to be defined");
-			if (!Array.isArray(ocrElements)) {
-				throw new Error("Expected ocrElements to be an array");
-			}
-			if (ocrElements.length === 0) {
-				throw new Error("Expected ocrElements to be non-empty");
-			}
-		}
-		if (Array.isArray(ocrElements)) {
-			if (typeof minCount === "number") {
-				assertEquals(
-					ocrElements.length >= minCount,
-					true,
-					`Expected at least ${minCount} ocrElements, got ${ocrElements.length}`,
-				);
-			}
-			if (elementsHaveGeometry) {
-				for (const el of ocrElements) {
-					const geometry = (el as PlainRecord).geometry;
-					assertExists(geometry, "OCR element missing geometry");
-					const type = (geometry as PlainRecord)?.type;
-					assertEquals(
-						["rectangle", "quadrilateral"].includes(type as string),
-						true,
-						`Invalid geometry type: ${type}`,
-					);
-				}
-			}
-			if (elementsHaveConfidence) {
-				for (const el of ocrElements) {
-					const confidence = (el as PlainRecord).confidence;
-					assertExists(confidence, "OCR element missing confidence");
-					const recognition = (confidence as PlainRecord)?.recognition;
-					assertEquals(
-						typeof recognition === "number" && recognition > 0,
-						true,
-						`Invalid confidence recognition: ${recognition}`,
-					);
-				}
-			}
-		}
-	},
-
 	assertDocument(
 		result: ExtractionResult,
-		hasDocument: boolean = false,
+		hasDocument: boolean,
 		minNodeCount?: number | null,
 		nodeTypesInclude?: string[] | null,
 		hasGroups?: boolean | null,
 	): void {
-		const document = (result as unknown as PlainRecord).document as unknown[] | PlainRecord | undefined;
+		const doc = (result as unknown as PlainRecord).document as PlainRecord | undefined | null;
 		if (hasDocument) {
-			assertExists(document, "Expected document to be defined");
-			let nodes: unknown[] | undefined;
-			if (Array.isArray(document)) {
-				nodes = document;
-			} else if (isPlainRecord(document)) {
-				nodes = (document as PlainRecord).nodes as unknown[] | undefined;
-			}
-			assertExists(nodes, "Expected document nodes to be defined");
-			if (!Array.isArray(nodes)) {
-				throw new Error("Expected document nodes to be an array");
-			}
+			assertExists(doc, "Expected document but got null");
+			const nodes = (doc as PlainRecord).nodes as unknown[];
+			assertExists(nodes, "Expected document nodes but got null");
 			if (typeof minNodeCount === "number") {
 				assertEquals(
 					nodes.length >= minNodeCount,
@@ -570,34 +470,27 @@ export const assertions: Assertions = {
 				);
 			}
 			if (nodeTypesInclude && nodeTypesInclude.length > 0) {
-				const foundTypes = new Set<string>();
-				for (const node of nodes) {
-					if (isPlainRecord(node)) {
-						const nodeType = ((node as PlainRecord).nodeType ?? (node as PlainRecord).type) as string | undefined;
-						if (nodeType) {
-							foundTypes.add(nodeType);
-						}
-					}
-				}
-				for (const expectedType of nodeTypesInclude) {
-					assertEquals(foundTypes.has(expectedType), true, `Expected node type ${expectedType} not found`);
+				const foundTypes = new Set(
+					nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.node_type ?? (n as PlainRecord).node_type),
+				);
+				for (const expected of nodeTypesInclude) {
+					assertEquals(
+						[...foundTypes].some((t) => typeof t === "string" && t.toLowerCase() === expected.toLowerCase()),
+						true,
+						`Expected node type '${expected}' not found in [${[...foundTypes].join(", ")}]`,
+					);
 				}
 			}
 			if (typeof hasGroups === "boolean") {
-				let hasGroupNodes = false;
-				for (const node of nodes) {
-					if (isPlainRecord(node)) {
-						const nodeType = ((node as PlainRecord).nodeType ?? (node as PlainRecord).type) as string | undefined;
-						if (nodeType === "group") {
-							hasGroupNodes = true;
-							break;
-						}
-					}
-				}
-				assertEquals(hasGroupNodes, hasGroups, `Expected hasGroups to be ${hasGroups}, but got ${hasGroupNodes}`);
+				const hasGroupNodes = nodes.some(
+					(n) =>
+						((n as PlainRecord).content as PlainRecord)?.node_type === "group" ||
+						(n as PlainRecord).node_type === "group",
+				);
+				assertEquals(hasGroupNodes, hasGroups, `Expected hasGroups=${hasGroups} but got ${hasGroupNodes}`);
 			}
 		} else {
-			assertEquals(document === undefined || document === null, true, "Expected document to be undefined");
+			assertEquals(doc == null, true, "Expected document to be null but got a document");
 		}
 	},
 };

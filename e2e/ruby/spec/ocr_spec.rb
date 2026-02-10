@@ -114,7 +114,7 @@ RSpec.describe 'ocr fixtures' do
   it 'ocr_paddle_pdf_scanned' do
     E2ERuby.run_fixture(
       'ocr_paddle_pdf_scanned',
-      'pdfs/ocr_test.pdf',
+      'pdf/ocr_test.pdf',
       { force_ocr: true, ocr: { backend: 'paddle-ocr', language: 'en' } },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Requires PaddleOCR with ONNX Runtime',

@@ -55,9 +55,7 @@ Deno.test("office_doc_legacy", { permissions: { read: true } }, async () => {
 		// Sync file extraction - WASM uses extractBytes with pre-read bytes
 		result = await extractBytes(documentBytes, "application/msword", config);
 	} catch (error) {
-		if (
-			shouldSkipFixture(error, "office_doc_legacy", ["libreoffice"], "LibreOffice must be installed for conversion.")
-		) {
+		if (shouldSkipFixture(error, "office_doc_legacy", ["office"], "Requires the office feature.")) {
 			return;
 		}
 		throw error;
@@ -574,9 +572,7 @@ Deno.test("office_ppt_legacy", { permissions: { read: true } }, async () => {
 		// Sync file extraction - WASM uses extractBytes with pre-read bytes
 		result = await extractBytes(documentBytes, "application/vnd.ms-powerpoint", config);
 	} catch (error) {
-		if (
-			shouldSkipFixture(error, "office_ppt_legacy", ["libreoffice"], "Skip if LibreOffice conversion is unavailable.")
-		) {
+		if (shouldSkipFixture(error, "office_ppt_legacy", ["office"], "Requires the office feature.")) {
 			return;
 		}
 		throw error;

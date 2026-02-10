@@ -2,7 +2,6 @@ package com.kreuzberg.e2e;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.kreuzberg.Element;
 import dev.kreuzberg.ExtractionResult;
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.MissingDependencyException;
@@ -223,17 +222,14 @@ public final class E2EHelpers {
                     String.format("Expected languages %s to be in %s", expected, languages));
 
             if (minConfidence != null) {
-                dev.kreuzberg.Metadata metadata = result.getMetadata();
-                if (metadata != null) {
-                    Map<String, Object> additional = metadata.getAdditional();
-                    if (additional.containsKey("confidence")) {
-                        Object confObj = additional.get("confidence");
-                        double confidence = confObj instanceof Number
-                                ? ((Number) confObj).doubleValue()
-                                : 0.0;
-                        assertTrue(confidence >= minConfidence,
-                                String.format("Expected confidence >= %f, got %f", minConfidence, confidence));
-                    }
+                Map<String, Object> metadata = result.getMetadata();
+                if (metadata != null && metadata.containsKey("confidence")) {
+                    Object confObj = metadata.get("confidence");
+                    double confidence = confObj instanceof Number
+                            ? ((Number) confObj).doubleValue()
+                            : 0.0;
+                    assertTrue(confidence >= minConfidence,
+                            String.format("Expected confidence >= %f, got %f", minConfidence, confidence));
                 }
             }
         }
@@ -243,7 +239,7 @@ public final class E2EHelpers {
                 String path,
                 Map<String, Object> expectation
         ) {
-            dev.kreuzberg.Metadata metadata = result.getMetadata();
+            Map<String, Object> metadata = result.getMetadata();
             Object value = fetchMetadataValue(metadata, path);
             assertNotNull(value, String.format("Metadata path '%s' missing", path));
 
@@ -297,17 +293,16 @@ public final class E2EHelpers {
             }
         }
 
-        private static Object fetchMetadataValue(dev.kreuzberg.Metadata metadata, String path) {
+        private static Object fetchMetadataValue(Map<String, Object> metadata, String path) {
             if (metadata == null) {
                 return null;
             }
-            Map<String, Object> additional = metadata.getAdditional();
-            Object direct = lookupMetadataPath(additional, path);
+            Object direct = lookupMetadataPath(metadata, path);
             if (direct != null) {
                 return direct;
             }
-            Object formatObj = additional.get("format");
-            if (formatObj instanceof Map) {
+            Object formatObj = metadata.get("format");
+            if (formatObj instanceof Map<?, ?>) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> format = (Map<String, Object>) formatObj;
                 return lookupMetadataPath(format, path);
@@ -447,55 +442,14 @@ public final class E2EHelpers {
             }
             if (elements != null && typesInclude != null && !typesInclude.isEmpty()) {
                 var types = elements.stream()
-                        .map(Element::getElementType)
+                        .map(el -> el.getType())
                         .filter(t -> t != null)
-                        .map(t -> t.toString())
                         .toList();
                 for (String expected : typesInclude) {
                     boolean found = types.stream()
                             .anyMatch(t -> t.toLowerCase().contains(expected.toLowerCase()));
                     assertTrue(found,
                             String.format("Expected element types to include '%s', got %s", expected, types));
-                }
-            }
-        }
-
-        public static void assertOcrElements(
-                ExtractionResult result,
-                Boolean hasElements,
-                Boolean elementsHaveGeometry,
-                Boolean elementsHaveConfidence,
-                Integer minCount
-        ) {
-            var ocrElements = result.getOcrElements();
-            if (hasElements != null && hasElements) {
-                assertNotNull(ocrElements, "Expected ocr_elements but got null");
-                assertTrue(!ocrElements.isEmpty(), "Expected ocr_elements to be non-empty");
-            }
-            if (ocrElements != null && !ocrElements.isEmpty()) {
-                if (minCount != null) {
-                    assertTrue(ocrElements.size() >= minCount,
-                            String.format("Expected at least %d ocr_elements, found %d", minCount, ocrElements.size()));
-                }
-                if (elementsHaveGeometry != null && elementsHaveGeometry) {
-                    for (int i = 0; i < ocrElements.size(); i++) {
-                        var el = ocrElements.get(i);
-                        assertNotNull(el.getGeometry(),
-                                String.format("OCR element %d has no geometry", i));
-                        var geomType = el.getGeometry().getType().toString().toLowerCase();
-                        assertTrue(geomType.equals("rectangle") || geomType.equals("quadrilateral"),
-                                String.format("OCR element %d has invalid geometry type: %s", i, geomType));
-                    }
-                }
-                if (elementsHaveConfidence != null && elementsHaveConfidence) {
-                    for (int i = 0; i < ocrElements.size(); i++) {
-                        var el = ocrElements.get(i);
-                        assertNotNull(el.getConfidence(),
-                                String.format("OCR element %d has no confidence", i));
-                        assertTrue(el.getConfidence().getRecognition() > 0,
-                                String.format("OCR element %d has invalid confidence recognition: %f",
-                                        i, el.getConfidence().getRecognition()));
-                    }
                 }
             }
         }
@@ -507,7 +461,7 @@ public final class E2EHelpers {
                 List<String> nodeTypesInclude,
                 Boolean hasGroups
         ) {
-            var document = result.getDocument();
+            var document = result.getDocumentStructure().orElse(null);
             if (hasDocument) {
                 assertNotNull(document, "Expected document but got null");
                 var nodes = document.getNodes();

@@ -1523,6 +1523,11 @@ internal static class Serialization
             root["djot_content"] = JsonSerializer.SerializeToNode(result.DjotContent, Options);
         }
 
+        if (result.Document != null)
+        {
+            root["document"] = JsonSerializer.SerializeToNode(result.Document, Options);
+        }
+
         return root.ToJsonString(Options);
     }
 
@@ -1575,6 +1580,11 @@ internal static class Serialization
         if (root.TryGetProperty("djot_content", out var djotContent))
         {
             result.DjotContent = DeserializeElement<DjotContent>(djotContent);
+        }
+
+        if (root.TryGetProperty("document", out var document))
+        {
+            result.Document = DeserializeElement<DocumentStructure>(document);
         }
 
         if (root.TryGetProperty("metadata", out var metadata))

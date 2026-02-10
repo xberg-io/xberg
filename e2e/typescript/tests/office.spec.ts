@@ -69,7 +69,7 @@ describe("office fixtures", () => {
 			const documentPath = resolveDocument("doc/unit_test_lists.doc");
 			if (!existsSync(documentPath)) {
 				console.warn("Skipping office_doc_legacy: missing document at", documentPath);
-				console.warn("Notes: LibreOffice must be installed for conversion.");
+				console.warn("Notes: Requires the office feature.");
 				return;
 			}
 			const config = buildConfig(undefined);
@@ -77,14 +77,7 @@ describe("office fixtures", () => {
 			try {
 				result = extractFileSync(documentPath, null, config);
 			} catch (error) {
-				if (
-					shouldSkipFixture(
-						error,
-						"office_doc_legacy",
-						["libreoffice"],
-						"LibreOffice must be installed for conversion.",
-					)
-				) {
+				if (shouldSkipFixture(error, "office_doc_legacy", ["office"], "Requires the office feature.")) {
 					return;
 				}
 				throw error;
@@ -749,7 +742,7 @@ describe("office fixtures", () => {
 			const documentPath = resolveDocument("ppt/simple.ppt");
 			if (!existsSync(documentPath)) {
 				console.warn("Skipping office_ppt_legacy: missing document at", documentPath);
-				console.warn("Notes: Skip if LibreOffice conversion is unavailable.");
+				console.warn("Notes: Requires the office feature.");
 				return;
 			}
 			const config = buildConfig(undefined);
@@ -757,14 +750,7 @@ describe("office fixtures", () => {
 			try {
 				result = extractFileSync(documentPath, null, config);
 			} catch (error) {
-				if (
-					shouldSkipFixture(
-						error,
-						"office_ppt_legacy",
-						["libreoffice"],
-						"Skip if LibreOffice conversion is unavailable.",
-					)
-				) {
+				if (shouldSkipFixture(error, "office_ppt_legacy", ["office"], "Requires the office feature.")) {
 					return;
 				}
 				throw error;

@@ -189,6 +189,7 @@ export function buildConfig(raw: unknown): ExtractionConfig {
     assignBooleanField(target, source, "use_cache", "useCache");
     assignBooleanField(target, source, "enable_quality_processing", "enableQualityProcessing");
     assignBooleanField(target, source, "force_ocr", "forceOcr");
+    assignBooleanField(target, source, "include_document_structure", "includeDocumentStructure");
     assignNumberField(target, source, "max_concurrent_extractions", "maxConcurrentExtractions");
 
     if (isPlainRecord(source.ocr)) {
@@ -456,6 +457,40 @@ export const assertions = {
             for (const elType of typesInclude) {
                 assertEquals(foundTypes.has(elType), true, `Expected element type ${elType} not found`);
             }
+        }
+    },
+
+    assertDocument(
+        result: ExtractionResult,
+        hasDocument: boolean,
+        minNodeCount?: number | null,
+        nodeTypesInclude?: string[] | null,
+        hasGroups?: boolean | null,
+    ): void {
+        const doc = (result as unknown as PlainRecord).document as PlainRecord | undefined | null;
+        if (hasDocument) {
+            assertExists(doc, "Expected document but got null");
+            const nodes = (doc as PlainRecord).nodes as unknown[];
+            assertExists(nodes, "Expected document nodes but got null");
+            if (typeof minNodeCount === "number") {
+                assertEquals(nodes.length >= minNodeCount, true, `Expected at least ${minNodeCount} nodes, got ${nodes.length}`);
+            }
+            if (nodeTypesInclude && nodeTypesInclude.length > 0) {
+                const foundTypes = new Set(nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.node_type ?? (n as PlainRecord).node_type));
+                for (const expected of nodeTypesInclude) {
+                    assertEquals(
+                        [...foundTypes].some((t) => typeof t === "string" && t.toLowerCase() === expected.toLowerCase()),
+                        true,
+                        `Expected node type '${expected}' not found in [${[...foundTypes].join(", ")}]`,
+                    );
+                }
+            }
+            if (typeof hasGroups === "boolean") {
+                const hasGroupNodes = nodes.some((n) => ((n as PlainRecord).content as PlainRecord)?.node_type === "group" || (n as PlainRecord).node_type === "group");
+                assertEquals(hasGroupNodes, hasGroups, `Expected hasGroups=${hasGroups} but got ${hasGroupNodes}`);
+            }
+        } else {
+            assertEquals(doc == null, true, "Expected document to be null but got a document");
         }
     },
 };

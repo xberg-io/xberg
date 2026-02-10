@@ -157,7 +157,7 @@ export function buildConfig(raw: unknown): ExtractionConfig {
 	assignBooleanField(target, source, "use_cache", "useCache");
 	assignBooleanField(target, source, "enable_quality_processing", "enableQualityProcessing");
 	assignBooleanField(target, source, "force_ocr", "forceOcr");
-	assignBooleanField(target, source, "include_document_structure", "include_document_structure");
+	assignBooleanField(target, source, "include_document_structure", "includeDocumentStructure");
 	assignNumberField(target, source, "max_concurrent_extractions", "maxConcurrentExtractions");
 
 	if (isPlainRecord(source.ocr)) {
@@ -404,98 +404,43 @@ export const assertions = {
 		}
 	},
 
-	assertOcrElements(
-		result: ExtractionResult,
-		hasElements: boolean | null,
-		elementsHaveGeometry: boolean | null,
-		elementsHaveConfidence: boolean | null,
-		minCount: number | null,
-	): void {
-		const ocrElements = (result as unknown as PlainRecord).ocrElements as unknown[] | undefined;
-		if (hasElements) {
-			expect(ocrElements !== undefined && ocrElements !== null).toBe(true);
-			if (!Array.isArray(ocrElements)) {
-				throw new Error("Expected ocrElements to be an array");
-			}
-			if (ocrElements.length === 0) {
-				throw new Error("Expected ocrElements to be non-empty");
-			}
-		}
-		if (Array.isArray(ocrElements)) {
-			if (typeof minCount === "number") {
-				expect(ocrElements.length >= minCount).toBe(true);
-			}
-			if (elementsHaveGeometry) {
-				for (const el of ocrElements) {
-					const geometry = (el as PlainRecord).geometry;
-					expect(geometry !== undefined && geometry !== null).toBe(true);
-					const type = (geometry as PlainRecord)?.type;
-					expect(["rectangle", "quadrilateral"].includes(type as string)).toBe(true);
-				}
-			}
-			if (elementsHaveConfidence) {
-				for (const el of ocrElements) {
-					const confidence = (el as PlainRecord).confidence;
-					expect(confidence !== undefined && confidence !== null).toBe(true);
-					const recognition = (confidence as PlainRecord)?.recognition;
-					expect(typeof recognition === "number" && recognition > 0).toBe(true);
-				}
-			}
-		}
-	},
-
 	assertDocument(
 		result: ExtractionResult,
 		hasDocument: boolean,
-		minNodeCount: number | null,
-		nodeTypesInclude: string[] | null,
-		hasGroups: boolean | null,
+		minNodeCount?: number | null,
+		nodeTypesInclude?: string[] | null,
+		hasGroups?: boolean | null,
 	): void {
-		const document = (result as unknown as PlainRecord).document as unknown[] | PlainRecord | undefined;
+		const doc = (result as unknown as PlainRecord).document as PlainRecord | undefined | null;
 		if (hasDocument) {
-			expect(document !== undefined && document !== null).toBe(true);
-			let nodes: unknown[] | undefined;
-			if (Array.isArray(document)) {
-				nodes = document;
-			} else if (isPlainRecord(document)) {
-				nodes = (document as PlainRecord).nodes as unknown[] | undefined;
-			}
-			expect(nodes !== undefined && nodes !== null).toBe(true);
-			if (!Array.isArray(nodes)) {
-				throw new Error("Expected document nodes to be an array");
-			}
+			expect(doc).toBeDefined();
+			expect(doc).not.toBeNull();
+			const nodes = (doc as PlainRecord).nodes as unknown[];
+			expect(nodes).toBeDefined();
 			if (typeof minNodeCount === "number") {
-				expect(nodes.length >= minNodeCount).toBe(true);
+				expect(nodes.length).toBeGreaterThanOrEqual(minNodeCount);
 			}
 			if (nodeTypesInclude && nodeTypesInclude.length > 0) {
-				const foundTypes = new Set<string>();
-				for (const node of nodes) {
-					if (isPlainRecord(node)) {
-						const nodeType = ((node as PlainRecord).nodeType ?? (node as PlainRecord).type) as string | undefined;
-						if (nodeType) {
-							foundTypes.add(nodeType);
-						}
-					}
-				}
-				for (const expectedType of nodeTypesInclude) {
-					expect(foundTypes.has(expectedType)).toBe(true);
+				const foundTypes = new Set(
+					nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.node_type ?? (n as PlainRecord).node_type),
+				);
+				for (const expected of nodeTypesInclude) {
+					const found = [...foundTypes].some(
+						(t) => typeof t === "string" && t.toLowerCase() === expected.toLowerCase(),
+					);
+					expect(found).toBe(true);
 				}
 			}
 			if (typeof hasGroups === "boolean") {
-				let hasGroupNodes = false;
-				for (const node of nodes) {
-					if (isPlainRecord(node)) {
-						const nodeType = ((node as PlainRecord).nodeType ?? (node as PlainRecord).type) as string | undefined;
-						if (nodeType === "group") {
-							hasGroupNodes = true;
-							break;
-						}
-					}
-				}
+				const hasGroupNodes = nodes.some(
+					(n) =>
+						((n as PlainRecord).content as PlainRecord)?.node_type === "group" ||
+						(n as PlainRecord).node_type === "group",
+				);
 				expect(hasGroupNodes).toBe(hasGroups);
 			}
 		} else {
-			expect(document === undefined || document === null).toBe(true);
+			expect(doc).toBeUndefined();
 		}
 	},
 };

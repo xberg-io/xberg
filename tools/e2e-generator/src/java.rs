@@ -470,7 +470,7 @@ public final class E2EHelpers {
                 List<String> nodeTypesInclude,
                 Boolean hasGroups
         ) {
-            var document = result.getDocument();
+            var document = result.getDocumentStructure().orElse(null);
             if (hasDocument) {
                 assertNotNull(document, "Expected document but got null");
                 var nodes = document.getNodes();

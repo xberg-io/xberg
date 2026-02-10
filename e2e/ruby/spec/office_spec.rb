@@ -45,8 +45,8 @@ RSpec.describe 'office fixtures' do
       'office_doc_legacy',
       'doc/unit_test_lists.doc',
       nil,
-      requirements: %w[libreoffice libreoffice],
-      notes: 'LibreOffice must be installed for conversion.',
+      requirements: %w[office],
+      notes: 'Requires the office feature.',
       skip_if_missing: true
     ) do |result|
       E2ERuby::Assertions.assert_expected_mime(
@@ -458,8 +458,8 @@ RSpec.describe 'office fixtures' do
       'office_ppt_legacy',
       'ppt/simple.ppt',
       nil,
-      requirements: %w[libreoffice libreoffice],
-      notes: 'Skip if LibreOffice conversion is unavailable.',
+      requirements: %w[office],
+      notes: 'Requires the office feature.',
       skip_if_missing: true
     ) do |result|
       E2ERuby::Assertions.assert_expected_mime(

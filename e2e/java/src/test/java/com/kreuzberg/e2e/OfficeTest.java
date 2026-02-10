@@ -66,8 +66,8 @@ public class OfficeTest {
             "office_doc_legacy",
             "doc/unit_test_lists.doc",
             config,
-            Arrays.asList("libreoffice", "libreoffice"),
-            "LibreOffice must be installed for conversion.",
+            Arrays.asList("office"),
+            "Requires the office feature.",
             true,
             result -> {
                 E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/msword"));
@@ -479,8 +479,8 @@ public class OfficeTest {
             "office_ppt_legacy",
             "ppt/simple.ppt",
             config,
-            Arrays.asList("libreoffice", "libreoffice"),
-            "Skip if LibreOffice conversion is unavailable.",
+            Arrays.asList("office"),
+            "Requires the office feature.",
             true,
             result -> {
                 E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/vnd.ms-powerpoint"));

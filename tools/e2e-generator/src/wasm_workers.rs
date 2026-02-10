@@ -171,6 +171,7 @@ export function buildConfig(raw: unknown): ExtractionConfig {
     assignBooleanField(target, source, "use_cache", "useCache");
     assignBooleanField(target, source, "enable_quality_processing", "enableQualityProcessing");
     assignBooleanField(target, source, "force_ocr", "forceOcr");
+    assignBooleanField(target, source, "include_document_structure", "includeDocumentStructure");
     assignNumberField(target, source, "max_concurrent_extractions", "maxConcurrentExtractions");
 
     if (isPlainRecord(source.ocr)) {
@@ -420,6 +421,38 @@ export const assertions = {
             for (const expected of typesInclude) {
                 expect(types.some((t) => t.toLowerCase().includes(expected.toLowerCase()))).toBe(true);
             }
+        }
+    },
+
+    assertDocument(
+        result: ExtractionResult,
+        hasDocument: boolean,
+        minNodeCount?: number | null,
+        nodeTypesInclude?: string[] | null,
+        hasGroups?: boolean | null,
+    ): void {
+        const doc = (result as unknown as PlainRecord).document as PlainRecord | undefined | null;
+        if (hasDocument) {
+            expect(doc).toBeDefined();
+            expect(doc).not.toBeNull();
+            const nodes = (doc as PlainRecord).nodes as unknown[];
+            expect(nodes).toBeDefined();
+            if (typeof minNodeCount === "number") {
+                expect(nodes.length).toBeGreaterThanOrEqual(minNodeCount);
+            }
+            if (nodeTypesInclude && nodeTypesInclude.length > 0) {
+                const foundTypes = new Set(nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.node_type ?? (n as PlainRecord).node_type));
+                for (const expected of nodeTypesInclude) {
+                    const found = [...foundTypes].some((t) => typeof t === "string" && t.toLowerCase() === expected.toLowerCase());
+                    expect(found).toBe(true);
+                }
+            }
+            if (typeof hasGroups === "boolean") {
+                const hasGroupNodes = nodes.some((n) => ((n as PlainRecord).content as PlainRecord)?.node_type === "group" || (n as PlainRecord).node_type === "group");
+                expect(hasGroupNodes).toBe(hasGroups);
+            }
+        } else {
+            expect(doc).toBeUndefined();
         }
     },
 };

@@ -135,7 +135,7 @@ public class OcrTest {
         JsonNode config = MAPPER.readTree("{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"}}");
         E2EHelpers.runFixture(
             "ocr_paddle_pdf_scanned",
-            "pdfs/ocr_test.pdf",
+            "pdf/ocr_test.pdf",
             config,
             Arrays.asList("paddle-ocr", "paddle-ocr", "onnxruntime"),
             "Requires PaddleOCR with ONNX Runtime",

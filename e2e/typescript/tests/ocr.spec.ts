@@ -224,7 +224,7 @@ describe("ocr fixtures", () => {
 	it(
 		"ocr_paddle_pdf_scanned",
 		() => {
-			const documentPath = resolveDocument("pdfs/ocr_test.pdf");
+			const documentPath = resolveDocument("pdf/ocr_test.pdf");
 			if (!existsSync(documentPath)) {
 				console.warn("Skipping ocr_paddle_pdf_scanned: missing document at", documentPath);
 				console.warn("Notes: Requires PaddleOCR with ONNX Runtime");
