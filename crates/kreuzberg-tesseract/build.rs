@@ -128,16 +128,24 @@ mod build_tesseract {
     /// glibc C headers, producing objects with glibc-versioned symbols (e.g.
     /// `__isoc23_sscanf@@GLIBC_2.38`) incompatible with musl linking.
     ///
-    /// This wrapper prepends musl's C header directory via `-isystem` so that musl's
-    /// headers shadow glibc's. Unlike libc++ (which uses wrapper `<stddef.h>` etc.
-    /// with `#include_next`), libstdc++ includes C headers directly from `<cstdlib>`
-    /// etc., so `-isystem` shadowing works correctly without `-nostdinc`.
+    /// The wrapper uses `-nostdinc` to remove ALL default system include paths, then
+    /// adds them back in the correct order:
+    ///   1. GCC internal headers (stddef.h, stdarg.h, etc.)
+    ///   2. GCC fixed-includes (system header fixups)
+    ///   3. C++ standard library headers (libstdc++)
+    ///   4. C++ platform-specific headers (bits/c++config.h etc.)
+    ///   5. musl C headers (replaces glibc C headers)
     ///
-    /// Additionally, some glibc-specific C++ platform headers (e.g. `os_defines.h`,
-    /// `libc-header-start.h`, `floatn.h`) still get picked up from gcc's built-in
-    /// include paths. These headers use `__GLIBC_PREREQ()` and `__GLIBC_USE()` macros
-    /// that musl doesn't define. We define these as no-op macros evaluating to 0 so
-    /// glibc-guarded code paths are correctly skipped.
+    /// This ordering is critical because libstdc++ headers use `#include_next`
+    /// to include C headers. With `-isystem` alone (no `-nostdinc`), the musl
+    /// headers come before libstdc++ in the search path, so `#include_next` from
+    /// `<cstdlib>` skips them and finds glibc's headers instead. By using
+    /// `-nostdinc` and placing musl headers AFTER the C++ headers, `#include_next`
+    /// correctly finds musl's C headers.
+    ///
+    /// Additionally defines glibc compatibility macros as no-ops so that
+    /// platform-specific C++ headers (os_defines.h, floatn.h) that reference
+    /// `__GLIBC_PREREQ()` etc. compile correctly with musl.
     #[cfg(unix)]
     fn create_musl_cxx_wrapper(target: &str) -> Option<String> {
         use std::os::unix::fs::PermissionsExt;
@@ -157,27 +165,45 @@ mod build_tesseract {
             return None;
         }
 
+        // Detect host GCC triplet and version for include path construction
+        let host_arch = host.split('-').next().unwrap_or("x86_64");
+        let host_triplet = format!("{host_arch}-linux-gnu");
+
         // Write wrapper script to OUT_DIR
         let out_dir = env::var("OUT_DIR").unwrap();
         let wrapper_path = format!("{out_dir}/musl-g++.sh");
         let wrapper_content = format!(
-            "#!/bin/sh\n\
-             # Auto-generated musl-g++ wrapper for cross-compilation.\n\
-             # Prepends musl C headers so they shadow glibc's.\n\
-             # Defines glibc compat macros as 0 for musl -- handles os_defines.h,\n\
-             # libc-header-start.h, floatn.h etc. that use __GLIBC_PREREQ().\n\
-             # Also defines __GNUC_PREREQ for floatn.h which checks compiler version.\n\
-             exec g++ -isystem \"{musl_include}\" \\\n\
-               '-D__GLIBC_PREREQ(maj,min)=0' \\\n\
-               '-D__GLIBC_USE(F)=0' \\\n\
-               '-D__GNUC_PREREQ(maj,min)=0' \\\n\
-               \"$@\"\n"
+            r#"#!/bin/sh
+# Auto-generated musl-g++ wrapper for cross-compilation.
+# Uses -nostdinc to remove default system includes, then adds back
+# GCC internal, C++ stdlib, and musl C headers in the correct order
+# so that #include_next from libstdc++ finds musl headers (not glibc).
+
+GCC_VER=$(g++ -dumpversion | cut -d. -f1)
+TRIPLET="{host_triplet}"
+GCC_LIB="/usr/lib/gcc/$TRIPLET/$GCC_VER"
+
+exec g++ -nostdinc \
+  -isystem "$GCC_LIB/include" \
+  -isystem "$GCC_LIB/include-fixed" \
+  -isystem "/usr/include/c++/$GCC_VER" \
+  -isystem "/usr/include/$TRIPLET/c++/$GCC_VER" \
+  -isystem "{musl_include}" \
+  '-D__GLIBC_PREREQ(maj,min)=0' \
+  '-D__GLIBC_USE(F)=0' \
+  '-D__GNUC_PREREQ(maj,min)=((__GNUC__<<16)+__GNUC_MINOR__>=((maj)<<16)+(min))' \
+  '-D__locale_t=locale_t' \
+  '-include' '{musl_include}/locale.h' \
+  "$@"
+"#
         );
 
         fs::write(&wrapper_path, &wrapper_content).ok()?;
         fs::set_permissions(&wrapper_path, fs::Permissions::from_mode(0o755)).ok()?;
 
-        println!("cargo:warning=Created musl g++ wrapper at {wrapper_path} (musl headers: {musl_include})");
+        println!(
+            "cargo:warning=Created musl g++ wrapper at {wrapper_path} (musl headers: {musl_include}, host triplet: {host_triplet})"
+        );
         Some(wrapper_path)
     }
 

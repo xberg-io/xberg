@@ -1582,9 +1582,9 @@ internal static class Serialization
             result.DjotContent = DeserializeElement<DjotContent>(djotContent);
         }
 
-        if (root.TryGetProperty("document", out var document))
+        if (root.TryGetProperty("document", out var documentProp))
         {
-            result.Document = DeserializeElement<DocumentStructure>(document);
+            result.Document = DeserializeElement<DocumentStructure>(documentProp);
         }
 
         if (root.TryGetProperty("metadata", out var metadata))
