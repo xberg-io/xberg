@@ -14,5 +14,9 @@
     "description": "Document from pdfplumber test suite",
     "source": "pdfplumber",
     "size_category": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/pdf/mcid_example.txt",
+    "source": "pdftotext"
   }
 }

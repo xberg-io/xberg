@@ -8,5 +8,9 @@
   "metadata": {
     "description": "RSS feed format with multiple items containing metadata and content links",
     "category": "feed"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/xml/xml_rss.txt",
+    "source": "xml_parse"
   }
 }

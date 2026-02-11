@@ -8,5 +8,9 @@
   "metadata": {
     "description": "SVG technical diagram from Intel document",
     "category": "technical"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/svg/svg_technical.txt",
+    "source": "raw_source"
   }
 }

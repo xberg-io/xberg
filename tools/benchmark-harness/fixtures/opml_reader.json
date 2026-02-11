@@ -8,5 +8,9 @@
   "metadata": {
     "description": "OPML reader document with nested outlines",
     "category": "structured_data"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/opml/opml_reader.txt",
+    "source": "pandoc"
   }
 }

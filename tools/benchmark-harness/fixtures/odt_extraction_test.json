@@ -2,9 +2,15 @@
   "document": "../../../test_documents/odt/extraction_test.odt",
   "file_type": "odt",
   "file_size": 7659,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "ODT document specifically for extraction testing",
     "category": "simple"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/odt/odt_extraction_test.txt",
+    "source": "pandoc"
   }
 }

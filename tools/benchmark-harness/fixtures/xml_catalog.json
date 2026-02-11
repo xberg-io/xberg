@@ -8,5 +8,9 @@
   "metadata": {
     "description": "XML catalog with multiple plant records containing structured product data",
     "category": "catalog"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/xml/xml_catalog.txt",
+    "source": "xml_parse"
   }
 }

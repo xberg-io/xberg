@@ -2,9 +2,15 @@
   "document": "../../../test_documents/odt/table.odt",
   "file_type": "odt",
   "file_size": 10763,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "ODT document with table structures for layout extraction",
     "category": "tables"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/odt/odt_tables.txt",
+    "source": "pandoc"
   }
 }

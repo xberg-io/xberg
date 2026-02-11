@@ -12,5 +12,9 @@
     "description": "Large formatted DOCX - 416KB document with EMF graphics",
     "category": "docx-complex",
     "size_class": "medium"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/docx/docx_large_formatted.txt",
+    "source": "python-docx"
   }
 }

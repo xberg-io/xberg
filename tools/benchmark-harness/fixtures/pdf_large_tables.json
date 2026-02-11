@@ -12,5 +12,9 @@
     "description": "Large PDF with extensive tables - 2.5MB comprehensive document",
     "category": "pdf-tables",
     "size_class": "large"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_large_tables.txt",
+    "source": "pdftotext"
   }
 }

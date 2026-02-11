@@ -11,5 +11,9 @@
   "metadata": {
     "description": "DOCX with tables",
     "category": "structured"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/docx/docx_tables.txt",
+    "source": "python-docx"
   }
 }

@@ -2,9 +2,15 @@
   "document": "../../../test_documents/email/plain_text_only.eml",
   "file_type": "eml",
   "file_size": 317,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Simple plain text email without attachments",
     "category": "simple"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/eml/eml_simple.txt",
+    "source": "python_email"
   }
 }

@@ -2,9 +2,15 @@
   "document": "../../../test_documents/email/multipart_email.eml",
   "file_type": "eml",
   "file_size": 763,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Multipart email with both plain text and HTML alternatives",
     "category": "multipart"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/eml/eml_multipart.txt",
+    "source": "python_email"
   }
 }

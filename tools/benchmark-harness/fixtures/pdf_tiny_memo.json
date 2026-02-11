@@ -12,5 +12,9 @@
     "description": "Tiny PDF memo - 13KB searchable text document",
     "category": "pdf-tiny",
     "size_class": "tiny"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_tiny_memo.txt",
+    "source": "pdftotext"
   }
 }

@@ -2,9 +2,15 @@
   "document": "../../../test_documents/latex/latex_document.tex",
   "file_type": "tex",
   "file_size": 1475,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Full LaTeX document with sections, lists, tables, equations, and metadata",
     "category": "structured"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/tex/latex_document.txt",
+    "source": "pandoc"
   }
 }

@@ -2,9 +2,15 @@
   "document": "../../../test_documents/rtf/tables.rtf",
   "file_type": "rtf",
   "file_size": 8499,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "RTF document with table structures and tabular data",
     "category": "structured"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/rtf/rtf_tables.txt",
+    "source": "pandoc"
   }
 }

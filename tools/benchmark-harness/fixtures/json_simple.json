@@ -1,10 +1,16 @@
 {
-	"document": "../../../test_documents/json/simple.json",
-	"file_type": "json",
-	"file_size": 3443,
-	"expected_frameworks": ["kreuzberg"],
-	"metadata": {
-		"description": "Simple JSON - Document elements with metadata and structured content",
-		"category": "structured"
-	}
+  "document": "../../../test_documents/json/simple.json",
+  "file_type": "json",
+  "file_size": 3443,
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
+  "metadata": {
+    "description": "Simple JSON - Document elements with metadata and structured content",
+    "category": "structured"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/json/json_simple.txt",
+    "source": "raw_source"
+  }
 }

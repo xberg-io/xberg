@@ -9,5 +9,9 @@
   "metadata": {
     "description": "LaTeX reader test document",
     "category": "academic"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/latex/latex_reader.txt",
+    "source": "pandoc"
   }
 }

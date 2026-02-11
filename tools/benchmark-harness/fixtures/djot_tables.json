@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Djot markup with tables",
     "category": "markup"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/djot/djot_tables.txt",
+    "source": "raw_source"
   }
 }

@@ -10,5 +10,9 @@
     "category": "pdf-scanned",
     "size_class": "small",
     "requires_ocr": true
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_scanned_ocr.txt",
+    "source": "pdftotext"
   }
 }

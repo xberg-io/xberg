@@ -11,5 +11,9 @@
     "size_class": "small",
     "source": "google-docs",
     "special_handling": "cloud_generated"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_google_docs.txt",
+    "source": "pdftotext"
   }
 }

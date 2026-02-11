@@ -1,10 +1,16 @@
 {
-	"document": "../../../test_documents/xls/tests_example.xls",
-	"file_type": "xls",
-	"file_size": 16384,
-	"expected_frameworks": ["kreuzberg"],
-	"metadata": {
-		"description": "XLS example - Small Excel spreadsheet with sample data",
-		"category": "text"
-	}
+  "document": "../../../test_documents/xls/tests_example.xls",
+  "file_type": "xls",
+  "file_size": 16384,
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
+  "metadata": {
+    "description": "XLS example - Small Excel spreadsheet with sample data",
+    "category": "text"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/xls/xls_example.txt",
+    "source": "xlrd"
+  }
 }

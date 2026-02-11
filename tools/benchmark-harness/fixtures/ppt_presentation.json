@@ -1,10 +1,16 @@
 {
-	"document": "../../../test_documents/ppt/simple.ppt",
-	"file_type": "ppt",
-	"file_size": 504320,
-	"expected_frameworks": ["kreuzberg"],
-	"metadata": {
-		"description": "Legacy PPT format - Office 97-2003 presentation document",
-		"category": "legacy"
-	}
+  "document": "../../../test_documents/ppt/simple.ppt",
+  "file_type": "ppt",
+  "file_size": 504320,
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
+  "metadata": {
+    "description": "Legacy PPT format - Office 97-2003 presentation document",
+    "category": "legacy"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/ppt/ppt_presentation.txt",
+    "source": "libreoffice"
+  }
 }

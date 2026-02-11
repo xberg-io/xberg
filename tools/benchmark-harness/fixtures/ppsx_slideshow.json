@@ -11,5 +11,9 @@
     "description": "PowerPoint Slideshow (auto-play presentation)",
     "category": "presentation",
     "variant": "slideshow"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/ppsx/ppsx_slideshow.txt",
+    "source": "python-pptx"
   }
 }

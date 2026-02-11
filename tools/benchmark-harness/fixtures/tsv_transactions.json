@@ -2,9 +2,15 @@
   "document": "../../../test_documents/data_formats/sales_transactions.tsv",
   "file_type": "tsv",
   "file_size": 4127,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Sales transaction ledger",
     "category": "data"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/tsv/tsv_transactions.txt",
+    "source": "raw_source"
   }
 }

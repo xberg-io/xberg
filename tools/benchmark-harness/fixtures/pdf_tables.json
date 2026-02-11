@@ -11,5 +11,9 @@
   "metadata": {
     "description": "PDF with tables - tiny document",
     "category": "structured"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_tables.txt",
+    "source": "pdftotext"
   }
 }

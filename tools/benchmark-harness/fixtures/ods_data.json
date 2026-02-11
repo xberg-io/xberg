@@ -2,9 +2,15 @@
   "document": "../../../test_documents/data_formats/stanley_cups.ods",
   "file_type": "ods",
   "file_size": 11904,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Real-world data spreadsheet",
     "category": "spreadsheet"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/ods/ods_data.txt",
+    "source": "odfpy"
   }
 }

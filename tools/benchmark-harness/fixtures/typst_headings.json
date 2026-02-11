@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Typst document with headings structure",
     "category": "academic"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/typ/typst_headings.txt",
+    "source": "pandoc"
   }
 }

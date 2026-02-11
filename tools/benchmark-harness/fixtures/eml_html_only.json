@@ -2,9 +2,15 @@
   "document": "../../../test_documents/email/html_only.eml",
   "file_type": "eml",
   "file_size": 1150,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "HTML-only email with formatted content",
     "category": "simple"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/eml/eml_html_only.txt",
+    "source": "python_email"
   }
 }

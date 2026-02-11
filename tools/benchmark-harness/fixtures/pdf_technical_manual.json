@@ -12,5 +12,9 @@
     "description": "Technical manual - 2.5MB machine learning course textbook",
     "category": "pdf-technical",
     "size_class": "large"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_technical_manual.txt",
+    "source": "pdftotext"
   }
 }

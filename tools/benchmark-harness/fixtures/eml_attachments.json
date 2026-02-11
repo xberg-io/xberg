@@ -2,9 +2,15 @@
   "document": "../../../test_documents/email/mailgun_pdf_attachment.eml",
   "file_type": "eml",
   "file_size": 1514,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Email with PDF attachment from Mailgun",
     "category": "attachments"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/eml/eml_attachments.txt",
+    "source": "python_email"
   }
 }

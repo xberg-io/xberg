@@ -11,5 +11,9 @@
     "description": "Medium-sized HTML with deeply nested elements and hierarchical structure",
     "category": "web",
     "size_class": "medium"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/html/html_nested.txt",
+    "source": "beautifulsoup"
   }
 }

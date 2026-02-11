@@ -2,9 +2,15 @@
   "document": "../../../test_documents/epub/features.epub",
   "file_type": "epub",
   "file_size": 8970,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Simple EPUB document with feature demonstrations for basic parsing validation",
     "category": "simple"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/epub/epub_simple.txt",
+    "source": "pandoc"
   }
 }

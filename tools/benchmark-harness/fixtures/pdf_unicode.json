@@ -11,5 +11,9 @@
     "size_class": "large",
     "language": "multi-unicode",
     "special_handling": "unicode_encoding"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_unicode.txt",
+    "source": "pdftotext"
   }
 }

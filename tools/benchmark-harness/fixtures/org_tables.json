@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Org-mode document with structured tables and complex formatting",
     "category": "structured-data"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/org/org_tables.txt",
+    "source": "raw_source"
   }
 }

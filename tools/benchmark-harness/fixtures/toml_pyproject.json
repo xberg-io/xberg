@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Python pyproject.toml configuration",
     "category": "data"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/toml/toml_pyproject.txt",
+    "source": "raw_source"
   }
 }

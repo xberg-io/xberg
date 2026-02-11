@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Jupyter notebook with mixed markdown, code, and embedded HTML content",
     "category": "mixed"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/ipynb/jupyter_mixed.txt",
+    "source": "nbformat"
   }
 }

@@ -10,5 +10,9 @@
     "description": "Document from docling test suite",
     "source": "docling",
     "size_category": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/md/webvtt_example_02.vtt.txt",
+    "source": "raw_source"
   }
 }

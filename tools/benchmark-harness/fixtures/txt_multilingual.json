@@ -9,5 +9,9 @@
   "metadata": {
     "description": "Multilingual plain text file",
     "category": "text"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/txt/txt_multilingual.txt",
+    "source": "raw_source"
   }
 }

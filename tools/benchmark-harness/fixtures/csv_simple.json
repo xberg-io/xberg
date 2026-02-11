@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Simple CSV with Stanley Cups data",
     "category": "tables"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/csv/csv_simple.txt",
+    "source": "raw_source"
   }
 }

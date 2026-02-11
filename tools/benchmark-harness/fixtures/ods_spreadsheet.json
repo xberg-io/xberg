@@ -2,9 +2,15 @@
   "document": "../../../test_documents/data_formats/excel_multi_sheet.ods",
   "file_type": "ods",
   "file_size": 9534,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Multi-sheet OpenDocument Spreadsheet",
     "category": "spreadsheet"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/ods/ods_spreadsheet.txt",
+    "source": "odfpy"
   }
 }

@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Rust Cargo workspace configuration",
     "category": "data"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/toml/toml_cargo.txt",
+    "source": "raw_source"
   }
 }

@@ -12,5 +12,9 @@
     "description": "Medium PDF with complex tables - 240KB technical document",
     "category": "pdf-tables",
     "size_class": "medium"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_medium_tables.txt",
+    "source": "pdftotext"
   }
 }

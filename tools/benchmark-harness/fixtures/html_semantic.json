@@ -11,5 +11,9 @@
     "description": "Medium-sized HTML with semantic markup and international content structure",
     "category": "web",
     "size_class": "medium"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/html/html_semantic.txt",
+    "source": "beautifulsoup"
   }
 }

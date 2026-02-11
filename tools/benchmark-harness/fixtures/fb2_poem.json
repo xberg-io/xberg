@@ -8,5 +8,9 @@
   "metadata": {
     "description": "FictionBook poem with verse structure",
     "category": "literature"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/fb2/fb2_poem.txt",
+    "source": "pandoc"
   }
 }

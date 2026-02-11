@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Advanced Typst document with complex formatting",
     "category": "academic"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/typ/typst_advanced.txt",
+    "source": "pandoc"
   }
 }

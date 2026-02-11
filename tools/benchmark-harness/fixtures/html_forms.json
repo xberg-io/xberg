@@ -11,5 +11,9 @@
     "description": "Medium-sized HTML document with form elements and structured content",
     "category": "web",
     "size_class": "medium"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/html/html_forms.txt",
+    "source": "beautifulsoup"
   }
 }

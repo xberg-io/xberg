@@ -2,9 +2,15 @@
   "document": "../../../test_documents/odt/unorderedList.odt",
   "file_type": "odt",
   "file_size": 9505,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "ODT document with unordered and ordered lists",
     "category": "lists"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/odt/odt_lists.txt",
+    "source": "pandoc"
   }
 }

@@ -12,5 +12,9 @@
     "description": "Very large textbook - 9MB comprehensive statistical learning book",
     "category": "pdf-book",
     "size_class": "very-large"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_very_large_book.txt",
+    "source": "pdftotext"
   }
 }

@@ -9,5 +9,9 @@
     "description": "Document from unstructured test suite",
     "source": "unstructured",
     "size_category": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/eml/mime-attach-mp3.txt",
+    "source": "python_email"
   }
 }

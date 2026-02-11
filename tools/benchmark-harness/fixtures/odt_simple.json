@@ -2,9 +2,15 @@
   "document": "../../../test_documents/odt/simple.odt",
   "file_type": "odt",
   "file_size": 7649,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Simple ODT document with basic text content",
     "category": "simple"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/odt/odt_simple.txt",
+    "source": "pandoc"
   }
 }

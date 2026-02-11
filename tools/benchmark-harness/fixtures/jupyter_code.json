@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Jupyter notebook with Python code cells and MIME type demonstrations",
     "category": "code"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/ipynb/jupyter_code.txt",
+    "source": "nbformat"
   }
 }

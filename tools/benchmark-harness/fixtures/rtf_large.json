@@ -2,9 +2,15 @@
   "document": "../../../test_documents/rtf/word_sample.rtf",
   "file_type": "rtf",
   "file_size": 163580,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Large RTF document with substantial word sample content",
     "category": "large"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/rtf/rtf_large.txt",
+    "source": "pandoc"
   }
 }

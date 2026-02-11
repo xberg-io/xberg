@@ -11,5 +11,9 @@
     "size_class": "small",
     "has_forms": true,
     "special_handling": "form_fields"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_forms.txt",
+    "source": "pdftotext"
   }
 }

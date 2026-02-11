@@ -11,5 +11,9 @@
     "description": "Complex HTML with nested tables - 2.6KB web document",
     "category": "html-complex",
     "size_class": "tiny"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/html/html_complex.txt",
+    "source": "beautifulsoup"
   }
 }

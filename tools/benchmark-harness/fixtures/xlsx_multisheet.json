@@ -11,5 +11,9 @@
     "description": "Excel with multiple sheets - 6KB spreadsheet with formulas",
     "category": "xlsx-multi-sheet",
     "size_class": "tiny"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/xlsx/xlsx_multisheet.txt",
+    "source": "openpyxl"
   }
 }

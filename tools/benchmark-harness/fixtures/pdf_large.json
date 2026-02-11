@@ -11,5 +11,9 @@
   "metadata": {
     "description": "Large PDF - Technical presentation slides",
     "category": "presentation"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_large.txt",
+    "source": "pdftotext"
   }
 }

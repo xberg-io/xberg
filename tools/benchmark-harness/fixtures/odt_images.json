@@ -2,7 +2,9 @@
   "document": "../../../test_documents/odt/image.odt",
   "file_type": "odt",
   "file_size": 33360,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "ODT document containing embedded images",
     "category": "image"

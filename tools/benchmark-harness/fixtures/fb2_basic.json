@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Basic FictionBook document with simple content",
     "category": "literature"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/fb2/fb2_basic.txt",
+    "source": "pandoc"
   }
 }

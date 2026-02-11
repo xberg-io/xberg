@@ -2,9 +2,15 @@
   "document": "../../../test_documents/data_formats/product_catalog.tsv",
   "file_type": "tsv",
   "file_size": 2889,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Product catalog with inventory data",
     "category": "data"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/tsv/tsv_products.txt",
+    "source": "raw_source"
   }
 }

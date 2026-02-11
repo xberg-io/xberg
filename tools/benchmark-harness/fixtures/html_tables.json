@@ -11,5 +11,9 @@
     "description": "Minimal HTML document with basic structure",
     "category": "web",
     "size_class": "tiny"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/html/html_tables.txt",
+    "source": "beautifulsoup"
   }
 }

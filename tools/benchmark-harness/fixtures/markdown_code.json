@@ -10,6 +10,17 @@
     "description": "Pandoc test suite - nested divs, headers, inline formatting, code blocks",
     "category": "markdown-code",
     "size_class": "small",
-    "features": ["divs", "nesting", "headers", "inline-code", "code-blocks", "emphasis"]
+    "features": [
+      "divs",
+      "nesting",
+      "headers",
+      "inline-code",
+      "code-blocks",
+      "emphasis"
+    ]
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/md/markdown_code.txt",
+    "source": "raw_source"
   }
 }

@@ -11,5 +11,9 @@
   "metadata": {
     "description": "PDF with embedded images and tables",
     "category": "complex"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_embedded.txt",
+    "source": "pdftotext"
   }
 }

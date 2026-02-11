@@ -2,9 +2,15 @@
   "document": "../../../test_documents/rtf/list_complex.rtf",
   "file_type": "rtf",
   "file_size": 63224,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "RTF document with complex list structures and nested formatting",
     "category": "complex"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/rtf/rtf_complex.txt",
+    "source": "pandoc"
   }
 }

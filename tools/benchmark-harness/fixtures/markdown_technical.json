@@ -10,5 +10,9 @@
     "description": "Technical markdown document - 33KB scientific text",
     "category": "markdown-technical",
     "size_class": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/md/markdown_technical.txt",
+    "source": "raw_source"
   }
 }

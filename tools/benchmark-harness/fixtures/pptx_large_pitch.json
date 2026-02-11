@@ -12,5 +12,9 @@
     "description": "Large pitch deck - 4.4MB presentation with high-res images",
     "category": "pptx-pitch-deck",
     "size_class": "large"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pptx/pptx_large_pitch.txt",
+    "source": "python-pptx"
   }
 }

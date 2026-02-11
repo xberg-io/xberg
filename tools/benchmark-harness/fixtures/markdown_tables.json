@@ -10,6 +10,15 @@
     "description": "Pandoc table syntax - simple tables, multiline tables with captions",
     "category": "markdown-tables",
     "size_class": "tiny",
-    "features": ["tables", "captions", "multiline-tables", "grid-tables"]
+    "features": [
+      "tables",
+      "captions",
+      "multiline-tables",
+      "grid-tables"
+    ]
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/md/markdown_tables.txt",
+    "source": "raw_source"
   }
 }

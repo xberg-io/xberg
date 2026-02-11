@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Minimal XML note structure with basic text content",
     "category": "structured"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/xml/xml_simple.txt",
+    "source": "xml_parse"
   }
 }

@@ -11,5 +11,9 @@
     "description": "PowerPoint Macro-Enabled Presentation with images",
     "category": "presentation",
     "variant": "macro-enabled"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pptm/pptm_macro_enabled.txt",
+    "source": "python-pptx"
   }
 }

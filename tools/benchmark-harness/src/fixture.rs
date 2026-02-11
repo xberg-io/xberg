@@ -117,6 +117,16 @@ impl Fixture {
                     | "openpyxl"
                     | "codex-vision"
                     | "raw_source"
+                    | "pandoc"
+                    | "python_email"
+                    | "extract_msg"
+                    | "nbformat"
+                    | "xml_parse"
+                    | "beautifulsoup"
+                    | "xlrd"
+                    | "antiword"
+                    | "libreoffice"
+                    | "odfpy"
             ) {
                 return Err(Error::InvalidFixture {
                     path: fixture_path.to_path_buf(),

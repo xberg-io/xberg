@@ -12,5 +12,9 @@
     "description": "Multi-page PDF - 125KB document with multiple pages",
     "category": "pdf-multi-page",
     "size_class": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_multipage.txt",
+    "source": "pdftotext"
   }
 }

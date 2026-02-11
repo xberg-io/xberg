@@ -10,6 +10,15 @@
     "description": "Comprehensive Markdown with GFM and Pandoc extensions - metadata, links, LaTeX",
     "category": "markdown-gfm",
     "size_class": "tiny",
-    "features": ["metadata", "links", "latex", "references"]
+    "features": [
+      "metadata",
+      "links",
+      "latex",
+      "references"
+    ]
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/md/markdown_gfm.txt",
+    "source": "raw_source"
   }
 }

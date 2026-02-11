@@ -2,9 +2,15 @@
   "document": "../../../test_documents/rtf/formatting.rtf",
   "file_type": "rtf",
   "file_size": 40193,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "RTF document with extensive formatting (bold, italic, colors, fonts)",
     "category": "formatted"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/rtf/rtf_formatted.txt",
+    "source": "pandoc"
   }
 }

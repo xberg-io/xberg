@@ -9,5 +9,9 @@
     "description": "reStructuredText with directives, tables, and metadata - 2.2KB technical documentation",
     "category": "rst-directives",
     "size_class": "tiny"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/rst/rst_directives.txt",
+    "source": "raw_source"
   }
 }

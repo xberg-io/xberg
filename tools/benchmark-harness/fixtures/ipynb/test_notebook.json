@@ -9,5 +9,9 @@
     "description": "Document from markitdown test suite",
     "source": "markitdown",
     "size_category": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/ipynb/test_notebook.txt",
+    "source": "nbformat"
   }
 }

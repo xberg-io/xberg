@@ -2,9 +2,15 @@
   "document": "../../../test_documents/markdown/sample.commonmark",
   "file_type": "commonmark",
   "file_size": 3036,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "CommonMark document with standard markdown elements including headers, lists, code blocks, links, emphasis, blockquotes, tables, and mixed formatting",
     "category": "text"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/commonmark/commonmark_sample.txt",
+    "source": "raw_source"
   }
 }

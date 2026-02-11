@@ -2,9 +2,15 @@
   "document": "../../../test_documents/email/simple_msg.msg",
   "file_type": "msg",
   "file_size": 8704,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Simple MSG format email without attachments",
     "category": "simple"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/msg/msg_simple.txt",
+    "source": "extract_msg"
   }
 }

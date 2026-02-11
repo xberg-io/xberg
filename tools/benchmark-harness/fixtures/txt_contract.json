@@ -9,5 +9,9 @@
   "metadata": {
     "description": "Contract document in plain text",
     "category": "legal"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/txt/txt_contract.txt",
+    "source": "raw_source"
   }
 }

@@ -12,5 +12,9 @@
     "description": "DOCX with embedded images and anchors - 18KB document",
     "category": "docx-images",
     "size_class": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/docx/docx_images.txt",
+    "source": "python-docx"
   }
 }

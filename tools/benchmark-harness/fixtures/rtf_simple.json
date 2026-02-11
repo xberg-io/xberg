@@ -2,9 +2,15 @@
   "document": "../../../test_documents/rtf/extraction_test.rtf",
   "file_type": "rtf",
   "file_size": 4262,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Simple RTF document with basic extraction test content",
     "category": "simple"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/rtf/rtf_simple.txt",
+    "source": "pandoc"
   }
 }

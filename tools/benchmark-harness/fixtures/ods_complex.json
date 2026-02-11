@@ -2,9 +2,15 @@
   "document": "../../../test_documents/data_formats/test_01.ods",
   "file_type": "ods",
   "file_size": 183558,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Complex spreadsheet with embedded objects",
     "category": "spreadsheet"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/ods/ods_complex.txt",
+    "source": "odfpy"
   }
 }

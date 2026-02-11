@@ -12,5 +12,9 @@
     "size_category": "medium",
     "excel_variant": "macro-enabled",
     "notes": "XLSM files support VBA macros and advanced Excel features"
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/xlsm/xlsm_macro_enabled.txt",
+    "source": "openpyxl"
   }
 }

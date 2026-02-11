@@ -2,9 +2,15 @@
   "document": "../../../test_documents/odt/unicode.odt",
   "file_type": "odt",
   "file_size": 11787,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "ODT document with mixed unicode characters and international text",
     "category": "unicode"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/odt/odt_unicode.txt",
+    "source": "pandoc"
   }
 }

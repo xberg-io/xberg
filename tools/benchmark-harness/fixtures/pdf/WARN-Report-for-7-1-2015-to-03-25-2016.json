@@ -14,5 +14,9 @@
     "description": "Document from pdfplumber test suite",
     "source": "pdfplumber",
     "size_category": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/pdf/WARN-Report-for-7-1-2015-to-03-25-2016.txt",
+    "source": "pdftotext"
   }
 }

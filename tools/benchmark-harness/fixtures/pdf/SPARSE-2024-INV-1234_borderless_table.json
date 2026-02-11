@@ -14,5 +14,9 @@
     "description": "Document from markitdown test suite",
     "source": "markitdown",
     "size_category": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/pdf/SPARSE-2024-INV-1234_borderless_table.txt",
+    "source": "pdftotext"
   }
 }

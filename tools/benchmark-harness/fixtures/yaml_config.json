@@ -8,5 +8,9 @@
   "metadata": {
     "description": "YAML configuration file",
     "category": "config"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/yaml/yaml_config.txt",
+    "source": "raw_source"
   }
 }

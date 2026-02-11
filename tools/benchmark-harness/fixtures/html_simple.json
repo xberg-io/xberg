@@ -10,5 +10,9 @@
   "metadata": {
     "description": "Simple HTML with table",
     "category": "web"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/html/html_simple.txt",
+    "source": "beautifulsoup"
   }
 }

@@ -2,9 +2,15 @@
   "document": "../../../test_documents/data_formats/employees.tsv",
   "file_type": "tsv",
   "file_size": 3051,
-  "expected_frameworks": ["kreuzberg"],
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
   "metadata": {
     "description": "Employee database with 25 records",
     "category": "data"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/tsv/tsv_data.txt",
+    "source": "raw_source"
   }
 }

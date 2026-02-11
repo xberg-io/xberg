@@ -12,5 +12,9 @@
     "description": "DOCX with mathematical equations - 15KB document with complex formatting",
     "category": "docx-equations",
     "size_class": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/docx/docx_equations.txt",
+    "source": "python-docx"
   }
 }

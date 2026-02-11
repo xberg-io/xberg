@@ -9,5 +9,9 @@
     "description": "Large Excel dataset - 166KB spreadsheet with extensive data",
     "category": "xlsx-large",
     "size_class": "medium"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/xlsx/xlsx_large_dataset.txt",
+    "source": "openpyxl"
   }
 }

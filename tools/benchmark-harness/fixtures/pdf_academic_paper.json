@@ -12,5 +12,9 @@
     "description": "Academic research paper - 1.5MB scientific publication with figures",
     "category": "pdf-academic",
     "size_class": "large"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_academic_paper.txt",
+    "source": "pdftotext"
   }
 }

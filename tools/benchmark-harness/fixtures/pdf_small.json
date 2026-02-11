@@ -11,5 +11,9 @@
   "metadata": {
     "description": "Small PDF - Intel technical document",
     "category": "technical"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/pdf/pdf_small.txt",
+    "source": "pdftotext"
   }
 }

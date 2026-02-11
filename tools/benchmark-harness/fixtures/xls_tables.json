@@ -1,10 +1,16 @@
 {
-	"document": "../../../test_documents/xls/test_excel.xls",
-	"file_type": "xls",
-	"file_size": 49664,
-	"expected_frameworks": ["kreuzberg"],
-	"metadata": {
-		"description": "XLS with tables - Excel spreadsheet test document with tabular data",
-		"category": "structured"
-	}
+  "document": "../../../test_documents/xls/test_excel.xls",
+  "file_type": "xls",
+  "file_size": 49664,
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
+  "metadata": {
+    "description": "XLS with tables - Excel spreadsheet test document with tabular data",
+    "category": "structured"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/xls/xls_tables.txt",
+    "source": "xlrd"
+  }
 }

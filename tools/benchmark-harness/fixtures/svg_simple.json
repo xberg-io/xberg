@@ -8,5 +8,9 @@
   "metadata": {
     "description": "Simple SVG image",
     "category": "image"
+  },
+  "ground_truth": {
+    "text_file": "../../../test_documents/ground_truth/svg/svg_simple.txt",
+    "source": "raw_source"
   }
 }
