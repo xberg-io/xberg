@@ -9,6 +9,7 @@ use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\OcrConfig;
 use Kreuzberg\Config\ChunkingConfig;
 use Kreuzberg\Config\ImageExtractionConfig;
+use Kreuzberg\Config\KeywordConfig;
 use Kreuzberg\Config\LanguageDetectionConfig;
 use Kreuzberg\Config\PdfConfig;
 use Kreuzberg\Config\PostProcessorConfig;
@@ -74,6 +75,15 @@ class Helpers
         }
         if (isset($config['language_detection']) && is_array($config['language_detection'])) {
             $params['languageDetection'] = new LanguageDetectionConfig(...$config['language_detection']);
+        }
+        if (isset($config['keywords']) && is_array($config['keywords'])) {
+            $params['keywords'] = new KeywordConfig(...$config['keywords']);
+        }
+        if (isset($config['postprocessor']) && is_array($config['postprocessor'])) {
+            $params['postprocessor'] = new PostProcessorConfig(...$config['postprocessor']);
+        }
+        if (isset($config['token_reduction']) && is_array($config['token_reduction'])) {
+            $params['tokenReduction'] = new TokenReductionConfig(...$config['token_reduction']);
         }
 
         // Handle scalar config options

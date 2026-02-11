@@ -13,6 +13,8 @@ from kreuzberg import (
     ChunkingConfig,
     ExtractionConfig,
     ImageExtractionConfig,
+    KeywordAlgorithm,
+    KeywordConfig,
     LanguageDetectionConfig,
     OcrConfig,
     OutputFormat,
@@ -61,6 +63,13 @@ def build_config(config: dict[str, Any] | None) -> ExtractionConfig:
 
     if (language_detection := config.get("language_detection")) is not None:
         kwargs["language_detection"] = LanguageDetectionConfig(**language_detection)
+
+    if (keywords_data := config.get("keywords")) is not None:
+        kw = dict(keywords_data)
+        if "algorithm" in kw:
+            algo_map = {"yake": KeywordAlgorithm.Yake, "rake": KeywordAlgorithm.Rake}
+            kw["algorithm"] = algo_map.get(kw["algorithm"], KeywordAlgorithm.Yake)
+        kwargs["keywords"] = KeywordConfig(**kw)
 
     if (postprocessor := config.get("postprocessor")) is not None:
         kwargs["postprocessor"] = PostProcessorConfig(**postprocessor)

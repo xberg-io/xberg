@@ -1741,7 +1741,18 @@ internal static class Serialization
         switch (metadata.Format.Type)
         {
             case FormatType.Pdf:
-                metadata.Format.Pdf = DeserializeElement<PdfMetadata>(root);
+                try
+                {
+                    metadata.Format.Pdf = DeserializeElement<PdfMetadata>(root);
+                }
+                catch (JsonException)
+                {
+                    // When keyword extraction is enabled, the flattened JSON may contain
+                    // keyword objects in the "keywords" field instead of simple strings,
+                    // which causes PdfMetadata deserialization to fail. Fall back to
+                    // extracting PDF-specific fields manually.
+                    metadata.Format.Pdf = ExtractPdfMetadataLenient(root);
+                }
                 break;
             case FormatType.Excel:
                 metadata.Format.Excel = DeserializeElement<ExcelMetadata>(root);
@@ -1774,6 +1785,47 @@ internal static class Serialization
                 metadata.Format.Type = FormatType.Unknown;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Lenient extraction of PDF metadata from flattened JSON.
+    /// Used when standard deserialization fails (e.g., keyword objects in the keywords field).
+    /// </summary>
+    private static PdfMetadata ExtractPdfMetadataLenient(JsonElement root)
+    {
+        var pdf = new PdfMetadata();
+
+        if (root.TryGetProperty("title", out var title) && title.ValueKind == JsonValueKind.String)
+            pdf.Title = title.GetString();
+        if (root.TryGetProperty("subject", out var subject) && subject.ValueKind == JsonValueKind.String)
+            pdf.Subject = subject.GetString();
+        if (root.TryGetProperty("author", out var author) && author.ValueKind == JsonValueKind.String)
+            pdf.Author = author.GetString();
+        if (root.TryGetProperty("creator", out var creator) && creator.ValueKind == JsonValueKind.String)
+            pdf.Creator = creator.GetString();
+        if (root.TryGetProperty("producer", out var producer) && producer.ValueKind == JsonValueKind.String)
+            pdf.Producer = producer.GetString();
+        if (root.TryGetProperty("creation_date", out var creationDate) && creationDate.ValueKind == JsonValueKind.String)
+            pdf.CreationDate = creationDate.GetString();
+        if (root.TryGetProperty("modification_date", out var modificationDate) && modificationDate.ValueKind == JsonValueKind.String)
+            pdf.ModificationDate = modificationDate.GetString();
+        if (root.TryGetProperty("page_count", out var pageCount) && pageCount.ValueKind == JsonValueKind.Number)
+            pdf.PageCount = pageCount.GetInt32();
+
+        // Try to extract keywords as string list; skip if they are keyword objects
+        if (root.TryGetProperty("keywords", out var keywords) && keywords.ValueKind == JsonValueKind.Array)
+        {
+            var stringKeywords = new List<string>();
+            foreach (var item in keywords.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String)
+                    stringKeywords.Add(item.GetString()!);
+            }
+            if (stringKeywords.Count > 0)
+                pdf.Keywords = stringKeywords;
+        }
+
+        return pdf;
     }
 
     /// <summary>
@@ -1966,6 +2018,10 @@ internal static class Serialization
         if (metadata.Keywords != null)
         {
             node["keywords"] = JsonSerializer.SerializeToNode(metadata.Keywords, Options);
+        }
+        else if (metadata.ExtractedKeywords != null)
+        {
+            node["keywords"] = JsonSerializer.SerializeToNode(metadata.ExtractedKeywords, Options);
         }
         if (!string.IsNullOrWhiteSpace(metadata.Language))
         {

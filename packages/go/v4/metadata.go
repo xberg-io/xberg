@@ -196,6 +196,52 @@ func (m Metadata) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
+// UnmarshalJSON implements lenient JSON unmarshaling for PdfMetadata.
+// When keyword extraction is enabled, the flattened JSON may contain keyword
+// objects ([{text, score, ...}]) in the "keywords" field instead of simple
+// strings, which causes standard decoding to fail. This method falls back to
+// field-by-field decoding to recover all other fields.
+func (p *PdfMetadata) UnmarshalJSON(data []byte) error {
+	type Alias PdfMetadata
+	var alias Alias
+	if err := json.Unmarshal(data, &alias); err == nil {
+		*p = PdfMetadata(alias)
+		return nil
+	}
+
+	// Standard decode failed; decode field-by-field, skipping type mismatches.
+	raw := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	tryUnmarshal := func(key string, target any) {
+		if v, ok := raw[key]; ok {
+			if err := json.Unmarshal(v, target); err != nil {
+				// Intentionally ignore type-mismatch errors in fallback decoding.
+				_ = err
+			}
+		}
+	}
+
+	tryUnmarshal("title", &p.Title)
+	tryUnmarshal("subject", &p.Subject)
+	tryUnmarshal("authors", &p.Authors)
+	tryUnmarshal("keywords", &p.Keywords)
+	tryUnmarshal("created_at", &p.CreatedAt)
+	tryUnmarshal("modified_at", &p.ModifiedAt)
+	tryUnmarshal("created_by", &p.CreatedBy)
+	tryUnmarshal("producer", &p.Producer)
+	tryUnmarshal("page_count", &p.PageCount)
+	tryUnmarshal("pdf_version", &p.PDFVersion)
+	tryUnmarshal("is_encrypted", &p.IsEncrypted)
+	tryUnmarshal("width", &p.Width)
+	tryUnmarshal("height", &p.Height)
+	tryUnmarshal("summary", &p.Summary)
+
+	return nil
+}
+
 func (m *Metadata) decodeFormat(data []byte) error {
 	switch m.Format.Type {
 	case FormatPDF:
