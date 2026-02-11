@@ -76,10 +76,17 @@ const MODELS: &[ModelDefinition] = &[
         model_type: "rec",
         remote_filename: "en_PP-OCRv4_rec_infer.onnx",
         local_filename: "model.onnx",
-        sha256_checksum: "8e7d966c3af523c93183eef3d4b01faae79b5aebb4e8272de302053d70d61e8f",
-        size_bytes: 7_684_142,
+        sha256_checksum: "c8f9b6f4d541991132f0971a4fbe879b79f226bb40174a385407e6be09099e6a",
+        size_bytes: 7_684_265,
     },
 ];
+
+/// Character dictionary for en_PP-OCRv4 recognition model.
+///
+/// The `ort` crate cannot read custom metadata from PaddlePaddle PIR-mode ONNX models,
+/// so we ship the dictionary alongside the model files. This contains 97 entries:
+/// CTC blank '#', 95 printable ASCII characters in model order, and trailing space.
+const EN_PPOCRV4_DICT: &str = "#\n0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n:\n;\n<\n=\n>\n?\n@\nA\nB\nC\nD\nE\nF\nG\nH\nI\nJ\nK\nL\nM\nN\nO\nP\nQ\nR\nS\nT\nU\nV\nW\nX\nY\nZ\n[\n\\\n]\n^\n_\n`\na\nb\nc\nd\ne\nf\ng\nh\ni\nj\nk\nl\nm\nn\no\np\nq\nr\ns\nt\nu\nv\nw\nx\ny\nz\n{\n|\n}\n~\n!\n\"\n#\n$\n%\n&\n'\n(\n)\n*\n+\n,\n-\n.\n/\n \n ";
 
 /// Paths to all three required PaddleOCR models.
 #[derive(Debug, Clone)]
@@ -90,6 +97,8 @@ pub struct ModelPaths {
     pub cls_model: PathBuf,
     /// Path to the recognition (text reading) model.
     pub rec_model: PathBuf,
+    /// Path to the character dictionary file for the recognition model.
+    pub dict_file: PathBuf,
 }
 
 /// Statistics about the PaddleOCR model cache.
@@ -211,12 +220,24 @@ impl ModelManager {
             }
         }
 
+        // Write character dictionary file for recognition model.
+        // The ort crate cannot read custom metadata from PaddlePaddle PIR-mode ONNX models,
+        // so we ship the dictionary as a separate file.
+        let dict_file = self.dict_file_path();
+        if !dict_file.exists() {
+            let rec_dir = self.model_path("rec");
+            fs::create_dir_all(&rec_dir)?;
+            fs::write(&dict_file, EN_PPOCRV4_DICT)?;
+            tracing::debug!("Character dictionary written to {:?}", dict_file);
+        }
+
         tracing::info!("All PaddleOCR models ready");
 
         Ok(ModelPaths {
             det_model: self.model_path("det"),
             cls_model: self.model_path("cls"),
             rec_model: self.model_path("rec"),
+            dict_file,
         })
     }
 
@@ -317,6 +338,11 @@ impl ModelManager {
     /// Returns the full path to the ONNX model file for a given type.
     fn model_file_path(&self, model_type: &str) -> PathBuf {
         self.model_path(model_type).join("model.onnx")
+    }
+
+    /// Returns the path to the character dictionary file.
+    fn dict_file_path(&self) -> PathBuf {
+        self.model_path("rec").join("dict.txt")
     }
 
     /// Checks if all required models are cached locally.
