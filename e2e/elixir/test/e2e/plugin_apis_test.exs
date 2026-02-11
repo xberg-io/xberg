@@ -61,6 +61,30 @@ defmodule E2E.ConfigurationTest do
   end
 end
 
+defmodule E2E.DocumentExtractorManagementTest do
+  use ExUnit.Case, async: false
+
+  describe "Document Extractor Management" do
+    test "Clear all document extractors and verify list is empty" do
+      Kreuzberg.Plugin.clear_document_extractors()
+      {:ok, result} = Kreuzberg.Plugin.list_document_extractors()
+      assert Enum.empty?(result)
+    end
+
+    test "List all registered document extractors" do
+      {:ok, result} = Kreuzberg.Plugin.list_document_extractors()
+      assert is_list(result)
+      assert Enum.all?(result, &is_binary/1)
+    end
+
+    test "Unregister nonexistent document extractor gracefully" do
+      Kreuzberg.Plugin.unregister_document_extractor(:"nonexistent-extractor-xyz")
+      # Should not raise an error
+    end
+
+  end
+end
+
 defmodule E2E.MimeUtilitiesTest do
   use ExUnit.Case, async: false
 

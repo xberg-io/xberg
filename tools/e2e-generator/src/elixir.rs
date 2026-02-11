@@ -1166,10 +1166,6 @@ fn generate_plugin_api_tests(fixtures: &[&Fixture], e2e_dir: &Utf8Path) -> Resul
             .with_context(|| format!("Fixture '{}' missing api_category", fixture.id))?
             .as_str()
             .to_string();
-        // Skip document_extractor_management - Elixir binding doesn't have these functions
-        if category == "document_extractor_management" {
-            continue;
-        }
         grouped_map.entry(category).or_default().push(fixture);
     }
     let mut grouped: Vec<_> = grouped_map.into_iter().collect();

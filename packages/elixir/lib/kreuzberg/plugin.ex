@@ -577,4 +577,81 @@ defmodule Kreuzberg.Plugin do
     result = Enum.map(backends, fn {_name, metadata} -> metadata.module end)
     {:ok, result}
   end
+
+  # ============================================================================
+  # Document Extractor Management (NIF-backed, managed by Rust core)
+  # ============================================================================
+
+  @doc """
+  List all registered document extractors.
+
+  Returns the names of all document extractors currently registered in the
+  Rust core plugin registry. These are native extractors that handle specific
+  document formats during the extraction pipeline.
+
+  ## Returns
+
+    * `{:ok, names}` - List of extractor name strings
+    * `{:error, reason}` - Error if retrieval fails
+
+  ## Examples
+
+      iex> {:ok, extractors} = Kreuzberg.Plugin.list_document_extractors()
+      iex> is_list(extractors)
+      true
+  """
+  @spec list_document_extractors() :: {:ok, [String.t()]} | {:error, String.t()}
+  def list_document_extractors do
+    Kreuzberg.Native.list_document_extractors()
+  end
+
+  @doc """
+  Unregister a document extractor by name.
+
+  Removes the extractor from the Rust core plugin registry and calls its
+  shutdown method. Safe to call even if the extractor doesn't exist.
+
+  ## Parameters
+
+    * `name` - String name of the extractor to unregister
+
+  ## Returns
+
+    * `:ok` - Extractor unregistered or didn't exist
+    * `{:error, reason}` - Error if unregistration fails
+
+  ## Examples
+
+      iex> Kreuzberg.Plugin.unregister_document_extractor("nonexistent")
+      :ok
+  """
+  @spec unregister_document_extractor(String.t() | atom()) :: :ok | {:error, String.t()}
+  def unregister_document_extractor(name) when is_binary(name) do
+    Kreuzberg.Native.unregister_document_extractor(name)
+  end
+
+  def unregister_document_extractor(name) when is_atom(name) do
+    Kreuzberg.Native.unregister_document_extractor(Atom.to_string(name))
+  end
+
+  @doc """
+  Clear all registered document extractors.
+
+  Removes all extractors from the Rust core plugin registry and calls their
+  shutdown methods. Useful for testing or resetting the extraction pipeline.
+
+  ## Returns
+
+    * `:ok` - All extractors cleared successfully
+    * `{:error, reason}` - Error if clearing fails
+
+  ## Examples
+
+      iex> Kreuzberg.Plugin.clear_document_extractors()
+      :ok
+  """
+  @spec clear_document_extractors() :: :ok | {:error, String.t()}
+  def clear_document_extractors do
+    Kreuzberg.Native.clear_document_extractors()
+  end
 end

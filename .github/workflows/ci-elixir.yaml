@@ -200,6 +200,12 @@ jobs:
           KREUZBERG_BUILD: "1"
         run: mix test
 
+      - name: Run E2E tests
+        shell: bash
+        env:
+          KREUZBERG_BUILD: "1"
+        run: task elixir:e2e:test
+
       - name: Verify FFI build artifacts
         if: always()
         shell: bash

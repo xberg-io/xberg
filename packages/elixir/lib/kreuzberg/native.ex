@@ -67,4 +67,9 @@ defmodule Kreuzberg.Native do
   # Config discovery operations
   def config_discover, do: :erlang.nif_error(:nif_not_loaded)
   def config_from_file(_file_path), do: :erlang.nif_error(:nif_not_loaded)
+
+  # Document extractor plugin management
+  def list_document_extractors, do: :erlang.nif_error(:nif_not_loaded)
+  def unregister_document_extractor(_name), do: :erlang.nif_error(:nif_not_loaded)
+  def clear_document_extractors, do: :erlang.nif_error(:nif_not_loaded)
 end
