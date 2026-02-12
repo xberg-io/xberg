@@ -2635,15 +2635,24 @@ jobs:
           mkdir -p dist
           cp packages/ruby/pkg/*.gem dist/
 
+      - name: Re-check RubyGems before publish
+        id: recheck
+        run: |
+          scripts/publish/check_rubygems.sh "${{ needs.prepare.outputs.version }}" >> "$GITHUB_OUTPUT"
+
       - name: Configure trusted publishing credentials
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
         uses: rubygems/configure-rubygems-credentials@v1.0.0
 
       - name: Publish gems to RubyGems
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
         env:
           RUBYGEMS_VERSION: ${{ needs.prepare.outputs.version }}
         run: scripts/publish/publish-gems-direct.sh dist
+
+      - name: RubyGems already published summary
+        if: ${{ steps.recheck.outputs.exists == 'true' }}
+        run: echo "Gem kreuzberg@${{ needs.prepare.outputs.version }} already published on RubyGems — skipped." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Dry run summary
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}
@@ -2716,29 +2725,38 @@ jobs:
       - name: Pack platform packages
         run: scripts/publish/pack-node-platform-packages.sh crates/kreuzberg-node/npm
 
+      - name: Re-check npm before publish
+        id: recheck
+        run: |
+          scripts/publish/check_npm.sh "${{ needs.prepare.outputs.version }}" >> "$GITHUB_OUTPUT"
+
       - name: Publish native binary packages
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
         run: scripts/publish/publish-node-packages.sh crates/kreuzberg-node/npm "${{ needs.prepare.outputs.npm_tag }}"
 
       - name: Wait for npm indexing
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: scripts/publish/wait-for-package.sh npm "@kreuzberg/node-linux-x64-gnu" "${{ needs.prepare.outputs.version }}" 25
 
       - name: Wait for npm indexing (ARM64)
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: scripts/publish/wait-for-package.sh npm "@kreuzberg/node-linux-arm64-gnu" "${{ needs.prepare.outputs.version }}" 25
 
       - name: Prepare main Node package metadata
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
         run: scripts/publish/node/prepublish-main-package.sh crates/kreuzberg-node
 
       - name: Publish main Node package
-        if: ${{ needs.prepare.outputs.dry_run != 'true' }}
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
         run: scripts/publish/publish-main-node-package.sh crates/kreuzberg-node "${{ needs.prepare.outputs.npm_tag }}"
+
+      - name: npm already published summary
+        if: ${{ steps.recheck.outputs.exists == 'true' }}
+        run: echo "Node package @kreuzberg/node@${{ needs.prepare.outputs.version }} already published on npm — skipped." >> "$GITHUB_STEP_SUMMARY"
 
   publish-wasm:
     name: Publish WASM package
@@ -3139,7 +3157,22 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: scripts/publish/homebrew/extract-bottle-hashes.sh dist/homebrew
 
+      - name: Re-check Homebrew tap before publish
+        id: recheck
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          api_response=$(timeout 120s gh api repos/kreuzberg-dev/homebrew-tap/contents/Formula/kreuzberg.rb --jq '.content' 2>/dev/null || echo "")
+          if [[ -n "$api_response" ]] && [[ "$api_response" != "null" ]] && echo "$api_response" | base64 -d 2>/dev/null | grep -q "version \"${VERSION}\""; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Homebrew formula already contains version ${VERSION} — skipping publish"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Git credentials
+        if: ${{ steps.recheck.outputs.exists != 'true' }}
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TOKEN }}
         run: |
@@ -3149,11 +3182,16 @@ jobs:
           git config --global user.email "bot@kreuzberg.dev"
 
       - name: Update Homebrew formula with bottles
+        if: ${{ steps.recheck.outputs.exists != 'true' }}
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
           VERSION: ${{ needs.prepare.outputs.version }}
           DRY_RUN: 'false'
         run: scripts/publish/homebrew/update-formula-with-bottles.sh dist/homebrew homebrew-tap
+
+      - name: Homebrew already published summary
+        if: ${{ steps.recheck.outputs.exists == 'true' }}
+        run: echo "Homebrew formula already contains version ${{ needs.prepare.outputs.version }} — skipped." >> "$GITHUB_STEP_SUMMARY"
 
   release-finalize:
     name: Finalize release and update notes
