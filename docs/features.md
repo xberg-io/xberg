@@ -252,10 +252,10 @@ Extract keywords and key phrases from documents.
 **Configuration:**
 ```python title="keyword_extraction_config.py"
 # Configure keyword extraction using YAKE algorithm
-KeywordExtractionConfig(
-    algorithm="yake",
+KeywordConfig(
+    algorithm=KeywordAlgorithm.Yake,
     max_keywords=10,
-    ngram_size=3
+    ngram_range=(1,3)
 )
 ```
 
