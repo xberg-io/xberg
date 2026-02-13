@@ -3325,7 +3325,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "lopdf",
- "lzma-rust2",
+ "lzma-rust2 0.16.1",
  "mail-parser",
  "memchr",
  "mime_guess",
@@ -3787,6 +3787,16 @@ name = "lzma-rust2"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1670343e58806300d87950e3401e820b519b9384281bbabfb15e3636689ffd69"
+dependencies = [
+ "crc",
+ "sha2",
+]
+
+[[package]]
+name = "lzma-rust2"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d673a11333485e7d8b93d62a9a5b07b22daf5e8a8655a44c1bb18aa4bf3d1524"
 dependencies = [
  "crc",
  "sha2",
@@ -6777,7 +6787,7 @@ dependencies = [
  "crc32fast",
  "getrandom 0.3.4",
  "js-sys",
- "lzma-rust2",
+ "lzma-rust2 0.15.7",
  "ppmd-rust",
  "sha2",
  "wasm-bindgen",
@@ -9276,7 +9286,7 @@ dependencies = [
  "getrandom 0.4.1",
  "hmac",
  "indexmap",
- "lzma-rust2",
+ "lzma-rust2 0.15.7",
  "memchr",
  "pbkdf2",
  "ppmd-rust",
