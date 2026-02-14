@@ -383,6 +383,24 @@ public class ContractTest {
     }
 
     @Test
+    public void configHtmlOptions() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"html_options\":{\"include_links\":true}}");
+        E2EHelpers.runFixture(
+            "config_html_options",
+            "html/complex_table.html",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/html"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+                E2EHelpers.Assertions.assertContentNotEmpty(result);
+            }
+        );
+    }
+
+    @Test
     public void configImages() throws Exception {
         JsonNode config = MAPPER.readTree("{\"images\":{\"extract_images\":true}}");
         E2EHelpers.runFixture(
@@ -453,6 +471,24 @@ public class ContractTest {
     }
 
     @Test
+    public void configQualityDisabled() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"enable_quality_processing\":false}");
+        E2EHelpers.runFixture(
+            "config_quality_disabled",
+            "pdf/fake_memo.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+                E2EHelpers.Assertions.assertContentNotEmpty(result);
+            }
+        );
+    }
+
+    @Test
     public void configUseCacheFalse() throws Exception {
         JsonNode config = MAPPER.readTree("{\"use_cache\":false}");
         E2EHelpers.runFixture(
@@ -467,6 +503,37 @@ public class ContractTest {
                 E2EHelpers.Assertions.assertMinContentLength(result, 10);
             }
         );
+    }
+
+    @Test
+    public void outputFormatBytesMarkdown() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"output_format\":\"markdown\"}");
+        Path documentPath = E2EHelpers.resolveDocument("pdf/fake_memo.pdf");
+
+        if (true && !Files.exists(documentPath)) {
+            String msg = String.format("Skipping output_format_bytes_markdown: missing document at %s", documentPath);
+            System.err.println(msg);
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);
+            return;
+        }
+
+        byte[] documentBytes = Files.readAllBytes(documentPath);
+        String mimeType = Kreuzberg.detectMimeType(documentBytes);
+        ExtractionConfig extractionConfig = E2EHelpers.buildConfig(config);
+        ExtractionResult result;
+        try {
+            result = Kreuzberg.extractBytes(documentBytes, mimeType, extractionConfig);
+        } catch (Exception e) {
+            String skipReason = E2EHelpers.skipReasonFor(e, "output_format_bytes_markdown", Collections.emptyList(), null);
+            if (skipReason != null) {
+                org.junit.jupiter.api.Assumptions.assumeTrue(false, skipReason);
+                return;
+            }
+            throw e;
+        }
+
+        E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+        E2EHelpers.Assertions.assertMinContentLength(result, 10);
     }
 
     @Test

@@ -433,6 +433,51 @@ pub mod assertions {
         }
     }
 
+    /// Assert keyword extraction results.
+    pub fn assert_keywords(
+        result: &ExtractionResult,
+        has_keywords: Option<bool>,
+        min_count: Option<usize>,
+        max_count: Option<usize>,
+    ) {
+        if let Some(true) = has_keywords {
+            let keywords = result
+                .metadata
+                .keywords
+                .as_ref()
+                .expect("Expected keywords but got None");
+            assert!(!keywords.is_empty(), "Expected non-empty keywords list");
+        }
+        if let Some(false) = has_keywords
+            && let Some(keywords) = result.metadata.keywords.as_ref()
+        {
+            assert!(keywords.is_empty(), "Expected no keywords but found {}", keywords.len());
+        }
+        if let Some(keywords) = result.metadata.keywords.as_ref() {
+            if let Some(min) = min_count {
+                assert!(
+                    keywords.len() >= min,
+                    "Expected >= {} keywords, found {}",
+                    min,
+                    keywords.len()
+                );
+            }
+            if let Some(max) = max_count {
+                assert!(
+                    keywords.len() <= max,
+                    "Expected <= {} keywords, found {}",
+                    max,
+                    keywords.len()
+                );
+            }
+        }
+    }
+
+    /// Assert that content is not empty.
+    pub fn assert_content_not_empty(result: &ExtractionResult) {
+        assert!(!result.content.trim().is_empty(), "Expected non-empty content");
+    }
+
     fn lookup_path<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
         if let Some(found) = lookup_path_inner(value, path) {
             return Some(found);

@@ -537,5 +537,38 @@ public final class E2EHelpers {
                         String.format("Expected document to be null but got %s", document));
             }
         }
+
+        public static void assertKeywords(
+                ExtractionResult result,
+                Boolean hasKeywords,
+                Integer minCount,
+                Integer maxCount
+        ) {
+            var keywords = result.getKeywords();
+            int count = keywords != null ? keywords.size() : 0;
+
+            if (hasKeywords != null && hasKeywords) {
+                assertTrue(keywords != null && !keywords.isEmpty(), "Expected keywords to be present");
+            }
+            if (hasKeywords != null && !hasKeywords) {
+                assertTrue(keywords == null || keywords.isEmpty(),
+                        String.format("Expected no keywords but found %d", count));
+            }
+
+            if (minCount != null) {
+                assertTrue(count >= minCount,
+                        String.format("Expected keyword count >= %d, got %d", minCount, count));
+            }
+            if (maxCount != null) {
+                assertTrue(count <= maxCount,
+                        String.format("Expected keyword count <= %d, got %d", maxCount, count));
+            }
+        }
+
+        public static void assertContentNotEmpty(ExtractionResult result) {
+            String content = result.getContent();
+            assertTrue(content != null && !content.isEmpty(),
+                    "Expected content to be non-empty");
+        }
     }
 }

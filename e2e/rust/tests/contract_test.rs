@@ -365,6 +365,37 @@ fn test_config_force_ocr() {
 }
 
 #[test]
+fn test_config_html_options() {
+    // Tests extraction with HTML conversion options configured
+
+    let document_path = resolve_document("html/complex_table.html");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_html_options: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "html_options": {
+    "include_links": true
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_html_options: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["text/html"]);
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
 fn test_config_images() {
     // Tests image extraction configuration with image assertions
 
@@ -497,6 +528,35 @@ fn test_config_pages() {
 }
 
 #[test]
+fn test_config_quality_disabled() {
+    // Tests extraction with quality processing explicitly disabled
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_quality_disabled: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "enable_quality_processing": false
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_quality_disabled: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
 fn test_config_use_cache_false() {
     // Tests use_cache=false configuration option
 
@@ -517,6 +577,37 @@ fn test_config_use_cache_false() {
 
     let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
         Err(err) => panic!("Extraction failed for config_use_cache_false: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 10);
+}
+
+#[test]
+fn test_output_format_bytes_markdown() {
+    // Tests markdown output format via bytes extraction API
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping output_format_bytes_markdown: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "output_format": "markdown"
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let file_bytes = std::fs::read(&document_path).expect("Failed to read document file");
+    let mime_type = kreuzberg::detect_mime_type(&document_path, true).expect("Failed to detect MIME type");
+
+    let result = match kreuzberg::extract_bytes_sync(&file_bytes, &mime_type, &config) {
+        Err(err) => panic!("Extraction failed for output_format_bytes_markdown: {err:?}"),
         Ok(result) => result,
     };
 

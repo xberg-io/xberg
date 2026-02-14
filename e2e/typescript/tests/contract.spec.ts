@@ -397,6 +397,34 @@ describe("contract fixtures", () => {
 	);
 
 	it(
+		"config_html_options",
+		() => {
+			const documentPath = resolveDocument("html/complex_table.html");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_html_options: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ html_options: { include_links: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_html_options", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/html"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"config_images",
 		() => {
 			const documentPath = resolveDocument("pdf/embedded_images_tables.pdf");
@@ -507,6 +535,34 @@ describe("contract fixtures", () => {
 	);
 
 	it(
+		"config_quality_disabled",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_quality_disabled: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ enable_quality_processing: false });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_quality_disabled", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"config_use_cache_false",
 		() => {
 			const documentPath = resolveDocument("pdf/fake_memo.pdf");
@@ -520,6 +576,35 @@ describe("contract fixtures", () => {
 				result = extractFileSync(documentPath, null, config);
 			} catch (error) {
 				if (shouldSkipFixture(error, "config_use_cache_false", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_bytes_markdown",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping output_format_bytes_markdown: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "markdown" });
+			let result: ExtractionResult | null = null;
+			try {
+				const fileBytes = readFileSync(documentPath);
+				const mimeType = detectMimeTypeFromPath(documentPath);
+				result = extractBytesSync(fileBytes, mimeType, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_bytes_markdown", [], undefined)) {
 					return;
 				}
 				throw error;

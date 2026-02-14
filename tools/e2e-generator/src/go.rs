@@ -639,6 +639,35 @@ func runBatchExtractionAsync(t *testing.T, relativePaths []string, configJSON []
 	}
 	return results
 }
+
+func assertKeywords(t *testing.T, result *kreuzberg.ExtractionResult, hasKeywords *bool, minCount, maxCount *int) {
+	t.Helper()
+	if hasKeywords != nil {
+		if *hasKeywords {
+			if result.Keywords == nil || len(result.Keywords) == 0 {
+				t.Fatalf("expected keywords in result but Keywords field is nil or empty")
+			}
+		} else {
+			if result.Keywords != nil && len(result.Keywords) > 0 {
+				t.Fatalf("expected no keywords but found %d", len(result.Keywords))
+			}
+		}
+	}
+	count := len(result.Keywords)
+	if minCount != nil && count < *minCount {
+		t.Fatalf("expected at least %d keywords, found %d", *minCount, count)
+	}
+	if maxCount != nil && count > *maxCount {
+		t.Fatalf("expected at most %d keywords, found %d", *maxCount, count)
+	}
+}
+
+func assertContentNotEmpty(t *testing.T, result *kreuzberg.ExtractionResult) {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatalf("expected content to be non-empty, but it is empty")
+	}
+}
 "#;
 
 pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
@@ -1012,6 +1041,29 @@ fn render_assertions(assertions: &Assertions) -> String {
             has_document, min_node_count, node_types, has_groups
         )
         .unwrap();
+    }
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let has_keywords = keywords
+            .has_keywords
+            .map(|v| format!("boolPtr({v})"))
+            .unwrap_or_else(|| "nil".to_string());
+        let min_count = keywords
+            .min_count
+            .map(|v| format!("intPtr({v})"))
+            .unwrap_or_else(|| "nil".to_string());
+        let max_count = keywords
+            .max_count
+            .map(|v| format!("intPtr({v})"))
+            .unwrap_or_else(|| "nil".to_string());
+        writeln!(
+            buffer,
+            "    assertKeywords(t, result, {}, {}, {})",
+            has_keywords, min_count, max_count
+        )
+        .unwrap();
+    }
+    if assertions.content_not_empty == Some(true) {
+        writeln!(buffer, "    assertContentNotEmpty(t, result)").unwrap();
     }
     buffer
 }

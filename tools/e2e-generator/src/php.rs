@@ -586,6 +586,51 @@ class Helpers
             }
         }
     }
+
+    public static function assertKeywords(
+        ExtractionResult $result,
+        ?bool $hasKeywords = null,
+        ?int $minCount = null,
+        ?int $maxCount = null
+    ): void {
+        if ($hasKeywords === true) {
+            Assert::assertNotNull($result->keywords, 'Expected keywords but got null');
+            Assert::assertNotEmpty($result->keywords ?? [], 'Expected keywords to be non-empty');
+        } elseif ($hasKeywords === false) {
+            $keywords = $result->keywords ?? [];
+            Assert::assertTrue(
+                $keywords === null || count($keywords) === 0,
+                'Expected keywords to be null or empty'
+            );
+        }
+
+        $keywords = $result->keywords ?? [];
+        $count = count($keywords);
+
+        if ($minCount !== null) {
+            Assert::assertGreaterThanOrEqual(
+                $minCount,
+                $count,
+                sprintf("Expected at least %d keywords, found %d", $minCount, $count)
+            );
+        }
+
+        if ($maxCount !== null) {
+            Assert::assertLessThanOrEqual(
+                $maxCount,
+                $count,
+                sprintf("Expected at most %d keywords, found %d", $maxCount, $count)
+            );
+        }
+    }
+
+    public static function assertContentNotEmpty(ExtractionResult $result): void
+    {
+        Assert::assertNotEmpty(
+            $result->content ?? '',
+            "Expected content to be non-empty"
+        );
+    }
 }
 "#;
 
@@ -941,6 +986,31 @@ fn render_assertions(assertions: &Assertions) -> String {
             has_document, min_node_count, node_types, has_groups
         )
         .unwrap();
+    }
+
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let has_keywords = keywords
+            .has_keywords
+            .map(|v| if v { "true" } else { "false" }.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let min_count = keywords
+            .min_count
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let max_count = keywords
+            .max_count
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        writeln!(
+            buffer,
+            "        Helpers::assertKeywords($result, {}, {}, {});",
+            has_keywords, min_count, max_count
+        )
+        .unwrap();
+    }
+
+    if assertions.content_not_empty == Some(true) {
+        writeln!(buffer, "        Helpers::assertContentNotEmpty($result);").unwrap();
     }
 
     buffer

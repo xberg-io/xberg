@@ -577,4 +577,49 @@ class Helpers
             }
         }
     }
+
+    public static function assertKeywords(
+        ExtractionResult $result,
+        ?bool $hasKeywords = null,
+        ?int $minCount = null,
+        ?int $maxCount = null
+    ): void {
+        if ($hasKeywords === true) {
+            Assert::assertNotNull($result->keywords, 'Expected keywords but got null');
+            Assert::assertNotEmpty($result->keywords ?? [], 'Expected keywords to be non-empty');
+        } elseif ($hasKeywords === false) {
+            $keywords = $result->keywords ?? [];
+            Assert::assertTrue(
+                $keywords === null || count($keywords) === 0,
+                'Expected keywords to be null or empty'
+            );
+        }
+
+        $keywords = $result->keywords ?? [];
+        $count = count($keywords);
+
+        if ($minCount !== null) {
+            Assert::assertGreaterThanOrEqual(
+                $minCount,
+                $count,
+                sprintf("Expected at least %d keywords, found %d", $minCount, $count)
+            );
+        }
+
+        if ($maxCount !== null) {
+            Assert::assertLessThanOrEqual(
+                $maxCount,
+                $count,
+                sprintf("Expected at most %d keywords, found %d", $maxCount, $count)
+            );
+        }
+    }
+
+    public static function assertContentNotEmpty(ExtractionResult $result): void
+    {
+        Assert::assertNotEmpty(
+            $result->content ?? '',
+            "Expected content to be non-empty"
+        );
+    }
 }

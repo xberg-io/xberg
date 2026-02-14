@@ -7,7 +7,8 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.Contract {
+namespace Kreuzberg.E2E.Contract
+{
     public class ContractTests
     {
         [SkippableFact]
@@ -201,6 +202,20 @@ namespace Kreuzberg.E2E.Contract {
         }
 
         [SkippableFact]
+        public void ConfigHtmlOptions()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("html/complex_table.html");
+            TestHelpers.SkipIfOfficeTestOnWindows("html/complex_table.html");
+            var documentPath = TestHelpers.EnsureDocument("html/complex_table.html", true);
+            var config = TestHelpers.BuildConfig("{\"html_options\":{\"include_links\":true}}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "text/html" });
+            TestHelpers.AssertMinContentLength(result, 10);
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
         public void ConfigImages()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/embedded_images_tables.pdf");
@@ -256,6 +271,20 @@ namespace Kreuzberg.E2E.Contract {
         }
 
         [SkippableFact]
+        public void ConfigQualityDisabled()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
+            TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
+            var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
+            var config = TestHelpers.BuildConfig("{\"enable_quality_processing\":false}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
+            TestHelpers.AssertMinContentLength(result, 10);
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
         public void ConfigUseCacheFalse()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
@@ -264,6 +293,21 @@ namespace Kreuzberg.E2E.Contract {
             var config = TestHelpers.BuildConfig("{\"use_cache\":false}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
+            TestHelpers.AssertMinContentLength(result, 10);
+        }
+
+        [SkippableFact]
+        public void OutputFormatBytesMarkdown()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
+            TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
+            var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
+            var config = TestHelpers.BuildConfig("{\"output_format\":\"markdown\"}");
+
+            var fileBytes = File.ReadAllBytes(documentPath);
+            var mimeType = KreuzbergClient.DetectMimeType(fileBytes);
+            var result = KreuzbergClient.ExtractBytesSync(fileBytes, mimeType, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 10);
         }

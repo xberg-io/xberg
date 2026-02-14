@@ -546,6 +546,39 @@ public final class E2EHelpers {
                         String.format("Expected document to be null but got %s", document));
             }
         }
+
+        public static void assertKeywords(
+                ExtractionResult result,
+                Boolean hasKeywords,
+                Integer minCount,
+                Integer maxCount
+        ) {
+            var keywords = result.getKeywords();
+            int count = keywords != null ? keywords.size() : 0;
+
+            if (hasKeywords != null && hasKeywords) {
+                assertTrue(keywords != null && !keywords.isEmpty(), "Expected keywords to be present");
+            }
+            if (hasKeywords != null && !hasKeywords) {
+                assertTrue(keywords == null || keywords.isEmpty(),
+                        String.format("Expected no keywords but found %d", count));
+            }
+
+            if (minCount != null) {
+                assertTrue(count >= minCount,
+                        String.format("Expected keyword count >= %d, got %d", minCount, count));
+            }
+            if (maxCount != null) {
+                assertTrue(count <= maxCount,
+                        String.format("Expected keyword count <= %d, got %d", maxCount, count));
+            }
+        }
+
+        public static void assertContentNotEmpty(ExtractionResult result) {
+            String content = result.getContent();
+            assertTrue(content != null && !content.isEmpty(),
+                    "Expected content to be non-empty");
+        }
     }
 }
 "#;
@@ -1546,6 +1579,29 @@ fn render_assertions(assertions: &Assertions) -> String {
             "                E2EHelpers.Assertions.assertDocument(result, {}, {}, {}, {});\n",
             has_document, min_node_count, node_types, has_groups
         ));
+    }
+
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let has_keywords = keywords
+            .has_keywords
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let min_literal = keywords
+            .min_count
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let max_literal = keywords
+            .max_count
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        buffer.push_str(&format!(
+            "                E2EHelpers.Assertions.assertKeywords(result, {}, {}, {});\n",
+            has_keywords, min_literal, max_literal
+        ));
+    }
+
+    if assertions.content_not_empty == Some(true) {
+        buffer.push_str("                E2EHelpers.Assertions.assertContentNotEmpty(result);\n");
     }
 
     buffer

@@ -79,12 +79,30 @@ fn main() -> Result<()> {
                     typescript::generate(&fixtures, output.as_path())?;
                     run_biome_format(&output.join("typescript"));
                 }
-                Language::Ruby => ruby::generate(&fixtures, output.as_path())?,
-                Language::Java => java::generate(&fixtures, output.as_path())?,
-                Language::Go => go::generate(&fixtures, output.as_path())?,
-                Language::Csharp => csharp::generate(&fixtures, output.as_path())?,
-                Language::Php => php::generate(&fixtures, output.as_path())?,
-                Language::Elixir => elixir::generate(&fixtures, output.as_path())?,
+                Language::Ruby => {
+                    ruby::generate(&fixtures, output.as_path())?;
+                    run_rubocop_format(&output.join("ruby"));
+                }
+                Language::Java => {
+                    java::generate(&fixtures, output.as_path())?;
+                    run_google_java_format(&output.join("java"));
+                }
+                Language::Go => {
+                    go::generate(&fixtures, output.as_path())?;
+                    run_go_format(&output.join("go"));
+                }
+                Language::Csharp => {
+                    csharp::generate(&fixtures, output.as_path())?;
+                    run_dotnet_format(&output.join("csharp"));
+                }
+                Language::Php => {
+                    php::generate(&fixtures, output.as_path())?;
+                    run_php_format(&output.join("php"));
+                }
+                Language::Elixir => {
+                    elixir::generate(&fixtures, output.as_path())?;
+                    run_mix_format(&output.join("elixir"));
+                }
                 Language::WasmDeno => {
                     wasm_deno::generate(&fixtures, output.as_path())?;
                     run_biome_format(&output.join("wasm-deno"));
@@ -156,6 +174,85 @@ fn run_cargo_fmt(dir: &Utf8Path) {
         Ok(s) if s.success() => {}
         Ok(_) => eprintln!("Warning: cargo fmt returned non-zero for {dir}"),
         Err(e) => eprintln!("Warning: failed to run cargo fmt: {e}"),
+    }
+}
+
+fn run_rubocop_format(dir: &Utf8Path) {
+    let status = std::process::Command::new("bundle")
+        .args(["exec", "rubocop", "--autocorrect-all"])
+        .current_dir(dir.as_str())
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(_) => eprintln!("Warning: rubocop --autocorrect-all returned non-zero for {dir}"),
+        Err(e) => eprintln!("Warning: failed to run rubocop: {e}"),
+    }
+}
+
+fn run_google_java_format(dir: &Utf8Path) {
+    let status = std::process::Command::new("google-java-format")
+        .args(["--replace"])
+        .arg(dir.join("src/test/java").as_str())
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(_) => eprintln!("Warning: google-java-format returned non-zero for {dir}"),
+        Err(e) => eprintln!("Warning: failed to run google-java-format: {e}"),
+    }
+}
+
+fn run_go_format(dir: &Utf8Path) {
+    let status = std::process::Command::new("gofmt").args(["-w", dir.as_str()]).status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(_) => eprintln!("Warning: gofmt returned non-zero for {dir}"),
+        Err(e) => {
+            eprintln!("Warning: failed to run gofmt: {e}");
+            return;
+        }
+    }
+    let status = std::process::Command::new("goimports")
+        .args(["-w", dir.as_str()])
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(_) => eprintln!("Warning: goimports returned non-zero for {dir}"),
+        Err(e) => eprintln!("Warning: failed to run goimports: {e}"),
+    }
+}
+
+fn run_dotnet_format(dir: &Utf8Path) {
+    let status = std::process::Command::new("dotnet")
+        .args(["format", "--verbosity", "quiet"])
+        .current_dir(dir.as_str())
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(_) => eprintln!("Warning: dotnet format returned non-zero for {dir}"),
+        Err(e) => eprintln!("Warning: failed to run dotnet format: {e}"),
+    }
+}
+
+fn run_php_format(dir: &Utf8Path) {
+    let status = std::process::Command::new("php-cs-fixer")
+        .args(["fix", dir.as_str(), "--rules=@PSR12"])
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(_) => eprintln!("Warning: php-cs-fixer returned non-zero for {dir}"),
+        Err(e) => eprintln!("Warning: failed to run php-cs-fixer: {e}"),
+    }
+}
+
+fn run_mix_format(dir: &Utf8Path) {
+    let status = std::process::Command::new("mix")
+        .arg("format")
+        .current_dir(dir.as_str())
+        .status();
+    match status {
+        Ok(s) if s.success() => {}
+        Ok(_) => eprintln!("Warning: mix format returned non-zero for {dir}"),
+        Err(e) => eprintln!("Warning: failed to run mix format: {e}"),
     }
 }
 

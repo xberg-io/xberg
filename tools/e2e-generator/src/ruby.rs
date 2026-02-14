@@ -328,6 +328,31 @@ module E2ERuby
       end
     end
 
+    def self.assert_keywords(result, has_keywords: nil, min_count: nil, max_count: nil)
+      keywords = result.keywords if result.respond_to?(:keywords)
+      if has_keywords == true
+        expect(keywords).not_to be_nil
+        expect(keywords).to be_a(Array)
+        expect(keywords.length).not_to eq(0)
+      end
+      if has_keywords == false
+        if keywords.nil?
+          expect(keywords).to be_nil
+        else
+          expect(keywords).to be_empty
+        end
+      end
+      if keywords.is_a?(Array)
+        expect(keywords.length).to be >= min_count if min_count
+        expect(keywords.length).to be <= max_count if max_count
+      end
+    end
+
+    def self.assert_content_not_empty(result)
+      expect(result.content).not_to be_nil
+      expect(result.content).not_to be_empty
+    end
+
     class << self
       private
 
@@ -768,6 +793,29 @@ fn render_assertions(assertions: &Assertions) -> String {
                 args.join(", ")
             ));
         }
+    }
+
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let mut args = Vec::new();
+        if let Some(has_keywords) = keywords.has_keywords {
+            args.push(format!("has_keywords: {}", if has_keywords { "true" } else { "false" }));
+        }
+        if let Some(min) = keywords.min_count {
+            args.push(format!("min_count: {}", render_numeric_literal(min as u64)));
+        }
+        if let Some(max) = keywords.max_count {
+            args.push(format!("max_count: {}", render_numeric_literal(max as u64)));
+        }
+        if !args.is_empty() {
+            buffer.push_str(&format!(
+                "      E2ERuby::Assertions.assert_keywords(result, {})\n",
+                args.join(", ")
+            ));
+        }
+    }
+
+    if assertions.content_not_empty == Some(true) {
+        buffer.push_str("      E2ERuby::Assertions.assert_content_not_empty(result)\n");
     }
 
     buffer

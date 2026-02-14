@@ -495,6 +495,42 @@ defmodule E2E.Helpers do
     result
   end
 
+  def assert_keywords(result, opts) do
+    keywords = result.keywords || []
+    keywords_len = length(keywords)
+
+    if is_boolean(opts[:has_keywords]) do
+      if opts[:has_keywords] do
+        if keywords == nil || keywords_len == 0 do
+          flunk("Expected keywords but got none")
+        end
+      else
+        if keywords != nil && keywords_len > 0 do
+          flunk("Expected no keywords but got #{keywords_len}")
+        end
+      end
+    end
+
+    if opts[:min_count] && keywords_len < opts[:min_count] do
+      flunk("Keyword count #{keywords_len} is less than minimum #{opts[:min_count]}")
+    end
+
+    if opts[:max_count] && keywords_len > opts[:max_count] do
+      flunk("Keyword count #{keywords_len} exceeds maximum #{opts[:max_count]}")
+    end
+
+    result
+  end
+
+  def assert_content_not_empty(result) do
+    content_len = String.length(result.content || "")
+    if content_len > 0 do
+      result
+    else
+      flunk("Content is empty but should not be")
+    end
+  end
+
   # Private helpers
 
   defp fetch_metadata_value(metadata, path) do
@@ -958,6 +994,26 @@ fn render_assertions(assertions: &Assertions) -> String {
         if !args.is_empty() {
             pipes.push(format!("E2E.Helpers.assert_document({})", args.join(", ")));
         }
+    }
+
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let mut args = Vec::new();
+        if let Some(has_keywords) = keywords.has_keywords {
+            args.push(format!("has_keywords: {}", has_keywords));
+        }
+        if let Some(min) = keywords.min_count {
+            args.push(format!("min_count: {}", render_numeric_literal(min as u64)));
+        }
+        if let Some(max) = keywords.max_count {
+            args.push(format!("max_count: {}", render_numeric_literal(max as u64)));
+        }
+        if !args.is_empty() {
+            pipes.push(format!("E2E.Helpers.assert_keywords({})", args.join(", ")));
+        }
+    }
+
+    if assertions.content_not_empty == Some(true) {
+        pipes.push("E2E.Helpers.assert_content_not_empty()".into());
     }
 
     if pipes.is_empty() {

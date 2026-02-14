@@ -1,0 +1,30 @@
+{
+	"id": "keywords_rake",
+	"description": "Tests keyword extraction using RAKE algorithm",
+	"tags": ["keywords", "rake"],
+	"document": {
+		"path": "pdf/fake_memo.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"keywords": {
+				"algorithm": "rake",
+				"max_keywords": 10
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 10,
+		"keywords": {
+			"has_keywords": true,
+			"min_count": 1,
+			"max_count": 10
+		}
+	},
+	"skip": {
+		"requires_feature": ["keywords"]
+	}
+}

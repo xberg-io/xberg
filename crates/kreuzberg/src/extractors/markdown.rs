@@ -85,12 +85,13 @@ impl MarkdownExtractor {
                     link_url = Some(dest_url.to_string());
                 }
                 Event::End(TagEnd::Link) => {
-                    if let Some(url) = link_url.take() {
-                        if !url.is_empty() && !url.starts_with('#') {
-                            text.push_str(" (");
-                            text.push_str(&url);
-                            text.push(')');
-                        }
+                    if let Some(url) = link_url.take()
+                        && !url.is_empty()
+                        && !url.starts_with('#')
+                    {
+                        text.push_str(" (");
+                        text.push_str(&url);
+                        text.push(')');
                     }
                 }
                 Event::Start(Tag::Image { dest_url, .. }) => {
@@ -101,10 +102,10 @@ impl MarkdownExtractor {
                     }
                     text.push(']');
                     // Extract image from data URIs
-                    if dest_url.starts_with("data:image/") {
-                        if let Some(image) = Self::decode_data_uri_image(dest_url, images.len()) {
-                            images.push(image);
-                        }
+                    if dest_url.starts_with("data:image/")
+                        && let Some(image) = Self::decode_data_uri_image(dest_url, images.len())
+                    {
+                        images.push(image);
                     }
                 }
                 Event::Start(Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(lang))) => {

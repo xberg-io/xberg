@@ -11,15 +11,15 @@ defmodule E2E.ContractTest do
   describe "contract fixtures" do
     test "api_batch_bytes_async" do
       case E2E.Helpers.run_fixture_with_method(
-        "api_batch_bytes_async",
-        "pdf/fake_memo.pdf",
-        nil,
-        :batch_async,
-        :bytes,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "api_batch_bytes_async",
+             "pdf/fake_memo.pdf",
+             nil,
+             :batch_async,
+             :bytes,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -36,15 +36,15 @@ defmodule E2E.ContractTest do
 
     test "api_batch_bytes_sync" do
       case E2E.Helpers.run_fixture_with_method(
-        "api_batch_bytes_sync",
-        "pdf/fake_memo.pdf",
-        nil,
-        :batch_sync,
-        :bytes,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "api_batch_bytes_sync",
+             "pdf/fake_memo.pdf",
+             nil,
+             :batch_sync,
+             :bytes,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -61,15 +61,15 @@ defmodule E2E.ContractTest do
 
     test "api_batch_file_async" do
       case E2E.Helpers.run_fixture_with_method(
-        "api_batch_file_async",
-        "pdf/fake_memo.pdf",
-        nil,
-        :batch_async,
-        :file,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "api_batch_file_async",
+             "pdf/fake_memo.pdf",
+             nil,
+             :batch_async,
+             :file,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -86,15 +86,15 @@ defmodule E2E.ContractTest do
 
     test "api_batch_file_sync" do
       case E2E.Helpers.run_fixture_with_method(
-        "api_batch_file_sync",
-        "pdf/fake_memo.pdf",
-        nil,
-        :batch_sync,
-        :file,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "api_batch_file_sync",
+             "pdf/fake_memo.pdf",
+             nil,
+             :batch_sync,
+             :file,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -111,15 +111,15 @@ defmodule E2E.ContractTest do
 
     test "api_extract_bytes_async" do
       case E2E.Helpers.run_fixture_with_method(
-        "api_extract_bytes_async",
-        "pdf/fake_memo.pdf",
-        nil,
-        :async,
-        :bytes,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "api_extract_bytes_async",
+             "pdf/fake_memo.pdf",
+             nil,
+             :async,
+             :bytes,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -136,15 +136,15 @@ defmodule E2E.ContractTest do
 
     test "api_extract_bytes_sync" do
       case E2E.Helpers.run_fixture_with_method(
-        "api_extract_bytes_sync",
-        "pdf/fake_memo.pdf",
-        nil,
-        :sync,
-        :bytes,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "api_extract_bytes_sync",
+             "pdf/fake_memo.pdf",
+             nil,
+             :sync,
+             :bytes,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -161,15 +161,15 @@ defmodule E2E.ContractTest do
 
     test "api_extract_file_async" do
       case E2E.Helpers.run_fixture_with_method(
-        "api_extract_file_async",
-        "pdf/fake_memo.pdf",
-        nil,
-        :async,
-        :file,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "api_extract_file_async",
+             "pdf/fake_memo.pdf",
+             nil,
+             :async,
+             :file,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -186,13 +186,13 @@ defmodule E2E.ContractTest do
 
     test "api_extract_file_sync" do
       case E2E.Helpers.run_fixture(
-        "api_extract_file_sync",
-        "pdf/fake_memo.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "api_extract_file_sync",
+             "pdf/fake_memo.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -209,13 +209,13 @@ defmodule E2E.ContractTest do
 
     test "config_chunking" do
       case E2E.Helpers.run_fixture(
-        "config_chunking",
-        "pdf/fake_memo.pdf",
-        %{chunking: %{max_chars: 500, max_overlap: 50}},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_chunking",
+             "pdf/fake_memo.pdf",
+             %{chunking: %{max_chars: 500, max_overlap: 50}},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -232,13 +232,13 @@ defmodule E2E.ContractTest do
 
     test "config_document_structure" do
       case E2E.Helpers.run_fixture(
-        "config_document_structure",
-        "pdf/fake_memo.pdf",
-        %{include_document_structure: true},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_document_structure",
+             "pdf/fake_memo.pdf",
+             %{include_document_structure: true},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -254,13 +254,13 @@ defmodule E2E.ContractTest do
 
     test "config_document_structure_disabled" do
       case E2E.Helpers.run_fixture(
-        "config_document_structure_disabled",
-        "pdf/fake_memo.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_document_structure_disabled",
+             "pdf/fake_memo.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -276,16 +276,18 @@ defmodule E2E.ContractTest do
 
     test "config_document_structure_with_headings" do
       case E2E.Helpers.run_fixture(
-        "config_document_structure_with_headings",
-        "docx/fake.docx",
-        %{include_document_structure: true},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_document_structure_with_headings",
+             "docx/fake.docx",
+             %{include_document_structure: true},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+          |> E2E.Helpers.assert_expected_mime([
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          ])
           |> E2E.Helpers.assert_document(has_document: true, min_node_count: 1)
 
         {:skipped, reason} ->
@@ -298,13 +300,13 @@ defmodule E2E.ContractTest do
 
     test "config_force_ocr" do
       case E2E.Helpers.run_fixture(
-        "config_force_ocr",
-        "pdf/fake_memo.pdf",
-        %{force_ocr: true},
-        requirements: ["tesseract"],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_force_ocr",
+             "pdf/fake_memo.pdf",
+             %{force_ocr: true},
+             requirements: ["tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -318,15 +320,38 @@ defmodule E2E.ContractTest do
       end
     end
 
+    test "config_html_options" do
+      case E2E.Helpers.run_fixture(
+             "config_html_options",
+             "html/complex_table.html",
+             %{html_options: %{include_links: true}},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["text/html"])
+          |> E2E.Helpers.assert_min_content_length(10)
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "config_images" do
       case E2E.Helpers.run_fixture(
-        "config_images",
-        "pdf/embedded_images_tables.pdf",
-        %{images: %{extract_images: true}},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_images",
+             "pdf/embedded_images_tables.pdf",
+             %{images: %{extract_images: true}},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -342,13 +367,13 @@ defmodule E2E.ContractTest do
 
     test "config_keywords" do
       case E2E.Helpers.run_fixture(
-        "config_keywords",
-        "pdf/fake_memo.pdf",
-        %{keywords: %{algorithm: "yake", max_keywords: 10}},
-        requirements: ["keywords-yake"],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_keywords",
+             "pdf/fake_memo.pdf",
+             %{keywords: %{algorithm: "yake", max_keywords: 10}},
+             requirements: ["keywords-yake"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -365,13 +390,13 @@ defmodule E2E.ContractTest do
 
     test "config_language_detection" do
       case E2E.Helpers.run_fixture(
-        "config_language_detection",
-        "pdf/fake_memo.pdf",
-        %{language_detection: %{enabled: true}},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_language_detection",
+             "pdf/fake_memo.pdf",
+             %{language_detection: %{enabled: true}},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -388,13 +413,13 @@ defmodule E2E.ContractTest do
 
     test "config_pages" do
       case E2E.Helpers.run_fixture(
-        "config_pages",
-        "pdf/multi_page.pdf",
-        %{pages: %{end: 3, start: 1}},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_pages",
+             "pdf/multi_page.pdf",
+             %{pages: %{end: 3, start: 1}},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -408,15 +433,62 @@ defmodule E2E.ContractTest do
       end
     end
 
+    test "config_quality_disabled" do
+      case E2E.Helpers.run_fixture(
+             "config_quality_disabled",
+             "pdf/fake_memo.pdf",
+             %{enable_quality_processing: false},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["application/pdf"])
+          |> E2E.Helpers.assert_min_content_length(10)
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "config_use_cache_false" do
       case E2E.Helpers.run_fixture(
-        "config_use_cache_false",
-        "pdf/fake_memo.pdf",
-        %{use_cache: false},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "config_use_cache_false",
+             "pdf/fake_memo.pdf",
+             %{use_cache: false},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["application/pdf"])
+          |> E2E.Helpers.assert_min_content_length(10)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "output_format_bytes_markdown" do
+      case E2E.Helpers.run_fixture_with_method(
+             "output_format_bytes_markdown",
+             "pdf/fake_memo.pdf",
+             %{output_format: "markdown"},
+             :sync,
+             :bytes,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -432,13 +504,13 @@ defmodule E2E.ContractTest do
 
     test "output_format_djot" do
       case E2E.Helpers.run_fixture(
-        "output_format_djot",
-        "pdf/fake_memo.pdf",
-        %{output_format: "djot"},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "output_format_djot",
+             "pdf/fake_memo.pdf",
+             %{output_format: "djot"},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -454,13 +526,13 @@ defmodule E2E.ContractTest do
 
     test "output_format_html" do
       case E2E.Helpers.run_fixture(
-        "output_format_html",
-        "pdf/fake_memo.pdf",
-        %{output_format: "html"},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "output_format_html",
+             "pdf/fake_memo.pdf",
+             %{output_format: "html"},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -476,13 +548,13 @@ defmodule E2E.ContractTest do
 
     test "output_format_markdown" do
       case E2E.Helpers.run_fixture(
-        "output_format_markdown",
-        "pdf/fake_memo.pdf",
-        %{output_format: "markdown"},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "output_format_markdown",
+             "pdf/fake_memo.pdf",
+             %{output_format: "markdown"},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -498,13 +570,13 @@ defmodule E2E.ContractTest do
 
     test "output_format_plain" do
       case E2E.Helpers.run_fixture(
-        "output_format_plain",
-        "pdf/fake_memo.pdf",
-        %{output_format: "plain"},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "output_format_plain",
+             "pdf/fake_memo.pdf",
+             %{output_format: "plain"},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -520,13 +592,13 @@ defmodule E2E.ContractTest do
 
     test "result_format_element_based" do
       case E2E.Helpers.run_fixture(
-        "result_format_element_based",
-        "pdf/fake_memo.pdf",
-        %{result_format: "element_based"},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "result_format_element_based",
+             "pdf/fake_memo.pdf",
+             %{result_format: "element_based"},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -542,13 +614,13 @@ defmodule E2E.ContractTest do
 
     test "result_format_unified" do
       case E2E.Helpers.run_fixture(
-        "result_format_unified",
-        "pdf/fake_memo.pdf",
-        %{result_format: "unified"},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "result_format_unified",
+             "pdf/fake_memo.pdf",
+             %{result_format: "unified"},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])

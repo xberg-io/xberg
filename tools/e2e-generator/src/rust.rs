@@ -402,6 +402,28 @@ fn render_assertions(assertions: &Assertions) -> String {
         ));
     }
 
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let has_keywords = keywords
+            .has_keywords
+            .map(|v| format!("Some({v})"))
+            .unwrap_or_else(|| "None".into());
+        let min_count = keywords
+            .min_count
+            .map(|v| format!("Some({v})"))
+            .unwrap_or_else(|| "None".into());
+        let max_count = keywords
+            .max_count
+            .map(|v| format!("Some({v})"))
+            .unwrap_or_else(|| "None".into());
+        buffer.push_str(&format!(
+            "    assertions::assert_keywords(&result, {has_keywords}, {min_count}, {max_count});\n"
+        ));
+    }
+
+    if assertions.content_not_empty == Some(true) {
+        buffer.push_str("    assertions::assert_content_not_empty(&result);\n");
+    }
+
     buffer
 }
 

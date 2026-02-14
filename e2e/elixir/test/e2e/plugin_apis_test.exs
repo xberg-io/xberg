@@ -13,19 +13,22 @@ defmodule E2E.ConfigurationTest do
       File.mkdir_p!(tmpdir)
       on_exit(fn -> File.rm_rf!(tmpdir) end)
       config_path = Path.join(tmpdir, "kreuzberg.toml")
+
       config_content = """
       [chunking]
       max_chars = 50
       """
+
       File.write!(config_path, config_content)
 
       subdir = Path.join(tmpdir, "subdir")
       File.mkdir_p!(subdir)
 
       prev_cwd = File.cwd!()
+
       try do
         File.cd!(subdir)
-        {:ok, config} = Kreuzberg.ExtractionConfig.discover
+        {:ok, config} = Kreuzberg.ExtractionConfig.discover()
 
         assert config.chunking != nil
         assert config.chunking["max_chars"] == 50
@@ -39,6 +42,7 @@ defmodule E2E.ConfigurationTest do
       File.mkdir_p!(tmpdir)
       on_exit(fn -> File.rm_rf!(tmpdir) end)
       config_path = Path.join(tmpdir, "test_config.toml")
+
       config_content = """
       [chunking]
       max_chars = 100
@@ -47,6 +51,7 @@ defmodule E2E.ConfigurationTest do
       [language_detection]
       enabled = false
       """
+
       File.write!(config_path, config_content)
 
       {:ok, config} = Kreuzberg.ExtractionConfig.from_file(config_path)
@@ -57,7 +62,6 @@ defmodule E2E.ConfigurationTest do
       assert config.language_detection != nil
       assert config.language_detection["enabled"] == false
     end
-
   end
 end
 
@@ -81,7 +85,6 @@ defmodule E2E.DocumentExtractorManagementTest do
       Kreuzberg.Plugin.unregister_document_extractor(:"nonexistent-extractor-xyz")
       # Should not raise an error
     end
-
   end
 end
 
@@ -111,7 +114,6 @@ defmodule E2E.MimeUtilitiesTest do
       assert is_list(result)
       assert Enum.member?(result, "pdf")
     end
-
   end
 end
 
@@ -135,7 +137,6 @@ defmodule E2E.OcrBackendManagementTest do
       Kreuzberg.Plugin.unregister_ocr_backend(:"nonexistent-backend-xyz")
       # Should not raise an error
     end
-
   end
 end
 
@@ -154,7 +155,6 @@ defmodule E2E.PostProcessorManagementTest do
       assert is_list(result)
       assert Enum.all?(result, &is_binary/1)
     end
-
   end
 end
 
@@ -173,6 +173,5 @@ defmodule E2E.ValidatorManagementTest do
       assert is_list(result)
       assert Enum.all?(result, &is_binary/1)
     end
-
   end
 end

@@ -320,6 +320,31 @@ module E2ERuby
       end
     end
 
+    def self.assert_keywords(result, has_keywords: nil, min_count: nil, max_count: nil)
+      keywords = result.keywords if result.respond_to?(:keywords)
+      if has_keywords == true
+        expect(keywords).not_to be_nil
+        expect(keywords).to be_a(Array)
+        expect(keywords.length).not_to eq(0)
+      end
+      if has_keywords == false
+        if keywords.nil?
+          expect(keywords).to be_nil
+        else
+          expect(keywords).to be_empty
+        end
+      end
+      if keywords.is_a?(Array)
+        expect(keywords.length).to be >= min_count if min_count
+        expect(keywords.length).to be <= max_count if max_count
+      end
+    end
+
+    def self.assert_content_not_empty(result)
+      expect(result.content).not_to be_nil
+      expect(result.content).not_to be_empty
+    end
+
     class << self
       private
 

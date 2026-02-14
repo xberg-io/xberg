@@ -245,6 +245,22 @@ def test_config_force_ocr() -> None:
     helpers.assert_min_content_length(result, 5)
 
 
+def test_config_html_options() -> None:
+    """Tests extraction with HTML conversion options configured"""
+
+    document_path = helpers.resolve_document("html/complex_table.html")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_html_options: missing document at {document_path}")
+
+    config = helpers.build_config({"html_options": {"include_links": True}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["text/html"])
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_content_not_empty(result)
+
+
 def test_config_images() -> None:
     """Tests image extraction configuration with image assertions"""
 
@@ -307,6 +323,22 @@ def test_config_pages() -> None:
     helpers.assert_min_content_length(result, 10)
 
 
+def test_config_quality_disabled() -> None:
+    """Tests extraction with quality processing explicitly disabled"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_quality_disabled: missing document at {document_path}")
+
+    config = helpers.build_config({"enable_quality_processing": False})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_content_not_empty(result)
+
+
 def test_config_use_cache_false() -> None:
     """Tests use_cache=false configuration option"""
 
@@ -320,6 +352,25 @@ def test_config_use_cache_false() -> None:
 
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 10)
+
+
+def test_output_format_bytes_markdown() -> None:
+    """Tests markdown output format via bytes extraction API"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping output_format_bytes_markdown: missing document at {document_path}")
+
+    config = helpers.build_config({"output_format": "markdown"})
+
+    file_bytes = document_path.read_bytes()
+    mime_type = detect_mime_type_from_path(str(document_path))
+
+    result = extract_bytes_sync(file_bytes, mime_type, config=config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_output_format(result, "markdown")
 
 
 def test_output_format_djot() -> None:

@@ -676,6 +676,50 @@ public static class TestHelpers
             }
         }
     }
+
+    public static void AssertKeywords(
+        ExtractionResult result,
+        bool? hasKeywords,
+        int? minCount,
+        int? maxCount)
+    {
+        var keywords = result.Keywords;
+        if (hasKeywords == true)
+        {
+            if (keywords is null || keywords.Count == 0)
+            {
+                throw new XunitException("Expected keywords but got null or empty");
+            }
+        }
+        if (hasKeywords == false)
+        {
+            if (keywords is not null && keywords.Count > 0)
+            {
+                throw new XunitException("Expected keywords to be null or empty");
+            }
+            return;
+        }
+        if (keywords is not null)
+        {
+            var count = keywords.Count;
+            if (minCount.HasValue && count < minCount.Value)
+            {
+                throw new XunitException($"Expected at least {minCount.Value} keywords, found {count}");
+            }
+            if (maxCount.HasValue && count > maxCount.Value)
+            {
+                throw new XunitException($"Expected at most {maxCount.Value} keywords, found {count}");
+            }
+        }
+    }
+
+    public static void AssertContentNotEmpty(ExtractionResult result)
+    {
+        if (string.IsNullOrEmpty(result.Content))
+        {
+            throw new XunitException("Expected content to be non-empty, but it is empty");
+        }
+    }
 }
 "#;
 
@@ -1119,6 +1163,30 @@ fn render_assertions(buffer: &mut String, assertions: &Assertions) -> Result<()>
             "            TestHelpers.AssertDocument(result, {}, {}, {}, {});",
             has_document, min_node_count, node_types, has_groups
         )?;
+    }
+
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let has_keywords = keywords
+            .has_keywords
+            .map(|v| if v { "true" } else { "false" }.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let min_count = keywords
+            .min_count
+            .map(|v| format!("{}", v))
+            .unwrap_or_else(|| "null".to_string());
+        let max_count = keywords
+            .max_count
+            .map(|v| format!("{}", v))
+            .unwrap_or_else(|| "null".to_string());
+        writeln!(
+            buffer,
+            "            TestHelpers.AssertKeywords(result, {}, {}, {});",
+            has_keywords, min_count, max_count
+        )?;
+    }
+
+    if assertions.content_not_empty == Some(true) {
+        writeln!(buffer, "            TestHelpers.AssertContentNotEmpty(result);")?;
     }
 
     Ok(())

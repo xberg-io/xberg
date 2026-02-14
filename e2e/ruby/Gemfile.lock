@@ -1,7 +1,7 @@
 PATH
   remote: ../../packages/ruby
   specs:
-    kreuzberg (4.2.15)
+    kreuzberg (4.3.3)
       rb_sys (~> 0.9.119)
 
 GEM
@@ -35,7 +35,7 @@ DEPENDENCIES
 
 CHECKSUMS
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
-  kreuzberg (4.2.15)
+  kreuzberg (4.3.3)
   rake-compiler-dock (1.11.0)
   rb_sys (0.9.124)
   rspec (3.13.2) sha256=206284a08ad798e61f86d7ca3e376718d52c0bc944626b2349266f239f820587

@@ -11,13 +11,13 @@ defmodule E2E.ArchiveTest do
   describe "archive fixtures" do
     test "archive_sevenz_basic" do
       case E2E.Helpers.run_fixture(
-        "archive_sevenz_basic",
-        "archives/documents.7z",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "archive_sevenz_basic",
+             "archives/documents.7z",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-7z-compressed"])
@@ -33,13 +33,13 @@ defmodule E2E.ArchiveTest do
 
     test "archive_tar_basic" do
       case E2E.Helpers.run_fixture(
-        "archive_tar_basic",
-        "archives/documents.tar",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "archive_tar_basic",
+             "archives/documents.tar",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-tar", "application/tar"])
@@ -55,13 +55,13 @@ defmodule E2E.ArchiveTest do
 
     test "archive_zip_basic" do
       case E2E.Helpers.run_fixture(
-        "archive_zip_basic",
-        "archives/documents.zip",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "archive_zip_basic",
+             "archives/documents.zip",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/zip", "application/x-zip-compressed"])

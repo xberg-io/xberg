@@ -1,0 +1,36 @@
+{
+	"id": "embedding_fast_preset",
+	"description": "Tests embedding generation with fast preset model",
+	"tags": ["embeddings", "chunking"],
+	"document": {
+		"path": "pdf/fake_memo.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"chunking": {
+				"max_chars": 500,
+				"max_overlap": 50,
+				"embedding": {
+					"model": {
+						"preset": "fast"
+					},
+					"normalize": true
+				}
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 10,
+		"chunks": {
+			"min_count": 1,
+			"each_has_content": true,
+			"each_has_embedding": true
+		}
+	},
+	"skip": {
+		"requires_feature": ["embeddings"]
+	}
+}

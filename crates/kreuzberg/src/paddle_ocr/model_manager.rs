@@ -442,12 +442,12 @@ impl ModelManager {
             for entry in fs::read_dir(&self.cache_dir)? {
                 let entry = entry?;
                 let path = entry.path();
-                if path.is_dir() {
-                    if let Ok(size) = Self::dir_size(&path) {
-                        total_size += size;
-                        if let Ok(entries) = fs::read_dir(&path) {
-                            model_count += entries.count();
-                        }
+                if path.is_dir()
+                    && let Ok(size) = Self::dir_size(&path)
+                {
+                    total_size += size;
+                    if let Ok(entries) = fs::read_dir(&path) {
+                        model_count += entries.count();
                     }
                 }
             }

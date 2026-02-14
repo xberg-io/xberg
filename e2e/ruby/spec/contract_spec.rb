@@ -253,6 +253,24 @@ RSpec.describe 'contract fixtures' do
     end
   end
 
+  it 'config_html_options' do
+    E2ERuby.run_fixture(
+      'config_html_options',
+      'html/complex_table.html',
+      { html_options: { include_links: true } },
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['text/html']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 10)
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
   it 'config_images' do
     E2ERuby.run_fixture(
       'config_images',
@@ -323,11 +341,48 @@ RSpec.describe 'contract fixtures' do
     end
   end
 
+  it 'config_quality_disabled' do
+    E2ERuby.run_fixture(
+      'config_quality_disabled',
+      'pdf/fake_memo.pdf',
+      { enable_quality_processing: false },
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['application/pdf']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 10)
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
   it 'config_use_cache_false' do
     E2ERuby.run_fixture(
       'config_use_cache_false',
       'pdf/fake_memo.pdf',
       { use_cache: false },
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['application/pdf']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 10)
+    end
+  end
+
+  it 'output_format_bytes_markdown' do
+    E2ERuby.run_fixture_with_method(
+      'output_format_bytes_markdown',
+      'pdf/fake_memo.pdf',
+      { output_format: 'markdown' },
+      :sync,
+      :bytes,
       requirements: [],
       notes: nil,
       skip_if_missing: true

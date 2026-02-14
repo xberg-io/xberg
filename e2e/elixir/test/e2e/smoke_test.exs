@@ -11,16 +11,18 @@ defmodule E2E.SmokeTest do
   describe "smoke fixtures" do
     test "smoke_docx_basic" do
       case E2E.Helpers.run_fixture(
-        "smoke_docx_basic",
-        "docx/fake.docx",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "smoke_docx_basic",
+             "docx/fake.docx",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+          |> E2E.Helpers.assert_expected_mime([
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          ])
           |> E2E.Helpers.assert_min_content_length(20)
           |> E2E.Helpers.assert_content_contains_any(["Lorem", "ipsum", "document", "text"])
 
@@ -34,13 +36,13 @@ defmodule E2E.SmokeTest do
 
     test "smoke_html_basic" do
       case E2E.Helpers.run_fixture(
-        "smoke_html_basic",
-        "html/simple_table.html",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "smoke_html_basic",
+             "html/simple_table.html",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/html"])
@@ -57,13 +59,13 @@ defmodule E2E.SmokeTest do
 
     test "smoke_image_png" do
       case E2E.Helpers.run_fixture(
-        "smoke_image_png",
-        "images/sample.png",
-        nil,
-        requirements: [],
-        notes: "Image extraction requires image processing dependencies",
-        skip_if_missing: true
-      ) do
+             "smoke_image_png",
+             "images/sample.png",
+             nil,
+             requirements: [],
+             notes: "Image extraction requires image processing dependencies",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/png"])
@@ -79,13 +81,13 @@ defmodule E2E.SmokeTest do
 
     test "smoke_json_basic" do
       case E2E.Helpers.run_fixture(
-        "smoke_json_basic",
-        "json/simple.json",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "smoke_json_basic",
+             "json/simple.json",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/json"])
@@ -101,13 +103,13 @@ defmodule E2E.SmokeTest do
 
     test "smoke_pdf_basic" do
       case E2E.Helpers.run_fixture(
-        "smoke_pdf_basic",
-        "pdf/fake_memo.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "smoke_pdf_basic",
+             "pdf/fake_memo.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -124,13 +126,13 @@ defmodule E2E.SmokeTest do
 
     test "smoke_txt_basic" do
       case E2E.Helpers.run_fixture(
-        "smoke_txt_basic",
-        "text/report.txt",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "smoke_txt_basic",
+             "text/report.txt",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/plain"])
@@ -146,18 +148,28 @@ defmodule E2E.SmokeTest do
 
     test "smoke_xlsx_basic" do
       case E2E.Helpers.run_fixture(
-        "smoke_xlsx_basic",
-        "xlsx/stanley_cups.xlsx",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "smoke_xlsx_basic",
+             "xlsx/stanley_cups.xlsx",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])
           |> E2E.Helpers.assert_min_content_length(100)
-          |> E2E.Helpers.assert_content_contains_all(["Team", "Location", "Stanley Cups", "Blues", "Flyers", "Maple Leafs", "STL", "PHI", "TOR"])
+          |> E2E.Helpers.assert_content_contains_all([
+            "Team",
+            "Location",
+            "Stanley Cups",
+            "Blues",
+            "Flyers",
+            "Maple Leafs",
+            "STL",
+            "PHI",
+            "TOR"
+          ])
           |> E2E.Helpers.assert_table_count(1, nil)
           |> E2E.Helpers.assert_metadata_expectation("sheet_count", %{gte: 2})
           |> E2E.Helpers.assert_metadata_expectation("sheet_names", %{contains: ["Stanley Cups"]})

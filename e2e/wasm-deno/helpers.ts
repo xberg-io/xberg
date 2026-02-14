@@ -502,6 +502,39 @@ export const assertions = {
 			assertEquals(doc == null, true, "Expected document to be null but got a document");
 		}
 	},
+
+	assertKeywords(
+		result: ExtractionResult,
+		hasKeywords?: boolean | null,
+		minCount?: number | null,
+		maxCount?: number | null,
+	): void {
+		const keywords = (result as unknown as PlainRecord).keywords as unknown[] | undefined;
+		if (typeof hasKeywords === "boolean") {
+			const keywordsExist = Array.isArray(keywords) && keywords.length > 0;
+			assertEquals(keywordsExist, hasKeywords, `Expected hasKeywords=${hasKeywords} but got ${keywordsExist}`);
+		}
+		if (Array.isArray(keywords)) {
+			if (typeof minCount === "number") {
+				assertEquals(
+					keywords.length >= minCount,
+					true,
+					`Expected at least ${minCount} keywords, got ${keywords.length}`,
+				);
+			}
+			if (typeof maxCount === "number") {
+				assertEquals(
+					keywords.length <= maxCount,
+					true,
+					`Expected at most ${maxCount} keywords, got ${keywords.length}`,
+				);
+			}
+		}
+	},
+
+	assertContentNotEmpty(result: ExtractionResult): void {
+		assertEquals(result.content.length > 0, true, "Expected content to be non-empty");
+	},
 };
 
 function lookupMetadataPath(metadata: PlainRecord, path: string): unknown {

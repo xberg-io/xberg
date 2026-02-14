@@ -10,7 +10,7 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
+	kreuzberg "github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
 )
 
 var (
@@ -630,4 +630,33 @@ func runBatchExtractionAsync(t *testing.T, relativePaths []string, configJSON []
 		t.Fatalf("batchExtractFilesWithContext failed: %v", err)
 	}
 	return results
+}
+
+func assertKeywords(t *testing.T, result *kreuzberg.ExtractionResult, hasKeywords *bool, minCount, maxCount *int) {
+	t.Helper()
+	if hasKeywords != nil {
+		if *hasKeywords {
+			if result.Keywords == nil || len(result.Keywords) == 0 {
+				t.Fatalf("expected keywords in result but Keywords field is nil or empty")
+			}
+		} else {
+			if result.Keywords != nil && len(result.Keywords) > 0 {
+				t.Fatalf("expected no keywords but found %d", len(result.Keywords))
+			}
+		}
+	}
+	count := len(result.Keywords)
+	if minCount != nil && count < *minCount {
+		t.Fatalf("expected at least %d keywords, found %d", *minCount, count)
+	}
+	if maxCount != nil && count > *maxCount {
+		t.Fatalf("expected at most %d keywords, found %d", *maxCount, count)
+	}
+}
+
+func assertContentNotEmpty(t *testing.T, result *kreuzberg.ExtractionResult) {
+	t.Helper()
+	if len(result.Content) == 0 {
+		t.Fatalf("expected content to be non-empty, but it is empty")
+	}
 }

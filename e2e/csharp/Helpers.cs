@@ -668,4 +668,48 @@ public static class TestHelpers
             }
         }
     }
+
+    public static void AssertKeywords(
+        ExtractionResult result,
+        bool? hasKeywords,
+        int? minCount,
+        int? maxCount)
+    {
+        var keywords = result.Keywords;
+        if (hasKeywords == true)
+        {
+            if (keywords is null || keywords.Count == 0)
+            {
+                throw new XunitException("Expected keywords but got null or empty");
+            }
+        }
+        if (hasKeywords == false)
+        {
+            if (keywords is not null && keywords.Count > 0)
+            {
+                throw new XunitException("Expected keywords to be null or empty");
+            }
+            return;
+        }
+        if (keywords is not null)
+        {
+            var count = keywords.Count;
+            if (minCount.HasValue && count < minCount.Value)
+            {
+                throw new XunitException($"Expected at least {minCount.Value} keywords, found {count}");
+            }
+            if (maxCount.HasValue && count > maxCount.Value)
+            {
+                throw new XunitException($"Expected at most {maxCount.Value} keywords, found {count}");
+            }
+        }
+    }
+
+    public static void AssertContentNotEmpty(ExtractionResult result)
+    {
+        if (string.IsNullOrEmpty(result.Content))
+        {
+            throw new XunitException("Expected content to be non-empty, but it is empty");
+        }
+    }
 }

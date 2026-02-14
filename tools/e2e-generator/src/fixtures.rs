@@ -172,6 +172,12 @@ pub struct Assertions {
     /// Document structure assertions for hierarchical document tree validation
     #[serde(default)]
     pub document: Option<DocumentAssertion>,
+    /// Keyword extraction assertions
+    #[serde(default)]
+    pub keywords: Option<KeywordAssertion>,
+    /// Whether content must be non-empty
+    #[serde(default)]
+    pub content_not_empty: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -243,6 +249,21 @@ pub struct OcrElementAssertion {
     /// Minimum number of OCR elements expected
     #[serde(default)]
     pub min_count: Option<usize>,
+}
+
+/// Keyword extraction assertions
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct KeywordAssertion {
+    /// Whether keywords should be present in the result
+    #[serde(default)]
+    pub has_keywords: Option<bool>,
+    /// Minimum number of keywords expected
+    #[serde(default)]
+    pub min_count: Option<usize>,
+    /// Maximum number of keywords expected
+    #[serde(default)]
+    pub max_count: Option<usize>,
 }
 
 /// Document structure assertions for hierarchical document tree validation
@@ -536,7 +557,13 @@ pub fn load_fixtures(fixtures_dir: &Utf8Path) -> Result<Vec<Fixture>> {
 /// - Workers target has a 500KB size limit for documents
 pub fn should_include_for_wasm(fixture: &Fixture, target: WasmTarget) -> bool {
     // PaddleOCR requires ONNX Runtime which is not available in WASM
-    if fixture.skip().requires_feature.iter().any(|f| f == "paddle-ocr") {
+    // Embeddings and keywords require native libraries not available in WASM
+    if fixture
+        .skip()
+        .requires_feature
+        .iter()
+        .any(|f| f == "paddle-ocr" || f == "embeddings" || f == "keywords")
+    {
         return false;
     }
 

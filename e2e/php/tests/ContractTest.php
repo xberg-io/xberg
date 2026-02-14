@@ -284,6 +284,26 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests extraction with HTML conversion options configured
+     */
+    public function test_config_html_options(): void
+    {
+        $documentPath = Helpers::resolveDocument('html/complex_table.html');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_html_options: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['html_options' => ['include_links' => true]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['text/html']);
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
      * Tests image extraction configuration with image assertions
      */
     public function test_config_images(): void
@@ -362,6 +382,26 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests extraction with quality processing explicitly disabled
+     */
+    public function test_config_quality_disabled(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_quality_disabled: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['enable_quality_processing' => false]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
      * Tests use_cache=false configuration option
      */
     public function test_config_use_cache_false(): void
@@ -375,6 +415,27 @@ class ContractTest extends TestCase
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 10);
+    }
+
+    /**
+     * Tests markdown output format via bytes extraction API
+     */
+    public function test_output_format_bytes_markdown(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping output_format_bytes_markdown: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['output_format' => 'markdown']);
+
+        $kreuzberg = new Kreuzberg($config);
+        $bytes = file_get_contents($documentPath);
+        $mimeType = Kreuzberg::detectMimeType($bytes);
+        $result = $kreuzberg->extractBytes($bytes, $mimeType);
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);

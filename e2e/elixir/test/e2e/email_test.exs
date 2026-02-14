@@ -11,13 +11,13 @@ defmodule E2E.EmailTest do
   describe "email fixtures" do
     test "email_eml_html_body" do
       case E2E.Helpers.run_fixture(
-        "email_eml_html_body",
-        "email/html_only.eml",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "email_eml_html_body",
+             "email/html_only.eml",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["message/rfc822"])
@@ -33,13 +33,13 @@ defmodule E2E.EmailTest do
 
     test "email_eml_multipart" do
       case E2E.Helpers.run_fixture(
-        "email_eml_multipart",
-        "email/html_email_multipart.eml",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "email_eml_multipart",
+             "email/html_email_multipart.eml",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["message/rfc822"])
@@ -55,13 +55,13 @@ defmodule E2E.EmailTest do
 
     test "email_eml_utf16" do
       case E2E.Helpers.run_fixture(
-        "email_eml_utf16",
-        "vendored/unstructured/eml/fake-email-utf-16.eml",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "email_eml_utf16",
+             "vendored/unstructured/eml/fake-email-utf-16.eml",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["message/rfc822"])
@@ -78,13 +78,13 @@ defmodule E2E.EmailTest do
 
     test "email_msg_basic" do
       case E2E.Helpers.run_fixture(
-        "email_msg_basic",
-        "email/fake_email.msg",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "email_msg_basic",
+             "email/fake_email.msg",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.ms-outlook"])
@@ -100,13 +100,13 @@ defmodule E2E.EmailTest do
 
     test "email_sample_eml" do
       case E2E.Helpers.run_fixture(
-        "email_sample_eml",
-        "email/sample_email.eml",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "email_sample_eml",
+             "email/sample_email.eml",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["message/rfc822"])

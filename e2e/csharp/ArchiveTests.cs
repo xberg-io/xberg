@@ -7,7 +7,8 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.Archive {
+namespace Kreuzberg.E2E.Archive
+{
     public class ArchiveTests
     {
         [SkippableFact]

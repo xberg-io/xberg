@@ -11,13 +11,13 @@ defmodule E2E.ImageTest do
   describe "image fixtures" do
     test "image_metadata_only" do
       case E2E.Helpers.run_fixture(
-        "image_metadata_only",
-        "images/example.jpg",
-        %{ocr: nil},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "image_metadata_only",
+             "images/example.jpg",
+             %{ocr: nil},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/jpeg"])
@@ -33,13 +33,13 @@ defmodule E2E.ImageTest do
 
     test "image_svg_basic" do
       case E2E.Helpers.run_fixture(
-        "image_svg_basic",
-        "xml/simple_svg.svg",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "image_svg_basic",
+             "xml/simple_svg.svg",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/svg+xml"])

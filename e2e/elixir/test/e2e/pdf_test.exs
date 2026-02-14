@@ -11,13 +11,13 @@ defmodule E2E.PdfTest do
   describe "pdf fixtures" do
     test "pdf_assembly_technical" do
       case E2E.Helpers.run_fixture(
-        "pdf_assembly_technical",
-        "pdf/assembly_language_for_beginners_al4_b_en.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_assembly_technical",
+             "pdf/assembly_language_for_beginners_al4_b_en.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -35,13 +35,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_bayesian_data_analysis" do
       case E2E.Helpers.run_fixture(
-        "pdf_bayesian_data_analysis",
-        "pdf/bayesian_data_analysis_third_edition_13th_feb_2020.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_bayesian_data_analysis",
+             "pdf/bayesian_data_analysis_third_edition_13th_feb_2020.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -59,13 +59,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_code_and_formula" do
       case E2E.Helpers.run_fixture(
-        "pdf_code_and_formula",
-        "pdf/code_and_formula.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_code_and_formula",
+             "pdf/code_and_formula.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -81,13 +81,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_deep_learning" do
       case E2E.Helpers.run_fixture(
-        "pdf_deep_learning",
-        "pdf/fundamentals_of_deep_learning_2014.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_deep_learning",
+             "pdf/fundamentals_of_deep_learning_2014.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -105,13 +105,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_embedded_images" do
       case E2E.Helpers.run_fixture(
-        "pdf_embedded_images",
-        "pdf/embedded_images_tables.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_embedded_images",
+             "pdf/embedded_images_tables.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -128,13 +128,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_google_doc" do
       case E2E.Helpers.run_fixture(
-        "pdf_google_doc",
-        "pdf/google_doc_document.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_google_doc",
+             "pdf/google_doc_document.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -151,13 +151,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_large_ciml" do
       case E2E.Helpers.run_fixture(
-        "pdf_large_ciml",
-        "pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_large_ciml",
+             "pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -175,13 +175,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_non_english_german" do
       case E2E.Helpers.run_fixture(
-        "pdf_non_english_german",
-        "pdf/5_level_paging_and_5_level_ept_intel_revision_1_1_may_2017.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_non_english_german",
+             "pdf/5_level_paging_and_5_level_ept_intel_revision_1_1_may_2017.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -199,13 +199,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_right_to_left" do
       case E2E.Helpers.run_fixture(
-        "pdf_right_to_left",
-        "pdf/right_to_left_01.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_right_to_left",
+             "pdf/right_to_left_01.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -222,13 +222,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_simple_text" do
       case E2E.Helpers.run_fixture(
-        "pdf_simple_text",
-        "pdf/fake_memo.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_simple_text",
+             "pdf/fake_memo.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -245,13 +245,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_tables_large" do
       case E2E.Helpers.run_fixture(
-        "pdf_tables_large",
-        "pdf/large.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_tables_large",
+             "pdf/large.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -268,13 +268,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_tables_medium" do
       case E2E.Helpers.run_fixture(
-        "pdf_tables_medium",
-        "pdf/medium.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_tables_medium",
+             "pdf/medium.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -291,18 +291,25 @@ defmodule E2E.PdfTest do
 
     test "pdf_tables_small" do
       case E2E.Helpers.run_fixture(
-        "pdf_tables_small",
-        "pdf/tiny.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_tables_small",
+             "pdf/tiny.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(50)
-          |> E2E.Helpers.assert_content_contains_all(["Table 1", "Selected Numbers", "Celsius", "Fahrenheit", "Water Freezing Point", "Water Boiling Point"])
+          |> E2E.Helpers.assert_content_contains_all([
+            "Table 1",
+            "Selected Numbers",
+            "Celsius",
+            "Fahrenheit",
+            "Water Freezing Point",
+            "Water Boiling Point"
+          ])
           |> E2E.Helpers.assert_table_count(1, nil)
 
         {:skipped, reason} ->
@@ -315,13 +322,13 @@ defmodule E2E.PdfTest do
 
     test "pdf_technical_stat_learning" do
       case E2E.Helpers.run_fixture(
-        "pdf_technical_stat_learning",
-        "pdf/an_introduction_to_statistical_learning_with_applications_in_r_islr_sixth_printing.pdf",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "pdf_technical_stat_learning",
+             "pdf/an_introduction_to_statistical_learning_with_applications_in_r_islr_sixth_printing.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])

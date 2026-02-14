@@ -448,6 +448,31 @@ export const assertions = {
 			expect(doc == null).toBe(true);
 		}
 	},
+
+	assertKeywords(
+		result: ExtractionResult,
+		hasKeywords?: boolean | null,
+		minCount?: number | null,
+		maxCount?: number | null,
+	): void {
+		const keywords = (result as unknown as PlainRecord).keywords as unknown[] | undefined;
+		if (typeof hasKeywords === "boolean") {
+			const keywordsExist = Array.isArray(keywords) && keywords.length > 0;
+			expect(keywordsExist).toBe(hasKeywords);
+		}
+		if (Array.isArray(keywords)) {
+			if (typeof minCount === "number") {
+				expect(keywords.length >= minCount).toBe(true);
+			}
+			if (typeof maxCount === "number") {
+				expect(keywords.length <= maxCount).toBe(true);
+			}
+		}
+	},
+
+	assertContentNotEmpty(result: ExtractionResult): void {
+		expect(typeof result.content === "string" && result.content.length > 0).toBe(true);
+	},
 };
 
 function lookupMetadataPath(metadata: PlainRecord, path: string): unknown {

@@ -11,13 +11,13 @@ defmodule E2E.OcrTest do
   describe "ocr fixtures" do
     test "ocr_image_hello_world" do
       case E2E.Helpers.run_fixture(
-        "ocr_image_hello_world",
-        "images/test_hello_world.png",
-        %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
-        requirements: ["tesseract", "tesseract"],
-        notes: "Requires Tesseract OCR for image text extraction.",
-        skip_if_missing: true
-      ) do
+             "ocr_image_hello_world",
+             "images/test_hello_world.png",
+             %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
+             requirements: ["tesseract", "tesseract"],
+             notes: "Requires Tesseract OCR for image text extraction.",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/png"])
@@ -34,13 +34,13 @@ defmodule E2E.OcrTest do
 
     test "ocr_image_no_text" do
       case E2E.Helpers.run_fixture(
-        "ocr_image_no_text",
-        "images/flower_no_text.jpg",
-        %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
-        requirements: ["tesseract", "tesseract"],
-        notes: "Skip when Tesseract is unavailable.",
-        skip_if_missing: true
-      ) do
+             "ocr_image_no_text",
+             "images/flower_no_text.jpg",
+             %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
+             requirements: ["tesseract", "tesseract"],
+             notes: "Skip when Tesseract is unavailable.",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/jpeg"])
@@ -56,13 +56,16 @@ defmodule E2E.OcrTest do
 
     test "ocr_paddle_confidence_filter" do
       case E2E.Helpers.run_fixture(
-        "ocr_paddle_confidence_filter",
-        "images/ocr_image.jpg",
-        %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{min_confidence: 80}}},
-        requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
-        notes: "Tests confidence threshold filtering with PaddleOCR",
-        skip_if_missing: true
-      ) do
+             "ocr_paddle_confidence_filter",
+             "images/ocr_image.jpg",
+             %{
+               force_ocr: true,
+               ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{min_confidence: 80}}
+             },
+             requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
+             notes: "Tests confidence threshold filtering with PaddleOCR",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/jpeg"])
@@ -78,13 +81,13 @@ defmodule E2E.OcrTest do
 
     test "ocr_paddle_image_chinese" do
       case E2E.Helpers.run_fixture(
-        "ocr_paddle_image_chinese",
-        "images/chi_sim_image.jpeg",
-        %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "ch"}},
-        requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
-        notes: "Requires PaddleOCR with Chinese models",
-        skip_if_missing: true
-      ) do
+             "ocr_paddle_image_chinese",
+             "images/chi_sim_image.jpeg",
+             %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "ch"}},
+             requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
+             notes: "Requires PaddleOCR with Chinese models",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/jpeg"])
@@ -100,13 +103,13 @@ defmodule E2E.OcrTest do
 
     test "ocr_paddle_image_english" do
       case E2E.Helpers.run_fixture(
-        "ocr_paddle_image_english",
-        "images/test_hello_world.png",
-        %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "en"}},
-        requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
-        notes: "Requires PaddleOCR with ONNX Runtime",
-        skip_if_missing: true
-      ) do
+             "ocr_paddle_image_english",
+             "images/test_hello_world.png",
+             %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "en"}},
+             requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
+             notes: "Requires PaddleOCR with ONNX Runtime",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/png"])
@@ -123,13 +126,16 @@ defmodule E2E.OcrTest do
 
     test "ocr_paddle_markdown" do
       case E2E.Helpers.run_fixture(
-        "ocr_paddle_markdown",
-        "images/test_hello_world.png",
-        %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{output_format: "markdown"}}},
-        requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
-        notes: "Tests markdown output format parity with Tesseract",
-        skip_if_missing: true
-      ) do
+             "ocr_paddle_markdown",
+             "images/test_hello_world.png",
+             %{
+               force_ocr: true,
+               ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{output_format: "markdown"}}
+             },
+             requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
+             notes: "Tests markdown output format parity with Tesseract",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/png"])
@@ -146,13 +152,13 @@ defmodule E2E.OcrTest do
 
     test "ocr_paddle_pdf_scanned" do
       case E2E.Helpers.run_fixture(
-        "ocr_paddle_pdf_scanned",
-        "pdf/ocr_test.pdf",
-        %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "en"}},
-        requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
-        notes: "Requires PaddleOCR with ONNX Runtime",
-        skip_if_missing: true
-      ) do
+             "ocr_paddle_pdf_scanned",
+             "pdf/ocr_test.pdf",
+             %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "en"}},
+             requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
+             notes: "Requires PaddleOCR with ONNX Runtime",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -169,18 +175,25 @@ defmodule E2E.OcrTest do
 
     test "ocr_paddle_structured" do
       case E2E.Helpers.run_fixture(
-        "ocr_paddle_structured",
-        "images/test_hello_world.png",
-        %{force_ocr: true, ocr: %{backend: "paddle-ocr", element_config: %{include_elements: true}, language: "en"}},
-        requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
-        notes: "Tests structured output with bbox/confidence preservation",
-        skip_if_missing: true
-      ) do
+             "ocr_paddle_structured",
+             "images/test_hello_world.png",
+             %{
+               force_ocr: true,
+               ocr: %{backend: "paddle-ocr", element_config: %{include_elements: true}, language: "en"}
+             },
+             requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
+             notes: "Tests structured output with bbox/confidence preservation",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/png"])
           |> E2E.Helpers.assert_min_content_length(5)
-          |> E2E.Helpers.assert_ocr_elements(has_elements: true, elements_have_geometry: true, elements_have_confidence: true)
+          |> E2E.Helpers.assert_ocr_elements(
+            has_elements: true,
+            elements_have_geometry: true,
+            elements_have_confidence: true
+          )
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -192,13 +205,16 @@ defmodule E2E.OcrTest do
 
     test "ocr_paddle_table_detection" do
       case E2E.Helpers.run_fixture(
-        "ocr_paddle_table_detection",
-        "images/simple_table.png",
-        %{force_ocr: true, ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{enable_table_detection: true}}},
-        requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
-        notes: "Tests table detection capability with PaddleOCR",
-        skip_if_missing: true
-      ) do
+             "ocr_paddle_table_detection",
+             "images/simple_table.png",
+             %{
+               force_ocr: true,
+               ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{enable_table_detection: true}}
+             },
+             requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
+             notes: "Tests table detection capability with PaddleOCR",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["image/png"])
@@ -215,13 +231,13 @@ defmodule E2E.OcrTest do
 
     test "ocr_pdf_image_only_german" do
       case E2E.Helpers.run_fixture(
-        "ocr_pdf_image_only_german",
-        "pdf/image_only_german_pdf.pdf",
-        %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
-        requirements: ["tesseract", "tesseract"],
-        notes: "Skip if OCR backend unavailable.",
-        skip_if_missing: true
-      ) do
+             "ocr_pdf_image_only_german",
+             "pdf/image_only_german_pdf.pdf",
+             %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
+             requirements: ["tesseract", "tesseract"],
+             notes: "Skip if OCR backend unavailable.",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -238,13 +254,13 @@ defmodule E2E.OcrTest do
 
     test "ocr_pdf_rotated_90" do
       case E2E.Helpers.run_fixture(
-        "ocr_pdf_rotated_90",
-        "pdf/ocr_test_rotated_90.pdf",
-        %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
-        requirements: ["tesseract", "tesseract"],
-        notes: "Skip automatically when OCR backend is missing.",
-        skip_if_missing: true
-      ) do
+             "ocr_pdf_rotated_90",
+             "pdf/ocr_test_rotated_90.pdf",
+             %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
+             requirements: ["tesseract", "tesseract"],
+             notes: "Skip automatically when OCR backend is missing.",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -260,13 +276,13 @@ defmodule E2E.OcrTest do
 
     test "ocr_pdf_tesseract" do
       case E2E.Helpers.run_fixture(
-        "ocr_pdf_tesseract",
-        "pdf/ocr_test.pdf",
-        %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
-        requirements: ["tesseract", "tesseract"],
-        notes: "Skip automatically if OCR backend is unavailable.",
-        skip_if_missing: true
-      ) do
+             "ocr_pdf_tesseract",
+             "pdf/ocr_test.pdf",
+             %{force_ocr: true, ocr: %{backend: "tesseract", language: "eng"}},
+             requirements: ["tesseract", "tesseract"],
+             notes: "Skip automatically if OCR backend is unavailable.",
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])

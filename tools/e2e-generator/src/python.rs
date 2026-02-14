@@ -454,6 +454,36 @@ def assert_document(
                 pytest.fail(f"Expected node type {expected_type!r} not found in {found_types}")
     if has_groups is not None:
         _check_groups(nodes, has_groups)
+
+
+def assert_keywords(
+    result: Any,
+    has_keywords: bool | None = None,
+    min_count: int | None = None,
+    max_count: int | None = None,
+) -> None:
+    keywords = result.keywords if hasattr(result, "keywords") else None
+    if has_keywords is True:
+        if keywords is None:
+            pytest.fail("Expected keywords but got None")
+        if not isinstance(keywords, (list, tuple)):
+            pytest.fail(f"Expected keywords list, got {type(keywords)}")
+        if len(keywords) == 0:
+            pytest.fail("Expected non-empty keywords list")
+    if has_keywords is False:
+        if keywords is not None and len(keywords) > 0:
+            pytest.fail(f"Expected no keywords but found {len(keywords)}")
+    if keywords is not None and isinstance(keywords, (list, tuple)):
+        if min_count is not None and len(keywords) < min_count:
+            pytest.fail(f"Expected >= {min_count} keywords, found {len(keywords)}")
+        if max_count is not None and len(keywords) > max_count:
+            pytest.fail(f"Expected <= {max_count} keywords, found {len(keywords)}")
+
+
+def assert_content_not_empty(result: Any) -> None:
+    content = getattr(result, "content", None)
+    if content is None or len(content.strip()) == 0:
+        pytest.fail("Expected non-empty content")
 "#;
 
 pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
@@ -853,6 +883,24 @@ fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("has_groups={}", if has_groups { "True" } else { "False" }));
         }
         writeln!(buffer, "    helpers.assert_document(result, {})", args.join(", ")).unwrap();
+    }
+
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let mut args = Vec::new();
+        if let Some(has_keywords) = keywords.has_keywords {
+            args.push(format!("has_keywords={}", if has_keywords { "True" } else { "False" }));
+        }
+        if let Some(min) = keywords.min_count {
+            args.push(format!("min_count={min}"));
+        }
+        if let Some(max) = keywords.max_count {
+            args.push(format!("max_count={max}"));
+        }
+        writeln!(buffer, "    helpers.assert_keywords(result, {})", args.join(", ")).unwrap();
+    }
+
+    if assertions.content_not_empty == Some(true) {
+        writeln!(buffer, "    helpers.assert_content_not_empty(result)").unwrap();
     }
 
     if !buffer.ends_with('\n') {

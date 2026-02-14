@@ -1,0 +1,22 @@
+{
+	"id": "config_html_options",
+	"description": "Tests extraction with HTML conversion options configured",
+	"tags": ["contract", "config"],
+	"document": {
+		"path": "html/complex_table.html"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"html_options": {
+				"include_links": true
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": ["text/html"],
+		"min_content_length": 10,
+		"content_not_empty": true
+	}
+}

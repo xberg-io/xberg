@@ -282,6 +282,27 @@ Deno.test("config_force_ocr", { permissions: { read: true } }, async () => {
 	assertions.assertMinContentLength(result, 5);
 });
 
+Deno.test("config_html_options", { permissions: { read: true } }, async () => {
+	const documentBytes = await resolveDocument("html/complex_table.html");
+	const config = buildConfig({ html_options: { include_links: true } });
+	let result: ExtractionResult | null = null;
+	try {
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/octet-stream", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "config_html_options", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["text/html"]);
+	assertions.assertMinContentLength(result, 10);
+	assertions.assertContentNotEmpty(result);
+});
+
 Deno.test("config_images", { permissions: { read: true } }, async () => {
 	const documentBytes = await resolveDocument("pdf/embedded_images_tables.pdf");
 	const config = buildConfig({ images: { extract_images: true } });
@@ -364,6 +385,27 @@ Deno.test("config_pages", { permissions: { read: true } }, async () => {
 	assertions.assertMinContentLength(result, 10);
 });
 
+Deno.test("config_quality_disabled", { permissions: { read: true } }, async () => {
+	const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
+	const config = buildConfig({ enable_quality_processing: false });
+	let result: ExtractionResult | null = null;
+	try {
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/octet-stream", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "config_quality_disabled", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/pdf"]);
+	assertions.assertMinContentLength(result, 10);
+	assertions.assertContentNotEmpty(result);
+});
+
 Deno.test("config_use_cache_false", { permissions: { read: true } }, async () => {
 	const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
 	const config = buildConfig({ use_cache: false });
@@ -373,6 +415,26 @@ Deno.test("config_use_cache_false", { permissions: { read: true } }, async () =>
 		result = await extractBytes(documentBytes, "application/octet-stream", config);
 	} catch (error) {
 		if (shouldSkipFixture(error, "config_use_cache_false", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/pdf"]);
+	assertions.assertMinContentLength(result, 10);
+});
+
+Deno.test("output_format_bytes_markdown", { permissions: { read: true } }, async () => {
+	const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
+	const config = buildConfig({ output_format: "markdown" });
+	let result: ExtractionResult | null = null;
+	try {
+		// Sync bytes extraction - WASM uses extractBytes with Uint8Array
+		result = await extractBytes(documentBytes, "application/octet-stream", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "output_format_bytes_markdown", [], undefined)) {
 			return;
 		}
 		throw error;

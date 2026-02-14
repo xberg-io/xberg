@@ -119,6 +119,17 @@ func TestContractConfigForceOcr(t *testing.T) {
 	assertMinContentLength(t, result, 5)
 }
 
+func TestContractConfigHtmlOptions(t *testing.T) {
+	result := runExtraction(t, "html/complex_table.html", []byte(`{
+"html_options": {
+	"include_links": true
+}
+}`))
+	assertExpectedMime(t, result, []string{"text/html"})
+	assertMinContentLength(t, result, 10)
+	assertContentNotEmpty(t, result)
+}
+
 func TestContractConfigImages(t *testing.T) {
 	result := runExtraction(t, "pdf/embedded_images_tables.pdf", []byte(`{
 "images": {
@@ -162,9 +173,26 @@ func TestContractConfigPages(t *testing.T) {
 	assertMinContentLength(t, result, 10)
 }
 
+func TestContractConfigQualityDisabled(t *testing.T) {
+	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
+"enable_quality_processing": false
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 10)
+	assertContentNotEmpty(t, result)
+}
+
 func TestContractConfigUseCacheFalse(t *testing.T) {
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "use_cache": false
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 10)
+}
+
+func TestContractOutputFormatBytesMarkdown(t *testing.T) {
+	result := runExtractionBytes(t, "pdf/fake_memo.pdf", []byte(`{
+"output_format": "markdown"
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)

@@ -411,6 +411,38 @@ export const assertions = {
 			}
 		}
 	},
+
+	assertKeywords(
+		result: ExtractionResult,
+		hasKeywords?: boolean | null,
+		minCount?: number | null,
+		maxCount?: number | null,
+	): void {
+		const keywords = (result as unknown as PlainRecord).keywords as unknown[] | undefined;
+		if (hasKeywords === true) {
+			expect(keywords).toBeDefined();
+			expect(Array.isArray(keywords)).toBe(true);
+			expect((keywords as unknown[]).length).toBeGreaterThan(0);
+		}
+		if (hasKeywords === false) {
+			if (keywords !== undefined && keywords !== null) {
+				expect((keywords as unknown[]).length).toBe(0);
+			}
+		}
+		if (keywords !== undefined && keywords !== null && Array.isArray(keywords)) {
+			if (typeof minCount === "number") {
+				expect(keywords.length).toBeGreaterThanOrEqual(minCount);
+			}
+			if (typeof maxCount === "number") {
+				expect(keywords.length).toBeLessThanOrEqual(maxCount);
+			}
+		}
+	},
+
+	assertContentNotEmpty(result: ExtractionResult): void {
+		expect(result.content).toBeDefined();
+		expect(result.content.trim().length).toBeGreaterThan(0);
+	},
 };
 
 function lookupMetadataPath(metadata: PlainRecord, path: string): unknown {

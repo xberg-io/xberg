@@ -498,6 +498,31 @@ export const assertions = {
             assertEquals(doc == null, true, "Expected document to be null but got a document");
         }
     },
+
+    assertKeywords(
+        result: ExtractionResult,
+        hasKeywords?: boolean | null,
+        minCount?: number | null,
+        maxCount?: number | null,
+    ): void {
+        const keywords = (result as unknown as PlainRecord).keywords as unknown[] | undefined;
+        if (typeof hasKeywords === "boolean") {
+            const keywordsExist = Array.isArray(keywords) && keywords.length > 0;
+            assertEquals(keywordsExist, hasKeywords, `Expected hasKeywords=${hasKeywords} but got ${keywordsExist}`);
+        }
+        if (Array.isArray(keywords)) {
+            if (typeof minCount === "number") {
+                assertEquals(keywords.length >= minCount, true, `Expected at least ${minCount} keywords, got ${keywords.length}`);
+            }
+            if (typeof maxCount === "number") {
+                assertEquals(keywords.length <= maxCount, true, `Expected at most ${maxCount} keywords, got ${keywords.length}`);
+            }
+        }
+    },
+
+    assertContentNotEmpty(result: ExtractionResult): void {
+        assertEquals(result.content.length > 0, true, "Expected content to be non-empty");
+    },
 };
 
 function lookupMetadataPath(metadata: PlainRecord, path: string): unknown {
@@ -932,6 +957,28 @@ fn render_assertions(assertions: &Assertions) -> String {
         buffer.push_str(&format!(
             "    assertions.assertDocument(result, {has_document}, {min_node_count}, {node_types}, {has_groups});\n"
         ));
+    }
+
+    if let Some(keywords) = assertions.keywords.as_ref() {
+        let has_keywords = keywords
+            .has_keywords
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".into());
+        let min_count = keywords
+            .min_count
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".into());
+        let max_count = keywords
+            .max_count
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".into());
+        buffer.push_str(&format!(
+            "    assertions.assertKeywords(result, {has_keywords}, {min_count}, {max_count});\n"
+        ));
+    }
+
+    if assertions.content_not_empty == Some(true) {
+        buffer.push_str("    assertions.assertContentNotEmpty(result);\n");
     }
 
     buffer

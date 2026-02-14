@@ -323,11 +323,11 @@ impl JupyterExtractor {
             }
 
             // Include JSON output as structured data
-            if let Some(json_content) = data.get("application/json") {
-                if let Ok(formatted) = serde_json::to_string_pretty(json_content) {
-                    content.push_str(&formatted);
-                    content.push('\n');
-                }
+            if let Some(json_content) = data.get("application/json")
+                && let Ok(formatted) = serde_json::to_string_pretty(json_content)
+            {
+                content.push_str(&formatted);
+                content.push('\n');
             }
         }
 

@@ -11,13 +11,13 @@ defmodule E2E.HtmlTest do
   describe "html fixtures" do
     test "html_complex_layout" do
       case E2E.Helpers.run_fixture(
-        "html_complex_layout",
-        "html/taylor_swift.html",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "html_complex_layout",
+             "html/taylor_swift.html",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/html"])
@@ -33,18 +33,26 @@ defmodule E2E.HtmlTest do
 
     test "html_simple_table" do
       case E2E.Helpers.run_fixture(
-        "html_simple_table",
-        "html/simple_table.html",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "html_simple_table",
+             "html/simple_table.html",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/html"])
           |> E2E.Helpers.assert_min_content_length(100)
-          |> E2E.Helpers.assert_content_contains_all(["Product", "Category", "Price", "Stock", "Laptop", "Electronics", "Sample Data Table"])
+          |> E2E.Helpers.assert_content_contains_all([
+            "Product",
+            "Category",
+            "Price",
+            "Stock",
+            "Laptop",
+            "Electronics",
+            "Sample Data Table"
+          ])
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
