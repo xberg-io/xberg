@@ -9,41 +9,28 @@ use kreuzberg::OcrConfig;
 use kreuzberg::ollama_ocr::OllamaOcrBackend;
 use kreuzberg::plugins::{OcrBackend, Plugin};
 
-fn ollama_available() -> bool {
-    match ureq::get("http://localhost:11434/api/tags").call() {
-        Ok(_) => true,
-        Err(_) => false,
-    }
-}
+const OLLAMA_TAGS_URL: &str = "http://localhost:11434/api/tags";
 
 fn model_available(model: &str) -> bool {
-    if !ollama_available() {
+    let Ok(mut resp) = ureq::get(OLLAMA_TAGS_URL).call() else {
         return false;
-    }
-    match ureq::get("http://localhost:11434/api/tags").call() {
-        Ok(mut resp) => {
-            let body: serde_json::Value = resp.body_mut().read_json().unwrap_or_default();
-            body["models"]
-                .as_array()
-                .map(|models| {
-                    models
-                        .iter()
-                        .any(|m| m["name"].as_str().unwrap_or("").starts_with(model))
-                })
-                .unwrap_or(false)
-        }
-        Err(_) => false,
-    }
+    };
+    let body: serde_json::Value = resp.body_mut().read_json().unwrap_or_default();
+    body["models"].as_array().is_some_and(|models| {
+        models
+            .iter()
+            .any(|m| m["name"].as_str().unwrap_or("").starts_with(model))
+    })
 }
 
 fn test_image_path(name: &str) -> std::path::PathBuf {
-    let workspace = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()
         .parent()
         .unwrap()
-        .to_path_buf();
-    workspace.join("test_documents/images").join(name)
+        .join("test_documents/images")
+        .join(name)
 }
 
 /// Test basic English OCR with glm-ocr.

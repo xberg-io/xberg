@@ -1,13 +1,15 @@
 //! Ollama OCR backend implementation.
 
+use std::borrow::Cow;
+use std::path::Path;
+
+use async_trait::async_trait;
+use base64::Engine;
+
 use crate::Result;
 use crate::core::config::OcrConfig;
 use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
 use crate::types::ExtractionResult;
-use async_trait::async_trait;
-use base64::Engine;
-use std::borrow::Cow;
-use std::path::Path;
 
 /// Default Ollama API endpoint.
 const DEFAULT_ENDPOINT: &str = "http://localhost:11434";
@@ -44,11 +46,7 @@ impl OllamaOcrBackend {
     ///
     /// Respects `OLLAMA_HOST` and `OLLAMA_MODEL` environment variables.
     pub fn new() -> Self {
-        Self {
-            endpoint: std::env::var("OLLAMA_HOST").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_string()),
-            model: std::env::var("OLLAMA_MODEL").unwrap_or_else(|_| DEFAULT_MODEL.to_string()),
-            prompt: DEFAULT_PROMPT.to_string(),
-        }
+        Self::builder().build()
     }
 
     /// Create a builder for custom configuration.
@@ -111,7 +109,7 @@ impl Plugin for OllamaOcrBackend {
     }
 
     fn version(&self) -> String {
-        "1.0.0".to_string()
+        env!("CARGO_PKG_VERSION").to_string()
     }
 
     fn initialize(&self) -> Result<()> {
@@ -123,7 +121,8 @@ impl Plugin for OllamaOcrBackend {
     }
 }
 
-#[async_trait]
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl OcrBackend for OllamaOcrBackend {
     async fn process_image(&self, image_bytes: &[u8], _config: &OcrConfig) -> Result<ExtractionResult> {
         let backend = self.clone();
@@ -139,20 +138,7 @@ impl OcrBackend for OllamaOcrBackend {
         Ok(ExtractionResult {
             content,
             mime_type: Cow::Borrowed("text/plain"),
-            metadata: crate::types::Metadata::default(),
-            tables: vec![],
-            detected_languages: None,
-            chunks: None,
-            images: None,
-            djot_content: None,
-            pages: None,
-            elements: None,
-            ocr_elements: None,
-            document: None,
-            #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
-            extracted_keywords: None,
-            quality_score: None,
-            processing_warnings: Vec::new(),
+            ..Default::default()
         })
     }
 
@@ -271,9 +257,8 @@ mod tests {
     }
 
     #[test]
-    fn test_plugin_name() {
+    fn test_version_from_cargo() {
         let backend = OllamaOcrBackend::builder().build();
-        assert_eq!(backend.name(), "ollama");
-        assert_eq!(backend.version(), "1.0.0");
+        assert_eq!(backend.version(), env!("CARGO_PKG_VERSION"));
     }
 }
