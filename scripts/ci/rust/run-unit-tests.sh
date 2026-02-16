@@ -67,6 +67,10 @@ if ! {
   if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" || "$OSTYPE" == "win32" ]]; then
     extra_excludes+=(--exclude benchmark-harness)
   fi
+  # pdfium-render tests crash with SIGTRAP on ARM64 Linux (pdfium binary incompatibility)
+  if [[ "$(uname -m)" == "aarch64" && "$(uname -s)" == "Linux" ]]; then
+    extra_excludes+=(--exclude kreuzberg-pdfium-render)
+  fi
   RUST_BACKTRACE=full cargo test \
     --workspace \
     --exclude kreuzberg \
