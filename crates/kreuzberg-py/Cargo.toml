@@ -18,7 +18,12 @@ test = false
 
 [dependencies]
 async-trait = { workspace = true }
-kreuzberg = { path = "../kreuzberg", features = ["full", "bundled-pdfium"] }
+kreuzberg = { path = "../kreuzberg", features = [
+    "full",
+    "bundled-pdfium",
+    "ollama-ocr",
+    "vllm-ocr",
+] }
 kreuzberg-ffi = { path = "../kreuzberg-ffi" }
 once_cell = "1.21"
 # NOTE: pyo3 pinned to 0.27.x until pyo3-async-runtimes supports 0.28.x
