@@ -77,6 +77,9 @@ paddle-ocr = [
 # Ollama OCR via vision models (e.g., glm-ocr)
 # Lightweight HTTP backend — uses ureq (already in tree) to call Ollama's /api/chat
 ollama-ocr = ["tokio-runtime"]
+# vLLM OCR via OpenAI-compatible /v1/chat/completions endpoint
+# Works with vLLM, llama.cpp, or any OpenAI-compatible vision API
+vllm-ocr = ["tokio-runtime"]
 language-detection = ["dep:whatlang"]
 chunking = ["dep:text-splitter"]
 embeddings = ["dep:fastembed", "dep:reqwest", "chunking", "tokio-runtime"]

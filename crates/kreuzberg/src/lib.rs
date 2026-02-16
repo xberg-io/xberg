@@ -85,6 +85,9 @@ pub mod ollama_ocr;
 #[cfg(feature = "paddle-ocr")]
 pub mod paddle_ocr;
 
+#[cfg(feature = "vllm-ocr")]
+pub mod vllm_ocr;
+
 #[cfg(feature = "pdf")]
 pub mod pdf;
 
