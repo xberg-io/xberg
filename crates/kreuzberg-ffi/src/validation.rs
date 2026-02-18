@@ -51,8 +51,6 @@ const VALID_OCR_BACKENDS: &[&str] = &[
     "paddle-ocr",
     "rapidocr",
     "rapid-ocr",
-    "rapidpaddle",
-    "rapid-paddle",
 ];
 const VALID_LANGUAGE_CODES: &[&str] = &[
     "en",
@@ -670,8 +668,6 @@ mod tests {
             assert_eq!(kreuzberg_validate_ocr_backend(c"paddle-ocr".as_ptr()), 1);
             assert_eq!(kreuzberg_validate_ocr_backend(c"rapidocr".as_ptr()), 1);
             assert_eq!(kreuzberg_validate_ocr_backend(c"rapid-ocr".as_ptr()), 1);
-            assert_eq!(kreuzberg_validate_ocr_backend(c"rapidpaddle".as_ptr()), 1);
-            assert_eq!(kreuzberg_validate_ocr_backend(c"rapid-paddle".as_ptr()), 1);
         }
     }
 
@@ -896,8 +892,6 @@ mod tests {
             assert!(json_str.contains("paddle-ocr"));
             assert!(json_str.contains("rapidocr"));
             assert!(json_str.contains("rapid-ocr"));
-            assert!(json_str.contains("rapidpaddle"));
-            assert!(json_str.contains("rapid-paddle"));
             assert!(json_str.starts_with('[') && json_str.ends_with(']'));
 
             let _ = std::ffi::CString::from_raw(json_ptr as *mut c_char);

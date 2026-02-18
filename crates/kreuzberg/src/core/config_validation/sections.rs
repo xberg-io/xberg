@@ -20,8 +20,6 @@ const VALID_OCR_BACKENDS: &[&str] = &[
     "paddle-ocr",
     "rapidocr",
     "rapid-ocr",
-    "rapidpaddle",
-    "rapid-paddle",
 ];
 
 /// Common ISO 639-1 language codes (extended list).
