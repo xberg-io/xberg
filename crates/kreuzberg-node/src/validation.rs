@@ -288,7 +288,7 @@ pub fn validate_binarization_method(method: String) -> Result<bool> {
 
 /// Validates an OCR backend string.
 ///
-/// Valid backends: "tesseract", "easyocr", "paddleocr"
+/// Valid backends: "tesseract", "easyocr", "paddleocr", "paddle-ocr", "rapidpaddle", "rapid-paddle"
 ///
 /// # Arguments
 ///
@@ -649,7 +649,7 @@ pub fn get_valid_language_codes() -> Result<Vec<String>> {
 ///
 /// # Returns
 ///
-/// Array of valid OCR backends: ["tesseract", "easyocr", "paddleocr"]
+/// Array of valid OCR backends: ["tesseract", "easyocr", "paddleocr", "paddle-ocr", "rapidpaddle", "rapid-paddle"]
 ///
 /// # Example
 ///
@@ -657,7 +657,7 @@ pub fn get_valid_language_codes() -> Result<Vec<String>> {
 /// import { getValidOcrBackends } from '@kreuzberg/node';
 ///
 /// const backends = getValidOcrBackends();
-/// console.log(backends); // ['tesseract', 'easyocr', 'paddleocr']
+/// console.log(backends); // ['tesseract', 'easyocr', 'paddleocr', 'paddle-ocr', 'rapidpaddle', 'rapid-paddle']
 /// ```
 #[napi(js_name = "getValidOcrBackends")]
 pub fn get_valid_ocr_backends() -> Result<Vec<String>> {

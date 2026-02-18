@@ -13,7 +13,14 @@ const VALID_BINARIZATION_METHODS: &[&str] = &["otsu", "adaptive", "sauvola"];
 const VALID_TOKEN_REDUCTION_LEVELS: &[&str] = &["off", "light", "moderate", "aggressive", "maximum"];
 
 /// Valid OCR backends.
-const VALID_OCR_BACKENDS: &[&str] = &["tesseract", "easyocr", "paddleocr", "paddle-ocr"];
+const VALID_OCR_BACKENDS: &[&str] = &[
+    "tesseract",
+    "easyocr",
+    "paddleocr",
+    "paddle-ocr",
+    "rapidpaddle",
+    "rapid-paddle",
+];
 
 /// Common ISO 639-1 language codes (extended list).
 /// Covers most major languages and variants used in document processing.

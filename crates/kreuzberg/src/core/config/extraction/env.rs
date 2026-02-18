@@ -17,7 +17,7 @@ impl ExtractionConfig {
     /// loaded from configuration files. This method supports the following environment variables:
     ///
     /// - `KREUZBERG_OCR_LANGUAGE`: OCR language (ISO 639-1 or 639-3 code, e.g., "eng", "fra", "deu")
-    /// - `KREUZBERG_OCR_BACKEND`: OCR backend ("tesseract", "easyocr", or "paddleocr")
+    /// - `KREUZBERG_OCR_BACKEND`: OCR backend ("tesseract", "easyocr", "paddleocr", or "rapid-paddle")
     /// - `KREUZBERG_CHUNKING_MAX_CHARS`: Maximum characters per chunk (positive integer)
     /// - `KREUZBERG_CHUNKING_MAX_OVERLAP`: Maximum overlap between chunks (non-negative integer)
     /// - `KREUZBERG_CACHE_ENABLED`: Cache enabled flag ("true" or "false")

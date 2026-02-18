@@ -38,6 +38,13 @@ pub struct LanguageRegistry {
 }
 
 impl LanguageRegistry {
+    fn canonical_backend_key(backend: &str) -> &str {
+        match backend {
+            "paddle-ocr" | "rapidpaddle" | "rapid-paddle" => "paddleocr",
+            other => other,
+        }
+    }
+
     /// Create a new language registry with all supported backends.
     ///
     /// # Returns
@@ -93,7 +100,9 @@ impl LanguageRegistry {
     /// }
     /// ```
     pub fn get_supported_languages(&self, backend: &str) -> Option<&[String]> {
-        self.backends.get(backend).map(|v| v.as_slice())
+        self.backends
+            .get(Self::canonical_backend_key(backend))
+            .map(|v| v.as_slice())
     }
 
     /// Check if a language is supported by a specific backend.
@@ -108,7 +117,7 @@ impl LanguageRegistry {
     /// `true` if the language is supported, `false` otherwise.
     pub fn is_language_supported(&self, backend: &str, language: &str) -> bool {
         self.backends
-            .get(backend)
+            .get(Self::canonical_backend_key(backend))
             .map(|langs| langs.contains(&language.to_string()))
             .unwrap_or(false)
     }
@@ -134,7 +143,10 @@ impl LanguageRegistry {
     ///
     /// Number of supported languages for the backend, or 0 if backend not found.
     pub fn get_language_count(&self, backend: &str) -> usize {
-        self.backends.get(backend).map(|langs| langs.len()).unwrap_or(0)
+        self.backends
+            .get(Self::canonical_backend_key(backend))
+            .map(|langs| langs.len())
+            .unwrap_or(0)
     }
 }
 
@@ -200,6 +212,14 @@ mod tests {
     fn test_get_unsupported_backend() {
         let registry = LanguageRegistry::new();
         assert_eq!(registry.get_supported_languages("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_paddle_alias_backends() {
+        let registry = LanguageRegistry::new();
+        assert!(registry.get_supported_languages("paddle-ocr").is_some());
+        assert!(registry.get_supported_languages("rapid-paddle").is_some());
+        assert!(registry.get_supported_languages("rapidpaddle").is_some());
     }
 
     #[test]

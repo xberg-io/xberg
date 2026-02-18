@@ -28,7 +28,7 @@ pub fn validate_binarization_method(method: &str) -> PyResult<bool> {
 /// Validate an OCR backend.
 ///
 /// Args:
-///     backend (str): The OCR backend to validate (e.g., "tesseract", "easyocr", "paddleocr")
+///     backend (str): The OCR backend to validate (e.g., "tesseract", "easyocr", "paddleocr", "rapid-paddle")
 ///
 /// Returns:
 ///     bool: True if valid, False if invalid
@@ -170,6 +170,9 @@ pub fn get_valid_ocr_backends() -> PyResult<Vec<String>> {
         "tesseract".to_string(),
         "easyocr".to_string(),
         "paddleocr".to_string(),
+        "paddle-ocr".to_string(),
+        "rapidpaddle".to_string(),
+        "rapid-paddle".to_string(),
     ])
 }
 

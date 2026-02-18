@@ -41,7 +41,8 @@ impl ImageExtractor {
                 message: format!("Failed to acquire read lock on OCR backend registry: {}", e),
                 plugin_name: "ocr-registry".to_string(),
             })?;
-            registry.get(&ocr_config.backend)?
+            let backend_name = crate::core::config::canonical_ocr_backend_name(&ocr_config.backend);
+            registry.get(&backend_name)?
         };
 
         // Thread output_format from ExtractionConfig to OcrConfig

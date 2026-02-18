@@ -13,7 +13,7 @@ use crate::types::OcrElementConfig;
 /// OCR configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrConfig {
-    /// OCR backend: tesseract, easyocr, paddleocr
+    /// OCR backend: tesseract, easyocr, paddleocr, paddle-ocr, rapidpaddle, rapid-paddle
     #[serde(default = "default_tesseract_backend")]
     pub backend: String,
 
@@ -57,7 +57,8 @@ impl OcrConfig {
     /// This method checks that the backend name is one of the supported OCR backends:
     /// - tesseract
     /// - easyocr
-    /// - paddleocr
+    /// - paddleocr / paddle-ocr
+    /// - rapidpaddle / rapid-paddle (alias for paddle-ocr)
     ///
     /// Typos in backend names are caught at configuration validation time, not at runtime.
     ///
@@ -91,6 +92,16 @@ impl OcrConfig {
 
 fn default_tesseract_backend() -> String {
     "tesseract".to_string()
+}
+
+/// Normalize OCR backend names to the canonical registered backend name.
+///
+/// This keeps user-facing aliases stable while registry internals remain consistent.
+pub fn canonical_ocr_backend_name(backend: &str) -> String {
+    match backend.to_lowercase().as_str() {
+        "paddleocr" | "rapidpaddle" | "rapid-paddle" => "paddle-ocr".to_string(),
+        other => other.to_string(),
+    }
 }
 
 fn default_eng() -> String {
@@ -146,6 +157,23 @@ mod tests {
             ..Default::default()
         };
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_rapid_paddle_backend() {
+        let config = OcrConfig {
+            backend: "rapid-paddle".to_string(),
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_canonical_ocr_backend_name_aliases() {
+        assert_eq!(canonical_ocr_backend_name("paddleocr"), "paddle-ocr");
+        assert_eq!(canonical_ocr_backend_name("rapidpaddle"), "paddle-ocr");
+        assert_eq!(canonical_ocr_backend_name("rapid-paddle"), "paddle-ocr");
+        assert_eq!(canonical_ocr_backend_name("tesseract"), "tesseract");
     }
 
     #[test]

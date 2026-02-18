@@ -44,7 +44,14 @@ use crate::set_last_error;
 
 const VALID_BINARIZATION_METHODS: &[&str] = &["otsu", "adaptive", "sauvola"];
 const VALID_TOKEN_REDUCTION_LEVELS: &[&str] = &["off", "light", "moderate", "aggressive", "maximum"];
-const VALID_OCR_BACKENDS: &[&str] = &["tesseract", "easyocr", "paddleocr", "paddle-ocr"];
+const VALID_OCR_BACKENDS: &[&str] = &[
+    "tesseract",
+    "easyocr",
+    "paddleocr",
+    "paddle-ocr",
+    "rapidpaddle",
+    "rapid-paddle",
+];
 const VALID_LANGUAGE_CODES: &[&str] = &[
     "en",
     "de",
@@ -659,6 +666,8 @@ mod tests {
             assert_eq!(kreuzberg_validate_ocr_backend(c"easyocr".as_ptr()), 1);
             assert_eq!(kreuzberg_validate_ocr_backend(c"paddleocr".as_ptr()), 1);
             assert_eq!(kreuzberg_validate_ocr_backend(c"paddle-ocr".as_ptr()), 1);
+            assert_eq!(kreuzberg_validate_ocr_backend(c"rapidpaddle".as_ptr()), 1);
+            assert_eq!(kreuzberg_validate_ocr_backend(c"rapid-paddle".as_ptr()), 1);
         }
     }
 
@@ -881,6 +890,8 @@ mod tests {
             assert!(json_str.contains("easyocr"));
             assert!(json_str.contains("paddleocr"));
             assert!(json_str.contains("paddle-ocr"));
+            assert!(json_str.contains("rapidpaddle"));
+            assert!(json_str.contains("rapid-paddle"));
             assert!(json_str.starts_with('[') && json_str.ends_with(']'));
 
             let _ = std::ffi::CString::from_raw(json_ptr as *mut c_char);

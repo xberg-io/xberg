@@ -322,7 +322,9 @@ impl OcrBackend for PythonOcrBackend {
     fn backend_type(&self) -> OcrBackendType {
         match self.name.as_str() {
             "easyocr" => OcrBackendType::EasyOCR,
-            "paddleocr" | "paddle" => OcrBackendType::PaddleOCR,
+            "paddleocr" | "paddle-ocr" | "paddle" | "rapidpaddle" | "rapid-paddle" => {
+                OcrBackendType::PaddleOCR
+            }
             _ => OcrBackendType::Custom,
         }
     }
