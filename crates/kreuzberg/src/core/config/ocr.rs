@@ -14,7 +14,7 @@ use crate::types::OcrElementConfig;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrConfig {
     /// OCR backend: tesseract, easyocr, paddleocr, paddle-ocr, rapidocr, rapid-ocr
-    #[serde(default = "default_tesseract_backend")]
+    #[serde(default = "default_rapid_ocr_backend")]
     pub backend: String,
 
     /// Language code (e.g., "eng", "deu")
@@ -41,7 +41,7 @@ pub struct OcrConfig {
 impl Default for OcrConfig {
     fn default() -> Self {
         Self {
-            backend: default_tesseract_backend(),
+            backend: default_rapid_ocr_backend(),
             language: default_eng(),
             tesseract_config: None,
             output_format: None,
@@ -90,8 +90,8 @@ impl OcrConfig {
     }
 }
 
-fn default_tesseract_backend() -> String {
-    "tesseract".to_string()
+fn default_rapid_ocr_backend() -> String {
+    "rapid-ocr".to_string()
 }
 
 /// Normalize OCR backend names to the canonical registered backend name.
@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn test_ocr_config_default() {
         let config = OcrConfig::default();
-        assert_eq!(config.backend, "tesseract");
+        assert_eq!(config.backend, "rapid-ocr");
         assert_eq!(config.language, "eng");
         assert!(config.tesseract_config.is_none());
         assert!(config.output_format.is_none());
