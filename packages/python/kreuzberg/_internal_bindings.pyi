@@ -441,7 +441,7 @@ class OcrConfig:
     """OCR configuration for extracting text from images.
 
     Attributes:
-        backend (str): OCR backend to use. Options: "tesseract", "easyocr", "paddleocr".
+        backend (str): OCR backend to use. Options: "tesseract", "easyocr", "paddleocr", "rapid-ocr".
             Default: "tesseract"
 
         language (str): Language code (ISO 639-3 three-letter code or ISO 639-1

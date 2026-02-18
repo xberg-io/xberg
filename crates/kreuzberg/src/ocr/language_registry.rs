@@ -41,6 +41,7 @@ impl LanguageRegistry {
     fn canonical_backend_key(backend: &str) -> &str {
         match backend {
             "paddle-ocr" | "rapidpaddle" | "rapid-paddle" => "paddleocr",
+            "rapidocr" | "rapid-ocr" => "paddleocr",
             other => other,
         }
     }
@@ -220,6 +221,8 @@ mod tests {
         assert!(registry.get_supported_languages("paddle-ocr").is_some());
         assert!(registry.get_supported_languages("rapid-paddle").is_some());
         assert!(registry.get_supported_languages("rapidpaddle").is_some());
+        assert!(registry.get_supported_languages("rapid-ocr").is_some());
+        assert!(registry.get_supported_languages("rapidocr").is_some());
     }
 
     #[test]

@@ -18,6 +18,8 @@ const VALID_OCR_BACKENDS: &[&str] = &[
     "easyocr",
     "paddleocr",
     "paddle-ocr",
+    "rapidocr",
+    "rapid-ocr",
     "rapidpaddle",
     "rapid-paddle",
 ];

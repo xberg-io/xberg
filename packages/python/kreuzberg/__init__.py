@@ -5,12 +5,12 @@ All extraction logic, chunking, quality processing, and language detection
 are implemented in Rust for maximum performance.
 
 Python-specific features:
-- OCR backends: EasyOCR (Python-based OCR engine)
+- OCR backends: EasyOCR and RapidOCR (Python-based OCR engines)
 - Custom PostProcessors: Register your own Python processing logic
 
 Architecture:
 - Rust handles: Extraction, parsing, chunking, quality, language detection, NLP (keyword extraction), OCR (Tesseract, PaddleOCR), API server, MCP server, CLI
-- Python adds: OCR backends (EasyOCR), custom postprocessors
+- Python adds: OCR backends (EasyOCR, RapidOCR), custom postprocessors
 
 Creating Custom PostProcessors:
     >>> from kreuzberg import PostProcessorProtocol, register_post_processor, ExtractionResult
@@ -168,6 +168,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from kreuzberg.ocr.easyocr import EasyOCRBackend  # noqa: F401
+    from kreuzberg.ocr.rapidocr import RapidOCRBackend  # noqa: F401
 
 __version__ = version("kreuzberg")
 
@@ -325,6 +326,7 @@ def _hash_kwargs(kwargs: dict[str, Any]) -> str:
 def _ensure_ocr_backend_registered(
     config: ExtractionConfig,
     easyocr_kwargs: dict[str, Any] | None,
+    rapidocr_kwargs: dict[str, Any] | None,
 ) -> None:
     if config.ocr is None:
         return
@@ -337,6 +339,8 @@ def _ensure_ocr_backend_registered(
 
     kwargs_map = {
         "easyocr": easyocr_kwargs or {},
+        "rapidocr": rapidocr_kwargs or {},
+        "rapid-ocr": rapidocr_kwargs or {},
     }
     kwargs = kwargs_map.get(backend_name, {})
 
@@ -365,6 +369,20 @@ def _ensure_ocr_backend_registered(
                     functionality="EasyOCR backend",
                     package_name="easyocr",
                 ) from e
+        elif backend_name in {"rapidocr", "rapid-ocr"}:
+            try:
+                from kreuzberg.ocr.rapidocr import RapidOCRBackend  # noqa: PLC0415
+
+                if "language" not in kwargs:
+                    kwargs["language"] = config.ocr.language
+
+                backend = RapidOCRBackend(**kwargs)
+            except ImportError as e:
+                raise MissingDependencyError.create_for_package(
+                    dependency_group="rapidocr",
+                    functionality="RapidOCR backend",
+                    package_name="rapidocr",
+                ) from e
         else:
             return
 
@@ -378,6 +396,7 @@ def extract_file_sync(
     config: ExtractionConfig | None = None,
     *,
     easyocr_kwargs: dict[str, Any] | None = None,
+    rapidocr_kwargs: dict[str, Any] | None = None,
 ) -> ExtractionResult:
     """Extract content from a file (synchronous).
 
@@ -385,7 +404,8 @@ def extract_file_sync(
         file_path: Path to the file (str or pathlib.Path)
         mime_type: Optional MIME type hint (auto-detected if None)
         config: Extraction configuration (uses defaults if None)
-        easyocr_kwargs: EasyOCR initialization options (languages, use_gpu, beam_width, etc.)
+        easyocr_kwargs: EasyOCR initialization options
+        rapidocr_kwargs: RapidOCR initialization options (language, params, config_path)
 
     Returns:
         ExtractionResult with content, metadata, and tables
@@ -416,7 +436,7 @@ def extract_file_sync(
     if config is None:
         config = ExtractionConfig()
 
-    _ensure_ocr_backend_registered(config, easyocr_kwargs)
+    _ensure_ocr_backend_registered(config, easyocr_kwargs, rapidocr_kwargs)
 
     return extract_file_sync_impl(str(file_path), mime_type, config)
 
@@ -427,6 +447,7 @@ def extract_bytes_sync(
     config: ExtractionConfig | None = None,
     *,
     easyocr_kwargs: dict[str, Any] | None = None,
+    rapidocr_kwargs: dict[str, Any] | None = None,
 ) -> ExtractionResult:
     """Extract content from bytes (synchronous).
 
@@ -435,6 +456,7 @@ def extract_bytes_sync(
         mime_type: MIME type of the data (required for format detection)
         config: Extraction configuration (uses defaults if None)
         easyocr_kwargs: EasyOCR initialization options
+        rapidocr_kwargs: RapidOCR initialization options
 
     Returns:
         ExtractionResult with content, metadata, and tables
@@ -442,7 +464,7 @@ def extract_bytes_sync(
     if config is None:
         config = ExtractionConfig()
 
-    _ensure_ocr_backend_registered(config, easyocr_kwargs)
+    _ensure_ocr_backend_registered(config, easyocr_kwargs, rapidocr_kwargs)
 
     return extract_bytes_sync_impl(bytes(data), mime_type, config)
 
@@ -452,6 +474,7 @@ def batch_extract_files_sync(
     config: ExtractionConfig | None = None,
     *,
     easyocr_kwargs: dict[str, Any] | None = None,
+    rapidocr_kwargs: dict[str, Any] | None = None,
 ) -> list[ExtractionResult]:
     """Extract content from multiple files in parallel (synchronous).
 
@@ -459,6 +482,7 @@ def batch_extract_files_sync(
         paths: List of file paths
         config: Extraction configuration (uses defaults if None)
         easyocr_kwargs: EasyOCR initialization options
+        rapidocr_kwargs: RapidOCR initialization options
 
     Returns:
         List of ExtractionResults (one per file)
@@ -466,7 +490,7 @@ def batch_extract_files_sync(
     if config is None:
         config = ExtractionConfig()
 
-    _ensure_ocr_backend_registered(config, easyocr_kwargs)
+    _ensure_ocr_backend_registered(config, easyocr_kwargs, rapidocr_kwargs)
 
     return batch_extract_files_sync_impl([str(p) for p in paths], config)
 
@@ -477,6 +501,7 @@ def batch_extract_bytes_sync(
     config: ExtractionConfig | None = None,
     *,
     easyocr_kwargs: dict[str, Any] | None = None,
+    rapidocr_kwargs: dict[str, Any] | None = None,
 ) -> list[ExtractionResult]:
     """Extract content from multiple byte arrays in parallel (synchronous).
 
@@ -485,6 +510,7 @@ def batch_extract_bytes_sync(
         mime_types: List of MIME types (one per data item)
         config: Extraction configuration (uses defaults if None)
         easyocr_kwargs: EasyOCR initialization options
+        rapidocr_kwargs: RapidOCR initialization options
 
     Returns:
         List of ExtractionResults (one per data item)
@@ -492,7 +518,7 @@ def batch_extract_bytes_sync(
     if config is None:
         config = ExtractionConfig()
 
-    _ensure_ocr_backend_registered(config, easyocr_kwargs)
+    _ensure_ocr_backend_registered(config, easyocr_kwargs, rapidocr_kwargs)
 
     return batch_extract_bytes_sync_impl([bytes(d) for d in data_list], mime_types, config)
 
@@ -503,6 +529,7 @@ async def extract_file(
     config: ExtractionConfig | None = None,
     *,
     easyocr_kwargs: dict[str, Any] | None = None,
+    rapidocr_kwargs: dict[str, Any] | None = None,
 ) -> ExtractionResult:
     """Extract content from a file (asynchronous).
 
@@ -511,6 +538,7 @@ async def extract_file(
         mime_type: Optional MIME type hint (auto-detected if None)
         config: Extraction configuration (uses defaults if None)
         easyocr_kwargs: EasyOCR initialization options
+        rapidocr_kwargs: RapidOCR initialization options
 
     Returns:
         ExtractionResult with content, metadata, and tables
@@ -518,7 +546,7 @@ async def extract_file(
     if config is None:
         config = ExtractionConfig()
 
-    _ensure_ocr_backend_registered(config, easyocr_kwargs)
+    _ensure_ocr_backend_registered(config, easyocr_kwargs, rapidocr_kwargs)
 
     return await extract_file_impl(str(file_path), mime_type, config)
 
@@ -529,6 +557,7 @@ async def extract_bytes(
     config: ExtractionConfig | None = None,
     *,
     easyocr_kwargs: dict[str, Any] | None = None,
+    rapidocr_kwargs: dict[str, Any] | None = None,
 ) -> ExtractionResult:
     """Extract content from bytes (asynchronous).
 
@@ -537,6 +566,7 @@ async def extract_bytes(
         mime_type: MIME type of the data (required for format detection)
         config: Extraction configuration (uses defaults if None)
         easyocr_kwargs: EasyOCR initialization options
+        rapidocr_kwargs: RapidOCR initialization options
 
     Returns:
         ExtractionResult with content, metadata, and tables
@@ -544,7 +574,7 @@ async def extract_bytes(
     if config is None:
         config = ExtractionConfig()
 
-    _ensure_ocr_backend_registered(config, easyocr_kwargs)
+    _ensure_ocr_backend_registered(config, easyocr_kwargs, rapidocr_kwargs)
 
     return await extract_bytes_impl(bytes(data), mime_type, config)
 
@@ -554,6 +584,7 @@ async def batch_extract_files(
     config: ExtractionConfig | None = None,
     *,
     easyocr_kwargs: dict[str, Any] | None = None,
+    rapidocr_kwargs: dict[str, Any] | None = None,
 ) -> list[ExtractionResult]:
     """Extract content from multiple files in parallel (asynchronous).
 
@@ -561,6 +592,7 @@ async def batch_extract_files(
         paths: List of file paths
         config: Extraction configuration (uses defaults if None)
         easyocr_kwargs: EasyOCR initialization options
+        rapidocr_kwargs: RapidOCR initialization options
 
     Returns:
         List of ExtractionResults (one per file)
@@ -568,7 +600,7 @@ async def batch_extract_files(
     if config is None:
         config = ExtractionConfig()
 
-    _ensure_ocr_backend_registered(config, easyocr_kwargs)
+    _ensure_ocr_backend_registered(config, easyocr_kwargs, rapidocr_kwargs)
 
     return await batch_extract_files_impl([str(p) for p in paths], config)
 
@@ -579,6 +611,7 @@ async def batch_extract_bytes(
     config: ExtractionConfig | None = None,
     *,
     easyocr_kwargs: dict[str, Any] | None = None,
+    rapidocr_kwargs: dict[str, Any] | None = None,
 ) -> list[ExtractionResult]:
     """Extract content from multiple byte arrays in parallel (asynchronous).
 
@@ -587,6 +620,7 @@ async def batch_extract_bytes(
         mime_types: List of MIME types (one per data item)
         config: Extraction configuration (uses defaults if None)
         easyocr_kwargs: EasyOCR initialization options
+        rapidocr_kwargs: RapidOCR initialization options
 
     Returns:
         List of ExtractionResults (one per data item)
@@ -594,7 +628,7 @@ async def batch_extract_bytes(
     if config is None:
         config = ExtractionConfig()
 
-    _ensure_ocr_backend_registered(config, easyocr_kwargs)
+    _ensure_ocr_backend_registered(config, easyocr_kwargs, rapidocr_kwargs)
 
     return await batch_extract_bytes_impl([bytes(d) for d in data_list], mime_types, config)
 

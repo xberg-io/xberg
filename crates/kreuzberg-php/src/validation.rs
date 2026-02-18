@@ -47,6 +47,8 @@ pub fn kreuzberg_validate_binarization_method(method: String) -> bool {
 /// - "tesseract"
 /// - "easyocr"
 /// - "paddleocr"
+/// - "rapidocr"
+/// - "rapid-ocr"
 ///
 /// # Example
 ///
@@ -307,11 +309,17 @@ pub fn kreuzberg_get_valid_language_codes() -> Vec<String> {
 ///
 /// ```php
 /// $backends = kreuzberg_get_valid_ocr_backends();
-/// print_r($backends); // ["tesseract", "easyocr", "paddleocr"]
+/// print_r($backends); // ["tesseract", "easyocr", "paddleocr", "rapidocr", "rapid-ocr"]
 /// ```
 #[php_function]
 pub fn kreuzberg_get_valid_ocr_backends() -> Vec<String> {
-    vec!["tesseract".to_string(), "easyocr".to_string(), "paddleocr".to_string()]
+    vec![
+        "tesseract".to_string(),
+        "easyocr".to_string(),
+        "paddleocr".to_string(),
+        "rapidocr".to_string(),
+        "rapid-ocr".to_string(),
+    ]
 }
 
 /// Get list of valid token reduction levels.

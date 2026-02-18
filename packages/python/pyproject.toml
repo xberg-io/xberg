@@ -61,11 +61,12 @@ classifiers = [
 
 dependencies = []
 
-optional-dependencies.all = ["kreuzberg[easyocr]"]
+optional-dependencies.all = ["kreuzberg[easyocr,rapidocr]"]
 optional-dependencies.easyocr = [
     "easyocr>=1.7.2; python_version<'3.14'",
     "torch>=2.9.1; python_version<'3.14'",
 ]
+optional-dependencies.rapidocr = ["rapidocr>=3.6.0"]
 urls.Changelog = "https://kreuzberg.dev/CHANGELOG/"
 urls.Documentation = "https://kreuzberg.dev"
 urls.Homepage = "https://kreuzberg.dev"

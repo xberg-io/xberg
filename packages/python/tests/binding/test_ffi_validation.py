@@ -37,6 +37,8 @@ def test_validate_ocr_backend_valid() -> None:
     assert validate_ocr_backend("tesseract")
     assert validate_ocr_backend("easyocr")
     assert validate_ocr_backend("paddleocr")
+    assert validate_ocr_backend("rapidocr")
+    assert validate_ocr_backend("rapid-ocr")
 
 
 def test_validate_ocr_backend_invalid() -> None:
@@ -193,6 +195,8 @@ def test_get_valid_ocr_backends() -> None:
     assert "tesseract" in backends
     assert "easyocr" in backends
     assert "paddleocr" in backends
+    assert "rapidocr" in backends
+    assert "rapid-ocr" in backends
 
 
 def test_get_valid_token_reduction_levels() -> None:

@@ -2294,20 +2294,25 @@ source = { editable = "packages/python" }
 [package.optional-dependencies]
 all = [
     { name = "easyocr", marker = "python_full_version < '3.14'" },
+    { name = "rapidocr" },
     { name = "torch", marker = "python_full_version < '3.14'" },
 ]
 easyocr = [
     { name = "easyocr", marker = "python_full_version < '3.14'" },
     { name = "torch", marker = "python_full_version < '3.14'" },
 ]
+rapidocr = [
+    { name = "rapidocr" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "easyocr", marker = "python_full_version < '3.14' and extra == 'easyocr'", specifier = ">=1.7.2" },
-    { name = "kreuzberg", extras = ["easyocr"], marker = "extra == 'all'" },
+    { name = "kreuzberg", extras = ["easyocr", "rapidocr"], marker = "extra == 'all'" },
+    { name = "rapidocr", marker = "extra == 'rapidocr'", specifier = ">=3.6.0" },
     { name = "torch", marker = "python_full_version < '3.14' and extra == 'easyocr'", specifier = ">=2.9.1" },
 ]
-provides-extras = ["all", "easyocr"]
+provides-extras = ["all", "easyocr", "rapidocr"]
 
 [[package]]
 name = "kreuzberg-e2e-tests"

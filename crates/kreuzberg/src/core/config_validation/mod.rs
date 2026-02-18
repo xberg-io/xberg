@@ -94,6 +94,8 @@ mod tests {
         assert!(validate_ocr_backend("tesseract").is_ok());
         assert!(validate_ocr_backend("easyocr").is_ok());
         assert!(validate_ocr_backend("paddleocr").is_ok());
+        assert!(validate_ocr_backend("rapidocr").is_ok());
+        assert!(validate_ocr_backend("rapid-ocr").is_ok());
         assert!(validate_ocr_backend("rapid-paddle").is_ok());
         assert!(validate_ocr_backend("rapidpaddle").is_ok());
     }
