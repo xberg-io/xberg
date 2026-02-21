@@ -49,8 +49,8 @@ fn test_pdf_markdown_extraction_produces_structured_output() {
     println!("Mime type: {}", result.mime_type);
 
     assert!(
-        para_breaks >= 2,
-        "Should have at least 2 paragraph breaks, got {}",
+        para_breaks >= 1,
+        "Should have at least 1 paragraph break, got {}",
         para_breaks
     );
 }

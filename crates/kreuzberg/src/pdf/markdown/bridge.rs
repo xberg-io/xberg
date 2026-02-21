@@ -319,6 +319,81 @@ fn apply_ligature_repairs(text: &str, repair_map: &[(char, &str)]) -> String {
     result
 }
 
+/// Per-character data extracted from pdfium's text API.
+struct CharInfo {
+    ch: char,
+    x: f32,
+    y: f32,
+    font_size: f32,
+    is_bold: bool,
+    is_italic: bool,
+    is_monospace: bool,
+    has_map_error: bool,
+    is_symbolic: bool,
+}
+
+/// Remove characters from sidebar annotations (e.g., arXiv identifiers along the left margin).
+///
+/// Sidebar text in papers is typically rotated 90° along the left margin, producing
+/// isolated characters at very low X positions that span most of the page height.
+/// This distinguishes them from bullets/labels which only span a small region.
+///
+/// Detection criteria:
+/// 1. Characters in the leftmost 5% of page width
+/// 2. Constitute < 5% of total characters
+/// 3. Span at least 30% of the page's vertical text extent
+fn filter_sidebar_characters(char_infos: &mut Vec<CharInfo>, page_width: f32) {
+    if char_infos.len() < 20 || page_width <= 0.0 {
+        return;
+    }
+
+    let total_non_space = char_infos.iter().filter(|c| c.ch != ' ').count();
+    if total_non_space < 20 {
+        return;
+    }
+
+    let margin_band = page_width * 0.05;
+
+    let margin_indices: Vec<usize> = char_infos
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.ch != ' ' && c.x < margin_band)
+        .map(|(i, _)| i)
+        .collect();
+
+    // Need some margin chars, but not too many (< 5% of total)
+    if margin_indices.is_empty() || margin_indices.len() * 20 > total_non_space {
+        return;
+    }
+
+    // Sidebar text spans most of the page height; bullets/labels don't.
+    let (y_min, y_max) = char_infos
+        .iter()
+        .filter(|c| c.ch != ' ')
+        .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), c| {
+            (lo.min(c.y), hi.max(c.y))
+        });
+    let page_text_height = (y_max - y_min).max(1.0);
+
+    let (margin_y_min, margin_y_max) =
+        margin_indices
+            .iter()
+            .fold((f32::INFINITY, f32::NEG_INFINITY), |(lo, hi), &i| {
+                let y = char_infos[i].y;
+                (lo.min(y), hi.max(y))
+            });
+    let margin_y_span = (margin_y_max - margin_y_min).abs();
+
+    if margin_y_span < page_text_height * 0.3 {
+        return; // Margin chars don't span the page — not a sidebar
+    }
+
+    // Remove sidebar characters (reverse order to preserve indices)
+    for &idx in margin_indices.iter().rev() {
+        char_infos.remove(idx);
+    }
+}
+
 /// Extract text segments from a PDF page using pdfium's text API.
 ///
 /// Uses `page.text().all()` for correct text content (pdfium handles font matrices,
@@ -342,19 +417,7 @@ fn chars_to_segments(page: &PdfPage) -> Option<Vec<SegmentData>> {
     // Build ligature repair map for this page (if needed).
     let repair_map = build_ligature_repair_map(page);
 
-    // Collect per-character data: (char, x, y, font_size, is_bold, is_italic, is_monospace)
-    struct CharInfo {
-        ch: char,
-        x: f32,
-        y: f32,
-        font_size: f32,
-        is_bold: bool,
-        is_italic: bool,
-        is_monospace: bool,
-        has_map_error: bool,
-        is_symbolic: bool,
-    }
-
+    // Collect per-character data.
     let mut char_infos: Vec<CharInfo> = Vec::with_capacity(char_count);
     for i in 0..char_count {
         let ch = match chars.get(i) {
@@ -419,6 +482,10 @@ fn chars_to_segments(page: &PdfPage) -> Option<Vec<SegmentData>> {
             is_symbolic: ch.font_is_symbolic(),
         });
     }
+
+    // Filter out sidebar/margin characters (e.g., arXiv identifiers along left margin).
+    let page_width = page.width().value;
+    filter_sidebar_characters(&mut char_infos, page_width);
 
     if char_infos.is_empty() {
         return None;

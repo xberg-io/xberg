@@ -71,6 +71,100 @@ pub(super) fn find_heading_level(font_size: f32, heading_map: &[(f32, Option<u8>
     best_level
 }
 
+/// Refine heading levels across the entire document.
+///
+/// 1. Merges consecutive H1 headings at the document start into one title.
+/// 2. Demotes numbered section headings from H1 to H2 when a non-numbered title H1 exists.
+pub(super) fn refine_heading_hierarchy(all_pages: &mut [Vec<PdfParagraph>]) {
+    let h1_count: usize = all_pages
+        .iter()
+        .flat_map(|page| page.iter())
+        .filter(|p| p.heading_level == Some(1))
+        .count();
+
+    if h1_count <= 1 {
+        return;
+    }
+
+    // Step 1: Merge consecutive leading H1s on the first page (split titles).
+    if let Some(first_page) = all_pages.first_mut() {
+        let h1_run_end = first_page.iter().take_while(|p| p.heading_level == Some(1)).count();
+
+        if h1_run_end > 1 {
+            let mut merged_lines = std::mem::take(&mut first_page[0].lines);
+            for para in &first_page[1..h1_run_end] {
+                merged_lines.extend(para.lines.clone());
+            }
+            first_page[0].lines = merged_lines;
+            first_page.drain(1..h1_run_end);
+        }
+    }
+
+    // Re-count after merging
+    let h1_count: usize = all_pages
+        .iter()
+        .flat_map(|page| page.iter())
+        .filter(|p| p.heading_level == Some(1))
+        .count();
+
+    if h1_count <= 1 {
+        return;
+    }
+
+    // Step 2: Demote numbered section headings.
+    // If the first H1 is a title (not starting with a number), demote subsequent
+    // numbered H1s to H2.
+    let first_h1_is_title = all_pages
+        .iter()
+        .flat_map(|page| page.iter())
+        .find(|p| p.heading_level == Some(1))
+        .is_some_and(|p| !starts_with_section_number(&paragraph_plain_text(p)));
+
+    if !first_h1_is_title {
+        return;
+    }
+
+    let mut found_first = false;
+    for page in all_pages.iter_mut() {
+        for para in page.iter_mut() {
+            if para.heading_level == Some(1) {
+                if !found_first {
+                    found_first = true;
+                    continue;
+                }
+                if starts_with_section_number(&paragraph_plain_text(para)) {
+                    para.heading_level = Some(2);
+                }
+            }
+        }
+    }
+}
+
+/// Check if text starts with a section number pattern (e.g., "1 ", "2.1 ", "A.").
+fn starts_with_section_number(text: &str) -> bool {
+    let trimmed = text.trim();
+    let bytes = trimmed.as_bytes();
+    if bytes.is_empty() {
+        return false;
+    }
+    let digit_end = bytes.iter().position(|&b| !b.is_ascii_digit()).unwrap_or(0);
+    if digit_end > 0 && digit_end < bytes.len() {
+        let next = bytes[digit_end];
+        return next == b' ' || next == b'.' || next == b')';
+    }
+    false
+}
+
+/// Extract plain text from a paragraph.
+fn paragraph_plain_text(para: &PdfParagraph) -> String {
+    para.lines
+        .iter()
+        .flat_map(|l| l.segments.iter())
+        .map(|s| s.text.as_str())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

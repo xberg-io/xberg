@@ -6,7 +6,7 @@ use pdfium_render::prelude::*;
 
 use super::assembly::assemble_markdown_with_tables;
 use super::bridge::{ImagePosition, extracted_blocks_to_paragraphs, objects_to_page_data};
-use super::classify::classify_paragraphs;
+use super::classify::{classify_paragraphs, refine_heading_hierarchy};
 use super::constants::{
     MIN_FONT_SIZE, MIN_HEADING_FONT_GAP, MIN_HEADING_FONT_RATIO, PAGE_BOTTOM_MARGIN_FRACTION, PAGE_TOP_MARGIN_FRACTION,
 };
@@ -170,6 +170,10 @@ pub fn render_document_as_markdown_with_tables(
             all_page_paragraphs.push(paragraphs);
         }
     }
+
+    // Refine heading hierarchy across the document: merge split titles and
+    // demote numbered section headings when a title H1 is detected.
+    refine_heading_hierarchy(&mut all_page_paragraphs);
 
     // Stage 4: Assemble markdown with tables interleaved
     let markdown = assemble_markdown_with_tables(all_page_paragraphs, tables);
