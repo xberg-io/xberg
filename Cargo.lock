@@ -3415,7 +3415,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "lopdf",
- "lzma-rust2 0.15.7",
+ "lzma-rust2 0.16.2",
  "mail-parser",
  "memchr",
  "mime_guess",
