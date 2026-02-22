@@ -23,7 +23,7 @@ format!("Page {}", first)
 } else {
 format!("Pages {}-{}", first, last)
 };
-println!("Chunk: {}... ({})", &chunk.content[..50.min(chunk.content.len())], page_range);
+println!("Chunk: {}... ({})", chunk.content.chars().take(50).collect::<String>(), page_range);
 }
 }
 }

@@ -838,7 +838,7 @@ IO.inspect(atom)
 ## Configuration
 
 !!! warning "Deprecated API"
-The `force_ocr` parameter has been deprecated in favor of the new `ocr` configuration object.
+    The `force_ocr` parameter has been deprecated in favor of the new `ocr` configuration object.
 
     **Old pattern (no longer supported):**
     ```elixir

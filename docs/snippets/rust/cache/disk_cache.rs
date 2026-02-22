@@ -1,4 +1,4 @@
-```rust title=r#"disk_cache.rs"#
+```rust title="disk_cache.rs"
 use kreuzberg::{extract_file_sync, ExtractionConfig};
 
 fn main() -> kreuzberg::Result<()> {

@@ -790,10 +790,10 @@ Page boundary marker in multi-page documents.
 Content layers classify nodes by their position and role in the document layout:
 
 | Layer        | Description            | Typical Nodes                               | Example                  |
-| ------------ | ---------------------- | ------------------------------------------- | ------------------------ | -------- |
+| ------------ | ---------------------- | ------------------------------------------- | ------------------------ |
 | **body**     | Main document content  | Headings, paragraphs, lists, tables, images | Chapter text, sections   |
 | **header**   | Page header content    | Title text, repeated headers                | "Chapter 5: Advanced ML" |
-| **footer**   | Page footer content    | Page numbers, copyright                     | "© 2025                  | Page 42" |
+| **footer**   | Page footer content    | Page numbers, copyright                     | "© 2025, Page 42"       |
 | **footnote** | Footnotes and endnotes | Footnote text, references                   | "1. See Smith (2020)"    |
 
 Access content layer:

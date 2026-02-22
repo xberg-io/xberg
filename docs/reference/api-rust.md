@@ -378,7 +378,7 @@ Main configuration struct for extraction operations.
 **Definition:**
 
 ```rust title="Rust"
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ExtractionConfig {
     pub use_cache: bool,
     pub enable_quality_processing: bool,

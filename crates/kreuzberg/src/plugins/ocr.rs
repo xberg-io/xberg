@@ -45,7 +45,6 @@ pub enum OcrBackendType {
 /// use async_trait::async_trait;
 /// use std::borrow::Cow;
 /// use std::path::Path;
-/// use std::borrow::Cow;
 /// use kreuzberg::types::{ExtractionResult, Metadata};
 ///
 /// struct CustomOcrBackend;
@@ -122,7 +121,6 @@ pub trait OcrBackend: Plugin {
     /// # use async_trait::async_trait;
     /// # use std::borrow::Cow;
     /// # use std::path::Path;
-    /// # use std::borrow::Cow;
     /// # use kreuzberg::types::{ExtractionResult, Metadata};
     /// # struct MyOcr;
     /// # impl Plugin for MyOcr {
@@ -315,7 +313,6 @@ pub trait OcrBackend: Plugin {
 /// use std::borrow::Cow;
 /// use std::sync::Arc;
 /// use std::path::Path;
-/// use std::borrow::Cow;
 ///
 /// struct CustomOcr;
 ///
