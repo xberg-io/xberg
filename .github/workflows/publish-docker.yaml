@@ -43,6 +43,7 @@ permissions:
 jobs:
   prepare:
     name: Prepare metadata
+    if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -281,11 +281,19 @@ impl ResourceMonitor {
 
             let refresh_kind = ProcessRefreshKind::nothing().with_memory().with_cpu();
 
-            while running.load(Ordering::SeqCst) {
-                system.refresh_cpu_usage();
+            // Establish baseline for CPU delta calculation.
+            // sysinfo computes cpu_usage() as a diff between two consecutive refreshes,
+            // so the first refresh after System::new() always returns 0.0.
+            // By doing a baseline refresh here, the first in-loop sample will have
+            // a prior measurement to compare against and yield real CPU values.
+            system.refresh_processes_specifics(ProcessesToUpdate::All, false, refresh_kind);
+            tokio::time::sleep(sample_interval).await;
 
-                // Refresh all processes to track child processes spawned by the benchmark
-                // This is critical for accurate memory measurement of subprocess-based frameworks
+            while running.load(Ordering::SeqCst) {
+                // Refresh all processes to track child processes spawned by the benchmark.
+                // Note: refresh_cpu_usage() is NOT called here — it refreshes global CPU counters,
+                // not per-process CPU. Per-process CPU is computed by refresh_processes_specifics
+                // as a delta between consecutive calls on the same System instance.
                 system.refresh_processes_specifics(ProcessesToUpdate::All, false, refresh_kind);
 
                 if system.process(pid).is_some() {
@@ -329,23 +337,32 @@ impl ResourceMonitor {
         });
     }
 
-    /// Take a single synchronous memory measurement of the current process tree.
+    /// Take a single synchronous memory and CPU measurement of the current process tree.
     ///
     /// Useful as a fallback when the background sampler collects zero samples
     /// (e.g., sub-millisecond extractions that complete before the first sample).
+    /// Performs two refreshes with a 50ms gap to get a valid CPU delta.
     pub fn snapshot_current_memory(&self) -> ResourceSample {
         let mut system = System::new();
         let refresh_kind = ProcessRefreshKind::nothing().with_memory().with_cpu();
+
+        // First refresh establishes the CPU baseline
+        system.refresh_processes_specifics(ProcessesToUpdate::All, false, refresh_kind);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        // Second refresh computes the CPU delta
         system.refresh_processes_specifics(ProcessesToUpdate::All, false, refresh_kind);
 
         let tree_memory = collect_process_tree_memory(self.pid, &system);
         let tree_vm = collect_process_tree_vm(self.pid, &system);
+        let cpu_count = num_cpus::get() as f64;
+        let tree_cpu = collect_process_tree_cpu(self.pid, &system);
+        let normalized_cpu_percent = tree_cpu / cpu_count;
 
         ResourceSample {
             memory_bytes: tree_memory,
             vm_size_bytes: tree_vm,
             page_faults: 0,
-            cpu_percent: 0.0,
+            cpu_percent: normalized_cpu_percent,
             timestamp_ms: 0,
         }
     }
