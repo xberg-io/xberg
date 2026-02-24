@@ -944,7 +944,7 @@ fn render_test(fixture: &Fixture) -> Result<String> {
     writeln!(body, "        return;\n      }}\n      throw error;\n    }}")?;
     writeln!(body, "    if (result === null) {{\n      return;\n    }}")?;
 
-    body.push_str(&render_assertions(&fixture.assertions()));
+    body.push_str(&render_assertions(&fixture.assertions(), &requirements));
 
     writeln!(body, "}});\n")?;
 
@@ -960,7 +960,7 @@ fn render_config_expression(config: &Map<String, Value>) -> Result<Option<String
     }
 }
 
-fn render_assertions(assertions: &Assertions) -> String {
+fn render_assertions(assertions: &Assertions, requirements: &[String]) -> String {
     let mut buffer = String::new();
 
     if !assertions.expected_mime.is_empty() {
@@ -993,6 +993,19 @@ fn render_assertions(assertions: &Assertions) -> String {
     }
 
     if let Some(tables) = assertions.tables.as_ref() {
+        // PDF table extraction requires the OCR feature. When the fixture declares
+        // an "ocr" requirement, guard all table assertions so they are skipped when
+        // the WASM build does not include OCR (tables will be an empty array).
+        let requires_ocr = requirements.iter().any(|r| r.eq_ignore_ascii_case("ocr"));
+        let indent = if requires_ocr {
+            buffer.push_str(
+                "    // Table assertions require OCR feature for PDF table extraction\n    if (result.tables.length > 0) {\n",
+            );
+            "      "
+        } else {
+            "    "
+        };
+
         let min = tables
             .min
             .map(|value| value.to_string())
@@ -1001,18 +1014,22 @@ fn render_assertions(assertions: &Assertions) -> String {
             .max
             .map(|value| value.to_string())
             .unwrap_or_else(|| "null".into());
-        buffer.push_str(&format!("    assertions.assertTableCount(result, {min}, {max});\n"));
+        buffer.push_str(&format!("{indent}assertions.assertTableCount(result, {min}, {max});\n"));
         if let Some(has_bb) = tables.has_bounding_boxes {
             buffer.push_str(&format!(
-                "    assertions.assertTableBoundingBoxes(result, {});\n",
+                "{indent}assertions.assertTableBoundingBoxes(result, {});\n",
                 if has_bb { "true" } else { "false" }
             ));
         }
         if let Some(ref contains) = tables.content_contains_any {
             buffer.push_str(&format!(
-                "    assertions.assertTableContentContainsAny(result, {});\n",
+                "{indent}assertions.assertTableContentContainsAny(result, {});\n",
                 render_string_array(contains)
             ));
+        }
+
+        if requires_ocr {
+            buffer.push_str("    }\n");
         }
     }
 

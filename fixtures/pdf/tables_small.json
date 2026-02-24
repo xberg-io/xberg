@@ -23,5 +23,9 @@
 		"tables": {
 			"min": 1
 		}
+	},
+	"skip": {
+		"requires_feature": ["ocr"],
+		"notes": "PDF table extraction requires OCR feature"
 	}
 }
