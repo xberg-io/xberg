@@ -37,6 +37,7 @@ import type {
 	Metadata,
 	OcrElement,
 	PageContent,
+	PdfAnnotation,
 	ProcessingWarning,
 	Table,
 } from "../types.js";
@@ -130,7 +131,8 @@ export function configToJS(config: ExtractionConfig | null): Record<string, unkn
 		return {};
 	}
 
-	const normalized: Record<string, unknown> = {};
+	// Convert camelCase key to snake_case to match Rust serde field names.
+	const toSnakeCase = (str: string): string => str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
 	const normalizeValue = (value: unknown): unknown => {
 		if (value === null || value === undefined) {
@@ -145,7 +147,7 @@ export function configToJS(config: ExtractionConfig | null): Record<string, unkn
 			for (const [key, val] of Object.entries(obj)) {
 				const normalizedVal = normalizeValue(val);
 				if (normalizedVal !== null && normalizedVal !== undefined) {
-					normalized[key] = normalizedVal;
+					normalized[toSnakeCase(key)] = normalizedVal;
 				}
 			}
 			return Object.keys(normalized).length > 0 ? normalized : null;
@@ -153,10 +155,11 @@ export function configToJS(config: ExtractionConfig | null): Record<string, unkn
 		return value;
 	};
 
+	const normalized: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(config)) {
 		const normalizedValue = normalizeValue(value);
 		if (normalizedValue !== null && normalizedValue !== undefined) {
-			normalized[key] = normalizedValue;
+			normalized[toSnakeCase(key)] = normalizedValue;
 		}
 	}
 
@@ -388,6 +391,7 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 	const ocrElements = (result.ocrElements ?? result.ocr_elements ?? null) as OcrElement[] | null;
 	const document = (result.document ?? null) as DocumentStructure | null;
 	const pages = (result.pages ?? null) as PageContent[] | null;
+	const annotations = (result.annotations ?? null) as PdfAnnotation[] | null;
 
 	return {
 		content: result.content,
@@ -404,6 +408,7 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 		elements,
 		ocrElements,
 		document,
+		annotations,
 	};
 }
 

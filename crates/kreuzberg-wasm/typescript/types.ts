@@ -500,6 +500,21 @@ export interface DocumentStructure {
 	nodes: DocumentNode[];
 }
 
+/** Type of PDF annotation */
+export type PdfAnnotationType = "text" | "highlight" | "link" | "stamp" | "underline" | "strike_out" | "other";
+
+/** A PDF annotation extracted from a document page */
+export interface PdfAnnotation {
+	/** The type of annotation */
+	annotationType: PdfAnnotationType;
+	/** Text content of the annotation (e.g., comment text, link URL) */
+	content?: string | null;
+	/** Page number where the annotation appears (1-indexed) */
+	pageNumber: number;
+	/** Bounding box of the annotation on the page */
+	boundingBox?: BoundingBox | null;
+}
+
 /**
  * Result of document extraction
  */
@@ -532,6 +547,8 @@ export interface ExtractionResult {
 	ocrElements?: OcrElement[] | null;
 	/** Hierarchical document structure */
 	document?: DocumentStructure | null;
+	/** PDF annotations (text notes, highlights, links, stamps) */
+	annotations?: PdfAnnotation[] | null;
 }
 
 /**
