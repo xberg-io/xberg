@@ -171,6 +171,11 @@ fn find_ruby() -> Result<(PathBuf, Vec<String>)> {
     }
 }
 
+/// Helper to find R interpreter (Rscript)
+fn find_r() -> Result<PathBuf> {
+    which::which("Rscript").map_err(|_| crate::Error::Config("Rscript not found".to_string()))
+}
+
 /// Helper to find Elixir interpreter
 fn find_elixir() -> Result<PathBuf> {
     which::which("elixir").map_err(|_| crate::Error::Config("Elixir not found".to_string()))
@@ -639,6 +644,46 @@ pub fn create_ruby_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter>
     let supported_formats = get_kreuzberg_supported_formats();
     Ok(SubprocessAdapter::with_batch_support(
         "kreuzberg-ruby-batch",
+        command,
+        args,
+        env,
+        supported_formats,
+    ))
+}
+
+/// Create R adapter (persistent server mode)
+pub fn create_r_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("kreuzberg_extract.R")?;
+    let command = find_r()?;
+
+    let mut args = vec![script_path.to_string_lossy().to_string()];
+    args.push(ocr_flag(ocr_enabled));
+    args.push("server".to_string());
+
+    let env = build_library_env()?;
+    let supported_formats = get_kreuzberg_supported_formats();
+    Ok(SubprocessAdapter::with_persistent_mode(
+        "kreuzberg-r",
+        command,
+        args,
+        env,
+        supported_formats,
+    ))
+}
+
+/// Create R batch adapter (batch_extract_files_sync)
+pub fn create_r_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("kreuzberg_extract.R")?;
+    let command = find_r()?;
+
+    let mut args = vec![script_path.to_string_lossy().to_string()];
+    args.push(ocr_flag(ocr_enabled));
+    args.push("batch".to_string());
+
+    let env = build_library_env()?;
+    let supported_formats = get_kreuzberg_supported_formats();
+    Ok(SubprocessAdapter::with_batch_support(
+        "kreuzberg-r-batch",
         command,
         args,
         env,

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **R language bindings** — Added kreuzberg R package via extendr with full extraction API (sync/async, batch, bytes), typed error conditions, S3 result class with accessors, config discovery, OCR/chunking configuration, plugin system, and 32 documentation snippets.
 - **PHP async extraction**: Non-blocking extraction via `DeferredResult` pattern with Tokio thread pool. Includes `extractFileAsync()`, `extractBytesAsync()`, `batchExtractFilesAsync()`, `batchExtractBytesAsync()` across OOP, procedural, and static APIs. Framework bridges for Amp v3+ (`AmpBridge`) and ReactPHP (`ReactBridge`).
 - **WASM native OCR** (`ocr-wasm` feature): Tesseract OCR compiled directly into the WASM binary via `kreuzberg-tesseract`, enabling OCR in all environments (Browser, Node.js, Deno, Bun) without browser-specific APIs. Supports 43 languages with tessdata downloaded from CDN into memory.
 - **WASM Node.js/Deno PDFium support**: PDFium initialization now works in Node.js and Deno by loading the WASM module from the filesystem. Configurable via `KREUZBERG_PDFIUM_PATH` environment variable.

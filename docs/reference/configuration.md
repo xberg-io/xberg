@@ -323,6 +323,10 @@ Output format for extraction content. Controls how extracted text is formatted i
 
     --8<-- "snippets/ruby/config/config_basic.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/config_basic.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/config/config_basic.md"
@@ -364,6 +368,10 @@ Configuration for OCR (Optical Character Recognition) processing on images and s
 === "Ruby"
 
     --8<-- "snippets/ruby/config/config_ocr.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/config_ocr.md"
 
 === "Rust"
 
@@ -449,6 +457,10 @@ Tesseract OCR engine configuration with fine-grained control over recognition pa
 
     --8<-- "snippets/ruby/config/tesseract_config.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/tesseract_config.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/ocr/tesseract_config.md"
@@ -495,6 +507,10 @@ Configuration for splitting extracted text into overlapping chunks, useful for v
 === "Ruby"
 
     --8<-- "snippets/ruby/config/chunking_config.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/chunking_config.md"
 
 === "Rust"
 
@@ -791,6 +807,10 @@ Configuration for automatic language detection in extracted text.
 === "Ruby"
 
     --8<-- "snippets/ruby/config/language_detection_config.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/language_detection_config.md"
 
 === "Rust"
 
@@ -1358,6 +1378,10 @@ PDF-specific extraction configuration.
 === "Ruby"
 
     --8<-- "snippets/ruby/config/pdf_config.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/pdf_config.md"
 
 === "Rust"
 
@@ -2916,6 +2940,10 @@ Configuration for extracting and processing images from documents.
 
     --8<-- "snippets/ruby/ocr/image_extraction.md"
 
+=== "R"
+
+    --8<-- "snippets/r/ocr/image_extraction.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/metadata/image_extraction.md"
@@ -2961,6 +2989,10 @@ Image preprocessing configuration for improving OCR quality on scanned documents
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/image_preprocessing.md"
+
+=== "R"
+
+    --8<-- "snippets/r/ocr/image_preprocessing.md"
 
 === "Rust"
 
@@ -3011,6 +3043,10 @@ Built-in post-processors include:
 
     --8<-- "snippets/ruby/config/postprocessor_config.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/postprocessor_config.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/postprocessor_config.md"
@@ -3059,6 +3095,10 @@ Configuration for reducing token count in extracted text, useful for optimizing 
 === "Ruby"
 
     --8<-- "snippets/ruby/config/token_reduction_config.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/token_reduction_config.md"
 
 === "Rust"
 

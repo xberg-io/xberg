@@ -376,6 +376,48 @@ class APIParityValidator:
 
         return fields, errors
 
+    def extract_r_fields(self) -> Tuple[Set[str], list[str]]:
+        """Extract field names from R extraction_config() function."""
+        errors = []
+        r_file = self.repo_root / "packages/r/R/config.R"
+
+        if not r_file.exists():
+            errors.append(f"R config file not found: {r_file}")
+            return set(), errors
+
+        content = r_file.read_text()
+
+        # Find the extraction_config function definition
+        # Extract named parameters from the function signature
+        func_pattern = r'extraction_config\s*<-\s*function\s*\(([^)]+)\)'
+        match = re.search(func_pattern, content, re.DOTALL)
+
+        if not match:
+            errors.append("extraction_config function not found")
+            return set(), errors
+
+        params_str = match.group(1)
+
+        # Extract parameter names (everything before = or ,)
+        param_pattern = r'(\w+)\s*='
+        fields = set(re.findall(param_pattern, params_str))
+
+        # Remove the variadic ... parameter (captured as implicit)
+        fields.discard('...')
+
+        # Also extract fields set via config$field_name in the function body
+        # Find the function body (from the function signature to the next top-level function)
+        func_body_pattern = r'extraction_config\s*<-\s*function.*?\{(.*?)^\}'
+        body_match = re.search(func_body_pattern, content, re.DOTALL | re.MULTILINE)
+        if body_match:
+            body = body_match.group(1)
+            # Extract config$field_name <- patterns
+            config_field_pattern = r'config\$(\w+)\s*<-'
+            config_fields = set(re.findall(config_field_pattern, body))
+            fields.update(config_fields)
+
+        return fields, errors
+
     def extract_elixir_fields(self) -> Tuple[Set[str], list[str]]:
         """Extract field names from Elixir config."""
         errors = []
@@ -428,6 +470,7 @@ class APIParityValidator:
             "C#": self.extract_csharp_fields,
             "WASM": self.extract_wasm_fields,
             "Elixir": self.extract_elixir_fields,
+            "R": self.extract_r_fields,
         }
 
         # Validate each language

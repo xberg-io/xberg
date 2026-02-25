@@ -211,6 +211,10 @@ Per-family models are downloaded automatically and cached locally when first nee
 
     --8<-- "snippets/ruby/ocr/ocr_extraction.md"
 
+=== "R"
+
+    --8<-- "snippets/r/ocr/ocr_extraction.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/ocr/ocr_extraction.md"
@@ -240,6 +244,10 @@ Per-family models are downloaded automatically and cached locally when first nee
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/ocr_multi_language.md"
+
+=== "R"
+
+    --8<-- "snippets/r/ocr/ocr_multi_language.md"
 
 === "Rust"
 
@@ -291,6 +299,10 @@ Process PDFs with OCR even when they have a text layer:
 
     --8<-- "snippets/ruby/ocr/ocr_force_all_pages.md"
 
+=== "R"
+
+    --8<-- "snippets/r/ocr/ocr_force_all_pages.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/ocr/ocr_force_all_pages.md"
@@ -340,6 +352,10 @@ Process PDFs with OCR even when they have a text layer:
 
     --8<-- "snippets/ruby/ocr/ocr_easyocr.md"
 
+=== "R"
+
+    --8<-- "snippets/r/ocr/ocr_easyocr.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/ocr/ocr_easyocr.md"
@@ -368,6 +384,10 @@ Process PDFs with OCR even when they have a text layer:
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/ocr_paddleocr.md"
+
+=== "R"
+
+    --8<-- "snippets/r/ocr/ocr_paddleocr.md"
 
 === "Rust"
 
@@ -398,6 +418,10 @@ Control image resolution for OCR processing:
 === "Ruby"
 
     --8<-- "snippets/ruby/config/ocr_dpi_config.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/ocr_dpi_config.md"
 
 === "Rust"
 

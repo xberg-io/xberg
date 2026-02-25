@@ -17,7 +17,7 @@ on:
         required: false
         type: string
       targets:
-        description: "Comma-separated list of release targets (all, python, node, ruby, cli, crates, docker, homebrew, java, csharp, elixir)"
+        description: "Comma-separated list of release targets (all, python, node, ruby, cli, crates, docker, homebrew, java, csharp, r, elixir)"
         required: false
         type: string
       force_republish:
@@ -77,6 +77,7 @@ jobs:
       release_wasm: ${{ steps.meta.outputs.release_wasm }}
       release_php: ${{ steps.meta.outputs.release_php }}
       release_elixir: ${{ steps.meta.outputs.release_elixir }}
+      release_r: ${{ steps.meta.outputs.release_r }}
     steps:
       - name: Checkout code (default)
         uses: actions/checkout@v4
@@ -2800,6 +2801,67 @@ jobs:
         working-directory: dist
         run: (echo "Dry run requested; gem artifacts ready:" && ls -1 kreuzberg-*.gem) >> "$GITHUB_STEP_SUMMARY"
 
+  check-r-universe:
+    name: Check if R package exists on r-universe
+    needs: prepare
+    if: ${{ needs.prepare.outputs.is_tag == 'true' && needs.prepare.outputs.release_r == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check r-universe
+        id: check
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          RESPONSE=$(curl -sf "https://kreuzberg-dev.r-universe.dev/api/packages/kreuzberg" 2>/dev/null || echo '{}')
+          EXISTING=$(echo "$RESPONSE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('Version',''))" 2>/dev/null || echo "")
+          if [ "$EXISTING" = "$VERSION" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "R package version $VERSION already exists on r-universe"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "R package version $VERSION not found on r-universe (found: ${EXISTING:-none})"
+          fi
+
+  r-source-package:
+    name: Build R source package
+    needs: [prepare, check-r-universe]
+    if: ${{ needs.prepare.outputs.release_r == 'true' && needs.check-r-universe.outputs.exists != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.3'
+
+      - name: Install R dependencies
+        run: |
+          Rscript -e "install.packages(c('jsonlite'), repos = 'https://cloud.r-project.org')"
+
+      - name: Vendor kreuzberg core
+        run: python3 scripts/ci/r/vendor-kreuzberg-core.py
+
+      - name: Build R source package
+        run: |
+          cd packages/r
+          R CMD build .
+
+      - name: Upload R source package
+        uses: actions/upload-artifact@v4
+        with:
+          name: r-source-package
+          path: packages/r/kreuzberg_*.tar.gz
+          retention-days: 30
+
   publish-node:
     name: Publish Node packages
     needs: [prepare, validate-versions, check-npm, node-bindings]
@@ -3333,6 +3395,7 @@ jobs:
       - check-cratesio
       - check-hex
       - check-homebrew
+      - check-r-universe
       - publish-pypi
       - publish-node
       - publish-wasm
@@ -3349,6 +3412,7 @@ jobs:
       - upload-go-release
       - homebrew-bottles
       - upload-homebrew-bottles
+      - r-source-package
     if: always() && needs.prepare.outputs.is_tag == 'true'
     runs-on: ubuntu-latest
     permissions:

@@ -35,6 +35,10 @@ Extract text from any supported document format:
 
     --8<-- "snippets/ruby/api/extract_file_sync.md"
 
+=== "R"
+
+    --8<-- "snippets/r/api/extract_file_sync.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/api/extract_file_sync.md"
@@ -78,6 +82,10 @@ For better performance with I/O-bound operations:
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_file_async.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/extract_file_async.md"
 
 === "Rust"
 
@@ -125,6 +133,10 @@ Extract text from images and scanned documents:
 
     --8<-- "snippets/ruby/ocr/ocr_extraction.md"
 
+=== "R"
+
+    --8<-- "snippets/r/ocr/ocr_extraction.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/ocr/ocr_extraction.md"
@@ -169,6 +181,10 @@ Process multiple files concurrently:
 
     --8<-- "snippets/ruby/api/batch_extract_files_sync.md"
 
+=== "R"
+
+    --8<-- "snippets/r/api/batch_extract_files_sync.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/api/batch_extract_files_sync.md"
@@ -212,6 +228,10 @@ When you already have file content in memory:
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_bytes_sync.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/extract_bytes_sync.md"
 
 === "Rust"
 
@@ -268,6 +288,10 @@ Customize extraction behavior:
 === "Ruby"
 
     --8<-- "snippets/ruby/config/advanced_config.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/advanced_config.md"
 
 === "Rust"
 
@@ -362,6 +386,10 @@ Access format-specific metadata from extracted documents:
 === "Ruby"
 
     --8<-- "snippets/ruby/metadata/metadata.md"
+
+=== "R"
+
+    --8<-- "snippets/r/metadata/metadata.md"
 
 === "Rust"
 
@@ -469,6 +497,10 @@ Extract and process tables from documents:
 
     --8<-- "snippets/ruby/metadata/tables.md"
 
+=== "R"
+
+    --8<-- "snippets/r/metadata/tables.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/metadata/tables.md"
@@ -549,6 +581,10 @@ Handle extraction errors gracefully:
 === "Ruby"
 
     --8<-- "snippets/ruby/api/error_handling.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/error_handling.md"
 
 === "Rust"
 

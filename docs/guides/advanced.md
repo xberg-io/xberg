@@ -72,6 +72,10 @@ Kreuzberg uses the `text-splitter` library with two chunking strategies:
 
     --8<-- "snippets/ruby/config/chunking_config.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/chunking_config.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/chunking_config.md"
@@ -118,6 +122,10 @@ Each chunk includes:
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/chunking_rag.md"
+
+=== "R"
+
+    --8<-- "snippets/r/advanced/chunking_rag.md"
 
 === "Rust"
 
@@ -215,6 +223,10 @@ Detect languages in extracted text using the [`whatlang`](https://crates.io/crat
 
     --8<-- "snippets/ruby/config/language_detection_config.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/language_detection_config.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/language_detection_config.md"
@@ -289,6 +301,10 @@ ISO 639-3 codes including:
 
     --8<-- "snippets/ruby/advanced/language_detection_multilingual.md"
 
+=== "R"
+
+    --8<-- "snippets/r/advanced/language_detection_multilingual.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/language_detection_multilingual.md"
@@ -335,6 +351,10 @@ The "Max Tokens" values shown are the model's maximum token limits. These don't 
 
     --8<-- "snippets/ruby/advanced/embedding_with_chunking.md"
 
+=== "R"
+
+    --8<-- "snippets/r/advanced/embedding_with_chunking.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/embedding_with_chunking.md"
@@ -364,6 +384,10 @@ The "Max Tokens" values shown are the model's maximum token limits. These don't 
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/vector_database_integration.md"
+
+=== "R"
+
+    --8<-- "snippets/r/advanced/vector_database_integration.md"
 
 === "Rust"
 
@@ -407,6 +431,10 @@ Intelligently reduce token count while preserving meaning. Removes stopwords, re
 
     --8<-- "snippets/ruby/config/token_reduction_config.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/token_reduction_config.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/token_reduction_config.md"
@@ -436,6 +464,10 @@ Intelligently reduce token count while preserving meaning. Removes stopwords, re
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/token_reduction_example.md"
+
+=== "R"
+
+    --8<-- "snippets/r/advanced/token_reduction_example.md"
 
 === "Rust"
 
@@ -488,6 +520,10 @@ Keyword extraction requires the `keywords` feature flag enabled when building Kr
 
     --8<-- "snippets/ruby/config/keyword_extraction_config.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/keyword_extraction_config.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/keyword_extraction_config.md"
@@ -517,6 +553,10 @@ Keyword extraction requires the `keywords` feature flag enabled when building Kr
 === "Ruby"
 
     --8<-- "snippets/ruby/advanced/keyword_extraction_example.md"
+
+=== "R"
+
+    --8<-- "snippets/r/advanced/keyword_extraction_example.md"
 
 === "Rust"
 
@@ -564,6 +604,10 @@ Quality processing is enabled by default:
 
     --8<-- "snippets/ruby/config/quality_processing_config.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/quality_processing_config.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/quality_processing_config.md"
@@ -603,6 +647,10 @@ The quality score ranges from 0.0 (lowest quality) to 1.0 (highest quality):
 
     --8<-- "snippets/ruby/advanced/quality_processing_example.md"
 
+=== "R"
+
+    --8<-- "snippets/r/advanced/quality_processing_example.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/advanced/quality_processing_example.md"
@@ -634,6 +682,10 @@ Advanced features work together:
 === "Ruby"
 
     --8<-- "snippets/ruby/api/combining_all_features.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/combining_all_features.md"
 
 === "Rust"
 

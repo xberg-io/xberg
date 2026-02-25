@@ -40,6 +40,10 @@ Kreuzberg supports four ways to configure extraction:
 
     --8<-- "snippets/ruby/config/config_discover.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/config_discover.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/config/config_discover.md"
@@ -150,6 +154,10 @@ Kreuzberg automatically discovers configuration files in the following locations
 
     --8<-- "snippets/ruby/config/config_discover.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/config_discover.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/config/config_discover.md"
@@ -188,6 +196,10 @@ Get started with minimal configuration:
 
     --8<-- "snippets/ruby/config/config_basic.md"
 
+=== "R"
+
+    --8<-- "snippets/r/config/config_basic.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/config/config_basic.md"
@@ -219,6 +231,10 @@ Enable OCR for scanned documents and images:
 === "Ruby"
 
     --8<-- "snippets/ruby/config/config_ocr.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/config_ocr.md"
 
 === "Rust"
 
@@ -253,6 +269,10 @@ Configure text chunking for vector database ingestion:
 === "Ruby"
 
     --8<-- "snippets/ruby/utils/chunking.md"
+
+=== "R"
+
+    --8<-- "snippets/r/utils/chunking.md"
 
 === "Rust"
 

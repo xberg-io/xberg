@@ -48,6 +48,10 @@ Extract text, tables, and metadata from a file on disk.
 
     --8<-- "snippets/ruby/api/extract_file_sync.md"
 
+=== "R"
+
+    --8<-- "snippets/r/api/extract_file_sync.md"
+
 === "Java"
 
     --8<-- "snippets/java/api/extract_file_sync.md"
@@ -81,6 +85,10 @@ Extract text, tables, and metadata from a file on disk.
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_file_async.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/extract_file_async.md"
 
 === "Java"
 
@@ -150,6 +158,17 @@ result = Kreuzberg.extract_file_sync('document.pdf', config: config)
 puts result.content
 ```
 
+## R {#r}
+
+R bindings provide the same function names (`extract_file_sync`, `extract_bytes`, etc.) via an S3 class-based result system. All functions return `kreuzberg_result` objects with `$content`, `$mime_type`, `$tables`, and other fields. See the [R API Reference](../reference/api-r.md) for details.
+
+```r title="basic_extraction.R"
+library(kreuzberg)
+
+result <- extract_file_sync("document.pdf")
+cat(result$content)
+```
+
 !!! tip "When to Use Async"
 Use async variants when you're already in an async context or processing multiple files concurrently. For simple scripts, sync variants are simpler and just as fast.
 
@@ -174,6 +193,10 @@ Extract from data already loaded in memory.
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_bytes_sync.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/extract_bytes_sync.md"
 
 === "Java"
 
@@ -208,6 +231,10 @@ Extract from data already loaded in memory.
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_bytes_async.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/extract_bytes_async.md"
 
 === "Java"
 
@@ -250,6 +277,10 @@ Process multiple files concurrently for better performance.
 
     --8<-- "snippets/ruby/api/batch_extract_files_sync.md"
 
+=== "R"
+
+    --8<-- "snippets/r/api/batch_extract_files_sync.md"
+
 === "Java"
 
     --8<-- "snippets/java/api/batch_extract_files_sync.md"
@@ -283,6 +314,10 @@ Process multiple files concurrently for better performance.
 === "Ruby"
 
     --8<-- "snippets/ruby/api/batch_extract_bytes_sync.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/batch_extract_bytes_sync.md"
 
 === "Java"
 
@@ -422,6 +457,10 @@ All extraction functions raise exceptions on failure:
 === "Ruby"
 
     --8<-- "snippets/ruby/api/error_handling.md"
+
+=== "R"
+
+    --8<-- "snippets/r/api/error_handling.md"
 
 === "Java"
 

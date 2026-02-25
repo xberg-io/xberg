@@ -16,6 +16,8 @@ tasks:
       - Rscript -e "if (!require('testthat', quietly = TRUE)) install.packages('testthat', repos = 'https://cran.r-project.org')"
       - Rscript -e "if (!require('jsonlite', quietly = TRUE)) install.packages('jsonlite', repos = 'https://cran.r-project.org')"
       - Rscript -e "if (!require('withr', quietly = TRUE)) install.packages('withr', repos = 'https://cran.r-project.org')"
+      - Rscript -e "if (!require('styler', quietly = TRUE)) install.packages('styler', repos = 'https://cran.r-project.org')"
+      - Rscript -e "if (!require('lintr', quietly = TRUE)) install.packages('lintr', repos = 'https://cran.r-project.org')"
 
   setup:
     desc: Alias for install
@@ -108,6 +110,13 @@ tasks:
     dir: packages/r
     cmds:
       - Rscript -e "update.packages(repos = 'https://cran.r-project.org', ask = FALSE)"
+
+  build:bindings:
+    desc: Build R package for benchmarking
+    dir: packages/r
+    cmds:
+      - R CMD build .
+      - R CMD INSTALL --no-multiarch --with-keep.source .
 
   e2e:generate:
     desc: Generate R E2E tests from fixtures

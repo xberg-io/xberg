@@ -28,6 +28,8 @@
 *temp/
 .benchmarks/
 .cache/
+.Rhistory
+.RData
 .mvn/
 .claude/
 .coverage

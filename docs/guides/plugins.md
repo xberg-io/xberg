@@ -62,6 +62,10 @@ Extract content from custom file formats or override built-in extractors.
 
     --8<-- "snippets/ruby/plugins/extractor_registration.md"
 
+=== "R"
+
+    --8<-- "snippets/r/plugins/extractor_registration.md"
+
 === "Rust"
 
     --8<-- "snippets/rust/plugins/extractor_registration.md"
@@ -153,6 +157,10 @@ Integrate custom OCR engines or cloud services.
 === "Ruby"
 
     --8<-- "snippets/ruby/ocr/cloud_ocr_backend.md"
+
+=== "R"
+
+    --8<-- "snippets/r/ocr/cloud_ocr_backend.md"
 
 ## Validators
 
@@ -301,6 +309,10 @@ All plugins must be thread-safe:
 
     --8<-- "snippets/ruby/plugins/plugin_validator.md"
 
+=== "R"
+
+    --8<-- "snippets/r/plugins/plugin_validator.md"
+
 ### Logging
 
 === "C#"
@@ -354,3 +366,7 @@ All plugins must be thread-safe:
 === "Ruby"
 
     --8<-- "snippets/ruby/plugins/pdf_metadata_extractor.md"
+
+=== "R"
+
+    --8<-- "snippets/r/plugins/pdf_metadata_extractor.md"

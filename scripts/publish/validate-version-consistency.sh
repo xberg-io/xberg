@@ -54,6 +54,13 @@ echo "packages/ruby/lib/kreuzberg/version.rb: $ruby_version"
   errors=$((errors + 1))
 }
 
+r_version="$(grep '^Version:' packages/r/DESCRIPTION | sed 's/Version: //')"
+echo "packages/r/DESCRIPTION: $r_version"
+[ "$r_version" = "$expected" ] || {
+  echo "❌ R DESCRIPTION version mismatch"
+  errors=$((errors + 1))
+}
+
 java_version="$(
   python3 - <<'PY'
 import re
@@ -132,4 +139,4 @@ if [ "$errors" -gt 0 ]; then
   exit 1
 fi
 
-echo "✅ All 11 version sources consistent: $expected"
+echo "✅ All 12 version sources consistent: $expected"

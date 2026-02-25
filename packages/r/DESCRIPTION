@@ -3,8 +3,10 @@ Title: High-Performance Document Intelligence Framework
 Version: 4.3.8
 Authors@R: person("Na'aman", "Hirschfeld", email = "nhirschfeld@gmail.com", role = c("aut", "cre"))
 Description: R bindings for Kreuzberg - a high-performance document intelligence framework
-    supporting extraction, OCR, chunking, and language detection for 30+ file formats.
+    supporting extraction, OCR, chunking, and language detection for 75+ file formats.
     Built with Rust via extendr for maximum performance.
+URL: https://kreuzberg.dev, https://github.com/kreuzberg-dev/kreuzberg
+BugReports: https://github.com/kreuzberg-dev/kreuzberg/issues
 License: MIT + file LICENSE
 Depends: R (>= 4.2)
 Imports: jsonlite

@@ -5,11 +5,32 @@
 #' @param chunking Chunking configuration created by \code{chunking_config()}.
 #' @param output_format Output format string (e.g., "text", "markdown").
 #' @param result_format Result format string (e.g., "unified", "element_based").
+#' @param use_cache Logical. Enable extraction result caching.
+#' @param include_document_structure Logical. Include document structure in output.
+#' @param enable_quality_processing Logical. Enable quality score processing.
+#' @param language_detection Named list. Language detection configuration.
+#' @param keywords Named list. Keyword extraction configuration.
+#' @param token_reduction Named list. Token reduction configuration.
+#' @param images Named list. Image extraction configuration.
+#' @param pages Named list. Page-level extraction configuration.
+#' @param pdf_options Named list. PDF-specific options.
+#' @param html_options Named list. HTML-specific options.
+#' @param postprocessor Named list. Post-processor configuration.
+#' @param security_limits Named list. Security limits configuration.
+#' @param max_concurrent_extractions Integer. Max concurrent extractions.
 #' @param ... Additional configuration options passed as named list elements.
 #' @return A named list representing the extraction configuration.
 #' @export
 extraction_config <- function(force_ocr = FALSE, ocr = NULL, chunking = NULL,
-                              output_format = NULL, result_format = NULL, ...) {
+                              output_format = NULL, result_format = NULL,
+                              use_cache = NULL, include_document_structure = NULL,
+                              enable_quality_processing = NULL,
+                              language_detection = NULL, keywords = NULL,
+                              token_reduction = NULL, images = NULL,
+                              pages = NULL, pdf_options = NULL,
+                              html_options = NULL, postprocessor = NULL,
+                              security_limits = NULL,
+                              max_concurrent_extractions = NULL, ...) {
   config <- list()
   if (isTRUE(force_ocr)) config$force_ocr <- TRUE
   if (!is.null(ocr)) config$ocr <- ocr
@@ -21,6 +42,25 @@ extraction_config <- function(force_ocr = FALSE, ocr = NULL, chunking = NULL,
   if (!is.null(result_format)) {
     stopifnot(is.character(result_format), length(result_format) == 1L)
     config$result_format <- result_format
+  }
+  if (!is.null(use_cache)) config$use_cache <- use_cache
+  if (!is.null(include_document_structure)) {
+    config$include_document_structure <- include_document_structure
+  }
+  if (!is.null(enable_quality_processing)) {
+    config$enable_quality_processing <- enable_quality_processing
+  }
+  if (!is.null(language_detection)) config$language_detection <- language_detection
+  if (!is.null(keywords)) config$keywords <- keywords
+  if (!is.null(token_reduction)) config$token_reduction <- token_reduction
+  if (!is.null(images)) config$images <- images
+  if (!is.null(pages)) config$pages <- pages
+  if (!is.null(pdf_options)) config$pdf_options <- pdf_options
+  if (!is.null(html_options)) config$html_options <- html_options
+  if (!is.null(postprocessor)) config$postprocessor <- postprocessor
+  if (!is.null(security_limits)) config$security_limits <- security_limits
+  if (!is.null(max_concurrent_extractions)) {
+    config$max_concurrent_extractions <- as.integer(max_concurrent_extractions)
   }
   extras <- list(...)
   if (length(extras) > 0) config <- c(config, extras)
