@@ -1,2 +1,17 @@
 #!/usr/bin/env sh
+
+# Vendor kreuzberg core crates if vendor directory is not populated
+if [ ! -f "vendor/kreuzberg/Cargo.toml" ]; then
+  # Detect monorepo root (two levels up from packages/r)
+  REPO_ROOT="$(cd ../.. 2>/dev/null && pwd)"
+  VENDOR_SCRIPT="${REPO_ROOT}/scripts/ci/r/vendor-kreuzberg-core.py"
+
+  if [ -f "${VENDOR_SCRIPT}" ] && [ -d "${REPO_ROOT}/crates/kreuzberg" ]; then
+    echo "Vendoring kreuzberg core crates from monorepo..."
+    REPO_ROOT="${REPO_ROOT}" python3 "${VENDOR_SCRIPT}" || {
+      echo "WARNING: Vendoring failed. Build may fail if vendor directory is empty."
+    }
+  fi
+fi
+
 Rscript tools/config.R
