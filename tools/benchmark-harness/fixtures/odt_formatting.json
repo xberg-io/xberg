@@ -2,12 +2,7 @@
 	"document": "../../../test_documents/odt/bold.odt",
 	"file_type": "odt",
 	"file_size": 10377,
-	"expected_frameworks": [
-		"kreuzberg",
-		"pandoc",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "pandoc", "tika", "unstructured"],
 	"metadata": {
 		"description": "ODT document with various text formatting styles (bold, italic, underline)",
 		"category": "formatting"

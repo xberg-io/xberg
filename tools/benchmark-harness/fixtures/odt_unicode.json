@@ -2,12 +2,7 @@
 	"document": "../../../test_documents/odt/unicode.odt",
 	"file_type": "odt",
 	"file_size": 11787,
-	"expected_frameworks": [
-		"kreuzberg",
-		"pandoc",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "pandoc", "tika", "unstructured"],
 	"metadata": {
 		"description": "ODT document with mixed unicode characters and international text",
 		"category": "unicode"

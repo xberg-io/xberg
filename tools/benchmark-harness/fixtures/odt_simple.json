@@ -2,12 +2,7 @@
 	"document": "../../../test_documents/odt/simple.odt",
 	"file_type": "odt",
 	"file_size": 7649,
-	"expected_frameworks": [
-		"kreuzberg",
-		"pandoc",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "pandoc", "tika", "unstructured"],
 	"metadata": {
 		"description": "Simple ODT document with basic text content",
 		"category": "simple"

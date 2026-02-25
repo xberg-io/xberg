@@ -2,12 +2,7 @@
 	"document": "../../../test_documents/rtf/word_sample.rtf",
 	"file_type": "rtf",
 	"file_size": 163580,
-	"expected_frameworks": [
-		"kreuzberg",
-		"pandoc",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "pandoc", "tika", "unstructured"],
 	"metadata": {
 		"description": "Large RTF document with substantial word sample content",
 		"category": "large"

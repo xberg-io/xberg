@@ -2,12 +2,7 @@
 	"document": "../../../test_documents/odt/extraction_test.odt",
 	"file_type": "odt",
 	"file_size": 7659,
-	"expected_frameworks": [
-		"kreuzberg",
-		"pandoc",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "pandoc", "tika", "unstructured"],
 	"metadata": {
 		"description": "ODT document specifically for extraction testing",
 		"category": "simple"

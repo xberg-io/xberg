@@ -2,14 +2,7 @@
 	"document": "../../../test_documents/epub/simple.epub",
 	"file_type": "epub",
 	"file_size": 31662481,
-	"expected_frameworks": [
-		"kreuzberg",
-		"markitdown",
-		"pandoc",
-		"pymupdf4llm",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "markitdown", "pandoc", "pymupdf4llm", "tika", "unstructured"],
 	"metadata": {
 		"description": "Large EPUB document (31.6 MB) for stress testing and performance profiling under high load conditions",
 		"category": "complex"

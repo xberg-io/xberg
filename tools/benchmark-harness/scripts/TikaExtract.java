@@ -189,6 +189,10 @@ public final class TikaExtract {
             if (filePath.isEmpty()) {
                 continue;
             }
+            // Parse JSON request if the harness sends {"path":"...", "force_ocr": ...}
+            if (filePath.startsWith("{")) {
+                filePath = parseJsonPath(filePath);
+            }
             try {
                 Path path = Path.of(filePath);
                 long start = System.nanoTime();
@@ -298,6 +302,32 @@ public final class TikaExtract {
         builder.append(",\"_ocr_used\":").append(determineOcrUsed(data.getMimeType(), ocrEnabled));
         builder.append('}');
         return builder.toString();
+    }
+
+    /**
+     * Parse a JSON request line to extract the "path" field.
+     * Minimal JSON parsing to avoid adding a dependency.
+     */
+    private static String parseJsonPath(String json) {
+        int idx = json.indexOf("\"path\"");
+        if (idx < 0) {
+            return json;
+        }
+        // Skip past "path" key, colon, optional whitespace, and opening quote
+        idx = json.indexOf(':', idx + 6);
+        if (idx < 0) {
+            return json;
+        }
+        idx = json.indexOf('"', idx + 1);
+        if (idx < 0) {
+            return json;
+        }
+        int start = idx + 1;
+        int end = json.indexOf('"', start);
+        if (end < 0) {
+            return json;
+        }
+        return json.substring(start, end);
     }
 
     private static String quote(String value) {

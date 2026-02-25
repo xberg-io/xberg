@@ -2,14 +2,7 @@
 	"document": "../../../test_documents/epub/winter_sports.epub",
 	"file_type": "epub",
 	"file_size": 210376,
-	"expected_frameworks": [
-		"kreuzberg",
-		"markitdown",
-		"pandoc",
-		"pymupdf4llm",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "markitdown", "pandoc", "pymupdf4llm", "tika", "unstructured"],
 	"metadata": {
 		"description": "Medium-sized EPUB with complex formatting, chapters, and structured content for realistic performance testing",
 		"category": "complex"

@@ -2,11 +2,7 @@
 	"document": "../../../../test_documents/vendored/unstructured/eml/test-invalid-date.eml",
 	"file_type": "eml",
 	"file_size": 161,
-	"expected_frameworks": [
-		"kreuzberg",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "tika", "unstructured"],
 	"metadata": {
 		"description": "Document from unstructured test suite",
 		"source": "unstructured",

@@ -2,14 +2,7 @@
 	"document": "../../../../test_documents/vendored/markitdown/epub/test.epub",
 	"file_type": "epub",
 	"file_size": 2677,
-	"expected_frameworks": [
-		"kreuzberg",
-		"markitdown",
-		"pandoc",
-		"pymupdf4llm",
-		"tika",
-		"unstructured"
-	],
+	"expected_frameworks": ["kreuzberg", "markitdown", "pandoc", "pymupdf4llm", "tika", "unstructured"],
 	"metadata": {
 		"description": "Document from markitdown test suite",
 		"source": "markitdown",

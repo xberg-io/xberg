@@ -86,12 +86,14 @@ repos:
         args: ["check"]
         files: ^(Cargo\.toml|Cargo\.lock|crates/.*/Cargo\.toml|tools/.*/Cargo\.toml|e2e/rust/Cargo\.toml|packages/ruby/ext/kreuzberg_rb/native/Cargo\.toml|deny\.toml)$
 
-  # JavaScript/TypeScript/JSON: biome (formatting + linting with autofixes)
+  # JavaScript/TypeScript/JSON/CSS: biome (formatting + linting with autofixes)
   - repo: https://github.com/biomejs/pre-commit
     rev: v2.4.4
     hooks:
       - id: biome-format
+        exclude: ^tools/benchmark-harness/fixtures/
       - id: biome-lint
+        exclude: ^tools/benchmark-harness/fixtures/
 
   # Go: formatting and linting
   - repo: https://github.com/dnephin/pre-commit-golang
