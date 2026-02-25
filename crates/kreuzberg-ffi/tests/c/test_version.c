@@ -1,7 +1,7 @@
+#include "../../kreuzberg.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../kreuzberg.h"
 
 int main(void) {
     const char *version = kreuzberg_version();
@@ -11,10 +11,8 @@ int main(void) {
 
     /* Verify defines match runtime */
     char expected[64];
-    snprintf(expected, sizeof(expected), "%d.%d.%d",
-             KREUZBERG_VERSION_MAJOR,
-             KREUZBERG_VERSION_MINOR,
-             KREUZBERG_VERSION_PATCH);
+    snprintf(expected, sizeof(expected), "%d.%d.%d", KREUZBERG_VERSION_MAJOR,
+             KREUZBERG_VERSION_MINOR, KREUZBERG_VERSION_PATCH);
     assert(strcmp(version, expected) == 0);
     assert(strcmp(version, KREUZBERG_VERSION) == 0);
 

@@ -1,7 +1,7 @@
+#include "../../kreuzberg.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../kreuzberg.h"
 
 int main(void) {
     /* Test error code name functions */

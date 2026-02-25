@@ -1,7 +1,7 @@
+#include "../../kreuzberg.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../kreuzberg.h"
 
 /* Create an empty temp file for MIME detection tests (check_exists=true in FFI) */
 static void create_temp_file(const char *name) {

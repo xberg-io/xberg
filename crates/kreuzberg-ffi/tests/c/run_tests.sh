@@ -14,19 +14,19 @@ make -C "$SCRIPT_DIR" LIBDIR="$REPO_DIR/target/debug" clean all
 echo "==> Running C tests..."
 FAILED=0
 for test in "$SCRIPT_DIR"/test_*; do
-    [ -x "$test" ] || continue
-    name=$(basename "$test")
-    if "$test"; then
-        echo "  PASS: $name"
-    else
-        echo "  FAIL: $name"
-        FAILED=1
-    fi
+  [ -x "$test" ] || continue
+  name=$(basename "$test")
+  if "$test"; then
+    echo "  PASS: $name"
+  else
+    echo "  FAIL: $name"
+    FAILED=1
+  fi
 done
 
 if [ "$FAILED" -eq 0 ]; then
-    echo "==> All C tests passed!"
+  echo "==> All C tests passed!"
 else
-    echo "==> Some C tests FAILED"
-    exit 1
+  echo "==> Some C tests FAILED"
+  exit 1
 fi

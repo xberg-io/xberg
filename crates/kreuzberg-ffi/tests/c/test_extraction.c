@@ -1,11 +1,11 @@
+#include "../../kreuzberg.h"
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../kreuzberg.h"
 
 int main(void) {
     /* Test NULL path extraction fails gracefully */
-    struct CExtractionResult *result = kreuzberg_extract_file_sync(NULL);
+    const struct CExtractionResult *result = kreuzberg_extract_file_sync(NULL);
     assert(result == NULL);
 
     const char *err = kreuzberg_last_error();
@@ -31,11 +31,8 @@ int main(void) {
     /* Test successful extraction from bytes with text/plain content */
     {
         const char *text = "Hello, Kreuzberg! This is a test document.";
-        struct CExtractionResult *res = kreuzberg_extract_bytes_sync(
-            (const uint8_t *)text,
-            strlen(text),
-            "text/plain"
-        );
+        struct CExtractionResult *res =
+            kreuzberg_extract_bytes_sync((const uint8_t *)text, strlen(text), "text/plain");
 
         /*
          * extraction may return NULL if the text/plain handler is not
@@ -56,7 +53,8 @@ int main(void) {
             assert(strlen(res->mime_type) > 0);
 
             /* Content should contain our input text (or a transformation of it) */
-            assert(strstr(res->content, "Hello") != NULL || strstr(res->content, "Kreuzberg") != NULL);
+            assert(strstr(res->content, "Hello") != NULL ||
+                   strstr(res->content, "Kreuzberg") != NULL);
 
             kreuzberg_free_result(res);
         } else {

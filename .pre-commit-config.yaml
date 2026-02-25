@@ -120,12 +120,15 @@ repos:
     hooks:
       - id: actionlint
 
-  # C/C++: formatting
-  - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v22.1.0
+  # C/C++: formatting and linting
+  - repo: https://github.com/pocc/pre-commit-hooks
+    rev: v1.3.5
     hooks:
       - id: clang-format
-        types_or: [c, c++]
+        args: [--style=file]
+        files: ^crates/kreuzberg-ffi/tests/c/
+      - id: cppcheck
+        args: ["--std=c11", "--enable=warning,style,performance", "--suppress=missingIncludeSystem"]
         files: ^crates/kreuzberg-ffi/tests/c/
 
   # Local hooks for unsupported languages (Ruby, Java, C#, PHP) and custom configurations

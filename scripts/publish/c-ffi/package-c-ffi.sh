@@ -54,12 +54,12 @@ esac
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
-FEATURES_ARG=""
+FEATURES_ARGS=()
 if [ -n "${BUILD_FEATURES:-}" ]; then
-  FEATURES_ARG="--features ${BUILD_FEATURES}"
+  FEATURES_ARGS=(--features "${BUILD_FEATURES}")
 fi
 echo "Building kreuzberg-ffi (release) ..."
-cargo build -p kreuzberg-ffi --release ${FEATURES_ARG}
+cargo build -p kreuzberg-ffi --release "${FEATURES_ARGS[@]}"
 
 # ---------------------------------------------------------------------------
 # Locate build artefacts
@@ -89,7 +89,7 @@ fi
 # ---------------------------------------------------------------------------
 # Parse version components
 # ---------------------------------------------------------------------------
-IFS='.' read -r ver_major ver_minor ver_patch <<< "$version"
+IFS='.' read -r ver_major ver_minor ver_patch <<<"$version"
 ver_major="${ver_major:-0}"
 ver_minor="${ver_minor:-0}"
 ver_patch="${ver_patch:-0}"
@@ -128,7 +128,7 @@ cp "${repo_root}/LICENSE" "${stage_dir}/LICENSE"
 # ---------------------------------------------------------------------------
 # pkg-config file (clean, with prefix=/usr/local)
 # ---------------------------------------------------------------------------
-cat > "${stage_dir}/lib/pkgconfig/kreuzberg.pc" <<EOF
+cat >"${stage_dir}/lib/pkgconfig/kreuzberg.pc" <<EOF
 prefix=/usr/local
 exec_prefix=\${prefix}
 libdir=\${exec_prefix}/lib
@@ -149,7 +149,7 @@ EOF
 cp "${ffi_crate_dir}/cmake/kreuzberg-ffi-config.cmake" "${stage_dir}/cmake/kreuzberg-ffi-config.cmake"
 
 # Generate version cmake with the correct version from script argument
-cat > "${stage_dir}/cmake/kreuzberg-ffi-config-version.cmake" <<EOF
+cat >"${stage_dir}/cmake/kreuzberg-ffi-config-version.cmake" <<EOF
 # kreuzberg-ffi version compatibility check
 #
 # Reads KREUZBERG_VERSION_MAJOR/MINOR/PATCH from the installed header.

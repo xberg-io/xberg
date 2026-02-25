@@ -206,6 +206,11 @@ jobs:
         run: scripts/ci/validate/show-disk-space.sh "Disk space before lint"
         shell: bash
 
+      - name: Install C/C++ tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends cppcheck clang-format
+
       - name: Run prek hooks
         uses: j178/prek-action@v1.1.1
         with:
