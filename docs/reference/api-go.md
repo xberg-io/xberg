@@ -6,7 +6,7 @@ The Go binding exposes the same extraction capabilities as the other languages t
 
 ## Requirements
 
-- **Go 1.25+** (with cgo support)
+- **go 1.26+** (with cgo support)
 - **C compiler** (gcc/clang for cgo compilation)
 - **libkreuzberg_ffi.a** static library (at build time only)
 - **Tesseract/EasyOCR/PaddleOCR** (optional, for OCR functionality)

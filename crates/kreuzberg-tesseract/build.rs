@@ -108,18 +108,18 @@ mod build_tesseract {
     /// 3. Fall back to `{fallback}` (e.g. "clang++" or "g++")
     fn resolve_cxx_compiler(target: &str, fallback: &str) -> String {
         // 1. Explicit CXX override (skip empty strings, e.g. from CI unsetting via GITHUB_ENV)
-        if let Ok(cxx) = env::var("CXX") {
-            if !cxx.is_empty() {
-                return cxx;
-            }
+        if let Ok(cxx) = env::var("CXX")
+            && !cxx.is_empty()
+        {
+            return cxx;
         }
 
         // 2. Target-specific CXX (hyphens → underscores, matching cc-rs convention)
         let target_env = target.replace('-', "_");
-        if let Ok(cxx) = env::var(format!("CXX_{target_env}")) {
-            if !cxx.is_empty() {
-                return cxx;
-            }
+        if let Ok(cxx) = env::var(format!("CXX_{target_env}"))
+            && !cxx.is_empty()
+        {
+            return cxx;
         }
 
         // 3. Default fallback
@@ -922,6 +922,88 @@ mod build_tesseract {
         }
     }
 
+    /// Install a no-op mutex header for WASM builds.
+    ///
+    /// The wasm32-wasi-threads libc++ provides std::mutex that uses memory.atomic.wait32
+    /// instructions. These deadlock in single-threaded WASM (no SharedArrayBuffer).
+    /// This function writes a header that replaces std::mutex with a no-op stub when
+    /// TESSERACT_WASM_NOOP_MUTEX is defined, and patches Tesseract source files to use it.
+    fn apply_wasm_noop_mutex_patch(tesseract_dir: &Path) {
+        // Write the no-op mutex header
+        let noop_header = tesseract_dir.join("src/wasm_noop_mutex.h");
+        let header_content = r#"// No-op mutex for single-threaded WASM builds.
+// Replaces std::mutex/std::lock_guard to avoid memory.atomic.wait32 deadlocks.
+#ifndef TESSERACT_WASM_NOOP_MUTEX_H_
+#define TESSERACT_WASM_NOOP_MUTEX_H_
+
+#ifdef TESSERACT_WASM_NOOP_MUTEX
+
+namespace wasm_noop {
+
+struct mutex {
+    void lock() {}
+    void unlock() {}
+    bool try_lock() { return true; }
+};
+
+template <typename M>
+struct lock_guard {
+    explicit lock_guard(M&) {}
+    ~lock_guard() = default;
+    lock_guard(const lock_guard&) = delete;
+    lock_guard& operator=(const lock_guard&) = delete;
+};
+
+}  // namespace wasm_noop
+
+// Replace std::mutex and std::lock_guard with no-op versions
+#define TESSERACT_MUTEX_TYPE wasm_noop::mutex
+#define TESSERACT_LOCK_GUARD wasm_noop::lock_guard
+
+#else
+
+#include <mutex>
+#define TESSERACT_MUTEX_TYPE std::mutex
+#define TESSERACT_LOCK_GUARD std::lock_guard
+
+#endif  // TESSERACT_WASM_NOOP_MUTEX
+#endif  // TESSERACT_WASM_NOOP_MUTEX_H_
+"#;
+        fs::write(&noop_header, header_content).expect("Failed to write wasm_noop_mutex.h");
+        println!("cargo:warning=Wrote wasm_noop_mutex.h for WASM no-op mutex support");
+
+        // Patch source files to use the no-op mutex header
+        let files_to_patch = [
+            "src/lstm/networkscratch.h",
+            "src/ccstruct/imagedata.h",
+            "src/ccstruct/imagedata.cpp",
+            "src/ccutil/object_cache.h",
+            "src/classify/intfx.cpp",
+        ];
+
+        for rel_path in &files_to_patch {
+            let file_path = tesseract_dir.join(rel_path);
+            if !file_path.exists() {
+                println!("cargo:warning=Skipping {}: file not found", rel_path);
+                continue;
+            }
+
+            let content = fs::read_to_string(&file_path).unwrap_or_default();
+            let patched = content
+                // Replace #include <mutex> with our no-op header
+                .replace("#include <mutex>", "#include \"wasm_noop_mutex.h\"")
+                // Replace std::mutex with TESSERACT_MUTEX_TYPE
+                .replace("std::mutex", "TESSERACT_MUTEX_TYPE")
+                // Replace std::lock_guard<TESSERACT_MUTEX_TYPE> with TESSERACT_LOCK_GUARD<TESSERACT_MUTEX_TYPE>
+                .replace("std::lock_guard<TESSERACT_MUTEX_TYPE>", "TESSERACT_LOCK_GUARD<TESSERACT_MUTEX_TYPE>");
+
+            if patched != content {
+                fs::write(&file_path, patched).unwrap_or_else(|_| panic!("Failed to patch {}", rel_path));
+                println!("cargo:warning=Patched {} for WASM no-op mutex", rel_path);
+            }
+        }
+    }
+
     fn clean_cache(cache_dir: &Path) {
         println!("Cleaning cache directory: {:?}", cache_dir);
         if cache_dir.exists() {
@@ -1014,6 +1096,7 @@ Installation instructions:
             let dir = download_and_extract(&third_party_dir, &tesseract_url(), "tesseract");
             // Apply WASM patches to tesseract source
             apply_tesseract_wasm_patch(&dir);
+            apply_wasm_noop_mutex_patch(&dir);
             dir
         };
 
@@ -1121,13 +1204,18 @@ Installation instructions:
         // TESSERACT_WASM_NOOP_MUTEX: Replace std::mutex with no-op stubs in WASM builds.
         // The wasm32-wasi-threads libc++ provides std::mutex that uses memory.atomic.wait32,
         // which deadlocks in single-threaded WASM environments (no SharedArrayBuffer).
+        let noop_mutex_include = src_dir.join("src");
         let mut cxx_flags = String::from(
             "-DTESSERACT_IMAGEDATA_AS_PIX -DTESSERACT_WASM_NOOP_MUTEX -fno-exceptions -pthread -D_WASI_EMULATED_PROCESS_CLOCKS -D_WASI_EMULATED_SIGNAL ",
         );
         if enable_simd {
             cxx_flags.push_str("-msimd128 ");
         }
-        cxx_flags.push_str(&format!("-fPIC -Os -fno-lto -I{}", leptonica_include_dir.display()));
+        cxx_flags.push_str(&format!(
+            "-fPIC -Os -fno-lto -I{} -I{}",
+            leptonica_include_dir.display(),
+            noop_mutex_include.display()
+        ));
 
         let c_flags = format!(
             "-fPIC -Os -fno-lto -fno-exceptions -pthread -D_WASI_EMULATED_PROCESS_CLOCKS -D_WASI_EMULATED_SIGNAL -I{}",

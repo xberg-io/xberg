@@ -1,3 +1,4 @@
+mod c;
 mod csharp;
 mod elixir;
 mod fixtures;
@@ -48,6 +49,7 @@ enum Commands {
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum Language {
+    C,
     Rust,
     Python,
     Typescript,
@@ -69,6 +71,9 @@ fn main() -> Result<()> {
         Commands::Generate { lang, fixtures, output } => {
             let fixtures = load_fixtures(fixtures.as_path())?;
             match lang {
+                Language::C => {
+                    c::generate(&fixtures, output.as_path())?;
+                }
                 Language::Rust => {
                     rust::generate(&fixtures, output.as_path())?;
                     run_cargo_fmt(&output.join("rust"));

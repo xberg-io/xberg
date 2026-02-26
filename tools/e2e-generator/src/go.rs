@@ -810,7 +810,7 @@ fn write_go_mod(go_root: &Utf8Path) -> Result<()> {
     let go_mod = go_root.join("go.mod");
     let template = r#"module github.com/kreuzberg-dev/kreuzberg/e2e/go
 
-go 1.25
+go 1.26
 
 require github.com/kreuzberg-dev/kreuzberg/packages/go/v4 v4.0.0
 

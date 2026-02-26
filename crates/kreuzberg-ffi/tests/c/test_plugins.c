@@ -1,8 +1,8 @@
 #include "../../kreuzberg.h"
 #include <assert.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ---- Stub callbacks for each plugin type ---- */
 
@@ -11,9 +11,7 @@
  *   char *(*)(const uint8_t *content, uintptr_t content_len,
  *             const char *mime_type, const char *config_json)
  */
-static char *my_doc_extractor(const uint8_t *content,
-                              uintptr_t content_len,
-                              const char *mime_type,
+static char *my_doc_extractor(const uint8_t *content, uintptr_t content_len, const char *mime_type,
                               const char *config_json) {
     (void)content;
     (void)content_len;
@@ -27,8 +25,7 @@ static char *my_doc_extractor(const uint8_t *content,
  *   char *(*)(const uint8_t *image_bytes, uintptr_t image_length,
  *             const char *config_json)
  */
-static char *my_ocr_backend(const uint8_t *image_bytes,
-                            uintptr_t image_length,
+static char *my_ocr_backend(const uint8_t *image_bytes, uintptr_t image_length,
                             const char *config_json) {
     (void)image_bytes;
     (void)image_length;
@@ -57,7 +54,8 @@ static char *my_validator(const char *result_json) {
 
 /* ---- Helper: check if a JSON array string contains a given name ---- */
 static int json_list_contains(const char *json, const char *name) {
-    if (json == NULL || name == NULL) return 0;
+    if (json == NULL || name == NULL)
+        return 0;
     return strstr(json, name) != NULL;
 }
 
@@ -78,11 +76,8 @@ int main(void) {
         kreuzberg_free_string(list);
 
         /* Register a document extractor */
-        ok = kreuzberg_register_document_extractor(
-            "test-doc-extractor",
-            my_doc_extractor,
-            "application/x-test",
-            100);
+        ok = kreuzberg_register_document_extractor("test-doc-extractor", my_doc_extractor,
+                                                   "application/x-test", 100);
         assert(ok);
 
         /* List again: should contain our registration */
@@ -146,10 +141,8 @@ int main(void) {
         kreuzberg_free_string(list);
 
         /* Register with languages */
-        ok = kreuzberg_register_ocr_backend_with_languages(
-            "test-ocr-lang",
-            my_ocr_backend,
-            "[\"en\", \"de\", \"fr\"]");
+        ok = kreuzberg_register_ocr_backend_with_languages("test-ocr-lang", my_ocr_backend,
+                                                           "[\"en\", \"de\", \"fr\"]");
         assert(ok);
 
         /* Verify it was registered */
@@ -242,11 +235,8 @@ int main(void) {
         kreuzberg_free_string(list);
 
         /* Register with stage (valid stages: "early", "middle", "late") */
-        ok = kreuzberg_register_post_processor_with_stage(
-            "test-stage-processor",
-            my_post_processor,
-            50,
-            "early");
+        ok = kreuzberg_register_post_processor_with_stage("test-stage-processor", my_post_processor,
+                                                          50, "early");
         assert(ok);
 
         /* Verify registered */

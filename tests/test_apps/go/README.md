@@ -10,7 +10,7 @@ This directory contains two test approaches:
 ## Quick Start
 
 ### Prerequisites
-- Go 1.25 or higher
+- go 1.26 or higher
 - Kreuzberg FFI library compiled: `cargo build --release -p kreuzberg-ffi`
 - Rust toolchain (for building FFI)
 
@@ -374,7 +374,7 @@ Ensure:
 ## Test Quality
 
 ### Code Standards
-- ✓ Go 1.25 compatible
+- ✓ go 1.26 compatible
 - ✓ Table-driven test patterns
 - ✓ testify/assert assertions
 - ✓ Descriptive error messages
@@ -394,7 +394,7 @@ Ensure:
 ## Environment
 
 ### Verified With
-- Go 1.25.5
+- go 1.26.5
 - macOS (ARM64)
 - Kreuzberg v4.0
 

@@ -346,7 +346,7 @@ Next steps: [Java Quick Start](quickstart.md) • [Java API Reference](../refere
 go get github.com/kreuzberg-dev/kreuzberg/packages/go/v4@latest
 ```
 
-**Requirements:** Go 1.25+ with cgo, C compiler, libkreuzberg_ffi.a static library at build time
+**Requirements:** go 1.26+ with cgo, C compiler, libkreuzberg_ffi.a static library at build time
 
 Kreuzberg Go binaries are **statically linked** — once built, they are self-contained and require no runtime library dependencies.
 

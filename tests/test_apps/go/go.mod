@@ -1,6 +1,6 @@
 module kreuzberg-test-suite
 
-go 1.25
+go 1.26
 
 require (
 	github.com/kreuzberg-dev/kreuzberg/packages/go/v4 v4.3.8
@@ -12,6 +12,3 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// For testing: use local module instead of GitHub release
-replace github.com/kreuzberg-dev/kreuzberg/packages/go/v4 => ../../../packages/go/v4

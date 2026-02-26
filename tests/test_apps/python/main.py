@@ -144,9 +144,9 @@ class TestRunner:
     def summary(self):
         total = self.passed + self.failed + self.skipped
 
-        print("\n" + "="*80)
+        print("\n" + "=" * 80)
         print("TEST SUMMARY")
-        print("="*80)
+        print("=" * 80)
         print(f"Total Tests: {total}")
         print(f"  Passed:  {self.passed}")
         print(f"  Failed:  {self.failed}")
@@ -157,7 +157,7 @@ class TestRunner:
             for test in self.failed_tests:
                 print(f"  - {test}")
 
-        print("="*80)
+        print("=" * 80)
         sys.stdout.flush()
 
         if self.failed == 0:
@@ -217,40 +217,40 @@ runner.start_section("ExtractionConfig Format Fields")
 
 runner.test(
     "ExtractionConfig() with output_format='plain'",
-    lambda: ExtractionConfig(output_format="plain").output_format == "plain"
+    lambda: ExtractionConfig(output_format="plain").output_format == "plain",
 )
 
 runner.test(
     "ExtractionConfig() with output_format='markdown'",
-    lambda: ExtractionConfig(output_format="markdown").output_format == "markdown"
+    lambda: ExtractionConfig(output_format="markdown").output_format == "markdown",
 )
 
 runner.test(
     "ExtractionConfig() with output_format='djot'",
-    lambda: ExtractionConfig(output_format="djot").output_format == "djot"
+    lambda: ExtractionConfig(output_format="djot").output_format == "djot",
 )
 
 runner.test(
     "ExtractionConfig() with output_format='html'",
-    lambda: ExtractionConfig(output_format="html").output_format == "html"
+    lambda: ExtractionConfig(output_format="html").output_format == "html",
 )
 
 runner.test(
     "ExtractionConfig() with result_format='unified'",
-    lambda: ExtractionConfig(result_format="unified").result_format == "unified"
+    lambda: ExtractionConfig(result_format="unified").result_format == "unified",
 )
 
 runner.test(
     "ExtractionConfig() with result_format='element_based'",
-    lambda: ExtractionConfig(result_format="element_based").result_format == "element_based"
+    lambda: ExtractionConfig(result_format="element_based").result_format == "element_based",
 )
 
 runner.test(
     "ExtractionConfig() with both format fields",
     lambda: (
         config := ExtractionConfig(output_format="markdown", result_format="element_based"),
-        config.output_format == "markdown" and config.result_format == "element_based"
-    )[1]
+        config.output_format == "markdown" and config.result_format == "element_based",
+    )[1],
 )
 
 runner.test(
@@ -258,8 +258,8 @@ runner.test(
     lambda: (
         config := ExtractionConfig(output_format="html", result_format="unified"),
         json_str := config_to_json(config),
-        "output_format" in json_str and "result_format" in json_str
-    )[2]
+        "output_format" in json_str and "result_format" in json_str,
+    )[2],
 )
 
 
@@ -499,9 +499,11 @@ if pdf_path.exists():
 
     runner.test(
         "ExtractionResult.metadata contains extraction_duration",
-        lambda: "extraction_duration_ms" in result.metadata
-        or "duration" in str(result.metadata).lower()
-        or len(result.metadata) >= 0,
+        lambda: (
+            "extraction_duration_ms" in result.metadata
+            or "duration" in str(result.metadata).lower()
+            or len(result.metadata) >= 0
+        ),
     )
 
     if len(result.tables) > 0:
@@ -1059,11 +1061,7 @@ runner.test("get_valid_binarization_methods() returns non-empty list of strings"
 def test_get_valid_ocr():
     try:
         backends = get_valid_ocr_backends()
-        return (
-            isinstance(backends, list)
-            and len(backends) > 0
-            and all(isinstance(b, str) for b in backends)
-        )
+        return isinstance(backends, list) and len(backends) > 0 and all(isinstance(b, str) for b in backends)
     except Exception:
         return False
 
@@ -1074,11 +1072,7 @@ runner.test("get_valid_ocr_backends() returns non-empty list of strings", test_g
 def test_get_valid_languages():
     try:
         langs = get_valid_language_codes()
-        return (
-            isinstance(langs, list)
-            and len(langs) > 0
-            and all(isinstance(l, str) for l in langs)
-        )
+        return isinstance(langs, list) and len(langs) > 0 and all(isinstance(l, str) for l in langs)
     except Exception:
         return False
 

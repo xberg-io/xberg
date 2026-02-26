@@ -1,7 +1,7 @@
 default_install_hook_types:
   - pre-commit
   - commit-msg
-exclude: ^docs/snippets/|vendor/|node_modules/|target/|invalid*|dist/|artifacts/
+exclude: ^docs/snippets/|vendor/|node_modules/|target/|invalid*|dist/|artifacts/|test_documents/
 
 repos:
   # Commit message linting
@@ -20,7 +20,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-merge-conflict
       - id: check-added-large-files
-        exclude: uv.lock|docs/benchmarks/app/|test_documents/|crates/kreuzberg-pdfium-render/
+        exclude: uv.lock|docs/benchmarks/app/|crates/kreuzberg-pdfium-render/
       - id: detect-private-key
       - id: check-json
       - id: check-yaml
@@ -29,10 +29,16 @@ repos:
       - id: check-case-conflict
 
   # TOML formatting
+  - repo: https://github.com/tox-dev/pyproject-fmt
+    rev: "v2.16.2"
+    hooks:
+      - id: pyproject-fmt
+
   - repo: https://github.com/ComPWA/taplo-pre-commit
     rev: v0.9.3
     hooks:
       - id: taplo-format
+        exclude: "pyproject.toml"
 
   # Python: ruff (linting + formatting) + mypy (type checking)
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -40,40 +46,37 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        files: ^packages/python/
       - id: ruff-format
-        files: ^packages/python/
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.19.1
     hooks:
       - id: mypy
-        files: ^packages/python/
-        additional_dependencies: []
+        exclude: "e2e/|scripts/"
 
   # Rust: formatting, linting, and license checking
-  - repo: https://github.com/doublify/pre-commit-rust
-    rev: v1.0
+  - repo: https://github.com/AndrejOrsula/pre-commit-cargo
+    rev: 0.5.0
     hooks:
-      - id: clippy
-        files: ^(crates|tools|e2e/rust)/.*\.rs$|^(Cargo\.toml|Cargo\.lock|crates/.*/Cargo\.toml|tools/.*/Cargo\.toml|e2e/rust/Cargo\.toml|packages/ruby/ext/kreuzberg_rb/native/Cargo\.toml|packages/r/src/rust/Cargo\.toml)$
-        args:
-          [
+        - id: cargo-fmt
+          args: ["--all"]
+        - id: cargo-clippy
+          args: [
             "--fix",
             "--allow-dirty",
             "--allow-staged",
             "--workspace",
             "--all-features",
             "--all-targets",
-            "--exclude", "kreuzberg-php",
-            "--exclude", "kreuzberg-tesseract",
-            "--exclude", "kreuzberg-pdfium-render",
             "--",
             "-D",
             "warnings",
           ]
+        - id: cargo-doc
+          args: [ "--no-deps", "--document-private-items" ]
+        - id: cargo-fix
+          args: [ "--allow-dirty", "--allow-staged" ]
 
-  # Rust: unused dependency detection
   - repo: https://github.com/bnjbvr/cargo-machete
     rev: v0.9.1
     hooks:
@@ -84,7 +87,6 @@ repos:
     hooks:
       - id: cargo-deny
         args: ["check"]
-        files: ^(Cargo\.toml|Cargo\.lock|crates/.*/Cargo\.toml|tools/.*/Cargo\.toml|e2e/rust/Cargo\.toml|packages/ruby/ext/kreuzberg_rb/native/Cargo\.toml|packages/r/src/rust/Cargo\.toml|deny\.toml)$
 
   # JavaScript/TypeScript/JSON/CSS: biome (formatting + linting with autofixes)
   - repo: https://github.com/biomejs/pre-commit
@@ -93,14 +95,32 @@ repos:
       - id: biome-format
         exclude: ^tools/benchmark-harness/fixtures/
       - id: biome-lint
-        exclude: ^tools/benchmark-harness/fixtures/
 
-  # Go: formatting and linting
-  - repo: https://github.com/dnephin/pre-commit-golang
-    rev: v0.5.1
+  # C/C++: formatting and linting
+  - repo: https://github.com/pocc/pre-commit-hooks
+    rev: v1.3.5
     hooks:
-      - id: go-fmt
-        files: ^packages/go/v4/.*\.go$
+      - id: clang-format
+        args: [ --style=file ]
+        files: ^crates/kreuzberg-ffi/tests/c/
+      - id: cppcheck
+        args: [ "--std=c11", "--enable=warning,style,performance", "--suppress=missingIncludeSystem" ]
+        files: ^crates/kreuzberg-ffi/tests/c/
+
+  - repo: https://github.com/checkmake/checkmake
+    rev: v0.3.2
+    hooks:
+      - id: checkmake
+
+  # Go: formatting and linting (runs per Go module via Taskfile)
+  - repo: local
+    hooks:
+      - id: golangci-lint-full
+        name: golangci-lint (all Go modules)
+        entry: task go:lint:check
+        language: system
+        files: \.go$
+        pass_filenames: false
 
   # Shell scripts: formatting and linting
   - repo: https://github.com/scop/pre-commit-shfmt
@@ -120,42 +140,9 @@ repos:
     hooks:
       - id: actionlint
 
-  # C/C++: formatting and linting
-  - repo: https://github.com/pocc/pre-commit-hooks
-    rev: v1.3.5
-    hooks:
-      - id: clang-format
-        args: [--style=file]
-        files: ^crates/kreuzberg-ffi/tests/c/
-      - id: cppcheck
-        args: ["--std=c11", "--enable=warning,style,performance", "--suppress=missingIncludeSystem"]
-        files: ^crates/kreuzberg-ffi/tests/c/
-
   # Local hooks for unsupported languages (Ruby, Java, C#, PHP) and custom configurations
   - repo: local
     hooks:
-      # Rust - cargo fmt auto-formats on commit
-      - id: cargo-fmt
-        name: Format Rust code (cargo fmt)
-        entry: cargo fmt --all
-        language: system
-        files: ^(crates|tools|e2e/rust)/.*\.rs$
-        pass_filenames: false
-        require_serial: true
-        stages: [commit]
-
-      # Go - golangci-lint needs to run in the module directory
-      # Note: CGO_ENABLED=0 is required because the FFI library is not built during
-      # pre-commit validation. This skips linters that require type-checking CGO code.
-      # Full CGO linting is done in the dedicated Go CI workflow (ci-go.yaml).
-      - id: golangci-lint
-        name: Check Go linting (golangci-lint)
-        entry: bash -c 'cd packages/go/v4 && CGO_ENABLED=0 golangci-lint run --fix --tests=false'
-        language: system
-        files: ^packages/go/v4/.*\.go$
-        pass_filenames: false
-        require_serial: true
-        stages: [commit]
 
       # Ruby - prek doesn't support Ruby yet
       - id: ruby-format-check
@@ -254,10 +241,10 @@ repos:
 
       # TypeScript - type checking across all projects
       - id: typescript-typecheck
-        name: Check TypeScript types (tsc --noEmit)
-        entry: task typescript:typecheck
+        name: Check TypeScript types
+        entry: npx -y tsc-files
         language: system
-        files: ^(crates/kreuzberg-(node|wasm)|packages/typescript|examples/(typescript|wasm-.*)|tests/test_apps/(node|wasm|browser-vite-svelte)|e2e/wasm-workers)/.*\.(ts|tsx)$
+        files: ^*\.(ts|tsx)$
         pass_filenames: false
         require_serial: true
         stages: [commit]

@@ -1,8 +1,8 @@
 #include "../../kreuzberg.h"
 #include <assert.h>
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 int main(void) {
     /* Test 1: classify_error with various messages */
@@ -159,10 +159,9 @@ int main(void) {
 
     /* Test 11: clone_string with longer content */
     {
-        const char *long_str =
-            "This is a longer string to test kreuzberg_clone_string with "
-            "more content. It includes multiple sentences and should be "
-            "cloned exactly as-is without any truncation or modification.";
+        const char *long_str = "This is a longer string to test kreuzberg_clone_string with "
+                               "more content. It includes multiple sentences and should be "
+                               "cloned exactly as-is without any truncation or modification.";
         char *cloned = kreuzberg_clone_string(long_str);
         assert(cloned != NULL);
         assert(strcmp(cloned, long_str) == 0);

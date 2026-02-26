@@ -10,13 +10,11 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from typing import Any
 
 import pytest
-
 
 # ============================================================================
 # JSON Normalization and Comparison Utilities
@@ -77,17 +75,15 @@ def normalize_json(json_obj: Any, to_snake_case: bool = True) -> Any:
                 normalized[new_key] = normalize_json(value, to_snake_case)
             elif isinstance(value, list):
                 normalized[new_key] = [
-                    normalize_json(item, to_snake_case) if isinstance(item, (dict, list)) else item
-                    for item in value
+                    normalize_json(item, to_snake_case) if isinstance(item, (dict, list)) else item for item in value
                 ]
             else:
                 normalized[new_key] = value
 
         return normalized
-    elif isinstance(json_obj, list):
+    if isinstance(json_obj, list):
         return [normalize_json(item, to_snake_case) if isinstance(item, (dict, list)) else item for item in json_obj]
-    else:
-        return json_obj
+    return json_obj
 
 
 def compare_json_structures(
@@ -308,9 +304,7 @@ def test_python_extraction_config_serialization() -> None:
 
             # Validate that all expected fields are present
             for field in fixture.expected_fields:
-                assert field in config_dict, (
-                    f"Field '{field}' missing in Python output for fixture '{fixture.name}'"
-                )
+                assert field in config_dict, f"Field '{field}' missing in Python output for fixture '{fixture.name}'"
 
             # Store for comparison
             fixture.python_output = config_dict
@@ -972,9 +966,7 @@ def test_rust_vs_python_serialization(fixture: TestFixture) -> None:
 
         # Validate that expected fields are present
         for field in fixture.expected_fields:
-            assert field in python_output, (
-                f"Field '{field}' missing in Python output for fixture '{fixture.name}'"
-            )
+            assert field in python_output, f"Field '{field}' missing in Python output for fixture '{fixture.name}'"
 
     except Exception as e:
         pytest.fail(f"Python serialization failed for fixture '{fixture.name}': {e}")
