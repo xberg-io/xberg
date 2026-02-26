@@ -5,9 +5,8 @@ name: CI R
     workflows: ["Publish Release"]
     types: [completed]
   push:
-    branches: ['**']
+    branches: [main]
     paths:
-      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-r.yaml'
       - '.cargo/config.toml'
@@ -26,9 +25,8 @@ name: CI R
       - 'scripts/ci/cache/**'
       - 'scripts/ci/actions/**'
   pull_request:
-    branches: ['**']
+    branches: [main]
     paths:
-      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-r.yaml'
       - '.cargo/config.toml'

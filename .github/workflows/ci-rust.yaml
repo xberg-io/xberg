@@ -5,9 +5,8 @@ on:
     workflows: ["Publish Release"]
     types: [completed]
   push:
-    branches: ['**']
+    branches: [main]
     paths:
-      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-rust.yaml'
       - '.cargo/config.toml'
@@ -29,9 +28,8 @@ on:
       - 'scripts/install-system-pdfium-linux.sh'
       - 'scripts/install-system-pdfium-macos.sh'
   pull_request:
-    branches: ['**']
+    branches: [main]
     paths:
-      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-rust.yaml'
       - '.cargo/config.toml'

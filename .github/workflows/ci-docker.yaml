@@ -5,9 +5,8 @@ on:
     workflows: ["Publish Release"]
     types: [completed]
   push:
-    branches: ['**']
+    branches: [main]
     paths:
-      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-docker.yaml'
       - 'crates/kreuzberg/**'
@@ -22,9 +21,8 @@ on:
       - 'scripts/ci/docker/**'
       - 'scripts/ci/docker/test_docker.py'
   pull_request:
-    branches: ['**']
+    branches: [main]
     paths:
-      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-docker.yaml'
       - 'crates/kreuzberg/**'

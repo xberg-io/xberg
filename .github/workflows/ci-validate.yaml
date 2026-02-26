@@ -5,9 +5,8 @@ on:
     workflows: ["Publish Release"]
     types: [completed]
   push:
-    branches: ['**']
+    branches: [main]
     paths:
-      - '**'
       - 'crates/kreuzberg/**'
       - 'crates/kreuzberg-cli/**'
       - 'crates/kreuzberg-py/**'
@@ -38,9 +37,8 @@ on:
       - 'Cargo.lock'
       - '.github/workflows/ci-validate.yaml'
   pull_request:
-    branches: ['**']
+    branches: [main]
     paths:
-      - '**'
       - 'crates/kreuzberg/**'
       - 'crates/kreuzberg-cli/**'
       - 'crates/kreuzberg-py/**'
