@@ -57,10 +57,23 @@ if [ ! -f "vendor/kreuzberg/Cargo.toml" ]; then
     fi
 
     echo "* running vendoring script against downloaded source..."
-    REPO_ROOT="${EXTRACTED}" python3 "${EXTRACTED}/scripts/ci/r/vendor-kreuzberg-core.py" || {
-      echo "ERROR: vendoring from downloaded source failed."
+    # Prefer the local copy of the vendor script (shipped with the R package)
+    # over the one in the downloaded archive (which may not exist for older tags).
+    LOCAL_VENDOR_SCRIPT="$(pwd)/tools/vendor-kreuzberg-core.py"
+    if [ -f "${LOCAL_VENDOR_SCRIPT}" ]; then
+      REPO_ROOT="${EXTRACTED}" python3 "${LOCAL_VENDOR_SCRIPT}" || {
+        echo "ERROR: vendoring from downloaded source failed."
+        exit 1
+      }
+    elif [ -f "${EXTRACTED}/scripts/ci/r/vendor-kreuzberg-core.py" ]; then
+      REPO_ROOT="${EXTRACTED}" python3 "${EXTRACTED}/scripts/ci/r/vendor-kreuzberg-core.py" || {
+        echo "ERROR: vendoring from downloaded source failed."
+        exit 1
+      }
+    else
+      echo "ERROR: vendoring script not found (neither local nor in downloaded source)."
       exit 1
-    }
+    fi
 
     if [ ! -d "${EXTRACTED}/packages/r/vendor/kreuzberg" ]; then
       echo "ERROR: vendor directory was not created by vendoring script."
