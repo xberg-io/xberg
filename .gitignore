@@ -157,7 +157,14 @@ packages/php/tests.xml
 # Clippy fix temporary output
 rust_out
 
+# C FFI test binaries and build artifacts
+crates/kreuzberg-ffi/tests/c/test_*
+!crates/kreuzberg-ffi/tests/c/test_*.c
+crates/kreuzberg-ffi/tests/c/*.o
+crates/kreuzberg-ffi/tests/c/*.dSYM/
+
 # Go test binaries
+
 tests/test_apps/go/kreuzberg-test-suite
 tests/test_apps/go/main
 

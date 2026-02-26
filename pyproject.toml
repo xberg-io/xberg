@@ -56,7 +56,7 @@ members = ["packages/python", "examples/python", "e2e/python"]
 target-version = "py310"
 line-length = 120
 src = ["packages/python/*"]
-extend-exclude = ["benchmarks", "crates", "scripts", "test_documents"]
+extend-exclude = ["benchmarks", "crates", "scripts", "test_documents", "docs/snippets"]
 format.docstring-code-line-length = 120
 format.docstring-code-format = true
 lint.select = ["ALL"]
@@ -128,6 +128,7 @@ lint.per-file-ignores."**/tests/**/*.*" = [
     "SLF001",
 ]
 lint.per-file-ignores."examples/**/*.py" = [
+    "ANN",
     "ANN202",
     "ARG002",
     "B007",
@@ -137,10 +138,32 @@ lint.per-file-ignores."examples/**/*.py" = [
     "DTZ005",
     "ERA001",
     "INP001",
+    "PERF203",
     "PLC0415",
     "PTH123",
     "PTH207",
     "S112",
+    "T201",
+]
+lint.per-file-ignores."tests/test_apps/python/main.py" = [
+    "ANN",
+    "D",
+    "E741",
+    "INP001",
+    "T201",
+]
+lint.per-file-ignores."e2e/python/conftest.py" = [
+    "ANN001",
+    "ANN201",
+    "ARG001",
+]
+lint.per-file-ignores."tests/cross_language_serialization_test.py" = [
+    "B905",
+    "E721",
+    "INP001",
+    "PERF203",
+    "PLW1510",
+    "SIM108",
 ]
 lint.per-file-ignores."packages/python/build.py" = ["INP001"]
 lint.per-file-ignores."packages/python/tests/e2e/*_test.py" = ["T201"]
@@ -235,3 +258,13 @@ follow_imports = "skip"
 [[tool.mypy.overrides]]
 module = ["numpy", "numpy.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.test_apps.python.*"]
+ignore_errors = true
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = ["examples.python.*"]
+ignore_errors = true
+follow_imports = "skip"

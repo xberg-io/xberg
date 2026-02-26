@@ -488,11 +488,7 @@ pub fn extract_text_from_image_with_ocr(
     }
 
     let content_len = ocr_result.len();
-    let content_per_frame = if frame_count > 0 {
-        content_len / frame_count
-    } else {
-        content_len
-    };
+    let content_per_frame = content_len.checked_div(frame_count).unwrap_or(content_len);
 
     let mut boundaries = Vec::new();
     let mut page_contents = Vec::new();

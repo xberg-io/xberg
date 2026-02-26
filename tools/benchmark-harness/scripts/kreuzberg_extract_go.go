@@ -64,11 +64,12 @@ func main() {
 
 	// Parse OCR flags
 	for _, arg := range os.Args[1:] {
-		if arg == "--ocr" {
+		switch arg {
+		case "--ocr":
 			ocrEnabled = true
-		} else if arg == "--no-ocr" {
+		case "--no-ocr":
 			ocrEnabled = false
-		} else {
+		default:
 			args = append(args, arg)
 		}
 	}
@@ -130,7 +131,7 @@ func determineOcrUsed(meta map[string]any, ocrEnabled bool) bool {
 	if meta == nil {
 		return false
 	}
-	formatType, _ := meta["format_type"].(string)
+	formatType, _ := meta["format_type"].(string) //nolint:errcheck // type assertion, not error
 	if formatType == "ocr" {
 		return true
 	}
@@ -199,7 +200,7 @@ func runServer(ocrEnabled bool) {
 		}
 		mustEncodeNoNewline(p)
 		fmt.Println()
-		os.Stdout.Sync()
+		os.Stdout.Sync() //nolint:errcheck
 	}
 
 	if err := scanner.Err(); err != nil {

@@ -42,7 +42,7 @@ int main(void) {
                 assert(batch->results != NULL);
                 assert(batch->count == 1);
 
-                struct CExtractionResult *res = batch->results[0];
+                const struct CExtractionResult *res = batch->results[0];
                 if (res != NULL && res->success) {
                     assert(res->content != NULL);
                     assert(strlen(res->content) > 0);

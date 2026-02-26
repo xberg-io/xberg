@@ -1140,7 +1140,7 @@ func testConfigFileFunctions(tr *TestRunner) {
 	tr.Test("ConfigDiscover returns config or nil", func() error {
 		cfg, err := kb.ConfigDiscover()
 		_ = cfg // can be nil, just checking it doesn't error
-		_ = err  // can error, just checking it's callable
+		_ = err // can error, just checking it's callable
 		return nil
 	})
 

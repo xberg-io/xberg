@@ -32,7 +32,7 @@ fn create_test_result(content_size: usize, chunk_count: usize) -> ExtractionResu
     );
 
     let chunks = if chunk_count > 0 {
-        let chunk_size = content.len() / chunk_count;
+        let chunk_size = content.len().checked_div(chunk_count).unwrap_or(0);
         Some(
             (0..chunk_count)
                 .map(|i| {

@@ -99,7 +99,7 @@ fn detect_multiple_languages(text: &str, config: &LanguageDetectionConfig) -> Re
     }
 
     let mut lang_vec: Vec<(Lang, usize)> = lang_counts.into_iter().collect();
-    lang_vec.sort_by(|a, b| b.1.cmp(&a.1));
+    lang_vec.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     let languages: Vec<String> = lang_vec.iter().map(|(lang, _)| lang_to_iso639_3(*lang)).collect();
 

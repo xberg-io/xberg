@@ -81,7 +81,7 @@ pub(super) fn most_frequent_font_size(sizes: impl Iterator<Item = f32>) -> f32 {
     if counts.is_empty() {
         return 0.0;
     }
-    counts.sort_by(|a, b| b.1.cmp(&a.1));
+    counts.sort_by_key(|b| std::cmp::Reverse(b.1));
     counts[0].0 as f32 / 2.0
 }
 

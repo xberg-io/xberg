@@ -23,7 +23,7 @@ TESTS = test_version test_error test_extraction test_mime \
 	test_config test_config_builder test_html_options test_validation test_string_intern \
 	test_result_pool test_result_inspect test_plugins test_batch test_error_extended
 
-.PHONY: all clean
+.PHONY: all clean test
 
 all: $(TESTS)
 

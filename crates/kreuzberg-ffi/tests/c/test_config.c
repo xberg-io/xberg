@@ -39,7 +39,7 @@ int main(void) {
     kreuzberg_config_free(config);
 
     /* Test kreuzberg_config_from_json with invalid JSON */
-    ExtractionConfig *bad_config = kreuzberg_config_from_json("not valid json");
+    const ExtractionConfig *bad_config = kreuzberg_config_from_json("not valid json");
     assert(bad_config == NULL);
 
     /* Test kreuzberg_config_is_valid with valid JSON */

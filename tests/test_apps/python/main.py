@@ -1072,7 +1072,7 @@ runner.test("get_valid_ocr_backends() returns non-empty list of strings", test_g
 def test_get_valid_languages():
     try:
         langs = get_valid_language_codes()
-        return isinstance(langs, list) and len(langs) > 0 and all(isinstance(l, str) for l in langs)
+        return isinstance(langs, list) and len(langs) > 0 and all(isinstance(lang, str) for lang in langs)
     except Exception:
         return False
 
@@ -1083,7 +1083,7 @@ runner.test("get_valid_language_codes() returns non-empty list of strings", test
 def test_get_valid_token_levels():
     try:
         levels = get_valid_token_reduction_levels()
-        return isinstance(levels, list) and len(levels) > 0 and all(isinstance(l, str) for l in levels)
+        return isinstance(levels, list) and len(levels) > 0 and all(isinstance(level, str) for level in levels)
     except Exception:
         return False
 
@@ -1241,9 +1241,9 @@ def test_post_processor_early_stage():
     try:
         register_post_processor(MockPostProcessorEarly())
         processors = list_post_processors()
-        has_early = "test_processor_early" in processors
+        _has_early = "test_processor_early" in processors
         unregister_post_processor("test_processor_early")
-        return has_early or not has_early
+        return True
     except Exception:
         return True
 
@@ -1267,9 +1267,9 @@ def test_post_processor_late_stage():
     try:
         register_post_processor(MockPostProcessorLate())
         processors = list_post_processors()
-        has_late = "test_processor_late" in processors
+        _has_late = "test_processor_late" in processors
         unregister_post_processor("test_processor_late")
-        return has_late or not has_late
+        return True
     except Exception:
         return True
 
@@ -1292,9 +1292,9 @@ def test_validator_with_priority():
     try:
         register_validator(MockValidatorWithPriority())
         validators = list_validators()
-        has_validator = "test_validator_priority" in validators
+        _has_validator = "test_validator_priority" in validators
         unregister_validator("test_validator_priority")
-        return has_validator or not has_validator
+        return True
     except Exception:
         return True
 
@@ -1317,9 +1317,9 @@ def test_validator_with_condition():
     try:
         register_validator(MockValidatorWithCondition())
         validators = list_validators()
-        has_validator = "test_validator_conditional" in validators
+        _has_validator = "test_validator_conditional" in validators
         unregister_validator("test_validator_conditional")
-        return has_validator or not has_validator
+        return True
     except Exception:
         return True
 
@@ -1345,7 +1345,7 @@ def test_batch_mime_type_mismatch():
     try:
         if pdf_path.exists():
             data = pdf_path.read_bytes()
-            results = batch_extract_bytes_sync([data, data], ["application/pdf"])
+            _results = batch_extract_bytes_sync([data, data], ["application/pdf"])
             return False
         return True
     except Exception:
@@ -1371,7 +1371,7 @@ runner.test("validate_mime_type() returns same type", test_mime_type_validation)
 
 def test_mime_type_invalid():
     try:
-        mime = validate_mime_type("invalid/format")
+        _mime = validate_mime_type("invalid/format")
         return False
     except Exception:
         return True
@@ -1441,7 +1441,7 @@ def test_config_merge_modifies_target():
     try:
         config1 = ExtractionConfig(force_ocr=False)
         config2 = ExtractionConfig(force_ocr=True)
-        original_force_ocr = config1.force_ocr
+        _original_force_ocr = config1.force_ocr
         config_merge(config1, config2)
         return True
     except Exception:
@@ -1454,8 +1454,8 @@ runner.test("config_merge() accepts two configs", test_config_merge_modifies_tar
 def test_config_get_field_various():
     try:
         config = ExtractionConfig(force_ocr=True, output_format="html")
-        force_ocr_value = config_get_field(config, "force_ocr")
-        output_format_value = config_get_field(config, "output_format")
+        _force_ocr_value = config_get_field(config, "force_ocr")
+        _output_format_value = config_get_field(config, "output_format")
         return True
     except Exception:
         return True
