@@ -19,7 +19,9 @@ else
   RPATH = -Wl,-rpath,$(LIBDIR)
 endif
 
-TESTS = test_version test_error test_extraction test_mime
+TESTS = test_version test_error test_extraction test_mime \
+	test_config test_config_builder test_html_options test_validation test_string_intern \
+	test_result_pool test_result_inspect test_plugins test_batch test_error_extended
 
 .PHONY: all clean
 
@@ -35,6 +37,36 @@ test_extraction: test_extraction.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
 
 test_mime: test_mime.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_config: test_config.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_config_builder: test_config_builder.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_html_options: test_html_options.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_validation: test_validation.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_string_intern: test_string_intern.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_result_pool: test_result_pool.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_result_inspect: test_result_inspect.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_plugins: test_plugins.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_batch: test_batch.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_error_extended: test_error_extended.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
 
 clean:
