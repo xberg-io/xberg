@@ -5,8 +5,9 @@ on:
     workflows: ["Publish Release"]
     types: [completed]
   push:
-    branches: [main]
+    branches: ['**']
     paths:
+      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-wasm.yaml'
       - '.cargo/config.toml'
@@ -30,8 +31,9 @@ on:
       - 'scripts/ci/cache/**'
       - 'scripts/ci/actions/**'
   pull_request:
-    branches: [main]
+    branches: ['**']
     paths:
+      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-wasm.yaml'
       - '.cargo/config.toml'

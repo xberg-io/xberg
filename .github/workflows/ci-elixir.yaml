@@ -5,8 +5,9 @@ name: CI Elixir
     workflows: ["Publish Release"]
     types: [completed]
   push:
-    branches: [main]
+    branches: ['**']
     paths:
+      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-elixir.yaml'
       - '.cargo/config.toml'
@@ -26,8 +27,9 @@ name: CI Elixir
       - 'scripts/ci/cache/**'
       - 'scripts/ci/actions/**'
   pull_request:
-    branches: [main]
+    branches: ['**']
     paths:
+      - '**'
       - '.github/actions/**'
       - '.github/workflows/ci-elixir.yaml'
       - '.cargo/config.toml'
