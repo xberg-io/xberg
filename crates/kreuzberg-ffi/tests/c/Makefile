@@ -21,11 +21,15 @@ endif
 
 TESTS = test_version test_error test_extraction test_mime \
 	test_config test_config_builder test_html_options test_validation test_string_intern \
-	test_result_pool test_result_inspect test_plugins test_batch test_error_extended
+	test_result_pool test_result_inspect test_plugins test_batch test_error_extended \
+	test_plugins_errors test_concurrent
 
 .PHONY: all clean test
 
 all: $(TESTS)
+
+test: all
+	@for t in $(TESTS); do echo "Running $$t..."; ./$$t || exit 1; done
 
 test_version: test_version.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
@@ -68,6 +72,12 @@ test_batch: test_batch.c
 
 test_error_extended: test_error_extended.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_plugins_errors: test_plugins_errors.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH)
+
+test_concurrent: test_concurrent.c
+	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS) $(RPATH) -lpthread
 
 clean:
 	rm -f $(TESTS)

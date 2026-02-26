@@ -52,7 +52,7 @@ repos:
     rev: v1.19.1
     hooks:
       - id: mypy
-        exclude: "e2e/|scripts/"
+        exclude: "e2e/|scripts/|examples/|tests/test_apps/|benchmarks/"
 
   # Rust: formatting, linting, and license checking
   - repo: https://github.com/AndrejOrsula/pre-commit-cargo
@@ -117,7 +117,7 @@ repos:
     hooks:
       - id: golangci-lint-full
         name: golangci-lint (all Go modules)
-        entry: task go:lint:check
+        entry: task go:lint
         language: system
         files: \.go$
         pass_filenames: false
@@ -145,106 +145,106 @@ repos:
     hooks:
 
       # Ruby - prek doesn't support Ruby yet
-      - id: ruby-format-check
-        name: Check Ruby formatting (rubocop)
-        entry: task ruby:format:check
+      - id: ruby-format
+        name: Ruby formatting (rubocop)
+        entry: task ruby:format
         language: system
-        files: ^packages/ruby/.*\.rb$
+        files: \.rb$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
-      - id: ruby-lint-check
-        name: Check Ruby linting (rubocop + steep)
-        entry: task ruby:lint:check
+      - id: ruby-lint
+        name: Ruby linting (rubocop + steep)
+        entry: task ruby:lint
         language: system
-        files: ^packages/ruby/(lib|sig)/.*\.(rb|rbs)$
+        files: \.(rb|rbs)$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
       # Java - prek doesn't support Java
-      - id: java-format-check
-        name: Check Java formatting (spotless)
-        entry: task java:format:check
+      - id: java-format
+        name: Java formatting (spotless)
+        entry: task java:format
         language: system
-        files: ^packages/java/src/.*\.java$
+        files: \.java$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
-      - id: java-lint-check
-        name: Check Java linting (checkstyle + pmd)
-        entry: task java:lint:check
+      - id: java-lint
+        name: Java linting (checkstyle + pmd)
+        entry: task java:lint
         language: system
-        files: ^packages/java/src/.*\.java$
+        files: \.java$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
       # C# - prek doesn't support C#
-      - id: csharp-format-check
-        name: Check C# formatting (dotnet format)
-        entry: task csharp:format:check
+      - id: csharp-format
+        name: C# formatting (dotnet format)
+        entry: task csharp:format
         language: system
-        files: ^packages/csharp/
+        files: \.cs$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
-      - id: csharp-lint-check
-        name: Check C# linting (dotnet format verify)
-        entry: task csharp:lint:check
+      - id: csharp-lint
+        name: C# linting (dotnet format)
+        entry: task csharp:lint
         language: system
-        files: ^packages/csharp/
+        files: \.cs$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
       # PHP - prek doesn't support PHP
-      - id: php-format-check
-        name: Check PHP formatting (php-cs-fixer)
-        entry: task php:format:check
+      - id: php-format
+        name: PHP formatting (php-cs-fixer)
+        entry: task php:format
         language: system
-        files: ^packages/php/.*\.php$
+        files: \.php$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
-      - id: php-lint-check
-        name: Check PHP linting (phpstan + php-cs-fixer)
-        entry: task php:lint:check
+      - id: php-lint
+        name: PHP linting (phpstan + php-cs-fixer)
+        entry: task php:lint
         language: system
-        files: ^packages/php/.*\.php$
+        files: \.php$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
       # R - prek doesn't support R yet
-      - id: r-format-check
-        name: Check R formatting (styler)
-        entry: task r:format:check
+      - id: r-format
+        name: R formatting (styler)
+        entry: task r:format
         language: system
-        files: ^packages/r/R/.*\.R$
+        files: \.R$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
-      - id: r-lint-check
-        name: Check R linting (lintr)
-        entry: task r:lint:check
+      - id: r-lint
+        name: R linting (lintr)
+        entry: task r:lint
         language: system
-        files: ^packages/r/R/.*\.R$
+        files: \.R$
         pass_filenames: false
         require_serial: true
         stages: [commit]
 
-      # TypeScript - type checking across all projects
+      # TypeScript - type checking across all projects (builds WASM + Node first)
       - id: typescript-typecheck
         name: Check TypeScript types
-        entry: npx -y tsc-files
+        entry: task typescript:typecheck
         language: system
-        files: ^*\.(ts|tsx)$
+        files: \.(ts|tsx)$
         pass_filenames: false
         require_serial: true
         stages: [commit]
