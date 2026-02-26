@@ -149,11 +149,17 @@ impl OcrBackendRegistry {
     ///
     /// The backend if found, or an error if not registered.
     pub fn get(&self, name: &str) -> Result<Arc<dyn OcrBackend>> {
-        // Normalize common aliases: "paddleocr" → "paddle-ocr"
+        if let Some(backend) = self.backends.get(name) {
+            return Ok(backend.clone());
+        }
+
+        // Normalize common aliases when no exact backend was registered.
         let canonical = match name {
             "paddleocr" => "paddle-ocr",
+            "rapidocr" | "rapid-ocr" => "paddle-ocr",
             _ => name,
         };
+
         self.backends
             .get(canonical)
             .cloned()
@@ -524,5 +530,43 @@ mod tests {
         // Alias without hyphen also works
         let aliased = registry.get("paddleocr").unwrap();
         assert_eq!(aliased.name(), "paddle-ocr");
+    }
+
+    #[test]
+    fn test_ocr_backend_rapidocr_alias_resolves_to_paddle_ocr() {
+        let mut registry = OcrBackendRegistry::new_empty();
+
+        let backend = Arc::new(MockOcrBackend {
+            name: "paddle-ocr".to_string(),
+            languages: vec!["en".to_string()],
+        });
+
+        registry.register(backend).unwrap();
+
+        let aliased = registry.get("rapid-ocr").unwrap();
+        assert_eq!(aliased.name(), "paddle-ocr");
+
+        let aliased_no_hyphen = registry.get("rapidocr").unwrap();
+        assert_eq!(aliased_no_hyphen.name(), "paddle-ocr");
+    }
+
+    #[test]
+    fn test_ocr_backend_rapid_ocr_exact_registration_takes_precedence() {
+        let mut registry = OcrBackendRegistry::new_empty();
+
+        let canonical = Arc::new(MockOcrBackend {
+            name: "paddle-ocr".to_string(),
+            languages: vec!["en".to_string()],
+        });
+        registry.register(canonical).unwrap();
+
+        let explicit_rapid = Arc::new(MockOcrBackend {
+            name: "rapid-ocr".to_string(),
+            languages: vec!["en".to_string()],
+        });
+        registry.register(explicit_rapid).unwrap();
+
+        let retrieved = registry.get("rapid-ocr").unwrap();
+        assert_eq!(retrieved.name(), "rapid-ocr");
     }
 }
