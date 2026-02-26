@@ -15,7 +15,7 @@ import type {
 	TokenReductionConfig,
 } from "npm:@kreuzberg/wasm@^4.0.0";
 // @deno-types="../../crates/kreuzberg-wasm/dist/index.d.ts"
-import { extractBytes, initWasm } from "npm:@kreuzberg/wasm@^4.0.0";
+import { extractBytes as wasmExtractBytes, initWasm, listOcrBackends } from "npm:@kreuzberg/wasm@^4.0.0";
 import { assertEquals, assertExists } from "@std/assert";
 
 export type {
@@ -33,7 +33,7 @@ export type {
 	TokenReductionConfig,
 };
 
-export { extractBytes, initWasm };
+export { initWasm };
 
 const WORKSPACE_ROOT = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 const TEST_DOCUMENTS = `${WORKSPACE_ROOT}/test_documents`;
@@ -42,6 +42,29 @@ type PlainRecord = Record<string, unknown>;
 
 function isPlainRecord(value: unknown): value is PlainRecord {
 	return typeof value === "object" && value !== null;
+}
+
+function ensureRequestedOcrBackendAvailable(config?: ExtractionConfig): void {
+	const backend = config?.ocr?.backend;
+	if (typeof backend !== "string" || backend.length === 0) {
+		return;
+	}
+
+	const registered = listOcrBackends();
+	if (!Array.isArray(registered) || !registered.includes(backend)) {
+		const error = new Error(`OCR backend '${backend}' not registered`);
+		error.name = "MissingDependencyError";
+		throw error;
+	}
+}
+
+export async function extractBytes(
+	documentBytes: Uint8Array,
+	mimeType: string,
+	config?: ExtractionConfig,
+): Promise<ExtractionResult> {
+	ensureRequestedOcrBackendAvailable(config);
+	return await wasmExtractBytes(documentBytes, mimeType, config);
 }
 
 export async function resolveDocument(relative: string): Promise<Uint8Array> {
