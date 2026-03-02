@@ -173,7 +173,7 @@ pub fn parse_drawing(reader: &mut Reader<&[u8]>) -> Drawing {
                         });
                     }
                     b"blip" => {
-                        drawing.image_ref = get_attr(e, b"embed");
+                        drawing.image_ref = get_attr(e, b"embed").or_else(|| get_attr(e, b"link"));
                     }
                     b"wrapNone" => {
                         if let DrawingType::Anchored(ref mut anchor) = drawing.drawing_type {
@@ -267,7 +267,10 @@ fn get_attr(e: &BytesStart, key: &[u8]) -> Option<String> {
     e.attributes()
         .flatten()
         .find(|attr| attr.key.local_name().as_ref() == key)
-        .and_then(|attr| std::str::from_utf8(&attr.value).ok().map(String::from))
+        .and_then(|attr| {
+            let raw = std::str::from_utf8(&attr.value).ok()?;
+            quick_xml::escape::unescape(raw).ok().map(|s| s.into_owned())
+        })
 }
 
 /// Extract an i64 attribute by local name.

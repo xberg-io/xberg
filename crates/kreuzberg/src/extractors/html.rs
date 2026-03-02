@@ -209,7 +209,18 @@ impl SyncExtractor for HtmlExtractor {
             Some(config.output_format),
         )?;
 
-        let tables = extract_html_tables(&content_text)?;
+        // Table extraction relies on pipe-delimited markdown syntax.
+        // When the output is plain text, do a separate markdown conversion for table parsing.
+        let tables = if matches!(config.output_format, OutputFormat::Plain) {
+            let md = crate::extraction::html::convert_html_to_markdown(
+                &html,
+                config.html_options.clone(),
+                Some(OutputFormat::Markdown),
+            )?;
+            extract_html_tables(&md)?
+        } else {
+            extract_html_tables(&content_text)?
+        };
 
         // Always preserve the original document MIME type.
         // The output format is tracked separately in metadata.output_format.

@@ -2405,9 +2405,9 @@ dependencies = [
 
 [[package]]
 name = "html-to-markdown-rs"
-version = "2.26.3"
+version = "2.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d4ebd62ed1c62848a3cc6ccac93d5aca5cacb472d46dd15bf3b9e9c4c491b9"
+checksum = "88c6e0364111baca9d44e113df6e3150b109146233b350bf24b506d65a2e6963"
 dependencies = [
  "ahash",
  "astral-tl",
@@ -4651,12 +4651,9 @@ checksum = "007d8adb5ddab6f8e3f491ac63566a7d5002cc7ed73901f72057943fa71ae1ae"
 
 [[package]]
 name = "pxfm"
-version = "0.1.27"
+version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7186d3822593aa4393561d186d1393b3923e9d6163d3fbfd6e825e3e6cf3e6a8"
-dependencies = [
- "num-traits",
-]
+checksum = "b5a041e753da8b807c9255f28de81879c78c876392ff2469cde94799b2896b9d"
 
 [[package]]
 name = "pyo3"

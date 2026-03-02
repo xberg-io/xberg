@@ -1117,21 +1117,22 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.content.contains("Page Header"), "Header: {}", result.content);
+        // Headers/footers should NOT appear in text output
+        assert!(
+            !result.content.contains("Page Header"),
+            "Header should not be in output: {}",
+            result.content
+        );
         assert!(
             result.content.contains("Body content here."),
             "Body: {}",
             result.content
         );
-        assert!(result.content.contains("Page Footer"), "Footer: {}", result.content);
-        assert!(result.content.contains("---"), "Should have separator");
-
-        // Verify ordering
-        let header_pos = result.content.find("Page Header").unwrap();
-        let body_pos = result.content.find("Body content here.").unwrap();
-        let footer_pos = result.content.find("Page Footer").unwrap();
-        assert!(header_pos < body_pos, "Header before body");
-        assert!(body_pos < footer_pos, "Body before footer");
+        assert!(
+            !result.content.contains("Page Footer"),
+            "Footer should not be in output: {}",
+            result.content
+        );
     }
 
     #[tokio::test]

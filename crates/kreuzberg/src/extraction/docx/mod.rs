@@ -7,6 +7,7 @@
 //! in the document XML. This does not account for automatic pagination based on content reflowing.
 
 pub mod drawing;
+pub mod math;
 pub mod parser;
 pub mod section;
 pub mod styles;

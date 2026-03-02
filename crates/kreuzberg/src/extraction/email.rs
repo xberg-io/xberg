@@ -735,11 +735,15 @@ fn clean_html_content(html: &str) -> String {
         return String::new();
     }
 
-    // Use html-to-markdown converter when available for higher quality conversion
+    // Use html-to-markdown converter in plain text mode when available
     #[cfg(feature = "html")]
     {
-        if let Ok(markdown) = crate::extraction::html::convert_html_to_markdown(html, None, None) {
-            let trimmed = markdown.trim().to_string();
+        if let Ok(text) = crate::extraction::html::convert_html_to_markdown(
+            html,
+            None,
+            Some(crate::core::config::OutputFormat::Plain),
+        ) {
+            let trimmed = text.trim().to_string();
             if !trimmed.is_empty() {
                 return trimmed;
             }
@@ -836,7 +840,18 @@ mod tests {
     fn test_clean_html_with_whitespace() {
         let html = "<div>  Multiple   \n  spaces  </div>";
         let cleaned = clean_html_content(html);
-        assert_eq!(cleaned, "Multiple spaces");
+        assert!(
+            cleaned.contains("Multiple") && cleaned.contains("spaces"),
+            "Should contain text: {}",
+            cleaned
+        );
+        // Whitespace may be collapsed or converted to newlines depending on
+        // whether the html feature is enabled (block-level elements → newlines).
+        assert!(
+            !cleaned.contains("  "),
+            "Should not have consecutive spaces: {}",
+            cleaned
+        );
     }
 
     #[test]

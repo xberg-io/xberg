@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OMML-to-LaTeX math conversion for DOCX**: Mathematical equations in DOCX files (Office Math Markup Language) are now converted to LaTeX notation instead of being rendered as concatenated Unicode text. Supports superscripts, subscripts, fractions (`\frac`), radicals (`\sqrt`), n-ary operators (`\sum`, `\int`), delimiters, function names, accents, equation arrays, limits, bars, border boxes, matrices, and pre-sub-superscripts. Display math uses `$$...$$` and inline math uses `$...$` in markdown output. Plain text output includes raw LaTeX without delimiters.
+
 - **Plain text output paths for all extractors**: When `OutputFormat::Plain` or `OutputFormat::Structured` is requested, DOCX, PPTX, ODT, FB2, DocBook, RTF, and Jupyter extractors now produce clean plain text without markdown syntax (`#`, `**`, `|`, `![](image)`, `- `, etc.). Previously these extractors always emitted markdown regardless of the requested output format.
   - **DOCX**: `Document::to_plain_text()` skips heading prefixes, inline formatting markers, image placeholders, and renders footnotes/endnotes as `id: text` instead of `[^id]: text`.
   - **PPTX**: `ContentBuilder` respects `plain` mode — skips `# ` title prefix, image markers, list markers, and uses `Notes:` instead of `### Notes:`.
@@ -21,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Jupyter**: Skips `text/markdown` and `text/html` output types in plain mode, preferring `text/plain`.
 
 - **`cells_to_text()` shared utility**: Tab-separated plain text table formatter alongside existing `cells_to_markdown()`. Used by DOCX, PPTX, ODT, RTF, and DocBook extractors for plain text table rendering.
+
+### Fixed
+
+- **DOCX field codes refined**: Field instructions (between `begin` and `separate`) are now skipped while field results (between `separate` and `end`) are preserved. Previously all content between field begin/end was dropped, losing visible text like "Figure 1:" and page numbers.
+- **DOCX drawing alt text in plain text**: `to_plain_text()` now emits image alt text from `wp:docPr` descriptions instead of silently skipping drawings.
+- **DOCX/drawing/table XML entity decoding**: `get_attr()` helpers in `drawing.rs` and `table.rs` now use `quick_xml::escape::unescape()` to correctly decode XML entities like `&#xA;` in attribute values.
 
 ---
 

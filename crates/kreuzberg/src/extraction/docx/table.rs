@@ -18,6 +18,7 @@ pub struct TableProperties {
     pub borders: Option<TableBorders>,
     pub cell_margins: Option<CellMargins>,
     pub indent: Option<TableWidth>,
+    pub caption: Option<String>,
 }
 
 /// Width specification used for tables and cells.
@@ -157,6 +158,9 @@ pub fn parse_table_properties(reader: &mut Reader<&[u8]>) -> TableProperties {
                     b"tblInd" => {
                         props.indent = parse_width_element(&e);
                     }
+                    b"tblCaption" => {
+                        props.caption = get_attribute(&e, b"val");
+                    }
                     _ => {}
                 }
                 buf.clear();
@@ -181,6 +185,9 @@ pub fn parse_table_properties(reader: &mut Reader<&[u8]>) -> TableProperties {
                     }
                     b"tblInd" => {
                         props.indent = parse_width_element(&e);
+                    }
+                    b"tblCaption" => {
+                        props.caption = get_attribute(&e, b"val");
                     }
                     b"tblBorders" => {
                         props.borders = Some(TableBorders::default());
@@ -683,7 +690,10 @@ fn get_attribute(e: &BytesStart, key: &[u8]) -> Option<String> {
     e.attributes()
         .flatten()
         .find(|attr| attr.key.local_name().as_ref() == key)
-        .and_then(|attr| std::str::from_utf8(&attr.value).ok().map(String::from))
+        .and_then(|attr| {
+            let raw = std::str::from_utf8(&attr.value).ok()?;
+            quick_xml::escape::unescape(raw).ok().map(|s| s.into_owned())
+        })
 }
 
 /// Helper: Extract and parse integer attribute value.
@@ -1001,6 +1011,7 @@ mod tests {
                 value: 108,
                 width_type: "dxa".to_string(),
             }),
+            caption: None,
         };
 
         let json = serde_json::to_string(&props).unwrap();

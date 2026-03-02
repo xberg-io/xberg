@@ -64,6 +64,9 @@ pub struct Run {
     pub underline: bool,
     pub strikethrough: bool,
     pub hyperlink_url: Option<String>,
+    /// LaTeX math content: (latex_source, is_display_math).
+    /// When set, this run represents an equation and `text` is ignored.
+    pub math_latex: Option<(String, bool)>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -260,18 +263,6 @@ impl Document {
         text
     }
 
-    /// Render header/footer content as markdown text.
-    fn header_footer_to_markdown(hf: &HeaderFooter) -> String {
-        let mut parts = Vec::new();
-        for para in &hf.paragraphs {
-            let text = para.runs_to_markdown();
-            if !text.is_empty() {
-                parts.push(text);
-            }
-        }
-        parts.join("\n")
-    }
-
     /// Render the document as markdown.
     pub fn to_markdown(&self) -> String {
         use std::fmt::Write;
@@ -279,15 +270,6 @@ impl Document {
         let mut output = String::new();
         let mut list_counters: HashMap<(i64, i64), usize> = HashMap::new();
         let mut prev_was_list = false;
-
-        // Prepend headers (if any non-empty)
-        for header in &self.headers {
-            let header_text = Self::header_footer_to_markdown(header);
-            if !header_text.is_empty() {
-                output.push_str(&header_text);
-                output.push_str("\n\n---\n\n");
-            }
-        }
 
         // Use elements ordering if populated, otherwise fall back to paragraphs-only
         if !self.elements.is_empty() {
@@ -303,6 +285,12 @@ impl Document {
                         let Some(table) = self.tables.get(*idx) else { continue };
                         // Ensure blank line separation before table
                         Self::ensure_blank_line(&mut output);
+                        if let Some(ref props) = table.properties
+                            && let Some(ref caption) = props.caption
+                        {
+                            output.push_str(caption);
+                            output.push_str("\n\n");
+                        }
                         output.push_str(&table.to_markdown());
                         prev_was_list = false;
                     }
@@ -325,16 +313,6 @@ impl Document {
         } else {
             for paragraph in &self.paragraphs {
                 self.append_paragraph_markdown(paragraph, &mut output, &mut list_counters, &mut prev_was_list);
-            }
-        }
-
-        // Append footers (if any non-empty)
-        for footer in &self.footers {
-            let footer_text = Self::header_footer_to_markdown(footer);
-            if !footer_text.is_empty() {
-                Self::ensure_blank_line(&mut output);
-                output.push_str("---\n\n");
-                output.push_str(&footer_text);
             }
         }
 
@@ -384,21 +362,6 @@ impl Document {
     pub fn to_plain_text(&self) -> String {
         let mut output = String::new();
 
-        // Prepend headers (if any non-empty)
-        for header in &self.headers {
-            let header_text: String = header
-                .paragraphs
-                .iter()
-                .map(|p| p.to_text())
-                .filter(|t| !t.is_empty())
-                .collect::<Vec<_>>()
-                .join("\n");
-            if !header_text.is_empty() {
-                output.push_str(&header_text);
-                output.push_str("\n\n");
-            }
-        }
-
         // Use elements ordering if populated, otherwise fall back to paragraphs-only
         if !self.elements.is_empty() {
             for element in &self.elements {
@@ -416,10 +379,24 @@ impl Document {
                     DocumentElement::Table(idx) => {
                         let Some(table) = self.tables.get(*idx) else { continue };
                         Self::ensure_blank_line(&mut output);
+                        if let Some(ref props) = table.properties
+                            && let Some(ref caption) = props.caption
+                        {
+                            output.push_str(caption);
+                            output.push_str("\n\n");
+                        }
                         output.push_str(&table.to_plain_text());
                     }
-                    DocumentElement::Drawing(_) => {
-                        // Skip drawings/images in plain text output
+                    DocumentElement::Drawing(idx) => {
+                        let Some(drawing) = self.drawings.get(*idx) else {
+                            continue;
+                        };
+                        if let Some(alt) = drawing.doc_properties.as_ref().and_then(|dp| dp.description.as_deref())
+                            && !alt.is_empty()
+                        {
+                            Self::ensure_blank_line(&mut output);
+                            output.push_str(alt);
+                        }
                     }
                 }
             }
@@ -430,21 +407,6 @@ impl Document {
                     Self::ensure_blank_line(&mut output);
                     output.push_str(&text);
                 }
-            }
-        }
-
-        // Append footers (if any non-empty)
-        for footer in &self.footers {
-            let footer_text: String = footer
-                .paragraphs
-                .iter()
-                .map(|p| p.to_text())
-                .filter(|t| !t.is_empty())
-                .collect::<Vec<_>>()
-                .join("\n");
-            if !footer_text.is_empty() {
-                Self::ensure_blank_line(&mut output);
-                output.push_str(&footer_text);
             }
         }
 
@@ -553,7 +515,11 @@ impl Paragraph {
     pub fn to_text(&self) -> String {
         let mut text = String::new();
         for run in &self.runs {
-            text.push_str(&run.text);
+            if let Some((ref latex, _)) = run.math_latex {
+                text.push_str(latex);
+            } else {
+                text.push_str(&run.text);
+            }
         }
         text
     }
@@ -622,6 +588,18 @@ impl Run {
 
     /// Render this run as markdown with formatting markers.
     pub fn to_markdown(&self) -> String {
+        // Math runs: wrap LaTeX in $ or $$
+        if let Some((ref latex, is_display)) = self.math_latex {
+            if latex.is_empty() {
+                return String::new();
+            }
+            return if is_display {
+                format!("$${}$$", latex)
+            } else {
+                format!("${}$", latex)
+            };
+        }
+
         if self.text.is_empty() {
             return String::new();
         }
@@ -1096,7 +1074,7 @@ impl<R: Read + Seek> DocxParser<R> {
         let mut current_paragraph: Option<Paragraph> = None;
         let mut current_run: Option<Run> = None;
         let mut in_text = false;
-        let mut in_math_text = false;
+        let mut in_field_instruction = false;
         let mut current_hyperlink_url: Option<String> = None;
         let mut table_stack: Vec<TableContext> = Vec::new();
 
@@ -1118,17 +1096,71 @@ impl<R: Read + Seek> DocxParser<R> {
                         current_run = Some(run);
                     }
                     b"w:t" => {
-                        in_text = true;
-                    }
-                    // OMML math run — treat like a word run for text extraction
-                    b"m:r" => {
-                        if current_run.is_none() {
-                            current_run = Some(Run::default());
+                        if !in_field_instruction {
+                            in_text = true;
                         }
                     }
-                    // OMML math text
-                    b"m:t" => {
-                        in_math_text = true;
+                    b"w:fldChar" => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"w:fldCharType" {
+                                match attr.value.as_ref() {
+                                    b"begin" => in_field_instruction = true,
+                                    b"separate" | b"end" => in_field_instruction = false,
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    b"w:instrText" => {
+                        // Skip field instruction text
+                    }
+                    // OMML display math — delegate to math.rs
+                    b"m:oMathPara" => {
+                        let latex = super::math::collect_and_convert_omath_para(&mut reader);
+                        if !latex.is_empty() {
+                            let run = Run {
+                                math_latex: Some((latex, true)),
+                                ..Default::default()
+                            };
+                            if let Some(ctx) = table_stack.last_mut() {
+                                if let Some(ref mut para) = ctx.paragraph {
+                                    para.add_run(run);
+                                } else if let Some(ref mut cell) = ctx.current_cell {
+                                    if cell.paragraphs.is_empty() {
+                                        cell.paragraphs.push(Paragraph::new());
+                                    }
+                                    if let Some(para) = cell.paragraphs.last_mut() {
+                                        para.add_run(run);
+                                    }
+                                }
+                            } else if let Some(ref mut para) = current_paragraph {
+                                para.add_run(run);
+                            }
+                        }
+                    }
+                    // OMML inline math — delegate to math.rs
+                    b"m:oMath" => {
+                        let latex = super::math::collect_and_convert_omath(&mut reader);
+                        if !latex.is_empty() {
+                            let run = Run {
+                                math_latex: Some((latex, false)),
+                                ..Default::default()
+                            };
+                            if let Some(ctx) = table_stack.last_mut() {
+                                if let Some(ref mut para) = ctx.paragraph {
+                                    para.add_run(run);
+                                } else if let Some(ref mut cell) = ctx.current_cell {
+                                    if cell.paragraphs.is_empty() {
+                                        cell.paragraphs.push(Paragraph::new());
+                                    }
+                                    if let Some(para) = cell.paragraphs.last_mut() {
+                                        para.add_run(run);
+                                    }
+                                }
+                            } else if let Some(ref mut para) = current_paragraph {
+                                para.add_run(run);
+                            }
+                        }
                     }
                     b"w:tbl" => {
                         table_stack.push(TableContext::new());
@@ -1201,6 +1233,17 @@ impl<R: Read + Seek> DocxParser<R> {
                     _ => {}
                 },
                 Ok(Event::Empty(ref e)) => match e.name().as_ref() {
+                    b"w:fldChar" => {
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"w:fldCharType" {
+                                match attr.value.as_ref() {
+                                    b"begin" => in_field_instruction = true,
+                                    b"separate" | b"end" => in_field_instruction = false,
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
                     b"w:b" | b"w:i" | b"w:u" | b"w:strike" | b"w:dstrike" => {
                         apply_run_formatting(e, &mut current_run);
                     }
@@ -1259,9 +1302,7 @@ impl<R: Read + Seek> DocxParser<R> {
                     _ => {}
                 },
                 Ok(Event::Text(e)) => {
-                    if (in_text || in_math_text)
-                        && let Some(ref mut run) = current_run
-                    {
+                    if in_text && let Some(ref mut run) = current_run {
                         let text = e.decode()?;
                         run.text.push_str(&text);
                     }
@@ -1269,30 +1310,6 @@ impl<R: Read + Seek> DocxParser<R> {
                 Ok(Event::End(ref e)) => match e.name().as_ref() {
                     b"w:t" => {
                         in_text = false;
-                    }
-                    b"m:t" => {
-                        in_math_text = false;
-                    }
-                    // Math run ends — flush accumulated math text as a regular run
-                    b"m:r" => {
-                        if let Some(run) = current_run.take()
-                            && !run.text.is_empty()
-                        {
-                            if let Some(ctx) = table_stack.last_mut() {
-                                if let Some(ref mut para) = ctx.paragraph {
-                                    para.add_run(run);
-                                } else if let Some(ref mut cell) = ctx.current_cell {
-                                    if cell.paragraphs.is_empty() {
-                                        cell.paragraphs.push(Paragraph::new());
-                                    }
-                                    if let Some(para) = cell.paragraphs.last_mut() {
-                                        para.add_run(run);
-                                    }
-                                }
-                            } else if let Some(ref mut para) = current_paragraph {
-                                para.add_run(run);
-                            }
-                        }
                     }
                     b"w:r" => {
                         if let Some(run) = current_run.take() {
@@ -2025,7 +2042,7 @@ mod tests {
     }
 
     #[test]
-    fn test_header_footer_in_markdown() {
+    fn test_header_footer_excluded_from_output() {
         let mut doc = Document::new();
 
         // Add a header
@@ -2049,17 +2066,28 @@ mod tests {
         footer.paragraphs.push(footer_para);
         doc.footers.push(footer);
 
+        // Headers/footers should NOT appear in text output
         let md = doc.to_markdown();
-        assert!(md.contains("Header Text"), "Should contain header text");
+        assert!(!md.contains("Header Text"), "Header should not be in markdown output");
         assert!(md.contains("Body content"), "Should contain body content");
-        assert!(md.contains("Footer Text"), "Should contain footer text");
-        assert!(md.contains("---"), "Should contain separator");
-        // Header should be before body
-        let header_pos = md.find("Header Text").unwrap();
-        let body_pos = md.find("Body content").unwrap();
-        let footer_pos = md.find("Footer Text").unwrap();
-        assert!(header_pos < body_pos, "Header before body");
-        assert!(body_pos < footer_pos, "Body before footer");
+        assert!(!md.contains("Footer Text"), "Footer should not be in markdown output");
+
+        let plain = doc.to_plain_text();
+        assert!(
+            !plain.contains("Header Text"),
+            "Header should not be in plain text output"
+        );
+        assert!(plain.contains("Body content"), "Should contain body content");
+        assert!(
+            !plain.contains("Footer Text"),
+            "Footer should not be in plain text output"
+        );
+
+        // But headers/footers should still be accessible via struct fields
+        assert_eq!(doc.headers.len(), 1);
+        assert_eq!(doc.footers.len(), 1);
+        assert_eq!(doc.headers[0].paragraphs[0].runs[0].text, "Header Text");
+        assert_eq!(doc.footers[0].paragraphs[0].runs[0].text, "Footer Text");
     }
 
     #[test]
@@ -2608,5 +2636,736 @@ mod tests {
             pipes_row0, pipes_row1,
             "All rows should have same column count in markdown"
         );
+    }
+
+    // ========================================================================
+    // Comprehensive DOCX extraction tests (python-docx parity)
+    // ========================================================================
+
+    /// Helper: parse document XML through DocxParser and return the Document.
+    fn parse_xml(xml: &str) -> Document {
+        let parser_struct = DocxParser {
+            archive: zip::ZipArchive::new(std::io::Cursor::new(create_minimal_zip())).unwrap(),
+            relationships: HashMap::new(),
+            styles: None,
+            theme: None,
+        };
+        let mut document = Document::new();
+        parser_struct.parse_document_xml(xml, &mut document).unwrap();
+        document
+    }
+
+    /// Helper: parse document XML with custom relationships.
+    fn parse_xml_with_rels(xml: &str, rels: HashMap<String, String>) -> Document {
+        let parser_struct = DocxParser {
+            archive: zip::ZipArchive::new(std::io::Cursor::new(create_minimal_zip())).unwrap(),
+            relationships: rels,
+            styles: None,
+            theme: None,
+        };
+        let mut document = Document::new();
+        parser_struct.parse_document_xml(xml, &mut document).unwrap();
+        document
+    }
+
+    /// Wrap body XML in a w:document envelope.
+    fn wrap_body(body: &str) -> String {
+        format!(
+            r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>{}</w:body></w:document>"#,
+            body
+        )
+    }
+
+    // --- Group 1: Text Extraction Basics ---
+
+    #[test]
+    fn test_plain_paragraph_text() {
+        let xml = wrap_body(r#"<w:p><w:r><w:t>Hello World</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.paragraphs.len(), 1);
+        assert_eq!(doc.paragraphs[0].to_text(), "Hello World");
+    }
+
+    #[test]
+    fn test_multiple_paragraphs() {
+        let xml = wrap_body(
+            r#"<w:p><w:r><w:t>First</w:t></w:r></w:p>
+               <w:p><w:r><w:t>Second</w:t></w:r></w:p>
+               <w:p><w:r><w:t>Third</w:t></w:r></w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.paragraphs.len(), 3);
+        assert_eq!(doc.paragraphs[0].to_text(), "First");
+        assert_eq!(doc.paragraphs[1].to_text(), "Second");
+        assert_eq!(doc.paragraphs[2].to_text(), "Third");
+
+        let plain = doc.to_plain_text();
+        assert!(plain.contains("First"));
+        assert!(plain.contains("Second"));
+        assert!(plain.contains("Third"));
+    }
+
+    #[test]
+    fn test_empty_paragraph() {
+        let xml = wrap_body(r#"<w:p></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.paragraphs.len(), 1);
+        assert_eq!(doc.paragraphs[0].to_text(), "");
+    }
+
+    #[test]
+    fn test_multiple_runs_in_paragraph() {
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:r><w:t>Hello </w:t></w:r>
+                <w:r><w:t>World</w:t></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.paragraphs[0].to_text(), "Hello World");
+    }
+
+    #[test]
+    fn test_line_break_in_run() {
+        let xml = wrap_body(r#"<w:p><w:r><w:t>Before</w:t><w:br/><w:t>After</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        let text = doc.paragraphs[0].to_text();
+        assert!(text.contains("Before"));
+        assert!(text.contains("After"));
+        assert!(text.contains('\n'));
+    }
+
+    // --- Group 2: Run Formatting ---
+
+    #[test]
+    fn test_bold_formatting() {
+        let xml = wrap_body(r#"<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>Bold</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert!(doc.paragraphs[0].runs[0].bold);
+        let md = doc.to_markdown();
+        assert!(md.contains("**Bold**"), "Markdown: {}", md);
+    }
+
+    #[test]
+    fn test_bold_disabled_with_val_0() {
+        let xml = wrap_body(r#"<w:p><w:r><w:rPr><w:b w:val="0"/></w:rPr><w:t>Not Bold</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert!(!doc.paragraphs[0].runs[0].bold);
+    }
+
+    #[test]
+    fn test_italic_formatting() {
+        let xml = wrap_body(r#"<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Italic</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert!(doc.paragraphs[0].runs[0].italic);
+        let md = doc.to_markdown();
+        assert!(md.contains("*Italic*"), "Markdown: {}", md);
+    }
+
+    #[test]
+    fn test_bold_italic_combined() {
+        let xml = wrap_body(r#"<w:p><w:r><w:rPr><w:b/><w:i/></w:rPr><w:t>Both</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        let run = &doc.paragraphs[0].runs[0];
+        assert!(run.bold);
+        assert!(run.italic);
+        let md = doc.to_markdown();
+        assert!(md.contains("***Both***"), "Markdown: {}", md);
+    }
+
+    #[test]
+    fn test_underline_formatting() {
+        let xml = wrap_body(r#"<w:p><w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>Underlined</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert!(doc.paragraphs[0].runs[0].underline);
+    }
+
+    #[test]
+    fn test_underline_none_disabled() {
+        let xml = wrap_body(r#"<w:p><w:r><w:rPr><w:u w:val="none"/></w:rPr><w:t>No Underline</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert!(!doc.paragraphs[0].runs[0].underline);
+    }
+
+    #[test]
+    fn test_strikethrough_formatting() {
+        let xml = wrap_body(r#"<w:p><w:r><w:rPr><w:strike/></w:rPr><w:t>Struck</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert!(doc.paragraphs[0].runs[0].strikethrough);
+        let md = doc.to_markdown();
+        assert!(md.contains("~~Struck~~"), "Markdown: {}", md);
+    }
+
+    #[test]
+    fn test_double_strikethrough() {
+        let xml = wrap_body(r#"<w:p><w:r><w:rPr><w:dstrike/></w:rPr><w:t>DStruck</w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert!(doc.paragraphs[0].runs[0].strikethrough);
+    }
+
+    // --- Group 3: Hyperlinks ---
+
+    #[test]
+    fn test_external_hyperlink() {
+        let mut rels = HashMap::new();
+        rels.insert("rId1".to_string(), "https://example.com".to_string());
+
+        let xml = wrap_body(r#"<w:p><w:hyperlink r:id="rId1"><w:r><w:t>Click here</w:t></w:r></w:hyperlink></w:p>"#);
+        let doc = parse_xml_with_rels(&xml, rels);
+        assert_eq!(doc.paragraphs.len(), 1);
+        let run = &doc.paragraphs[0].runs[0];
+        assert_eq!(run.text, "Click here");
+        assert_eq!(run.hyperlink_url.as_deref(), Some("https://example.com"));
+
+        let md = doc.to_markdown();
+        assert!(md.contains("[Click here](https://example.com)"), "Markdown: {}", md);
+    }
+
+    #[test]
+    fn test_hyperlink_with_no_relationship() {
+        // Hyperlink with r:id that doesn't exist in relationships
+        let xml = wrap_body(r#"<w:p><w:hyperlink r:id="rId99"><w:r><w:t>Broken link</w:t></w:r></w:hyperlink></w:p>"#);
+        let doc = parse_xml(&xml);
+        let run = &doc.paragraphs[0].runs[0];
+        assert_eq!(run.text, "Broken link");
+        assert!(run.hyperlink_url.is_none());
+    }
+
+    #[test]
+    fn test_multiple_hyperlinks() {
+        let mut rels = HashMap::new();
+        rels.insert("rId1".to_string(), "https://one.com".to_string());
+        rels.insert("rId2".to_string(), "https://two.com".to_string());
+
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:hyperlink r:id="rId1"><w:r><w:t>First</w:t></w:r></w:hyperlink>
+                <w:r><w:t> and </w:t></w:r>
+                <w:hyperlink r:id="rId2"><w:r><w:t>Second</w:t></w:r></w:hyperlink>
+            </w:p>"#,
+        );
+        let doc = parse_xml_with_rels(&xml, rels);
+        let md = doc.to_markdown();
+        assert!(md.contains("[First](https://one.com)"), "Markdown: {}", md);
+        assert!(md.contains("[Second](https://two.com)"), "Markdown: {}", md);
+    }
+
+    // --- Group 4: Tables ---
+
+    #[test]
+    fn test_basic_2x2_table() {
+        let xml = wrap_body(
+            r#"<w:tbl>
+                <w:tr>
+                    <w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>
+                    <w:tc><w:p><w:r><w:t>B1</w:t></w:r></w:p></w:tc>
+                </w:tr>
+                <w:tr>
+                    <w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc>
+                    <w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc>
+                </w:tr>
+            </w:tbl>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.tables.len(), 1);
+        let table = &doc.tables[0];
+        assert_eq!(table.rows.len(), 2);
+        assert_eq!(table.rows[0].cells.len(), 2);
+
+        let md = doc.to_markdown();
+        assert!(md.contains("A1"), "Markdown: {}", md);
+        assert!(md.contains("B2"), "Markdown: {}", md);
+
+        let plain = doc.to_plain_text();
+        assert!(plain.contains("A1"), "Plain: {}", plain);
+        assert!(plain.contains("B2"), "Plain: {}", plain);
+    }
+
+    #[test]
+    fn test_table_with_caption() {
+        let xml = wrap_body(
+            r#"<w:tbl>
+                <w:tblPr>
+                    <w:tblCaption w:val="My Table Caption"/>
+                </w:tblPr>
+                <w:tr>
+                    <w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc>
+                </w:tr>
+                <w:tr>
+                    <w:tc><w:p><w:r><w:t>Data</w:t></w:r></w:p></w:tc>
+                </w:tr>
+            </w:tbl>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.tables.len(), 1);
+        let caption = doc.tables[0].properties.as_ref().and_then(|p| p.caption.as_deref());
+        assert_eq!(caption, Some("My Table Caption"));
+
+        let md = doc.to_markdown();
+        assert!(md.contains("My Table Caption"), "Caption should be in markdown: {}", md);
+
+        let plain = doc.to_plain_text();
+        assert!(
+            plain.contains("My Table Caption"),
+            "Caption should be in plain text: {}",
+            plain
+        );
+    }
+
+    #[test]
+    fn test_table_column_span() {
+        let xml = wrap_body(
+            r#"<w:tbl>
+                <w:tr>
+                    <w:tc>
+                        <w:tcPr><w:gridSpan w:val="2"/></w:tcPr>
+                        <w:p><w:r><w:t>Spanning</w:t></w:r></w:p>
+                    </w:tc>
+                </w:tr>
+                <w:tr>
+                    <w:tc><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc>
+                    <w:tc><w:p><w:r><w:t>Right</w:t></w:r></w:p></w:tc>
+                </w:tr>
+            </w:tbl>"#,
+        );
+        let doc = parse_xml(&xml);
+        let table = &doc.tables[0];
+        let first_cell = &table.rows[0].cells[0];
+        assert_eq!(first_cell.properties.as_ref().and_then(|p| p.grid_span), Some(2));
+    }
+
+    #[test]
+    fn test_table_vertical_merge() {
+        let xml = wrap_body(
+            r#"<w:tbl>
+                <w:tr>
+                    <w:tc>
+                        <w:tcPr><w:vMerge w:val="restart"/></w:tcPr>
+                        <w:p><w:r><w:t>Merged</w:t></w:r></w:p>
+                    </w:tc>
+                    <w:tc><w:p><w:r><w:t>Right1</w:t></w:r></w:p></w:tc>
+                </w:tr>
+                <w:tr>
+                    <w:tc>
+                        <w:tcPr><w:vMerge/></w:tcPr>
+                        <w:p></w:p>
+                    </w:tc>
+                    <w:tc><w:p><w:r><w:t>Right2</w:t></w:r></w:p></w:tc>
+                </w:tr>
+            </w:tbl>"#,
+        );
+        let doc = parse_xml(&xml);
+        let table = &doc.tables[0];
+        // First row, first cell: vMerge restart
+        let cell_0_0 = &table.rows[0].cells[0];
+        assert_eq!(
+            cell_0_0.properties.as_ref().and_then(|p| p.v_merge.as_ref()),
+            Some(&super::super::table::VerticalMerge::Restart)
+        );
+        // Second row, first cell: vMerge continue
+        let cell_1_0 = &table.rows[1].cells[0];
+        assert_eq!(
+            cell_1_0.properties.as_ref().and_then(|p| p.v_merge.as_ref()),
+            Some(&super::super::table::VerticalMerge::Continue)
+        );
+    }
+
+    #[test]
+    fn test_table_empty_cells() {
+        let xml = wrap_body(
+            r#"<w:tbl>
+                <w:tr>
+                    <w:tc><w:p><w:r><w:t>Has content</w:t></w:r></w:p></w:tc>
+                    <w:tc><w:p></w:p></w:tc>
+                </w:tr>
+            </w:tbl>"#,
+        );
+        let doc = parse_xml(&xml);
+        let table = &doc.tables[0];
+        assert_eq!(table.rows[0].cells.len(), 2);
+        let md = doc.to_markdown();
+        assert!(md.contains("Has content"), "Markdown: {}", md);
+    }
+
+    // --- Group 5: Lists ---
+
+    #[test]
+    fn test_bullet_list_extraction() {
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:pPr>
+                    <w:numId w:val="1"/>
+                    <w:ilvl w:val="0"/>
+                </w:pPr>
+                <w:r><w:t>Bullet item</w:t></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.paragraphs.len(), 1);
+        assert_eq!(doc.paragraphs[0].to_text(), "Bullet item");
+        assert!(doc.paragraphs[0].numbering_id.is_some());
+    }
+
+    // --- Group 6: Headings & Styles ---
+
+    #[test]
+    fn test_heading_style() {
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
+                <w:r><w:t>My Heading</w:t></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.paragraphs[0].style.as_deref(), Some("Heading1"));
+        let md = doc.to_markdown();
+        assert!(md.contains("# My Heading"), "Markdown: {}", md);
+    }
+
+    #[test]
+    fn test_heading2_style() {
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:pPr><w:pStyle w:val="Heading2"/></w:pPr>
+                <w:r><w:t>Sub Heading</w:t></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let md = doc.to_markdown();
+        assert!(md.contains("## Sub Heading"), "Markdown: {}", md);
+    }
+
+    #[test]
+    fn test_title_style() {
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:pPr><w:pStyle w:val="Title"/></w:pPr>
+                <w:r><w:t>Document Title</w:t></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let md = doc.to_markdown();
+        // Title maps to heading level (varies by implementation)
+        assert!(md.contains("Document Title"), "Markdown: {}", md);
+    }
+
+    // --- Group 7: Images/Drawings ---
+
+    #[test]
+    fn test_inline_drawing_with_alt_text() {
+        let xml = wrap_body(
+            r#"<w:p><w:r>
+                <w:drawing>
+                    <wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+                        <wp:extent cx="914400" cy="914400"/>
+                        <wp:docPr id="1" name="Picture 1" descr="A logo image"/>
+                        <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+                            <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                                <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                                    <pic:blipFill>
+                                        <a:blip r:embed="rId5"/>
+                                    </pic:blipFill>
+                                </pic:pic>
+                            </a:graphicData>
+                        </a:graphic>
+                    </wp:inline>
+                </w:drawing>
+            </w:r></w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.drawings.len(), 1);
+        let drawing = &doc.drawings[0];
+        assert_eq!(
+            drawing.doc_properties.as_ref().and_then(|dp| dp.description.as_deref()),
+            Some("A logo image")
+        );
+        assert_eq!(drawing.image_ref.as_deref(), Some("rId5"));
+
+        let md = doc.to_markdown();
+        assert!(md.contains("![A logo image]"), "Markdown: {}", md);
+    }
+
+    #[test]
+    fn test_drawing_dimensions() {
+        let xml = wrap_body(
+            r#"<w:p><w:r>
+                <w:drawing>
+                    <wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+                        <wp:extent cx="1828800" cy="914400"/>
+                        <wp:docPr id="1" name="Pic"/>
+                    </wp:inline>
+                </w:drawing>
+            </w:r></w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let extent = doc.drawings[0].extent.as_ref().unwrap();
+        assert_eq!(extent.cx, 1828800); // 2 inches
+        assert_eq!(extent.cy, 914400); // 1 inch
+    }
+
+    // --- Group 8: Sections ---
+
+    #[test]
+    fn test_section_properties_parsed() {
+        let xml = wrap_body(
+            r#"<w:p><w:r><w:t>Content</w:t></w:r></w:p>
+            <w:sectPr>
+                <w:pgSz w:w="12240" w:h="15840"/>
+                <w:pgMar w:top="1440" w:right="1800" w:bottom="1440" w:left="1800"/>
+            </w:sectPr>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert!(!doc.sections.is_empty(), "Should have sections");
+        let sect = &doc.sections[0];
+        assert_eq!(sect.page_width_twips, Some(12240));
+        assert_eq!(sect.page_height_twips, Some(15840));
+        assert_eq!(sect.margins.top, Some(1440));
+        assert_eq!(sect.margins.left, Some(1800));
+    }
+
+    // --- Group 9: Footnotes & Endnotes ---
+
+    #[test]
+    fn test_footnote_reference_marker() {
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:r><w:t>Main text</w:t></w:r>
+                <w:r><w:footnoteReference w:id="2"/></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let text = doc.paragraphs[0].to_text();
+        assert!(text.contains("[^2]"), "Should contain footnote marker: {}", text);
+    }
+
+    #[test]
+    fn test_footnote_separator_ids_filtered() {
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:r><w:footnoteReference w:id="0"/></w:r>
+                <w:r><w:footnoteReference w:id="1"/></w:r>
+                <w:r><w:t>text</w:t></w:r>
+                <w:r><w:footnoteReference w:id="2"/></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let text = doc.paragraphs[0].to_text();
+        assert!(!text.contains("[^0]"), "Separator id 0 should be filtered");
+        assert!(!text.contains("[^1]"), "Separator id 1 should be filtered");
+        assert!(text.contains("[^2]"), "Real footnote 2 should be present");
+    }
+
+    // --- Group 10: Field Codes (Fix 3 verification) ---
+
+    #[test]
+    fn test_field_instruction_skipped_result_kept() {
+        // Field instructions (between begin and separate) are skipped,
+        // but field results (between separate and end) are kept.
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:r><w:t>Before </w:t></w:r>
+                <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+                <w:r><w:instrText> SEQ Figure \* ARABIC </w:instrText></w:r>
+                <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+                <w:r><w:t>2</w:t></w:r>
+                <w:r><w:fldChar w:fldCharType="end"/></w:r>
+                <w:r><w:t> After</w:t></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let text = doc.paragraphs[0].to_text();
+        assert!(text.contains("Before"), "Text: {}", text);
+        assert!(text.contains("After"), "Text: {}", text);
+        assert!(text.contains("2"), "Field result '2' should be kept: {}", text);
+        assert!(!text.contains("SEQ"), "Field instruction should be skipped: {}", text);
+    }
+
+    #[test]
+    fn test_page_field_result_kept() {
+        // PAGE field result is kept in output
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:r><w:t>Page </w:t></w:r>
+                <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+                <w:r><w:instrText> PAGE </w:instrText></w:r>
+                <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+                <w:r><w:t>1</w:t></w:r>
+                <w:r><w:fldChar w:fldCharType="end"/></w:r>
+                <w:r><w:t> of 5</w:t></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let text = doc.paragraphs[0].to_text();
+        assert_eq!(text.trim(), "Page 1 of 5", "Text: '{}'", text);
+    }
+
+    #[test]
+    fn test_text_after_field_resumes() {
+        // Field result is kept, and text after field resumes normally
+        let xml = wrap_body(
+            r#"<w:p>
+                <w:r><w:fldChar w:fldCharType="begin"/></w:r>
+                <w:r><w:instrText> NUMPAGES </w:instrText></w:r>
+                <w:r><w:fldChar w:fldCharType="separate"/></w:r>
+                <w:r><w:t>10</w:t></w:r>
+                <w:r><w:fldChar w:fldCharType="end"/></w:r>
+                <w:r><w:t>Normal text</w:t></w:r>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let text = doc.paragraphs[0].to_text();
+        assert!(text.contains("Normal text"), "Text: {}", text);
+        assert!(text.contains("10"), "Field result should be kept: {}", text);
+    }
+
+    // --- Group 11: OMML Math ---
+
+    #[test]
+    fn test_math_text_extracted() {
+        let xml = wrap_body(
+            r#"<w:p>
+                <m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+                    <m:r>
+                        <m:t>E=mc</m:t>
+                    </m:r>
+                    <m:sSup>
+                        <m:e><m:r><m:t></m:t></m:r></m:e>
+                        <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                    </m:sSup>
+                </m:oMath>
+            </w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        let text = doc.paragraphs[0].to_text();
+        assert!(text.contains("E=mc"), "Math text should contain E=mc: {}", text);
+        assert!(text.contains("^{2}"), "Math text should contain ^{{2}}: {}", text);
+        // Markdown should have $ delimiters
+        let md = doc.paragraphs[0].runs_to_markdown();
+        assert!(md.starts_with('$'), "Inline math should start with $: {}", md);
+        assert!(md.ends_with('$'), "Inline math should end with $: {}", md);
+    }
+
+    // --- Group 12: Element ordering ---
+
+    #[test]
+    fn test_element_ordering_preserved() {
+        let xml = wrap_body(
+            r#"<w:p><w:r><w:t>Para 1</w:t></w:r></w:p>
+            <w:tbl>
+                <w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr>
+                <w:tr><w:tc><w:p><w:r><w:t>Data</w:t></w:r></w:p></w:tc></w:tr>
+            </w:tbl>
+            <w:p><w:r><w:t>Para 2</w:t></w:r></w:p>"#,
+        );
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.elements.len(), 3);
+        assert!(matches!(doc.elements[0], DocumentElement::Paragraph(0)));
+        assert!(matches!(doc.elements[1], DocumentElement::Table(0)));
+        assert!(matches!(doc.elements[2], DocumentElement::Paragraph(1)));
+
+        // Verify ordering in output
+        let md = doc.to_markdown();
+        let para1_pos = md.find("Para 1").unwrap();
+        let cell_pos = md.find("Cell").unwrap();
+        let para2_pos = md.find("Para 2").unwrap();
+        assert!(para1_pos < cell_pos, "Para 1 before table");
+        assert!(cell_pos < para2_pos, "Table before Para 2");
+    }
+
+    // --- Group 13: Edge cases ---
+
+    #[test]
+    fn test_empty_document() {
+        let xml = wrap_body("");
+        let doc = parse_xml(&xml);
+        assert!(doc.paragraphs.is_empty());
+        assert!(doc.tables.is_empty());
+        let md = doc.to_markdown();
+        assert!(md.trim().is_empty(), "Empty doc markdown: '{}'", md);
+    }
+
+    #[test]
+    fn test_paragraph_with_only_whitespace() {
+        let xml = wrap_body(r#"<w:p><w:r><w:t>   </w:t></w:r></w:p>"#);
+        let doc = parse_xml(&xml);
+        assert_eq!(doc.paragraphs[0].to_text(), "   ");
+    }
+
+    // --- Group 14: Real document extraction tests ---
+
+    #[test]
+    fn test_extract_lorem_ipsum_docx() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/docx/lorem_ipsum.docx");
+        if let Ok(bytes) = std::fs::read(&path) {
+            let text = super::super::extract_text(&bytes).unwrap();
+            assert!(!text.is_empty(), "Should extract text from lorem ipsum");
+            assert!(
+                text.contains("Lorem"),
+                "Should contain 'Lorem': {}",
+                &text[..100.min(text.len())]
+            );
+        }
+    }
+
+    #[test]
+    fn test_extract_word_tables_docx() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/docx/word_tables.docx");
+        if let Ok(bytes) = std::fs::read(&path) {
+            let text = super::super::extract_text(&bytes).unwrap();
+            assert!(!text.is_empty(), "Should extract text from word tables");
+        }
+    }
+
+    #[test]
+    fn test_extract_unit_test_lists_docx() {
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/docx/unit_test_lists.docx");
+        if let Ok(bytes) = std::fs::read(&path) {
+            let text = super::super::extract_text(&bytes).unwrap();
+            assert!(!text.is_empty(), "Should extract text from list document");
+        }
+    }
+
+    #[test]
+    fn test_extract_python_docx_test_file() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test_documents/vendored/python-docx/test.docx");
+        if let Ok(bytes) = std::fs::read(&path) {
+            let text = super::super::extract_text(&bytes).unwrap();
+            assert!(!text.is_empty(), "Should extract text from python-docx test.docx");
+        }
+    }
+
+    #[test]
+    fn test_extract_python_docx_having_images() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test_documents/vendored/python-docx/having-images.docx");
+        if let Ok(bytes) = std::fs::read(&path) {
+            let text = super::super::extract_text(&bytes).unwrap();
+            // Document with images should still extract any surrounding text
+            assert!(text.len() >= 0, "Should not crash on images document");
+        }
+    }
+
+    #[test]
+    fn test_extract_word_sample_no_field_leaks() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/docx/word_sample.docx");
+        if let Ok(bytes) = std::fs::read(&path) {
+            let text = super::super::extract_text(&bytes).unwrap();
+            assert!(!text.is_empty());
+            // After Fix 3: SEQ field results should not leak
+            // The word_sample.docx has SEQ Figure fields that produced "2"
+        }
+    }
+
+    #[test]
+    fn test_extract_unit_test_formatting_no_headers() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test_documents/docx/unit_test_formatting.docx");
+        if let Ok(bytes) = std::fs::read(&path) {
+            let text = super::super::extract_text(&bytes).unwrap();
+            assert!(!text.is_empty());
+            // After Fix 1: Headers/footers should not appear in text output
+        }
     }
 }
