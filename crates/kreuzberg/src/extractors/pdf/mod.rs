@@ -222,11 +222,12 @@ impl DocumentExtractor for PdfExtractor {
         };
 
         #[cfg(feature = "ocr")]
-        let (text, used_ocr) = if config.force_ocr {
+        let (text, tables, used_ocr) = if config.force_ocr {
             if config.ocr.is_some() {
-                (extract_with_ocr(content, config).await?, true)
+                let (ocr_text, ocr_tables) = extract_with_ocr(content, config).await?;
+                (ocr_text, ocr_tables, true)
             } else {
-                (native_text, false)
+                (native_text, tables, false)
             }
         } else if config.ocr.is_some() {
             let decision = ocr::evaluate_per_page_ocr(
@@ -251,12 +252,13 @@ impl DocumentExtractor for PdfExtractor {
             }
 
             if decision.fallback || has_font_encoding_issues {
-                (extract_with_ocr(content, config).await?, true)
+                let (ocr_text, ocr_tables) = extract_with_ocr(content, config).await?;
+                (ocr_text, ocr_tables, true)
             } else {
-                (native_text, false)
+                (native_text, tables, false)
             }
         } else {
-            (native_text, false)
+            (native_text, tables, false)
         };
 
         #[cfg(not(feature = "ocr"))]

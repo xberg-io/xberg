@@ -166,7 +166,7 @@ pub fn evaluate_per_page_ocr(
     document_decision
 }
 
-/// Extract text from PDF using OCR.
+/// Extract text and tables from PDF using OCR.
 ///
 /// Renders all pages to images and processes them with OCR backend.
 ///
@@ -177,9 +177,12 @@ pub fn evaluate_per_page_ocr(
 ///
 /// # Returns
 ///
-/// Concatenated text from all pages, separated by double newlines
+/// A tuple of (concatenated text, collected tables) from all pages
 #[cfg(feature = "ocr")]
-pub(crate) async fn extract_with_ocr(content: &[u8], config: &ExtractionConfig) -> crate::Result<String> {
+pub(crate) async fn extract_with_ocr(
+    content: &[u8],
+    config: &ExtractionConfig,
+) -> crate::Result<(String, Vec<crate::types::Table>)> {
     use crate::pdf::rendering::{PageRenderOptions, PdfRenderer};
     use crate::plugins::registry::get_ocr_backend_registry;
     use image::ImageEncoder;
@@ -216,8 +219,9 @@ pub(crate) async fn extract_with_ocr(content: &[u8], config: &ExtractionConfig) 
     };
 
     let mut page_texts = Vec::with_capacity(images.len());
+    let mut all_tables = Vec::new();
 
-    for image in images {
+    for (page_idx, image) in images.iter().enumerate() {
         let rgb_image = image.to_rgb8();
         let (width, height) = rgb_image.dimensions();
 
@@ -235,6 +239,12 @@ pub(crate) async fn extract_with_ocr(content: &[u8], config: &ExtractionConfig) 
         let ocr_result = backend.process_image(&image_data, ocr_config).await?;
 
         page_texts.push(ocr_result.content);
+
+        // Collect tables from OCR result, assigning correct 1-indexed page numbers
+        for mut table in ocr_result.tables {
+            table.page_number = page_idx + 1;
+            all_tables.push(table);
+        }
     }
 
     let page_marker_cfg = config.pages.as_ref().filter(|p| p.insert_page_markers);
@@ -248,5 +258,5 @@ pub(crate) async fn extract_with_ocr(content: &[u8], config: &ExtractionConfig) 
         }
         result.push_str(text);
     }
-    Ok(result)
+    Ok((result, all_tables))
 }
