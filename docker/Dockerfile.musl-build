@@ -1,12 +1,15 @@
 # =============================================================================
-# Alpine-based builder for fully-static musl CLI binaries.
+# Alpine-based builder for musl CLI binaries.
 #
 # Usage:
 #   docker build -f docker/Dockerfile.musl-build \
 #     --output type=local,dest=./dist \
 #     --build-arg TARGETARCH=x86_64 .
 #
-# Produces a statically-linked kreuzberg binary at dist/kreuzberg
+# Produces a kreuzberg binary at dist/kreuzberg
+#
+# NOTE: The binary uses dlopen for PDFium (bundled inside the binary).
+# It requires musl libc, libstdc++, and libgcc at runtime.
 # =============================================================================
 FROM alpine:3.21 AS builder
 
@@ -45,6 +48,11 @@ RUN mkdir -p /build/pdfium && \
 
 ENV KREUZBERG_PDFIUM_PREBUILT=/build/pdfium
 
+# Allow dynamic loading (dlopen) on musl targets by disabling crt-static.
+# This is required for PDFium's bundled strategy which embeds libpdfium.so
+# and dlopens it at runtime. Musl's default static linking does not support dlopen.
+ENV RUSTFLAGS="-C target-feature=-crt-static"
+
 # Copy workspace manifests and crates
 COPY Cargo.toml Cargo.lock ./
 COPY crates/kreuzberg/ crates/kreuzberg/
@@ -56,23 +64,22 @@ COPY crates/kreuzberg-pdfium-render/ crates/kreuzberg-pdfium-render/
 # Remove workspace members that aren't included
 RUN sed -i '/kreuzberg-py/d; /kreuzberg_rb/d; /kreuzberg-node/d; /kreuzberg-ffi/d; /kreuzberg-php/d; /kreuzberg_rustler/d; /"crates\/kreuzberg-wasm"/d; /^\[profile\.release\.package\.kreuzberg-wasm\]$/,$d; /benchmark-harness/d; /e2e-generator/d; /snippet-runner/d; /e2e\/rust/d' Cargo.toml
 
-# Remove the linker-facing libstdc++.so symlink so that -lstdc++ resolves
-# only to libstdc++.a (static). Keep the runtime .so.6 for proc-macros.
-RUN rm -f /usr/lib/libstdc++.so
 RUN cargo build --release --package kreuzberg-cli --features all && \
     cp target/release/kreuzberg /build/kreuzberg && \
     strip /build/kreuzberg
 
-# Verify the binary is statically linked
+# Verify the binary was built successfully
 RUN file /build/kreuzberg && \
-    ! readelf -d /build/kreuzberg 2>/dev/null | grep NEEDED && \
-    echo "Binary is statically linked" || \
-    (echo "WARNING: Binary has dynamic dependencies:" && \
-     readelf -d /build/kreuzberg 2>/dev/null | grep NEEDED && \
-     exit 1)
+    echo "=== Dynamic dependencies ===" && \
+    readelf -d /build/kreuzberg 2>/dev/null | grep NEEDED || echo "No external dependencies"
 
 # =============================================================================
-# Output stage — just the binary
+# Output stage — minimal Alpine with runtime deps
 # =============================================================================
-FROM scratch
-COPY --from=builder /build/kreuzberg /kreuzberg
+FROM alpine:3.21
+
+RUN apk add --no-cache libstdc++ libgcc
+
+COPY --from=builder /build/kreuzberg /usr/local/bin/kreuzberg
+
+ENTRYPOINT ["kreuzberg"]

@@ -15,7 +15,7 @@ publish = false
 collapsible_if = "allow"
 
 [dependencies]
-kreuzberg = { version = "4.4.2", features = ["static-pdfium", "excel", "office", "html"] }
+kreuzberg = { version = "4.4.3", features = ["static-pdfium", "excel", "office", "html"] }
 tokio = { version = "1", features = ["full"] }
 
 [[bin]]
