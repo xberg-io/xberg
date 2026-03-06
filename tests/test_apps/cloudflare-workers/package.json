@@ -1,19 +1,19 @@
 {
-  "name": "@kreuzberg/test-app-cloudflare-workers",
-  "version": "4.4.3",
-  "private": true,
-  "type": "module",
-  "description": "Cloudflare Workers test app for Kreuzberg WASM module",
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.12.6",
-    "@cloudflare/workers-types": "^4.20260124.0",
-    "@kreuzberg/wasm": "4.4.3",
-    "vitest": "~3.2.4",
-    "wrangler": "^4.18.0"
-  }
+	"name": "@kreuzberg/test-app-cloudflare-workers",
+	"version": "4.4.3",
+	"private": true,
+	"type": "module",
+	"description": "Cloudflare Workers test app for Kreuzberg WASM module",
+	"scripts": {
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.12.6",
+		"@cloudflare/workers-types": "^4.20260124.0",
+		"@kreuzberg/wasm": "4.4.3",
+		"vitest": "~3.2.4",
+		"wrangler": "^4.18.0"
+	}
 }

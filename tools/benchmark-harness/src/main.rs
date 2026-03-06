@@ -313,7 +313,7 @@ async fn main() -> Result<()> {
 
             use benchmark_harness::adapters::{
                 create_docling_adapter, create_markitdown_adapter, create_mineru_adapter, create_pandoc_adapter,
-                create_pdfminer_adapter, create_pdfplumber_adapter, create_pdftotext_adapter,
+                create_pdfminer_adapter, create_pdfplumber_adapter, create_pdftotext_adapter, create_playa_pdf_adapter,
                 create_pymupdf4llm_adapter, create_pypdf_adapter, create_tika_adapter, create_unstructured_adapter,
             };
 
@@ -330,9 +330,10 @@ async fn main() -> Result<()> {
             try_register!("pypdf", || create_pypdf_adapter(ocr), external_count);
             try_register!("pdfminer", || create_pdfminer_adapter(ocr), external_count);
             try_register!("pdftotext", || create_pdftotext_adapter(ocr), external_count);
+            try_register!("playa-pdf", || create_playa_pdf_adapter(ocr), external_count);
 
             eprintln!(
-                "[adapter] Open source extraction frameworks: {}/11 available",
+                "[adapter] Open source extraction frameworks: {}/12 available",
                 external_count
             );
             eprintln!(

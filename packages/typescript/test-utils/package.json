@@ -1,77 +1,77 @@
 {
-  "name": "@kreuzberg/test-utils",
-  "version": "4.4.3",
-  "description": "Shared test utilities for Kreuzberg e2e and integration tests",
-  "author": {
-    "name": "Na'aman Hirschfeld",
-    "email": "nhirschfeld@gmail.com",
-    "url": "https://kreuzberg.dev"
-  },
-  "homepage": "https://kreuzberg.dev",
-  "bugs": {
-    "url": "https://github.com/kreuzberg-dev/kreuzberg/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/kreuzberg-dev/kreuzberg.git"
-  },
-  "license": "MIT",
-  "type": "module",
-  "main": "dist/index.cjs",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
-    },
-    "./config-mapping": {
-      "types": "./dist/config-mapping/index.d.ts",
-      "import": "./dist/config-mapping/index.js",
-      "require": "./dist/config-mapping/index.cjs"
-    },
-    "./assertions": {
-      "types": "./dist/assertions/index.d.ts",
-      "import": "./dist/assertions/index.js",
-      "require": "./dist/assertions/index.cjs"
-    },
-    "./fixtures": {
-      "types": "./dist/fixtures/index.d.ts",
-      "import": "./dist/fixtures/index.js",
-      "require": "./dist/fixtures/index.cjs"
-    },
-    "./paths": {
-      "types": "./dist/paths/index.d.ts",
-      "import": "./dist/paths/index.js",
-      "require": "./dist/paths/index.cjs"
-    }
-  },
-  "files": [
-    "dist",
-    "README.md"
-  ],
-  "engines": {
-    "node": ">= 22"
-  },
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/",
-    "access": "public"
-  },
-  "scripts": {
-    "build": "tsup",
-    "prepare": "tsup",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest",
-    "test:watch": "vitest --watch",
-    "lint": "biome check src",
-    "lint:fix": "biome check --write src"
-  },
-  "devDependencies": {
-    "@biomejs/biome": "^2.3.12",
-    "@types/node": "^25.0.10",
-    "tsup": "^8.5.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
-  }
+	"name": "@kreuzberg/test-utils",
+	"version": "4.4.3",
+	"description": "Shared test utilities for Kreuzberg e2e and integration tests",
+	"author": {
+		"name": "Na'aman Hirschfeld",
+		"email": "nhirschfeld@gmail.com",
+		"url": "https://kreuzberg.dev"
+	},
+	"homepage": "https://kreuzberg.dev",
+	"bugs": {
+		"url": "https://github.com/kreuzberg-dev/kreuzberg/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/kreuzberg-dev/kreuzberg.git"
+	},
+	"license": "MIT",
+	"type": "module",
+	"main": "dist/index.cjs",
+	"module": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		},
+		"./config-mapping": {
+			"types": "./dist/config-mapping/index.d.ts",
+			"import": "./dist/config-mapping/index.js",
+			"require": "./dist/config-mapping/index.cjs"
+		},
+		"./assertions": {
+			"types": "./dist/assertions/index.d.ts",
+			"import": "./dist/assertions/index.js",
+			"require": "./dist/assertions/index.cjs"
+		},
+		"./fixtures": {
+			"types": "./dist/fixtures/index.d.ts",
+			"import": "./dist/fixtures/index.js",
+			"require": "./dist/fixtures/index.cjs"
+		},
+		"./paths": {
+			"types": "./dist/paths/index.d.ts",
+			"import": "./dist/paths/index.js",
+			"require": "./dist/paths/index.cjs"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"engines": {
+		"node": ">= 22"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org/",
+		"access": "public"
+	},
+	"scripts": {
+		"build": "tsup",
+		"prepare": "tsup",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest",
+		"test:watch": "vitest --watch",
+		"lint": "biome check src",
+		"lint:fix": "biome check --write src"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.3.12",
+		"@types/node": "^25.0.10",
+		"tsup": "^8.5.1",
+		"typescript": "^5.9.3",
+		"vitest": "^4.0.18"
+	}
 }

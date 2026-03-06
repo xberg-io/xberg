@@ -1,26 +1,26 @@
 {
-  "name": "@kreuzberg/test-app-wasm",
-  "version": "4.4.3",
-  "private": true,
-  "type": "module",
-  "description": "Comprehensive WASM test suite for Kreuzberg",
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/setup-wasm.js"
-  },
-  "keywords": [
-    "kreuzberg",
-    "wasm",
-    "testing",
-    "document-extraction"
-  ],
-  "devDependencies": {
-    "@kreuzberg/wasm": "4.4.3",
-    "@types/node": "^20",
-    "vitest": "^4.0.16"
-  }
+	"name": "@kreuzberg/test-app-wasm",
+	"version": "4.4.3",
+	"private": true,
+	"type": "module",
+	"description": "Comprehensive WASM test suite for Kreuzberg",
+	"scripts": {
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:ui": "vitest --ui",
+		"test:coverage": "vitest run --coverage",
+		"typecheck": "tsc --noEmit",
+		"postinstall": "node scripts/setup-wasm.js"
+	},
+	"keywords": [
+		"kreuzberg",
+		"wasm",
+		"testing",
+		"document-extraction"
+	],
+	"devDependencies": {
+		"@kreuzberg/wasm": "4.4.3",
+		"@types/node": "^20",
+		"vitest": "^4.0.16"
+	}
 }

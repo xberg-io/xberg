@@ -17,7 +17,7 @@ else
   RPATH = -Wl,-rpath,$(LIBDIR)
 endif
 
-TESTS = 
+TESTS =
 
 .PHONY: all test clean
 

@@ -1,92 +1,90 @@
 {
-    "name": "kreuzberg/kreuzberg",
-    "description": "High-performance document intelligence for PHP. Extract text, metadata, and structured information from PDFs, Office documents, images, and 75 formats. Powered by Rust core for 10-50x speed improvements.",
-    "version": "4.4.3",
-    "type": "php-ext",
-    "license": "MIT",
-    "keywords": [
-        "document-extraction",
-        "document-intelligence",
-        "document-parsing",
-        "document-processing",
-        "pdf",
-        "docx",
-        "xlsx",
-        "pptx",
-        "ocr",
-        "tesseract",
-        "table-extraction",
-        "text-extraction",
-        "metadata-extraction",
-        "rust",
-        "performance",
-        "php8"
-    ],
-    "homepage": "https://kreuzberg.dev",
-    "support": {
-        "issues": "https://github.com/kreuzberg-dev/kreuzberg/issues",
-        "source": "https://github.com/kreuzberg-dev/kreuzberg",
-        "docs": "https://kreuzberg.dev"
-    },
-    "authors": [
-        {
-            "name": "Na'aman Hirschfeld",
-            "email": "nhirschfeld@gmail.com",
-            "role": "creator"
-        }
-    ],
-    "require": {
-        "php": "^8.4"
-    },
-    "replace": {
-        "ext-kreuzberg": "*"
-    },
-    "suggest": {
-        "amphp/amp": "For Fiber-based async integration with Amp framework (^3.0)",
-        "react/promise": "For Promise-based async integration with ReactPHP (^3.0)"
-    },
-    "require-dev": {
-        "friendsofphp/php-cs-fixer": "^3.94",
-        "phpstan/phpstan": "^2.1",
-        "phpunit/phpunit": "^13.0"
-    },
-    "autoload": {
-        "psr-4": {
-            "Kreuzberg\\": "src/"
-        },
-        "files": [
-            "src/functions.php"
-        ]
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "Kreuzberg\\Tests\\": "tests/"
-        }
-    },
-    "scripts": {
-        "test": "vendor/bin/phpunit",
-        "phpstan": "vendor/bin/phpstan analyse src --level=max --memory-limit=512M",
-        "lint": "@phpstan",
-        "format": "vendor/bin/php-cs-fixer fix src",
-        "format:check": "vendor/bin/php-cs-fixer fix src --dry-run"
-    },
-    "config": {
-        "sort-packages": true
-    },
-    "minimum-stability": "stable",
-    "prefer-stable": true,
-    "php-ext": {
-        "extension-name": "kreuzberg",
-        "priority": 50,
-        "configure-options": [
-            {
-                "name": "enable-kreuzberg",
-                "description": "Enable Kreuzberg document intelligence extension"
-            }
-        ],
-        "support": {
-            "source-url": "https://github.com/kreuzberg-dev/kreuzberg",
-            "download-url": "https://github.com/kreuzberg-dev/kreuzberg/releases"
-        }
-    }
+	"name": "kreuzberg/kreuzberg",
+	"description": "High-performance document intelligence for PHP. Extract text, metadata, and structured information from PDFs, Office documents, images, and 75 formats. Powered by Rust core for 10-50x speed improvements.",
+	"version": "4.4.3",
+	"type": "php-ext",
+	"license": "MIT",
+	"keywords": [
+		"document-extraction",
+		"document-intelligence",
+		"document-parsing",
+		"document-processing",
+		"pdf",
+		"docx",
+		"xlsx",
+		"pptx",
+		"ocr",
+		"tesseract",
+		"table-extraction",
+		"text-extraction",
+		"metadata-extraction",
+		"rust",
+		"performance",
+		"php8"
+	],
+	"homepage": "https://kreuzberg.dev",
+	"support": {
+		"issues": "https://github.com/kreuzberg-dev/kreuzberg/issues",
+		"source": "https://github.com/kreuzberg-dev/kreuzberg",
+		"docs": "https://kreuzberg.dev"
+	},
+	"authors": [
+		{
+			"name": "Na'aman Hirschfeld",
+			"email": "nhirschfeld@gmail.com",
+			"role": "creator"
+		}
+	],
+	"require": {
+		"php": "^8.4"
+	},
+	"replace": {
+		"ext-kreuzberg": "*"
+	},
+	"suggest": {
+		"amphp/amp": "For Fiber-based async integration with Amp framework (^3.0)",
+		"react/promise": "For Promise-based async integration with ReactPHP (^3.0)"
+	},
+	"require-dev": {
+		"friendsofphp/php-cs-fixer": "^3.94",
+		"phpstan/phpstan": "^2.1",
+		"phpunit/phpunit": "^13.0"
+	},
+	"autoload": {
+		"psr-4": {
+			"Kreuzberg\\": "src/"
+		},
+		"files": ["src/functions.php"]
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"Kreuzberg\\Tests\\": "tests/"
+		}
+	},
+	"scripts": {
+		"test": "vendor/bin/phpunit",
+		"phpstan": "vendor/bin/phpstan analyse src --level=max --memory-limit=512M",
+		"lint": "@phpstan",
+		"format": "vendor/bin/php-cs-fixer fix src",
+		"format:check": "vendor/bin/php-cs-fixer fix src --dry-run"
+	},
+	"config": {
+		"sort-packages": true
+	},
+	"minimum-stability": "stable",
+	"prefer-stable": true,
+	"php-ext": {
+		"extension-name": "kreuzberg",
+		"priority": 50,
+		"configure-options": [
+			{
+				"name": "enable-kreuzberg",
+				"description": "Enable Kreuzberg document intelligence extension"
+			}
+		],
+		"support": {
+			"source-url": "https://github.com/kreuzberg-dev/kreuzberg",
+			"download-url": "https://github.com/kreuzberg-dev/kreuzberg/releases"
+		}
+	}
 }

@@ -1,25 +1,25 @@
 {
-  "name": "browser-vite-svelte",
-  "private": true,
-  "version": "4.4.3",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
-    "typecheck": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json --noEmit"
-  },
-  "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^6.2.1",
-    "@tsconfig/svelte": "^5.0.6",
-    "@types/node": "^24.10.1",
-    "svelte": "^5.46.4",
-    "svelte-check": "^4.3.4",
-    "typescript": "~5.9.3",
-    "vite": "^7.2.4"
-  },
-  "dependencies": {
-    "@kreuzberg/wasm": "4.4.3"
-  }
+	"name": "browser-vite-svelte",
+	"private": true,
+	"version": "4.4.3",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "vite build",
+		"preview": "vite preview",
+		"check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
+		"typecheck": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json --noEmit"
+	},
+	"devDependencies": {
+		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"@tsconfig/svelte": "^5.0.6",
+		"@types/node": "^24.10.1",
+		"svelte": "^5.46.4",
+		"svelte-check": "^4.3.4",
+		"typescript": "~5.9.3",
+		"vite": "^7.2.4"
+	},
+	"dependencies": {
+		"@kreuzberg/wasm": "4.4.3"
+	}
 }
