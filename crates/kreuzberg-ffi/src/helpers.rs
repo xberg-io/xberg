@@ -134,8 +134,12 @@ pub fn to_c_extraction_result(result: ExtractionResult) -> std::result::Result<*
     };
 
     let metadata_json_guard = {
+        let json_value =
+            serde_json::to_value(&metadata).map_err(|e| format!("Failed to serialize metadata to JSON: {}", e))?;
+        let camel_json = kreuzberg::utils::snake_to_camel(json_value);
         let json =
-            serde_json::to_string(&metadata).map_err(|e| format!("Failed to serialize metadata to JSON: {}", e))?;
+            serde_json::to_string(&camel_json).map_err(|e| format!("Failed to serialize metadata to JSON: {}", e))?;
+
         Some(CStringGuard::new(CString::new(json).map_err(|e| {
             format!("Failed to convert metadata JSON to C string: {}", e)
         })?))
