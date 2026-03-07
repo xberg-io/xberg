@@ -337,7 +337,14 @@ jobs:
 
       - name: Run WASM tests
         shell: bash
-        run: task wasm:test:ci
+        # Use pre-built WASM artifacts (downloaded above) — skip wasm-pack rebuild
+        # which would require WASI SDK for Tesseract/Leptonica compilation.
+        run: |
+          cd crates/kreuzberg-wasm
+          pnpm run fix:wasi
+          pnpm run build:ts
+          pnpm run copy:pkg
+          pnpm test
 
 
   deno-tests:

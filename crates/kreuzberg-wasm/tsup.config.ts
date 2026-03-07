@@ -41,5 +41,10 @@ export default defineConfig({
 		// In Node.js, loaded from filesystem; in browser, loaded via dynamic import
 		"../pdfium.js",
 		"./pdfium.js",
+		// Node.js built-in modules — preserve node: prefix for Deno compatibility.
+		// Without this, tsup strips the node: prefix (e.g. "node:worker_threads" → "worker_threads"),
+		// which breaks Deno where the node: prefix is required.
+		/^node:/,
+		"worker_threads",
 	],
 });
