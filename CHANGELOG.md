@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Node worker pool password bug**: `extractFileInWorker` was passing the `password` argument as `mime_type` to `extract_file_sync`, meaning passwords were never applied and MIME detection could break. Password is now correctly injected into `config.pdf_options.passwords`.
 - **Unused import in kreuzberg-node**: Removed unused `use serde_json::Value` import in `result.rs` that caused clippy warnings.
 - **WASM Deno OCR test hang**: OCR tests hung indefinitely on WASM Deno because Tesseract synchronous initialization blocks the single-threaded runtime. OCR fixtures are now skipped for the wasm-deno target.
+- **WASM camelCase config deserialization**: JS consumers send camelCase config keys (e.g. `includeDocumentStructure`) but `serde` expects snake_case. Added `camel_to_snake` transform in `parse_config()` so config fields are properly deserialized. Fixes document structure extraction returning empty results via WASM.
+- **PHP 8.5 array coercion on macOS**: On PHP 8.5 + macOS, ext-php-rs coerces `#[php_class]` return values to arrays instead of objects. Added `normalizeExtractionResult()` wrapper that transparently converts arrays via `ExtractionResult::fromArray()`.
+- **PHP 8.5 support**: Upgraded ext-php-rs to 0.15.6 for PHP 8.5 compatibility.
+- **Vendoring scripts missing path deps**: Ruby and R vendoring scripts failed when workspace dependencies use `path` instead of `version`. Added path field handling to `format_dependency()` and kreuzberg-ffi fixup block to the Ruby vendoring script.
+- **pdfium-render clippy lints**: Fixed clippy warnings in kreuzberg-pdfium-render crate.
 
 ### Added
 
@@ -24,6 +29,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PdfConfig` Default impl**: Added `Default` implementation for `PdfConfig` to support ergonomic config construction.
 - **Binding crate clippy in CI**: Added clippy steps to `ci-node`, `ci-python`, and `ci-wasm` workflows (gated to Linux). Added `node:clippy`, `python:clippy`, and `wasm:clippy` task commands.
 - **E2E password-protected PDF fixture**: Added `pdf_password_protected` fixture testing copy-protected PDF extraction across all bindings.
+
+### Changed
+
+- **All binding crates linted in pre-commit**: Removed clippy exclusions for kreuzberg-php, kreuzberg-node, and kreuzberg-wasm from pre-commit config.
+- **golangci-lint v2.11.3**: Upgraded from v2.9.0 across Taskfile, CI workflows, and install scripts.
 
 ## [4.4.4]
 
