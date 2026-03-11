@@ -44,3 +44,51 @@ class Program
     }
 }
 ```
+
+```csharp title="C# - Markdown with Heading Context"
+using Kreuzberg;
+
+class Program
+{
+    static async Task Main()
+    {
+        var config = new ExtractionConfig
+        {
+            Chunking = new ChunkingConfig
+            {
+                MaxChars = 500,
+                MaxOverlap = 50,
+                Sizing = new ChunkSizingConfig
+                {
+                    Type = "tokenizer",
+                    Model = "Xenova/gpt-4o"
+                }
+            }
+        };
+
+        try
+        {
+            var result = await KreuzbergClient.ExtractFileAsync(
+                "document.md",
+                config
+            ).ConfigureAwait(false);
+
+            foreach (var chunk in result.Chunks)
+            {
+                if (chunk.HeadingContext?.Headings != null)
+                {
+                    Console.WriteLine("Headings:");
+                    foreach (var heading in chunk.HeadingContext.Headings)
+                    {
+                        Console.WriteLine($"  Level {heading.Level}: {heading.Text}");
+                    }
+                }
+            }
+        }
+        catch (KreuzbergException ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+}
+```
