@@ -3533,7 +3533,7 @@ jobs:
           tag: ${{ needs.prepare.outputs.tag }}
           version: ${{ needs.prepare.outputs.version }}
           github-repo: kreuzberg-dev/kreuzberg
-          dry-run: "false"
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
 
       - name: Homebrew already published summary
         if: ${{ steps.recheck.outputs.exists == 'true' }}
