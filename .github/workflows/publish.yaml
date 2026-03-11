@@ -2860,10 +2860,12 @@ jobs:
 
       - name: Publish to Hex.pm
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
-        working-directory: packages/elixir
+        uses: kreuzberg-dev/actions/publish-hex@v1
+        with:
+          package-dir: packages/elixir
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
-        run: mix hex.publish --yes --replace
 
       - name: Hex.pm dry-run summary
         if: ${{ needs.prepare.outputs.dry_run == 'true' }}
@@ -3001,18 +3003,14 @@ jobs:
 
       - name: Publish gems to RubyGems
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
-        env:
-          RUBYGEMS_VERSION: ${{ needs.prepare.outputs.version }}
-        run: scripts/publish/publish-gems-direct.sh dist
+        uses: kreuzberg-dev/actions/publish-rubygems@v1
+        with:
+          gems-dir: dist
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
 
       - name: RubyGems already published summary
         if: ${{ steps.recheck.outputs.exists == 'true' }}
         run: echo "Gem kreuzberg@${{ needs.prepare.outputs.version }} already published on RubyGems — skipped." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Dry run summary
-        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
-        working-directory: dist
-        run: (echo "Dry run requested; gem artifacts ready:" && ls -1 kreuzberg-*.gem) >> "$GITHUB_STEP_SUMMARY"
 
   publish-node:
     name: Publish Node packages
@@ -3087,19 +3085,31 @@ jobs:
 
       - name: Publish native binary packages
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
-        run: scripts/publish/publish-node-packages.sh crates/kreuzberg-node/npm "${{ needs.prepare.outputs.npm_tag }}"
-
-      - name: Wait for npm indexing
-        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
+        uses: kreuzberg-dev/actions/publish-npm@v1
+        with:
+          packages-dir: crates/kreuzberg-node/npm
+          npm-tag: ${{ needs.prepare.outputs.npm_tag }}
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: scripts/publish/wait-for-package.sh npm "@kreuzberg/node-linux-x64-gnu" "${{ needs.prepare.outputs.version }}" 25
+
+      - name: Wait for npm indexing (x64)
+        if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
+        uses: kreuzberg-dev/actions/wait-for-package@v1
+        with:
+          registry: npm
+          package: "@kreuzberg/node-linux-x64-gnu"
+          version: ${{ needs.prepare.outputs.version }}
+          max-attempts: "25"
 
       - name: Wait for npm indexing (ARM64)
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: scripts/publish/wait-for-package.sh npm "@kreuzberg/node-linux-arm64-gnu" "${{ needs.prepare.outputs.version }}" 25
+        uses: kreuzberg-dev/actions/wait-for-package@v1
+        with:
+          registry: npm
+          package: "@kreuzberg/node-linux-arm64-gnu"
+          version: ${{ needs.prepare.outputs.version }}
+          max-attempts: "25"
 
       - name: Prepare main Node package metadata
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
@@ -3107,7 +3117,13 @@ jobs:
 
       - name: Publish main Node package
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.recheck.outputs.exists != 'true' }}
-        run: scripts/publish/publish-main-node-package.sh crates/kreuzberg-node "${{ needs.prepare.outputs.npm_tag }}"
+        uses: kreuzberg-dev/actions/publish-npm@v1
+        with:
+          package-dir: crates/kreuzberg-node
+          npm-tag: ${{ needs.prepare.outputs.npm_tag }}
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: npm already published summary
         if: ${{ steps.recheck.outputs.exists == 'true' }}
@@ -3183,16 +3199,22 @@ jobs:
 
       - name: Publish to npm
         if: ${{ steps.npm_check.outputs.exists != 'true' }}
+        uses: kreuzberg-dev/actions/publish-npm@v1
+        with:
+          package-dir: crates/kreuzberg-wasm
+          npm-tag: ${{ needs.prepare.outputs.npm_tag }}
+          provenance: "true"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        working-directory: crates/kreuzberg-wasm
-        run: npm publish --access public --provenance --ignore-scripts --tag "${{ needs.prepare.outputs.npm_tag }}"
 
       - name: Wait for npm indexing
         if: ${{ steps.npm_check.outputs.exists != 'true' }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: scripts/publish/wait-for-package.sh npm "@kreuzberg/wasm" "${{ needs.prepare.outputs.version }}" 25
+        uses: kreuzberg-dev/actions/wait-for-package@v1
+        with:
+          registry: npm
+          package: "@kreuzberg/wasm"
+          version: ${{ needs.prepare.outputs.version }}
+          max-attempts: "25"
 
       - name: Publish summary
         env:
@@ -3323,21 +3345,20 @@ jobs:
 
       - name: Release Maven package
         if: ${{ needs.prepare.outputs.dry_run != 'true' && steps.maven_check.outputs.exists != 'true' }}
+        uses: kreuzberg-dev/actions/publish-maven@v1
+        with:
+          pom-file: packages/java/pom.xml
+          maven-profile: publish
+          extra-args: -DskipTests
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
           MAVEN_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPP_PASSPHRASE }}
-        # Note: GPG passphrase is provided via MAVEN_GPG_PASSPHRASE env var (configured in pom.xml via passphraseEnvName)
-        # The -Ppublish profile activates central-publishing-maven-plugin and skips maven-deploy-plugin
-        run: scripts/publish/maven/deploy-or-skip.sh --version "${{ needs.prepare.outputs.version }}" -- mvn -f packages/java/pom.xml --batch-mode --no-transfer-progress -Ppublish -DskipTests clean deploy
 
       - name: Maven already published summary
         if: ${{ steps.maven_check.outputs.exists == 'true' }}
         run: echo "Maven package version ${{ needs.prepare.outputs.version }} already published; skipping." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Dry run summary
-        if: ${{ needs.prepare.outputs.dry_run == 'true' }}
-        run: echo "Dry run requested; Maven publish skipped." >> "$GITHUB_STEP_SUMMARY"
 
   publish-nuget:
     name: Publish NuGet package
@@ -3402,12 +3423,16 @@ jobs:
       - name: List PHP artifacts
         run: ls -lah dist/php/
 
-      - name: Verify Packagist auto-update
+      - name: Trigger Packagist update
+        uses: kreuzberg-dev/actions/publish-packagist@v1
+        with:
+          packagist-username: Goldziher
+          package-name: kreuzberg/kreuzberg
+          version: ${{ needs.prepare.outputs.version }}
+          repository-url: https://github.com/kreuzberg-dev/kreuzberg
+          dry-run: ${{ needs.prepare.outputs.dry_run }}
         env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
           PACKAGIST_API_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
-        run: scripts/publish/php/publish-packagist.sh "${{ needs.prepare.outputs.version }}"
 
       - name: Ensure GitHub release exists
         env:
@@ -3467,26 +3492,12 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
-      - name: Extract release info
-        id: release
-        env:
-          TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: scripts/publish/homebrew/extract-release-info.sh
-
       - name: Download bottle artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: homebrew-bottle-*
           path: dist/homebrew
           merge-multiple: true
-
-      - name: Extract bottle hashes
-        id: bottles
-        env:
-          TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-        run: scripts/publish/homebrew/extract-bottle-hashes.sh dist/homebrew
 
       - name: Re-check Homebrew tap before publish
         id: recheck
@@ -3514,11 +3525,15 @@ jobs:
 
       - name: Update Homebrew formula with bottles
         if: ${{ steps.recheck.outputs.exists != 'true' }}
-        env:
-          TAG: ${{ needs.prepare.outputs.tag }}
-          VERSION: ${{ needs.prepare.outputs.version }}
-          DRY_RUN: 'false'
-        run: scripts/publish/homebrew/update-formula-with-bottles.sh dist/homebrew homebrew-tap
+        uses: kreuzberg-dev/actions/publish-homebrew@v1
+        with:
+          bottles-dir: dist/homebrew
+          formula-name: kreuzberg
+          tap-repo: kreuzberg-dev/homebrew-tap
+          tag: ${{ needs.prepare.outputs.tag }}
+          version: ${{ needs.prepare.outputs.version }}
+          github-repo: kreuzberg-dev/kreuzberg
+          dry-run: "false"
 
       - name: Homebrew already published summary
         if: ${{ steps.recheck.outputs.exists == 'true' }}
