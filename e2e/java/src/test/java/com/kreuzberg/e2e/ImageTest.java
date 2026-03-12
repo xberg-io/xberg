@@ -19,6 +19,55 @@ public class ImageTest {
   private static final ObjectMapper MAPPER = new ObjectMapper();
 
   @Test
+  public void imageBmpBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "image_bmp_basic",
+        "images/bmp_24.bmp",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("image/bmp"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
+  public void imageGifBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "image_gif_basic",
+        "images_extra/ocr_image.gif",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("image/gif"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
+  public void imageJp2Basic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "image_jp2_basic",
+        "images_extra/ocr_image.jp2",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(
+              result, Arrays.asList("image/jp2", "image/jpeg2000"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
   public void imageMetadataOnly() throws Exception {
     JsonNode config = MAPPER.readTree("{\"ocr\":null}");
     E2EHelpers.runFixture(
@@ -35,6 +84,57 @@ public class ImageTest {
   }
 
   @Test
+  public void imagePbmBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "image_pbm_basic",
+        "images_extra/ocr_image.pbm",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(
+              result, Arrays.asList("image/x-portable-bitmap", "image/x-pbm"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
+  public void imagePgmBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "image_pgm_basic",
+        "images_extra/ocr_image.pgm",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(
+              result, Arrays.asList("image/x-portable-graymap", "image/x-pgm"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
+  public void imagePpmBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "image_ppm_basic",
+        "images_extra/ocr_image.ppm",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(
+              result, Arrays.asList("image/x-portable-pixmap", "image/x-ppm"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
   public void imageSvgBasic() throws Exception {
     JsonNode config = null;
     E2EHelpers.runFixture(
@@ -47,6 +147,38 @@ public class ImageTest {
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("image/svg+xml"));
           E2EHelpers.Assertions.assertMinContentLength(result, 5);
+        });
+  }
+
+  @Test
+  public void imageTiffBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "image_tiff_basic",
+        "images_extra/ocr_image.tif",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("image/tiff"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
+  public void imageWebpBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "image_webp_basic",
+        "images_extra/ocr_image.webp",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("image/webp"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
         });
   }
 }

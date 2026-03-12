@@ -80,17 +80,17 @@ runs:
           ~/.cargo/registry/cache
           ~/.cargo/git/db
           target/
-        key: ${{ inputs.shared-core-cache == 'true' && format('ffi-core-v3-{0}-{1}', runner.os, steps.cargo-hash.outputs.hash) || format('{0}-v3-{1}-{2}-{3}', inputs.cache-key-prefix, runner.os, inputs.target || 'default', steps.cargo-hash.outputs.hash) }}
+        key: ${{ inputs.shared-core-cache == 'true' && format('ffi-core-v4-{0}-{1}-{2}', runner.os, runner.arch, steps.cargo-hash.outputs.hash) || format('{0}-v4-{1}-{2}-{3}-{4}', inputs.cache-key-prefix, runner.os, runner.arch, inputs.target || 'default', steps.cargo-hash.outputs.hash) }}
         restore-keys: |
-          ${{ inputs.shared-core-cache == 'true' && format('ffi-core-v3-{0}-', runner.os) || format('{0}-v3-{1}-{2}-', inputs.cache-key-prefix, runner.os, inputs.target || 'default') }}
+          ${{ inputs.shared-core-cache == 'true' && format('ffi-core-v4-{0}-{1}-', runner.os, runner.arch) || format('{0}-v4-{1}-{2}-{3}-', inputs.cache-key-prefix, runner.os, runner.arch, inputs.target || 'default') }}
 
     - name: Cache cargo-llvm-cov
       uses: actions/cache@v5
       with:
         path: ~/.cargo/bin/cargo-llvm-cov
-        key: cargo-llvm-cov-v5-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml') }}
+        key: cargo-llvm-cov-v6-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml') }}
         restore-keys: |
-          cargo-llvm-cov-v5-${{ runner.os }}-
+          cargo-llvm-cov-v6-${{ runner.os }}-${{ runner.arch }}-
 
     - name: Validate sccache installation
       if: inputs.use-sccache == 'true'

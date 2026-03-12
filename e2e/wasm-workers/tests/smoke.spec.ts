@@ -198,7 +198,7 @@ describe("smoke", () => {
 			"TOR",
 		]);
 		assertions.assertTableCount(result, 1, null);
-		assertions.assertMetadataExpectation(result, "sheet_count", { gte: 2 });
-		assertions.assertMetadataExpectation(result, "sheet_names", { contains: ["Stanley Cups"] });
+		assertions.assertMetadataExpectation(result, "sheetCount", { gte: 2 });
+		assertions.assertMetadataExpectation(result, "sheetNames", { contains: ["Stanley Cups"] });
 	});
 });

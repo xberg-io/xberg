@@ -7,7 +7,7 @@ set -euo pipefail
 
 version="${1:?VERSION argument required}"
 
-if gem search kreuzberg --remote --exact --version "=${version}" | grep -q "kreuzberg (${version})"; then
+if curl -s "https://rubygems.org/api/v1/versions/kreuzberg.json" | jq -e "any(.[]; .number == \"${version}\")" >/dev/null 2>&1; then
   echo "exists=true"
   echo "::notice::Ruby gem kreuzberg ${version} already exists on RubyGems"
 else

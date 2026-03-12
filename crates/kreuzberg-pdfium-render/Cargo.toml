@@ -45,12 +45,8 @@ web-sys = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libloading = "0.9"
 
-[build-dependencies]
-bindgen = { version = "0.72", optional = true }
-
 [features]
 default = ["image_latest", "thread_safe"]
-bindings = ["dep:bindgen"]
 thread_safe = []
 
 # Image
@@ -60,6 +56,3 @@ image_025 = ["dep:image_025"]
 [lints.rust.unexpected_cfgs]
 level = "allow"
 check-cfg = ['cfg(pdfium_use_static)']
-
-[package.metadata.cargo-machete]
-ignored = ["bindgen"]

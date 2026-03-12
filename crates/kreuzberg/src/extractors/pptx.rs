@@ -1,5 +1,3 @@
-#![cfg(feature = "office")]
-
 //! PowerPoint presentation extractor.
 
 use crate::Result;

@@ -222,6 +222,26 @@ class PdfTest extends TestCase
     }
 
     /**
+     * Copy-protected PDF should extract content (pdfium handles copy-protection transparently).
+     */
+    public function test_pdf_password_protected(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/copy_protected.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping pdf_password_protected: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 50);
+        Helpers::assertContentContainsAny($result, ['LayoutParser', 'document image analysis', 'deep learning']);
+    }
+
+    /**
      * Right-to-left language PDF to verify RTL extraction.
      */
     public function test_pdf_right_to_left(): void

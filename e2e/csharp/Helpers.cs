@@ -454,7 +454,8 @@ public static class TestHelpers
         int? minCount,
         int? maxCount,
         bool? eachHasContent,
-        bool? eachHasEmbedding)
+        bool? eachHasEmbedding,
+        bool? eachHasHeadingContext = null)
     {
         var chunks = result.Chunks;
         if (chunks is null)
@@ -487,6 +488,26 @@ public static class TestHelpers
                 if (chunks[i].Embedding is null || chunks[i].Embedding!.Length == 0)
                 {
                     throw new XunitException($"Chunk {i} has no embedding");
+                }
+            }
+        }
+        if (eachHasHeadingContext == true)
+        {
+            for (var i = 0; i < chunks.Count; i++)
+            {
+                if (chunks[i].Metadata?.HeadingContext is null)
+                {
+                    throw new XunitException($"Chunk {i} has no heading_context");
+                }
+            }
+        }
+        if (eachHasHeadingContext == false)
+        {
+            for (var i = 0; i < chunks.Count; i++)
+            {
+                if (chunks[i].Metadata?.HeadingContext is not null)
+                {
+                    throw new XunitException($"Chunk {i} should have no heading_context");
                 }
             }
         }

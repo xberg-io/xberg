@@ -142,6 +142,11 @@ tasks:
     cmds:
       - pnpm test
 
+  clippy:
+    desc: Run clippy on kreuzberg-wasm crate
+    cmds:
+      - cargo clippy -p kreuzberg-wasm --target wasm32-unknown-unknown -- -D warnings
+
   lint:
     desc: Lint WASM TypeScript code with auto-fix (biome + oxlint)
     dir: crates/kreuzberg-wasm

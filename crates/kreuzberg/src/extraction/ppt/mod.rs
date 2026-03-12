@@ -1,5 +1,3 @@
-#![cfg(feature = "office")]
-
 //! Native PPT (PowerPoint 97-2003) text extraction.
 //!
 //! Extracts text directly from PowerPoint Binary File Format using OLE/CFB

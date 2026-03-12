@@ -21,10 +21,7 @@ async fn test_chunking_enabled() {
         chunking: Some(ChunkingConfig {
             max_characters: 50,
             overlap: 10,
-            embedding: None,
-            preset: None,
-            trim: true,
-            chunker_type: kreuzberg::chunking::ChunkerType::Text,
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -66,10 +63,7 @@ async fn test_chunking_with_overlap() {
         chunking: Some(ChunkingConfig {
             max_characters: 100,
             overlap: 20,
-            embedding: None,
-            preset: None,
-            trim: true,
-            chunker_type: kreuzberg::chunking::ChunkerType::Text,
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -108,10 +102,7 @@ async fn test_chunking_custom_sizes() {
         chunking: Some(ChunkingConfig {
             max_characters: 200,
             overlap: 50,
-            embedding: None,
-            preset: None,
-            trim: true,
-            chunker_type: kreuzberg::chunking::ChunkerType::Text,
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -503,6 +494,98 @@ async fn test_quality_processing_disabled() {
     assert!(!result.content.is_empty());
 }
 
+/// Test markdown chunker populates heading context.
+#[tokio::test]
+#[cfg(feature = "chunking")]
+async fn test_markdown_chunker_heading_context() {
+    let markdown = r#"# Title
+
+Some intro text.
+
+## Section One
+
+Content in section one with enough text to create a chunk.
+
+## Section Two
+
+Content in section two with enough text to create another chunk.
+
+### Subsection
+
+More detailed content here in the subsection.
+"#;
+
+    let config = ExtractionConfig {
+        chunking: Some(ChunkingConfig {
+            max_characters: 80,
+            overlap: 10,
+            chunker_type: kreuzberg::ChunkerType::Markdown,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let result = extract_bytes(markdown.as_bytes(), "text/markdown", &config)
+        .await
+        .expect("Should extract successfully");
+
+    assert!(result.chunks.is_some(), "Chunks should be present");
+    let chunks = result.chunks.expect("Should have chunks");
+    assert!(chunks.len() >= 2, "Should have at least 2 chunks");
+
+    // At least one chunk should have heading_context populated
+    let has_heading = chunks.iter().any(|c| c.metadata.heading_context.is_some());
+    assert!(has_heading, "At least one chunk should have heading_context");
+
+    // Verify heading context structure
+    for chunk in &chunks {
+        if let Some(ref ctx) = chunk.metadata.heading_context {
+            for heading in &ctx.headings {
+                assert!(heading.level >= 1 && heading.level <= 6, "Heading level should be 1-6");
+                assert!(!heading.text.is_empty(), "Heading text should not be empty");
+            }
+        }
+    }
+}
+
+/// Test tokenizer env var override.
+#[tokio::test]
+#[cfg(feature = "chunking-tokenizers")]
+async fn test_env_chunking_tokenizer() {
+    // SAFETY: This test is run serially and no other threads read this env var concurrently.
+    unsafe { std::env::set_var("KREUZBERG_CHUNKING_TOKENIZER", "Xenova/gpt-4o") };
+
+    let mut config = ExtractionConfig::default();
+    config.apply_env_overrides().expect("Should apply env overrides");
+
+    assert!(config.chunking.is_some(), "Chunking should be enabled by env var");
+    let chunking = config.chunking.as_ref().expect("Should have chunking config");
+    match &chunking.sizing {
+        kreuzberg::chunking::ChunkSizing::Tokenizer { model, .. } => {
+            assert_eq!(model, "Xenova/gpt-4o");
+        }
+        _ => panic!("Expected tokenizer sizing"),
+    }
+
+    // SAFETY: This test is run serially and no other threads read this env var concurrently.
+    unsafe { std::env::remove_var("KREUZBERG_CHUNKING_TOKENIZER") };
+}
+
+/// Test empty tokenizer env var is rejected.
+#[tokio::test]
+#[cfg(feature = "chunking-tokenizers")]
+async fn test_env_chunking_tokenizer_empty_rejected() {
+    // SAFETY: This test is run serially and no other threads read this env var concurrently.
+    unsafe { std::env::set_var("KREUZBERG_CHUNKING_TOKENIZER", "") };
+
+    let mut config = ExtractionConfig::default();
+    let result = config.apply_env_overrides();
+    assert!(result.is_err(), "Empty tokenizer model should be rejected");
+
+    // SAFETY: This test is run serially and no other threads read this env var concurrently.
+    unsafe { std::env::remove_var("KREUZBERG_CHUNKING_TOKENIZER") };
+}
+
 /// Test chunking with embeddings using balanced preset.
 ///
 /// This test requires ONNX Runtime to be installed as a system dependency.
@@ -521,9 +604,7 @@ async fn test_chunking_with_embeddings() {
             max_characters: 100,
             overlap: 20,
             embedding: Some(EmbeddingConfig::default()),
-            preset: None,
-            trim: true,
-            chunker_type: kreuzberg::chunking::ChunkerType::Text,
+            ..Default::default()
         }),
         ..Default::default()
     };

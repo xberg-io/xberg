@@ -319,27 +319,47 @@ Main configuration interface for extraction operations.
 
 ```typescript title="TypeScript"
 interface ExtractionConfig {
+  useCache?: boolean;
+  enableQualityProcessing?: boolean;
   ocr?: OcrConfig | null;
   forceOcr?: boolean;
   pdfOptions?: PdfConfig | null;
   chunking?: ChunkingConfig | null;
+  imageExtraction?: ImageExtractionConfig | null;
   languageDetection?: LanguageDetectionConfig | null;
   tokenReduction?: TokenReductionConfig | null;
-  imageExtraction?: ImageExtractionConfig | null;
   postProcessor?: PostProcessorConfig | null;
+  htmlOptions?: HtmlConversionOptions | null;
+  keywords?: KeywordConfig | null;
+  pages?: PageConfig | null;
+  securityLimits?: Record<string, number> | null;
+  maxConcurrentExtractions?: number;
+  outputFormat?: "plain" | "markdown" | "djot" | "html";
+  resultFormat?: "unified" | "element_based";
+  includeDocumentStructure?: boolean;
 }
 ```
 
 **Fields:**
 
+- `useCache` (boolean): Enable caching for identical inputs. Default: true
+- `enableQualityProcessing` (boolean): Enable built-in filters to improve extraction reliability. Default: false
 - `ocr` (OcrConfig | null): OCR configuration. Default: null (no OCR)
 - `forceOcr` (boolean): Force OCR even for text-based PDFs. Default: false
 - `pdfOptions` (PdfConfig | null): PDF-specific configuration. Default: null
 - `chunking` (ChunkingConfig | null): Text chunking configuration. Default: null
+- `imageExtraction` (ImageExtractionConfig | null): Image extraction from documents. Default: null
 - `languageDetection` (LanguageDetectionConfig | null): Language detection configuration. Default: null
 - `tokenReduction` (TokenReductionConfig | null): Token reduction configuration. Default: null
-- `imageExtraction` (ImageExtractionConfig | null): Image extraction from documents. Default: null
 - `postProcessor` (PostProcessorConfig | null): Post-processing configuration. Default: null
+- `htmlOptions` (HtmlConversionOptions | null): HTML to Markdown conversion options. Default: null
+- `keywords` (KeywordConfig | null): Keyword extraction configuration. Default: null
+- `pages` (PageConfig | null): Page tracking and continuous extraction options. Default: null
+- `securityLimits` (Record<string, number> | null): Safety limits (archive recursion, xml depth, etc.)
+- `maxConcurrentExtractions` (number): Maximum parallel tasks for batching. Default: 4
+- `outputFormat` ("plain" | "markdown" | "djot" | "html"): Generated text format. Default: "plain"
+- `resultFormat` ("unified" | "element_based"): Shape of extraction results. Default: "unified"
+- `includeDocumentStructure` (boolean): Construct hierarchical document tree. Default: false
 
 **Example:**
 
@@ -555,6 +575,9 @@ interface ChunkingConfig {
   maxOverlap?: number;
   embedding?: EmbeddingConfig | null;
   preset?: string | null;
+  sizingType?: "characters" | "tokenizer" | null;
+  sizingModel?: string | null;
+  sizingCacheDir?: string | null;
 }
 ```
 
@@ -564,6 +587,9 @@ interface ChunkingConfig {
 - `maxOverlap` (number): Overlap between chunks in characters. Default: 200
 - `embedding` (EmbeddingConfig | null): Embedding configuration for generating embeddings. Default: null
 - `preset` (string | null): Chunking preset to use. Default: null
+- `sizingType` ("characters" | "tokenizer" | null): How chunk size is measured. Use `"tokenizer"` to measure by token count using a HuggingFace tokenizer. Default: null (characters)
+- `sizingModel` (string | null): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `sizingType` is `"tokenizer"`. Default: null
+- `sizingCacheDir` (string | null): Optional directory to cache downloaded tokenizer files. Default: null
 
 ---
 
@@ -659,22 +685,43 @@ Result object returned by all extraction functions.
 
 ```typescript title="TypeScript"
 interface ExtractionResult {
+  annotations?: PdfAnnotation[];
+  chunks?: Chunk[];
   content: string;
-  mimeType: string;
-  metadata: Metadata;
-  tables: Table[];
   detectedLanguages: string[] | null;
+  djotContent?: DjotContent | null;
+  document?: DocumentStructure | null;
+  elements?: Element[];
+  extractedKeywords?: ExtractedKeyword[];
+  images?: ExtractedImage[];
+  metadata: Metadata;
+  mimeType: string;
+  ocrElements?: OcrElement[];
+  pages?: PageContent[];
+  processingWarnings: ProcessingWarning[];
+  qualityScore?: number;
+  tables: Table[];
 }
 ```
 
 **Fields:**
 
+- `annotations` (PdfAnnotation[] | undefined): Extracted PDF annotations and highlights
+- `chunks` (Chunk[] | undefined): Text chunks if chunking is enabled
 - `content` (string): Extracted text content
-- `mimeType` (string): MIME type of the processed document
-- `metadata` (Metadata): Document metadata (format-specific fields)
-- `tables` (Table[]): Array of extracted tables
 - `detectedLanguages` (string[] | null): Array of detected language codes (ISO 639-1) if language detection is enabled
+- `djotContent` (DjotContent | null): Rich structural markup
+- `document` (DocumentStructure | null): Hierarchical document structure
+- `elements` (Element[] | undefined): Semantic elements (headings, paragraphs, etc.)
+- `extractedKeywords` (ExtractedKeyword[] | undefined): Extracted keywords (RAKE/YAKE)
+- `images` (ExtractedImage[] | undefined): Extracted images if enabled
+- `metadata` (Metadata): Document metadata (format-specific fields)
+- `mimeType` (string): MIME type of the processed document
+- `ocrElements` (OcrElement[] | undefined): Granular OCR text blocks with bounding boxes
 - `pages` (PageContent[] | undefined): Per-page extracted content when page extraction is enabled via `PageConfig.extractPages = true`
+- `processingWarnings` (ProcessingWarning[]): Non-fatal warnings encountered during extraction
+- `qualityScore` (number | undefined): Document quality estimation score
+- `tables` (Table[]): Array of extracted tables
 
 **Example:**
 
@@ -683,7 +730,7 @@ const result = extractFileSync('document.pdf');
 
 console.log(`Content: ${result.content}`);
 console.log(`MIME type: ${result.mimeType}`);
-console.log(`Page count: ${result.metadata.pageCount}`);
+console.log(`Page count: ${result.metadata.page_count}`);
 console.log(`Tables: ${result.tables.length}`);
 
 if (result.detectedLanguages) {
@@ -771,21 +818,27 @@ Document metadata with format-specific fields.
 
 ```typescript title="TypeScript"
 interface Metadata {
-  // Common fields
+  // Common fields (camelCase alignment for TS)
   language?: string;
-  date?: string;
+  createdAt?: string;
+  modifiedAt?: string;
   subject?: string;
   formatType?: string;
+  category?: string;
+  tags?: string[];
+  documentVersion?: string;
+  abstractText?: string;
+  outputFormat?: string;
 
   // PDF-specific fields
   title?: string;
-  author?: string;
+  authors?: string[];
   pageCount?: number;
   creationDate?: string;
   modificationDate?: string;
   creator?: string;
   producer?: string;
-  keywords?: string;
+  keywords?: string[];
 
   // Excel-specific fields
   sheetCount?: number;
@@ -810,15 +863,20 @@ interface Metadata {
 - `language` (string): Document language (ISO 639-1 code)
 - `date` (string): Document date (ISO 8601 format)
 - `subject` (string): Document subject
-- `formatType` (string): Format discriminator ("pdf", "excel", "email", etc.)
+- `format_type` (string): Format discriminator ("pdf", "excel", "email", etc.)
+- `category` (string): Document category classification
+- `tags` (string[]): Associated concept tags
+- `document_version` (string): Document version string
+- `abstract_text` (string): Document abstract or summary
+- `output_format` (string): The generated output format identifier
 
-**PDF-Specific Fields** (when `formatType === "pdf"`):
+**PDF-Specific Fields** (when `format_type === "pdf"`):
 
 - `title` (string): PDF title
 - `author` (string): PDF author
-- `pageCount` (number): Number of pages
-- `creationDate` (string): Creation date (ISO 8601)
-- `modificationDate` (string): Modification date (ISO 8601)
+- `page_count` (number): Number of pages
+- `creation_date` (string): Creation date (ISO 8601)
+- `modification_date` (string): Modification date (ISO 8601)
 - `creator` (string): Creator application
 - `producer` (string): Producer application
 - `keywords` (string): PDF keywords
@@ -829,10 +887,10 @@ interface Metadata {
 const result = extractFileSync('document.pdf');
 const metadata = result.metadata;
 
-if (metadata.formatType === 'pdf') {
+if (metadata.format_type === 'pdf') {
   console.log(`Title: ${metadata.title}`);
   console.log(`Author: ${metadata.author}`);
-  console.log(`Pages: ${metadata.pageCount}`);
+  console.log(`Pages: ${metadata.page_count}`);
 }
 ```
 
@@ -888,6 +946,7 @@ interface ChunkMetadata {
   tokenCount?: number;
   firstPage?: number;
   lastPage?: number;
+  headingContext?: HeadingContext;
 }
 ```
 
@@ -899,6 +958,7 @@ interface ChunkMetadata {
 - `tokenCount` (number | undefined): Estimated token count (if configured)
 - `firstPage` (number | undefined): First page this chunk appears on (1-indexed, only when page boundaries available)
 - `lastPage` (number | undefined): Last page this chunk appears on (1-indexed, only when page boundaries available)
+- `headingContext` (HeadingContext | undefined): Heading hierarchy when using Markdown chunker. Only populated when chunker_type is set to markdown.
 
 **Page tracking:** When `PageStructure.boundaries` is available and chunking is enabled, `firstPage` and `lastPage` are automatically calculated based on byte offsets.
 

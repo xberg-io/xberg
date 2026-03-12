@@ -10,6 +10,45 @@ use Kreuzberg\Types\DeferredResult;
 use Kreuzberg\Types\ExtractionResult;
 
 /**
+ * Normalize the raw result from the ext-php-rs FFI layer.
+ *
+ * On PHP 8.5, ext-php-rs may coerce #[php_class] return values to arrays
+ * instead of objects. This function handles both cases transparently.
+ *
+ * @param ExtractionResult|array<string, mixed> $raw
+ * @return ExtractionResult
+ *
+ * @internal
+ */
+function normalizeExtractionResult(mixed $raw): ExtractionResult
+{
+    if ($raw instanceof ExtractionResult) {
+        return $raw;
+    }
+
+    if (is_array($raw)) {
+        return ExtractionResult::fromArray($raw);
+    }
+
+    // ext-php-rs object — proxy properties into fromArray
+    if (is_object($raw)) {
+        $data = [];
+        foreach (['content', 'mime_type', 'metadata', 'tables', 'detected_languages',
+                   'chunks', 'images', 'pages', 'keywords', 'elements', 'ocr_elements',
+                   'djot_content', 'document', 'extracted_keywords', 'quality_score',
+                   'processing_warnings', 'annotations'] as $field) {
+            if (isset($raw->$field)) {
+                $data[$field] = $raw->$field;
+            }
+        }
+
+        return ExtractionResult::fromArray($data);
+    }
+
+    throw new \RuntimeException('Unexpected extraction result type: ' . get_debug_type($raw));
+}
+
+/**
  * Convert generic exceptions from FFI layer to KreuzbergException.
  *
  * @internal
@@ -79,7 +118,9 @@ function extract_file(
     ?ExtractionConfig $config = null,
 ): ExtractionResult {
     try {
-        return \kreuzberg_extract_file($filePath, $mimeType, $config?->toJson());
+        $raw = \kreuzberg_extract_file($filePath, $mimeType, $config?->toJson());
+
+        return normalizeExtractionResult($raw);
     } catch (\Exception $e) {
         if ($e instanceof KreuzbergException) {
             throw $e;
@@ -112,7 +153,9 @@ function extract_bytes(
     ?ExtractionConfig $config = null,
 ): ExtractionResult {
     try {
-        return \kreuzberg_extract_bytes($data, $mimeType, $config?->toJson());
+        $raw = \kreuzberg_extract_bytes($data, $mimeType, $config?->toJson());
+
+        return normalizeExtractionResult($raw);
     } catch (\Exception $e) {
         if ($e instanceof KreuzbergException) {
             throw $e;
@@ -146,7 +189,8 @@ function batch_extract_files(
     ?ExtractionConfig $config = null,
 ): array {
     try {
-        $results = \kreuzberg_batch_extract_files($paths, $config?->toJson());
+        $rawResults = \kreuzberg_batch_extract_files($paths, $config?->toJson());
+        $results = array_map(fn ($r) => normalizeExtractionResult($r), $rawResults);
 
         // Check if any results contain errors in metadata
         foreach ($results as $result) {
@@ -197,7 +241,8 @@ function batch_extract_bytes(
     ?ExtractionConfig $config = null,
 ): array {
     try {
-        $results = \kreuzberg_batch_extract_bytes($dataList, $mimeTypes, $config?->toJson());
+        $rawResults = \kreuzberg_batch_extract_bytes($dataList, $mimeTypes, $config?->toJson());
+        $results = array_map(fn ($r) => normalizeExtractionResult($r), $rawResults);
 
         // Check if any results contain errors in metadata
         foreach ($results as $result) {

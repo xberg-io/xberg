@@ -459,6 +459,11 @@ mod build_tesseract {
         let tessdata_prefix = project_dir.clone();
 
         let leptonica_install_dir_cmake = normalize_cmake_path(&leptonica_install_dir);
+        // Leptonica_DIR must point to the directory containing LeptonicaConfig.cmake,
+        // not the install prefix. On Windows with cross-compilation toolchains,
+        // CMAKE_PREFIX_PATH search doesn't find it automatically.
+        let leptonica_cmake_dir = leptonica_install_dir.join("lib/cmake/leptonica");
+        let leptonica_cmake_dir_cmake = normalize_cmake_path(&leptonica_cmake_dir);
         let leptonica_include_dir_cmake = normalize_cmake_path(&leptonica_include_dir);
         let leptonica_lib_dir_cmake = normalize_cmake_path(&leptonica_lib_dir);
         let tesseract_install_dir_cmake = normalize_cmake_path(&tesseract_install_dir);
@@ -495,7 +500,7 @@ mod build_tesseract {
                     .define("DISABLE_ARCHIVE", "ON")
                     .define("DISABLE_CURL", "ON")
                     .define("DISABLE_OPENCL", "ON")
-                    .define("Leptonica_DIR", &leptonica_install_dir_cmake)
+                    .define("Leptonica_DIR", &leptonica_cmake_dir_cmake)
                     .define("LEPTONICA_INCLUDE_DIR", &leptonica_include_dir_cmake)
                     .define("LEPTONICA_LIBRARY", &leptonica_lib_dir_cmake)
                     .define("CMAKE_PREFIX_PATH", &leptonica_install_dir_cmake)
@@ -843,9 +848,10 @@ mod build_tesseract {
             .arg(&patch_str)
             .output();
 
-        match result {
+        let patch_applied = match result {
             Ok(output) if output.status.success() => {
                 println!("cargo:warning=Successfully applied tesseract WASM patch via git apply");
+                true
             }
             _ => {
                 println!("cargo:warning=git apply failed, trying patch command...");
@@ -860,41 +866,34 @@ mod build_tesseract {
                 match result {
                     Ok(output) if output.status.success() => {
                         println!("cargo:warning=Successfully applied tesseract WASM patch via patch command");
+                        true
                     }
                     Ok(output) => {
                         let stderr = String::from_utf8_lossy(&output.stderr);
                         let stdout = String::from_utf8_lossy(&output.stdout);
-                        // Tesseract 5.5.2 restructured CMakeLists.txt, moving source
-                        // lists to cmake/SourceLists.cmake. The patch will partially
-                        // fail but the programmatic fixups below handle the rest.
-                        if tesseract_dir.join("cmake/SourceLists.cmake").exists() {
-                            println!(
-                                "cargo:warning=Patch partially failed (expected for Tesseract 5.5.2+), \
-                                 applying programmatic fixups:\nstderr: {}\nstdout: {}",
-                                stderr, stdout
-                            );
-                        } else {
-                            panic!(
-                                "Failed to apply tesseract WASM patch:\nstderr: {}\nstdout: {}",
-                                stderr, stdout
-                            );
-                        }
+                        println!(
+                            "cargo:warning=Patch command failed, will apply programmatic fixups.\
+                             \nstderr: {}\nstdout: {}",
+                            stderr, stdout
+                        );
+                        false
                     }
                     Err(e) => {
-                        // If patch command is not available, check if we can handle
-                        // it programmatically for 5.5.2+
-                        if tesseract_dir.join("cmake/SourceLists.cmake").exists() {
-                            println!(
-                                "cargo:warning=patch command not available ({}), \
-                                 applying programmatic fixups for Tesseract 5.5.2+",
-                                e
-                            );
-                        } else {
-                            panic!("Failed to run patch command: {}. Install git or patch utility.", e);
-                        }
+                        println!(
+                            "cargo:warning=patch command not available ({}), will apply programmatic fixups",
+                            e
+                        );
+                        false
                     }
                 }
             }
+        };
+
+        // When the diff patch fails (or partially applies), apply all necessary
+        // modifications programmatically. These fixups are idempotent — safe to
+        // run even if the diff patch already applied some changes.
+        if !patch_applied {
+            apply_wasm_source_fixups(tesseract_dir);
         }
 
         // Tesseract 5.5.2 moved source lists to cmake/SourceLists.cmake.
@@ -951,6 +950,117 @@ mod build_tesseract {
             fs::write(&cmakelists, patched).expect("Failed to write patched CMakeLists.txt");
             println!("cargo:warning=Disabled tesseract binary build in CMakeLists.txt");
         }
+    }
+
+    /// Apply C++ source fixups programmatically when the diff patch fails.
+    /// These are the same changes from patches/tesseract.diff applied via string replacement.
+    /// All replacements are idempotent (no-op if already applied).
+    fn apply_wasm_source_fixups(tesseract_dir: &Path) {
+        println!("cargo:warning=Applying programmatic C++ source fixups for WASM");
+
+        // 1. simddetect.cpp: Guard CPUID detection with !defined(__wasm__)
+        let simddetect = tesseract_dir.join("src/arch/simddetect.cpp");
+        if simddetect.exists() {
+            let content = fs::read_to_string(&simddetect).expect("Failed to read simddetect.cpp");
+            if !content.contains("#if !defined(__wasm__)") {
+                let patched = content.replace(
+                    "#if defined(HAVE_AVX) || defined(HAVE_AVX2) || defined(HAVE_FMA) || defined(HAVE_SSE4_1)\n\
+                     // See https://en.wikipedia.org/wiki/CPUID.\n\
+                     #  define HAS_CPUID\n\
+                     #endif",
+                    "#if !defined(__wasm__)\n\
+                     #if defined(HAVE_AVX) || defined(HAVE_AVX2) || defined(HAVE_FMA) || defined(HAVE_SSE4_1)\n\
+                     // See https://en.wikipedia.org/wiki/CPUID.\n\
+                     #  define HAS_CPUID\n\
+                     #endif\n\
+                     #endif",
+                );
+                fs::write(&simddetect, patched).expect("Failed to write simddetect.cpp");
+                println!("cargo:warning=Patched simddetect.cpp: added __wasm__ guard for CPUID");
+            }
+        }
+
+        // 2. pageiterator.cpp: Fix orientation null vector check
+        let pageiter = tesseract_dir.join("src/ccmain/pageiterator.cpp");
+        if pageiter.exists() {
+            let content = fs::read_to_string(&pageiter).expect("Failed to read pageiterator.cpp");
+            if content.contains("if (up_in_image.y() > 0.0F) {") && !content.contains("if (up_in_image.y() >= 0.0F) {")
+            {
+                let patched = content.replace("if (up_in_image.y() > 0.0F) {", "if (up_in_image.y() >= 0.0F) {");
+                fs::write(&pageiter, patched).expect("Failed to write pageiterator.cpp");
+                println!("cargo:warning=Patched pageiterator.cpp: fixed orientation null vector check");
+            }
+        }
+
+        // 3. tesseractclass.h: Convert pixa_debug_ to unique_ptr
+        let tessclass_h = tesseract_dir.join("src/ccmain/tesseractclass.h");
+        if tessclass_h.exists() {
+            let content = fs::read_to_string(&tessclass_h).expect("Failed to read tesseractclass.h");
+            if content.contains("DebugPixa pixa_debug_;") {
+                let patched = content.replace("DebugPixa pixa_debug_;", "std::unique_ptr<DebugPixa> pixa_debug_;");
+                fs::write(&tessclass_h, patched).expect("Failed to write tesseractclass.h");
+                println!("cargo:warning=Patched tesseractclass.h: pixa_debug_ -> unique_ptr");
+            }
+        }
+
+        // 4. tesseractclass.cpp: Update pixa_debug_ usage for unique_ptr
+        let tessclass_cpp = tesseract_dir.join("src/ccmain/tesseractclass.cpp");
+        if tessclass_cpp.exists() {
+            let content = fs::read_to_string(&tessclass_cpp).expect("Failed to read tesseractclass.cpp");
+            if content.contains("pixa_debug_.WritePDF") {
+                let mut patched = content;
+                // Clear() method: guard WritePDF with null check
+                patched = patched.replace(
+                    "  std::string debug_name = imagebasename + \"_debug.pdf\";\n  pixa_debug_.WritePDF(debug_name.c_str());",
+                    "  if (pixa_debug_) {\n    std::string debug_name = imagebasename + \"_debug.pdf\";\n    pixa_debug_->WritePDF(debug_name.c_str());\n  }",
+                );
+                // Split methods: &pixa_debug_ -> pixa_debug_.get()
+                patched = patched.replace("&pixa_debug_)", "pixa_debug_.get())");
+                fs::write(&tessclass_cpp, patched).expect("Failed to write tesseractclass.cpp");
+                println!("cargo:warning=Patched tesseractclass.cpp: updated pixa_debug_ for unique_ptr");
+            }
+        }
+
+        // 5. pagesegmain.cpp: Update pixa_debug_ usage for unique_ptr
+        let pageseg = tesseract_dir.join("src/ccmain/pagesegmain.cpp");
+        if pageseg.exists() {
+            let content = fs::read_to_string(&pageseg).expect("Failed to read pagesegmain.cpp");
+            if content.contains("pixa_debug_.AddPix") || content.contains("&pixa_debug_") {
+                let mut patched = content;
+                // pixa_debug_.AddPix -> pixa_debug_->AddPix (with null guard)
+                patched = patched.replace("pixa_debug_.AddPix(", "pixa_debug_->AddPix(");
+                // Add null checks for dump_pageseg_images blocks
+                patched = patched.replace(
+                    "if (tessedit_dump_pageseg_images) {\n    pixa_debug_->AddPix(",
+                    "if (tessedit_dump_pageseg_images && pixa_debug_) {\n    pixa_debug_->AddPix(",
+                );
+                // &pixa_debug_ -> pixa_debug_.get()
+                patched = patched.replace("&pixa_debug_", "pixa_debug_.get()");
+                fs::write(&pageseg, patched).expect("Failed to write pagesegmain.cpp");
+                println!("cargo:warning=Patched pagesegmain.cpp: updated pixa_debug_ for unique_ptr");
+            }
+        }
+
+        // 6. CMakeLists.txt: Remove opencl and viewer source globs, strip API sources
+        let cmakelists = tesseract_dir.join("CMakeLists.txt");
+        if cmakelists.exists() {
+            let content = fs::read_to_string(&cmakelists).expect("Failed to read CMakeLists.txt");
+            let mut patched = content;
+            // Remove opencl and viewer source globs
+            patched = patched.replace("  src/opencl/*.cpp\n", "");
+            patched = patched.replace("  src/viewer/*.cpp\n", "");
+            // Strip API sources to only baseapi.cpp and hocrrenderer.cpp
+            patched = patched.replace("    src/api/capi.cpp\n", "");
+            patched = patched.replace("    src/api/renderer.cpp\n", "");
+            patched = patched.replace("    src/api/altorenderer.cpp\n", "");
+            patched = patched.replace("    src/api/lstmboxrenderer.cpp\n", "");
+            patched = patched.replace("    src/api/pdfrenderer.cpp\n", "");
+            patched = patched.replace("    src/api/wordstrboxrenderer.cpp\n", "");
+            fs::write(&cmakelists, &patched).expect("Failed to write CMakeLists.txt");
+            println!("cargo:warning=Patched CMakeLists.txt: removed unnecessary sources for WASM");
+        }
+
+        println!("cargo:warning=Programmatic C++ source fixups complete");
     }
 
     /// Install a no-op mutex header for WASM builds.
@@ -1087,13 +1197,26 @@ namespace this_thread {
         let mut config = Config::new(leptonica_src);
 
         config.target("wasm32-wasi");
-        config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
-        config.define("CMAKE_SYSROOT", &sysroot);
-        config.define("CMAKE_C_COMPILER", &clang);
+        // On Windows, the default Visual Studio generator ignores CMAKE_C_COMPILER
+        // and uses cl.exe, which doesn't understand GCC/Clang flags (-fPIC, -Wno-*, etc.).
+        // Force Ninja to ensure the WASI SDK clang is actually used.
+        if cfg!(target_os = "windows") {
+            config.generator("Ninja");
+        }
+        // Normalize all paths to forward slashes for CMake on Windows.
+        // Backslash paths (e.g. C:\hostedtoolcache\...) cause CMake "Invalid character escape"
+        // errors when written to CMakeCCompiler.cmake cache files.
+        config.define("CMAKE_TOOLCHAIN_FILE", normalize_cmake_path(&toolchain_file));
+        config.define("CMAKE_SYSROOT", normalize_cmake_path(&sysroot));
+        config.define("CMAKE_C_COMPILER", normalize_cmake_path(&clang));
 
         config
             .define("CMAKE_BUILD_TYPE", "Release")
             .define("CMAKE_POLICY_VERSION_MINIMUM", "3.5")
+            // Skip executable linking in CMake try-compile checks (cross-compilation).
+            // On Windows, the host MSVC compiler may be used for try-compile, and it
+            // does not understand GCC/Clang flags like -Wno-implicit-function-declaration.
+            .define("CMAKE_TRY_COMPILE_TARGET_TYPE", "STATIC_LIBRARY")
             .define("LIBWEBP_SUPPORT", "OFF")
             .define("OPENJPEG_SUPPORT", "OFF")
             .define("ENABLE_ZLIB", "OFF")
@@ -1114,7 +1237,7 @@ namespace this_thread {
             // (e.g., mkstemp — WASI has no temp directories). These code paths are never reached
             // in WASM since OCR is fully in-memory.
             .define("CMAKE_C_FLAGS", "-fPIC -Os -fno-lto -fno-exceptions -D_WASI_EMULATED_PROCESS_CLOCKS -D_WASI_EMULATED_SIGNAL -Wno-implicit-function-declaration")
-            .define("CMAKE_INSTALL_PREFIX", leptonica_install);
+            .define("CMAKE_INSTALL_PREFIX", normalize_cmake_path(leptonica_install));
 
         config.build();
     }
@@ -1251,19 +1374,35 @@ Installation instructions:
 
         // Use wasm32-wasi (non-threaded) - no atomic operations emitted
         config.target("wasm32-wasi");
-        config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
-        config.define("CMAKE_SYSROOT", &sysroot);
-        config.define("CMAKE_C_COMPILER", &clang);
-        config.define("CMAKE_CXX_COMPILER", &clangxx);
-        config.define("WASI_SDK_PREFIX", wasi_sdk_dir);
+        // On Windows, the default Visual Studio generator ignores CMAKE_C_COMPILER
+        // and uses cl.exe, which doesn't understand GCC/Clang flags (-fPIC, -Wno-*, etc.).
+        // Force Ninja to ensure the WASI SDK clang is actually used.
+        if cfg!(target_os = "windows") {
+            config.generator("Ninja");
+        }
+        // Normalize all paths to forward slashes for CMake on Windows.
+        // Backslash paths (e.g. C:\hostedtoolcache\...) cause CMake "Invalid character escape"
+        // errors when written to CMakeCCompiler.cmake cache files.
+        config.define("CMAKE_TOOLCHAIN_FILE", normalize_cmake_path(&toolchain_file));
+        config.define("CMAKE_SYSROOT", normalize_cmake_path(&sysroot));
+        config.define("CMAKE_C_COMPILER", normalize_cmake_path(&clang));
+        config.define("CMAKE_CXX_COMPILER", normalize_cmake_path(&clangxx));
+        config.define("WASI_SDK_PREFIX", normalize_cmake_path(wasi_sdk_dir));
 
         let leptonica_lib_dir = leptonica_install.join("lib");
         let leptonica_include_dir = leptonica_install.join("include");
 
-        config.define("Leptonica_DIR", leptonica_install);
-        config.define("CMAKE_PREFIX_PATH", leptonica_install);
+        // Leptonica_DIR must point to the directory containing LeptonicaConfig.cmake,
+        // not the install prefix. On Windows with WASI toolchain, CMAKE_PREFIX_PATH
+        // search doesn't find it automatically because the toolchain overrides search paths.
+        let leptonica_cmake_dir = leptonica_install.join("lib/cmake/leptonica");
+        config.define("Leptonica_DIR", normalize_cmake_path(&leptonica_cmake_dir));
+        config.define("CMAKE_PREFIX_PATH", normalize_cmake_path(leptonica_install));
         // Help the linker find leptonica during try_compile checks
-        config.define("CMAKE_EXE_LINKER_FLAGS", format!("-L{}", leptonica_lib_dir.display()));
+        config.define(
+            "CMAKE_EXE_LINKER_FLAGS",
+            format!("-L{}", normalize_cmake_path(&leptonica_lib_dir)),
+        );
 
         // TESSERACT_WASM_NOOP_MUTEX: Replace std::mutex with no-op stubs in WASM builds.
         // The wasm32-wasi-threads libc++ provides std::mutex that uses memory.atomic.wait32,
@@ -1277,18 +1416,22 @@ Installation instructions:
         }
         cxx_flags.push_str(&format!(
             "-fPIC -Os -fno-lto -I{} -I{}",
-            leptonica_include_dir.display(),
-            noop_mutex_include.display()
+            normalize_cmake_path(&leptonica_include_dir),
+            normalize_cmake_path(&noop_mutex_include)
         ));
 
         let c_flags = format!(
             "-fPIC -Os -fno-lto -fno-exceptions -D_WASI_EMULATED_PROCESS_CLOCKS -D_WASI_EMULATED_SIGNAL -I{}",
-            leptonica_include_dir.display()
+            normalize_cmake_path(&leptonica_include_dir)
         );
 
         config
             .define("CMAKE_BUILD_TYPE", "Release")
             .define("CMAKE_POLICY_VERSION_MINIMUM", "3.5")
+            // Skip executable linking in CMake try-compile checks (cross-compilation).
+            // On Windows, the host MSVC compiler may be used for try-compile, and it
+            // does not understand GCC/Clang flags passed via CMAKE_C_FLAGS/CMAKE_CXX_FLAGS.
+            .define("CMAKE_TRY_COMPILE_TARGET_TYPE", "STATIC_LIBRARY")
             // Cross-compilation: provide try_run results since we can't execute WASM binaries
             .define("LEPT_TIFF_RESULT", "1")
             .define("LEPT_TIFF_RESULT__TRYRUN_OUTPUT", "")
@@ -1323,7 +1466,7 @@ Installation instructions:
             .define("HAVE_AVX2", "OFF")
             .define("HAVE_AVX512F", "OFF")
             .define("HAVE_FMA", "OFF")
-            .define("CMAKE_INSTALL_PREFIX", tesseract_install)
+            .define("CMAKE_INSTALL_PREFIX", normalize_cmake_path(tesseract_install))
             .define("CMAKE_CXX_FLAGS", &cxx_flags)
             .define("CMAKE_C_FLAGS", &c_flags);
 

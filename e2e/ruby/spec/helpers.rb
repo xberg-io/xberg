@@ -230,14 +230,17 @@ module E2ERuby
       end
     end
 
-    def self.assert_chunks(result, min_count: nil, max_count: nil, each_has_content: nil, each_has_embedding: nil)
+    def self.assert_chunks(result, min_count: nil, max_count: nil, each_has_content: nil, each_has_embedding: nil, each_has_heading_context: nil)
       chunks = Array(result.chunks)
       expect(chunks.length).to be >= min_count if min_count
       expect(chunks.length).to be <= max_count if max_count
       chunks.each { |chunk| expect(chunk.content).not_to be_nil } if each_has_content
-      return unless each_has_embedding
-
-      chunks.each { |chunk| expect(chunk.embedding).not_to be_nil }
+      chunks.each { |chunk| expect(chunk.embedding).not_to be_nil } if each_has_embedding
+      if each_has_heading_context == true
+        chunks.each { |chunk| expect(chunk.metadata&.heading_context).not_to be_nil }
+      elsif each_has_heading_context == false
+        chunks.each { |chunk| expect(chunk.metadata&.heading_context).to be_nil }
+      end
     end
 
     def self.assert_images(result, min_count: nil, max_count: nil, formats_include: nil)

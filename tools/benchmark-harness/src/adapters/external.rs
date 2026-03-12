@@ -52,6 +52,9 @@ fn get_supported_formats(framework_name: &str) -> Vec<String> {
         // pypdf: PDF-only (pure Python PDF library)
         "pypdf" => vec!["pdf".to_string()],
 
+        // playa-pdf: PDF-only (pure Python PDF library)
+        "playa-pdf" => vec!["pdf".to_string()],
+
         // pdfminer.six: PDF-only (Python PDF text extraction)
         "pdfminer" => vec!["pdf".to_string()],
 
@@ -411,6 +414,22 @@ pub fn create_pypdf_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     )
 }
 
+/// Creates a subprocess adapter for playa-pdf (persistent server mode)
+pub fn create_playa_pdf_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("playa_pdf_extract.py")?;
+    let (command, mut args) = find_python_with_framework("playa")?;
+    args.push(script_path.to_string_lossy().to_string());
+    args.push(format!("--timeout={}", PYTHON_EXTRACTION_TIMEOUT_SECS));
+    args.push(ocr_flag(ocr_enabled));
+    args.push("server".to_string());
+
+    let supported_formats = get_supported_formats("playa-pdf");
+    Ok(
+        SubprocessAdapter::with_persistent_mode("playa-pdf", command, args, vec![], supported_formats)
+            .with_max_timeout(Duration::from_secs(PERSISTENT_MAX_TIMEOUT_SECS)),
+    )
+}
+
 /// Creates a subprocess adapter for pdfminer.six (persistent server mode)
 pub fn create_pdfminer_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     let script_path = get_script_path("pdfminer_extract.py")?;
@@ -487,5 +506,6 @@ mod tests {
         let _ = create_pypdf_adapter(true);
         let _ = create_pdfminer_adapter(true);
         let _ = create_pdftotext_adapter(true);
+        let _ = create_playa_pdf_adapter(true);
     }
 }

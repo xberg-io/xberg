@@ -12,6 +12,14 @@ static void test_office_office_bibtex_basic(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_office_office_commonmark_basic(void) {
+    CExtractionResult *result = run_extraction("markdown/sample.commonmark", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"text/markdown", "text/plain", "text/x-commonmark"}, 3);
+    assert_min_content_length(result, 5);
+    kreuzberg_free_result(result);
+}
+
 static void test_office_office_djot_basic(void) {
     CExtractionResult *result = run_extraction("markdown/tables.djot", NULL);
     if (!result) return; /* skipped */
@@ -259,6 +267,14 @@ static void test_office_office_ppt_legacy(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_office_office_pptm_basic(void) {
+    CExtractionResult *result = run_extraction("pptx/powerpoint_with_image.pptm", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation"}, 2);
+    assert_content_not_empty(result);
+    kreuzberg_free_result(result);
+}
+
 static void test_office_office_pptx_basic(void) {
     CExtractionResult *result = run_extraction("pptx/simple.pptx", NULL);
     if (!result) return; /* skipped */
@@ -315,6 +331,22 @@ static void test_office_office_xls_legacy(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_office_office_xlsb_basic(void) {
+    CExtractionResult *result = run_extraction("xlsx/test_xlsb.xlsb", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}, 2);
+    assert_content_not_empty(result);
+    kreuzberg_free_result(result);
+}
+
+static void test_office_office_xlsm_basic(void) {
+    CExtractionResult *result = run_extraction("xlsx/test_01.xlsm", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}, 2);
+    assert_content_not_empty(result);
+    kreuzberg_free_result(result);
+}
+
 static void test_office_office_xlsx_basic(void) {
     CExtractionResult *result = run_extraction("xlsx/stanley_cups.xlsx", NULL);
     if (!result) return; /* skipped */
@@ -349,6 +381,7 @@ static void test_office_office_xlsx_office_example(void) {
 
 int main(void) {
     test_office_office_bibtex_basic();
+    test_office_office_commonmark_basic();
     test_office_office_djot_basic();
     test_office_office_doc_legacy();
     test_office_office_docbook_basic();
@@ -379,6 +412,7 @@ int main(void) {
     test_office_office_org_basic();
     test_office_office_ppsx_slideshow();
     test_office_office_ppt_legacy();
+    test_office_office_pptm_basic();
     test_office_office_pptx_basic();
     test_office_office_pptx_images();
     test_office_office_pptx_pitch_deck();
@@ -386,6 +420,8 @@ int main(void) {
     test_office_office_rtf_basic();
     test_office_office_typst_basic();
     test_office_office_xls_legacy();
+    test_office_office_xlsb_basic();
+    test_office_office_xlsm_basic();
     test_office_office_xlsx_basic();
     test_office_office_xlsx_multi_sheet();
     test_office_office_xlsx_office_example();

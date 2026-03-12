@@ -8,6 +8,7 @@ var config = new ExtractionConfig
         ExtractImages = true,
         TargetDpi = 200,
         MaxImageDimension = 2048,
+        InjectPlaceholders = true, // set to false to extract images without markdown references
         AutoAdjustDpi = true
     }
 };

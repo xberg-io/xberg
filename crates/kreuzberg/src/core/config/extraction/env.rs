@@ -22,6 +22,7 @@ impl ExtractionConfig {
     /// - `KREUZBERG_CHUNKING_MAX_OVERLAP`: Maximum overlap between chunks (non-negative integer)
     /// - `KREUZBERG_CACHE_ENABLED`: Cache enabled flag ("true" or "false")
     /// - `KREUZBERG_TOKEN_REDUCTION_MODE`: Token reduction mode ("off", "light", "moderate", "aggressive", or "maximum")
+    /// - `KREUZBERG_CHUNKING_TOKENIZER`: HuggingFace tokenizer model ID for token-based chunk sizing (requires `chunking-tokenizers` feature)
     ///
     /// # Behavior
     ///
@@ -93,14 +94,7 @@ impl ExtractionConfig {
             }
 
             if self.chunking.is_none() {
-                self.chunking = Some(ChunkingConfig {
-                    max_characters: 1000,
-                    overlap: 200,
-                    trim: true,
-                    chunker_type: super::super::processing::ChunkerType::Text,
-                    embedding: None,
-                    preset: None,
-                });
+                self.chunking = Some(ChunkingConfig::default());
             }
 
             if let Some(ref mut chunking) = self.chunking {
@@ -121,14 +115,7 @@ impl ExtractionConfig {
             })?;
 
             if self.chunking.is_none() {
-                self.chunking = Some(ChunkingConfig {
-                    max_characters: 1000,
-                    overlap: 200,
-                    trim: true,
-                    chunker_type: super::super::processing::ChunkerType::Text,
-                    embedding: None,
-                    preset: None,
-                });
+                self.chunking = Some(ChunkingConfig::default());
             }
 
             if let Some(ref mut chunking) = self.chunking {
@@ -176,6 +163,25 @@ impl ExtractionConfig {
                 message: format!("Invalid value for KREUZBERG_OUTPUT_FORMAT: {}", e),
                 source: None,
             })?;
+        }
+
+        // KREUZBERG_CHUNKING_TOKENIZER override
+        #[cfg(feature = "chunking-tokenizers")]
+        if let Ok(model) = std::env::var("KREUZBERG_CHUNKING_TOKENIZER") {
+            if model.is_empty() {
+                return Err(KreuzbergError::Validation {
+                    message: "KREUZBERG_CHUNKING_TOKENIZER must not be empty".to_string(),
+                    source: None,
+                });
+            }
+
+            if self.chunking.is_none() {
+                self.chunking = Some(ChunkingConfig::default());
+            }
+
+            if let Some(ref mut chunking) = self.chunking {
+                chunking.sizing = crate::core::config::processing::ChunkSizing::Tokenizer { model, cache_dir: None };
+            }
         }
 
         Ok(())

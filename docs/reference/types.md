@@ -2143,6 +2143,7 @@ pub struct ChunkMetadata {
     pub total_chunks: usize,
     pub first_page: Option<usize>,
     pub last_page: Option<usize>,
+    pub heading_context: Option<HeadingContext>,
 }
 ```
 
@@ -2157,6 +2158,7 @@ class ChunkMetadata(TypedDict):
     total_chunks: int
     first_page: int | None
     last_page: int | None
+    heading_context: HeadingContext | None
 
 class Chunk(TypedDict, total=False):
     content: str
@@ -2175,6 +2177,7 @@ export interface ChunkMetadata {
   totalChunks: number;
   firstPage?: number | null;
   lastPage?: number | null;
+  headingContext?: HeadingContext | null;
 }
 
 export interface Chunk {
@@ -2190,6 +2193,7 @@ export interface Chunk {
 Kreuzberg::Result::Chunk = Struct.new(
     :content, :byte_start, :byte_end, :token_count,
     :chunk_index, :total_chunks, :first_page, :last_page, :embedding,
+    :heading_context,
     keyword_init: true
 )
 ```
@@ -2204,7 +2208,8 @@ public record ChunkMetadata(
     int chunkIndex,
     int totalChunks,
     Optional<Integer> firstPage,
-    Optional<Integer> lastPage
+    Optional<Integer> lastPage,
+    Optional<HeadingContext> headingContext
 ) {}
 
 public record Chunk(
@@ -2218,13 +2223,14 @@ public record Chunk(
 
 ```go title="chunk.go"
 type ChunkMetadata struct {
-    ByteStart   int  `json:"byte_start"`
-    ByteEnd     int  `json:"byte_end"`
-    TokenCount  *int `json:"token_count,omitempty"`
-    ChunkIndex  int  `json:"chunk_index"`
-    TotalChunks int  `json:"total_chunks"`
-    FirstPage   *int `json:"first_page,omitempty"`
-    LastPage    *int `json:"last_page,omitempty"`
+    ByteStart      int             `json:"byte_start"`
+    ByteEnd        int             `json:"byte_end"`
+    TokenCount     *int            `json:"token_count,omitempty"`
+    ChunkIndex     int             `json:"chunk_index"`
+    TotalChunks    int             `json:"total_chunks"`
+    FirstPage      *int            `json:"first_page,omitempty"`
+    LastPage       *int            `json:"last_page,omitempty"`
+    HeadingContext *HeadingContext  `json:"heading_context,omitempty"`
 }
 
 type Chunk struct {
@@ -2551,6 +2557,7 @@ pub struct ChunkingConfig {
     pub chunker_type: ChunkerType,   // default: ChunkerType::Text
     pub embedding: Option<EmbeddingConfig>,
     pub preset: Option<String>,
+    pub sizing: ChunkSizing,         // default: ChunkSizing::Characters
 }
 ```
 
@@ -2565,6 +2572,7 @@ class ChunkingConfig:
     chunker_type: ChunkerType = ChunkerType.TEXT
     embedding: EmbeddingConfig | None = None
     preset: str | None = None
+    sizing: ChunkSizing = ChunkSizing.CHARACTERS
 ```
 
 #### TypeScript
@@ -2577,6 +2585,7 @@ export interface ChunkingConfig {
   chunkerType?: ChunkerType;
   embedding?: EmbeddingConfig;
   preset?: string;
+  sizing?: ChunkSizing;
 }
 ```
 
@@ -2589,7 +2598,8 @@ public record ChunkingConfig(
     boolean trim,
     ChunkerType chunkerType,
     Optional<EmbeddingConfig> embedding,
-    Optional<String> preset
+    Optional<String> preset,
+    ChunkSizing sizing
 ) {}
 ```
 
@@ -2603,6 +2613,7 @@ type ChunkingConfig struct {
     ChunkerType   ChunkerType      `json:"chunker_type"`
     Embedding     *EmbeddingConfig `json:"embedding,omitempty"`
     Preset        *string          `json:"preset,omitempty"`
+    Sizing        ChunkSizing      `json:"sizing"`
 }
 ```
 
@@ -2665,6 +2676,155 @@ const (
     ChunkerTypeText     ChunkerType = "text"
     ChunkerTypeMarkdown ChunkerType = "markdown"
 )
+```
+
+### HeadingLevel
+
+A single heading in the document hierarchy, representing one level of section nesting.
+
+#### Rust
+
+```rust title="heading_level.rs"
+pub struct HeadingLevel {
+    pub level: u8,      // Heading depth (1 = h1, 2 = h2, etc.)
+    pub text: String,   // The text content of the heading
+}
+```
+
+#### Python
+
+```python title="heading_level.py"
+@dataclass
+class HeadingLevel:
+    level: int
+    text: str
+```
+
+#### TypeScript
+
+```typescript title="heading_level.ts"
+export interface HeadingLevel {
+  level: number;
+  text: string;
+}
+```
+
+#### Java
+
+```java title="HeadingLevel.java"
+public record HeadingLevel(
+    int level,
+    String text
+) {}
+```
+
+#### Go
+
+```go title="heading_level.go"
+type HeadingLevel struct {
+    Level int    `json:"level"`
+    Text  string `json:"text"`
+}
+```
+
+### HeadingContext
+
+Heading hierarchy from root to current section, providing structural context for a chunk within the document.
+
+#### Rust
+
+```rust title="heading_context.rs"
+pub struct HeadingContext {
+    pub headings: Vec<HeadingLevel>,  // Hierarchy from root to current section
+}
+```
+
+#### Python
+
+```python title="heading_context.py"
+@dataclass
+class HeadingContext:
+    headings: list[HeadingLevel]
+```
+
+#### TypeScript
+
+```typescript title="heading_context.ts"
+export interface HeadingContext {
+  headings: HeadingLevel[];
+}
+```
+
+#### Java
+
+```java title="HeadingContext.java"
+public record HeadingContext(
+    List<HeadingLevel> headings
+) {}
+```
+
+#### Go
+
+```go title="heading_context.go"
+type HeadingContext struct {
+    Headings []HeadingLevel `json:"headings"`
+}
+```
+
+### ChunkSizing
+
+Chunk size measurement strategy. Defaults to Unicode character count; optionally uses a HuggingFace tokenizer (requires `chunking-tokenizers` feature).
+
+#### Rust
+
+```rust title="chunk_sizing.rs"
+pub enum ChunkSizing {
+    Characters,           // Default: Unicode character count
+    Tokenizer {           // Requires `chunking-tokenizers` feature
+        model: String,    // HuggingFace model ID (e.g., "Xenova/gpt-4o")
+        cache_dir: Option<PathBuf>,  // Optional cache directory
+    },
+}
+```
+
+#### Python
+
+```python title="chunk_sizing.py"
+@dataclass
+class ChunkSizing:
+    mode: str = "characters"          # "characters" or "tokenizer"
+    model: str | None = None          # HuggingFace model ID
+    cache_dir: str | None = None      # Optional cache directory
+```
+
+#### TypeScript
+
+```typescript title="chunk_sizing.ts"
+export type ChunkSizing =
+  | { mode: "characters" }
+  | { mode: "tokenizer"; model: string; cacheDir?: string };
+```
+
+#### Java
+
+```java title="ChunkSizing.java"
+public sealed interface ChunkSizing {
+    record Characters() implements ChunkSizing {}
+    record Tokenizer(
+        String model,
+        Optional<String> cacheDir
+    ) implements ChunkSizing {}
+}
+```
+
+#### Go
+
+```go title="chunk_sizing.go"
+type ChunkSizing struct {
+    Mode     string  `json:"mode"`                // "characters" or "tokenizer"
+    Model    *string `json:"model,omitempty"`      // HuggingFace model ID
+    CacheDir *string `json:"cache_dir,omitempty"`  // Optional cache directory
+}
 ```
 
 ### EmbeddingConfig
@@ -2734,6 +2894,7 @@ pub struct ImageExtractionConfig {
     pub extract_images: bool,
     pub target_dpi: i32,
     pub max_image_dimension: i32,
+    pub inject_placeholders: bool,
     pub auto_adjust_dpi: bool,
     pub min_dpi: i32,
     pub max_dpi: i32,
@@ -2748,6 +2909,7 @@ class ImageExtractionConfig:
     extract_images: bool = True
     target_dpi: int = 300
     max_image_dimension: int = 4096
+    inject_placeholders: bool = True
     auto_adjust_dpi: bool = True
     min_dpi: int = 72
     max_dpi: int = 600
@@ -2760,6 +2922,7 @@ export interface ImageExtractionConfig {
   extractImages?: boolean;
   targetDpi?: number;
   maxImageDimension?: number;
+  injectPlaceholders?: boolean;
   autoAdjustDpi?: boolean;
   minDpi?: number;
   maxDpi?: number;
@@ -2773,6 +2936,7 @@ public record ImageExtractionConfig(
     boolean extractImages,
     int targetDpi,
     int maxImageDimension,
+    boolean injectPlaceholders,
     boolean autoAdjustDpi,
     int minDpi,
     int maxDpi
@@ -2783,12 +2947,13 @@ public record ImageExtractionConfig(
 
 ```go title="image_extraction_config.go"
 type ImageExtractionConfig struct {
-    ExtractImages      bool
-    TargetDPI          int32
-    MaxImageDimension  int32
-    AutoAdjustDPI      bool
-    MinDPI             int32
-    MaxDPI             int32
+    ExtractImages        bool
+    TargetDPI            int32
+    MaxImageDimension    int32
+    InjectPlaceholders   bool
+    AutoAdjustDPI        bool
+    MinDPI               int32
+    MaxDPI               int32
 }
 ```
 

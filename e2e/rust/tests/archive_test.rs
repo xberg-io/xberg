@@ -7,6 +7,29 @@ use e2e_rust::{assertions, resolve_document};
 use kreuzberg::core::config::ExtractionConfig;
 
 #[test]
+fn test_archive_gz_basic() {
+    // Gzip compressed file extraction.
+
+    let document_path = resolve_document("archives/book_war_and_peace_1p.txt.gz");
+    if !document_path.exists() {
+        println!(
+            "Skipping archive_gz_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for archive_gz_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/gzip", "application/x-gzip"]);
+    assertions::assert_min_content_length(&result, 10);
+}
+
+#[test]
 fn test_archive_sevenz_basic() {
     // 7-Zip archive extraction.
 

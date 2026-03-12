@@ -1,5 +1,3 @@
-#![cfg(feature = "office")]
-
 //! Native DOC extractor for Word 97-2003 binary format.
 //!
 //! Extracts text directly from OLE/CFB compound documents without LibreOffice.

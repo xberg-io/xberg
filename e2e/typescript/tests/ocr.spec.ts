@@ -451,7 +451,7 @@ describe("ocr fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 20);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -555,6 +555,40 @@ describe("ocr fixtures", () => {
 			assertions.assertExpectedMime(result, ["image/png"]);
 			assertions.assertMinContentLength(result, 5);
 			chunkAssertions.assertOcrElements(result, true, true, true, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"ocr_tesseract_elements_min_count",
+		() => {
+			const documentPath = resolveDocument("images/test_hello_world.png");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping ocr_tesseract_elements_min_count: missing document at", documentPath);
+				console.warn("Notes: Requires Tesseract OCR backend");
+				return;
+			}
+			const config = buildConfig({
+				force_ocr: true,
+				ocr: { backend: "tesseract", element_config: { include_elements: true, min_level: "line" }, language: "eng" },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(error, "ocr_tesseract_elements_min_count", ["tesseract"], "Requires Tesseract OCR backend")
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/png"]);
+			assertions.assertMinContentLength(result, 5);
+			chunkAssertions.assertOcrElements(result, true, null, null, 1);
 		},
 		TEST_TIMEOUT_MS,
 	);

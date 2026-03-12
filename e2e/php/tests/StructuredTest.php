@@ -35,6 +35,24 @@ class StructuredTest extends TestCase
     }
 
     /**
+     * EndNote ENW citation format extraction.
+     */
+    public function test_structured_enw_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('data_formats/sample.enw');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping structured_enw_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/x-endnote-refer', 'application/x-endnote+xml', 'text/plain']);
+    }
+
+    /**
      * Structured JSON extraction should stream and preserve content.
      */
     public function test_structured_json_basic(): void
@@ -75,6 +93,44 @@ class StructuredTest extends TestCase
     }
 
     /**
+     * PubMed NBIB citation format extraction.
+     */
+    public function test_structured_nbib_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('data_formats/sample.nbib');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping structured_nbib_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/nbib', 'application/x-pubmed', 'text/plain']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
+     * RIS citation format extraction.
+     */
+    public function test_structured_ris_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('data_formats/sample.ris');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping structured_ris_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/x-research-info-systems', 'text/plain']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
      * TOML configuration file extraction.
      */
     public function test_structured_toml_basic(): void
@@ -90,6 +146,25 @@ class StructuredTest extends TestCase
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertExpectedMime($result, ['application/toml', 'text/toml']);
+        Helpers::assertMinContentLength($result, 10);
+    }
+
+    /**
+     * TSV (tab-separated values) data file extraction.
+     */
+    public function test_structured_tsv_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('data_formats/employees.tsv');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping structured_tsv_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['text/tab-separated-values', 'text/plain']);
         Helpers::assertMinContentLength($result, 10);
     }
 

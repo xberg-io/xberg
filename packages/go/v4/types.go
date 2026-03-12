@@ -174,13 +174,25 @@ type Chunk struct {
 
 // ChunkMetadata provides positional information for a chunk.
 type ChunkMetadata struct {
-	ByteStart   uint64  `json:"byte_start"`
-	ByteEnd     uint64  `json:"byte_end"`
-	TokenCount  *uint64 `json:"token_count,omitempty"`
-	ChunkIndex  uint64  `json:"chunk_index"`
-	TotalChunks uint64  `json:"total_chunks"`
-	FirstPage   *uint64 `json:"first_page,omitempty"`
-	LastPage    *uint64 `json:"last_page,omitempty"`
+	ByteStart      uint64          `json:"byte_start"`
+	ByteEnd        uint64          `json:"byte_end"`
+	TokenCount     *uint64         `json:"token_count,omitempty"`
+	ChunkIndex     uint64          `json:"chunk_index"`
+	TotalChunks    uint64          `json:"total_chunks"`
+	FirstPage      *uint64         `json:"first_page,omitempty"`
+	LastPage       *uint64         `json:"last_page,omitempty"`
+	HeadingContext *HeadingContext `json:"heading_context,omitempty"`
+}
+
+// HeadingContext contains the heading hierarchy for a chunk's section.
+type HeadingContext struct {
+	Headings []HeadingLevel `json:"headings"`
+}
+
+// HeadingLevel represents a single heading in the hierarchy.
+type HeadingLevel struct {
+	Level uint8  `json:"level"`
+	Text  string `json:"text"`
 }
 
 // ExtractedImage represents an extracted image, optionally with nested OCR results.

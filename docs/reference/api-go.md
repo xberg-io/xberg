@@ -1,4 +1,4 @@
-# Go API Reference <span class="version-badge">v4.4.2</span>
+# Go API Reference <span class="version-badge">v4.4.5</span>
 
 Complete reference for the Kreuzberg Go bindings using cgo to access the Rust-powered extraction pipeline.
 
@@ -43,7 +43,7 @@ When building outside the monorepo, provide the static library via `CGO_LDFLAGS`
 
 ```bash title="Terminal"
 # Option 1: Download pre-built from GitHub Releases
-curl -LO https://github.com/kreuzberg-dev/kreuzberg/releases/download/v4.4.2/go-ffi-linux-x86_64.tar.gz
+curl -LO https://github.com/kreuzberg-dev/kreuzberg/releases/download/v4.4.5/go-ffi-linux-x86_64.tar.gz
 tar -xzf go-ffi-linux-x86_64.tar.gz
 mkdir -p ~/kreuzberg/lib
 cp kreuzberg-ffi/lib/libkreuzberg_ffi.a ~/kreuzberg/lib/
@@ -462,7 +462,7 @@ func LibraryVersion() string
 
 **Returns:**
 
-- `string`: Version string (e.g., "4.4.2")
+- `string`: Version string (e.g., "4.4.5")
 
 **Example:**
 
@@ -482,19 +482,24 @@ Root configuration struct for all extraction operations. All fields are optional
 
 ```go title="Go"
 type ExtractionConfig struct {
-	UseCache                 *bool                          // Enable result caching
-	EnableQualityProcessing  *bool                          // Run quality improvements
-	OCR                      *OCRConfig                     // OCR backend and settings
-	ForceOCR                 *bool                          // Force OCR even for text-extractable docs
-	Chunking                 *ChunkingConfig                // Text chunking and embeddings
-	Images                   *ImageExtractionConfig         // Image extraction from docs
-	PdfOptions               *PdfConfig                     // PDF-specific options
-	TokenReduction           *TokenReductionConfig          // Token pruning before embeddings
-	LanguageDetection        *LanguageDetectionConfig       // Language detection settings
-	Keywords                 *KeywordConfig                 // Keyword extraction
-	Postprocessor            *PostProcessorConfig           // Post-processor selection
-	HTMLOptions              *HTMLConversionOptions         // HTML-to-Markdown conversion
-	MaxConcurrentExtractions *int                           // Batch concurrency limit
+	Chunking                 *ChunkingConfig          // Text chunking and embeddings
+	EnableQualityProcessing  *bool                    // Run quality improvements
+	ForceOCR                 *bool                    // Force OCR even for text-extractable docs
+	HTMLOptions              *HTMLConversionOptions   // HTML-to-Markdown conversion
+	Images                   *ImageExtractionConfig   // Image extraction from docs
+	IncludeDocumentStructure *bool                    // Include hierarchical document tree
+	Keywords                 *KeywordConfig           // Keyword extraction settings
+	LanguageDetection        *LanguageDetectionConfig // Language detection settings
+	MaxConcurrentExtractions *int                     // Batch concurrency limit
+	OCR                      *OCRConfig               // OCR backend and settings
+	OutputFormat             string                   // Applied output format ("markdown", "djot", etc.)
+	Pages                    *PageConfig              // Page extraction settings
+	PdfOptions               *PdfConfig               // PDF-specific options
+	Postprocessor            *PostProcessorConfig     // Post-processor selection
+	ResultFormat             string                   // Result structure ("unified", "element_based")
+	SecurityLimits           *SecurityLimitsConfig    // Security thresholds for archives/XML
+	TokenReduction           *TokenReductionConfig    // Token pruning settings
+	UseCache                 *bool                    // Enable result caching
 }
 ```
 
@@ -508,9 +513,11 @@ Configure OCR backend selection and language.
 
 ```go title="Go"
 type OCRConfig struct {
-	Backend   string           // OCR backend name: "tesseract", "easyocr", "paddle", etc.
-	Language  *string          // Language code (e.g., "eng", "deu", "fra")
-	Tesseract *TesseractConfig // Tesseract-specific fine-tuning
+	Backend       string            // OCR backend name: "tesseract", "easyocr", "paddle", etc.
+	ElementConfig *OcrElementConfig // OCR element extraction fine-tuning
+	Language      *string           // Language code (e.g., "eng", "deu", "fra")
+	PaddleOcr     *PaddleOcrConfig  // PaddleOCR-specific configuration
+	Tesseract     *TesseractConfig  // Tesseract-specific fine-tuning
 }
 ```
 
@@ -539,20 +546,27 @@ Fine-grained Tesseract OCR tuning.
 
 ```go title="Go"
 type TesseractConfig struct {
-	Language                       string                    // Language code
-	PSM                            *int                      // Page segmentation mode (0-13)
-	OutputFormat                   string                    // Output format: "text", "pdf", "hocr"
-	OEM                            *int                      // Engine mode (0-3)
-	MinConfidence                  *float64                  // Confidence threshold (0.0-1.0)
-	Preprocessing                  *ImagePreprocessingConfig // Image preprocessing
+	ClassifyUsePreAdaptedTemplates *bool                     // Use pre-adapted templates
 	EnableTableDetection           *bool                     // Detect and extract tables
-	TableMinConfidence             *float64                  // Table detection confidence
+	Language                       string                    // Language code
+	LanguageModelNgramOn           *bool                     // Enable N-gram language model
+	MinConfidence                  *float64                  // Confidence threshold (0.0-1.0)
+	OEM                            *int                      // Engine mode (0-3)
+	OutputFormat                   string                    // Output format: "text", "pdf", "hocr"
+	Preprocessing                  *ImagePreprocessingConfig // Image preprocessing
+	PSM                            *int                      // Page segmentation mode (0-13)
 	TableColumnThreshold           *int                      // Column separation threshold
+	TableMinConfidence             *float64                  // Table detection confidence
 	TableRowThresholdRatio         *float64                  // Row separation ratio
-	UseCache                       *bool                     // Cache OCR results
-	// Additional Tesseract parameters...
-	TesseditCharWhitelist          string                    // Character whitelist
 	TesseditCharBlacklist          string                    // Character blacklist
+	TesseditCharWhitelist          string                    // Character whitelist
+	TesseditDontBlkrejGoodWds      *bool                     // Don't reject good words
+	TesseditDontRowrejGoodWds      *bool                     // Don't reject good rows
+	TesseditEnableDictCorrection   *bool                     // Enable dictionary correction
+	TesseditUsePrimaryParamsModel  *bool                     // Use primary parameters model
+	TextordSpaceSizeIsVariable     *bool                     // Variable space size
+	ThresholdingMethod             *bool                     // Thresholding method
+	UseCache                       *bool                     // Cache OCR results
 }
 ```
 
@@ -586,16 +600,26 @@ Configure text chunking for RAG and retrieval workloads.
 
 ```go title="Go"
 type ChunkingConfig struct {
-	MaxChars     *int    // Maximum characters per chunk
-	MaxOverlap   *int    // Overlap between chunks in characters
-	ChunkSize    *int    // Deprecated: use MaxChars instead
-	ChunkOverlap *int    // Deprecated: use MaxOverlap instead
-	Preset       *string // Chunking preset name
-	Enabled      *bool   // Enable chunking (default: true)
+	ChunkOverlap *int             // Deprecated: use MaxOverlap instead
+	ChunkSize    *int             // Deprecated: use MaxChars instead
+	Embedding    *EmbeddingConfig // Nested embedding configuration
+	Enabled      *bool            // Enable chunking (default: true)
+	MaxChars     *int             // Maximum characters per chunk
+	MaxOverlap   *int             // Overlap between chunks in characters
+	Preset       *string          // Chunking preset name
+	Sizing       *ChunkSizingConfig // Chunk size measurement configuration
+}
+
+type ChunkSizingConfig struct {
+	SizingType string  // "characters" (default) or "tokenizer"
+	Model      string  // HuggingFace model ID (required when SizingType is "tokenizer")
+	CacheDir   *string // Optional directory to cache downloaded tokenizer files
 }
 ```
 
 **Note:** The Go binding maintains both `MaxChars`/`MaxOverlap` (recommended) and `ChunkSize`/`ChunkOverlap` (deprecated) for backward compatibility. New code should use `MaxChars` and `MaxOverlap`.
+
+The `Sizing` field controls how chunk size is measured. By default, `MaxChars` counts characters. Set `SizingType` to `"tokenizer"` with a HuggingFace `Model` ID (e.g. `"bert-base-uncased"`) to measure by token count instead.
 
 ---
 
@@ -626,9 +650,13 @@ PDF-specific extraction options.
 
 ```go title="Go"
 type PdfConfig struct {
-	ExtractImages   *bool    // Extract embedded images
-	Passwords       []string // List of passwords for encrypted PDFs
-	ExtractMetadata *bool    // Extract document metadata
+	BottomMarginFraction *float64    // Bottom margin to ignore during extraction
+	ExtractAnnotations   *bool       // Extract PDF annotations
+	ExtractImages        *bool       // Extract embedded images
+	ExtractMetadata      *bool       // Extract document metadata
+	FontConfig           *FontConfig // Font provider configuration
+	Passwords            []string    // List of passwords for encrypted PDFs
+	TopMarginFraction    *float64    // Top margin to ignore during extraction
 }
 ```
 
@@ -697,9 +725,64 @@ Configure post-processing steps.
 
 ```go title="Go"
 type PostProcessorConfig struct {
+	DisabledProcessors []string // Processors to skip
 	Enabled            *bool    // Enable post-processing
 	EnabledProcessors  []string // Specific processors to run
-	DisabledProcessors []string // Processors to skip
+}
+```
+
+### OcrElementConfig
+
+Fine-grained controls for OCR element extraction.
+
+**Signature:**
+
+```go title="Go"
+type OcrElementConfig struct {
+	BuildHierarchy  bool    // Build hierarchical relationship between elements
+	IncludeElements bool    // Whether to extract spatial elements
+	MinConfidence   float64 // Minimum confidence threshold (0.0-1.0)
+	MinLevel        string  // Minimum level: "word", "line", "block", "page"
+}
+```
+
+### PaddleOcrConfig
+
+Specific configuration for the PaddleOCR backend.
+
+**Signature:**
+
+```go title="Go"
+type PaddleOcrConfig struct {
+	CacheDir             string   // Cache directory for model files
+	DetDbBoxThresh       *float64 // Detection box threshold
+	DetDbThresh          *float64 // Detection threshold
+	DetDbUnclipRatio     *float64 // Detection unclip ratio
+	DetLimitSideLen      *int     // Detection side length limit
+	EnableTableDetection *bool    // Detect tables in images
+	Language             string   // Language code
+	RecBatchNum          *int     // Recognition batch size
+	UseAngleCls          *bool    // Use angle classification
+}
+```
+
+### SecurityLimitsConfig
+
+Security thresholds for archive and XML processing.
+
+**Signature:**
+
+```go title="Go"
+type SecurityLimitsConfig struct {
+	MaxArchiveSize      *int // Maximum archive size in bytes
+	MaxCompressionRatio *int // Maximum allowed compression ratio
+	MaxContentSize      *int // Maximum extracted content size
+	MaxEntityLength     *int // Maximum XML entity expansion length
+	MaxFilesInArchive   *int // Maximum number of files in archive
+	MaxIterations       *int // Maximum processing iterations
+	MaxNestingDepth     *int // Maximum recursion depth
+	MaxTableCells       *int // Maximum table cells per document
+	MaxXMLDepth         *int // Maximum XML structure depth
 }
 ```
 
@@ -715,15 +798,22 @@ The main result struct containing all extracted data.
 
 ```go title="Go"
 type ExtractionResult struct {
-	Content           string           // Extracted text content
-	MimeType          string           // Detected MIME type
-	Metadata          Metadata         // Document metadata
-	Tables            []Table          // Extracted tables
-	DetectedLanguages []string         // Detected languages
-	Chunks            []Chunk          // Text chunks (if enabled)
-	Images            []ExtractedImage // Embedded images (if enabled)
-	Pages             []PageContent    // Per-page content (if enabled)
-	Success           bool             // Extraction success flag
+	Annotations        []PdfAnnotation    // PDF annotations extracted from the document
+	Chunks             []Chunk            // Text chunks (if enabled)
+	Content            string             // Extracted text content
+	DetectedLanguages  []string           // Detected languages (ISO codes)
+	DjotContent        *DjotContent       // Rich Djot content structure
+	Document           *DocumentStructure // Structured document tree
+	Elements           []Element          // Semantic elements (ElementBased format)
+	ExtractedKeywords  []ExtractedKeyword // Keywords from RAKE/YAKE extraction
+	Images             []ExtractedImage   // Embedded images (if enabled)
+	Metadata           Metadata           // Aggregated document metadata
+	MimeType           string             // Detected or hint MIME type
+	OcrElements        []OcrElement       // OCR elements with spatial metadata
+	Pages              []PageContent      // Per-page content (if enabled)
+	ProcessingWarnings []ProcessingWarning // Non-fatal pipeline warnings
+	QualityScore       *float64           // Document quality score (0.0-1.0)
+	Tables             []Table            // Extracted tables as markdown and grids
 }
 ```
 
@@ -741,6 +831,9 @@ fmt.Printf("Detected languages: %v\n", result.DetectedLanguages)
 fmt.Printf("Number of tables: %d\n", len(result.Tables))
 fmt.Printf("Number of chunks: %d\n", len(result.Chunks))
 fmt.Printf("Number of images: %d\n", len(result.Images))
+if result.QualityScore != nil {
+	fmt.Printf("Quality score: %.2f\n", *result.QualityScore)
+}
 ```
 
 #### Pages
@@ -830,6 +923,115 @@ if result.Pages != nil {
 
 ---
 
+### DjotContent
+
+Comprehensive Djot document structure with semantic preservation.
+
+**Signature:**
+
+```go title="Go"
+type DjotContent struct {
+	Attributes []DjotAttributeEntry // Element attributes mapping
+	Blocks     []FormattedBlock     // Structured block-level content
+	Footnotes  []Footnote           // Footnote definitions
+	Images     []DjotImage           // Extracted images with metadata
+	Links      []DjotLink            // Extracted links with URLs
+	Metadata   Metadata             // YAML frontmatter metadata
+	PlainText  string               // Plain text representation
+	Tables     []Table              // Extracted tables as structured data
+}
+```
+
+---
+
+### DocumentStructure
+
+Hierarchical tree representation of the document.
+
+**Signature:**
+
+```go title="Go"
+type DocumentStructure struct {
+	Nodes []DocumentNode // Flat list of nodes with parent/child references
+}
+```
+
+#### DocumentNode
+
+A single node in the document hierarchy.
+
+**Signature:**
+
+```go title="Go"
+type DocumentNode struct {
+	Annotations  []TextAnnotation // Inline formatting and links
+	Bbox         *BoundingBox     // Spatial position
+	Children     []uint32         // Child node indices
+	Content      NodeContent      // Typed node content
+	ContentLayer ContentLayer     // Layer: body, header, footer, etc.
+	ID           string           // Unique node ID
+	Page         *uint32          // Start page number
+	PageEnd      *uint32          // End page number
+	Parent       *uint32          // Parent node index
+}
+```
+
+---
+
+### Element
+
+Semantic element extracted from a document (ElementBased format).
+
+**Signature:**
+
+```go title="Go"
+type Element struct {
+	ElementID   string          // Unique deterministic element ID
+	ElementType ElementType     // Semantic type: "title", "heading", "table", etc.
+	Metadata    ElementMetadata // Element-specific metadata (page, bbox, etc.)
+	Text        string          // Text content of the element
+}
+```
+
+#### ElementMetadata
+
+Metadata for a semantic element.
+
+**Signature:**
+
+```go title="Go"
+type ElementMetadata struct {
+	Additional   map[string]string // Custom metadata fields
+	Coordinates  *BoundingBox      // Bounding box coordinates
+	ElementIndex *uint64           // Zero-based index in element sequence
+	Filename     *string           // Source filename
+	PageNumber   *uint64           // 1-indexed page number
+}
+```
+
+---
+
+### OcrElement
+
+Spatial text element from OCR processing.
+
+**Signature:**
+
+```go title="Go"
+type OcrElement struct {
+	BackendMetadata map[string]interface{} // Raw backend-specific metadata
+	Confidence      *OcrConfidence         // Confidence scores
+	Geometry        *OcrBoundingGeometry   // Spatial geometry (box/points)
+	Level           string                 // Element level (word/line)
+	PageNumber      *int                   // 1-indexed page number
+	ParentID        string                 // ID of parent element
+	Rotation        *OcrRotation           // Rotation info
+	Text            string                 // Recognized text
+}
+```
+
+---
+
 ### Metadata
 
 Aggregated document metadata with format-specific fields.
@@ -838,14 +1040,27 @@ Aggregated document metadata with format-specific fields.
 
 ```go title="Go"
 type Metadata struct {
-	Language           *string                     // Detected language code
-	Date               *string                     // Extracted document date
-	Subject            *string                     // Document subject
-	Format             FormatMetadata              // Format-specific metadata
-	ImagePreprocessing *ImagePreprocessingMetadata // OCR preprocessing info
-	JSONSchema         json.RawMessage             // JSON Schema if available
-	Error              *ErrorMetadata              // Error info for batch operations
-	Additional         map[string]json.RawMessage  // Custom/additional fields
+	AbstractText         *string                     // Abstract or summary text (from frontmatter)
+	Additional           map[string]json.RawMessage  // Custom/additional fields (deprecated)
+	Authors              []string                    // Primary author(s)
+	Category             *string                     // Document category (classification/frontmatter)
+	CreatedAt            *string                     // Creation timestamp (ISO 8601)
+	CreatedBy            *string                     // User who created the document
+	DocumentVersion      *string                     // Document version string (from frontmatter)
+	Error                *ErrorMetadata              // Error info for batch operations
+	ExtractionDurationMs *uint64                     // Extraction duration in milliseconds
+	Format               FormatMetadata              // Format-specific metadata
+	ImagePreprocessing   *ImagePreprocessingMetadata // OCR preprocessing info
+	JSONSchema           json.RawMessage             // JSON Schema for structured data
+	Keywords             []string                    // Keywords/tags
+	Language             *string                     // Primary language (ISO 639 code)
+	ModifiedAt           *string                     // Last modification timestamp (ISO 8601)
+	ModifiedBy           *string                     // User who last modified the document
+	OutputFormat         *string                     // Applied output format (e.g., "markdown")
+	Pages                *PageStructure              // Page/slide/sheet structure
+	Subject              *string                     // Document subject or description
+	Tags                 []string                    // Document tags (from frontmatter)
+	Title                *string                     // Document title
 }
 ```
 
@@ -881,9 +1096,10 @@ Extracted table structure.
 
 ```go title="Go"
 type Table struct {
-	Cells      [][]string // 2D cell array [row][col]
-	Markdown   string     // Markdown representation
-	PageNumber int        // Page number (PDF/Image documents)
+	BoundingBox *BoundingBox // Spatial location on page
+	Cells       [][]string   // 2D cell array [row][col]
+	Markdown    string       // Markdown representation
+	PageNumber  int          // Page number (1-indexed)
 }
 ```
 
@@ -915,14 +1131,15 @@ type Chunk struct {
 }
 
 type ChunkMetadata struct {
-	ByteStart   int  // UTF-8 byte offset (inclusive)
-	ByteEnd     int  // UTF-8 byte offset (exclusive)
-	CharCount   int  // Number of characters in chunk
-	TokenCount  *int // Token count (if available)
-	FirstPage   *int // First page this chunk appears on (1-indexed)
-	LastPage    *int // Last page this chunk appears on (1-indexed)
-	ChunkIndex  int  // Index in chunk sequence
-	TotalChunks int  // Total number of chunks
+	ByteEnd        uint64           // UTF-8 byte offset (exclusive)
+	ByteStart      uint64           // UTF-8 byte offset (inclusive)
+	CharCount      int              // Number of characters in chunk
+	ChunkIndex     uint64           // Index in chunk sequence
+	FirstPage      *uint64          // First page this chunk appears on
+	LastPage       *uint64          // Last page this chunk appears on
+	TokenCount     *uint64          // Token count (if available)
+	TotalChunks    uint64           // Total number of chunks in document
+	HeadingContext *HeadingContext   // Heading hierarchy (markdown chunker only)
 }
 ```
 
@@ -934,6 +1151,7 @@ type ChunkMetadata struct {
 - `TokenCount` (\*int): Estimated token count (if configured)
 - `FirstPage` (\*int): First page this chunk appears on (1-indexed, only when page boundaries available)
 - `LastPage` (\*int): Last page this chunk appears on (1-indexed, only when page boundaries available)
+- `HeadingContext` (\*HeadingContext): Heading hierarchy when using Markdown chunker. Only populated when chunker_type is set to markdown.
 
 **Page tracking:** When `PageStructure.Boundaries` is available and chunking is enabled, `FirstPage` and `LastPage` are automatically calculated based on byte offsets.
 
@@ -976,17 +1194,18 @@ Image extracted from document with optional OCR results.
 
 ```go title="Go"
 type ExtractedImage struct {
-	Data             []byte            // Raw image bytes
-	Format           string            // Image format: "jpeg", "png", "webp"
-	ImageIndex       int               // Index in images list
-	PageNumber       *int              // Page number (if applicable)
-	Width            *uint32           // Image width in pixels
-	Height           *uint32           // Image height in pixels
-	Colorspace       *string           // Colorspace (sRGB, CMYK, etc.)
 	BitsPerComponent *uint32           // Bits per color component
-	IsMask           bool              // Is image a mask?
-	Description      *string           // Image description/alt text
-	OCRResult        *ExtractionResult // Nested OCR extraction
+	BoundingBox      *BoundingBox      // Spatial location on page
+	Colorspace       *string           // Colorspace info (RGB, CMYK, etc.)
+	Data             []byte            // Raw image bytes
+	Description      *string           // Image description or alt-text
+	Format           string            // Image format: "jpeg", "png", "webp"
+	Height           *uint32           // Image height in pixels
+	ImageIndex       uint64            // Zero-based index in results
+	IsMask           bool              // Whether image is a transparency mask
+	OCRResult        *ExtractionResult // Nested OCR result if processed
+	PageNumber       *uint64           // 1-indexed page number
+	Width            *uint32           // Image width in pixels
 }
 ```
 

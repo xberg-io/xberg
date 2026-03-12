@@ -292,6 +292,7 @@ fn test_extraction_config_needs_image_processing() {
         extract_images: true,
         target_dpi: 150,
         max_image_dimension: 2000,
+        inject_placeholders: true,
         auto_adjust_dpi: true,
         min_dpi: 72,
         max_dpi: 600,

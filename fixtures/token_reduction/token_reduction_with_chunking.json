@@ -21,6 +21,7 @@
 	"assertions": {
 		"expected_mime": "application/pdf",
 		"min_content_length": 5,
+		"max_content_length": 200,
 		"content_not_empty": true,
 		"chunks": {
 			"min_count": 1,

@@ -9,11 +9,10 @@ version="${1:?VERSION argument required}"
 group="dev.kreuzberg"
 artifact="kreuzberg"
 
-url="https://search.maven.org/solrsearch/select?q=g:${group}+AND+a:${artifact}+AND+v:${version}&rows=1&wt=json"
-response=$(curl -s "$url")
+group_path="${group//.//}"
+repo_url="https://repo1.maven.org/maven2/${group_path}/${artifact}/${version}/${artifact}-${version}.jar"
 
-count=$(echo "$response" | jq -r '.response.numFound')
-if [ "$count" -gt 0 ]; then
+if curl -sI "$repo_url" 2>/dev/null | grep -q "^HTTP.*200\|^HTTP.*301\|^HTTP.*302"; then
   echo "exists=true"
   echo "::notice::Java package ${group}:${artifact}:${version} already exists on Maven Central"
 else

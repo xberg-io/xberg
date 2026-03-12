@@ -32,8 +32,8 @@ describe("Security Validation Tests", () => {
 
 			const result = await extractBytes(zipBytes, "application/zip");
 
-			if (result.metadata.archive) {
-				for (const filePath of result.metadata.archive.file_list) {
+			if (result.metadata.fileList) {
+				for (const filePath of result.metadata.fileList) {
 					expect(filePath.startsWith("/")).toBe(false);
 				}
 			}
@@ -68,7 +68,7 @@ describe("Security Validation Tests", () => {
 
 			expect(result).toBeDefined();
 			const metadata = result.metadata ?? {};
-			expect(metadata.file_count).toBe(1000);
+			expect(metadata.fileCount).toBe(1000);
 		});
 	});
 
@@ -256,8 +256,8 @@ endobj`);
 
 			const result = await extractBytes(zipBytes, "application/zip");
 
-			if (result.metadata.archive) {
-				for (const path of result.metadata.archive.file_list) {
+			if (result.metadata.fileList) {
+				for (const path of result.metadata.fileList) {
 					expect(path).not.toMatch(/\.\.\//);
 					expect(path.startsWith("/")).toBe(false);
 				}

@@ -59,7 +59,7 @@ Deno.test("pdf_assembly_technical", { permissions: { read: true, net: true } }, 
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 5000);
 	assertions.assertContentContainsAny(result, ["assembly", "register", "instruction"]);
-	assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+	assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 });
 
 Deno.test("pdf_bayesian_data_analysis", { permissions: { read: true, net: true } }, async () => {
@@ -81,7 +81,7 @@ Deno.test("pdf_bayesian_data_analysis", { permissions: { read: true, net: true }
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 10000);
 	assertions.assertContentContainsAny(result, ["Bayesian", "probability", "distribution"]);
-	assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+	assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 });
 
 Deno.test("pdf_bounding_boxes", { permissions: { read: true, net: true } }, async () => {
@@ -148,7 +148,7 @@ Deno.test("pdf_deep_learning", { permissions: { read: true, net: true } }, async
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 1000);
 	assertions.assertContentContainsAny(result, ["neural", "network", "deep learning"]);
-	assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+	assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 });
 
 Deno.test("pdf_embedded_images", { permissions: { read: true, net: true } }, async () => {
@@ -193,7 +193,7 @@ Deno.test("pdf_google_doc", { permissions: { read: true, net: true } }, async ()
 	}
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 50);
-	assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+	assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 });
 
 Deno.test("pdf_large_ciml", { permissions: { read: true, net: true } }, async () => {
@@ -215,7 +215,7 @@ Deno.test("pdf_large_ciml", { permissions: { read: true, net: true } }, async ()
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 10000);
 	assertions.assertContentContainsAny(result, ["machine learning", "algorithm", "training"]);
-	assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+	assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 });
 
 Deno.test("pdf_non_english_german", { permissions: { read: true, net: true } }, async () => {
@@ -237,7 +237,28 @@ Deno.test("pdf_non_english_german", { permissions: { read: true, net: true } }, 
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 100);
 	assertions.assertContentContainsAny(result, ["Intel", "paging"]);
-	assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+	assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+});
+
+Deno.test("pdf_password_protected", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig(undefined);
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("pdf/copy_protected.pdf");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/pdf", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "pdf_password_protected", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/pdf"]);
+	assertions.assertMinContentLength(result, 50);
+	assertions.assertContentContainsAny(result, ["LayoutParser", "document image analysis", "deep learning"]);
 });
 
 Deno.test("pdf_right_to_left", { permissions: { read: true, net: true } }, async () => {
@@ -258,7 +279,7 @@ Deno.test("pdf_right_to_left", { permissions: { read: true, net: true } }, async
 	}
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 50);
-	assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+	assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 });
 
 Deno.test("pdf_simple_text", { permissions: { read: true, net: true } }, async () => {
@@ -375,5 +396,5 @@ Deno.test("pdf_technical_stat_learning", { permissions: { read: true, net: true 
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 10000);
 	assertions.assertContentContainsAny(result, ["statistical", "regression", "learning"]);
-	assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+	assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 });

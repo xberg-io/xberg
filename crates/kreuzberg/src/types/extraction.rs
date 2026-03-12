@@ -181,6 +181,27 @@ pub struct Chunk {
     pub metadata: ChunkMetadata,
 }
 
+/// Heading context for a chunk within a Markdown document.
+///
+/// Contains the heading hierarchy from document root to this chunk's section.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct HeadingContext {
+    /// The heading hierarchy from document root to this chunk's section.
+    /// Index 0 is the outermost (h1), last element is the most specific.
+    pub headings: Vec<HeadingLevel>,
+}
+
+/// A single heading in the hierarchy.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct HeadingLevel {
+    /// Heading depth (1 = h1, 2 = h2, etc.)
+    pub level: u8,
+    /// The text content of the heading.
+    pub text: String,
+}
+
 /// Metadata about a chunk's position in the original document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
@@ -214,6 +235,14 @@ pub struct ChunkMetadata {
     /// Only populated when page tracking is enabled in extraction configuration.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_page: Option<usize>,
+
+    /// Heading context when using Markdown chunker.
+    ///
+    /// Contains the heading hierarchy this chunk falls under.
+    /// Only populated when `ChunkerType::Markdown` is used.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub heading_context: Option<HeadingContext>,
 }
 
 /// Extracted image from a document.

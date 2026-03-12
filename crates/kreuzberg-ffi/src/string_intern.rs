@@ -48,23 +48,18 @@ use std::sync::Mutex;
 /// Statistics for string interning efficiency tracking.
 #[repr(C)]
 pub struct CStringInternStats {
-    /// Number of unique strings currently interned
-    pub unique_count: usize,
-
-    /// Total number of intern requests
-    pub total_requests: usize,
-
     /// Number of cache hits (string already interned)
     pub cache_hits: usize,
-
     /// Number of cache misses (new string added)
     pub cache_misses: usize,
-
     /// Estimated memory saved by deduplication (bytes)
     pub estimated_memory_saved: usize,
-
     /// Total memory used by interned strings (bytes)
     pub total_memory_bytes: usize,
+    /// Total number of intern requests
+    pub total_requests: usize,
+    /// Number of unique strings currently interned
+    pub unique_count: usize,
 }
 
 /// Interned string entry with reference counting.
@@ -214,12 +209,12 @@ impl StringInternTable {
             .sum();
 
         CStringInternStats {
-            unique_count: self.strings.len(),
-            total_requests: self.total_requests,
             cache_hits: self.cache_hits,
             cache_misses: self.total_requests - self.cache_hits,
             estimated_memory_saved,
             total_memory_bytes,
+            total_requests: self.total_requests,
+            unique_count: self.strings.len(),
         }
     }
 }

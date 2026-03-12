@@ -1,0 +1,27 @@
+{
+	"id": "config_chunking_text",
+	"description": "Tests text chunker type (generic whitespace/punctuation splitter)",
+	"tags": ["contract", "config", "chunking"],
+	"document": {
+		"path": "pdf/fake_memo.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"chunking": {
+				"chunker_type": "text",
+				"max_chars": 500,
+				"max_overlap": 50
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 10,
+		"chunks": {
+			"min_count": 1,
+			"each_has_content": true
+		}
+	}
+}

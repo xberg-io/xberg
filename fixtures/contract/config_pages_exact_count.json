@@ -1,0 +1,27 @@
+{
+	"id": "config_pages_exact_count",
+	"description": "Tests page extraction with exact page count assertion on multi-page PDF",
+	"tags": ["contract", "config", "pages"],
+	"document": {
+		"path": "pdf/multi_page.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"pages": {
+				"extract_pages": true
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 10,
+		"pages": {
+			"exact_count": 5
+		}
+	},
+	"skip": {
+		"requires_feature": ["pdf"]
+	}
+}

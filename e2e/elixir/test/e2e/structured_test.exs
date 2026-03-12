@@ -31,6 +31,31 @@ defmodule E2E.StructuredTest do
       end
     end
 
+    test "structured_enw_basic" do
+      case E2E.Helpers.run_fixture(
+             "structured_enw_basic",
+             "data_formats/sample.enw",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime([
+            "application/x-endnote-refer",
+            "application/x-endnote+xml",
+            "text/plain"
+          ])
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "structured_json_basic" do
       case E2E.Helpers.run_fixture(
              "structured_json_basic",
@@ -77,6 +102,50 @@ defmodule E2E.StructuredTest do
       end
     end
 
+    test "structured_nbib_basic" do
+      case E2E.Helpers.run_fixture(
+             "structured_nbib_basic",
+             "data_formats/sample.nbib",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["application/nbib", "application/x-pubmed", "text/plain"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "structured_ris_basic" do
+      case E2E.Helpers.run_fixture(
+             "structured_ris_basic",
+             "data_formats/sample.ris",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["application/x-research-info-systems", "text/plain"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "structured_toml_basic" do
       case E2E.Helpers.run_fixture(
              "structured_toml_basic",
@@ -89,6 +158,28 @@ defmodule E2E.StructuredTest do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/toml", "text/toml"])
+          |> E2E.Helpers.assert_min_content_length(10)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "structured_tsv_basic" do
+      case E2E.Helpers.run_fixture(
+             "structured_tsv_basic",
+             "data_formats/employees.tsv",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["text/tab-separated-values", "text/plain"])
           |> E2E.Helpers.assert_min_content_length(10)
 
         {:skipped, reason} ->

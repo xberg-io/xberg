@@ -241,7 +241,7 @@ func boolPtr(value bool) *bool {
 	return &value
 }
 
-func assertChunks(t *testing.T, result *kreuzberg.ExtractionResult, minCount, maxCount *int, eachHasContent, eachHasEmbedding *bool) {
+func assertChunks(t *testing.T, result *kreuzberg.ExtractionResult, minCount, maxCount *int, eachHasContent, eachHasEmbedding, eachHasHeadingContext *bool) {
 	t.Helper()
 	count := len(result.Chunks)
 	if minCount != nil && count < *minCount {
@@ -261,6 +261,20 @@ func assertChunks(t *testing.T, result *kreuzberg.ExtractionResult, minCount, ma
 		for i, chunk := range result.Chunks {
 			if len(chunk.Embedding) == 0 {
 				t.Fatalf("chunk %d has no embedding", i)
+			}
+		}
+	}
+	if eachHasHeadingContext != nil && *eachHasHeadingContext {
+		for i, chunk := range result.Chunks {
+			if chunk.Metadata.HeadingContext == nil {
+				t.Fatalf("chunk %d has no heading_context", i)
+			}
+		}
+	}
+	if eachHasHeadingContext != nil && !*eachHasHeadingContext {
+		for i, chunk := range result.Chunks {
+			if chunk.Metadata.HeadingContext != nil {
+				t.Fatalf("chunk %d should have no heading_context", i)
 			}
 		}
 	}

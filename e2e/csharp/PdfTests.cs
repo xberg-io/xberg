@@ -163,6 +163,20 @@ namespace Kreuzberg.E2E.Pdf
         }
 
         [SkippableFact]
+        public void PdfPasswordProtected()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("pdf/copy_protected.pdf");
+            TestHelpers.SkipIfOfficeTestOnWindows("pdf/copy_protected.pdf");
+            var documentPath = TestHelpers.EnsureDocument("pdf/copy_protected.pdf", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
+            TestHelpers.AssertMinContentLength(result, 50);
+            TestHelpers.AssertContentContainsAny(result, new[] { "LayoutParser", "document image analysis", "deep learning" });
+        }
+
+        [SkippableFact]
         public void PdfRightToLeft()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/right_to_left_01.pdf");

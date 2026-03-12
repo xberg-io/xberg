@@ -99,7 +99,12 @@ Each chunk includes:
   - `chunk_index`: Zero-based chunk number
   - `total_chunks`: Total number of chunks
   - `token_count`: Token count (if embeddings enabled)
+  - `heading_context: Option<HeadingContext>` — Heading hierarchy when using Markdown chunker
 - `embedding`: Optional embedding vector (if configured)
+
+The Markdown chunker (`chunker_type: "markdown"`) populates `heading_context` on each chunk with the active heading hierarchy at that point in the document. This is useful for structure-aware RAG pipelines where chunks need to carry section context for better retrieval relevance.
+
+Chunks can also be sized by token count instead of character count. Enable the `chunking-tokenizers` feature to use HuggingFace tokenizers, then set the `sizing` config field to switch from character-based to token-based chunk boundaries.
 
 ### Example: RAG Pipeline
 

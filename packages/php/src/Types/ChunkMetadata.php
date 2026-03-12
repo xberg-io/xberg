@@ -14,6 +14,7 @@ namespace Kreuzberg\Types;
  * @property-read int $totalChunks Total number of chunks
  * @property-read int|null $firstPage First page number in chunk
  * @property-read int|null $lastPage Last page number in chunk
+ * @property-read HeadingContext|null $headingContext Heading hierarchy for this chunk's section
  */
 readonly class ChunkMetadata
 {
@@ -25,6 +26,7 @@ readonly class ChunkMetadata
         public int $totalChunks,
         public ?int $firstPage = null,
         public ?int $lastPage = null,
+        public ?HeadingContext $headingContext = null,
     ) {
     }
 
@@ -54,6 +56,12 @@ readonly class ChunkMetadata
         /** @var int|null $lastPage */
         $lastPage = $data['last_page'] ?? null;
 
+        /** @var array<string, mixed>|null $rawHeadingContext */
+        $rawHeadingContext = is_array($data['heading_context'] ?? null) ? $data['heading_context'] : null;
+        $headingContext = $rawHeadingContext !== null
+            ? HeadingContext::fromArray($rawHeadingContext)
+            : null;
+
         return new self(
             byteStart: $byteStart,
             byteEnd: $byteEnd,
@@ -62,6 +70,7 @@ readonly class ChunkMetadata
             totalChunks: $totalChunks,
             firstPage: $firstPage,
             lastPage: $lastPage,
+            headingContext: $headingContext,
         );
     }
 }

@@ -1,0 +1,23 @@
+{
+	"id": "config_images_with_formats",
+	"description": "Tests image extraction on PPTX containing embedded images",
+	"tags": ["contract", "config", "images"],
+	"document": {
+		"path": "pptx/powerpoint_with_image.pptx"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"images": {
+				"extract_images": true
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		"images": {
+			"min_count": 1
+		}
+	}
+}

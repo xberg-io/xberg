@@ -185,6 +185,21 @@ def test_config_chunking() -> None:
     helpers.assert_chunks(result, min_count=1, each_has_content=True)
 
 
+def test_config_chunking_heading_context() -> None:
+    """Tests markdown chunker populates heading context on chunks"""
+
+    document_path = helpers.resolve_document("markdown/extraction_test.md")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_chunking_heading_context: missing document at {document_path}")
+
+    config = helpers.build_config({"chunking": {"chunker_type": "markdown", "max_chars": 300, "max_overlap": 50}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_chunks(result, min_count=2, each_has_content=True, each_has_heading_context=True)
+
+
 def test_config_chunking_markdown() -> None:
     """Tests markdown-aware chunker type"""
 
@@ -201,6 +216,21 @@ def test_config_chunking_markdown() -> None:
     helpers.assert_chunks(result, min_count=1, each_has_content=True)
 
 
+def test_config_chunking_no_headings() -> None:
+    """Tests markdown chunker on text with no headings produces null heading_context"""
+
+    document_path = helpers.resolve_document("text/book_war_and_peace_1p.txt")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_chunking_no_headings: missing document at {document_path}")
+
+    config = helpers.build_config({"chunking": {"chunker_type": "markdown", "max_chars": 300, "max_overlap": 50}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_chunks(result, min_count=2, each_has_content=True, each_has_heading_context=False)
+
+
 def test_config_chunking_small() -> None:
     """Tests chunking with very small chunk size produces more chunks"""
 
@@ -213,6 +243,39 @@ def test_config_chunking_small() -> None:
     result = extract_file_sync(document_path, None, config)
 
     helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_chunks(result, min_count=2, each_has_content=True)
+
+
+def test_config_chunking_text() -> None:
+    """Tests text chunker type (generic whitespace/punctuation splitter)"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_chunking_text: missing document at {document_path}")
+
+    config = helpers.build_config({"chunking": {"chunker_type": "text", "max_chars": 500, "max_overlap": 50}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_chunks(result, min_count=1, each_has_content=True)
+
+
+def test_config_chunking_tokenizer() -> None:
+    """Tests token-based chunk sizing with HuggingFace tokenizer"""
+
+    document_path = helpers.resolve_document("markdown/comprehensive.md")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_chunking_tokenizer: missing document at {document_path}")
+
+    config = helpers.build_config(
+        {"chunking": {"max_chars": 200, "max_overlap": 40, "sizing": {"model": "Xenova/gpt-4o", "type": "tokenizer"}}}
+    )
+
+    result = extract_file_sync(document_path, None, config)
+
     helpers.assert_min_content_length(result, 10)
     helpers.assert_chunks(result, min_count=2, each_has_content=True)
 
@@ -261,6 +324,21 @@ def test_config_document_structure_disabled() -> None:
 
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_document(result, has_document=False)
+
+
+def test_config_document_structure_groups() -> None:
+    """Tests document structure extraction with group node assertion on DOCX with headings"""
+
+    document_path = helpers.resolve_document("docx/unit_test_headers.docx")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_document_structure_groups: missing document at {document_path}")
+
+    config = helpers.build_config({"include_document_structure": True})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+    helpers.assert_document(result, has_document=True, has_groups=True)
 
 
 def test_config_document_structure_headings() -> None:
@@ -355,6 +433,21 @@ def test_config_images() -> None:
     helpers.assert_images(result, min_count=1)
 
 
+def test_config_images_with_formats() -> None:
+    """Tests image extraction on PPTX containing embedded images"""
+
+    document_path = helpers.resolve_document("pptx/powerpoint_with_image.pptx")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_images_with_formats: missing document at {document_path}")
+
+    config = helpers.build_config({"images": {"extract_images": True}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/vnd.openxmlformats-officedocument.presentationml.presentation"])
+    helpers.assert_images(result, min_count=1)
+
+
 def test_config_keywords() -> None:
     """Tests keyword extraction via YAKE algorithm"""
 
@@ -385,6 +478,24 @@ def test_config_language_detection() -> None:
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 10)
     helpers.assert_detected_languages(result, ["eng"], 0.5)
+
+
+def test_config_language_detection_multi() -> None:
+    """Tests language detection with detect_multiple and min_confidence options"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_language_detection_multi: missing document at {document_path}")
+
+    config = helpers.build_config(
+        {"language_detection": {"detect_multiple": True, "enabled": True, "min_confidence": 0.3}}
+    )
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_detected_languages(result, ["eng"], None)
 
 
 def test_config_language_multi() -> None:
@@ -419,6 +530,22 @@ def test_config_pages() -> None:
     helpers.assert_content_contains_any(result, ["PAGE"])
 
 
+def test_config_pages_exact_count() -> None:
+    """Tests page extraction with exact page count assertion on multi-page PDF"""
+
+    document_path = helpers.resolve_document("pdf/multi_page.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_pages_exact_count: missing document at {document_path}")
+
+    config = helpers.build_config({"pages": {"extract_pages": True}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_pages(result, exact_count=5)
+
+
 def test_config_pages_extract() -> None:
     """Tests page extraction config producing per-page content array"""
 
@@ -451,6 +578,21 @@ def test_config_pages_markers() -> None:
     helpers.assert_content_contains_any(result, ["PAGE"])
 
 
+def test_config_pdf_annotations_count() -> None:
+    """Tests PDF annotation extraction with min_count assertion"""
+
+    document_path = helpers.resolve_document("vendored/pdfplumber/pdf/annotations.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_pdf_annotations_count: missing document at {document_path}")
+
+    config = helpers.build_config({"pdf_options": {"extract_annotations": True}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_annotations(result, has_annotations=True, min_count=3)
+
+
 def test_config_pdf_hierarchy() -> None:
     """Tests PDF hierarchy extraction config with block-level structure"""
 
@@ -468,6 +610,21 @@ def test_config_pdf_hierarchy() -> None:
     helpers.assert_min_content_length(result, 50)
 
 
+def test_config_pdf_margins() -> None:
+    """Tests PDF margin exclusion configuration"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_pdf_margins: missing document at {document_path}")
+
+    config = helpers.build_config({"pdf_options": {"bottom_margin_fraction": 0.1, "top_margin_fraction": 0.1}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 5)
+
+
 def test_config_postprocessor() -> None:
     """Tests postprocessor config is accepted and extraction succeeds"""
 
@@ -482,6 +639,22 @@ def test_config_postprocessor() -> None:
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 10)
     helpers.assert_content_not_empty(result)
+
+
+def test_config_processing_warnings_empty() -> None:
+    """Tests that a clean PDF extraction produces no processing warnings"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_processing_warnings_empty: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+    helpers.assert_processing_warnings(result, is_empty=True)
 
 
 def test_config_quality_disabled() -> None:
@@ -516,6 +689,38 @@ def test_config_quality_enabled() -> None:
     helpers.assert_quality_score(result, has_score=True, min_score=0, max_score=1)
 
 
+def test_config_quality_score_range() -> None:
+    """Tests quality scoring produces a score with minimum bound assertion"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_quality_score_range: missing document at {document_path}")
+
+    config = helpers.build_config({"enable_quality_processing": True})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_quality_score(result, has_score=True, min_score=0.1)
+
+
+def test_config_security_limits() -> None:
+    """Tests archive extraction with custom security limits"""
+
+    document_path = helpers.resolve_document("archives/documents.zip")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_security_limits: missing document at {document_path}")
+
+    config = helpers.build_config(
+        {"security_limits": {"max_archive_size": 104857600, "max_compression_ratio": 50, "max_files_in_archive": 100}}
+    )
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/zip", "application/x-zip-compressed"])
+    helpers.assert_min_content_length(result, 10)
+
+
 def test_config_structured_output() -> None:
     """Tests structured (JSON) output format config"""
 
@@ -530,6 +735,21 @@ def test_config_structured_output() -> None:
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 10)
     helpers.assert_output_format(result, "structured")
+
+
+def test_config_tables_content() -> None:
+    """Tests table extraction with content_contains_any assertion on DOCX with tables"""
+
+    document_path = helpers.resolve_document("docx/docx_tables.docx")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_tables_content: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
+    helpers.assert_table_count(result, 1, None)
 
 
 def test_config_use_cache_false() -> None:

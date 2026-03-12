@@ -35,6 +35,7 @@ describe("token_reduction fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 5);
+			assertions.assertMaxContentLength(result, 150);
 			assertions.assertContentNotEmpty(result);
 		},
 		TEST_TIMEOUT_MS,
@@ -63,6 +64,7 @@ describe("token_reduction fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 5);
+			assertions.assertMaxContentLength(result, 200);
 			assertions.assertContentNotEmpty(result);
 		},
 		TEST_TIMEOUT_MS,
@@ -122,7 +124,8 @@ describe("token_reduction fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 5);
-			chunkAssertions.assertChunks(result, 1, null, true, null);
+			assertions.assertMaxContentLength(result, 200);
+			chunkAssertions.assertChunks(result, 1, null, true, null, null);
 			assertions.assertContentNotEmpty(result);
 		},
 		TEST_TIMEOUT_MS,

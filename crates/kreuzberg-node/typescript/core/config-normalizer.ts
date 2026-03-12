@@ -111,6 +111,9 @@ function normalizeChunkingConfig(chunking?: ChunkingConfig): NativeExtractionCon
 	setIfDefined(normalized, "preset", chunking.preset);
 	setIfDefined(normalized, "embedding", chunking.embedding);
 	setIfDefined(normalized, "enabled", chunking.enabled);
+	setIfDefined(normalized, "sizingType", chunking.sizingType);
+	setIfDefined(normalized, "sizingModel", chunking.sizingModel);
+	setIfDefined(normalized, "sizingCacheDir", chunking.sizingCacheDir);
 	return normalized;
 }
 

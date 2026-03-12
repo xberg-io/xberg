@@ -283,13 +283,12 @@ impl ServerHandler for KreuzbergMcp {
         let mut capabilities = ServerCapabilities::default();
         capabilities.tools = Some(ToolsCapability::default());
 
-        let server_info = Implementation::new(
-            "kreuzberg-mcp",
-            env!("CARGO_PKG_VERSION"),
-        )
-        .with_title("Kreuzberg Document Intelligence MCP Server")
-        .with_description("Document intelligence library for extracting content from PDFs, images, office documents, and more.")
-        .with_website_url("https://kreuzberg-dev.github.io/kreuzberg/");
+        let server_info = Implementation::new("kreuzberg-mcp", env!("CARGO_PKG_VERSION"))
+            .with_title("Kreuzberg Document Intelligence MCP Server")
+            .with_description(
+                "Document intelligence library for extracting content from PDFs, images, office documents, and more.",
+            )
+            .with_website_url("https://kreuzberg-dev.github.io/kreuzberg/");
 
         InitializeResult::new(capabilities)
             .with_server_info(server_info)

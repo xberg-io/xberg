@@ -5,18 +5,47 @@ name: Kreuzberg
 
 # Include shared ai-rulez configuration from git repository
 includes:
-  - name: kreuzberg-shared-rules
+  - name: kreuzberg-core
     source: https://github.com/kreuzberg-dev/ai-rulez.git
-    ref: main
-    include:
-      - rules
-      - context
-      - skills
-      - agents
+    path: modules/core
     merge_strategy: local-override
+  - name: kreuzberg-cicd
+    source: https://github.com/kreuzberg-dev/ai-rulez.git
+    path: modules/cicd
+    merge_strategy: local-override
+  - name: kreuzberg-infrastructure
+    source: https://github.com/kreuzberg-dev/ai-rulez.git
+    path: modules/infrastructure
+    merge_strategy: local-override
+  - name: kreuzberg-e2e-generator
+    source: https://github.com/kreuzberg-dev/ai-rulez.git
+    path: modules/e2e-generator
+    merge_strategy: local-override
+
+builtins:
+  - rust
+  - python
+  - pyo3
+  - typescript
+  - napi-rs
+  - ruby
+  - magnus
+  - php
+  - ext-php-rs
+  - elixir
+  - rustler
+  - wasm
+  - security
+  - git-workflow
+  - code-quality
+  - testing
+  - token-efficiency
+  - default-commands
 
 presets:
     - claude
     - gemini
     - codex
+compression:
+  level: moderate
 version: "3.0"

@@ -15,6 +15,7 @@ test_that("token_reduction_aggressive", {
   )
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 5L)
+  assert_max_content_length(result, 150L)
   assert_content_not_empty(result)
 })
 
@@ -29,6 +30,7 @@ test_that("token_reduction_basic", {
   )
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 5L)
+  assert_max_content_length(result, 200L)
   assert_content_not_empty(result)
 })
 
@@ -57,6 +59,7 @@ test_that("token_reduction_with_chunking", {
   )
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 5L)
+  assert_max_content_length(result, 200L)
   assert_chunks(result, min_count = 1L, each_has_content = TRUE)
   assert_content_not_empty(result)
 })

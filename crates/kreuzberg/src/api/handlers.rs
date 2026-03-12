@@ -170,6 +170,15 @@ pub async fn extract_handler(
                     }
                 };
             }
+            "pdf_password" => {
+                let pwd = field
+                    .text()
+                    .await
+                    .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?;
+                let cfg = config.get_or_insert_with(|| (*state.default_config).clone());
+                let pdf_opts = cfg.pdf_options.get_or_insert_with(Default::default);
+                pdf_opts.passwords.get_or_insert_with(Vec::new).push(pwd);
+            }
             _ => {}
         }
     }
@@ -390,6 +399,7 @@ pub async fn embed_handler(JsonApi(request): JsonApi<EmbedRequest>) -> Result<Js
                 total_chunks: request.texts.len(),
                 first_page: None,
                 last_page: None,
+                heading_context: None,
             },
         })
         .collect();
@@ -519,8 +529,7 @@ pub async fn chunk_handler(JsonApi(request): JsonApi<ChunkRequest>) -> Result<Js
         overlap,
         trim: cfg.trim.unwrap_or(true),
         chunker_type,
-        embedding: None,
-        preset: None,
+        ..Default::default()
     };
 
     // Perform chunking - convert any remaining errors to validation errors since they're likely config issues

@@ -132,6 +132,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
 	const config: ChunkingConfig = {};
 	assignNumberField(config as PlainRecord, raw, "max_chars", "maxChars");
 	assignNumberField(config as PlainRecord, raw, "max_overlap", "maxOverlap");
+	if (typeof raw.chunker_type === "string") {
+		(config as PlainRecord).chunkerType = raw.chunker_type;
+	}
 	return config;
 }
 
@@ -686,6 +689,7 @@ export const chunkAssertions = {
 		maxCount?: number | null,
 		eachHasContent?: boolean | null,
 		eachHasEmbedding?: boolean | null,
+		eachHasHeadingContext?: boolean | null,
 	): void {
 		const chunks = (result as unknown as PlainRecord).chunks as unknown[] | undefined;
 		expect(chunks).toBeDefined();
@@ -706,6 +710,16 @@ export const chunkAssertions = {
 		if (eachHasEmbedding) {
 			for (const chunk of chunks) {
 				expect((chunk as PlainRecord).embedding).toBeDefined();
+			}
+		}
+		if (eachHasHeadingContext === true) {
+			for (const chunk of chunks) {
+				expect(((chunk as PlainRecord).metadata as PlainRecord)?.headingContext).toBeDefined();
+			}
+		}
+		if (eachHasHeadingContext === false) {
+			for (const chunk of chunks) {
+				expect(((chunk as PlainRecord).metadata as PlainRecord)?.headingContext ?? null).toBeNull();
 			}
 		}
 	},

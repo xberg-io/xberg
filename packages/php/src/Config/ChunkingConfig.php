@@ -80,6 +80,36 @@ readonly class ChunkingConfig
          * @default null
          */
         public ?EmbeddingConfig $embedding = null,
+
+        /**
+         * Sizing type: "characters" (default) or "tokenizer".
+         *
+         * When set to "tokenizer", chunks are sized by token count using the
+         * specified HuggingFace tokenizer model.
+         *
+         * @var string
+         * @default "characters"
+         */
+        public string $sizingType = 'characters',
+
+        /**
+         * HuggingFace model ID for tokenizer sizing.
+         *
+         * Only used when sizingType is "tokenizer".
+         * Example: "Xenova/gpt-4o", "bert-base-uncased"
+         *
+         * @var string|null
+         * @default null
+         */
+        public ?string $sizingModel = null,
+
+        /**
+         * Optional cache directory for tokenizer files.
+         *
+         * @var string|null
+         * @default null
+         */
+        public ?string $sizingCacheDir = null,
     ) {
     }
 
@@ -125,12 +155,35 @@ readonly class ChunkingConfig
             $embedding = EmbeddingConfig::fromArray($embeddingData);
         }
 
+        /** @var string $sizingType */
+        $sizingType = 'characters';
+        /** @var string|null $sizingModel */
+        $sizingModel = null;
+        /** @var string|null $sizingCacheDir */
+        $sizingCacheDir = null;
+        if (isset($data['sizing']) && is_array($data['sizing'])) {
+            /** @var array<string, mixed> $sizingData */
+            $sizingData = $data['sizing'];
+            if (isset($sizingData['type']) && is_string($sizingData['type'])) {
+                $sizingType = $sizingData['type'];
+            }
+            if (isset($sizingData['model']) && is_string($sizingData['model'])) {
+                $sizingModel = $sizingData['model'];
+            }
+            if (isset($sizingData['cache_dir']) && is_string($sizingData['cache_dir'])) {
+                $sizingCacheDir = $sizingData['cache_dir'];
+            }
+        }
+
         return new self(
             maxChars: $maxChars,
             maxOverlap: $maxOverlap,
             respectSentences: $respectSentences,
             respectParagraphs: $respectParagraphs,
             embedding: $embedding,
+            sizingType: $sizingType,
+            sizingModel: $sizingModel,
+            sizingCacheDir: $sizingCacheDir,
         );
     }
 
@@ -173,12 +226,22 @@ readonly class ChunkingConfig
         // Use toRustArray() for embedding to get Rust-compatible format
         $embedding = $this->embedding !== null ? $this->embedding->toRustArray() : null;
 
+        $sizing = null;
+        if ($this->sizingType !== 'characters') {
+            $sizing = array_filter([
+                'type' => $this->sizingType,
+                'model' => $this->sizingModel,
+                'cache_dir' => $this->sizingCacheDir,
+            ], static fn ($value): bool => $value !== null);
+        }
+
         return array_filter([
             'max_chars' => $this->maxChars,
             'max_overlap' => $this->maxOverlap,
             'respect_sentences' => $this->respectSentences,
             'respect_paragraphs' => $this->respectParagraphs,
             'embedding' => $embedding,
+            'sizing' => $sizing,
         ], static fn ($value): bool => $value !== null);
     }
 

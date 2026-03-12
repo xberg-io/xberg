@@ -1,32 +1,23 @@
 //! Defines the [PdfDocument] struct, the entry point to all Pdfium functionality
 //! related to a single PDF file.
 
-pub mod attachment;
-pub mod attachments;
-pub mod bookmark;
-pub mod bookmarks;
 pub mod fonts;
 pub mod form;
 pub mod metadata;
 pub mod page;
 pub mod pages;
 pub mod permissions;
-pub mod signature;
-pub mod signatures;
 
 use crate::bindgen::FPDF_DOCUMENT;
 use crate::bindings::PdfiumLibraryBindings;
 use crate::error::PdfiumError;
 use crate::error::PdfiumInternalError;
-use crate::pdf::document::attachments::PdfAttachments;
-use crate::pdf::document::bookmarks::PdfBookmarks;
 use crate::pdf::document::fonts::PdfFonts;
 use crate::pdf::document::form::PdfForm;
 use crate::pdf::document::metadata::PdfMetadata;
 use crate::pdf::document::page::index_cache::PdfPageIndexCache;
 use crate::pdf::document::pages::PdfPages;
 use crate::pdf::document::permissions::PdfPermissions;
-use crate::pdf::document::signatures::PdfSignatures;
 use crate::utils::files::FpdfFileAccessExt;
 use crate::utils::files::get_pdfium_file_writer_from_writer;
 use std::fmt::{Debug, Formatter};
@@ -141,9 +132,6 @@ impl PdfDocumentVersion {
 
 /// An entry point to all the various object collections contained in a single PDF file.
 /// These collections include:
-/// * [PdfDocument::attachments()], an immutable collection of all the [PdfAttachments] in the document.
-/// * [PdfDocument::attachments_mut()], a mutable collection of all the [PdfAttachments] in the document.
-/// * [PdfDocument::bookmarks()], an immutable collection of all the [PdfBookmarks] in the document.
 /// * [PdfDocument::fonts()], an immutable collection of all the [PdfFonts] in the document.
 /// * [PdfDocument::fonts_mut()], a mutable collection of all the [PdfFonts] in the document.
 /// * [PdfDocument::form()], an immutable reference to the [PdfForm] embedded in the document, if any.
@@ -152,18 +140,14 @@ impl PdfDocumentVersion {
 /// * [PdfDocument::pages_mut()], a mutable collection of all the [PdfPages] in the document.
 /// * [PdfDocument::permissions()], settings relating to security handlers and document permissions
 ///   for the document.
-/// * [PdfDocument::signatures()], an immutable collection of all the [PdfSignatures] in the document.
 pub struct PdfDocument<'a> {
     handle: FPDF_DOCUMENT,
     output_version: Option<PdfDocumentVersion>,
-    attachments: PdfAttachments<'a>,
-    bookmarks: PdfBookmarks<'a>,
     form: Option<PdfForm<'a>>,
     fonts: PdfFonts<'a>,
     metadata: PdfMetadata<'a>,
     pages: PdfPages<'a>,
     permissions: PdfPermissions<'a>,
-    signatures: PdfSignatures<'a>,
     bindings: &'a dyn PdfiumLibraryBindings,
     source_byte_buffer: Option<Vec<u8>>,
 
@@ -182,14 +166,11 @@ impl<'a> PdfDocument<'a> {
         PdfDocument {
             handle,
             output_version: None,
-            attachments: PdfAttachments::from_pdfium(handle, bindings),
-            bookmarks: PdfBookmarks::from_pdfium(handle, bindings),
             form,
             fonts: PdfFonts::from_pdfium(handle, bindings),
             metadata: PdfMetadata::from_pdfium(handle, bindings),
             pages,
             permissions: PdfPermissions::from_pdfium(handle, bindings),
-            signatures: PdfSignatures::from_pdfium(handle, bindings),
             bindings,
             source_byte_buffer: None,
             file_access_reader: None,
@@ -240,22 +221,15 @@ impl<'a> PdfDocument<'a> {
         self.output_version = Some(version);
     }
 
-    /// Returns an immutable collection of all the [PdfAttachments] embedded in this [PdfDocument].
-    #[inline]
-    pub fn attachments(&self) -> &PdfAttachments<'_> {
-        &self.attachments
+    /// Returns `true` if this [PdfDocument] is a tagged PDF.
+    pub fn is_tagged(&self) -> bool {
+        self.bindings.is_true(self.bindings.FPDFCatalog_IsTagged(self.handle))
     }
 
-    /// Returns a mutable collection of all the [PdfAttachments] embedded in this [PdfDocument].
-    #[inline]
-    pub fn attachments_mut(&mut self) -> &mut PdfAttachments<'a> {
-        &mut self.attachments
-    }
-
-    /// Returns an immutable collection of all the [PdfBookmarks] in this [PdfDocument].
-    #[inline]
-    pub fn bookmarks(&self) -> &PdfBookmarks<'_> {
-        &self.bookmarks
+    /// Returns `true` if this [PdfDocument] has a valid cross-reference table.
+    pub fn has_valid_cross_reference_table(&self) -> bool {
+        self.bindings
+            .is_true(self.bindings.FPDF_DocumentHasValidCrossReferenceTable(self.handle))
     }
 
     /// Returns an immutable reference to the [PdfForm] embedded in this [PdfDocument], if any.
@@ -298,12 +272,6 @@ impl<'a> PdfDocument<'a> {
     #[inline]
     pub fn permissions(&self) -> &PdfPermissions<'_> {
         &self.permissions
-    }
-
-    /// Returns an immutable collection of all the [PdfSignatures] attached to this [PdfDocument].
-    #[inline]
-    pub fn signatures(&self) -> &PdfSignatures<'_> {
-        &self.signatures
     }
 
     /// Writes this [PdfDocument] to the given writer.

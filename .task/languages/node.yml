@@ -70,6 +70,11 @@ tasks:
     cmds:
       - pnpm test
 
+  clippy:
+    desc: Run clippy on kreuzberg-node crate
+    cmds:
+      - cargo clippy -p kreuzberg-node -- -D warnings
+
   lint:
     desc: Auto-fix Node/TypeScript code linting (biome + oxlint)
     dir: crates/kreuzberg-node

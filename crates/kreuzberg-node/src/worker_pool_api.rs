@@ -160,15 +160,22 @@ pub async fn extract_file_in_worker(
 
     pool_clone.increment_active();
 
-    let rust_config = resolve_config(config)?;
+    let mut rust_config = resolve_config(config)?;
+
+    // Inject password into PDF config if provided
+    if let Some(ref pwd) = password {
+        let pdf_opts = rust_config.pdf_options.get_or_insert_with(Default::default);
+        let passwords = pdf_opts.passwords.get_or_insert_with(Vec::new);
+        if !passwords.contains(pwd) {
+            passwords.push(pwd.clone());
+        }
+    }
 
     // Spawn the extraction in a blocking thread
-    let result = tokio::task::spawn_blocking(move || {
-        kreuzberg::extract_file_sync(&file_path, password.as_deref(), &rust_config)
-    })
-    .await
-    .map_err(|e| Error::from_reason(format!("Worker thread error: {}", e)))?
-    .map_err(convert_error)?;
+    let result = tokio::task::spawn_blocking(move || kreuzberg::extract_file_sync(&file_path, None, &rust_config))
+        .await
+        .map_err(|e| Error::from_reason(format!("Worker thread error: {}", e)))?
+        .map_err(convert_error)?;
 
     pool_clone.decrement_active();
 

@@ -1,0 +1,19 @@
+{
+	"id": "office_xlsm_basic",
+	"category": "office",
+	"description": "Excel macro-enabled workbook (.xlsm) extraction.",
+	"document": {
+		"path": "xlsx/test_01.xlsm",
+		"media_type": "application/vnd.ms-excel.sheet.macroEnabled.12"
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": [
+			"application/vnd.ms-excel.sheet.macroEnabled.12",
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		],
+		"content_not_empty": true
+	}
+}

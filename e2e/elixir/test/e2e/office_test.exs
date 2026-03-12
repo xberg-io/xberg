@@ -31,6 +31,28 @@ defmodule E2E.OfficeTest do
       end
     end
 
+    test "office_commonmark_basic" do
+      case E2E.Helpers.run_fixture(
+             "office_commonmark_basic",
+             "markdown/sample.commonmark",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["text/markdown", "text/plain", "text/x-commonmark"])
+          |> E2E.Helpers.assert_min_content_length(5)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "office_djot_basic" do
       case E2E.Helpers.run_fixture(
              "office_djot_basic",
@@ -717,6 +739,31 @@ defmodule E2E.OfficeTest do
       end
     end
 
+    test "office_pptm_basic" do
+      case E2E.Helpers.run_fixture(
+             "office_pptm_basic",
+             "pptx/powerpoint_with_image.pptm",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime([
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+          ])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "office_pptx_basic" do
       case E2E.Helpers.run_fixture(
              "office_pptx_basic",
@@ -868,6 +915,56 @@ defmodule E2E.OfficeTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.ms-excel"])
           |> E2E.Helpers.assert_min_content_length(10)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "office_xlsb_basic" do
+      case E2E.Helpers.run_fixture(
+             "office_xlsb_basic",
+             "xlsx/test_xlsb.xlsb",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime([
+            "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "office_xlsm_basic" do
+      case E2E.Helpers.run_fixture(
+             "office_xlsm_basic",
+             "xlsx/test_01.xlsm",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime([
+            "application/vnd.ms-excel.sheet.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ])
+          |> E2E.Helpers.assert_content_not_empty()
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")

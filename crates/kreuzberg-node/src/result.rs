@@ -2,7 +2,7 @@ use crate::KNOWN_FORMAT_FIELDS;
 use crate::config::JsExtractionConfig;
 use kreuzberg::{
     Chunk as RustChunk, ChunkMetadata as RustChunkMetadata, ExtractionConfig, ExtractionResult as RustExtractionResult,
-    ProcessingWarning as RustProcessingWarning,
+    ProcessingWarning as RustProcessingWarning, utils::snake_to_camel,
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -65,6 +65,19 @@ pub struct JsExtractedImage {
 
 #[napi(object)]
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct JsHeadingLevel {
+    pub level: u32,
+    pub text: String,
+}
+
+#[napi(object)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct JsHeadingContext {
+    pub headings: Vec<JsHeadingLevel>,
+}
+
+#[napi(object)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct JsChunkMetadata {
     pub byte_start: u32,
     pub byte_end: u32,
@@ -73,6 +86,7 @@ pub struct JsChunkMetadata {
     pub total_chunks: u32,
     pub first_page: Option<u32>,
     pub last_page: Option<u32>,
+    pub heading_context: Option<JsHeadingContext>,
 }
 
 #[napi(object)]
@@ -193,6 +207,9 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
     fn try_from(val: RustExtractionResult) -> Result<Self> {
         let metadata = serde_json::to_value(&val.metadata)
             .map_err(|e| Error::new(Status::GenericFailure, format!("Failed to serialize metadata: {}", e)))?;
+
+        // Transform snake_case keys from Rust core to camelCase for TypeScript/Node.js
+        let metadata = snake_to_camel(metadata);
 
         let images = if let Some(imgs) = val.images {
             let mut js_images = Vec::with_capacity(imgs.len());
@@ -478,6 +495,16 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                         total_chunks: usize_to_u32(chunk.metadata.total_chunks, "chunks[].metadata.total_chunks")?,
                         first_page: chunk.metadata.first_page.map(|p| p as u32),
                         last_page: chunk.metadata.last_page.map(|p| p as u32),
+                        heading_context: chunk.metadata.heading_context.map(|hc| JsHeadingContext {
+                            headings: hc
+                                .headings
+                                .into_iter()
+                                .map(|h| JsHeadingLevel {
+                                    level: u32::from(h.level),
+                                    text: h.text,
+                                })
+                                .collect(),
+                        }),
                     };
 
                     let embedding = chunk
@@ -662,6 +689,16 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                         total_chunks: chunk.metadata.total_chunks as usize,
                         first_page: chunk.metadata.first_page.map(|v| v as usize),
                         last_page: chunk.metadata.last_page.map(|v| v as usize),
+                        heading_context: chunk.metadata.heading_context.map(|hc| kreuzberg::HeadingContext {
+                            headings: hc
+                                .headings
+                                .into_iter()
+                                .map(|h| kreuzberg::HeadingLevel {
+                                    level: h.level as u8,
+                                    text: h.text,
+                                })
+                                .collect(),
+                        }),
                     },
                 });
             }

@@ -25,13 +25,13 @@ pool-metrics = []
 
 simd-utf8 = ["dep:simdutf8"]
 
-tokio-runtime = ["dep:tokio"]
+tokio-runtime = ["dep:tokio", "tokio/rt", "tokio/rt-multi-thread"]
 
 pdf = ["dep:pdfium-render", "dep:lopdf", "dep:image"]
 static-pdfium = ["pdf"]
 bundled-pdfium = ["pdf"]
 system-pdfium = ["pdf"]
-excel = ["dep:calamine", "tokio-runtime"]
+excel = ["dep:calamine"]
 excel-wasm = ["dep:calamine"]
 office = [
     "dep:cfb",
@@ -70,12 +70,14 @@ paddle-ocr = [
     "dep:sha2",
     "dep:image",
     "dep:hf-hub",
+    "dep:ureq",
     "html",
     "tokio-runtime",
     "ocr",
 ]
 language-detection = ["dep:whatlang"]
-chunking = ["dep:text-splitter"]
+chunking = ["dep:text-splitter", "dep:pulldown-cmark"]
+chunking-tokenizers = ["chunking", "dep:tokenizers", "text-splitter/tokenizers"]
 embeddings = ["dep:fastembed", "dep:reqwest", "chunking", "tokio-runtime"]
 stopwords = []
 quality = ["dep:unicode-normalization", "dep:chardetng", "stopwords"]
@@ -105,7 +107,7 @@ wasm-target = [
 ]
 wasm-threads = ["dep:wasm-bindgen-rayon"]
 
-full = [
+formats = [
     "pdf",
     "excel",
     "office",
@@ -113,18 +115,17 @@ full = [
     "html",
     "xml",
     "archives",
-    "ocr",
-    "paddle-ocr",
     "language-detection",
     "chunking",
-    "embeddings",
     "quality",
     "keywords",
     "mdx",
     "api",
     "mcp",
     "otel",
+    "chunking-tokenizers",
 ]
+full = ["formats", "ocr", "paddle-ocr", "embeddings", "api", "mcp", "otel"]
 server = ["pdf", "excel", "html", "ocr", "paddle-ocr", "chunking", "api", "mcp"]
 
 [build-dependencies]
@@ -162,7 +163,7 @@ indexmap = "2.13.0"
 tracing = { workspace = true }
 pdfium-render = { workspace = true, features = ["thread_safe", "image_latest"], optional = true }
 lopdf = { version = "0.39.0", optional = true }
-calamine = { version = "0.33.0", features = ["dates"], optional = true }
+calamine = { version = "0.34.0", features = ["dates"], optional = true }
 
 roxmltree = { version = "0.21.1", optional = true }
 zip = { version = "8.2.0", optional = true, default-features = false, features = [
@@ -172,6 +173,7 @@ mail-parser = { version = "0.11.2", optional = true }
 html-to-markdown-rs = { workspace = true, features = [
     "inline-images",
     "metadata",
+    "visitor",
 ], optional = true }
 cfb = { version = "0.14.0", optional = true }
 quick-xml = { version = "0.39.2", features = ["serialize"], optional = true }
@@ -189,7 +191,7 @@ biblib = { version = "0.4", default-features = false, features = [
 ], optional = true }
 org = { version = "0.3", optional = true }
 
-kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "4.3", optional = true }
+kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "4.4.5", optional = true }
 image = { workspace = true, default-features = false, features = [
     "png",
     "jpeg",
@@ -210,6 +212,7 @@ hayro-jpeg2000 = { version = "0.3", default-features = false, features = [
 hayro-jbig2 = { version = "0.1", default-features = false, features = ["std"], optional = true }
 whatlang = { version = "0.18.0", optional = true }
 text-splitter = { version = "0.29.3", features = ["markdown"], optional = true }
+tokenizers = { version = "0.22", optional = true, default-features = false, features = ["http"] }
 unicode-normalization = { version = "0.1.25", optional = true }
 chardetng = { version = "0.1.17", optional = true }
 encoding_rs = { version = "0.8.35" }
@@ -219,7 +222,7 @@ axum = { version = "0.8", features = ["macros", "json", "multipart"], optional =
 tower = { version = "0.5", optional = true }
 tower-http = { version = "0.6", features = ["cors", "trace", "limit"], optional = true }
 utoipa = { version = "5.4", features = ["axum_extras"], optional = true }
-rmcp = { version = "1.1.0", features = [
+rmcp = { version = "1.1.1", features = [
     "server",
     "macros",
     "base64",
@@ -240,6 +243,7 @@ tar = "0.4.44"
 zip = { version = "8.2.0", default-features = false, features = ["deflate-flate2"] }
 serial_test = "3.4.0"
 anyhow = { workspace = true }
+tokio = { workspace = true, features = ["macros", "time"] }
 tokio-test = "0.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 criterion = { workspace = true }
@@ -248,7 +252,7 @@ image = { workspace = true, default-features = false, features = ["png"] }
 [target.'cfg(all(not(target_os = "windows"), not(target_arch = "wasm32")))'.dependencies]
 pprof = { version = "0.15.0", features = ["flamegraph"], optional = true }
 # PaddleOCR via ONNX Runtime - not available on WASM (vendored from paddle-ocr-rs)
-kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "4.3", optional = true }
+kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "4.4.5", optional = true }
 # Use rustls on non-Windows platforms (Linux, macOS)
 # Blocking feature needed for model downloads
 reqwest = { workspace = true, default-features = false, features = [
@@ -257,18 +261,18 @@ reqwest = { workspace = true, default-features = false, features = [
     "blocking",
 ], optional = true }
 # Use rustls-tls for fastembed on non-Windows platforms
-fastembed = { version = "5.11", default-features = false, features = [
+fastembed = { version = "5.12", default-features = false, features = [
     "hf-hub-rustls-tls",
     "ort-load-dynamic",
 ], optional = true }
 hf-hub = { version = "0.5", default-features = false, features = ["ureq"], optional = true }
 # Force ureq (transitive dep via hf-hub) to use rustls on non-Windows
-ureq = { version = "3.2", default-features = false, features = ["rustls", "json"] }
+ureq = { version = "3.2", default-features = false, features = ["rustls", "json"], optional = true }
 
 # Use native-tls on Windows to avoid aws-lc-sys CMake build issues with MinGW
 [target.'cfg(all(target_os = "windows", not(target_arch = "wasm32")))'.dependencies]
 # PaddleOCR via ONNX Runtime - not available on WASM (vendored from paddle-ocr-rs)
-kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "4.3", optional = true }
+kreuzberg-paddle-ocr = { path = "../kreuzberg-paddle-ocr", version = "4.4.5", optional = true }
 # Blocking feature needed for model downloads
 reqwest = { workspace = true, default-features = false, features = [
     "json",
@@ -276,13 +280,16 @@ reqwest = { workspace = true, default-features = false, features = [
     "blocking",
 ], optional = true }
 # Use native-tls for fastembed on Windows
-fastembed = { version = "5.11", default-features = false, features = [
+fastembed = { version = "5.12", default-features = false, features = [
     "hf-hub-native-tls",
     "ort-load-dynamic",
 ], optional = true }
 hf-hub = { version = "0.5", default-features = false, features = ["ureq"], optional = true }
 # Force ureq (transitive dep via hf-hub) to use native-tls on Windows
-ureq = { version = "3.2", default-features = false, features = ["native-tls", "json"] }
+ureq = { version = "3.2", default-features = false, features = [
+    "native-tls",
+    "json",
+], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-rayon = { version = "1.3", optional = true }

@@ -35,6 +35,25 @@ class OfficeTest extends TestCase
     }
 
     /**
+     * CommonMark (.commonmark) text extraction.
+     */
+    public function test_office_commonmark_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('markdown/sample.commonmark');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping office_commonmark_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['text/markdown', 'text/plain', 'text/x-commonmark']);
+        Helpers::assertMinContentLength($result, 5);
+    }
+
+    /**
      * Djot markup text extraction.
      */
     public function test_office_djot_basic(): void
@@ -614,6 +633,25 @@ class OfficeTest extends TestCase
     }
 
     /**
+     * PowerPoint macro-enabled presentation (.pptm) extraction.
+     */
+    public function test_office_pptm_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('pptx/powerpoint_with_image.pptm');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping office_pptm_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/vnd.ms-powerpoint.presentation.macroEnabled.12', 'application/vnd.openxmlformats-officedocument.presentationml.presentation']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
      * PPTX deck should extract slides content.
      */
     public function test_office_pptx_basic(): void
@@ -744,6 +782,44 @@ class OfficeTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/vnd.ms-excel']);
         Helpers::assertMinContentLength($result, 10);
+    }
+
+    /**
+     * Excel binary workbook (.xlsb) extraction.
+     */
+    public function test_office_xlsb_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('xlsx/test_xlsb.xlsb');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping office_xlsb_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/vnd.ms-excel.sheet.binary.macroEnabled.12', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
+     * Excel macro-enabled workbook (.xlsm) extraction.
+     */
+    public function test_office_xlsm_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('xlsx/test_01.xlsm');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping office_xlsm_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/vnd.ms-excel.sheet.macroEnabled.12', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        Helpers::assertContentNotEmpty($result);
     }
 
     /**

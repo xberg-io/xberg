@@ -64,44 +64,46 @@ impl Drop for CStringGuard {
 /// The struct itself must be freed using `kreuzberg_free_extraction_result`.
 #[repr(C)]
 pub struct CExtractionResult {
+    /// JSON-serialized PDF annotations array (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+    pub annotations_json: *mut c_char,
+    /// Text chunks as JSON array (null-terminated, or null pointer if not available, must be freed with kreuzberg_free_string)
+    pub chunks_json: *mut c_char,
     /// Extracted text content (null-terminated UTF-8 string, must be freed with kreuzberg_free_string)
     pub content: *mut c_char,
-    /// Detected MIME type (null-terminated string, must be freed with kreuzberg_free_string)
-    pub mime_type: *mut c_char,
-    /// Document language (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-    pub language: *mut c_char,
     /// Document date (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
     pub date: *mut c_char,
-    /// Document subject (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-    pub subject: *mut c_char,
-    /// Tables as JSON array (null-terminated string, or NULL if no tables, must be freed with kreuzberg_free_string)
-    pub tables_json: *mut c_char,
     /// Detected languages as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
     pub detected_languages_json: *mut c_char,
-    /// Metadata as JSON object (null-terminated string, or NULL if no metadata, must be freed with kreuzberg_free_string)
-    pub metadata_json: *mut c_char,
-    /// Text chunks as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-    pub chunks_json: *mut c_char,
+    /// JSON-serialized Djot content (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+    pub djot_content_json: *mut c_char,
+    /// Document structure as JSON object (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+    pub document_json: *mut c_char,
+    /// Semantic elements as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+    pub elements_json: *mut c_char,
+    /// JSON-serialized extracted keywords (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+    pub extracted_keywords_json: *mut c_char,
     /// Extracted images as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
     pub images_json: *mut c_char,
+    /// Document language (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+    pub language: *mut c_char,
+    /// Metadata as JSON object (null-terminated string, or NULL if no metadata, must be freed with kreuzberg_free_string)
+    pub metadata_json: *mut c_char,
+    /// Detected MIME type (null-terminated string, must be freed with kreuzberg_free_string)
+    pub mime_type: *mut c_char,
+    /// OCR elements as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+    pub ocr_elements_json: *mut c_char,
     /// Page structure as JSON object (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
     pub page_structure_json: *mut c_char,
     /// Per-page content as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
     pub pages_json: *mut c_char,
-    /// Semantic elements as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-    pub elements_json: *mut c_char,
-    /// OCR elements as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-    pub ocr_elements_json: *mut c_char,
-    /// Document structure as JSON object (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-    pub document_json: *mut c_char,
-    /// JSON-serialized extracted keywords (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
-    pub extracted_keywords_json: *mut c_char,
-    /// JSON-serialized quality score (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
-    pub quality_score_json: *mut c_char,
     /// JSON-serialized processing warnings array (null-terminated, or null pointer if empty, must be freed with kreuzberg_free_string)
     pub processing_warnings_json: *mut c_char,
-    /// JSON-serialized PDF annotations array (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
-    pub annotations_json: *mut c_char,
+    /// JSON-serialized quality score (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+    pub quality_score_json: *mut c_char,
+    /// Document subject (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+    pub subject: *mut c_char,
+    /// Tables as JSON array (null-terminated string, or NULL if no tables, must be freed with kreuzberg_free_string)
+    pub tables_json: *mut c_char,
     /// Whether extraction was successful
     pub success: bool,
     /// Padding to match Java MemoryLayout (7 bytes padding to align to 8-byte boundary)
@@ -146,10 +148,10 @@ pub struct CBytesWithMime {
 /// - Each individual result in the array must also be freed
 #[repr(C)]
 pub struct CBatchResult {
-    /// Array of extraction results
-    pub results: *mut *mut CExtractionResult,
     /// Number of results
     pub count: usize,
+    /// Array of extraction results
+    pub results: *mut *mut CExtractionResult,
     /// Whether batch operation was successful
     pub success: bool,
     /// Padding to match Java MemoryLayout (7 bytes padding to align to 8-byte boundary)
@@ -164,7 +166,7 @@ pub struct CBatchResult {
 const _: () = {
     const fn assert_c_extraction_result_size() {
         const SIZE: usize = std::mem::size_of::<CExtractionResult>();
-        const _: () = assert!(SIZE == 160, "CExtractionResult size must be 160 bytes");
+        const _: () = assert!(SIZE == 168, "CExtractionResult size must be 168 bytes");
     }
 
     const fn assert_c_extraction_result_alignment() {
@@ -209,8 +211,8 @@ mod tests {
     fn test_c_extraction_result_size() {
         assert_eq!(
             std::mem::size_of::<CExtractionResult>(),
-            160,
-            "CExtractionResult must be exactly 160 bytes"
+            168,
+            "CExtractionResult must be exactly 168 bytes"
         );
     }
 
@@ -329,26 +331,27 @@ mod tests {
         use std::mem::offset_of;
 
         // All pointer fields should be 8 bytes each
-        assert_eq!(offset_of!(CExtractionResult, content), 0);
-        assert_eq!(offset_of!(CExtractionResult, mime_type), 8);
-        assert_eq!(offset_of!(CExtractionResult, language), 16);
+        assert_eq!(offset_of!(CExtractionResult, annotations_json), 0);
+        assert_eq!(offset_of!(CExtractionResult, chunks_json), 8);
+        assert_eq!(offset_of!(CExtractionResult, content), 16);
         assert_eq!(offset_of!(CExtractionResult, date), 24);
-        assert_eq!(offset_of!(CExtractionResult, subject), 32);
-        assert_eq!(offset_of!(CExtractionResult, tables_json), 40);
-        assert_eq!(offset_of!(CExtractionResult, detected_languages_json), 48);
-        assert_eq!(offset_of!(CExtractionResult, metadata_json), 56);
-        assert_eq!(offset_of!(CExtractionResult, chunks_json), 64);
+        assert_eq!(offset_of!(CExtractionResult, detected_languages_json), 32);
+        assert_eq!(offset_of!(CExtractionResult, djot_content_json), 40);
+        assert_eq!(offset_of!(CExtractionResult, document_json), 48);
+        assert_eq!(offset_of!(CExtractionResult, elements_json), 56);
+        assert_eq!(offset_of!(CExtractionResult, extracted_keywords_json), 64);
         assert_eq!(offset_of!(CExtractionResult, images_json), 72);
-        assert_eq!(offset_of!(CExtractionResult, page_structure_json), 80);
-        assert_eq!(offset_of!(CExtractionResult, pages_json), 88);
-        assert_eq!(offset_of!(CExtractionResult, elements_json), 96);
+        assert_eq!(offset_of!(CExtractionResult, language), 80);
+        assert_eq!(offset_of!(CExtractionResult, metadata_json), 88);
+        assert_eq!(offset_of!(CExtractionResult, mime_type), 96);
         assert_eq!(offset_of!(CExtractionResult, ocr_elements_json), 104);
-        assert_eq!(offset_of!(CExtractionResult, document_json), 112);
-        assert_eq!(offset_of!(CExtractionResult, extracted_keywords_json), 120);
-        assert_eq!(offset_of!(CExtractionResult, quality_score_json), 128);
-        assert_eq!(offset_of!(CExtractionResult, processing_warnings_json), 136);
-        assert_eq!(offset_of!(CExtractionResult, annotations_json), 144);
-        assert_eq!(offset_of!(CExtractionResult, success), 152);
+        assert_eq!(offset_of!(CExtractionResult, page_structure_json), 112);
+        assert_eq!(offset_of!(CExtractionResult, pages_json), 120);
+        assert_eq!(offset_of!(CExtractionResult, processing_warnings_json), 128);
+        assert_eq!(offset_of!(CExtractionResult, quality_score_json), 136);
+        assert_eq!(offset_of!(CExtractionResult, subject), 144);
+        assert_eq!(offset_of!(CExtractionResult, tables_json), 152);
+        assert_eq!(offset_of!(CExtractionResult, success), 160);
     }
 
     /// Verify field offsets in CBatchResult match expectations
@@ -356,8 +359,8 @@ mod tests {
     fn test_c_batch_result_field_offsets() {
         use std::mem::offset_of;
 
-        assert_eq!(offset_of!(CBatchResult, results), 0);
-        assert_eq!(offset_of!(CBatchResult, count), 8);
+        assert_eq!(offset_of!(CBatchResult, count), 0);
+        assert_eq!(offset_of!(CBatchResult, results), 8);
         assert_eq!(offset_of!(CBatchResult, success), 16);
     }
 

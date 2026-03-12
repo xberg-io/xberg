@@ -104,6 +104,29 @@ function convertChunk(rawChunk: unknown): Chunk {
 			firstPage: ((metadata["first_page"] ?? metadata["firstPage"]) as number | null) ?? null,
 			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
 			lastPage: ((metadata["last_page"] ?? metadata["lastPage"]) as number | null) ?? null,
+			// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+			headingContext: (() => {
+				// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+				const hc = (metadata["heading_context"] ?? metadata["headingContext"]) as
+					| Record<string, unknown>
+					| null
+					| undefined;
+				if (!hc) return null;
+				// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+				const headings = hc["headings"];
+				if (!Array.isArray(headings)) return null;
+				return {
+					headings: headings.map((h: unknown) => {
+						const heading = h as Record<string, unknown>;
+						return {
+							// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+							level: (heading["level"] as number) ?? 0,
+							// biome-ignore lint/complexity/useLiteralKeys: required for strict TypeScript noPropertyAccessFromIndexSignature
+							text: (heading["text"] as string) ?? "",
+						};
+					}),
+				};
+			})(),
 		},
 	};
 }

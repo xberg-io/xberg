@@ -1,0 +1,20 @@
+{
+	"id": "config_processing_warnings_empty",
+	"description": "Tests that a clean PDF extraction produces no processing warnings",
+	"tags": ["contract", "config"],
+	"document": {
+		"path": "pdf/fake_memo.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 10,
+		"processing_warnings": {
+			"is_empty": true
+		}
+	}
+}

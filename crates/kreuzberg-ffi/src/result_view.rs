@@ -46,50 +46,40 @@ use std::ptr;
 /// Views are NOT thread-safe. External synchronization required for concurrent access.
 #[repr(C)]
 pub struct CExtractionResultView {
-    /// Direct pointer to content bytes (UTF-8, not null-terminated)
-    pub content_ptr: *const u8,
-    /// Length of content in bytes
-    pub content_len: usize,
-
-    /// Direct pointer to MIME type bytes (UTF-8, not null-terminated)
-    pub mime_type_ptr: *const u8,
-    /// Length of MIME type in bytes
-    pub mime_type_len: usize,
-
-    /// Direct pointer to language bytes (UTF-8, not null-terminated), or NULL
-    pub language_ptr: *const u8,
-    /// Length of language in bytes (0 if NULL)
-    pub language_len: usize,
-
-    /// Direct pointer to date bytes (UTF-8, not null-terminated), or NULL
-    pub date_ptr: *const u8,
-    /// Length of date in bytes (0 if NULL)
-    pub date_len: usize,
-
-    /// Direct pointer to subject bytes (UTF-8, not null-terminated), or NULL
-    pub subject_ptr: *const u8,
-    /// Length of subject in bytes (0 if NULL)
-    pub subject_len: usize,
-
-    /// Direct pointer to title bytes (UTF-8, not null-terminated), or NULL
-    pub title_ptr: *const u8,
-    /// Length of title in bytes (0 if NULL)
-    pub title_len: usize,
-
-    /// Number of tables extracted
-    pub table_count: usize,
-
     /// Number of chunks (0 if chunking not enabled)
     pub chunk_count: usize,
-
+    /// Length of content in bytes
+    pub content_len: usize,
+    /// Direct pointer to content bytes (UTF-8, not null-terminated)
+    pub content_ptr: *const u8,
+    /// Length of date in bytes (0 if NULL)
+    pub date_len: usize,
+    /// Direct pointer to date bytes (UTF-8, not null-terminated), or NULL
+    pub date_ptr: *const u8,
     /// Number of detected languages (0 if language detection not enabled)
     pub detected_language_count: usize,
-
     /// Number of extracted images (0 if no images)
     pub image_count: usize,
-
+    /// Length of language in bytes (0 if NULL)
+    pub language_len: usize,
+    /// Direct pointer to language bytes (UTF-8, not null-terminated), or NULL
+    pub language_ptr: *const u8,
+    /// Length of MIME type in bytes
+    pub mime_type_len: usize,
+    /// Direct pointer to MIME type bytes (UTF-8, not null-terminated)
+    pub mime_type_ptr: *const u8,
     /// Total page count (0 if not applicable)
     pub page_count: usize,
+    /// Length of subject in bytes (0 if NULL)
+    pub subject_len: usize,
+    /// Direct pointer to subject bytes (UTF-8, not null-terminated), or NULL
+    pub subject_ptr: *const u8,
+    /// Number of tables extracted
+    pub table_count: usize,
+    /// Length of title in bytes (0 if NULL)
+    pub title_len: usize,
+    /// Direct pointer to title bytes (UTF-8, not null-terminated), or NULL
+    pub title_ptr: *const u8,
 }
 
 /// Get a zero-copy view of an extraction result.
@@ -160,22 +150,11 @@ pub unsafe extern "C" fn kreuzberg_get_result_view(
     let result_ref = unsafe { &*result };
 
     unsafe {
+        (*out_view).chunk_count = result_ref.chunks.as_ref().map_or(0, |c| c.len());
+
         let content_bytes = result_ref.content.as_bytes();
         (*out_view).content_ptr = content_bytes.as_ptr();
         (*out_view).content_len = content_bytes.len();
-
-        let mime_bytes = result_ref.mime_type.as_bytes();
-        (*out_view).mime_type_ptr = mime_bytes.as_ptr();
-        (*out_view).mime_type_len = mime_bytes.len();
-
-        if let Some(ref language) = result_ref.metadata.language {
-            let lang_bytes = language.as_bytes();
-            (*out_view).language_ptr = lang_bytes.as_ptr();
-            (*out_view).language_len = lang_bytes.len();
-        } else {
-            (*out_view).language_ptr = ptr::null();
-            (*out_view).language_len = 0;
-        }
 
         if let Some(ref created_at) = result_ref.metadata.created_at {
             let created_at_bytes = created_at.as_bytes();
@@ -186,6 +165,24 @@ pub unsafe extern "C" fn kreuzberg_get_result_view(
             (*out_view).date_len = 0;
         }
 
+        (*out_view).detected_language_count = result_ref.detected_languages.as_ref().map_or(0, |l| l.len());
+        (*out_view).image_count = result_ref.images.as_ref().map_or(0, |i| i.len());
+
+        if let Some(ref language) = result_ref.metadata.language {
+            let lang_bytes = language.as_bytes();
+            (*out_view).language_ptr = lang_bytes.as_ptr();
+            (*out_view).language_len = lang_bytes.len();
+        } else {
+            (*out_view).language_ptr = ptr::null();
+            (*out_view).language_len = 0;
+        }
+
+        let mime_bytes = result_ref.mime_type.as_bytes();
+        (*out_view).mime_type_ptr = mime_bytes.as_ptr();
+        (*out_view).mime_type_len = mime_bytes.len();
+
+        (*out_view).page_count = result_ref.metadata.pages.as_ref().map_or(0, |p| p.total_count);
+
         if let Some(ref subject) = result_ref.metadata.subject {
             let subject_bytes = subject.as_bytes();
             (*out_view).subject_ptr = subject_bytes.as_ptr();
@@ -195,6 +192,8 @@ pub unsafe extern "C" fn kreuzberg_get_result_view(
             (*out_view).subject_len = 0;
         }
 
+        (*out_view).table_count = result_ref.tables.len();
+
         if let Some(ref title) = result_ref.metadata.title {
             let title_bytes = title.as_bytes();
             (*out_view).title_ptr = title_bytes.as_ptr();
@@ -203,12 +202,6 @@ pub unsafe extern "C" fn kreuzberg_get_result_view(
             (*out_view).title_ptr = ptr::null();
             (*out_view).title_len = 0;
         }
-
-        (*out_view).table_count = result_ref.tables.len();
-        (*out_view).chunk_count = result_ref.chunks.as_ref().map_or(0, |c| c.len());
-        (*out_view).detected_language_count = result_ref.detected_languages.as_ref().map_or(0, |l| l.len());
-        (*out_view).image_count = result_ref.images.as_ref().map_or(0, |i| i.len());
-        (*out_view).page_count = result_ref.metadata.pages.as_ref().map_or(0, |p| p.total_count);
     }
 
     0
@@ -244,19 +237,11 @@ pub(crate) fn create_result_view(result: &ExtractionResult) -> CExtractionResult
         page_count: 0,
     };
 
+    view.chunk_count = result.chunks.as_ref().map_or(0, |c| c.len());
+
     let content_bytes = result.content.as_bytes();
     view.content_ptr = content_bytes.as_ptr();
     view.content_len = content_bytes.len();
-
-    let mime_bytes = result.mime_type.as_bytes();
-    view.mime_type_ptr = mime_bytes.as_ptr();
-    view.mime_type_len = mime_bytes.len();
-
-    if let Some(ref language) = result.metadata.language {
-        let lang_bytes = language.as_bytes();
-        view.language_ptr = lang_bytes.as_ptr();
-        view.language_len = lang_bytes.len();
-    }
 
     if let Some(ref created_at) = result.metadata.created_at {
         let created_at_bytes = created_at.as_bytes();
@@ -264,23 +249,34 @@ pub(crate) fn create_result_view(result: &ExtractionResult) -> CExtractionResult
         view.date_len = created_at_bytes.len();
     }
 
+    view.detected_language_count = result.detected_languages.as_ref().map_or(0, |l| l.len());
+    view.image_count = result.images.as_ref().map_or(0, |i| i.len());
+
+    if let Some(ref language) = result.metadata.language {
+        let lang_bytes = language.as_bytes();
+        view.language_ptr = lang_bytes.as_ptr();
+        view.language_len = lang_bytes.len();
+    }
+
+    let mime_bytes = result.mime_type.as_bytes();
+    view.mime_type_ptr = mime_bytes.as_ptr();
+    view.mime_type_len = mime_bytes.len();
+
+    view.page_count = result.metadata.pages.as_ref().map_or(0, |p| p.total_count);
+
     if let Some(ref subject) = result.metadata.subject {
         let subject_bytes = subject.as_bytes();
         view.subject_ptr = subject_bytes.as_ptr();
         view.subject_len = subject_bytes.len();
     }
 
+    view.table_count = result.tables.len();
+
     if let Some(ref title) = result.metadata.title {
         let title_bytes = title.as_bytes();
         view.title_ptr = title_bytes.as_ptr();
         view.title_len = title_bytes.len();
     }
-
-    view.table_count = result.tables.len();
-    view.chunk_count = result.chunks.as_ref().map_or(0, |c| c.len());
-    view.detected_language_count = result.detected_languages.as_ref().map_or(0, |l| l.len());
-    view.image_count = result.images.as_ref().map_or(0, |i| i.len());
-    view.page_count = result.metadata.pages.as_ref().map_or(0, |p| p.total_count);
 
     view
 }
@@ -436,6 +432,7 @@ mod tests {
                         total_chunks: 2,
                         first_page: None,
                         last_page: None,
+                        heading_context: None,
                     },
                 },
                 kreuzberg::types::Chunk {
@@ -449,6 +446,7 @@ mod tests {
                         total_chunks: 2,
                         first_page: None,
                         last_page: None,
+                        heading_context: None,
                     },
                 },
             ]),

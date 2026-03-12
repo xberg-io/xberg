@@ -1,5 +1,5 @@
 //! Defines the [PdfLink] struct, exposing functionality related to a single link contained
-//! within a [PdfPage], a [PdfPageAnnotation], or a [PdfBookmark].
+//! within a [PdfPage] or a [PdfPageAnnotation].
 
 use crate::bindgen::{FPDF_DOCUMENT, FPDF_LINK, FS_RECTF};
 use crate::bindings::PdfiumLibraryBindings;
@@ -10,11 +10,11 @@ use crate::pdf::rect::PdfRect;
 
 #[cfg(doc)]
 use {
-    crate::pdf::action::PdfActionType, crate::pdf::document::bookmark::PdfBookmark,
-    crate::pdf::document::page::PdfPage, crate::pdf::document::page::annotation::PdfPageAnnotation,
+    crate::pdf::action::PdfActionType, crate::pdf::document::page::PdfPage,
+    crate::pdf::document::page::annotation::PdfPageAnnotation,
 };
 
-/// A single link contained within a [PdfPage], a [PdfPageAnnotation], or a [PdfBookmark].
+/// A single link contained within a [PdfPage] or a [PdfPageAnnotation].
 ///
 /// Each link may have a corresponding [PdfAction] that will be triggered when the user
 /// interacts with the link, and a [PdfDestination] that indicates the target of any behaviour

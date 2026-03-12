@@ -1,0 +1,19 @@
+{
+	"id": "office_xlsb_basic",
+	"category": "office",
+	"description": "Excel binary workbook (.xlsb) extraction.",
+	"document": {
+		"path": "xlsx/test_xlsb.xlsb",
+		"media_type": "application/vnd.ms-excel.sheet.binary.macroEnabled.12"
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": [
+			"application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+		],
+		"content_not_empty": true
+	}
+}

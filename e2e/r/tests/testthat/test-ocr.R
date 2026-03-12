@@ -234,6 +234,21 @@ test_that("ocr_tesseract_elements", {
   assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, elements_have_confidence = TRUE)
 })
 
+test_that("ocr_tesseract_elements_min_count", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "ocr_tesseract_elements_min_count",
+    "images/test_hello_world.png",
+    list(force_ocr = TRUE, ocr = list(backend = "tesseract", element_config = list(include_elements = TRUE, min_level = "line"), language = "eng")),
+    requirements = c("tesseract", "tesseract"),
+    notes = "Requires Tesseract OCR backend",
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/png"))
+  assert_min_content_length(result, 5L)
+  assert_ocr_elements(result, has_elements = TRUE, min_count = 1L)
+})
+
 test_that("ocr_tesseract_language_german", {
   skip_if_feature_unavailable("tesseract")
   result <- run_fixture(

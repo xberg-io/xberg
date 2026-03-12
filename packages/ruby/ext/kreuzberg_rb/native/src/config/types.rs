@@ -6,24 +6,23 @@
 use crate::error_handling::{runtime_error, validation_error};
 use crate::helpers::{get_kw, json_value_to_ruby, ruby_value_to_json, symbol_to_string};
 
-use html_to_markdown_rs::options::{
-    CodeBlockStyle, ConversionOptions, HeadingStyle, HighlightStyle, ListIndentType, NewlineStyle,
-    PreprocessingPreset,
-};
 use html_to_markdown_rs::WhitespaceMode;
+use html_to_markdown_rs::options::{
+    CodeBlockStyle, ConversionOptions, HeadingStyle, HighlightStyle, ListIndentType, NewlineStyle, PreprocessingPreset,
+};
 use kreuzberg::core::config::PageConfig;
 use kreuzberg::keywords::{
     KeywordAlgorithm as RustKeywordAlgorithm, KeywordConfig as RustKeywordConfig, RakeParams as RustRakeParams,
     YakeParams as RustYakeParams,
 };
-use kreuzberg::types::TesseractConfig as RustTesseractConfig;
 use kreuzberg::pdf::HierarchyConfig;
+use kreuzberg::types::TesseractConfig as RustTesseractConfig;
 use kreuzberg::{
-    ChunkingConfig, EmbeddingConfig, ExtractionConfig, ImageExtractionConfig,
-    LanguageDetectionConfig, OcrConfig, OutputFormat, PdfConfig, PostProcessorConfig, TokenReductionConfig,
+    ChunkingConfig, EmbeddingConfig, ExtractionConfig, ImageExtractionConfig, LanguageDetectionConfig, OcrConfig,
+    OutputFormat, PdfConfig, PostProcessorConfig, TokenReductionConfig,
 };
-use magnus::{Error, RArray, RHash, Ruby, TryConvert, Value};
 use magnus::value::ReprValue;
+use magnus::{Error, RArray, RHash, Ruby, TryConvert, Value};
 use std::fs;
 
 /// Parse OcrConfig from Ruby Hash
@@ -123,16 +122,62 @@ pub fn parse_chunking_config(ruby: &Ruby, hash: RHash) -> Result<ChunkingConfig,
         None
     };
 
+    let chunker_type = if let Some(val) = get_kw(ruby, hash, "chunker_type")
+        && !val.is_nil()
+    {
+        match symbol_to_string(val)?.as_str() {
+            "markdown" => kreuzberg::ChunkerType::Markdown,
+            _ => kreuzberg::ChunkerType::Text,
+        }
+    } else {
+        kreuzberg::ChunkerType::Text
+    };
+
+    let sizing = parse_chunk_sizing(ruby, hash)?;
+
     let config = ChunkingConfig {
         max_characters: max_chars,
         overlap: max_overlap,
         trim: true,
-        chunker_type: kreuzberg::ChunkerType::Text,
+        chunker_type,
         embedding,
         preset,
+        sizing,
     };
 
     Ok(config)
+}
+
+/// Parse ChunkSizing from Ruby Hash fields.
+fn parse_chunk_sizing(ruby: &Ruby, hash: RHash) -> Result<kreuzberg::ChunkSizing, Error> {
+    let sizing_type = if let Some(val) = get_kw(ruby, hash, "sizing_type")
+        && !val.is_nil()
+    {
+        Some(symbol_to_string(val)?)
+    } else {
+        None
+    };
+
+    match sizing_type.as_deref() {
+        Some("tokenizer") => {
+            let model = if let Some(val) = get_kw(ruby, hash, "sizing_model")
+                && !val.is_nil()
+            {
+                String::try_convert(val)?
+            } else {
+                "Xenova/gpt-4o".to_string()
+            };
+            let cache_dir = if let Some(val) = get_kw(ruby, hash, "sizing_cache_dir")
+                && !val.is_nil()
+            {
+                Some(std::path::PathBuf::from(String::try_convert(val)?))
+            } else {
+                None
+            };
+            Ok(kreuzberg::ChunkSizing::Tokenizer { model, cache_dir })
+        }
+        _ => Ok(kreuzberg::ChunkSizing::Characters),
+    }
 }
 
 /// Parse LanguageDetectionConfig from Ruby Hash
@@ -317,10 +362,17 @@ pub fn parse_image_extraction_config(ruby: &Ruby, hash: RHash) -> Result<ImageEx
         600
     };
 
+    let inject_placeholders = if let Some(val) = get_kw(ruby, hash, "inject_placeholders") {
+        bool::try_convert(val)?
+    } else {
+        true
+    };
+
     let config = ImageExtractionConfig {
         extract_images,
         target_dpi,
         max_image_dimension,
+        inject_placeholders,
         auto_adjust_dpi,
         min_dpi,
         max_dpi,
@@ -809,7 +861,7 @@ pub fn parse_extraction_config(ruby: &Ruby, opts: Option<RHash>) -> Result<Extra
                     return Err(runtime_error(format!(
                         "Invalid result_format: '{}'. Expected 'unified' or 'element_based'",
                         format_str
-                    )))
+                    )));
                 }
             };
         }
@@ -825,7 +877,7 @@ pub fn parse_extraction_config(ruby: &Ruby, opts: Option<RHash>) -> Result<Extra
                     return Err(runtime_error(format!(
                         "Invalid output_format: '{}'. Expected 'plain', 'markdown', 'djot', or 'html'",
                         format_str
-                    )))
+                    )));
                 }
             };
         }
@@ -853,18 +905,12 @@ pub fn config_from_file(path: String) -> Result<RHash, Error> {
         .map(|s| s.to_lowercase());
 
     let json_value: serde_json::Value = match extension.as_deref() {
-        Some("toml") => {
-            toml::from_str(&content)
-                .map_err(|e| validation_error(format!("Invalid TOML in config file '{}': {}", path, e)))?
-        }
-        Some("yaml") | Some("yml") => {
-            serde_yaml_ng::from_str(&content)
-                .map_err(|e| validation_error(format!("Invalid YAML in config file '{}': {}", path, e)))?
-        }
-        Some("json") => {
-            serde_json::from_str(&content)
-                .map_err(|e| validation_error(format!("Invalid JSON in config file '{}': {}", path, e)))?
-        }
+        Some("toml") => toml::from_str(&content)
+            .map_err(|e| validation_error(format!("Invalid TOML in config file '{}': {}", path, e)))?,
+        Some("yaml") | Some("yml") => serde_yaml_ng::from_str(&content)
+            .map_err(|e| validation_error(format!("Invalid YAML in config file '{}': {}", path, e)))?,
+        Some("json") => serde_json::from_str(&content)
+            .map_err(|e| validation_error(format!("Invalid JSON in config file '{}': {}", path, e)))?,
         Some(ext) => {
             return Err(validation_error(format!(
                 "Unsupported config file format: .{}. Supported formats: .toml, .yaml, .yml, .json",

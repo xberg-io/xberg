@@ -25,6 +25,23 @@ RSpec.describe 'office fixtures' do
     end
   end
 
+  it 'office_commonmark_basic' do
+    E2ERuby.run_fixture(
+      'office_commonmark_basic',
+      'markdown/sample.commonmark',
+      nil,
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['text/markdown', 'text/plain', 'text/x-commonmark']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 5)
+    end
+  end
+
   it 'office_djot_basic' do
     E2ERuby.run_fixture(
       'office_djot_basic',
@@ -544,6 +561,24 @@ RSpec.describe 'office fixtures' do
     end
   end
 
+  it 'office_pptm_basic' do
+    E2ERuby.run_fixture(
+      'office_pptm_basic',
+      'pptx/powerpoint_with_image.pptm',
+      nil,
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+         'application/vnd.openxmlformats-officedocument.presentationml.presentation']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
   it 'office_pptx_basic' do
     E2ERuby.run_fixture(
       'office_pptx_basic',
@@ -660,6 +695,42 @@ RSpec.describe 'office fixtures' do
         ['application/vnd.ms-excel']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 10)
+    end
+  end
+
+  it 'office_xlsb_basic' do
+    E2ERuby.run_fixture(
+      'office_xlsb_basic',
+      'xlsx/test_xlsb.xlsb',
+      nil,
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['application/vnd.ms-excel.sheet.binary.macroEnabled.12',
+         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
+  it 'office_xlsm_basic' do
+    E2ERuby.run_fixture(
+      'office_xlsm_basic',
+      'xlsx/test_01.xlsm',
+      nil,
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['application/vnd.ms-excel.sheet.macroEnabled.12',
+         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
     end
   end
 

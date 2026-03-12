@@ -1,8 +1,9 @@
 use super::error::OcrError;
 use crate::core::config::OutputFormat as KreuzbergOutputFormat;
-use html_to_markdown_rs::{ConversionOptions, OutputFormat as LibOutputFormat, convert};
+use crate::extraction::html::map_output_format;
+use html_to_markdown_rs::{ConversionOptions, convert};
 
-/// Convert hOCR to specified output format (markdown or djot).
+/// Convert hOCR to specified output format (markdown, djot, or plain text).
 ///
 /// Defaults to Markdown for backward compatibility.
 pub fn convert_hocr_to_markdown(
@@ -18,16 +19,8 @@ pub fn convert_hocr_to_markdown(
         opts.extract_metadata = false;
     }
 
-    // Set output format
     let format = output_format.unwrap_or(KreuzbergOutputFormat::Markdown);
-    opts.output_format = match format {
-        KreuzbergOutputFormat::Markdown => LibOutputFormat::Markdown,
-        KreuzbergOutputFormat::Djot => LibOutputFormat::Djot,
-        // Plain, Html, and Structured default to Markdown for hOCR conversion
-        KreuzbergOutputFormat::Plain | KreuzbergOutputFormat::Html | KreuzbergOutputFormat::Structured => {
-            LibOutputFormat::Markdown
-        }
-    };
+    opts.output_format = map_output_format(format);
 
     convert(hocr_html, Some(opts)).map_err(|e| OcrError::ProcessingFailed(format!("hOCR conversion failed: {}", e)))
 }

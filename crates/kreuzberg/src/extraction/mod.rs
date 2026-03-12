@@ -78,7 +78,7 @@ pub use email::{build_email_text_output, extract_email_content, parse_eml_conten
 pub use excel::{excel_to_markdown, read_excel_bytes, read_excel_file};
 
 #[cfg(feature = "html")]
-pub use html::{convert_html_to_markdown, process_html};
+pub use html::convert_html_to_markdown;
 
 #[cfg(feature = "office")]
 pub use doc::extract_doc_text;

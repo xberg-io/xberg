@@ -1,5 +1,3 @@
-#![cfg(feature = "office")]
-
 //! Native DOC (Word 97-2003) text extraction.
 //!
 //! Extracts text directly from Word Binary File Format using OLE/CFB

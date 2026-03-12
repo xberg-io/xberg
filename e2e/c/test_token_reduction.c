@@ -9,6 +9,7 @@ static void test_token_reduction_token_reduction_aggressive(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 5);
+    assert_max_content_length(result, 150);
     assert_content_not_empty(result);
     kreuzberg_free_result(result);
 }
@@ -18,6 +19,7 @@ static void test_token_reduction_token_reduction_basic(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 5);
+    assert_max_content_length(result, 200);
     assert_content_not_empty(result);
     kreuzberg_free_result(result);
 }
@@ -36,6 +38,7 @@ static void test_token_reduction_token_reduction_with_chunking(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 5);
+    assert_max_content_length(result, 200);
     assert_content_not_empty(result);
     assert_chunks(result, 1, 1, 0, 0);
     kreuzberg_free_result(result);

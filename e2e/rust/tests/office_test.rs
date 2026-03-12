@@ -30,6 +30,29 @@ fn test_office_bibtex_basic() {
 }
 
 #[test]
+fn test_office_commonmark_basic() {
+    // CommonMark (.commonmark) text extraction.
+
+    let document_path = resolve_document("markdown/sample.commonmark");
+    if !document_path.exists() {
+        println!(
+            "Skipping office_commonmark_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for office_commonmark_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["text/markdown", "text/plain", "text/x-commonmark"]);
+    assertions::assert_min_content_length(&result, 5);
+}
+
+#[test]
 fn test_office_djot_basic() {
     // Djot markup text extraction.
 
@@ -777,6 +800,35 @@ fn test_office_ppt_legacy() {
 }
 
 #[test]
+fn test_office_pptm_basic() {
+    // PowerPoint macro-enabled presentation (.pptm) extraction.
+
+    let document_path = resolve_document("pptx/powerpoint_with_image.pptm");
+    if !document_path.exists() {
+        println!(
+            "Skipping office_pptm_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for office_pptm_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(
+        &result,
+        &[
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ],
+    );
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
 fn test_office_pptx_basic() {
     // PPTX deck should extract slides content.
 
@@ -944,6 +996,64 @@ fn test_office_xls_legacy() {
 
     assertions::assert_expected_mime(&result, &["application/vnd.ms-excel"]);
     assertions::assert_min_content_length(&result, 10);
+}
+
+#[test]
+fn test_office_xlsb_basic() {
+    // Excel binary workbook (.xlsb) extraction.
+
+    let document_path = resolve_document("xlsx/test_xlsb.xlsb");
+    if !document_path.exists() {
+        println!(
+            "Skipping office_xlsb_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for office_xlsb_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(
+        &result,
+        &[
+            "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ],
+    );
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
+fn test_office_xlsm_basic() {
+    // Excel macro-enabled workbook (.xlsm) extraction.
+
+    let document_path = resolve_document("xlsx/test_01.xlsm");
+    if !document_path.exists() {
+        println!(
+            "Skipping office_xlsm_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for office_xlsm_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(
+        &result,
+        &[
+            "application/vnd.ms-excel.sheet.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ],
+    );
+    assertions::assert_content_not_empty(&result);
 }
 
 #[test]

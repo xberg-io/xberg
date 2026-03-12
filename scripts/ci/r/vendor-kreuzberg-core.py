@@ -61,13 +61,20 @@ def format_dependency(name: str, dep_spec: object) -> str:
         package: str | None = dep_spec.get("package")
         features: list[str] = dep_spec.get("features", [])
         default_features: bool | None = dep_spec.get("default-features")
+        optional: bool | None = dep_spec.get("optional")
+
+        path: str | None = dep_spec.get("path")
 
         parts: list[str] = []
 
         if package:
             parts.append(f'package = "{package}"')
 
-        parts.append(f'version = "{version}"')
+        if path:
+            parts.append(f'path = "{path}"')
+
+        if version:
+            parts.append(f'version = "{version}"')
 
         if features:
             features_str = ', '.join(f'"{f}"' for f in features)
@@ -77,6 +84,11 @@ def format_dependency(name: str, dep_spec: object) -> str:
             parts.append('default-features = false')
         elif default_features is True:
             parts.append('default-features = true')
+
+        if optional is True:
+            parts.append('optional = true')
+        elif optional is False:
+            parts.append('optional = false')
 
         spec_str = ", ".join(parts)
         return f"{name} = {{ {spec_str} }}"
@@ -101,29 +113,72 @@ def replace_workspace_deps_in_toml(toml_path: Path, workspace_deps: dict[str, ob
                 version_val = base_spec.split(" = ", 1)[1].strip('"')
                 spec_part = f'version = "{version_val}"'
             else:
-                spec_part = base_spec.split(" = { ", 1)[1].rstrip("}")
+                spec_part = base_spec.split(" = { ", 1)[1].rstrip("} ").rstrip("}")
 
-            existing_keys: set[str] = set()
-            for part in spec_part.split(","):
-                part = part.strip()
-                if "=" in part:
-                    key = part.split("=")[0].strip()
-                    existing_keys.add(key)
+            # Extract existing keys and values from workspace spec, handling nested brackets
+            workspace_fields: dict[str, str] = {}
+            bracket_depth = 0
+            current_field = ""
+            for char in spec_part:
+                if char == '[':
+                    bracket_depth += 1
+                    current_field += char
+                elif char == ']':
+                    bracket_depth -= 1
+                    current_field += char
+                elif char == ',' and bracket_depth == 0:
+                    # End of field
+                    field = current_field.strip()
+                    if field and "=" in field:
+                        key, val = field.split("=", 1)
+                        workspace_fields[key.strip()] = val.strip()
+                    current_field = ""
+                else:
+                    current_field += char
 
-            filtered_fields: list[str] = []
-            for field in other_fields_str.split(","):
-                field = field.strip()
+            # Don't forget the last field
+            if current_field.strip():
+                field = current_field.strip()
                 if field and "=" in field:
-                    key = field.split("=")[0].strip()
-                    if key not in existing_keys:
-                        filtered_fields.append(field)
-                elif field:
-                    filtered_fields.append(field)
+                    key, val = field.split("=", 1)
+                    workspace_fields[key.strip()] = val.strip()
 
-            if filtered_fields:
-                return f"{name} = {{ {spec_part}, {', '.join(filtered_fields)} }}"
-            else:
-                return f"{name} = {{ {spec_part} }}"
+            # Extract crate-specific keys using bracket-aware parsing
+            crate_fields: dict[str, str] = {}
+            bracket_depth = 0
+            current_field = ""
+            for char in other_fields_str:
+                if char == '[':
+                    bracket_depth += 1
+                    current_field += char
+                elif char == ']':
+                    bracket_depth -= 1
+                    current_field += char
+                elif char == ',' and bracket_depth == 0:
+                    # End of field
+                    field = current_field.strip()
+                    if field and "=" in field:
+                        key, val = field.split("=", 1)
+                        crate_fields[key.strip()] = val.strip()
+                    current_field = ""
+                else:
+                    current_field += char
+
+            # Don't forget the last field
+            if current_field.strip():
+                field = current_field.strip()
+                if field and "=" in field:
+                    key, val = field.split("=", 1)
+                    crate_fields[key.strip()] = val.strip()
+
+            # Merge: crate-specific fields override workspace fields
+            merged_fields = {**workspace_fields, **crate_fields}
+
+            # Build result from merged fields
+            merged_parts = [f"{k} = {v}" for k, v in merged_fields.items()]
+            merged_spec = ", ".join(merged_parts)
+
+            return f"{name} = {{ {merged_spec} }}"
 
         pattern2 = rf'^{re.escape(name)} = \{{ workspace = true, (.+?) \}}$'
         content = re.sub(pattern2, replace_with_fields, content, flags=re.MULTILINE | re.DOTALL)
@@ -263,6 +318,26 @@ def main() -> None:
 
             replace_workspace_deps_in_toml(crate_toml, workspace_deps)
             print(f"Updated {crate_dir}/Cargo.toml")
+
+    # Update path dependencies in all crates that depend on other vendored crates
+    # First handle kreuzberg-ffi's dependency on kreuzberg
+    if "kreuzberg-ffi" in copied_crates:
+        ffi_toml = vendor_base / "kreuzberg-ffi" / "Cargo.toml"
+        if ffi_toml.exists():
+            with open(ffi_toml, "r") as f:
+                content = f.read()
+
+            if "kreuzberg" in copied_crates:
+                # Replace kreuzberg workspace references with path dependency
+                # Handle cases with path, version, or neither
+                content = re.sub(
+                    r'(kreuzberg = \{) (?:(?:path|version) = "[^"]*", )?',
+                    r'\1 path = "../kreuzberg", ',
+                    content
+                )
+
+            with open(ffi_toml, "w") as f:
+                f.write(content)
 
     # Update path dependencies in kreuzberg crate if tesseract was copied
     if "kreuzberg" in copied_crates:

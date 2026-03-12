@@ -90,6 +90,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
 	const config: ChunkingConfig = {};
 	assignNumberField(config as PlainRecord, raw, "max_chars", "maxChars");
 	assignNumberField(config as PlainRecord, raw, "max_overlap", "maxOverlap");
+	if (typeof raw.chunker_type === "string") {
+		(config as PlainRecord).chunkerType = raw.chunker_type;
+	}
 	return config;
 }
 
@@ -341,6 +344,7 @@ export const assertions = {
 		maxCount: number | null,
 		eachHasContent: boolean | null,
 		eachHasEmbedding: boolean | null,
+		eachHasHeadingContext: boolean | null,
 	): void {
 		const chunks = Array.isArray(result.chunks) ? result.chunks : [];
 		if (typeof minCount === "number") {
@@ -357,6 +361,16 @@ export const assertions = {
 		if (eachHasEmbedding === true) {
 			for (const chunk of chunks) {
 				expect(chunk.embedding !== undefined && chunk.embedding !== null).toBe(true);
+			}
+		}
+		if (eachHasHeadingContext === true) {
+			for (const chunk of chunks) {
+				expect(chunk.metadata?.headingContext !== undefined && chunk.metadata?.headingContext !== null).toBe(true);
+			}
+		}
+		if (eachHasHeadingContext === false) {
+			for (const chunk of chunks) {
+				expect(chunk.metadata?.headingContext ?? null).toBeNull();
 			}
 		}
 	},
@@ -463,7 +477,7 @@ export const assertions = {
 			}
 			if (nodeTypesInclude && nodeTypesInclude.length > 0) {
 				const foundTypes = new Set(
-					nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.node_type ?? (n as PlainRecord).node_type),
+					nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.nodeType ?? (n as PlainRecord).nodeType),
 				);
 				for (const expected of nodeTypesInclude) {
 					const found = [...foundTypes].some(
@@ -475,8 +489,8 @@ export const assertions = {
 			if (typeof hasGroups === "boolean") {
 				const hasGroupNodes = nodes.some(
 					(n) =>
-						((n as PlainRecord).content as PlainRecord)?.node_type === "group" ||
-						(n as PlainRecord).node_type === "group",
+						((n as PlainRecord).content as PlainRecord)?.nodeType === "group" ||
+						(n as PlainRecord).nodeType === "group",
 				);
 				expect(hasGroupNodes).toBe(hasGroups);
 			}

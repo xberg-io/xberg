@@ -1,0 +1,19 @@
+{
+	"id": "office_pptm_basic",
+	"category": "office",
+	"description": "PowerPoint macro-enabled presentation (.pptm) extraction.",
+	"document": {
+		"path": "pptx/powerpoint_with_image.pptm",
+		"media_type": "application/vnd.ms-powerpoint.presentation.macroEnabled.12"
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": [
+			"application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation"
+		],
+		"content_not_empty": true
+	}
+}

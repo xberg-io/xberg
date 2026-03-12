@@ -355,45 +355,21 @@ Main configuration class for extraction operations.
 
 **Fields:**
 
-- `use_cache` (`bool`): Enable caching of extraction results to improve performance
-  on repeated extractions. Default: `True`
-- `enable_quality_processing` (`bool`): Enable quality post-processing to clean
-  and normalize extracted text. Default: `True`
-- `ocr` (`OcrConfig | None`): OCR configuration for extracting text from images
-  and scanned documents. `None` = OCR disabled. Default: `None`
-- `force_ocr` (`bool`): Force OCR processing even for searchable PDFs that contain
-  extractable text. Useful for ensuring consistent formatting. Default: `False`
-- `chunking` (`ChunkingConfig | None`): Text chunking configuration for dividing
-  content into manageable chunks. `None` = chunking disabled. Default: `None`
-- `images` (`ImageExtractionConfig | None`): Image extraction configuration for
-  extracting images FROM documents (not for OCR preprocessing).
-  `None` = no image extraction. Default: `None`
-- `pdf_options` (`PdfConfig | None`): PDF-specific options like password handling
-  and metadata extraction. `None` = use defaults. Default: `None`
-- `token_reduction` (`TokenReductionConfig | None`): Token reduction configuration
-  for reducing token count in extracted content (useful for LLM APIs).
-  `None` = no token reduction. Default: `None`
-- `language_detection` (`LanguageDetectionConfig | None`): Language detection
-  configuration for identifying the language(s) in documents.
-  `None` = no language detection. Default: `None`
-- `pages` (`PageConfig | None`): Page extraction configuration for tracking and
-  extracting page boundaries. `None` = no page tracking. Default: `None`
-- `keywords` (`KeywordConfig | None`): Keyword extraction configuration for
-  identifying important terms and phrases in content.
-  `None` = no keyword extraction. Default: `None`
-- `postprocessor` (`PostProcessorConfig | None`): Post-processor configuration
-  for custom text processing. `None` = use defaults. Default: `None`
-- `max_concurrent_extractions` (`int | None`): Maximum concurrent extractions
-  in batch operations. `None` = `num_cpus * 2`. Default: `None`
-- `html_options` (`HtmlConversionOptions | None`): HTML conversion options for
-  converting documents to markdown. Default: `None`
-- `result_format` (`str`): Result format for extraction output.
-  Specifies whether results use unified format (all content in `content` field)
-  or element-based format (with semantic elements for Unstructured-compatible output).
-  Values: `"unified"` (default), `"element_based"`. Default: `"unified"`
-- `output_format` (`str`): Output content format.
-  Controls the format of the extracted content.
-  Values: `"plain"` (default), `"markdown"`, `"djot"`, `"html"`. Default: `"plain"`
+- `chunking` (`ChunkingConfig | None`): Text chunking configuration. Default: `None`
+- `enable_quality_processing` (`bool`): Enable quality post-processing. Default: `True`
+- `force_ocr` (`bool`): Force OCR processing even for searchable documents. Default: `False`
+- `html_options` (`HtmlConversionOptions | None`): HTML-specific conversion options. Default: `None`
+- `images` (`ImageExtractionConfig | None`): Image extraction configuration. Default: `None`
+- `language_detection` (`LanguageDetectionConfig | None`): Language detection settings. Default: `None`
+- `max_concurrent_extractions` (`int | None`): Max concurrent batch extractions. Default: `None`
+- `ocr` (`OcrConfig | None`): OCR configuration. Default: `None`
+- `output_format` (`str`): Output content format (plain, markdown, djot, html). Default: `"plain"`
+- `pages` (`PageConfig | None`): Page extraction settings. Default: `None`
+- `pdf_options` (`PdfConfig | None`): PDF-specific options. Default: `None`
+- `postprocessor` (`PostProcessorConfig | None`): Post-processing settings. Default: `None`
+- `result_format` (`str`): Result layout (unified, element_based). Default: `"unified"`
+- `token_reduction` (`TokenReductionConfig | None`): Token reduction settings. Default: `None`
+- `use_cache` (`bool`): Enable result caching. Default: `True`
 
 **Example:**
 
@@ -555,6 +531,9 @@ Text chunking configuration for splitting long documents.
 - `max_overlap` (int): Overlap between chunks in characters. Default: 200
 - `embedding` (EmbeddingConfig | None): Embedding configuration for generating embeddings. Default: None
 - `preset` (str | None): Chunking preset to use (e.g. from `list_embedding_presets()`). Default: None
+- `sizing_type` (str | None): How chunk size is measured. Options: `"characters"` (default) or `"tokenizer"` (use a HuggingFace tokenizer). Default: None (characters)
+- `sizing_model` (str | None): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `sizing_type="tokenizer"`. Default: None
+- `sizing_cache_dir` (str | None): Optional directory to cache downloaded tokenizer files. Default: None
 
 **Example:**
 
@@ -677,17 +656,22 @@ Result object returned by all extraction functions.
 
 ```python title="Python"
 class ExtractionResult:
-    content: str
-    mime_type: str
-    metadata: Metadata
-    tables: list[ExtractedTable]
-    detected_languages: list[str] | None
+    annotations: list[PdfAnnotation] | None
     chunks: list[Chunk] | None
-    images: list[ExtractedImage] | None
-    pages: list[PageContent] | None
-    elements: list[Element] | None
+    content: str
+    detected_languages: list[str] | None
     djot_content: DjotContent | None
+    document: DocumentStructure | None
+    elements: list[Element] | None
+    extracted_keywords: list[ExtractedKeyword] | None
+    images: list[ExtractedImage] | None
+    metadata: Metadata
+    mime_type: str
+    ocr_elements: list[OcrElement] | None
     output_format: str | None
+    pages: list[PageContent] | None
+    processing_warnings: list[ProcessingWarning]
+    quality_score: float | None
     result_format: str | None
     def get_page_count(self) -> int: ...
     def get_chunk_count(self) -> int: ...
@@ -697,18 +681,24 @@ class ExtractionResult:
 
 **Fields:**
 
+- `annotations` (list[PdfAnnotation] | None): Extracted PDF annotations and highlights
+- `chunks` (list[Chunk] | None): Text chunks when chunking is configured
 - `content` (str): Extracted text content
-- `mime_type` (str): MIME type of the processed document
-- `metadata` (Metadata): Document metadata (format-specific fields)
-- `tables` (list[ExtractedTable]): List of extracted tables
-- `detected_languages` (list[str] | None): List of detected language codes (ISO 639-1) if language detection is enabled
-- `chunks` (list[Chunk] | None): Text chunks when chunking is enabled via `ChunkingConfig`. Each chunk has `content` (str), `metadata` (ChunkMetadata), and optionally `embedding` (list[float] | None).
-- `images` (list[ExtractedImage] | None): Extracted images when image extraction is enabled
-- `pages` (list[PageContent] | None): Per-page extracted content when page extraction is enabled via `PageConfig.extract_pages = true`
-- `elements` (list[Element] | None): Semantic elements when `result_format="element_based"`
+- `detected_languages` (list[str] | None): Detected language codes (ISO 639-1)
 - `djot_content` (DjotContent | None): Structured djot content when `output_format="djot"`
-- `output_format` (str | None): Requested output format (`"plain"`, `"markdown"`, `"djot"`, `"html"`)
-- `result_format` (str | None): Result layout (`"unified"` or `"element_based"`)
+- `document` (DocumentStructure | None): Hierarchical document strucure when `include_document_structure=True`
+- `elements` (list[Element] | None): Semantic elements when using element-based layout
+- `extracted_keywords` (list[ExtractedKeyword] | None): Keywords extracted with RAKE/YAKE
+- `images` (list[ExtractedImage] | None): Extracted images
+- `metadata` (Metadata): Document metadata (format-specific fields)
+- `mime_type` (str): MIME type of the document
+- `ocr_elements` (list[OcrElement] | None): Granular OCR blocks with bounding boxes
+- `output_format` (str | None): Effective output format
+- `pages` (list[PageContent] | None): Per-page content when enabled
+- `processing_warnings` (list[ProcessingWarning]): Non-fatal warnings during extraction
+- `quality_score` (float | None): Document quality score
+- `result_format` (str | None): Layout format (unified or element_based)
+- `tables` (list[ExtractedTable]): List of extracted tables
 
 **Methods:**
 
@@ -904,6 +894,7 @@ class ChunkMetadata(TypedDict, total=False):
     token_count: int | None
     first_page: int
     last_page: int
+    heading_context: HeadingContext | None
 ```
 
 **Fields:**
@@ -915,6 +906,7 @@ class ChunkMetadata(TypedDict, total=False):
 - `token_count` (int | None): Estimated token count (if configured)
 - `first_page` (int): First page this chunk appears on (1-indexed, only when page boundaries available)
 - `last_page` (int): Last page this chunk appears on (1-indexed, only when page boundaries available)
+- `heading_context` (HeadingContext | None): Heading hierarchy when using Markdown chunker. Only populated when chunker_type is set to markdown.
 
 **Page tracking:** When `PageStructure.boundaries` is available and chunking is enabled, `first_page` and `last_page` are automatically calculated based on byte offsets.
 

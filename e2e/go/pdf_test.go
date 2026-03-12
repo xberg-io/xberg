@@ -82,6 +82,13 @@ func TestPdfPdfNonEnglishGerman(t *testing.T) {
 	assertContentContainsAny(t, result, []string{"Intel", "paging"})
 }
 
+func TestPdfPdfPasswordProtected(t *testing.T) {
+	result := runExtraction(t, "pdf/copy_protected.pdf", nil)
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 50)
+	assertContentContainsAny(t, result, []string{"LayoutParser", "document image analysis", "deep learning"})
+}
+
 func TestPdfPdfRightToLeft(t *testing.T) {
 	result := runExtraction(t, "pdf/right_to_left_01.pdf", nil)
 	assertExpectedMime(t, result, []string{"application/pdf"})

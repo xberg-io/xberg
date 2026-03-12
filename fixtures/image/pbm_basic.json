@@ -1,0 +1,20 @@
+{
+	"id": "image_pbm_basic",
+	"category": "image",
+	"description": "PBM (portable bitmap) image extraction via OCR.",
+	"document": {
+		"path": "images_extra/ocr_image.pbm",
+		"media_type": "image/x-portable-bitmap",
+		"requires_external_tool": ["tesseract"]
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": ["image/x-portable-bitmap", "image/x-pbm"],
+		"content_not_empty": true
+	},
+	"skip": {
+		"requires_feature": ["tesseract"]
+	}
+}

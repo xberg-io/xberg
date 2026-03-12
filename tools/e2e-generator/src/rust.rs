@@ -307,8 +307,12 @@ fn render_assertions(assertions: &Assertions) -> String {
             .each_has_embedding
             .map(|v| format!("Some({v})"))
             .unwrap_or_else(|| "None".into());
+        let each_has_heading_context = chunks
+            .each_has_heading_context
+            .map(|v| format!("Some({v})"))
+            .unwrap_or_else(|| "None".into());
         buffer.push_str(&format!(
-            "    assertions::assert_chunks(&result, {min_count}, {max_count}, {each_has_content}, {each_has_embedding});\n"
+            "    assertions::assert_chunks(&result, {min_count}, {max_count}, {each_has_content}, {each_has_embedding}, {each_has_heading_context});\n"
         ));
     }
 

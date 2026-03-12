@@ -13,6 +13,21 @@ from kreuzberg import (
 from . import helpers
 
 
+def test_archive_gz_basic() -> None:
+    """Gzip compressed file extraction."""
+
+    document_path = helpers.resolve_document("archives/book_war_and_peace_1p.txt.gz")
+    if not document_path.exists():
+        pytest.skip(f"Skipping archive_gz_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/gzip", "application/x-gzip"])
+    helpers.assert_min_content_length(result, 10)
+
+
 def test_archive_sevenz_basic() -> None:
     """7-Zip archive extraction."""
 

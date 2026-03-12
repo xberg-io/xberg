@@ -4,7 +4,109 @@
 // Tests for image fixtures.
 #![allow(clippy::too_many_lines)]
 use e2e_rust::{assertions, resolve_document};
+use kreuzberg::KreuzbergError;
 use kreuzberg::core::config::ExtractionConfig;
+#[test]
+fn test_image_bmp_basic() {
+    // BMP image extraction via OCR.
+
+    let document_path = resolve_document("images/bmp_24.bmp");
+    if !document_path.exists() {
+        println!(
+            "Skipping image_bmp_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping image_bmp_basic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping image_bmp_basic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for image_bmp_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/bmp"]);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
+fn test_image_gif_basic() {
+    // GIF image extraction via OCR.
+
+    let document_path = resolve_document("images_extra/ocr_image.gif");
+    if !document_path.exists() {
+        println!(
+            "Skipping image_gif_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping image_gif_basic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping image_gif_basic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for image_gif_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/gif"]);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
+fn test_image_jp2_basic() {
+    // JPEG 2000 image extraction via OCR.
+
+    let document_path = resolve_document("images_extra/ocr_image.jp2");
+    if !document_path.exists() {
+        println!(
+            "Skipping image_jp2_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping image_jp2_basic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping image_jp2_basic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for image_jp2_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/jp2", "image/jpeg2000"]);
+    assertions::assert_content_not_empty(&result);
+}
 
 #[test]
 fn test_image_metadata_only() {
@@ -35,6 +137,108 @@ fn test_image_metadata_only() {
 }
 
 #[test]
+fn test_image_pbm_basic() {
+    // PBM (portable bitmap) image extraction via OCR.
+
+    let document_path = resolve_document("images_extra/ocr_image.pbm");
+    if !document_path.exists() {
+        println!(
+            "Skipping image_pbm_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping image_pbm_basic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping image_pbm_basic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for image_pbm_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/x-portable-bitmap", "image/x-pbm"]);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
+fn test_image_pgm_basic() {
+    // PGM (portable graymap) image extraction via OCR.
+
+    let document_path = resolve_document("images_extra/ocr_image.pgm");
+    if !document_path.exists() {
+        println!(
+            "Skipping image_pgm_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping image_pgm_basic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping image_pgm_basic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for image_pgm_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/x-portable-graymap", "image/x-pgm"]);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
+fn test_image_ppm_basic() {
+    // PPM (portable pixmap) image extraction via OCR.
+
+    let document_path = resolve_document("images_extra/ocr_image.ppm");
+    if !document_path.exists() {
+        println!(
+            "Skipping image_ppm_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping image_ppm_basic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping image_ppm_basic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for image_ppm_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/x-portable-pixmap", "image/x-ppm"]);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
 fn test_image_svg_basic() {
     // SVG image extraction.
 
@@ -55,4 +259,72 @@ fn test_image_svg_basic() {
 
     assertions::assert_expected_mime(&result, &["image/svg+xml"]);
     assertions::assert_min_content_length(&result, 5);
+}
+
+#[test]
+fn test_image_tiff_basic() {
+    // TIFF image extraction via OCR.
+
+    let document_path = resolve_document("images_extra/ocr_image.tif");
+    if !document_path.exists() {
+        println!(
+            "Skipping image_tiff_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping image_tiff_basic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping image_tiff_basic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for image_tiff_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/tiff"]);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
+fn test_image_webp_basic() {
+    // WebP image extraction via OCR.
+
+    let document_path = resolve_document("images_extra/ocr_image.webp");
+    if !document_path.exists() {
+        println!(
+            "Skipping image_webp_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping image_webp_basic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping image_webp_basic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for image_webp_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/webp"]);
+    assertions::assert_content_not_empty(&result);
 }

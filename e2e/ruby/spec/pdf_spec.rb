@@ -193,6 +193,25 @@ RSpec.describe 'pdf fixtures' do
     end
   end
 
+  it 'pdf_password_protected' do
+    E2ERuby.run_fixture(
+      'pdf_password_protected',
+      'pdf/copy_protected.pdf',
+      nil,
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['application/pdf']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 50)
+      E2ERuby::Assertions.assert_content_contains_any(result,
+                                                      ['LayoutParser', 'document image analysis', 'deep learning'])
+    end
+  end
+
   it 'pdf_right_to_left' do
     E2ERuby.run_fixture(
       'pdf_right_to_left',

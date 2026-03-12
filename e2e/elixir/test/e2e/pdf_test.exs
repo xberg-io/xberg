@@ -243,6 +243,29 @@ defmodule E2E.PdfTest do
       end
     end
 
+    test "pdf_password_protected" do
+      case E2E.Helpers.run_fixture(
+             "pdf_password_protected",
+             "pdf/copy_protected.pdf",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["application/pdf"])
+          |> E2E.Helpers.assert_min_content_length(50)
+          |> E2E.Helpers.assert_content_contains_any(["LayoutParser", "document image analysis", "deep learning"])
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "pdf_right_to_left" do
       case E2E.Helpers.run_fixture(
              "pdf_right_to_left",

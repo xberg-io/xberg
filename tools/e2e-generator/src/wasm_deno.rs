@@ -124,6 +124,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
     const config: PlainRecord = {};
     assignNumberField(config, raw, "max_chars", "maxChars");
     assignNumberField(config, raw, "max_overlap", "maxOverlap");
+    if (typeof raw.chunker_type === "string") {
+        config.chunkerType = raw.chunker_type;
+    }
     return config as unknown as ChunkingConfig;
 }
 
@@ -392,6 +395,7 @@ export const assertions = {
         maxCount?: number | null,
         eachHasContent?: boolean | null,
         eachHasEmbedding?: boolean | null,
+        eachHasHeadingContext?: boolean | null,
     ): void {
         const chunks = (result as unknown as PlainRecord).chunks as unknown[] | undefined;
         assertExists(chunks, "Expected chunks to be defined");
@@ -412,6 +416,16 @@ export const assertions = {
         if (eachHasEmbedding) {
             for (const chunk of chunks) {
                 assertExists((chunk as PlainRecord).embedding, "Chunk missing embedding");
+            }
+        }
+        if (eachHasHeadingContext === true) {
+            for (const chunk of chunks) {
+                assertExists(((chunk as PlainRecord).metadata as PlainRecord)?.headingContext, "Chunk missing heading_context");
+            }
+        }
+        if (eachHasHeadingContext === false) {
+            for (const chunk of chunks) {
+                assertEquals(((chunk as PlainRecord).metadata as PlainRecord)?.headingContext ?? null, null, "Chunk should have no heading_context");
             }
         }
     },
@@ -541,7 +555,7 @@ export const assertions = {
                 assertEquals(nodes.length >= minNodeCount, true, `Expected at least ${minNodeCount} nodes, got ${nodes.length}`);
             }
             if (nodeTypesInclude && nodeTypesInclude.length > 0) {
-                const foundTypes = new Set(nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.node_type ?? (n as PlainRecord).node_type));
+                const foundTypes = new Set(nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.nodeType ?? (n as PlainRecord).nodeType));
                 for (const expected of nodeTypesInclude) {
                     assertEquals(
                         [...foundTypes].some((t) => typeof t === "string" && t.toLowerCase() === expected.toLowerCase()),
@@ -551,7 +565,7 @@ export const assertions = {
                 }
             }
             if (typeof hasGroups === "boolean") {
-                const hasGroupNodes = nodes.some((n) => ((n as PlainRecord).content as PlainRecord)?.node_type === "group" || (n as PlainRecord).node_type === "group");
+                const hasGroupNodes = nodes.some((n) => ((n as PlainRecord).content as PlainRecord)?.nodeType === "group" || (n as PlainRecord).nodeType === "group");
                 assertEquals(hasGroupNodes, hasGroups, `Expected hasGroups=${hasGroups} but got ${hasGroupNodes}`);
             }
         } else {
@@ -1065,9 +1079,10 @@ fn render_assertions(assertions: &Assertions, _requirements: &[String]) -> Strin
 
     if !assertions.metadata.is_empty() {
         for (path, expectation) in &assertions.metadata {
+            let camel_path = to_camel_case(path);
             buffer.push_str(&format!(
                 "    assertions.assertMetadataExpectation(result, \"{}\", {});\n",
-                escape_ts_string(path),
+                escape_ts_string(&camel_path),
                 normalize_metadata_expectation(expectation)
             ));
         }
@@ -1084,8 +1099,12 @@ fn render_assertions(assertions: &Assertions, _requirements: &[String]) -> Strin
             .each_has_embedding
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".into());
+        let has_heading_context = chunks
+            .each_has_heading_context
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".into());
         buffer.push_str(&format!(
-            "    assertions.assertChunks(result, {min}, {max}, {has_content}, {has_embedding});\n"
+            "    assertions.assertChunks(result, {min}, {max}, {has_content}, {has_embedding}, {has_heading_context});\n"
         ));
     }
 

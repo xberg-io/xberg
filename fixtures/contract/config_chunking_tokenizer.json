@@ -1,0 +1,33 @@
+{
+	"id": "config_chunking_tokenizer",
+	"description": "Tests token-based chunk sizing with HuggingFace tokenizer",
+	"tags": ["contract", "config", "chunking", "tokenizer"],
+	"document": {
+		"path": "markdown/comprehensive.md"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"chunking": {
+				"max_chars": 200,
+				"max_overlap": 40,
+				"sizing": {
+					"type": "tokenizer",
+					"model": "Xenova/gpt-4o"
+				}
+			}
+		}
+	},
+	"assertions": {
+		"min_content_length": 10,
+		"chunks": {
+			"min_count": 2,
+			"each_has_content": true
+		}
+	},
+	"skip": {
+		"requires_feature": ["chunking-tokenizers"],
+		"notes": "Requires network access for HuggingFace Hub tokenizer download"
+	}
+}

@@ -791,6 +791,42 @@ public sealed class ChunkMetadata
     /// </summary>
     [JsonPropertyName("last_page")]
     public int? LastPage { get; set; }
+
+    /// <summary>
+    /// Heading hierarchy for this chunk's section, if available (markdown chunker only).
+    /// </summary>
+    [JsonPropertyName("heading_context")]
+    public HeadingContext? HeadingContext { get; set; }
+}
+
+/// <summary>
+/// Heading context for a chunk's section in the document.
+/// </summary>
+public sealed class HeadingContext
+{
+    /// <summary>
+    /// Heading hierarchy from document root to this chunk's section.
+    /// </summary>
+    [JsonPropertyName("headings")]
+    public List<HeadingLevel> Headings { get; set; } = new();
+}
+
+/// <summary>
+/// A single heading in the document hierarchy.
+/// </summary>
+public sealed class HeadingLevel
+{
+    /// <summary>
+    /// Heading depth (1 = h1, 2 = h2, etc.).
+    /// </summary>
+    [JsonPropertyName("level")]
+    public int Level { get; set; }
+
+    /// <summary>
+    /// Text content of the heading.
+    /// </summary>
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -2359,6 +2395,39 @@ public sealed class ChunkingConfig
     /// </summary>
     [JsonPropertyName("enabled")]
     public bool? Enabled { get; init; }
+
+    /// <summary>
+    /// Chunk sizing configuration. Controls how chunk size is measured.
+    /// Use <c>new { type = "characters" }</c> for character-based (default)
+    /// or <c>new { type = "tokenizer", model = "Xenova/gpt-4o" }</c> for token-based.
+    /// </summary>
+    [JsonPropertyName("sizing")]
+    public ChunkSizingConfig? Sizing { get; init; }
+}
+
+/// <summary>
+/// Configuration for how chunk size is measured.
+/// </summary>
+public sealed class ChunkSizingConfig
+{
+    /// <summary>
+    /// Sizing type: "characters" (default) or "tokenizer".
+    /// </summary>
+    [JsonPropertyName("type")]
+    public string? Type { get; init; }
+
+    /// <summary>
+    /// HuggingFace model ID for tokenizer sizing (e.g., "Xenova/gpt-4o").
+    /// Only used when Type is "tokenizer".
+    /// </summary>
+    [JsonPropertyName("model")]
+    public string? Model { get; init; }
+
+    /// <summary>
+    /// Optional cache directory for tokenizer files.
+    /// </summary>
+    [JsonPropertyName("cache_dir")]
+    public string? CacheDir { get; init; }
 }
 
 /// <summary>

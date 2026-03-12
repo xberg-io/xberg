@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 public final class E2EHelpers {
     private static final Path WORKSPACE_ROOT =
-            Paths.get("").toAbsolutePath().getParent().getParent();
+            Paths.get("").toAbsolutePath().getParent().getParent().getParent();
     private static final Path TEST_DOCUMENTS = WORKSPACE_ROOT.resolve("test_documents");
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -222,7 +222,7 @@ public final class E2EHelpers {
                     String.format("Expected languages %s to be in %s", expected, languages));
 
             if (minConfidence != null) {
-                Map<String, Object> metadata = result.getMetadata();
+                Map<String, Object> metadata = result.getMetadataMap();
                 if (metadata != null && metadata.containsKey("confidence")) {
                     Object confObj = metadata.get("confidence");
                     double confidence = confObj instanceof Number
@@ -239,7 +239,7 @@ public final class E2EHelpers {
                 String path,
                 Map<String, Object> expectation
         ) {
-            Map<String, Object> metadata = result.getMetadata();
+            Map<String, Object> metadata = result.getMetadataMap();
             Object value = fetchMetadataValue(metadata, path);
             assertNotNull(value, String.format("Metadata path '%s' missing", path));
 

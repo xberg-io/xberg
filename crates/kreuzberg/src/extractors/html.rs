@@ -5,12 +5,10 @@ use crate::core::config::{ExtractionConfig, OutputFormat};
 use crate::extractors::SyncExtractor;
 use crate::plugins::{DocumentExtractor, Plugin};
 use crate::text::utf8_validation;
-use crate::types::{ExtractionResult, Metadata, Table};
+use crate::types::{ExtractionResult, HtmlMetadata, Metadata, Table};
 use async_trait::async_trait;
 #[cfg(feature = "tokio-runtime")]
 use std::path::Path;
-
-// NOTE: scraper dependency has been removed in favor of html-to-markdown-rs
 
 /// HTML document extractor using html-to-markdown.
 pub struct HtmlExtractor;
@@ -25,158 +23,6 @@ impl HtmlExtractor {
     pub fn new() -> Self {
         Self
     }
-}
-
-/// Extract all tables from pre-converted markdown content.
-///
-/// Parses markdown pipe-delimited format to extract table structures.
-/// This function accepts already-converted markdown to enable reuse of
-/// a single HTML-to-markdown conversion pass, improving performance by
-/// eliminating duplicate conversions.
-///
-/// # Optimization
-/// By accepting markdown instead of HTML, callers can convert HTML once
-/// and reuse the result for both table extraction and metadata parsing,
-/// reducing computational overhead by ~50% on table extraction flows.
-fn extract_html_tables(markdown: &str) -> Result<Vec<Table>> {
-    let tables = parse_markdown_tables(markdown);
-    Ok(tables)
-}
-
-/// Parse markdown tables from HTML-converted markdown.
-///
-/// Extracts table data from markdown pipe-delimited format.
-/// This maintains the existing Table structure API.
-fn parse_markdown_tables(markdown: &str) -> Vec<Table> {
-    let mut tables = Vec::new();
-    let mut table_index = 0;
-    let lines: Vec<&str> = markdown.lines().collect();
-    let mut i = 0;
-
-    while i < lines.len() {
-        if lines[i].trim_start().starts_with('|')
-            && let Some((cells, end_idx)) = extract_markdown_table(&lines, i)
-            && !cells.is_empty()
-        {
-            let markdown_table = reconstruct_markdown_table(&cells);
-            tables.push(Table {
-                cells,
-                markdown: markdown_table,
-                page_number: table_index + 1,
-                bounding_box: None,
-            });
-            table_index += 1;
-            i = end_idx;
-            continue;
-        }
-        i += 1;
-    }
-
-    tables
-}
-
-/// Extract a single markdown table from lines.
-///
-/// Returns the parsed table cells and the index after the table ends.
-fn extract_markdown_table(lines: &[&str], start_idx: usize) -> Option<(Vec<Vec<String>>, usize)> {
-    let header_line = lines.get(start_idx)?;
-
-    if !header_line.trim_start().starts_with('|') {
-        return None;
-    }
-
-    let mut cells = Vec::new();
-    let mut i = start_idx;
-
-    if let Some(header_cells) = parse_markdown_table_row(header_line) {
-        cells.push(header_cells);
-        i += 1;
-    } else {
-        return None;
-    }
-
-    if i < lines.len() {
-        let sep_line = lines[i];
-        if is_markdown_table_separator(sep_line) {
-            i += 1;
-        }
-    }
-
-    while i < lines.len() {
-        let line = lines[i];
-        if let Some(row_cells) = parse_markdown_table_row(line) {
-            cells.push(row_cells);
-            i += 1;
-        } else if !line.trim_start().starts_with('|') {
-            break;
-        } else {
-            i += 1;
-        }
-    }
-
-    if cells.len() > 1 { Some((cells, i)) } else { None }
-}
-
-/// Parse a single markdown table row into cell contents.
-fn parse_markdown_table_row(line: &str) -> Option<Vec<String>> {
-    let trimmed = line.trim_start();
-
-    if !trimmed.starts_with('|') || !trimmed.contains('|') {
-        return None;
-    }
-
-    let cells: Vec<String> = trimmed
-        .split('|')
-        .skip(1)
-        .map(|cell| cell.trim().to_string())
-        .filter(|cell| !cell.is_empty())
-        .collect();
-
-    if cells.is_empty() { None } else { Some(cells) }
-}
-
-/// Check if a line is a markdown table separator.
-fn is_markdown_table_separator(line: &str) -> bool {
-    let trimmed = line.trim_start();
-    if !trimmed.starts_with('|') {
-        return false;
-    }
-
-    trimmed
-        .split('|')
-        .all(|cell| cell.trim().chars().all(|c| c == '-' || c == ':' || c.is_whitespace()))
-}
-
-/// Reconstruct markdown table from cells.
-///
-/// Takes parsed table cells and creates a properly formatted markdown table string.
-fn reconstruct_markdown_table(cells: &[Vec<String>]) -> String {
-    if cells.is_empty() {
-        return String::new();
-    }
-
-    let mut markdown = String::new();
-
-    for (row_idx, row) in cells.iter().enumerate() {
-        markdown.push('|');
-        for cell in row {
-            markdown.push(' ');
-            markdown.push_str(cell);
-            markdown.push(' ');
-            markdown.push('|');
-        }
-        markdown.push('\n');
-
-        if row_idx == 0 {
-            markdown.push('|');
-            for _ in row {
-                markdown.push_str("------|");
-            }
-            markdown.push('\n');
-        }
-    }
-
-    markdown
 }
 
 impl Plugin for HtmlExtractor {
@@ -203,28 +49,24 @@ impl SyncExtractor for HtmlExtractor {
             .map(|s| s.to_string())
             .unwrap_or_else(|_| String::from_utf8_lossy(content).to_string());
 
-        let (content_text, html_metadata) = crate::extraction::html::convert_html_to_markdown_with_metadata(
+        let (content_text, html_metadata, table_data) = crate::extraction::html::convert_html_to_markdown_with_tables(
             &html,
             config.html_options.clone(),
             Some(config.output_format),
         )?;
 
-        // Table extraction relies on pipe-delimited markdown syntax.
-        // When the output is plain text, do a separate markdown conversion for table parsing.
-        let tables = if matches!(config.output_format, OutputFormat::Plain) {
-            let md = crate::extraction::html::convert_html_to_markdown(
-                &html,
-                config.html_options.clone(),
-                Some(OutputFormat::Markdown),
-            )?;
-            extract_html_tables(&md)?
-        } else {
-            extract_html_tables(&content_text)?
-        };
+        let tables: Vec<Table> = table_data
+            .into_iter()
+            .enumerate()
+            .map(|(i, t)| Table {
+                cells: t.cells,
+                markdown: t.markdown,
+                page_number: i + 1,
+                bounding_box: None,
+            })
+            .collect();
 
-        // Always preserve the original document MIME type.
-        // The output format is tracked separately in metadata.output_format.
-        let result_mime_type = mime_type;
+        let format_metadata = html_metadata.map(|m: HtmlMetadata| crate::types::FormatMetadata::Html(Box::new(m)));
 
         // Signal that the extractor already formatted the output so the pipeline
         // does not double-convert.
@@ -236,10 +78,10 @@ impl SyncExtractor for HtmlExtractor {
 
         Ok(ExtractionResult {
             content: content_text,
-            mime_type: result_mime_type.to_string().into(),
+            mime_type: mime_type.to_string().into(),
             metadata: Metadata {
                 output_format: pre_formatted,
-                format: html_metadata.map(|m| crate::types::FormatMetadata::Html(Box::new(m))),
+                format: format_metadata,
                 ..Default::default()
             },
             pages: None,
@@ -309,9 +151,20 @@ impl DocumentExtractor for HtmlExtractor {
 mod tests {
     use super::*;
 
-    /// Helper function to convert HTML to markdown for testing
-    fn html_to_markdown_for_test(html: &str) -> String {
-        crate::extraction::html::convert_html_to_markdown(html, None, None).unwrap()
+    /// Helper to extract tables from HTML using the visitor-based converter.
+    fn extract_tables(html: &str) -> Vec<Table> {
+        let (_, _, table_data): (String, _, Vec<html_to_markdown_rs::TableData>) =
+            crate::extraction::html::convert_html_to_markdown_with_tables(html, None, None).unwrap();
+        table_data
+            .into_iter()
+            .enumerate()
+            .map(|(i, t)| Table {
+                cells: t.cells,
+                markdown: t.markdown,
+                page_number: i + 1,
+                bounding_box: None,
+            })
+            .collect()
     }
 
     #[test]
@@ -341,8 +194,7 @@ mod tests {
             </table>
         "#;
 
-        let markdown = html_to_markdown_for_test(html);
-        let tables = extract_html_tables(&markdown).unwrap();
+        let tables = extract_tables(html);
         assert_eq!(tables.len(), 1);
 
         let table = &tables[0];
@@ -351,10 +203,8 @@ mod tests {
         assert_eq!(table.cells[1], vec!["Row1Col1", "Row1Col2"]);
         assert_eq!(table.cells[2], vec!["Row2Col1", "Row2Col2"]);
         assert_eq!(table.page_number, 1);
-
-        assert!(table.markdown.contains("| Header1 | Header2 |"));
-        assert!(table.markdown.contains("|------|------|"));
-        assert!(table.markdown.contains("| Row1Col1 | Row1Col2 |"));
+        assert!(table.markdown.contains("Header1"));
+        assert!(table.markdown.contains("Row1Col1"));
     }
 
     #[test]
@@ -371,8 +221,7 @@ mod tests {
             </table>
         "#;
 
-        let markdown = html_to_markdown_for_test(html);
-        let tables = extract_html_tables(&markdown).unwrap();
+        let tables = extract_tables(html);
         assert_eq!(tables.len(), 2);
         assert_eq!(tables[0].page_number, 1);
         assert_eq!(tables[1].page_number, 2);
@@ -387,8 +236,7 @@ mod tests {
             </table>
         "#;
 
-        let markdown = html_to_markdown_for_test(html);
-        let tables = extract_html_tables(&markdown).unwrap();
+        let tables = extract_tables(html);
         assert_eq!(tables.len(), 1);
 
         let table = &tables[0];
@@ -400,8 +248,7 @@ mod tests {
     #[test]
     fn test_extract_html_tables_empty() {
         let html = "<p>No tables here</p>";
-        let markdown = html_to_markdown_for_test(html);
-        let tables = extract_html_tables(&markdown).unwrap();
+        let tables = extract_tables(html);
         assert_eq!(tables.len(), 0);
     }
 
@@ -414,13 +261,73 @@ mod tests {
             </table>
         "#;
 
-        let markdown = html_to_markdown_for_test(html);
-        let tables = extract_html_tables(&markdown).unwrap();
+        let tables = extract_tables(html);
         assert_eq!(tables.len(), 1);
 
         let table = &tables[0];
-        assert_eq!(table.cells[0][0], "Header **Bold**");
-        assert_eq!(table.cells[1][0], "Data with *emphasis*");
+        assert!(table.cells[0][0].contains("Header"));
+        assert!(table.cells[0][0].contains("Bold"));
+        assert!(table.cells[1][0].contains("Data with"));
+        assert!(table.cells[1][0].contains("emphasis"));
+    }
+
+    #[test]
+    fn test_extract_nested_html_tables() {
+        let html = r#"
+            <table>
+                <tr>
+                    <th>Category</th>
+                    <th>Details &amp; Nested Data</th>
+                </tr>
+                <tr>
+                    <td><strong>Project Alpha</strong></td>
+                    <td>
+                    <table>
+                        <tr><th>Task ID</th><th>Status</th><th>Priority</th></tr>
+                        <tr><td>001</td><td>Completed</td><td>High</td></tr>
+                        <tr><td>002</td><td>In Progress</td><td>Medium</td></tr>
+                    </table>
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Project Beta</strong></td>
+                    <td>No sub-tasks assigned yet.</td>
+                </tr>
+            </table>
+        "#;
+
+        let tables = extract_tables(html);
+
+        // Should find at least 2 tables: outer + nested
+        assert!(
+            tables.len() >= 2,
+            "Expected at least 2 tables (outer + nested), found {}",
+            tables.len()
+        );
+
+        // Find the nested table (has Task ID header)
+        let nested = tables
+            .iter()
+            .find(|t| {
+                t.cells
+                    .first()
+                    .is_some_and(|row| row.iter().any(|c| c.contains("Task ID")))
+            })
+            .expect("Should find nested table with Task ID header");
+
+        assert_eq!(nested.cells[0].len(), 3, "Nested table header should have 3 columns");
+        assert!(nested.cells[0][0].contains("Task ID"));
+        assert!(nested.cells[0][1].contains("Status"));
+        assert!(nested.cells[0][2].contains("Priority"));
+        assert_eq!(
+            nested.cells.len(),
+            3,
+            "Nested table should have 3 rows (header + 2 data)"
+        );
+        assert!(nested.cells[1][0].contains("001"));
+        assert!(nested.cells[1][1].contains("Completed"));
+        assert!(nested.cells[2][0].contains("002"));
+        assert!(nested.cells[2][1].contains("In Progress"));
     }
 
     #[tokio::test]

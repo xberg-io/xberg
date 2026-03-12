@@ -40,6 +40,33 @@ describe("office fixtures", () => {
 	);
 
 	it(
+		"office_commonmark_basic",
+		() => {
+			const documentPath = resolveDocument("markdown/sample.commonmark");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping office_commonmark_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_commonmark_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/markdown", "text/plain", "text/x-commonmark"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"office_djot_basic",
 		() => {
 			const documentPath = resolveDocument("markdown/tables.djot");
@@ -876,6 +903,36 @@ describe("office fixtures", () => {
 	);
 
 	it(
+		"office_pptm_basic",
+		() => {
+			const documentPath = resolveDocument("pptx/powerpoint_with_image.pptm");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping office_pptm_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_pptm_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+				"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"office_pptx_basic",
 		() => {
 			const documentPath = resolveDocument("pptx/simple.pptx");
@@ -1071,6 +1128,66 @@ describe("office fixtures", () => {
 	);
 
 	it(
+		"office_xlsb_basic",
+		() => {
+			const documentPath = resolveDocument("xlsx/test_xlsb.xlsb");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping office_xlsb_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_xlsb_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+				"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"office_xlsm_basic",
+		() => {
+			const documentPath = resolveDocument("xlsx/test_01.xlsm");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping office_xlsm_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_xlsm_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.ms-excel.sheet.macroEnabled.12",
+				"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"office_xlsx_basic",
 		() => {
 			const documentPath = resolveDocument("xlsx/stanley_cups.xlsx");
@@ -1095,8 +1212,8 @@ describe("office fixtures", () => {
 			assertions.assertMinContentLength(result, 100);
 			assertions.assertContentContainsAll(result, ["Team", "Location", "Stanley Cups"]);
 			assertions.assertTableCount(result, 1, null);
-			assertions.assertMetadataExpectation(result, "sheet_count", { gte: 2 });
-			assertions.assertMetadataExpectation(result, "sheet_names", { contains: ["Stanley Cups"] });
+			assertions.assertMetadataExpectation(result, "sheetCount", { gte: 2 });
+			assertions.assertMetadataExpectation(result, "sheetNames", { contains: ["Stanley Cups"] });
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -1124,7 +1241,7 @@ describe("office fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
 			assertions.assertMinContentLength(result, 20);
-			assertions.assertMetadataExpectation(result, "sheet_count", { gte: 2 });
+			assertions.assertMetadataExpectation(result, "sheetCount", { gte: 2 });
 		},
 		TEST_TIMEOUT_MS,
 	);

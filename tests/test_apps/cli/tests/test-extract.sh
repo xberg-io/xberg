@@ -56,7 +56,7 @@ else
 fi
 
 echo "Testing markdown output format..."
-if kreuzberg extract "$TEST_DOCS_DIR/tiny.pdf" --format markdown >/dev/null 2>&1; then
+if kreuzberg extract "$TEST_DOCS_DIR/tiny.pdf" --output-format markdown >/dev/null 2>&1; then
   echo -e "${GREEN}✓ Markdown format successful${NC}"
   ((PASSED++))
 else

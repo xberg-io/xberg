@@ -36,5 +36,5 @@ Deno.test("embedding_disabled", { permissions: { read: true, net: true } }, asyn
 	}
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 1, null, true, false);
+	assertions.assertChunks(result, 1, null, true, false, null);
 });

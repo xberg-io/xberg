@@ -25,6 +25,19 @@ namespace Kreuzberg.E2E.Office
         }
 
         [SkippableFact]
+        public void OfficeCommonmarkBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("markdown/sample.commonmark");
+            TestHelpers.SkipIfOfficeTestOnWindows("markdown/sample.commonmark");
+            var documentPath = TestHelpers.EnsureDocument("markdown/sample.commonmark", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "text/markdown", "text/plain", "text/x-commonmark" });
+            TestHelpers.AssertMinContentLength(result, 5);
+        }
+
+        [SkippableFact]
         public void OfficeDjotBasic()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("markdown/tables.djot");
@@ -422,6 +435,19 @@ namespace Kreuzberg.E2E.Office
         }
 
         [SkippableFact]
+        public void OfficePptmBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("pptx/powerpoint_with_image.pptm");
+            TestHelpers.SkipIfOfficeTestOnWindows("pptx/powerpoint_with_image.pptm");
+            var documentPath = TestHelpers.EnsureDocument("pptx/powerpoint_with_image.pptm", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
         public void OfficePptxBasic()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("pptx/simple.pptx");
@@ -510,6 +536,32 @@ namespace Kreuzberg.E2E.Office
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/vnd.ms-excel" });
             TestHelpers.AssertMinContentLength(result, 10);
+        }
+
+        [SkippableFact]
+        public void OfficeXlsbBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("xlsx/test_xlsb.xlsb");
+            TestHelpers.SkipIfOfficeTestOnWindows("xlsx/test_xlsb.xlsb");
+            var documentPath = TestHelpers.EnsureDocument("xlsx/test_xlsb.xlsb", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
+        public void OfficeXlsmBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("xlsx/test_01.xlsm");
+            TestHelpers.SkipIfOfficeTestOnWindows("xlsx/test_01.xlsm");
+            var documentPath = TestHelpers.EnsureDocument("xlsx/test_01.xlsm", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+            TestHelpers.AssertContentNotEmpty(result);
         }
 
         [SkippableFact]

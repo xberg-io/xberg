@@ -4,6 +4,48 @@
 # Tests for image fixtures.
 # nolint start
 
+test_that("image_bmp_basic", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "image_bmp_basic",
+    "images/bmp_24.bmp",
+    NULL,
+    requirements = c("tesseract", "tesseract"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/bmp"))
+  assert_content_not_empty(result)
+})
+
+test_that("image_gif_basic", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "image_gif_basic",
+    "images_extra/ocr_image.gif",
+    NULL,
+    requirements = c("tesseract", "tesseract"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/gif"))
+  assert_content_not_empty(result)
+})
+
+test_that("image_jp2_basic", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "image_jp2_basic",
+    "images_extra/ocr_image.jp2",
+    NULL,
+    requirements = c("tesseract", "tesseract"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/jp2", "image/jpeg2000"))
+  assert_content_not_empty(result)
+})
+
 test_that("image_metadata_only", {
   result <- run_fixture(
     "image_metadata_only",
@@ -17,6 +59,48 @@ test_that("image_metadata_only", {
   assert_max_content_length(result, 100L)
 })
 
+test_that("image_pbm_basic", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "image_pbm_basic",
+    "images_extra/ocr_image.pbm",
+    NULL,
+    requirements = c("tesseract", "tesseract"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/x-portable-bitmap", "image/x-pbm"))
+  assert_content_not_empty(result)
+})
+
+test_that("image_pgm_basic", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "image_pgm_basic",
+    "images_extra/ocr_image.pgm",
+    NULL,
+    requirements = c("tesseract", "tesseract"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/x-portable-graymap", "image/x-pgm"))
+  assert_content_not_empty(result)
+})
+
+test_that("image_ppm_basic", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "image_ppm_basic",
+    "images_extra/ocr_image.ppm",
+    NULL,
+    requirements = c("tesseract", "tesseract"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/x-portable-pixmap", "image/x-ppm"))
+  assert_content_not_empty(result)
+})
+
 test_that("image_svg_basic", {
   result <- run_fixture(
     "image_svg_basic",
@@ -28,5 +112,33 @@ test_that("image_svg_basic", {
   )
   assert_expected_mime(result, c("image/svg+xml"))
   assert_min_content_length(result, 5L)
+})
+
+test_that("image_tiff_basic", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "image_tiff_basic",
+    "images_extra/ocr_image.tif",
+    NULL,
+    requirements = c("tesseract", "tesseract"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/tiff"))
+  assert_content_not_empty(result)
+})
+
+test_that("image_webp_basic", {
+  skip_if_feature_unavailable("tesseract")
+  result <- run_fixture(
+    "image_webp_basic",
+    "images_extra/ocr_image.webp",
+    NULL,
+    requirements = c("tesseract", "tesseract"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/webp"))
+  assert_content_not_empty(result)
 })
 # nolint end

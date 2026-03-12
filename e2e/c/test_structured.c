@@ -12,6 +12,13 @@ static void test_structured_structured_csv_basic(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_structured_structured_enw_basic(void) {
+    CExtractionResult *result = run_extraction("data_formats/sample.enw", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/x-endnote-refer", "application/x-endnote+xml", "text/plain"}, 3);
+    kreuzberg_free_result(result);
+}
+
 static void test_structured_structured_json_basic(void) {
     CExtractionResult *result = run_extraction("json/sample_document.json", NULL);
     if (!result) return; /* skipped */
@@ -30,10 +37,34 @@ static void test_structured_structured_json_simple(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_structured_structured_nbib_basic(void) {
+    CExtractionResult *result = run_extraction("data_formats/sample.nbib", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/nbib", "application/x-pubmed", "text/plain"}, 3);
+    assert_content_not_empty(result);
+    kreuzberg_free_result(result);
+}
+
+static void test_structured_structured_ris_basic(void) {
+    CExtractionResult *result = run_extraction("data_formats/sample.ris", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/x-research-info-systems", "text/plain"}, 2);
+    assert_content_not_empty(result);
+    kreuzberg_free_result(result);
+}
+
 static void test_structured_structured_toml_basic(void) {
     CExtractionResult *result = run_extraction("data_formats/cargo.toml", NULL);
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/toml", "text/toml"}, 2);
+    assert_min_content_length(result, 10);
+    kreuzberg_free_result(result);
+}
+
+static void test_structured_structured_tsv_basic(void) {
+    CExtractionResult *result = run_extraction("data_formats/employees.tsv", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"text/tab-separated-values", "text/plain"}, 2);
     assert_min_content_length(result, 10);
     kreuzberg_free_result(result);
 }
@@ -56,9 +87,13 @@ static void test_structured_structured_yaml_simple(void) {
 
 int main(void) {
     test_structured_structured_csv_basic();
+    test_structured_structured_enw_basic();
     test_structured_structured_json_basic();
     test_structured_structured_json_simple();
+    test_structured_structured_nbib_basic();
+    test_structured_structured_ris_basic();
     test_structured_structured_toml_basic();
+    test_structured_structured_tsv_basic();
     test_structured_structured_yaml_basic();
     test_structured_structured_yaml_simple();
     printf("test_structured: all tests passed\n");

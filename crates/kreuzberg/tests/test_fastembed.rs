@@ -151,6 +151,7 @@ async fn test_generate_embeddings_for_chunks_basic() {
                 token_count: None,
                 first_page: None,
                 last_page: None,
+                heading_context: None,
             },
         },
         Chunk {
@@ -164,6 +165,7 @@ async fn test_generate_embeddings_for_chunks_basic() {
                 token_count: None,
                 first_page: None,
                 last_page: None,
+                heading_context: None,
             },
         },
         Chunk {
@@ -177,6 +179,7 @@ async fn test_generate_embeddings_for_chunks_basic() {
                 token_count: None,
                 first_page: None,
                 last_page: None,
+                heading_context: None,
             },
         },
     ];
@@ -227,6 +230,7 @@ async fn test_generate_embeddings_for_chunks_normalization() {
             token_count: None,
             first_page: None,
             last_page: None,
+            heading_context: None,
         },
     }];
 
@@ -254,6 +258,7 @@ async fn test_generate_embeddings_for_chunks_normalization() {
             token_count: None,
             first_page: None,
             last_page: None,
+            heading_context: None,
         },
     }];
 
@@ -336,6 +341,7 @@ async fn test_generate_embeddings_for_chunks_model_caching() {
             token_count: None,
             first_page: None,
             last_page: None,
+            heading_context: None,
         },
     }];
 
@@ -364,6 +370,7 @@ async fn test_generate_embeddings_for_chunks_model_caching() {
             token_count: None,
             first_page: None,
             last_page: None,
+            heading_context: None,
         },
     }];
 
@@ -398,6 +405,7 @@ async fn test_generate_embeddings_for_chunks_invalid_preset() {
             token_count: None,
             first_page: None,
             last_page: None,
+            heading_context: None,
         },
     }];
 
@@ -443,6 +451,7 @@ async fn test_generate_embeddings_for_chunks_unknown_model() {
             token_count: None,
             first_page: None,
             last_page: None,
+            heading_context: None,
         },
     }];
 
@@ -489,6 +498,7 @@ async fn test_generate_embeddings_for_chunks_custom_model_not_supported() {
             token_count: None,
             first_page: None,
             last_page: None,
+            heading_context: None,
         },
     }];
 
@@ -536,6 +546,7 @@ async fn test_generate_embeddings_for_chunks_batch_size() {
                 token_count: None,
                 first_page: None,
                 last_page: None,
+                heading_context: None,
             },
         })
         .collect();

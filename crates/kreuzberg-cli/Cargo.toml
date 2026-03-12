@@ -13,25 +13,31 @@ keywords = ["document", "extraction", "cli", "tool", "parser"]
 categories = ["command-line-utilities", "text-processing"]
 
 [dependencies]
-kreuzberg = { path = "../kreuzberg", version = "4.4.2", features = ["full"] }
+kreuzberg = { workspace = true, features = ["formats", "tokio-runtime", "simd-utf8"] }
+
 clap = { workspace = true }
-tokio = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 base64 = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
 [features]
-default = ["bundled-pdfium"]
+default = ["bundled-pdfium", "embeddings", "ocr", "paddle-ocr", "chunking-tokenizers"]
+
 bundled-pdfium = ["kreuzberg/bundled-pdfium"]
 static-pdfium = ["kreuzberg/static-pdfium"]
+
+ocr = ["kreuzberg/ocr"]
+
 api = ["kreuzberg/api"]
 mcp = ["kreuzberg/mcp"]
 mcp-http = ["kreuzberg/mcp-http"]
 embeddings = ["kreuzberg/embeddings"]
 paddle-ocr = ["kreuzberg/paddle-ocr"]
-all = ["api", "mcp", "mcp-http", "embeddings", "paddle-ocr"]
+chunking-tokenizers = ["kreuzberg/chunking-tokenizers"]
+all = ["default", "api", "mcp", "mcp-http", "chunking-tokenizers"]
 
 [[bin]]
 name = "kreuzberg"

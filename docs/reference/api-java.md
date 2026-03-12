@@ -1,4 +1,4 @@
-# Java API Reference <span class="version-badge">v4.4.2</span>
+# Java API Reference <span class="version-badge">v4.4.5</span>
 
 Complete reference for the Kreuzberg Java bindings using Java 25+ Foreign Function & Memory API (FFM/Panama).
 
@@ -10,7 +10,7 @@ Add the dependency to your Maven `pom.xml`:
 <dependency>
     <groupId>dev.kreuzberg</groupId>
     <artifactId>kreuzberg</artifactId>
-    <version>4.4.2</version>
+    <version>4.4.5</version>
 </dependency>
 ```
 
@@ -18,7 +18,7 @@ Or with Gradle:
 
 ```gradle title="build.gradle"
 dependencies {
-    implementation 'dev.kreuzberg:kreuzberg:4.4.2'
+    implementation 'dev.kreuzberg:kreuzberg:4.4.5'
 }
 ```
 
@@ -484,6 +484,9 @@ ChunkingConfig chunking = ChunkingConfig.builder()
     .preset("large")             // Preset: "small", "medium", "large"
     .enabled(true)               // Enable chunking (default: true)
     .embedding(embeddingMap)     // Embedding configuration
+    .sizingTokenizer("bert-base-uncased") // Measure size by token count using a HuggingFace tokenizer
+    // .sizingCharacters()       // Measure size by character count (default)
+    // .sizingCacheDir("/tmp/tokenizers") // Optional: cache directory for tokenizer files
     .build();
 ```
 
@@ -836,6 +839,7 @@ int charCount = metadata.getCharCount();              // Number of characters
 Optional<Integer> tokenCount = metadata.getTokenCount(); // Estimated token count
 Optional<Integer> firstPage = metadata.getFirstPage();   // First page (1-indexed)
 Optional<Integer> lastPage = metadata.getLastPage();     // Last page (1-indexed)
+Optional<HeadingContext> headingContext = metadata.getHeadingContext(); // Heading hierarchy (markdown chunker)
 ```
 
 **Fields:**
@@ -846,6 +850,7 @@ Optional<Integer> lastPage = metadata.getLastPage();     // Last page (1-indexed
 - `tokenCount` (Optional<Integer>): Estimated token count (if configured)
 - `firstPage` (Optional<Integer>): First page this chunk appears on (1-indexed, only when page boundaries available)
 - `lastPage` (Optional<Integer>): Last page this chunk appears on (1-indexed, only when page boundaries available)
+- `headingContext` (Optional<HeadingContext>): Heading hierarchy when using Markdown chunker. Only populated when chunker_type is set to markdown.
 
 **Page tracking:** When `PageStructure.boundaries` is available and chunking is enabled, `firstPage` and `lastPage` are automatically calculated based on byte offsets.
 

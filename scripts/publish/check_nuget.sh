@@ -10,7 +10,8 @@ fi
 
 version="$1"
 package="Kreuzberg"
-url="https://api.nuget.org/v3/registration5-gz-semver2/${package,,}/index.json"
+package_lower="$(echo "$package" | tr '[:upper:]' '[:lower:]')"
+url="https://api.nuget.org/v3/registration5-gz-semver2/${package_lower}/index.json"
 max_attempts=3
 attempt=1
 response=""

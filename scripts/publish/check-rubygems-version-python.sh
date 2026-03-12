@@ -11,7 +11,7 @@ export VERSION="${1:?VERSION argument required}"
 python3 - <<'PY'
 import json, os, sys, urllib.request
 
-version = os.environ.get("VERSION") or sys.argv[1] if len(sys.argv) > 1 else None
+version = os.environ.get("VERSION") or (sys.argv[1] if len(sys.argv) > 1 else None)
 if not version:
     print("Error: VERSION not provided", file=sys.stderr)
     sys.exit(1)

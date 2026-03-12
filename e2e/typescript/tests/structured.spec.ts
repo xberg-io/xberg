@@ -40,6 +40,32 @@ describe("structured fixtures", () => {
 	);
 
 	it(
+		"structured_enw_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/sample.enw");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_enw_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_enw_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"structured_json_basic",
 		() => {
 			const documentPath = resolveDocument("json/sample_document.json");
@@ -96,6 +122,60 @@ describe("structured fixtures", () => {
 	);
 
 	it(
+		"structured_nbib_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/sample.nbib");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_nbib_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_nbib_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/nbib", "application/x-pubmed", "text/plain"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"structured_ris_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/sample.ris");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_ris_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_ris_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-research-info-systems", "text/plain"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"structured_toml_basic",
 		() => {
 			const documentPath = resolveDocument("data_formats/cargo.toml");
@@ -117,6 +197,33 @@ describe("structured fixtures", () => {
 				return;
 			}
 			assertions.assertExpectedMime(result, ["application/toml", "text/toml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"structured_tsv_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/employees.tsv");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_tsv_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_tsv_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/tab-separated-values", "text/plain"]);
 			assertions.assertMinContentLength(result, 10);
 		},
 		TEST_TIMEOUT_MS,

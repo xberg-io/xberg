@@ -26,6 +26,7 @@ def test_token_reduction_aggressive() -> None:
 
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 5)
+    helpers.assert_max_content_length(result, 150)
     helpers.assert_content_not_empty(result)
 
 
@@ -42,6 +43,7 @@ def test_token_reduction_basic() -> None:
 
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 5)
+    helpers.assert_max_content_length(result, 200)
     helpers.assert_content_not_empty(result)
 
 
@@ -76,5 +78,6 @@ def test_token_reduction_with_chunking() -> None:
 
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 5)
+    helpers.assert_max_content_length(result, 200)
     helpers.assert_chunks(result, min_count=1, each_has_content=True)
     helpers.assert_content_not_empty(result)

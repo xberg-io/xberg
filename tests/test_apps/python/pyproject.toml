@@ -1,7 +1,7 @@
 [project]
 name = "kreuzberg-test-app-python"
-version = "4.4.2"
-description = "Comprehensive API coverage test for Kreuzberg 4.4.2 Python bindings"
+version = "4.4.5"
+description = "Comprehensive API coverage test for Kreuzberg 4.4.5 Python bindings"
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
@@ -12,7 +12,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
-dependencies = [ "kreuzberg==4.4" ]
+dependencies = [ "kreuzberg==4.4.3" ]
 
 [tool.mypy]
 python_version = "3.10"

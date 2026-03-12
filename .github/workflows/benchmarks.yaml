@@ -1194,6 +1194,68 @@ jobs:
           path: benchmark-results/
           retention-days: 30
 
+  bench-c:
+    name: kreuzberg-c (${{ matrix.mode }})
+    needs: setup
+    runs-on: runner-large
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Install system dependencies
+        uses: ./.github/actions/install-system-deps
+
+      - name: Setup OpenSSL
+        uses: ./.github/actions/setup-openssl
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-rust
+        with:
+          cache-key-prefix: benchmarks-c
+          use-sccache: 'true'
+          report-stats: 'true'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.setup.outputs.artifact-name }}
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Setup ONNX Runtime
+        uses: ./.github/actions/setup-onnx-runtime
+        with:
+          ort-version: ${{ env.ORT_VERSION }}
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: kreuzberg-c
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          TIMEOUT: ${{ github.event.inputs.timeout }}
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-kreuzberg-c-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 30
+
   bench-docling:
     name: docling (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: setup
@@ -1852,9 +1914,69 @@ jobs:
           path: benchmark-results/
           retention-days: 30
 
+  bench-playa-pdf:
+    name: playa-pdf (${{ matrix.mode }})
+    needs: setup
+    runs-on: runner-large
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [single-file, batch]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref }}
+
+      - name: Free disk space
+        run: scripts/ci/benchmarks/free-disk-space.sh
+
+      - name: Download benchmark harness binary
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-harness-binary
+          path: target/release
+
+      - name: Restore benchmark binary permissions
+        run: scripts/benchmarks/restore-binary-permissions.sh
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.11"
+          cache-prefix: benchmark-playa-pdf
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config
+
+      - name: Install playa-pdf benchmark dependencies
+        run: uv sync --no-build-package kreuzberg --group dev --group bench-playa-pdf --all-extras --all-packages --no-install-project --no-install-workspace
+
+      - name: Run benchmark
+        env:
+          FRAMEWORK: playa-pdf
+          MODE: ${{ matrix.mode }}
+          ITERATIONS: ${{ env.ITERATIONS }}
+          TIMEOUT: ${{ github.event.inputs.timeout }}
+          OCR_ENABLED: "false"
+          UV_NO_SYNC: "1"
+        run: scripts/benchmarks/run-benchmark.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-playa-pdf-${{ matrix.mode }}-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 30
+
   aggregate-and-publish:
     name: Aggregate & Release Results
-    needs: [setup, bench-native, bench-native-paddle, bench-python, bench-node, bench-wasm, bench-ruby, bench-r, bench-go, bench-java, bench-csharp, bench-elixir, bench-php, bench-docling, bench-markitdown, bench-pandoc, bench-unstructured, bench-tika, bench-pymupdf4llm, bench-pdfplumber, bench-mineru, bench-pypdf, bench-pdfminer, bench-pdftotext]
+    needs: [setup, bench-native, bench-native-paddle, bench-python, bench-node, bench-wasm, bench-ruby, bench-r, bench-c, bench-go, bench-java, bench-csharp, bench-elixir, bench-php, bench-docling, bench-markitdown, bench-pandoc, bench-unstructured, bench-tika, bench-pymupdf4llm, bench-pdfplumber, bench-mineru, bench-pypdf, bench-pdfminer, bench-pdftotext, bench-playa-pdf]
     runs-on: runner-small
     if: ${{ always() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
     permissions:
@@ -1995,6 +2117,8 @@ jobs:
             "kreuzberg-csharp:single" "kreuzberg-csharp:batch"
             "kreuzberg-elixir:single" "kreuzberg-elixir:batch"
             "kreuzberg-php:single" "kreuzberg-php:batch"
+            "kreuzberg-r:single" "kreuzberg-r:batch"
+            "kreuzberg-c:single" "kreuzberg-c:batch"
             "docling:single" "docling:batch"
             "markitdown:single" "markitdown:batch"
             "pandoc:single" "pandoc:batch"
@@ -2006,6 +2130,7 @@ jobs:
             "pypdf:single" "pypdf:batch"
             "pdfminer:single" "pdfminer:batch"
             "pdftotext:single" "pdftotext:batch"
+            "playa-pdf:single" "playa-pdf:batch"
           )
 
           # Get actual frameworks from aggregated.json

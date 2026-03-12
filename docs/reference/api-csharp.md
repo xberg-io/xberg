@@ -8,7 +8,7 @@ Add the NuGet package to your `.csproj`:
 
 ```xml title=".csproj"
 <ItemGroup>
-    <PackageReference Include="Kreuzberg" Version="4.4.2" />
+    <PackageReference Include="Kreuzberg" Version="4.4.5" />
 </ItemGroup>
 ```
 
@@ -1023,15 +1023,15 @@ The main result of document extraction containing extracted content, metadata, a
 
 **Properties:**
 
-- `Content` (string): The extracted text content from the document.
-- `MimeType` (string): The detected MIME type of the document (e.g., "application/pdf").
-- `Metadata` (Metadata): Document metadata including language, format-specific info, and other attributes.
-- `Tables` (List<Table>): Extracted tables from the document, if any.
-- `DetectedLanguages` (List<string>?): Detected languages in the document, if language detection was enabled.
 - `Chunks` (List<Chunk>?): Text chunks if chunking was enabled, each with metadata and optional embedding vector.
+- `Content` (string): The extracted text content from the document.
+- `DetectedLanguages` (List<string>?): Detected languages in the document, if language detection was enabled.
 - `Images` (List<ExtractedImage>?): Images extracted from the document, if image extraction was enabled.
+- `Metadata` (Metadata): Document metadata including language, format-specific info, and other attributes.
+- `MimeType` (string): The detected MIME type of the document (e.g., "application/pdf").
 - `Pages` (List<PageContent>?): Per-page extracted content when page extraction is enabled.
 - `Success` (bool): Indicates whether extraction completed successfully.
+- `Tables` (List<Table>): Extracted tables from the document, if any.
 
 ---
 
@@ -1041,20 +1041,20 @@ Configuration for document extraction, controlling extraction behavior and featu
 
 **Properties:**
 
-- `UseCache` (bool?): Whether to use caching for extraction results. Default is null (use server default).
+- `Chunking` (ChunkingConfig?): Text chunking configuration for splitting long documents. Includes `Sizing` property (ChunkSizingConfig?) to control how chunk size is measured -- by character count (default) or by token count using a HuggingFace tokenizer. ChunkSizingConfig has properties: `SizingType` (string: `"characters"` or `"tokenizer"`), `Model` (string: HuggingFace model ID, e.g. `"bert-base-uncased"`), and `CacheDir` (string?: optional tokenizer cache directory).
 - `EnableQualityProcessing` (bool?): Whether to enable quality processing to improve extraction quality.
-- `Ocr` (OcrConfig?): OCR configuration for handling scanned documents and images. If null, OCR is disabled.
 - `ForceOcr` (bool?): Whether to force OCR processing even for documents with text.
-- `Chunking` (ChunkingConfig?): Text chunking configuration for splitting long documents.
-- `Images` (ImageExtractionConfig?): Image extraction configuration.
-- `PdfOptions` (PdfConfig?): PDF-specific extraction options.
-- `TokenReduction` (TokenReductionConfig?): Token reduction configuration.
-- `LanguageDetection` (LanguageDetectionConfig?): Language detection configuration.
-- `Postprocessor` (PostProcessorConfig?): Post-processor configuration.
 - `HtmlOptions` (HtmlConversionOptions?): HTML conversion options for HTML documents.
+- `Images` (ImageExtractionConfig?): Image extraction configuration.
 - `Keywords` (KeywordConfig?): Keyword extraction configuration.
-- `Pages` (PageConfig?): Page extraction and tracking configuration.
+- `LanguageDetection` (LanguageDetectionConfig?): Language detection configuration.
 - `MaxConcurrentExtractions` (int?): Maximum number of concurrent extractions in batch operations.
+- `Ocr` (OcrConfig?): OCR configuration for handling scanned documents and images. If null, OCR is disabled.
+- `Pages` (PageConfig?): Page extraction and tracking configuration.
+- `PdfOptions` (PdfConfig?): PDF-specific extraction options.
+- `Postprocessor` (PostProcessorConfig?): Post-processor configuration.
+- `TokenReduction` (TokenReductionConfig?): Token reduction configuration.
+- `UseCache` (bool?): Whether to use caching for extraction results. Default is null (use server default).
 
 ---
 
@@ -1100,13 +1100,14 @@ Metadata about a chunk.
 
 **Properties:**
 
-- `ByteStart` (long): Starting byte offset in the document.
 - `ByteEnd` (long): Ending byte offset in the document.
-- `TokenCount` (int?): Token count for the chunk.
+- `ByteStart` (long): Starting byte offset in the document.
 - `ChunkIndex` (int): Zero-based index of this chunk.
-- `TotalChunks` (int): Total number of chunks in the document.
 - `FirstPage` (int?): First page number (1-indexed) containing this chunk.
 - `LastPage` (int?): Last page number (1-indexed) containing this chunk.
+- `TokenCount` (int?): Token count for the chunk.
+- `TotalChunks` (int): Total number of chunks in the document.
+- `HeadingContext` (HeadingContext?): Heading hierarchy when using Markdown chunker. Only populated when chunker_type is set to markdown.
 
 ---
 
@@ -1116,15 +1117,15 @@ Document metadata including language, format-specific info, and other attributes
 
 **Properties:**
 
-- `Language` (string?): Detected language of the document (e.g., "en", "de").
 - `Date` (string?): Document date if available.
-- `Subject` (string?): Document subject if available.
-- `FormatType` (FormatType): The format type of the document (PDF, Excel, Email, etc.).
+- `Error` (ErrorMetadata?): Error information if extraction failed.
 - `Format` (FormatMetadata): Format-specific metadata (varies by document type).
+- `FormatType` (FormatType): The format type of the document (PDF, Excel, Email, etc.).
 - `ImagePreprocessing` (ImagePreprocessingMetadata?): Image preprocessing information if OCR was used.
 - `JsonSchema` (JsonNode?): JSON schema if document is structured as JSON.
-- `Error` (ErrorMetadata?): Error information if extraction failed.
+- `Language` (string?): Detected language of the document (e.g., "en", "de").
 - `Pages` (PageStructure?): Page structure and boundaries information.
+- `Subject` (string?): Document subject if available.
 
 ---
 
@@ -1195,12 +1196,12 @@ Represents an embedding preset with configuration for text embedding generation.
 
 **Properties:**
 
-- `Name` (string): The name/identifier of this embedding preset (e.g., "default", "openai").
 - `ChunkSize` (int): The recommended chunk size (in tokens or characters) for this embedding model.
-- `Overlap` (int): The recommended overlap between chunks when chunking text for this model.
-- `ModelName` (string): The name of the embedding model (e.g., "text-embedding-ada-002").
-- `Dimensions` (int): The output dimensionality of the embedding vectors from this model.
 - `Description` (string): Human-readable description of this embedding preset.
+- `Dimensions` (int): The output dimensionality of the embedding vectors from this model.
+- `ModelName` (string): The name of the embedding model (e.g., "text-embedding-ada-002").
+- `Name` (string): The name/identifier of this embedding preset (e.g., "default", "openai").
+- `Overlap` (int): The recommended overlap between chunks when chunking text for this model.
 
 ---
 

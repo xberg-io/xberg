@@ -1,0 +1,25 @@
+{
+	"id": "config_document_structure_groups",
+	"description": "Tests document structure extraction with group node assertion on DOCX with headings",
+	"tags": ["contract", "document_structure"],
+	"document": {
+		"path": "docx/unit_test_headers.docx"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"include_document_structure": true
+		}
+	},
+	"assertions": {
+		"expected_mime": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+		"document": {
+			"has_document": true,
+			"has_groups": true
+		}
+	},
+	"skip": {
+		"requires_feature": ["office"]
+	}
+}

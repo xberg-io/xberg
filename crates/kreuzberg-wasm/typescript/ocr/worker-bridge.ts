@@ -32,6 +32,14 @@ let useFallback = false;
 /** Direct (blocking) fallback function, set by the enabler when creating the backend. */
 let fallbackFn: ((imageData: Uint8Array, tessdata: Uint8Array, language: string) => string) | null = null;
 
+async function cleanupWorker(): Promise<void> {
+	if (workerHandle) {
+		await workerHandle.terminate();
+		workerHandle = null;
+	}
+	workerReady = false;
+}
+
 function handleWorkerMessage(msg: Record<string, unknown>): void {
 	switch (msg["type"]) {
 		case "ready":
@@ -98,10 +106,16 @@ export async function createOcrWorker(
 			return;
 		}
 
-		await readyPromise;
+		// Timeout prevents indefinite hang if the worker loads but never sends "ready"
+		// (e.g. WASM module import fails silently inside the worker)
+		const timeoutMs = 30_000;
+		const timeout = new Promise<void>((_, reject) => {
+			setTimeout(() => reject(new Error("OCR worker initialization timed out")), timeoutMs);
+		});
+		await Promise.race([readyPromise, timeout]);
 	} catch {
 		// Worker creation or init failed — fall back to direct calls
-		workerHandle = null;
+		await cleanupWorker();
 		useFallback = true;
 	}
 }

@@ -207,7 +207,8 @@ class Helpers
         ?int $minCount,
         ?int $maxCount,
         ?bool $eachHasContent,
-        ?bool $eachHasEmbedding
+        ?bool $eachHasEmbedding,
+        ?bool $eachHasHeadingContext = null
     ): void {
         $chunks = $result->chunks ?? [];
         $count = count($chunks);
@@ -242,6 +243,23 @@ class Helpers
                 Assert::assertNotNull(
                     $chunk->embedding ?? null,
                     sprintf("Chunk %d should have embedding", $i)
+                );
+            }
+        }
+
+        if ($eachHasHeadingContext === true) {
+            foreach ($chunks as $i => $chunk) {
+                Assert::assertNotNull(
+                    $chunk->metadata->heading_context ?? null,
+                    sprintf("Chunk %d should have heading_context", $i)
+                );
+            }
+        }
+        if ($eachHasHeadingContext === false) {
+            foreach ($chunks as $i => $chunk) {
+                Assert::assertNull(
+                    $chunk->metadata->heading_context ?? null,
+                    sprintf("Chunk %d should have no heading_context", $i)
                 );
             }
         }

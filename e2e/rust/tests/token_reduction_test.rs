@@ -34,6 +34,7 @@ fn test_token_reduction_aggressive() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 5);
+    assertions::assert_max_content_length(&result, 150);
     assertions::assert_content_not_empty(&result);
 }
 
@@ -65,6 +66,7 @@ fn test_token_reduction_basic() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 5);
+    assertions::assert_max_content_length(&result, 200);
     assertions::assert_content_not_empty(&result);
 }
 
@@ -131,6 +133,7 @@ fn test_token_reduction_with_chunking() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 5);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), None);
+    assertions::assert_max_content_length(&result, 200);
+    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None);
     assertions::assert_content_not_empty(&result);
 }

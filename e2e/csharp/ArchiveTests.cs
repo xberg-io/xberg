@@ -12,6 +12,19 @@ namespace Kreuzberg.E2E.Archive
     public class ArchiveTests
     {
         [SkippableFact]
+        public void ArchiveGzBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("archives/book_war_and_peace_1p.txt.gz");
+            TestHelpers.SkipIfOfficeTestOnWindows("archives/book_war_and_peace_1p.txt.gz");
+            var documentPath = TestHelpers.EnsureDocument("archives/book_war_and_peace_1p.txt.gz", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/gzip", "application/x-gzip" });
+            TestHelpers.AssertMinContentLength(result, 10);
+        }
+
+        [SkippableFact]
         public void ArchiveSevenzBasic()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("archives/documents.7z");

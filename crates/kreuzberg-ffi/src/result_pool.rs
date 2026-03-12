@@ -60,20 +60,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// Provides insight into pool efficiency and memory usage patterns.
 #[repr(C)]
 pub struct CResultPoolStats {
-    /// Current number of results stored in pool
-    pub current_count: usize,
-
     /// Maximum capacity of pool (before automatic growth)
     pub capacity: usize,
-
-    /// Total number of allocations (successful extractions)
-    pub total_allocations: usize,
-
-    /// Number of times pool capacity was exceeded (triggered growth)
-    pub growth_events: usize,
-
+    /// Current number of results stored in pool
+    pub current_count: usize,
     /// Estimated memory used by results in bytes
     pub estimated_memory_bytes: usize,
+    /// Number of times pool capacity was exceeded (triggered growth)
+    pub growth_events: usize,
+    /// Total number of allocations (successful extractions)
+    pub total_allocations: usize,
 }
 
 /// Memory pool for ExtractionResult objects.
@@ -161,11 +157,11 @@ impl ResultPool {
             .sum();
 
         CResultPoolStats {
-            current_count: results.len(),
             capacity: results.capacity(),
-            total_allocations: self.total_allocations.load(Ordering::Relaxed),
-            growth_events: self.growth_events.load(Ordering::Relaxed),
+            current_count: results.len(),
             estimated_memory_bytes,
+            growth_events: self.growth_events.load(Ordering::Relaxed),
+            total_allocations: self.total_allocations.load(Ordering::Relaxed),
         }
     }
 }

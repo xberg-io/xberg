@@ -22,6 +22,13 @@ pub struct ImageExtractionConfig {
     #[serde(default = "default_max_dimension")]
     pub max_image_dimension: i32,
 
+    /// Whether to inject image reference placeholders into markdown output.
+    /// When `true` (default), image references like `![Image 1](embedded:p1_i0)`
+    /// are appended to the markdown. Set to `false` to extract images as data
+    /// without polluting the markdown output.
+    #[serde(default = "default_true")]
+    pub inject_placeholders: bool,
+
     /// Automatically adjust DPI based on image content
     #[serde(default = "default_true")]
     pub auto_adjust_dpi: bool,

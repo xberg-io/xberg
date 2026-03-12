@@ -223,6 +223,8 @@ pub struct ChunkAssertion {
     pub each_has_content: Option<bool>,
     #[serde(default)]
     pub each_has_embedding: Option<bool>,
+    #[serde(default)]
+    pub each_has_heading_context: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -639,7 +641,7 @@ pub fn should_include_for_wasm(fixture: &Fixture, target: WasmTarget) -> bool {
         .skip()
         .requires_feature
         .iter()
-        .any(|f| f == "paddle-ocr" || f == "embeddings" || f.starts_with("keywords"))
+        .any(|f| f == "paddle-ocr" || f == "embeddings" || f.starts_with("keywords") || f == "chunking-tokenizers")
     {
         return false;
     }
@@ -657,6 +659,12 @@ pub fn should_include_for_wasm(fixture: &Fixture, target: WasmTarget) -> bool {
         {
             return false;
         }
+    }
+
+    // OCR tests hang indefinitely on WASM Deno because Tesseract synchronous
+    // initialization blocks the single-threaded WASM runtime.
+    if target == WasmTarget::Deno && fixture.category() == "ocr" {
+        return false;
     }
 
     // Jupyter notebook parsing is not supported in the WASM Deno environment

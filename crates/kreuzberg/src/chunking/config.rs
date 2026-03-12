@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 // Re-export ChunkingConfig and ChunkerType from core config (canonical location)
-pub use crate::core::config::processing::{ChunkerType, ChunkingConfig};
+pub use crate::core::config::processing::{ChunkSizing, ChunkerType, ChunkingConfig};
 
 /// Result of a text chunking operation.
 ///

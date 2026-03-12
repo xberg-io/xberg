@@ -8,7 +8,8 @@ set -euo pipefail
 version="${1:?VERSION argument required}"
 package="Kreuzberg"
 
-url="https://api.nuget.org/v3/registration5-gz-semver2/${package,,}/index.json"
+package_lower="$(echo "$package" | tr '[:upper:]' '[:lower:]')"
+url="https://api.nuget.org/v3/registration5-gz-semver2/${package_lower}/index.json"
 response="$(curl -sSL --compressed "$url" 2>/dev/null || echo "")"
 
 if [ -n "$response" ] && echo "$response" | jq -e ".items[].items[]?.catalogEntry | select(.version == \"${version}\")" >/dev/null 2>&1; then

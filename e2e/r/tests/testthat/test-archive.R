@@ -4,6 +4,19 @@
 # Tests for archive fixtures.
 # nolint start
 
+test_that("archive_gz_basic", {
+  result <- run_fixture(
+    "archive_gz_basic",
+    "archives/book_war_and_peace_1p.txt.gz",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/gzip", "application/x-gzip"))
+  assert_min_content_length(result, 10L)
+})
+
 test_that("archive_sevenz_basic", {
   result <- run_fixture(
     "archive_sevenz_basic",

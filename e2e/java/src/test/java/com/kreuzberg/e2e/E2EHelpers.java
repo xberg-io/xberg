@@ -336,7 +336,8 @@ public final class E2EHelpers {
         Integer minCount,
         Integer maxCount,
         Boolean eachHasContent,
-        Boolean eachHasEmbedding) {
+        Boolean eachHasEmbedding,
+        Boolean eachHasHeadingContext) {
       var chunks = result.getChunks();
       int count = chunks != null ? chunks.size() : 0;
       if (minCount != null) {
@@ -358,6 +359,20 @@ public final class E2EHelpers {
       if (chunks != null && eachHasEmbedding != null && eachHasEmbedding) {
         for (var chunk : chunks) {
           assertNotNull(chunk.getEmbedding(), "Expected each chunk to have an embedding");
+        }
+      }
+      if (chunks != null && eachHasHeadingContext != null && eachHasHeadingContext) {
+        for (var chunk : chunks) {
+          assertNotNull(
+              chunk.getMetadata().getHeadingContext(),
+              "Expected each chunk to have heading_context");
+        }
+      }
+      if (chunks != null && eachHasHeadingContext != null && !eachHasHeadingContext) {
+        for (var chunk : chunks) {
+          assertNull(
+              chunk.getMetadata().getHeadingContext(),
+              "Expected each chunk to have no heading_context");
         }
       }
     }
@@ -437,14 +452,14 @@ public final class E2EHelpers {
     public static void assertOcrElements(
         ExtractionResult result,
         boolean hasElements,
-        boolean hasGeometry,
+        Boolean hasGeometry,
         Boolean hasConfidence,
         Integer minCount) {
       var ocrElements = result.getOcrElements();
       if (hasElements) {
         assertTrue(!ocrElements.isEmpty(), "Expected OCR elements, but none found");
       }
-      if (hasGeometry) {
+      if (hasGeometry != null && hasGeometry) {
         for (int i = 0; i < ocrElements.size(); i++) {
           assertNotNull(
               ocrElements.get(i).getGeometry(),

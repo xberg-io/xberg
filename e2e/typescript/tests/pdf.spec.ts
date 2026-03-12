@@ -75,7 +75,7 @@ describe("pdf fixtures", () => {
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 5000);
 			assertions.assertContentContainsAny(result, ["assembly", "register", "instruction"]);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -104,7 +104,7 @@ describe("pdf fixtures", () => {
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10000);
 			assertions.assertContentContainsAny(result, ["Bayesian", "probability", "distribution"]);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -189,7 +189,7 @@ describe("pdf fixtures", () => {
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 1000);
 			assertions.assertContentContainsAny(result, ["neural", "network", "deep learning"]);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -245,7 +245,7 @@ describe("pdf fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 50);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -274,7 +274,7 @@ describe("pdf fixtures", () => {
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10000);
 			assertions.assertContentContainsAny(result, ["machine learning", "algorithm", "training"]);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -303,7 +303,35 @@ describe("pdf fixtures", () => {
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 100);
 			assertions.assertContentContainsAny(result, ["Intel", "paging"]);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"pdf_password_protected",
+		() => {
+			const documentPath = resolveDocument("pdf/copy_protected.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping pdf_password_protected: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_password_protected", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAny(result, ["LayoutParser", "document image analysis", "deep learning"]);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -331,7 +359,7 @@ describe("pdf fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 50);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -481,7 +509,7 @@ describe("pdf fixtures", () => {
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10000);
 			assertions.assertContentContainsAny(result, ["statistical", "regression", "learning"]);
-			assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 		},
 		TEST_TIMEOUT_MS,
 	);

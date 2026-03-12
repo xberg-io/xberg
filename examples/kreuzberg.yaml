@@ -91,6 +91,13 @@ chunking:
 
   max_overlap: 200
 
+  # Chunker type: "text" (default) or "markdown" (preserves heading context in chunks)
+  # chunker_type: markdown
+
+  # Token-based sizing (requires chunking-tokenizers feature):
+  # sizing:
+  #   type: tokenizer
+  #   model: "Xenova/gpt-4o"
 
   embedding:
     batch_size: 32

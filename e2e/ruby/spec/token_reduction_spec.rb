@@ -22,6 +22,7 @@ RSpec.describe 'token_reduction fixtures' do
         ['application/pdf']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 5)
+      E2ERuby::Assertions.assert_max_content_length(result, 150)
       E2ERuby::Assertions.assert_content_not_empty(result)
     end
   end
@@ -40,6 +41,7 @@ RSpec.describe 'token_reduction fixtures' do
         ['application/pdf']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 5)
+      E2ERuby::Assertions.assert_max_content_length(result, 200)
       E2ERuby::Assertions.assert_content_not_empty(result)
     end
   end
@@ -76,6 +78,7 @@ RSpec.describe 'token_reduction fixtures' do
         ['application/pdf']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 5)
+      E2ERuby::Assertions.assert_max_content_length(result, 200)
       E2ERuby::Assertions.assert_chunks(result, min_count: 1, each_has_content: true)
       E2ERuby::Assertions.assert_content_not_empty(result)
     end

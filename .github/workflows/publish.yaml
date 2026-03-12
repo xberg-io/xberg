@@ -25,6 +25,11 @@ on:
         required: false
         type: boolean
         default: false
+      republish:
+        description: "Delete and re-create the tag on current HEAD before publishing (retag + full republish)"
+        required: false
+        type: boolean
+        default: false
   release:
     types: [published]
   repository_dispatch:
@@ -50,7 +55,7 @@ jobs:
     if: ${{ github.event_name != 'release' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
@@ -81,6 +86,30 @@ jobs:
     steps:
       - name: Checkout code (default)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Retag for republish
+        if: ${{ inputs.republish == true || github.event.client_payload.republish == true }}
+        env:
+          TAG: ${{ inputs.tag || github.event.client_payload.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ -z "${TAG}" ]]; then
+            echo "::error::republish requires a tag input"
+            exit 1
+          fi
+          sha="$(git rev-parse HEAD)"
+          echo "::notice::Republish requested — deleting and re-creating tag ${TAG} on ${sha:0:8}"
+          # Delete via API (avoids workflows permission issue with git push)
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" -X DELETE 2>/dev/null || true
+          # Create via API
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f "ref=refs/tags/${TAG}" \
+            -f "sha=${sha}" --silent
+          # Update local state
+          git tag -d "${TAG}" 2>/dev/null || true
+          git tag "${TAG}" "${sha}"
 
       - name: Validate tag and compute version
         id: meta
@@ -486,7 +515,7 @@ jobs:
 
       - name: Setup QEMU
         if: matrix.os == 'ubuntu-latest' && matrix.needs_qemu
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
         with:
           platforms: all
 
@@ -962,26 +991,31 @@ jobs:
       - name: Free up disk space
         run: scripts/publish/ubuntu/free-disk-space.sh
 
-      - name: Build static CLI binary via Docker
+      - name: Build CLI binary via Docker
         run: |
           docker build -f docker/Dockerfile.musl-build \
             --output type=local,dest=./dist .
 
-      - name: Verify static binary
+      - name: Verify CLI binary
         run: |
           file dist/kreuzberg
-          if readelf -d dist/kreuzberg 2>/dev/null | grep NEEDED; then
-            echo "ERROR: Binary has dynamic dependencies"
-            exit 1
-          fi
-          echo "Binary is fully statically linked"
+          echo "=== Dynamic dependencies ==="
+          readelf -d dist/kreuzberg 2>/dev/null | grep -E "NEEDED|RPATH|RUNPATH" || echo "No dependencies"
+          echo "=== Bundled libraries ==="
+          ls -la dist/lib/ 2>/dev/null || echo "No bundled libraries"
+          # Binary is dynamically linked against musl libc for dlopen support
+          # (required by PDFium bundled strategy). RPATH is set to $ORIGIN/lib
+          # so runtime libraries are found relative to the binary.
+          echo "Binary built successfully"
 
       - name: Package CLI artifact
         run: |
           TARGET="${{ matrix.target }}"
           STAGE="kreuzberg-cli-${TARGET}"
-          mkdir -p "$STAGE"
+          mkdir -p "$STAGE/lib"
           cp dist/kreuzberg "$STAGE/"
+          cp dist/kreuzberg.bin "$STAGE/" 2>/dev/null || true
+          cp dist/lib/* "$STAGE/lib/" 2>/dev/null || true
           cp LICENSE "$STAGE/"
           cp README.md "$STAGE/"
           tar -czf "kreuzberg-cli-${TARGET}.tar.gz" "$STAGE"

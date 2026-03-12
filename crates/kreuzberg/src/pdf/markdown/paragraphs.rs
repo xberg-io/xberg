@@ -1,11 +1,17 @@
 //! Paragraph building from lines using vertical gaps and formatting changes.
 
 use super::constants::{
-    FONT_SIZE_CHANGE_THRESHOLD, LEFT_INDENT_CHANGE_THRESHOLD, MAX_LIST_ITEM_LINES, PARAGRAPH_GAP_MULTIPLIER,
+    FONT_SIZE_CHANGE_THRESHOLD, FULL_LINE_FRACTION, LEFT_INDENT_CHANGE_THRESHOLD, MAX_LIST_ITEM_LINES,
+    PARAGRAPH_GAP_MULTIPLIER,
 };
 use super::types::{PdfLine, PdfParagraph};
 
 /// Group lines into paragraphs based on vertical gaps, font size changes, and indentation.
+///
+/// Short-line detection: when a line doesn't extend to the right margin, it indicates
+/// intentionally positioned text (CVs, addresses, data entries) rather than word-wrapped
+/// flowing text. Each short line becomes its own paragraph to preserve the document's
+/// visual structure in the markdown output.
 pub(super) fn lines_to_paragraphs(lines: Vec<PdfLine>) -> Vec<PdfParagraph> {
     if lines.is_empty() {
         return Vec::new();
@@ -38,6 +44,32 @@ pub(super) fn lines_to_paragraphs(lines: Vec<PdfLine>) -> Vec<PdfParagraph> {
 
     let paragraph_gap_threshold = base_spacing * PARAGRAPH_GAP_MULTIPLIER;
 
+    // Compute max right edge for short-line detection.
+    // In flowing text, lines extend to the right margin (word-wrapped).
+    // In positioned text (CVs, addresses), lines end where the content ends.
+    let max_right_edge = lines
+        .iter()
+        .filter_map(|l| l.segments.last().map(|s| s.x + s.width))
+        .fold(0.0_f32, f32::max);
+
+    // Page-level positioned text detection:
+    // If fewer than 30% of lines reach the right margin, this page has
+    // predominantly positioned text (CVs, addresses, data entries).
+    // Only then do we split short lines into separate paragraphs.
+    let is_positioned_text_page = if max_right_edge > 0.0 {
+        let full_line_count = lines
+            .iter()
+            .filter(|l| {
+                l.segments
+                    .last()
+                    .is_some_and(|s| s.x + s.width >= max_right_edge * FULL_LINE_FRACTION)
+            })
+            .count();
+        full_line_count * 100 < lines.len() * 30 // < 30% full-width
+    } else {
+        false
+    };
+
     let mut paragraphs: Vec<PdfParagraph> = Vec::new();
     let mut current_lines: Vec<PdfLine> = vec![lines[0].clone()];
 
@@ -64,8 +96,18 @@ pub(super) fn lines_to_paragraphs(lines: Vec<PdfLine>) -> Vec<PdfParagraph> {
             .map(is_list_prefix)
             .unwrap_or(false);
 
-        let is_paragraph_break =
-            has_significant_gap || (has_some_gap && (has_font_change || has_indent_change)) || next_starts_with_list;
+        // Short-line detection for positioned text pages only.
+        // When the page is predominantly short lines (< 30% full-width), each
+        // short line that's followed by a gap indicates a separate entry.
+        let prev_is_short_on_positioned_page = is_positioned_text_page && {
+            let prev_right = prev.segments.last().map(|s| s.x + s.width).unwrap_or(0.0);
+            prev_right < max_right_edge * FULL_LINE_FRACTION
+        };
+
+        let is_paragraph_break = has_significant_gap
+            || (has_some_gap && (has_font_change || has_indent_change))
+            || next_starts_with_list
+            || (prev_is_short_on_positioned_page && has_some_gap);
 
         if is_paragraph_break {
             paragraphs.push(finalize_paragraph(current_lines));
@@ -248,15 +290,20 @@ mod tests {
 
     #[test]
     fn test_lines_to_paragraphs_gap_detection() {
+        // Full-width lines (490pt wide from x=10) followed by a big gap
         let lines = vec![
-            make_line(vec![plain_segment("Para 1", 10.0, 700.0, 60.0, 12.0)], 700.0, 12.0),
             make_line(
-                vec![plain_segment("Still para 1", 10.0, 686.0, 80.0, 12.0)],
+                vec![plain_segment("Para 1 line one", 10.0, 700.0, 490.0, 12.0)],
+                700.0,
+                12.0,
+            ),
+            make_line(
+                vec![plain_segment("Still para 1", 10.0, 686.0, 490.0, 12.0)],
                 686.0,
                 12.0,
             ),
             // Big gap
-            make_line(vec![plain_segment("Para 2", 10.0, 640.0, 60.0, 12.0)], 640.0, 12.0),
+            make_line(vec![plain_segment("Para 2", 10.0, 640.0, 490.0, 12.0)], 640.0, 12.0),
         ];
         let paragraphs = lines_to_paragraphs(lines);
         assert_eq!(paragraphs.len(), 2);
@@ -300,5 +347,212 @@ mod tests {
         )];
         let paragraphs = lines_to_paragraphs(lines);
         assert!(!paragraphs[0].is_list_item);
+    }
+
+    // ── Short-line paragraph splitting tests (issue #431) ──
+
+    #[test]
+    fn test_short_lines_split_into_separate_paragraphs() {
+        // Simulates a CV/address block: short lines with uniform spacing.
+        // Each line should become its own paragraph.
+        // Max right edge = 500 (from the widest line).
+        let lines = vec![
+            make_line(
+                vec![plain_segment("Max Mustermann", 50.0, 700.0, 120.0, 12.0)],
+                700.0,
+                12.0,
+            ),
+            make_line(
+                vec![plain_segment("Musterstraße 1", 50.0, 686.0, 110.0, 12.0)],
+                686.0,
+                12.0,
+            ),
+            make_line(
+                vec![plain_segment("12345 Musterstadt", 50.0, 672.0, 130.0, 12.0)],
+                672.0,
+                12.0,
+            ),
+            // Add a full-width line to establish right margin (like page footer)
+            make_line(
+                vec![plain_segment("Full width reference line", 50.0, 600.0, 450.0, 12.0)],
+                600.0,
+                12.0,
+            ),
+        ];
+        let paragraphs = lines_to_paragraphs(lines);
+        // The 3 short CV lines should each be separate paragraphs,
+        // plus the full-width line (4 total)
+        assert_eq!(paragraphs.len(), 4);
+        assert_eq!(paragraphs[0].lines[0].segments[0].text, "Max Mustermann");
+        assert_eq!(paragraphs[1].lines[0].segments[0].text, "Musterstraße 1");
+        assert_eq!(paragraphs[2].lines[0].segments[0].text, "12345 Musterstadt");
+    }
+
+    #[test]
+    fn test_full_width_lines_grouped_as_paragraph() {
+        // Flowing text: full-width lines should be grouped together.
+        // Max right edge = 500 (x=10 + width=490).
+        let lines = vec![
+            make_line(
+                vec![plain_segment(
+                    "The quick brown fox jumps over",
+                    10.0,
+                    700.0,
+                    490.0,
+                    12.0,
+                )],
+                700.0,
+                12.0,
+            ),
+            make_line(
+                vec![plain_segment("the lazy dog and continues on", 10.0, 686.0, 490.0, 12.0)],
+                686.0,
+                12.0,
+            ),
+            make_line(
+                vec![plain_segment("to the end.", 10.0, 672.0, 100.0, 12.0)],
+                672.0,
+                12.0,
+            ),
+        ];
+        let paragraphs = lines_to_paragraphs(lines);
+        // Full-width lines are flowing text → should be one paragraph
+        assert_eq!(paragraphs.len(), 1);
+        assert_eq!(paragraphs[0].lines.len(), 3);
+    }
+
+    #[test]
+    fn test_flowing_text_with_short_last_line_followed_by_new_paragraph() {
+        // Paragraph 1: two full lines + short last line
+        // Paragraph 2: starts after a big gap
+        let lines = vec![
+            make_line(
+                vec![plain_segment(
+                    "Flowing text line one that extends",
+                    10.0,
+                    700.0,
+                    490.0,
+                    12.0,
+                )],
+                700.0,
+                12.0,
+            ),
+            make_line(
+                vec![plain_segment(
+                    "to the edge of the margin here",
+                    10.0,
+                    686.0,
+                    490.0,
+                    12.0,
+                )],
+                686.0,
+                12.0,
+            ),
+            make_line(
+                vec![plain_segment("short ending.", 10.0, 672.0, 100.0, 12.0)],
+                672.0,
+                12.0,
+            ),
+            // Big gap → new paragraph
+            make_line(
+                vec![plain_segment("New paragraph starts here", 10.0, 630.0, 490.0, 12.0)],
+                630.0,
+                12.0,
+            ),
+        ];
+        let paragraphs = lines_to_paragraphs(lines);
+        assert_eq!(paragraphs.len(), 2);
+        assert_eq!(paragraphs[0].lines.len(), 3); // full + full + short ending
+        assert_eq!(paragraphs[1].lines.len(), 1);
+    }
+
+    #[test]
+    fn test_no_positional_data_no_short_line_detection() {
+        // Structure tree path: all segments have x=0, width=0.
+        // Short-line detection should not apply (no positional data).
+        let lines = vec![
+            make_line(vec![plain_segment("Line one", 0.0, 0.0, 0.0, 12.0)], 0.0, 12.0),
+            make_line(vec![plain_segment("Line two", 0.0, 0.0, 0.0, 12.0)], 0.0, 12.0),
+        ];
+        let paragraphs = lines_to_paragraphs(lines);
+        // Without positional data, lines are grouped into one paragraph
+        assert_eq!(paragraphs.len(), 1);
+    }
+
+    #[test]
+    fn test_merge_continuation_respects_sentence_terminators() {
+        // Two paragraphs where the first ends with a period.
+        // Should NOT be merged because the first ends with sentence-terminating punctuation.
+        let mut paragraphs = vec![
+            PdfParagraph {
+                lines: vec![make_line(
+                    vec![plain_segment("First paragraph ends here.", 10.0, 700.0, 490.0, 12.0)],
+                    700.0,
+                    12.0,
+                )],
+                dominant_font_size: 12.0,
+                heading_level: None,
+                is_bold: false,
+                is_list_item: false,
+                is_code_block: false,
+            },
+            PdfParagraph {
+                lines: vec![make_line(
+                    vec![plain_segment("Second paragraph starts", 10.0, 686.0, 490.0, 12.0)],
+                    686.0,
+                    12.0,
+                )],
+                dominant_font_size: 12.0,
+                heading_level: None,
+                is_bold: false,
+                is_list_item: false,
+                is_code_block: false,
+            },
+        ];
+        merge_continuation_paragraphs(&mut paragraphs);
+        // Should NOT merge: first paragraph ends with "."
+        assert_eq!(paragraphs.len(), 2);
+    }
+
+    #[test]
+    fn test_merge_continuation_merges_full_width_paragraphs() {
+        // Two paragraphs where the first ends with a full-width line and no sentence terminator.
+        // These should be merged (flowing text continuation).
+        let mut paragraphs = vec![
+            PdfParagraph {
+                lines: vec![make_line(
+                    vec![plain_segment(
+                        "The quick brown fox jumps over the",
+                        10.0,
+                        700.0,
+                        490.0,
+                        12.0,
+                    )],
+                    700.0,
+                    12.0,
+                )],
+                dominant_font_size: 12.0,
+                heading_level: None,
+                is_bold: false,
+                is_list_item: false,
+                is_code_block: false,
+            },
+            PdfParagraph {
+                lines: vec![make_line(
+                    vec![plain_segment("lazy dog and more text", 10.0, 686.0, 490.0, 12.0)],
+                    686.0,
+                    12.0,
+                )],
+                dominant_font_size: 12.0,
+                heading_level: None,
+                is_bold: false,
+                is_list_item: false,
+                is_code_block: false,
+            },
+        ];
+        merge_continuation_paragraphs(&mut paragraphs);
+        // Full-width lines without sentence terminator → should be merged
+        assert_eq!(paragraphs.len(), 1);
+        assert_eq!(paragraphs[0].lines.len(), 2);
     }
 }

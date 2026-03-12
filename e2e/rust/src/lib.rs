@@ -232,6 +232,7 @@ pub mod assertions {
         max_count: Option<usize>,
         each_has_content: Option<bool>,
         each_has_embedding: Option<bool>,
+        each_has_heading_context: Option<bool>,
     ) {
         let chunks = result.chunks.as_ref().expect("Expected chunks in result");
         let count = chunks.len();
@@ -255,6 +256,24 @@ pub mod assertions {
                 assert!(
                     chunk.embedding.is_some() && !chunk.embedding.as_ref().unwrap().is_empty(),
                     "Expected chunk {i} to have embedding"
+                );
+            }
+        }
+
+        if each_has_heading_context == Some(true) {
+            for (i, chunk) in chunks.iter().enumerate() {
+                assert!(
+                    chunk.metadata.heading_context.is_some(),
+                    "Expected chunk {i} to have heading_context"
+                );
+            }
+        }
+
+        if each_has_heading_context == Some(false) {
+            for (i, chunk) in chunks.iter().enumerate() {
+                assert!(
+                    chunk.metadata.heading_context.is_none(),
+                    "Expected chunk {i} to have no heading_context"
                 );
             }
         }

@@ -177,6 +177,22 @@ def test_pdf_non_english_german() -> None:
     helpers.assert_metadata_expectation(result, "format_type", {"eq": "pdf"})
 
 
+def test_pdf_password_protected() -> None:
+    """Copy-protected PDF should extract content (pdfium handles copy-protection transparently)."""
+
+    document_path = helpers.resolve_document("pdf/copy_protected.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping pdf_password_protected: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 50)
+    helpers.assert_content_contains_any(result, ["LayoutParser", "document image analysis", "deep learning"])
+
+
 def test_pdf_right_to_left() -> None:
     """Right-to-left language PDF to verify RTL extraction."""
 

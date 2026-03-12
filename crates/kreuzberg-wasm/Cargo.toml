@@ -15,7 +15,8 @@ readme = "README.md"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-kreuzberg = { path = "../kreuzberg", default-features = false, features = ["wasm-target"] }
+kreuzberg = { workspace = true, default-features = false, features = ["wasm-target"] }
+
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 wasm-bindgen-rayon = { version = "1.3", optional = true }
@@ -26,7 +27,7 @@ web-sys = { workspace = true }
 getrandom = { version = "0.4", features = ["wasm_js"] }
 # Also need to explicitly depend on 0.3.4 to enable wasm_js for transitive deps
 getrandom_compat = { package = "getrandom", version = "=0.3.4", features = ["wasm_js"] }
-uuid = { version = "1.21", features = ["js"] }
+uuid = { version = "1.22", features = ["js"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = "0.9"

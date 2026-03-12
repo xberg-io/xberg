@@ -392,7 +392,7 @@ const dataList = [pdfBytes1, pdfBytes2, pdfBytes3];
 const mimeTypes = ['application/pdf', 'application/pdf', 'application/pdf'];
 
 const results = await batchExtractBytes(dataList, mimeTypes, {
-  extract_tables: true
+  extractTables: true
 });
 
 for (const result of results) {
@@ -439,7 +439,7 @@ const fileInput = document.getElementById('files') as HTMLInputElement;
 const files = Array.from(fileInput.files);
 
 const results = await batchExtractFiles(files, {
-  extract_tables: true
+  extractTables: true
 });
 
 for (const result of results) {
@@ -922,7 +922,7 @@ function loadConfigFromString(
 import { loadConfigFromString, extractBytes } from '@kreuzberg/wasm';
 
 const yamlConfig = `
-extract_tables: true
+extractTables: true
 ocr:
   backend: tesseract
   languages: [eng, deu]
@@ -937,7 +937,7 @@ const result = await extractBytes(data, 'application/pdf', config);
 ```typescript title="load_config_json.ts"
 import { loadConfigFromString } from '@kreuzberg/wasm';
 
-const jsonConfig = '{"extract_tables":true}';
+const jsonConfig = '{"extractTables":true}';
 const config = loadConfigFromString(jsonConfig, 'json');
 ```
 
@@ -1278,13 +1278,17 @@ The main result object returned from extraction functions.
 
 **Fields:**
 
+- `annotations` (Annotation[] | null): Document annotations/elements (if element-based output)
+- `chunks` (Chunk[] | null): Text chunks (if chunking enabled)
 - `content` (string): Extracted text content
+- `detectedLanguages` (string[] | null): Detected language codes (if language detection enabled)
+- `extractedKeywords` (Keyword[] | null): Extracted keywords (if keyword extraction enabled)
+- `images` (ExtractedImage[] | null): Extracted images (if image extraction enabled)
+- `metadata` (Metadata): Document metadata
 - `mimeType` (string): MIME type of the document
-- `metadata` (Metadata): Document metadata (page count, encoding, etc.)
-- `tables` (Table[] | null): Extracted tables (if `extract_tables` enabled)
-- `images` (ExtractedImage[] | null): Extracted images (if `extract_images` enabled)
-- `chunks` (Chunk[] | null): Text chunks (if `enable_chunking` enabled)
-- `detectedLanguages` (string[] | null): Detected language codes (if `enable_language_detection` enabled)
+- `processingWarnings` (string[] | null): Warnings during processing
+- `qualityScore` (number | null): Content quality score (0.0-1.0)
+- `tables` (Table[] | null): Extracted tables (if table extraction enabled)
 
 ---
 
@@ -1294,16 +1298,18 @@ Configuration object for extraction. All fields are optional; defaults are used 
 
 **Fields:**
 
-- `extract_tables` (boolean): Extract tables as structured data
-- `extract_images` (boolean): Extract embedded images
-- `extract_metadata` (boolean): Extract document metadata
-- `ocr_config` (OcrConfig): OCR configuration
-- `enable_chunking` (boolean): Split text into semantic chunks
-- `chunking_config` (ChunkingConfig): Text chunking configuration
-- `enable_language_detection` (boolean): Detect document language
-- `enable_quality` (boolean): Enable encoding detection and normalization
-- `extract_keywords` (boolean): Extract important keywords
-- `keywords_config` (KeywordsConfig): Keyword extraction settings
+- `chunkingConfig` (ChunkingConfig): Text chunking configuration
+- `enableChunking` (boolean): Split text into semantic chunks
+- `enableLanguageDetection` (boolean): Detect document language
+- `enableQuality` (boolean): Enable encoding detection and normalization
+- `extractImages` (boolean): Extract embedded images
+- `extractKeywords` (boolean): Extract important keywords (requires keyword features)
+- `extractMetadata` (boolean): Extract document metadata
+- `extractTables` (boolean): Extract tables as structured data
+- `imagesConfig` (ImageConfig): Image extraction settings
+- `keywordsConfig` (KeywordsConfig): Keyword extraction settings
+- `ocrConfig` (OcrConfig): OCR configuration
+- `outputFormat` (string): Content format (Plain, Markdown, Djot, Html, Structured)
 
 ---
 
@@ -1321,6 +1327,22 @@ Configuration for OCR extraction.
 
 ---
 
+### OcrPreprocessing
+
+Image preprocessing configuration for improving OCR quality on scanned documents.
+
+**Fields:**
+
+- `autoRotate` (boolean): Auto-detect and correct image rotation
+- `binarizationMethod` (string): Binarization method: "otsu", "sauvola", "adaptive", "none"
+- `contrastEnhance` (boolean): Enhance image contrast
+- `denoise` (boolean): Apply noise reduction filter
+- `deskew` (boolean): Correct skew (tilted images)
+- `invertColors` (boolean): Invert colors
+- `targetDpi` (number): Target DPI for OCR processing (default: 300)
+
+---
+
 ### ChunkingConfig
 
 Configuration for text chunking.
@@ -1331,6 +1353,9 @@ Configuration for text chunking.
 - `maxOverlap` (number): Overlap between chunks in characters (default: 200)
 - `embedding` (EmbeddingConfig | undefined): Optional embedding configuration
 - `preset` (string | undefined): Chunking preset name
+- `sizingType` ("characters" | "tokenizer" | undefined): How chunk size is measured. Use `"tokenizer"` to measure by token count using a HuggingFace tokenizer. Default: undefined (characters)
+- `sizingModel` (string | undefined): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `sizingType` is `"tokenizer"`. Default: undefined
+- `sizingCacheDir` (string | undefined): Optional directory to cache downloaded tokenizer files. Default: undefined
 
 ---
 
@@ -1400,13 +1425,14 @@ Text chunk from chunking operation.
 
 **ChunkMetadata:**
 
-- `byte_start` (number): Starting byte offset (UTF-8 boundary)
-- `byte_end` (number): Ending byte offset (UTF-8 boundary)
-- `chunk_index` (number): Index of this chunk
-- `total_chunks` (number): Total number of chunks
-- `token_count` (number | null): Token count if available
-- `first_page` (number | null): First page this chunk appears on
-- `last_page` (number | null): Last page this chunk appears on
+- `byteStart` (number): Starting byte offset (UTF-8 boundary)
+- `byteEnd` (number): Ending byte offset (UTF-8 boundary)
+- `chunkIndex` (number): Index of this chunk
+- `totalChunks` (number): Total number of chunks
+- `tokenCount` (number | null): Token count if available
+- `firstPage` (number | null): First page this chunk appears on
+- `lastPage` (number | null): Last page this chunk appears on
+- `headingContext` (HeadingContext | null): Heading hierarchy when using Markdown chunker. Only populated when chunker_type is set to markdown.
 
 ---
 
@@ -1416,13 +1442,19 @@ Document metadata.
 
 **Fields:**
 
-- `pageCount` (number | null): Number of pages (if applicable)
+- `authors` (string[] | null): Document authors
+- `category` (string | null): Document category
+- `createdAt` (string | null): Creation timestamp
+- `creationDate` (string | null): Creation date (legacy field)
+- `documentVersion` (string | null): Document version
 - `encoding` (string | null): Text encoding
 - `format` (string): Document format
-- `author` (string | null): Document author
-- `title` (string | null): Document title
-- `createdAt` (string | null): Creation timestamp
+- `formatType` (string | null): Specific format type
+- `keywords` (string[] | null): Document keywords
 - `modifiedAt` (string | null): Last modification timestamp
+- `pageCount` (number | null): Number of pages (if applicable)
+- `tags` (string[] | null): Document tags
+- `title` (string | null): Document title
 - [Additional format-specific fields]
 
 ---
@@ -1591,7 +1623,7 @@ export default {
     const bytes = new Uint8Array(arrayBuffer);
 
     const result = await extractBytes(bytes, file.type, {
-      chunking_config: { maxChars: 1000 }
+      chunkingConfig: { maxChars: 1000 }
     });
 
     return Response.json({
@@ -1711,8 +1743,8 @@ async function extractWithConfig(bytes: Uint8Array, mimeType: string) {
   // Default config if not loaded
   if (!config) {
     config = {
-      extract_tables: true,
-      extract_metadata: true
+      extractTables: true,
+      extractMetadata: true
     };
   }
 
@@ -1853,7 +1885,7 @@ For large documents, process in smaller chunks:
 
 ```typescript title="cloudflare_chunked.ts"
 const result = await extractBytes(pdfBytes, 'application/pdf', {
-  chunking_config: { maxChars: 1000 }
+  chunkingConfig: { maxChars: 1000 }
 });
 ```
 

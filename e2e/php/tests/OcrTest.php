@@ -351,6 +351,28 @@ class OcrTest extends TestCase
     }
 
     /**
+     * Tests Tesseract OCR element output with min_count assertion
+     */
+    public function test_ocr_tesseract_elements_min_count(): void
+    {
+        $documentPath = Helpers::resolveDocument('images/test_hello_world.png');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping ocr_tesseract_elements_min_count: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'element_config' => ['include_elements' => true, 'min_level' => 'line'], 'language' => 'eng']]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/png']);
+        Helpers::assertMinContentLength($result, 5);
+        Helpers::assertOcrElements($result, true, null, null, 1);
+    }
+
+    /**
      * Tests Tesseract OCR with German language configuration
      */
     public function test_ocr_tesseract_language_german(): void

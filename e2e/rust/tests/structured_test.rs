@@ -30,6 +30,31 @@ fn test_structured_csv_basic() {
 }
 
 #[test]
+fn test_structured_enw_basic() {
+    // EndNote ENW citation format extraction.
+
+    let document_path = resolve_document("data_formats/sample.enw");
+    if !document_path.exists() {
+        println!(
+            "Skipping structured_enw_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for structured_enw_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(
+        &result,
+        &["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"],
+    );
+}
+
+#[test]
 fn test_structured_json_basic() {
     // Structured JSON extraction should stream and preserve content.
 
@@ -78,6 +103,52 @@ fn test_structured_json_simple() {
 }
 
 #[test]
+fn test_structured_nbib_basic() {
+    // PubMed NBIB citation format extraction.
+
+    let document_path = resolve_document("data_formats/sample.nbib");
+    if !document_path.exists() {
+        println!(
+            "Skipping structured_nbib_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for structured_nbib_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/nbib", "application/x-pubmed", "text/plain"]);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
+fn test_structured_ris_basic() {
+    // RIS citation format extraction.
+
+    let document_path = resolve_document("data_formats/sample.ris");
+    if !document_path.exists() {
+        println!(
+            "Skipping structured_ris_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for structured_ris_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/x-research-info-systems", "text/plain"]);
+    assertions::assert_content_not_empty(&result);
+}
+
+#[test]
 fn test_structured_toml_basic() {
     // TOML configuration file extraction.
 
@@ -97,6 +168,29 @@ fn test_structured_toml_basic() {
     };
 
     assertions::assert_expected_mime(&result, &["application/toml", "text/toml"]);
+    assertions::assert_min_content_length(&result, 10);
+}
+
+#[test]
+fn test_structured_tsv_basic() {
+    // TSV (tab-separated values) data file extraction.
+
+    let document_path = resolve_document("data_formats/employees.tsv");
+    if !document_path.exists() {
+        println!(
+            "Skipping structured_tsv_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for structured_tsv_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["text/tab-separated-values", "text/plain"]);
     assertions::assert_min_content_length(&result, 10);
 }
 

@@ -208,7 +208,28 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, null);
+        Helpers::assertChunks($result, 1, null, true, null, null);
+    }
+
+    /**
+     * Tests markdown chunker populates heading context on chunks
+     */
+    public function test_config_chunking_heading_context(): void
+    {
+        $documentPath = Helpers::resolveDocument('markdown/extraction_test.md');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_chunking_heading_context: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('chunking');
+
+        $config = Helpers::buildConfig(['chunking' => ['chunker_type' => 'markdown', 'max_chars' => 300, 'max_overlap' => 50]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertChunks($result, 2, null, true, null, true);
     }
 
     /**
@@ -230,7 +251,28 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, null);
+        Helpers::assertChunks($result, 1, null, true, null, null);
+    }
+
+    /**
+     * Tests markdown chunker on text with no headings produces null heading_context
+     */
+    public function test_config_chunking_no_headings(): void
+    {
+        $documentPath = Helpers::resolveDocument('text/book_war_and_peace_1p.txt');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_chunking_no_headings: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('chunking');
+
+        $config = Helpers::buildConfig(['chunking' => ['chunker_type' => 'markdown', 'max_chars' => 300, 'max_overlap' => 50]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertChunks($result, 2, null, true, null, false);
     }
 
     /**
@@ -252,7 +294,48 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 2, null, true, null);
+        Helpers::assertChunks($result, 2, null, true, null, null);
+    }
+
+    /**
+     * Tests text chunker type (generic whitespace/punctuation splitter)
+     */
+    public function test_config_chunking_text(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_chunking_text: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['chunking' => ['chunker_type' => 'text', 'max_chars' => 500, 'max_overlap' => 50]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertChunks($result, 1, null, true, null, null);
+    }
+
+    /**
+     * Tests token-based chunk sizing with HuggingFace tokenizer
+     */
+    public function test_config_chunking_tokenizer(): void
+    {
+        $documentPath = Helpers::resolveDocument('markdown/comprehensive.md');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_chunking_tokenizer: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('chunking-tokenizers');
+
+        $config = Helpers::buildConfig(['chunking' => ['max_chars' => 200, 'max_overlap' => 40, 'sizing' => ['model' => 'Xenova/gpt-4o', 'type' => 'tokenizer']]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertChunks($result, 2, null, true, null, null);
     }
 
     /**
@@ -312,6 +395,27 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertDocument($result, false, null, null, null);
+    }
+
+    /**
+     * Tests document structure extraction with group node assertion on DOCX with headings
+     */
+    public function test_config_document_structure_groups(): void
+    {
+        $documentPath = Helpers::resolveDocument('docx/unit_test_headers.docx');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_document_structure_groups: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('office');
+
+        $config = Helpers::buildConfig(['include_document_structure' => true]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
+        Helpers::assertDocument($result, true, null, null, true);
     }
 
     /**
@@ -436,6 +540,25 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests image extraction on PPTX containing embedded images
+     */
+    public function test_config_images_with_formats(): void
+    {
+        $documentPath = Helpers::resolveDocument('pptx/powerpoint_with_image.pptx');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_images_with_formats: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['images' => ['extract_images' => true]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/vnd.openxmlformats-officedocument.presentationml.presentation']);
+        Helpers::assertImages($result, 1, null, null);
+    }
+
+    /**
      * Tests keyword extraction via YAKE algorithm
      */
     public function test_config_keywords(): void
@@ -475,6 +598,26 @@ class ContractTest extends TestCase
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
         Helpers::assertDetectedLanguages($result, ['eng'], 0.5);
+    }
+
+    /**
+     * Tests language detection with detect_multiple and min_confidence options
+     */
+    public function test_config_language_detection_multi(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_language_detection_multi: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['language_detection' => ['detect_multiple' => true, 'enabled' => true, 'min_confidence' => 0.3]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertDetectedLanguages($result, ['eng'], null);
     }
 
     /**
@@ -522,6 +665,28 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests page extraction with exact page count assertion on multi-page PDF
+     */
+    public function test_config_pages_exact_count(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/multi_page.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_pages_exact_count: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('pdf');
+
+        $config = Helpers::buildConfig(['pages' => ['extract_pages' => true]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertPages($result, null, 5);
+    }
+
+    /**
      * Tests page extraction config producing per-page content array
      */
     public function test_config_pages_extract(): void
@@ -566,6 +731,27 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests PDF annotation extraction with min_count assertion
+     */
+    public function test_config_pdf_annotations_count(): void
+    {
+        $documentPath = Helpers::resolveDocument('vendored/pdfplumber/pdf/annotations.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_pdf_annotations_count: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('pdf');
+
+        $config = Helpers::buildConfig(['pdf_options' => ['extract_annotations' => true]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertAnnotations($result, true, 3);
+    }
+
+    /**
      * Tests PDF hierarchy extraction config with block-level structure
      */
     public function test_config_pdf_hierarchy(): void
@@ -587,6 +773,27 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests PDF margin exclusion configuration
+     */
+    public function test_config_pdf_margins(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_pdf_margins: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('pdf');
+
+        $config = Helpers::buildConfig(['pdf_options' => ['bottom_margin_fraction' => 0.1, 'top_margin_fraction' => 0.1]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 5);
+    }
+
+    /**
      * Tests postprocessor config is accepted and extraction succeeds
      */
     public function test_config_postprocessor(): void
@@ -604,6 +811,26 @@ class ContractTest extends TestCase
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
         Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
+     * Tests that a clean PDF extraction produces no processing warnings
+     */
+    public function test_config_processing_warnings_empty(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_processing_warnings_empty: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 10);
+        Helpers::assertProcessingWarnings($result, null, true);
     }
 
     /**
@@ -649,6 +876,46 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests quality scoring produces a score with minimum bound assertion
+     */
+    public function test_config_quality_score_range(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_quality_score_range: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('quality');
+
+        $config = Helpers::buildConfig(['enable_quality_processing' => true]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertQualityScore($result, true, 0.1, null);
+    }
+
+    /**
+     * Tests archive extraction with custom security limits
+     */
+    public function test_config_security_limits(): void
+    {
+        $documentPath = Helpers::resolveDocument('archives/documents.zip');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_security_limits: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['security_limits' => ['max_archive_size' => 104857600, 'max_compression_ratio' => 50, 'max_files_in_archive' => 100]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/zip', 'application/x-zip-compressed']);
+        Helpers::assertMinContentLength($result, 10);
+    }
+
+    /**
      * Tests structured (JSON) output format config
      */
     public function test_config_structured_output(): void
@@ -667,6 +934,25 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
+    }
+
+    /**
+     * Tests table extraction with content_contains_any assertion on DOCX with tables
+     */
+    public function test_config_tables_content(): void
+    {
+        $documentPath = Helpers::resolveDocument('docx/docx_tables.docx');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_tables_content: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
+        Helpers::assertTableCount($result, 1, null);
     }
 
     /**

@@ -20,12 +20,14 @@ public final class ChunkMetadata {
 	private final Integer tokenCount;
 	private final int chunkIndex;
 	private final int totalChunks;
+	private final HeadingContext headingContext;
 
 	@JsonCreator
 	public ChunkMetadata(@JsonProperty("byte_start") long byteStart, @JsonProperty("byte_end") long byteEnd,
 			@JsonProperty("first_page") Long firstPage, @JsonProperty("last_page") Long lastPage,
 			@JsonProperty("token_count") Integer tokenCount, @JsonProperty("chunk_index") int chunkIndex,
-			@JsonProperty("total_chunks") int totalChunks) {
+			@JsonProperty("total_chunks") int totalChunks,
+			@JsonProperty("heading_context") HeadingContext headingContext) {
 		if (byteStart < 0 || byteEnd < byteStart) {
 			throw new IllegalArgumentException("Invalid chunk byte range: " + byteStart + "-" + byteEnd);
 		}
@@ -51,6 +53,7 @@ public final class ChunkMetadata {
 		this.tokenCount = tokenCount;
 		this.chunkIndex = chunkIndex;
 		this.totalChunks = totalChunks;
+		this.headingContext = headingContext;
 	}
 
 	/**
@@ -121,6 +124,15 @@ public final class ChunkMetadata {
 		return totalChunks;
 	}
 
+	/**
+	 * Get the heading context for this chunk's section (optional).
+	 *
+	 * @return heading context, or empty if not available
+	 */
+	public Optional<HeadingContext> getHeadingContext() {
+		return Optional.ofNullable(headingContext);
+	}
+
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj) {
@@ -132,18 +144,20 @@ public final class ChunkMetadata {
 		ChunkMetadata other = (ChunkMetadata) obj;
 		return byteStart == other.byteStart && byteEnd == other.byteEnd && Objects.equals(firstPage, other.firstPage)
 				&& Objects.equals(lastPage, other.lastPage) && Objects.equals(tokenCount, other.tokenCount)
-				&& chunkIndex == other.chunkIndex && totalChunks == other.totalChunks;
+				&& chunkIndex == other.chunkIndex && totalChunks == other.totalChunks
+				&& Objects.equals(headingContext, other.headingContext);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(byteStart, byteEnd, firstPage, lastPage, tokenCount, chunkIndex, totalChunks);
+		return Objects.hash(byteStart, byteEnd, firstPage, lastPage, tokenCount, chunkIndex, totalChunks,
+				headingContext);
 	}
 
 	@Override
 	public String toString() {
 		return "ChunkMetadata{" + "byteStart=" + byteStart + ", byteEnd=" + byteEnd + ", firstPage=" + firstPage
 				+ ", lastPage=" + lastPage + ", tokenCount=" + tokenCount + ", chunkIndex=" + chunkIndex
-				+ ", totalChunks=" + totalChunks + '}';
+				+ ", totalChunks=" + totalChunks + ", headingContext=" + headingContext + '}';
 	}
 }

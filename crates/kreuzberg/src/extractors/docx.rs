@@ -1,5 +1,3 @@
-#![cfg(feature = "office")]
-
 //! DOCX extractor for high-performance text extraction.
 //!
 //! Supports: Microsoft Word (.docx)

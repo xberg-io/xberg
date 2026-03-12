@@ -104,6 +104,15 @@ static void test_pdf_pdf_non_english_german(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_pdf_pdf_password_protected(void) {
+    CExtractionResult *result = run_extraction("pdf/copy_protected.pdf", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
+    assert_min_content_length(result, 50);
+    assert_content_contains_any(result, (const char *[]){"LayoutParser", "document image analysis", "deep learning"}, 3);
+    kreuzberg_free_result(result);
+}
+
 static void test_pdf_pdf_right_to_left(void) {
     CExtractionResult *result = run_extraction("pdf/right_to_left_01.pdf", NULL);
     if (!result) return; /* skipped */
@@ -172,6 +181,7 @@ int main(void) {
     test_pdf_pdf_google_doc();
     test_pdf_pdf_large_ciml();
     test_pdf_pdf_non_english_german();
+    test_pdf_pdf_password_protected();
     test_pdf_pdf_right_to_left();
     test_pdf_pdf_simple_text();
     test_pdf_pdf_tables_large();

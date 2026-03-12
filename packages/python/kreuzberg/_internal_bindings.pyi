@@ -672,6 +672,9 @@ class ChunkingConfig:
     max_overlap: int
     embedding: EmbeddingConfig | None
     preset: str | None
+    chunker_type: str | None
+    sizing_type: str
+    sizing_model: str | None
 
     def __init__(
         self,
@@ -680,6 +683,10 @@ class ChunkingConfig:
         max_overlap: int | None = None,
         embedding: EmbeddingConfig | None = None,
         preset: str | None = None,
+        chunker_type: str | None = None,
+        sizing_type: str | None = None,
+        sizing_model: str | None = None,
+        sizing_cache_dir: str | None = None,
     ) -> None: ...
 
 class ImageExtractionConfig:
@@ -1571,6 +1578,13 @@ class ExtractedImage(TypedDict, total=False):
     bounding_box: BoundingBox
     ocr_result: ExtractionResult
 
+class HeadingLevel(TypedDict):
+    level: int
+    text: str
+
+class HeadingContext(TypedDict):
+    headings: list[HeadingLevel]
+
 class ChunkMetadata(TypedDict, total=False):
     byte_start: int
     byte_end: int
@@ -1579,6 +1593,7 @@ class ChunkMetadata(TypedDict, total=False):
     token_count: int | None
     first_page: int
     last_page: int
+    heading_context: HeadingContext | None
 
 class Chunk:
     content: str

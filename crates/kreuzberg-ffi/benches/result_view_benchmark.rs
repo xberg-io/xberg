@@ -53,6 +53,7 @@ fn create_test_result(content_size: usize, chunk_count: usize) -> ExtractionResu
                             total_chunks: chunk_count,
                             first_page: Some(1 + (i / 10)),
                             last_page: Some(1 + (i / 10)),
+                            heading_context: None,
                         },
                     }
                 })

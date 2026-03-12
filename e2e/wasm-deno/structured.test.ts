@@ -38,6 +38,25 @@ Deno.test("structured_csv_basic", { permissions: { read: true, net: true } }, as
 	assertions.assertMinContentLength(result, 20);
 });
 
+Deno.test("structured_enw_basic", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig(undefined);
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("data_formats/sample.enw");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/x-endnote-refer", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "structured_enw_basic", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"]);
+});
+
 Deno.test("structured_json_basic", { permissions: { read: true, net: true } }, async () => {
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -80,6 +99,46 @@ Deno.test("structured_json_simple", { permissions: { read: true, net: true } }, 
 	assertions.assertContentContainsAny(result, ["{", "name"]);
 });
 
+Deno.test("structured_nbib_basic", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig(undefined);
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("data_formats/sample.nbib");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/nbib", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "structured_nbib_basic", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/nbib", "application/x-pubmed", "text/plain"]);
+	assertions.assertContentNotEmpty(result);
+});
+
+Deno.test("structured_ris_basic", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig(undefined);
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("data_formats/sample.ris");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/x-research-info-systems", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "structured_ris_basic", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/x-research-info-systems", "text/plain"]);
+	assertions.assertContentNotEmpty(result);
+});
+
 Deno.test("structured_toml_basic", { permissions: { read: true, net: true } }, async () => {
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;
@@ -97,6 +156,26 @@ Deno.test("structured_toml_basic", { permissions: { read: true, net: true } }, a
 		return;
 	}
 	assertions.assertExpectedMime(result, ["application/toml", "text/toml"]);
+	assertions.assertMinContentLength(result, 10);
+});
+
+Deno.test("structured_tsv_basic", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig(undefined);
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("data_formats/employees.tsv");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "text/tab-separated-values", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "structured_tsv_basic", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["text/tab-separated-values", "text/plain"]);
 	assertions.assertMinContentLength(result, 10);
 });
 

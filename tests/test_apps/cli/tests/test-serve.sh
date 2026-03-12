@@ -3,6 +3,7 @@ set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,6 +15,12 @@ echo
 if ! command -v kreuzberg &>/dev/null; then
   echo -e "${RED}✗ kreuzberg not found. Run ./tests/install.sh first.${NC}"
   exit 1
+fi
+
+# Check if 'serve' subcommand is available (requires --features api)
+if ! kreuzberg serve --help >/dev/null 2>&1; then
+  echo -e "${YELLOW}⚠ 'serve' subcommand not available (requires --features api). Skipping.${NC}"
+  exit 0
 fi
 
 PASSED=0
@@ -57,8 +64,8 @@ fi
 
 echo "Testing extraction endpoint with PDF..."
 if curl -s -f -X POST "http://localhost:$PORT/extract" \
-  -F "file=@$TEST_DOCS_DIR/tiny.pdf" |
-  grep -q "text"; then
+  -F "files=@$TEST_DOCS_DIR/tiny.pdf" |
+  grep -q "content"; then
   echo -e "${GREEN}✓ PDF extraction via API successful${NC}"
   ((PASSED++))
 else
@@ -68,8 +75,8 @@ fi
 
 echo "Testing extraction endpoint with DOCX..."
 if curl -s -f -X POST "http://localhost:$PORT/extract" \
-  -F "file=@$TEST_DOCS_DIR/lorem_ipsum.docx" |
-  grep -q "text"; then
+  -F "files=@$TEST_DOCS_DIR/lorem_ipsum.docx" |
+  grep -q "content"; then
   echo -e "${GREEN}✓ DOCX extraction via API successful${NC}"
   ((PASSED++))
 else

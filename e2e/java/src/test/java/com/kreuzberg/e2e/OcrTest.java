@@ -314,6 +314,25 @@ public class OcrTest {
   }
 
   @Test
+  public void ocrTesseractElementsMinCount() throws Exception {
+    JsonNode config =
+        MAPPER.readTree(
+            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"element_config\":{\"include_elements\":true,\"min_level\":\"line\"},\"language\":\"eng\"}}");
+    E2EHelpers.runFixture(
+        "ocr_tesseract_elements_min_count",
+        "images/test_hello_world.png",
+        config,
+        Arrays.asList("tesseract", "tesseract"),
+        "Requires Tesseract OCR backend",
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("image/png"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 5);
+          E2EHelpers.Assertions.assertOcrElements(result, true, null, null, 1);
+        });
+  }
+
+  @Test
   public void ocrTesseractLanguageGerman() throws Exception {
     JsonNode config =
         MAPPER.readTree(

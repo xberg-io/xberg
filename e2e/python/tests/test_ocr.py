@@ -292,6 +292,31 @@ def test_ocr_tesseract_elements() -> None:
     helpers.assert_ocr_elements(result, has_elements=True, elements_have_geometry=True, elements_have_confidence=True)
 
 
+def test_ocr_tesseract_elements_min_count() -> None:
+    """Tests Tesseract OCR element output with min_count assertion"""
+
+    document_path = helpers.resolve_document("images/test_hello_world.png")
+    if not document_path.exists():
+        pytest.skip(f"Skipping ocr_tesseract_elements_min_count: missing document at {document_path}")
+
+    config = helpers.build_config(
+        {
+            "force_ocr": True,
+            "ocr": {
+                "backend": "tesseract",
+                "element_config": {"include_elements": True, "min_level": "line"},
+                "language": "eng",
+            },
+        }
+    )
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["image/png"])
+    helpers.assert_min_content_length(result, 5)
+    helpers.assert_ocr_elements(result, has_elements=True, min_count=1)
+
+
 def test_ocr_tesseract_language_german() -> None:
     """Tests Tesseract OCR with German language configuration"""
 

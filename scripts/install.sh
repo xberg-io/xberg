@@ -130,13 +130,27 @@ install() {
   tar -xzf "${tmpdir}/${artifact}" -C "$tmpdir"
 
   # Install binary
-  local binary_path="${tmpdir}/kreuzberg-cli-${target}/${BINARY_NAME}"
+  local stage_dir="${tmpdir}/kreuzberg-cli-${target}"
+  local binary_path="${stage_dir}/${BINARY_NAME}"
   if [ ! -f "$binary_path" ]; then
     error "binary not found in archive at ${binary_path}"
   fi
 
   cp "$binary_path" "${install_dir}/${BINARY_NAME}"
   chmod +x "${install_dir}/${BINARY_NAME}"
+
+  # Install the actual binary (musl builds use wrapper + .bin)
+  if [ -f "${stage_dir}/${BINARY_NAME}.bin" ]; then
+    cp "${stage_dir}/${BINARY_NAME}.bin" "${install_dir}/${BINARY_NAME}.bin"
+    chmod +x "${install_dir}/${BINARY_NAME}.bin"
+  fi
+
+  # Install bundled runtime libraries (musl builds only)
+  if [ -d "${stage_dir}/lib" ] && [ "$(ls -A "${stage_dir}/lib" 2>/dev/null)" ]; then
+    mkdir -p "${install_dir}/lib"
+    cp "${stage_dir}/lib/"* "${install_dir}/lib/"
+    info "Installed runtime libraries to ${install_dir}/lib/"
+  fi
 
   info "Installed ${BINARY_NAME} to ${install_dir}/${BINARY_NAME}"
 

@@ -5,6 +5,12 @@ package e2e
 
 import "testing"
 
+func TestArchiveArchiveGzBasic(t *testing.T) {
+	result := runExtraction(t, "archives/book_war_and_peace_1p.txt.gz", nil)
+	assertExpectedMime(t, result, []string{"application/gzip", "application/x-gzip"})
+	assertMinContentLength(t, result, 10)
+}
+
 func TestArchiveArchiveSevenzBasic(t *testing.T) {
 	result := runExtraction(t, "archives/documents.7z", nil)
 	assertExpectedMime(t, result, []string{"application/x-7z-compressed"})

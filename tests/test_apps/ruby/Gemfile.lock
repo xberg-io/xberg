@@ -2,10 +2,10 @@ GEM
   remote: https://rubygems.org/
   specs:
     diff-lcs (1.6.2)
-    kreuzberg (4.4.0)
+    kreuzberg (4.4.3)
       rb_sys (~> 0.9.119)
       sorbet-runtime (~> 0.5)
-    kreuzberg (4.4.0-arm64-darwin)
+    kreuzberg (4.4.3-arm64-darwin)
       sorbet-runtime (~> 0.5)
     rake-compiler-dock (1.11.0)
     rb_sys (0.9.124)
@@ -30,13 +30,13 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  kreuzberg (= 4.4.0)
+  kreuzberg (= 4.4.3)
   rspec
 
 CHECKSUMS
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
-  kreuzberg (4.4.0) sha256=8402a3167284d91fe06fdbe86e22a09510a1bc7960da21b98be20cf733ad07c1
-  kreuzberg (4.4.0-arm64-darwin) sha256=dda8aed3fb0ca0cfc7aeae6c90069d6157b279b8d2f4325bb164072199a35aa1
+  kreuzberg (4.4.3) sha256=09be59de685e004b178a92517054be62aa351e2c47e388cdb666748f97b9f69a
+  kreuzberg (4.4.3-arm64-darwin) sha256=c5f71db9ad092a94015105c55befad2979ccdc3e8db3fb8b89170b45a2f65fc7
   rake-compiler-dock (1.11.0) sha256=eab51f2cd533eb35cea6b624a75281f047123e70a64c58b607471bb49428f8c2
   rb_sys (0.9.124) sha256=513476557b12eaf73764b3da9f8746024558fe8699bda785fb548c9aa3877ae7
   rspec (3.13.2) sha256=206284a08ad798e61f86d7ca3e376718d52c0bc944626b2349266f239f820587

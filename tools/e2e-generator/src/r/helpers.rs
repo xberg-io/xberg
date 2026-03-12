@@ -214,7 +214,8 @@ assert_metadata_expectation <- function(result, path, expectation) {
 }
 
 assert_chunks <- function(result, min_count = NULL, max_count = NULL,
-                          each_has_content = NULL, each_has_embedding = NULL) {
+                          each_has_content = NULL, each_has_embedding = NULL,
+                          each_has_heading_context = NULL) {
   chunks <- if (is.null(result$chunks)) list() else result$chunks
   if (!is.null(min_count)) testthat::expect_gte(length(chunks), min_count)
   if (!is.null(max_count)) testthat::expect_lte(length(chunks), max_count)
@@ -223,6 +224,12 @@ assert_chunks <- function(result, min_count = NULL, max_count = NULL,
   }
   if (isTRUE(each_has_embedding)) {
     for (chunk in chunks) testthat::expect_false(is.null(chunk$embedding))
+  }
+  if (isTRUE(each_has_heading_context)) {
+    for (chunk in chunks) testthat::expect_false(is.null(chunk$metadata$heading_context))
+  }
+  if (isFALSE(each_has_heading_context)) {
+    for (chunk in chunks) testthat::expect_true(is.null(chunk$metadata$heading_context))
   }
 }
 

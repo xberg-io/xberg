@@ -259,6 +259,9 @@ module Kreuzberg
       attr_reader preset: String?
       attr_reader embedding: Embedding?
       attr_reader enabled: bool?
+      attr_reader sizing_type: String?
+      attr_reader sizing_model: String?
+      attr_reader sizing_cache_dir: String?
 
       def initialize: (
         ?max_chars: Integer?,
@@ -267,7 +270,10 @@ module Kreuzberg
         ?embedding: (Embedding | Hash[Symbol, untyped])?,
         ?chunk_size: Integer?,
         ?chunk_overlap: Integer?,
-        ?enabled: bool
+        ?enabled: bool,
+        ?sizing_type: String?,
+        ?sizing_model: String?,
+        ?sizing_cache_dir: String?
       ) -> void
       def to_h: () -> Hash[Symbol, untyped]
     end
@@ -767,6 +773,21 @@ module Kreuzberg
       def to_h: () -> table_hash
     end
 
+    # Heading level in the document hierarchy
+    class HeadingLevel
+      attr_reader level: Integer
+      attr_reader text: String
+
+      def initialize: (level: Integer, text: String) -> void
+    end
+
+    # Heading context for a chunk's section
+    class HeadingContext
+      attr_reader headings: Array[HeadingLevel]
+
+      def initialize: (headings: Array[HeadingLevel]) -> void
+    end
+
     # Text chunk (Struct from result.rb)
     class Chunk
       attr_reader content: String
@@ -778,6 +799,7 @@ module Kreuzberg
       attr_reader first_page: Integer?
       attr_reader last_page: Integer?
       attr_reader embedding: Array[Float]?
+      attr_reader heading_context: HeadingContext?
 
       def initialize: (
         content: String,
@@ -788,7 +810,8 @@ module Kreuzberg
         total_chunks: Integer,
         first_page: Integer?,
         last_page: Integer?,
-        embedding: Array[Float]?
+        embedding: Array[Float]?,
+        heading_context: HeadingContext?
       ) -> void
       def to_h: () -> chunk_hash
     end

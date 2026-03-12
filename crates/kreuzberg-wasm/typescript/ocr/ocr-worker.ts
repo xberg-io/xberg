@@ -65,7 +65,10 @@ function onMessage(msg: Record<string, unknown>): void {
 }
 
 async function bootstrap(): Promise<void> {
-	const isNodeEnv = typeof process !== "undefined" && !!process.versions?.node;
+	const isNodeEnv =
+		typeof process !== "undefined" &&
+		!!process.versions?.node &&
+		typeof (globalThis as Record<string, unknown>).Deno === "undefined";
 
 	if (isNodeEnv) {
 		const { parentPort, workerData } = await import(/* @vite-ignore */ "node:worker_threads");

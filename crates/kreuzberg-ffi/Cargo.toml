@@ -36,7 +36,7 @@ ahash = { workspace = true }
 ctor = { workspace = true }
 
 [target.'cfg(all(windows, target_env = "gnu"))'.dependencies]
-kreuzberg = { path = "../kreuzberg", features = [
+kreuzberg = { workspace = true, features = [
     "pdf",
     "excel",
     "office",
@@ -47,6 +47,7 @@ kreuzberg = { path = "../kreuzberg", features = [
     "ocr",
     "language-detection",
     "chunking",
+    "chunking-tokenizers",
     "embeddings",
     "quality",
     "keywords",
@@ -57,7 +58,7 @@ kreuzberg = { path = "../kreuzberg", features = [
 ] }
 
 [target.'cfg(not(all(windows, target_env = "gnu")))'.dependencies]
-kreuzberg = { path = "../kreuzberg", features = ["full", "bundled-pdfium"] }
+kreuzberg = { workspace = true, features = ["bundled-pdfium", "full"] }
 
 [build-dependencies]
 cbindgen = "0.29"

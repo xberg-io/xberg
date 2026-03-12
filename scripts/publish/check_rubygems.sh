@@ -81,6 +81,6 @@ elif [ "$http_code" = "404" ]; then
   echo "exists=false"
   echo "::notice::Ruby gem ${package_name} not found on RubyGems (first publish), will build and publish" >&2
 else
-  echo "::error::Failed to check RubyGems after $max_attempts attempts (last HTTP code: $http_code)"
+  echo "::error::Failed to check RubyGems after $max_attempts attempts (last HTTP code: $http_code)" >&2
   exit 1
 fi

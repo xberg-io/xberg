@@ -108,6 +108,12 @@ pub fn render_assertions(assertions: &Assertions) -> String {
                 if has_embedding { "TRUE" } else { "FALSE" }
             ));
         }
+        if let Some(has_heading_context) = chunks.each_has_heading_context {
+            args.push(format!(
+                "each_has_heading_context = {}",
+                if has_heading_context { "TRUE" } else { "FALSE" }
+            ));
+        }
         if !args.is_empty() {
             buf.push_str(&format!("      assert_chunks(result, {})\n", args.join(", ")));
         }

@@ -3,7 +3,7 @@ module kreuzberg-test-suite
 go 1.26
 
 require (
-	github.com/kreuzberg-dev/kreuzberg/packages/go/v4 v4.4.2
+	github.com/kreuzberg-dev/kreuzberg/packages/go/v4 v4.4.5
 	github.com/stretchr/testify v1.11.1
 )
 

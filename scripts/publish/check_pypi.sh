@@ -16,7 +16,7 @@ attempt=1
 http_code=""
 
 while [ $attempt -le $max_attempts ]; do
-  echo "::debug::Checking PyPI for kreuzberg==${version} (attempt ${attempt}/${max_attempts})"
+  echo "::debug::Checking PyPI for kreuzberg==${version} (attempt ${attempt}/${max_attempts})" >&2
 
   http_code=$(curl \
     --silent \
@@ -35,7 +35,7 @@ while [ $attempt -le $max_attempts ]; do
 
   if [ $attempt -lt $max_attempts ]; then
     sleep_time=$((attempt * 5))
-    echo "::warning::PyPI check failed (HTTP $http_code), retrying in ${sleep_time}s..."
+    echo "::warning::PyPI check failed (HTTP $http_code), retrying in ${sleep_time}s..." >&2
     sleep "$sleep_time"
   fi
 
@@ -43,12 +43,12 @@ while [ $attempt -le $max_attempts ]; do
 done
 
 if [ "$http_code" = "200" ]; then
-  echo "exists=true" >>"$GITHUB_OUTPUT"
-  echo "::notice::Python package kreuzberg==${version} already exists on PyPI"
+  echo "exists=true"
+  echo "::notice::Python package kreuzberg==${version} already exists on PyPI" >&2
 elif [ "$http_code" = "404" ]; then
-  echo "exists=false" >>"$GITHUB_OUTPUT"
-  echo "::notice::Python package kreuzberg==${version} not found on PyPI, will build and publish"
+  echo "exists=false"
+  echo "::notice::Python package kreuzberg==${version} not found on PyPI, will build and publish" >&2
 else
-  echo "::error::Failed to check PyPI after $max_attempts attempts (last HTTP code: $http_code)"
+  echo "::error::Failed to check PyPI after $max_attempts attempts (last HTTP code: $http_code)" >&2
   exit 1
 fi

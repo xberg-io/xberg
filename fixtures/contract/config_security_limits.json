@@ -1,0 +1,23 @@
+{
+	"id": "config_security_limits",
+	"description": "Tests archive extraction with custom security limits",
+	"tags": ["contract", "config", "security"],
+	"document": {
+		"path": "archives/documents.zip"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"security_limits": {
+				"max_archive_size": 104857600,
+				"max_compression_ratio": 50,
+				"max_files_in_archive": 100
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": ["application/zip", "application/x-zip-compressed"],
+		"min_content_length": 10
+	}
+}

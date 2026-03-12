@@ -45,10 +45,10 @@ while [ $attempt -le $max_attempts ]; do
 done
 
 if [ "$exists" = "true" ]; then
-  echo "exists=true" >>"$GITHUB_OUTPUT"
+  echo "exists=true"
   echo "::notice::PHP package kreuzberg/kreuzberg:${version} already exists on Packagist" >&2
 elif [ "$exists" = "false" ]; then
-  echo "exists=false" >>"$GITHUB_OUTPUT"
+  echo "exists=false"
   echo "::notice::PHP package kreuzberg/kreuzberg:${version} not found on Packagist (will auto-update via Git webhook)" >&2
 else
   echo "::error::Failed to check Packagist after $max_attempts attempts" >&2

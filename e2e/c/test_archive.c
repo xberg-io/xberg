@@ -4,6 +4,14 @@
 #include "helpers.h"
 #include <stdio.h>
 
+static void test_archive_archive_gz_basic(void) {
+    CExtractionResult *result = run_extraction("archives/book_war_and_peace_1p.txt.gz", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/gzip", "application/x-gzip"}, 2);
+    assert_min_content_length(result, 10);
+    kreuzberg_free_result(result);
+}
+
 static void test_archive_archive_sevenz_basic(void) {
     CExtractionResult *result = run_extraction("archives/documents.7z", NULL);
     if (!result) return; /* skipped */
@@ -29,6 +37,7 @@ static void test_archive_archive_zip_basic(void) {
 }
 
 int main(void) {
+    test_archive_archive_gz_basic();
     test_archive_archive_sevenz_basic();
     test_archive_archive_tar_basic();
     test_archive_archive_zip_basic();

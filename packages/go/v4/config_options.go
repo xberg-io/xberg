@@ -461,6 +461,20 @@ func WithChunkingEnabled(enabled bool) ChunkingOption {
 	}
 }
 
+// WithChunkSizingCharacters sets chunk sizing to character-based (default).
+func WithChunkSizingCharacters() ChunkingOption {
+	return func(c *ChunkingConfig) {
+		c.Sizing = &ChunkSizingConfig{Type: "characters"}
+	}
+}
+
+// WithChunkSizingTokenizer sets chunk sizing to token-based using a HuggingFace tokenizer.
+func WithChunkSizingTokenizer(model string) ChunkingOption {
+	return func(c *ChunkingConfig) {
+		c.Sizing = &ChunkSizingConfig{Type: "tokenizer", Model: model}
+	}
+}
+
 // ============================================================================
 // ImageExtractionConfig Options
 // ============================================================================

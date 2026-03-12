@@ -22,6 +22,7 @@ namespace Kreuzberg.E2E.TokenReduction
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 5);
+            TestHelpers.AssertMaxContentLength(result, 150);
             TestHelpers.AssertContentNotEmpty(result);
         }
 
@@ -36,6 +37,7 @@ namespace Kreuzberg.E2E.TokenReduction
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 5);
+            TestHelpers.AssertMaxContentLength(result, 200);
             TestHelpers.AssertContentNotEmpty(result);
         }
 
@@ -64,7 +66,8 @@ namespace Kreuzberg.E2E.TokenReduction
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 5);
-            TestHelpers.AssertChunks(result, 1, null, true, null);
+            TestHelpers.AssertMaxContentLength(result, 200);
+            TestHelpers.AssertChunks(result, 1, null, true, null, null);
             TestHelpers.AssertContentNotEmpty(result);
         }
 

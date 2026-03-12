@@ -135,6 +135,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
     const config: ChunkingConfig = {};
     assignNumberField(config as PlainRecord, raw, "max_chars", "maxChars");
     assignNumberField(config as PlainRecord, raw, "max_overlap", "maxOverlap");
+    if (typeof raw.chunker_type === "string") {
+        (config as PlainRecord).chunkerType = raw.chunker_type;
+    }
     return config;
 }
 
@@ -673,6 +676,7 @@ export const chunkAssertions = {
         maxCount?: number | null,
         eachHasContent?: boolean | null,
         eachHasEmbedding?: boolean | null,
+        eachHasHeadingContext?: boolean | null,
     ): void {
         const chunks = (result as unknown as PlainRecord).chunks as unknown[] | undefined;
         expect(chunks).toBeDefined();
@@ -693,6 +697,16 @@ export const chunkAssertions = {
         if (eachHasEmbedding) {
             for (const chunk of chunks) {
                 expect((chunk as PlainRecord).embedding).toBeDefined();
+            }
+        }
+        if (eachHasHeadingContext === true) {
+            for (const chunk of chunks) {
+                expect(((chunk as PlainRecord).metadata as PlainRecord)?.headingContext).toBeDefined();
+            }
+        }
+        if (eachHasHeadingContext === false) {
+            for (const chunk of chunks) {
+                expect(((chunk as PlainRecord).metadata as PlainRecord)?.headingContext ?? null).toBeNull();
             }
         }
     },
@@ -1224,9 +1238,10 @@ fn render_assertions(assertions: &Assertions) -> String {
 
     if !assertions.metadata.is_empty() {
         for (path, expectation) in &assertions.metadata {
+            let camel_path = to_camel_case(path);
             buffer.push_str(&format!(
                 "    assertions.assertMetadataExpectation(result, \"{}\", {});\n",
-                escape_ts_string(path),
+                escape_ts_string(&camel_path),
                 render_json_literal(expectation)
             ));
         }
@@ -1243,8 +1258,12 @@ fn render_assertions(assertions: &Assertions) -> String {
             .each_has_embedding
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".into());
+        let has_heading_context = chunks
+            .each_has_heading_context
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".into());
         buffer.push_str(&format!(
-            "    chunkAssertions.assertChunks(result, {min}, {max}, {has_content}, {has_embedding});\n"
+            "    chunkAssertions.assertChunks(result, {min}, {max}, {has_content}, {has_embedding}, {has_heading_context});\n"
         ));
     }
 

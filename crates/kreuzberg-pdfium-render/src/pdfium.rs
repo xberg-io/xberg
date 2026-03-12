@@ -502,6 +502,7 @@ impl Pdfium {
         if handle.is_null() {
             // Retrieve the error code of the last error recorded by Pdfium.
 
+            #[allow(clippy::unnecessary_cast)]
             if let Some(error) = match bindings.FPDF_GetLastError() as u32 {
                 crate::bindgen::FPDF_ERR_SUCCESS => None,
                 crate::bindgen::FPDF_ERR_UNKNOWN => Some(PdfiumInternalError::Unknown),

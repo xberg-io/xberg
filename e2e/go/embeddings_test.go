@@ -22,7 +22,7 @@ func TestEmbeddingsEmbeddingAsync(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), boolPtr(true))
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), boolPtr(true), nil)
 }
 
 func TestEmbeddingsEmbeddingBalancedPreset(t *testing.T) {
@@ -42,7 +42,7 @@ func TestEmbeddingsEmbeddingBalancedPreset(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), boolPtr(true))
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), boolPtr(true), nil)
 }
 
 func TestEmbeddingsEmbeddingDisabled(t *testing.T) {
@@ -54,7 +54,7 @@ func TestEmbeddingsEmbeddingDisabled(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), boolPtr(false))
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), boolPtr(false), nil)
 }
 
 func TestEmbeddingsEmbeddingFastPreset(t *testing.T) {
@@ -74,5 +74,5 @@ func TestEmbeddingsEmbeddingFastPreset(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), boolPtr(true))
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), boolPtr(true), nil)
 }

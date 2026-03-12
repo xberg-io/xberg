@@ -17,5 +17,5 @@ serde_json = { workspace = true }
 walkdir = "2.5"
 
 [dev-dependencies]
-assert_cmd = "2.1"
+assert_cmd = "2.2"
 predicates = "3.1"

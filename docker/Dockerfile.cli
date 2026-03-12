@@ -12,7 +12,7 @@
 # Stage 1: Build the static binary using the musl builder
 FROM alpine:3.21 AS builder
 
-ARG RUST_TOOLCHAIN=nightly-2026-01-22
+ARG RUST_TOOLCHAIN=nightly-2026-03-10
 ARG PDFIUM_VERSION=7678
 
 WORKDIR /build

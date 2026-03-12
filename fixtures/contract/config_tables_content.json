@@ -1,0 +1,19 @@
+{
+	"id": "config_tables_content",
+	"description": "Tests table extraction with content_contains_any assertion on DOCX with tables",
+	"tags": ["contract", "config", "tables"],
+	"document": {
+		"path": "docx/docx_tables.docx"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		"tables": {
+			"min": 1
+		}
+	}
+}

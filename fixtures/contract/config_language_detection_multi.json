@@ -1,0 +1,26 @@
+{
+	"id": "config_language_detection_multi",
+	"description": "Tests language detection with detect_multiple and min_confidence options",
+	"tags": ["contract", "config", "language_detection"],
+	"document": {
+		"path": "pdf/fake_memo.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"language_detection": {
+				"enabled": true,
+				"detect_multiple": true,
+				"min_confidence": 0.3
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 10,
+		"detected_languages": {
+			"expects": ["eng"]
+		}
+	}
+}

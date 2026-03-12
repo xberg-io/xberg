@@ -1,16 +1,22 @@
 # =============================================================================
-# Alpine-based builder for fully-static musl CLI binaries.
+# Alpine-based builder for musl CLI binaries.
 #
 # Usage:
 #   docker build -f docker/Dockerfile.musl-build \
 #     --output type=local,dest=./dist \
 #     --build-arg TARGETARCH=x86_64 .
 #
-# Produces a statically-linked kreuzberg binary at dist/kreuzberg
+# Produces: dist/kreuzberg (binary) and dist/lib/ (runtime libraries)
+#
+# The binary uses dlopen for PDFium's bundled strategy (extracts embedded
+# libpdfium.so and dlopens it at runtime). Fully-static musl binaries cannot
+# dlopen because they don't export libc symbols needed by the .so.
+# Runtime libraries (musl libc, libstdc++, libgcc) are bundled alongside
+# the binary for portability across Linux distros.
 # =============================================================================
 FROM alpine:3.21 AS builder
 
-ARG RUST_TOOLCHAIN=nightly-2026-01-22
+ARG RUST_TOOLCHAIN=nightly-2026-03-10
 ARG PDFIUM_VERSION=7678
 
 WORKDIR /build
@@ -20,7 +26,7 @@ WORKDIR /build
 RUN apk add --no-cache \
     curl gcc g++ musl-dev cmake make pkgconf \
     openssl-dev openssl-libs-static \
-    perl linux-headers git file
+    perl linux-headers git file patchelf
 
 # Install Rust via rustup (Alpine's packaged Rust may be too old / not nightly)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
@@ -45,6 +51,10 @@ RUN mkdir -p /build/pdfium && \
 
 ENV KREUZBERG_PDFIUM_PREBUILT=/build/pdfium
 
+# Disable crt-static so the binary can dlopen shared libraries at runtime.
+# musl's static dlopen doesn't export libc symbols to loaded .so files.
+ENV RUSTFLAGS="-C target-feature=-crt-static"
+
 # Copy workspace manifests and crates
 COPY Cargo.toml Cargo.lock ./
 COPY crates/kreuzberg/ crates/kreuzberg/
@@ -56,23 +66,40 @@ COPY crates/kreuzberg-pdfium-render/ crates/kreuzberg-pdfium-render/
 # Remove workspace members that aren't included
 RUN sed -i '/kreuzberg-py/d; /kreuzberg_rb/d; /kreuzberg-node/d; /kreuzberg-ffi/d; /kreuzberg-php/d; /kreuzberg_rustler/d; /"crates\/kreuzberg-wasm"/d; /^\[profile\.release\.package\.kreuzberg-wasm\]$/,$d; /benchmark-harness/d; /e2e-generator/d; /snippet-runner/d; /e2e\/rust/d' Cargo.toml
 
-# Remove the linker-facing libstdc++.so symlink so that -lstdc++ resolves
-# only to libstdc++.a (static). Keep the runtime .so.6 for proc-macros.
-RUN rm -f /usr/lib/libstdc++.so
 RUN cargo build --release --package kreuzberg-cli --features all && \
     cp target/release/kreuzberg /build/kreuzberg && \
     strip /build/kreuzberg
 
-# Verify the binary is statically linked
+# Set RPATH so the binary finds shared libs relative to itself
+RUN patchelf --set-rpath '$ORIGIN/lib' /build/kreuzberg
+
+# Collect runtime libraries
+RUN mkdir -p /build/lib && \
+    cp /usr/lib/libstdc++.so.6 /build/lib/ && \
+    cp /usr/lib/libgcc_s.so.1 /build/lib/ && \
+    # Copy the musl dynamic linker/libc
+    cp /lib/ld-musl-*.so.1 /build/lib/ 2>/dev/null || true
+
+# Rename the actual binary and create a wrapper script that invokes it
+# via the bundled musl interpreter. This makes the binary work on ANY
+# Linux distro (glibc or musl) without system dependencies.
+RUN mv /build/kreuzberg /build/kreuzberg.bin && \
+    INTERP_NAME=$(basename /lib/ld-musl-*.so.1) && \
+    printf '#!/bin/sh\nSCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"\nexec "$SCRIPT_DIR/lib/%s" --library-path "$SCRIPT_DIR/lib" "$SCRIPT_DIR/kreuzberg.bin" "$@"\n' \
+        "$INTERP_NAME" > /build/kreuzberg && \
+    chmod +x /build/kreuzberg
+
+# Verify the binary was built successfully
 RUN file /build/kreuzberg && \
-    ! readelf -d /build/kreuzberg 2>/dev/null | grep NEEDED && \
-    echo "Binary is statically linked" || \
-    (echo "WARNING: Binary has dynamic dependencies:" && \
-     readelf -d /build/kreuzberg 2>/dev/null | grep NEEDED && \
-     exit 1)
+    echo "=== Dynamic dependencies ===" && \
+    readelf -d /build/kreuzberg 2>/dev/null | grep -E "NEEDED|RPATH|RUNPATH" || echo "No dependencies" && \
+    echo "=== Bundled libraries ===" && \
+    ls -la /build/lib/
 
 # =============================================================================
-# Output stage — just the binary
+# Output stage — binary + bundled runtime libraries
 # =============================================================================
 FROM scratch
 COPY --from=builder /build/kreuzberg /kreuzberg
+COPY --from=builder /build/kreuzberg.bin /kreuzberg.bin
+COPY --from=builder /build/lib/ /lib/

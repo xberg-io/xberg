@@ -39,14 +39,18 @@ class KreuzbergMockStorage
 // Only define if not already defined by the extension
 if (!function_exists('kreuzberg_extract_file')) {
     /**
-     * @param array<string, mixed>|null $config
+     * @param string|null $config_json JSON-encoded configuration
      * @return array<string, mixed>
      */
     function kreuzberg_extract_file(
         string $filePath,
         ?string $mimeType = null,
-        ?array $config = null,
+        ?string $config_json = null,
     ): array {
+        // Decode JSON config to array (matching native extension which accepts JSON string)
+        /** @var array<string, mixed>|null $config */
+        $config = $config_json !== null ? json_decode($config_json, true) : null;
+
         // Validate configuration
         if ($config !== null) {
             // Validate chunking config
@@ -189,14 +193,18 @@ if (!function_exists('kreuzberg_extract_file')) {
 
 if (!function_exists('kreuzberg_extract_bytes')) {
     /**
-     * @param array<string, mixed>|null $config
+     * @param string|null $config_json JSON-encoded configuration
      * @return array<string, mixed>
      */
     function kreuzberg_extract_bytes(
         string $data,
         string $mimeType,
-        ?array $config = null,
+        ?string $config_json = null,
     ): array {
+        // Decode JSON config to array (matching native extension which accepts JSON string)
+        /** @var array<string, mixed>|null $config */
+        $config = $config_json !== null ? json_decode($config_json, true) : null;
+
         // Validate input - only require non-empty for PDFs
         if (empty($data) && $mimeType === 'application/pdf') {
             throw new \Kreuzberg\Exceptions\KreuzbergException('Empty data provided');
@@ -336,13 +344,17 @@ if (!function_exists('kreuzberg_extract_bytes')) {
 if (!function_exists('kreuzberg_batch_extract_files')) {
     /**
      * @param array<int, string> $paths
-     * @param array<string, mixed>|null $config
+     * @param string|null $config_json JSON-encoded configuration
      * @return array<int, array<string, mixed>>
      */
     function kreuzberg_batch_extract_files(
         array $paths,
-        ?array $config = null,
+        ?string $config_json = null,
     ): array {
+        // Decode JSON config to array (matching native extension which accepts JSON string)
+        /** @var array<string, mixed>|null $config */
+        $config = $config_json !== null ? json_decode($config_json, true) : null;
+
         // Validate configuration
         if ($config !== null) {
             // Validate chunking config
@@ -437,14 +449,18 @@ if (!function_exists('kreuzberg_batch_extract_bytes')) {
     /**
      * @param array<int, string> $dataList
      * @param array<int, string> $mimeTypes
-     * @param array<string, mixed>|null $config
+     * @param string|null $config_json JSON-encoded configuration
      * @return array<int, array<string, mixed>>
      */
     function kreuzberg_batch_extract_bytes(
         array $dataList,
         array $mimeTypes,
-        ?array $config = null,
+        ?string $config_json = null,
     ): array {
+        // Decode JSON config to array (matching native extension which accepts JSON string)
+        /** @var array<string, mixed>|null $config */
+        $config = $config_json !== null ? json_decode($config_json, true) : null;
+
         // Validate that array lengths match
         if (count($dataList) !== count($mimeTypes)) {
             throw new \Kreuzberg\Exceptions\KreuzbergException('data_list and mime_types must have the same length (got ' . count($dataList) . ' and ' . count($mimeTypes) . ')');

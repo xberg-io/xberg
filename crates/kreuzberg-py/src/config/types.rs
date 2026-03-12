@@ -675,18 +675,23 @@ pub struct ChunkingConfig {
 #[pymethods]
 impl ChunkingConfig {
     #[new]
-    #[pyo3(signature = (max_chars=None, max_overlap=None, embedding=None, preset=None, chunker_type=None))]
+    #[pyo3(signature = (max_chars=None, max_overlap=None, embedding=None, preset=None, chunker_type=None, sizing_type=None, sizing_model=None, sizing_cache_dir=None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         max_chars: Option<usize>,
         max_overlap: Option<usize>,
         embedding: Option<EmbeddingConfig>,
         preset: Option<String>,
         chunker_type: Option<String>,
+        sizing_type: Option<String>,
+        sizing_model: Option<String>,
+        sizing_cache_dir: Option<String>,
     ) -> Self {
         let ct = match chunker_type.as_deref() {
             Some("markdown") => kreuzberg::ChunkerType::Markdown,
             _ => kreuzberg::ChunkerType::Text,
         };
+        let sizing = Self::resolve_sizing(sizing_type, sizing_model, sizing_cache_dir);
         Self {
             inner: kreuzberg::ChunkingConfig {
                 max_characters: max_chars.unwrap_or(1000),
@@ -695,6 +700,7 @@ impl ChunkingConfig {
                 chunker_type: ct,
                 embedding: embedding.map(Into::into),
                 preset,
+                sizing,
             },
         }
     }
@@ -739,6 +745,22 @@ impl ChunkingConfig {
         self.inner.preset = value;
     }
 
+    #[getter]
+    fn sizing_type(&self) -> String {
+        match &self.inner.sizing {
+            kreuzberg::ChunkSizing::Characters => "characters".to_string(),
+            kreuzberg::ChunkSizing::Tokenizer { .. } => "tokenizer".to_string(),
+        }
+    }
+
+    #[getter]
+    fn sizing_model(&self) -> Option<String> {
+        match &self.inner.sizing {
+            kreuzberg::ChunkSizing::Tokenizer { model, .. } => Some(model.clone()),
+            _ => None,
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "ChunkingConfig(max_chars={}, max_overlap={}, embedding={}, preset={})",
@@ -751,6 +773,22 @@ impl ChunkingConfig {
                 .map(|s| format!("'{}'", s))
                 .unwrap_or_else(|| "None".to_string())
         )
+    }
+}
+
+impl ChunkingConfig {
+    fn resolve_sizing(
+        sizing_type: Option<String>,
+        sizing_model: Option<String>,
+        sizing_cache_dir: Option<String>,
+    ) -> kreuzberg::ChunkSizing {
+        match sizing_type.as_deref() {
+            Some("tokenizer") => kreuzberg::ChunkSizing::Tokenizer {
+                model: sizing_model.unwrap_or_else(|| "Xenova/gpt-4o".to_string()),
+                cache_dir: sizing_cache_dir.map(std::path::PathBuf::from),
+            },
+            _ => kreuzberg::ChunkSizing::Characters,
+        }
     }
 }
 
@@ -772,6 +810,7 @@ impl ImageExtractionConfig {
         extract_images=None,
         target_dpi=None,
         max_image_dimension=None,
+        inject_placeholders=None,
         auto_adjust_dpi=None,
         min_dpi=None,
         max_dpi=None
@@ -780,6 +819,7 @@ impl ImageExtractionConfig {
         extract_images: Option<bool>,
         target_dpi: Option<i32>,
         max_image_dimension: Option<i32>,
+        inject_placeholders: Option<bool>,
         auto_adjust_dpi: Option<bool>,
         min_dpi: Option<i32>,
         max_dpi: Option<i32>,
@@ -789,6 +829,7 @@ impl ImageExtractionConfig {
                 extract_images: extract_images.unwrap_or(true),
                 target_dpi: target_dpi.unwrap_or(300),
                 max_image_dimension: max_image_dimension.unwrap_or(4096),
+                inject_placeholders: inject_placeholders.unwrap_or(true),
                 auto_adjust_dpi: auto_adjust_dpi.unwrap_or(true),
                 min_dpi: min_dpi.unwrap_or(72),
                 max_dpi: max_dpi.unwrap_or(600),
@@ -824,6 +865,16 @@ impl ImageExtractionConfig {
     #[setter]
     fn set_max_image_dimension(&mut self, value: i32) {
         self.inner.max_image_dimension = value;
+    }
+
+    #[getter]
+    fn inject_placeholders(&self) -> bool {
+        self.inner.inject_placeholders
+    }
+
+    #[setter]
+    fn set_inject_placeholders(&mut self, value: bool) {
+        self.inner.inject_placeholders = value;
     }
 
     #[getter]

@@ -72,6 +72,21 @@ pub struct HierarchyConfig {
     pub ocr_coverage_threshold: Option<f32>,
 }
 
+#[cfg(feature = "pdf")]
+impl Default for PdfConfig {
+    fn default() -> Self {
+        Self {
+            extract_images: false,
+            passwords: None,
+            extract_metadata: true,
+            hierarchy: None,
+            extract_annotations: false,
+            top_margin_fraction: None,
+            bottom_margin_fraction: None,
+        }
+    }
+}
+
 impl Default for HierarchyConfig {
     fn default() -> Self {
         Self {

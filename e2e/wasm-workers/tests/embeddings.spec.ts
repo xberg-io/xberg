@@ -31,6 +31,6 @@ describe("embeddings", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 1, null, true, false);
+		assertions.assertChunks(result, 1, null, true, false, null);
 	});
 });

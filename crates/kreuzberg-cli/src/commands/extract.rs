@@ -93,6 +93,7 @@ pub fn apply_extraction_overrides(
     chunk: Option<bool>,
     chunk_size: Option<usize>,
     chunk_overlap: Option<usize>,
+    chunking_tokenizer: Option<&str>,
     quality: Option<bool>,
     detect_language: Option<bool>,
     output_format: Option<ContentOutputFormatArg>,
@@ -141,18 +142,35 @@ pub fn apply_extraction_overrides(
     if let Some(no_cache_flag) = no_cache {
         config.use_cache = !no_cache_flag;
     }
+    // Handle --chunking-tokenizer: implicitly enables chunking with tokenizer sizing
+    let chunk = if chunking_tokenizer.is_some() && chunk.is_none() {
+        Some(true)
+    } else {
+        chunk
+    };
+
     if let Some(chunk_flag) = chunk {
         if chunk_flag {
             let max_characters = chunk_size.unwrap_or(1000);
             let overlap = chunk_overlap.unwrap_or(200);
-            config.chunking = Some(ChunkingConfig {
+            let mut chunking_config = ChunkingConfig {
                 max_characters,
                 overlap,
                 trim: true,
                 chunker_type: kreuzberg::chunking::ChunkerType::Text,
-                embedding: None,
-                preset: None,
-            });
+                ..Default::default()
+            };
+
+            // Apply tokenizer sizing if specified
+            #[cfg(feature = "chunking-tokenizers")]
+            if let Some(model) = chunking_tokenizer {
+                chunking_config.sizing = kreuzberg::chunking::ChunkSizing::Tokenizer {
+                    model: model.to_string(),
+                    cache_dir: None,
+                };
+            }
+
+            config.chunking = Some(chunking_config);
         } else {
             config.chunking = None;
         }
@@ -162,6 +180,15 @@ pub fn apply_extraction_overrides(
         }
         if let Some(overlap) = chunk_overlap {
             chunking.overlap = overlap;
+        }
+
+        // Apply tokenizer sizing to existing config
+        #[cfg(feature = "chunking-tokenizers")]
+        if let Some(model) = chunking_tokenizer {
+            chunking.sizing = kreuzberg::chunking::ChunkSizing::Tokenizer {
+                model: model.to_string(),
+                cache_dir: None,
+            };
         }
     }
     if let Some(quality_flag) = quality {
@@ -214,6 +241,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
         let ocr = config.ocr.unwrap();
         assert_eq!(ocr.backend, "tesseract");
@@ -227,6 +255,7 @@ mod tests {
             &mut config,
             Some(true),
             Some("paddle-ocr"),
+            None,
             None,
             None,
             None,
@@ -260,6 +289,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
         let ocr = config.ocr.unwrap();
         assert_eq!(ocr.backend, "easyocr");
@@ -274,6 +304,7 @@ mod tests {
             Some(true),
             None,
             Some("fra"),
+            None,
             None,
             None,
             None,
@@ -306,6 +337,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
         let ocr = config.ocr.unwrap();
         assert_eq!(ocr.backend, "paddle-ocr");
@@ -320,6 +352,7 @@ mod tests {
             None,
             None,
             Some("deu"),
+            None,
             None,
             None,
             None,
@@ -361,6 +394,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
         let ocr = config.ocr.unwrap();
         assert_eq!(ocr.backend, "tesseract");
@@ -375,6 +409,7 @@ mod tests {
             Some(false),
             None,
             Some("fra"),
+            None,
             None,
             None,
             None,

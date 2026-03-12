@@ -276,6 +276,30 @@ fn test_pdf_non_english_german() {
 }
 
 #[test]
+fn test_pdf_password_protected() {
+    // Copy-protected PDF should extract content (pdfium handles copy-protection transparently).
+
+    let document_path = resolve_document("pdf/copy_protected.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping pdf_password_protected: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for pdf_password_protected: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 50);
+    assertions::assert_content_contains_any(&result, &["LayoutParser", "document image analysis", "deep learning"]);
+}
+
+#[test]
 fn test_pdf_right_to_left() {
     // Right-to-left language PDF to verify RTL extraction.
 

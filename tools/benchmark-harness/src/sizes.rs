@@ -64,6 +64,13 @@ const FRAMEWORKS: &[(&str, &str, &str)] = &[
     ("kreuzberg-csharp", "nuget_package", ".NET NuGet package"),
     ("kreuzberg-elixir", "hex_package", "Elixir hex package with NIF"),
     ("kreuzberg-php", "php_extension", "PHP extension"),
+    ("kreuzberg-c", "binary_size", "C FFI binding"),
+    ("kreuzberg-r", "binary_size", "R native package"),
+    (
+        "kreuzberg-rust-paddle",
+        "binary_size",
+        "Native Rust core with PaddleOCR",
+    ),
     // Third-party frameworks
     ("docling", "pip_package", "IBM Docling document processing"),
     ("markitdown", "pip_package", "Mark It Down markdown converter"),
@@ -76,6 +83,7 @@ const FRAMEWORKS: &[(&str, &str, &str)] = &[
     ("pypdf", "pip_package", "pypdf pure-Python PDF library"),
     ("pdfminer", "pip_package", "pdfminer.six PDF text extraction"),
     ("pdftotext", "pip_package", "pdftotext poppler Python binding"),
+    ("playa-pdf", "pip_package", "playa-pdf PDF extraction"),
 ];
 
 /// Verified installation footprints for third-party frameworks.
@@ -145,6 +153,9 @@ const KNOWN_THIRD_PARTY_SIZES: &[(&str, u64, u64, u64, &str)] = &[
     // Models: DocLayout-YOLO ~100 MB + PaddleOCR det/rec/cls ~150 MB +
     // UniMERNet ~200 MB + SLANet + PP-FormulaNet = ~650 MB.
     ("mineru", 2_000_000_000, 0, 650_000_000, "MinerU document intelligence"),
+    // playa-pdf: pure Python PDF library, very lightweight.
+    // pip-weigh: ~2.5 MB total (playa-pdf + pdfminer.six dependency).
+    ("playa-pdf", 2_500_000, 0, 0, "playa-pdf PDF extraction"),
 ];
 
 /// Look up a hardcoded third-party size entry.
@@ -292,6 +303,7 @@ fn extract_package_name(framework: &str) -> &str {
         "pypdf" => "pypdf",
         "pdfminer" => "pdfminer.six",
         "pdftotext" => "pdftotext",
+        "playa-pdf" => "playa-pdf",
         _ => name,
     }
 }
@@ -511,11 +523,15 @@ fn measure_binary(name: &str) -> Result<Option<u64>> {
         "pandoc" => "pandoc",
         "kreuzberg-rust" => "kreuzberg",
         s if s.starts_with("kreuzberg-go") => "kreuzberg-go",
+        "kreuzberg-c" | "kreuzberg-r" | "kreuzberg-rust-paddle" => name,
         _ => return Ok(None),
     };
 
-    // For kreuzberg-rust, measure the FFI shared library (used by all bindings)
-    if name.starts_with("kreuzberg-rust") {
+    // For kreuzberg-rust/c/r/rust-paddle, measure the FFI shared library (used by all bindings)
+    if matches!(
+        name,
+        "kreuzberg-rust" | "kreuzberg-c" | "kreuzberg-r" | "kreuzberg-rust-paddle"
+    ) {
         let target_paths = [
             "target/release/libkreuzberg_ffi.so",
             "target/release/libkreuzberg_ffi.dylib",

@@ -152,11 +152,12 @@ Split extracted text into semantic chunks for LLM processing.
 **Chunking Strategies:**
 - **Recursive**: Split by paragraphs, sentences, then words
 - **Semantic**: Preserve semantic boundaries
-- **Token-aware**: Respect token limits for LLMs
+- **Markdown**: Heading-aware chunker that populates heading hierarchy on each chunk, preserving document structure context
+- **Token-based sizing**: Size chunks by token count using HuggingFace tokenizers (requires `chunking-tokenizers` Cargo feature). Supports any HuggingFace tokenizer model (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`, `bert-base-uncased`)
 
 **Features:**
 - Configurable chunk size and overlap
-- Metadata preservation per chunk
+- Metadata preservation per chunk (including heading hierarchy for Markdown chunking)
 - Character position tracking
 - Optional embedding generation
 

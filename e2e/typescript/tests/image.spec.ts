@@ -13,6 +13,87 @@ const TEST_TIMEOUT_MS = 60_000;
 
 describe("image fixtures", () => {
 	it(
+		"image_bmp_basic",
+		() => {
+			const documentPath = resolveDocument("images/bmp_24.bmp");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping image_bmp_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_bmp_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/bmp"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"image_gif_basic",
+		() => {
+			const documentPath = resolveDocument("images_extra/ocr_image.gif");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping image_gif_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_gif_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/gif"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"image_jp2_basic",
+		() => {
+			const documentPath = resolveDocument("images_extra/ocr_image.jp2");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping image_jp2_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_jp2_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/jp2", "image/jpeg2000"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"image_metadata_only",
 		() => {
 			const documentPath = resolveDocument("images/example.jpg");
@@ -40,6 +121,87 @@ describe("image fixtures", () => {
 	);
 
 	it(
+		"image_pbm_basic",
+		() => {
+			const documentPath = resolveDocument("images_extra/ocr_image.pbm");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping image_pbm_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_pbm_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/x-portable-bitmap", "image/x-pbm"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"image_pgm_basic",
+		() => {
+			const documentPath = resolveDocument("images_extra/ocr_image.pgm");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping image_pgm_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_pgm_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/x-portable-graymap", "image/x-pgm"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"image_ppm_basic",
+		() => {
+			const documentPath = resolveDocument("images_extra/ocr_image.ppm");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping image_ppm_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_ppm_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/x-portable-pixmap", "image/x-ppm"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"image_svg_basic",
 		() => {
 			const documentPath = resolveDocument("xml/simple_svg.svg");
@@ -62,6 +224,60 @@ describe("image fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["image/svg+xml"]);
 			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"image_tiff_basic",
+		() => {
+			const documentPath = resolveDocument("images_extra/ocr_image.tif");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping image_tiff_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_tiff_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/tiff"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"image_webp_basic",
+		() => {
+			const documentPath = resolveDocument("images_extra/ocr_image.webp");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping image_webp_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_webp_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/webp"]);
+			assertions.assertContentNotEmpty(result);
 		},
 		TEST_TIMEOUT_MS,
 	);

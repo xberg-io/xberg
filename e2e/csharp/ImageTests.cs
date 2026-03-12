@@ -12,6 +12,48 @@ namespace Kreuzberg.E2E.Image
     public class ImageTests
     {
         [SkippableFact]
+        public void ImageBmpBasic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tesseract");
+            TestHelpers.SkipIfLegacyOfficeDisabled("images/bmp_24.bmp");
+            TestHelpers.SkipIfOfficeTestOnWindows("images/bmp_24.bmp");
+            var documentPath = TestHelpers.EnsureDocument("images/bmp_24.bmp", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/bmp" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
+        public void ImageGifBasic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tesseract");
+            TestHelpers.SkipIfLegacyOfficeDisabled("images_extra/ocr_image.gif");
+            TestHelpers.SkipIfOfficeTestOnWindows("images_extra/ocr_image.gif");
+            var documentPath = TestHelpers.EnsureDocument("images_extra/ocr_image.gif", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/gif" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
+        public void ImageJp2Basic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tesseract");
+            TestHelpers.SkipIfLegacyOfficeDisabled("images_extra/ocr_image.jp2");
+            TestHelpers.SkipIfOfficeTestOnWindows("images_extra/ocr_image.jp2");
+            var documentPath = TestHelpers.EnsureDocument("images_extra/ocr_image.jp2", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/jp2", "image/jpeg2000" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
         public void ImageMetadataOnly()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("images/example.jpg");
@@ -25,6 +67,48 @@ namespace Kreuzberg.E2E.Image
         }
 
         [SkippableFact]
+        public void ImagePbmBasic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tesseract");
+            TestHelpers.SkipIfLegacyOfficeDisabled("images_extra/ocr_image.pbm");
+            TestHelpers.SkipIfOfficeTestOnWindows("images_extra/ocr_image.pbm");
+            var documentPath = TestHelpers.EnsureDocument("images_extra/ocr_image.pbm", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/x-portable-bitmap", "image/x-pbm" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
+        public void ImagePgmBasic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tesseract");
+            TestHelpers.SkipIfLegacyOfficeDisabled("images_extra/ocr_image.pgm");
+            TestHelpers.SkipIfOfficeTestOnWindows("images_extra/ocr_image.pgm");
+            var documentPath = TestHelpers.EnsureDocument("images_extra/ocr_image.pgm", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/x-portable-graymap", "image/x-pgm" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
+        public void ImagePpmBasic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tesseract");
+            TestHelpers.SkipIfLegacyOfficeDisabled("images_extra/ocr_image.ppm");
+            TestHelpers.SkipIfOfficeTestOnWindows("images_extra/ocr_image.ppm");
+            var documentPath = TestHelpers.EnsureDocument("images_extra/ocr_image.ppm", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/x-portable-pixmap", "image/x-ppm" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
         public void ImageSvgBasic()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("xml/simple_svg.svg");
@@ -35,6 +119,34 @@ namespace Kreuzberg.E2E.Image
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "image/svg+xml" });
             TestHelpers.AssertMinContentLength(result, 5);
+        }
+
+        [SkippableFact]
+        public void ImageTiffBasic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tesseract");
+            TestHelpers.SkipIfLegacyOfficeDisabled("images_extra/ocr_image.tif");
+            TestHelpers.SkipIfOfficeTestOnWindows("images_extra/ocr_image.tif");
+            var documentPath = TestHelpers.EnsureDocument("images_extra/ocr_image.tif", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/tiff" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
+        public void ImageWebpBasic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tesseract");
+            TestHelpers.SkipIfLegacyOfficeDisabled("images_extra/ocr_image.webp");
+            TestHelpers.SkipIfOfficeTestOnWindows("images_extra/ocr_image.webp");
+            var documentPath = TestHelpers.EnsureDocument("images_extra/ocr_image.webp", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/webp" });
+            TestHelpers.AssertContentNotEmpty(result);
         }
 
     }

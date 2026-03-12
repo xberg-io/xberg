@@ -240,7 +240,53 @@ fn test_config_chunking() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), None);
+    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None);
+}
+
+#[test]
+fn test_config_chunking_heading_context() {
+    // Tests markdown chunker populates heading context on chunks
+
+    let document_path = resolve_document("markdown/extraction_test.md");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_chunking_heading_context: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "chunking": {
+    "chunker_type": "markdown",
+    "max_chars": 300,
+    "max_overlap": 50
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_chunking_heading_context: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_chunking_heading_context: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_chunking_heading_context: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, Some(true));
 }
 
 #[test]
@@ -284,7 +330,53 @@ fn test_config_chunking_markdown() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), None);
+    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None);
+}
+
+#[test]
+fn test_config_chunking_no_headings() {
+    // Tests markdown chunker on text with no headings produces null heading_context
+
+    let document_path = resolve_document("text/book_war_and_peace_1p.txt");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_chunking_no_headings: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "chunking": {
+    "chunker_type": "markdown",
+    "max_chars": 300,
+    "max_overlap": 50
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_chunking_no_headings: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_chunking_no_headings: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_chunking_no_headings: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, Some(false));
 }
 
 #[test]
@@ -327,7 +419,89 @@ fn test_config_chunking_small() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(2), None, Some(true), None);
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, None);
+}
+
+#[test]
+fn test_config_chunking_text() {
+    // Tests text chunker type (generic whitespace/punctuation splitter)
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_chunking_text: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "chunking": {
+    "chunker_type": "text",
+    "max_chars": 500,
+    "max_overlap": 50
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_chunking_text: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None);
+}
+
+#[test]
+fn test_config_chunking_tokenizer() {
+    // Tests token-based chunk sizing with HuggingFace tokenizer
+
+    let document_path = resolve_document("markdown/comprehensive.md");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_chunking_tokenizer: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "chunking": {
+    "max_chars": 200,
+    "max_overlap": 40,
+    "sizing": {
+      "model": "Xenova/gpt-4o",
+      "type": "tokenizer"
+    }
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_chunking_tokenizer: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_chunking_tokenizer: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_chunking_tokenizer: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, None);
 }
 
 #[test]
@@ -418,6 +592,51 @@ fn test_config_document_structure_disabled() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_document(&result, false, None, None, None);
+}
+
+#[test]
+fn test_config_document_structure_groups() {
+    // Tests document structure extraction with group node assertion on DOCX with headings
+
+    let document_path = resolve_document("docx/unit_test_headers.docx");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_document_structure_groups: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "include_document_structure": true
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_document_structure_groups: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_document_structure_groups: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_document_structure_groups: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(
+        &result,
+        &["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    );
+    assertions::assert_document(&result, true, None, None, Some(true));
 }
 
 #[test]
@@ -639,6 +858,39 @@ fn test_config_images() {
 }
 
 #[test]
+fn test_config_images_with_formats() {
+    // Tests image extraction on PPTX containing embedded images
+
+    let document_path = resolve_document("pptx/powerpoint_with_image.pptx");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_images_with_formats: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "images": {
+    "extract_images": true
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_images_with_formats: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(
+        &result,
+        &["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+    );
+    assertions::assert_images(&result, Some(1), None, None);
+}
+
+#[test]
 fn test_config_keywords() {
     // Tests keyword extraction via YAKE algorithm
 
@@ -710,6 +962,39 @@ fn test_config_language_detection() {
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
     assertions::assert_detected_languages(&result, &["eng"], Some(0.5));
+}
+
+#[test]
+fn test_config_language_detection_multi() {
+    // Tests language detection with detect_multiple and min_confidence options
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_language_detection_multi: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "language_detection": {
+    "detect_multiple": true,
+    "enabled": true,
+    "min_confidence": 0.3
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_language_detection_multi: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_detected_languages(&result, &["eng"], None);
 }
 
 #[test]
@@ -793,6 +1078,48 @@ fn test_config_pages() {
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
     assertions::assert_content_contains_any(&result, &["PAGE"]);
+}
+
+#[test]
+fn test_config_pages_exact_count() {
+    // Tests page extraction with exact page count assertion on multi-page PDF
+
+    let document_path = resolve_document("pdf/multi_page.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_pages_exact_count: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "pages": {
+    "extract_pages": true
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping config_pages_exact_count: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_pages_exact_count: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_pages_exact_count: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_pages(&result, None, Some(5));
 }
 
 #[test]
@@ -880,6 +1207,50 @@ fn test_config_pages_markers() {
 }
 
 #[test]
+fn test_config_pdf_annotations_count() {
+    // Tests PDF annotation extraction with min_count assertion
+
+    let document_path = resolve_document("vendored/pdfplumber/pdf/annotations.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_pdf_annotations_count: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "pdf_options": {
+    "extract_annotations": true
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_pdf_annotations_count: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_pdf_annotations_count: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_pdf_annotations_count: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_annotations(&result, true, Some(3));
+}
+
+#[test]
 fn test_config_pdf_hierarchy() {
     // Tests PDF hierarchy extraction config with block-level structure
 
@@ -927,6 +1298,48 @@ fn test_config_pdf_hierarchy() {
 }
 
 #[test]
+fn test_config_pdf_margins() {
+    // Tests PDF margin exclusion configuration
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_pdf_margins: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "pdf_options": {
+    "bottom_margin_fraction": 0.1,
+    "top_margin_fraction": 0.1
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping config_pdf_margins: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_pdf_margins: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_pdf_margins: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 5);
+}
+
+#[test]
 fn test_config_postprocessor() {
     // Tests postprocessor config is accepted and extraction succeeds
 
@@ -955,6 +1368,30 @@ fn test_config_postprocessor() {
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
     assertions::assert_content_not_empty(&result);
+}
+
+#[test]
+fn test_config_processing_warnings_empty() {
+    // Tests that a clean PDF extraction produces no processing warnings
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_processing_warnings_empty: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_processing_warnings_empty: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 10);
+    assertions::assert_processing_warnings(&result, None, Some(true));
 }
 
 #[test]
@@ -1027,6 +1464,80 @@ fn test_config_quality_enabled() {
 }
 
 #[test]
+fn test_config_quality_score_range() {
+    // Tests quality scoring produces a score with minimum bound assertion
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_quality_score_range: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "enable_quality_processing": true
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_quality_score_range: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_quality_score_range: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_quality_score_range: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_quality_score(&result, Some(true), Some(0.1), None);
+}
+
+#[test]
+fn test_config_security_limits() {
+    // Tests archive extraction with custom security limits
+
+    let document_path = resolve_document("archives/documents.zip");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_security_limits: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "security_limits": {
+    "max_archive_size": 104857600,
+    "max_compression_ratio": 50,
+    "max_files_in_archive": 100
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_security_limits: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/zip", "application/x-zip-compressed"]);
+    assertions::assert_min_content_length(&result, 10);
+}
+
+#[test]
 fn test_config_structured_output() {
     // Tests structured (JSON) output format config
 
@@ -1063,6 +1574,32 @@ fn test_config_structured_output() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
+}
+
+#[test]
+fn test_config_tables_content() {
+    // Tests table extraction with content_contains_any assertion on DOCX with tables
+
+    let document_path = resolve_document("docx/docx_tables.docx");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_tables_content: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_tables_content: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(
+        &result,
+        &["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    );
+    assertions::assert_table_count(&result, Some(1), None);
 }
 
 #[test]

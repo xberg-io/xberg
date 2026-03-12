@@ -588,9 +588,11 @@ pub fn create_wasm_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     args.push("server".to_string());
 
     let supported_formats = get_kreuzberg_wasm_supported_formats();
+    // WASM execution is significantly slower than native — use a higher timeout
+    // to avoid restart loops that waste the entire CI budget
     Ok(
         SubprocessAdapter::with_persistent_mode("kreuzberg-wasm", command, args, vec![], supported_formats)
-            .with_max_timeout(Duration::from_secs(180)),
+            .with_max_timeout(Duration::from_secs(600)),
     )
 }
 
@@ -606,7 +608,7 @@ pub fn create_wasm_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter>
     let supported_formats = get_kreuzberg_wasm_supported_formats();
     Ok(
         SubprocessAdapter::with_batch_support("kreuzberg-wasm-batch", command, args, vec![], supported_formats)
-            .with_max_timeout(Duration::from_secs(180)),
+            .with_max_timeout(Duration::from_secs(600)),
     )
 }
 

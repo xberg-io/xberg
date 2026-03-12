@@ -48,6 +48,8 @@
 	"chunking": {
 		"max_chars": 1000,
 		"max_overlap": 200,
+		"_comment_chunker_type": "Use 'markdown' for heading context preservation: \"chunker_type\": \"markdown\"",
+		"_comment_sizing": "Token-based sizing (requires chunking-tokenizers feature): \"sizing\": { \"type\": \"tokenizer\", \"model\": \"Xenova/gpt-4o\" }",
 		"embedding": {
 			"batch_size": 32,
 			"normalize": true,

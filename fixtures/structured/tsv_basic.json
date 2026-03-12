@@ -1,0 +1,16 @@
+{
+	"id": "structured_tsv_basic",
+	"category": "structured",
+	"description": "TSV (tab-separated values) data file extraction.",
+	"document": {
+		"path": "data_formats/employees.tsv",
+		"media_type": "text/tab-separated-values"
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": ["text/tab-separated-values", "text/plain"],
+		"min_content_length": 10
+	}
+}

@@ -462,7 +462,8 @@ public static class TestHelpers
         int? minCount,
         int? maxCount,
         bool? eachHasContent,
-        bool? eachHasEmbedding)
+        bool? eachHasEmbedding,
+        bool? eachHasHeadingContext = null)
     {
         var chunks = result.Chunks;
         if (chunks is null)
@@ -495,6 +496,26 @@ public static class TestHelpers
                 if (chunks[i].Embedding is null || chunks[i].Embedding!.Length == 0)
                 {
                     throw new XunitException($"Chunk {i} has no embedding");
+                }
+            }
+        }
+        if (eachHasHeadingContext == true)
+        {
+            for (var i = 0; i < chunks.Count; i++)
+            {
+                if (chunks[i].Metadata?.HeadingContext is null)
+                {
+                    throw new XunitException($"Chunk {i} has no heading_context");
+                }
+            }
+        }
+        if (eachHasHeadingContext == false)
+        {
+            for (var i = 0; i < chunks.Count; i++)
+            {
+                if (chunks[i].Metadata?.HeadingContext is not null)
+                {
+                    throw new XunitException($"Chunk {i} should have no heading_context");
                 }
             }
         }
@@ -1214,10 +1235,14 @@ fn render_assertions(buffer: &mut String, assertions: &Assertions) -> Result<()>
             .each_has_embedding
             .map(|v| if v { "true" } else { "false" }.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let each_has_heading_context = chunks
+            .each_has_heading_context
+            .map(|v| if v { "true" } else { "false" }.to_string())
+            .unwrap_or_else(|| "null".to_string());
         writeln!(
             buffer,
-            "            TestHelpers.AssertChunks(result, {}, {}, {}, {});",
-            min_count, max_count, each_has_content, each_has_embedding
+            "            TestHelpers.AssertChunks(result, {}, {}, {}, {}, {});",
+            min_count, max_count, each_has_content, each_has_embedding, each_has_heading_context
         )?;
     }
 

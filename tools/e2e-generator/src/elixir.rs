@@ -374,6 +374,18 @@ defmodule E2E.Helpers do
       end
     end
 
+    if opts[:each_has_heading_context] == true do
+      if !Enum.all?(chunks, fn chunk -> chunk.metadata && chunk.metadata.heading_context end) do
+        flunk("Not all chunks have heading_context")
+      end
+    end
+
+    if opts[:each_has_heading_context] == false do
+      if !Enum.all?(chunks, fn chunk -> is_nil(chunk.metadata) || is_nil(chunk.metadata.heading_context) end) do
+        flunk("Not all chunks have no heading_context")
+      end
+    end
+
     result
   end
 
@@ -469,8 +481,16 @@ defmodule E2E.Helpers do
       if is_boolean(opts[:has_groups]) do
         has_group_nodes =
           Enum.any?(nodes, fn node ->
-            content = node[:content] || node["content"]
-            node_type = if content, do: content[:node_type] || content["node_type"], else: node[:node_type] || node["node_type"]
+            content = Map.get(node, :content) || Map.get(node, "content")
+
+            node_type =
+              if content do
+                (if is_struct(content), do: Map.get(content, :node_type), else: nil) ||
+                  Map.get(content, :node_type) || Map.get(content, "node_type")
+              else
+                Map.get(node, :node_type) || Map.get(node, "node_type")
+              end
+
             node_type == "group"
           end)
 
@@ -1077,6 +1097,9 @@ fn render_assertions(assertions: &Assertions) -> String {
         }
         if let Some(has_embedding) = chunks.each_has_embedding {
             args.push(format!("each_has_embedding: {}", has_embedding));
+        }
+        if let Some(has_heading_context) = chunks.each_has_heading_context {
+            args.push(format!("each_has_heading_context: {}", has_heading_context));
         }
         if !args.is_empty() {
             pipes.push(format!("E2E.Helpers.assert_chunks({})", args.join(", ")));

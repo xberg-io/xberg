@@ -249,7 +249,7 @@ func boolPtr(value bool) *bool {
 	return &value
 }
 
-func assertChunks(t *testing.T, result *kreuzberg.ExtractionResult, minCount, maxCount *int, eachHasContent, eachHasEmbedding *bool) {
+func assertChunks(t *testing.T, result *kreuzberg.ExtractionResult, minCount, maxCount *int, eachHasContent, eachHasEmbedding, eachHasHeadingContext *bool) {
 	t.Helper()
 	count := len(result.Chunks)
 	if minCount != nil && count < *minCount {
@@ -269,6 +269,20 @@ func assertChunks(t *testing.T, result *kreuzberg.ExtractionResult, minCount, ma
 		for i, chunk := range result.Chunks {
 			if len(chunk.Embedding) == 0 {
 				t.Fatalf("chunk %d has no embedding", i)
+			}
+		}
+	}
+	if eachHasHeadingContext != nil && *eachHasHeadingContext {
+		for i, chunk := range result.Chunks {
+			if chunk.Metadata.HeadingContext == nil {
+				t.Fatalf("chunk %d has no heading_context", i)
+			}
+		}
+	}
+	if eachHasHeadingContext != nil && !*eachHasHeadingContext {
+		for i, chunk := range result.Chunks {
+			if chunk.Metadata.HeadingContext != nil {
+				t.Fatalf("chunk %d should have no heading_context", i)
 			}
 		}
 	}
@@ -926,10 +940,14 @@ fn render_assertions(assertions: &Assertions) -> String {
             .each_has_embedding
             .map(|v| format!("boolPtr({v})"))
             .unwrap_or_else(|| "nil".to_string());
+        let each_has_heading_context = chunks
+            .each_has_heading_context
+            .map(|v| format!("boolPtr({v})"))
+            .unwrap_or_else(|| "nil".to_string());
         writeln!(
             buffer,
-            "    assertChunks(t, result, {}, {}, {}, {})",
-            min_count, max_count, each_has_content, each_has_embedding
+            "    assertChunks(t, result, {}, {}, {}, {}, {})",
+            min_count, max_count, each_has_content, each_has_embedding, each_has_heading_context
         )
         .unwrap();
     }

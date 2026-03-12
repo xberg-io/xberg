@@ -59,7 +59,7 @@ public class EmbeddingsTest {
 
     E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
     E2EHelpers.Assertions.assertMinContentLength(result, 10);
-    E2EHelpers.Assertions.assertChunks(result, 1, null, true, true);
+    E2EHelpers.Assertions.assertChunks(result, 1, null, true, true, null);
   }
 
   @Test
@@ -77,7 +77,7 @@ public class EmbeddingsTest {
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
           E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertChunks(result, 1, null, true, true);
+          E2EHelpers.Assertions.assertChunks(result, 1, null, true, true, null);
         });
   }
 
@@ -94,7 +94,7 @@ public class EmbeddingsTest {
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
           E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertChunks(result, 1, null, true, false);
+          E2EHelpers.Assertions.assertChunks(result, 1, null, true, false, null);
         });
   }
 
@@ -113,7 +113,7 @@ public class EmbeddingsTest {
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
           E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertChunks(result, 1, null, true, true);
+          E2EHelpers.Assertions.assertChunks(result, 1, null, true, true, null);
         });
   }
 }

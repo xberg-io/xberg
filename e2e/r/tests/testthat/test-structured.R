@@ -17,6 +17,18 @@ test_that("structured_csv_basic", {
   assert_min_content_length(result, 20L)
 })
 
+test_that("structured_enw_basic", {
+  result <- run_fixture(
+    "structured_enw_basic",
+    "data_formats/sample.enw",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/x-endnote-refer", "application/x-endnote+xml", "text/plain"))
+})
+
 test_that("structured_json_basic", {
   result <- run_fixture(
     "structured_json_basic",
@@ -45,6 +57,32 @@ test_that("structured_json_simple", {
   assert_content_contains_any(result, c("{", "name"))
 })
 
+test_that("structured_nbib_basic", {
+  result <- run_fixture(
+    "structured_nbib_basic",
+    "data_formats/sample.nbib",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/nbib", "application/x-pubmed", "text/plain"))
+  assert_content_not_empty(result)
+})
+
+test_that("structured_ris_basic", {
+  result <- run_fixture(
+    "structured_ris_basic",
+    "data_formats/sample.ris",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/x-research-info-systems", "text/plain"))
+  assert_content_not_empty(result)
+})
+
 test_that("structured_toml_basic", {
   result <- run_fixture(
     "structured_toml_basic",
@@ -55,6 +93,19 @@ test_that("structured_toml_basic", {
     skip_if_missing = TRUE
   )
   assert_expected_mime(result, c("application/toml", "text/toml"))
+  assert_min_content_length(result, 10L)
+})
+
+test_that("structured_tsv_basic", {
+  result <- run_fixture(
+    "structured_tsv_basic",
+    "data_formats/employees.tsv",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("text/tab-separated-values", "text/plain"))
   assert_min_content_length(result, 10L)
 })
 

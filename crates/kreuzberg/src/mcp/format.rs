@@ -373,6 +373,7 @@ mod tests {
                     total_chunks: 1,
                     first_page: None,
                     last_page: None,
+                    heading_context: None,
                 },
             }]),
             images: None,

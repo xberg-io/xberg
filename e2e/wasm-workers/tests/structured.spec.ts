@@ -33,6 +33,29 @@ describe("structured", () => {
 		assertions.assertMinContentLength(result, 20);
 	});
 
+	it("structured_enw_basic", async () => {
+		const documentBytes = getFixture("data_formats/sample.enw");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/x-endnote-refer", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "structured_enw_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"]);
+	});
+
 	it("structured_json_basic", async () => {
 		const documentBytes = getFixture("json/sample_document.json");
 		if (documentBytes === null) {
@@ -83,6 +106,54 @@ describe("structured", () => {
 		assertions.assertContentContainsAny(result, ["{", "name"]);
 	});
 
+	it("structured_nbib_basic", async () => {
+		const documentBytes = getFixture("data_formats/sample.nbib");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/nbib", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "structured_nbib_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/nbib", "application/x-pubmed", "text/plain"]);
+		assertions.assertContentNotEmpty(result);
+	});
+
+	it("structured_ris_basic", async () => {
+		const documentBytes = getFixture("data_formats/sample.ris");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/x-research-info-systems", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "structured_ris_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/x-research-info-systems", "text/plain"]);
+		assertions.assertContentNotEmpty(result);
+	});
+
 	it("structured_toml_basic", async () => {
 		const documentBytes = getFixture("data_formats/cargo.toml");
 		if (documentBytes === null) {
@@ -104,6 +175,30 @@ describe("structured", () => {
 			return;
 		}
 		assertions.assertExpectedMime(result, ["application/toml", "text/toml"]);
+		assertions.assertMinContentLength(result, 10);
+	});
+
+	it("structured_tsv_basic", async () => {
+		const documentBytes = getFixture("data_formats/employees.tsv");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "text/tab-separated-values", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "structured_tsv_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["text/tab-separated-values", "text/plain"]);
 		assertions.assertMinContentLength(result, 10);
 	});
 

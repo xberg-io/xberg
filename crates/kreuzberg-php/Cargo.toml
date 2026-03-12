@@ -17,9 +17,10 @@ crate-type = ["cdylib"]
 test = false
 
 [dependencies]
+kreuzberg = { workspace = true, features = ["bundled-pdfium", "full"] }
+
 ctor = { workspace = true }
 ext-php-rs = "0.15"
-kreuzberg = { path = "../kreuzberg", features = ["full", "bundled-pdfium"] }
 num_cpus = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }

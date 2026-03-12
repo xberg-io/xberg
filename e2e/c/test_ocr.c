@@ -160,6 +160,16 @@ static void test_ocr_ocr_tesseract_elements(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_ocr_ocr_tesseract_elements_min_count(void) {
+    if (skip_if_feature_unavailable("tesseract")) return;
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"element_config\":{\"include_elements\":true,\"min_level\":\"line\"},\"language\":\"eng\"}}");
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"image/png"}, 1);
+    assert_min_content_length(result, 5);
+    assert_ocr_elements(result, 1, 0, 0, 1, 1);
+    kreuzberg_free_result(result);
+}
+
 static void test_ocr_ocr_tesseract_language_german(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
     CExtractionResult *result = run_extraction("pdf/image_only_german_pdf.pdf", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"}}");
@@ -185,6 +195,7 @@ int main(void) {
     test_ocr_ocr_pdf_rotated_90();
     test_ocr_ocr_pdf_tesseract();
     test_ocr_ocr_tesseract_elements();
+    test_ocr_ocr_tesseract_elements_min_count();
     test_ocr_ocr_tesseract_language_german();
     printf("test_ocr: all tests passed\n");
     return 0;

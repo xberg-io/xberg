@@ -8,11 +8,12 @@ license.workspace = true
 publish = false
 
 [dependencies]
-kreuzberg = { path = "../../crates/kreuzberg", features = ["full", "bundled-pdfium"] }
+kreuzberg = { workspace = true, features = ["bundled-pdfium", "full"] }
+
 serde_json = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
 async-trait = { workspace = true }
 tempfile = { workspace = true }
 hex = { workspace = true }

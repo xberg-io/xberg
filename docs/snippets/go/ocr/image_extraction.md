@@ -12,10 +12,11 @@ func main() {
     maxDim := 2048
     result, err := kreuzberg.ExtractFileSync("document.pdf", &kreuzberg.ExtractionConfig{
         ImageExtraction: &kreuzberg.ImageExtractionConfig{
-            ExtractImages:     kreuzberg.BoolPtr(true),
-            TargetDPI:         &targetDPI,
-            MaxImageDimension: &maxDim,
-            AutoAdjustDPI:     kreuzberg.BoolPtr(true),
+            ExtractImages:      kreuzberg.BoolPtr(true),
+            TargetDPI:          &targetDPI,
+            MaxImageDimension:  &maxDim,
+            InjectPlaceholders: kreuzberg.BoolPtr(true), // set to false to extract images without markdown references
+            AutoAdjustDPI:      kreuzberg.BoolPtr(true),
         },
     })
     if err != nil {

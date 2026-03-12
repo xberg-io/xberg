@@ -9,6 +9,30 @@ import { describe, expect, it } from "vitest";
 import { assertions, buildConfig, getFixture, shouldSkipFixture } from "./helpers.js";
 
 describe("archive", () => {
+	it("archive_gz_basic", async () => {
+		const documentBytes = getFixture("archives/book_war_and_peace_1p.txt.gz");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/gzip", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "archive_gz_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/gzip", "application/x-gzip"]);
+		assertions.assertMinContentLength(result, 10);
+	});
+
 	it("archive_sevenz_basic", async () => {
 		const documentBytes = getFixture("archives/documents.7z");
 		if (documentBytes === null) {

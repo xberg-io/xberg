@@ -27,6 +27,14 @@ pub(crate) mod dynamic_bindings;
 pub(crate) mod static_bindings;
 
 #[cfg(target_arch = "wasm32")]
+#[allow(
+    clippy::collapsible_if,
+    clippy::redundant_closure,
+    clippy::let_and_return,
+    clippy::needless_borrow,
+    clippy::derivable_impls,
+    clippy::unnecessary_cast
+)]
 pub(crate) mod wasm_bindings;
 
 // The following dummy declarations are used only when running cargo doc.

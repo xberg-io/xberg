@@ -16,6 +16,25 @@ use PHPUnit\Framework\TestCase;
 class ArchiveTest extends TestCase
 {
     /**
+     * Gzip compressed file extraction.
+     */
+    public function test_archive_gz_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('archives/book_war_and_peace_1p.txt.gz');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping archive_gz_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/gzip', 'application/x-gzip']);
+        Helpers::assertMinContentLength($result, 10);
+    }
+
+    /**
      * 7-Zip archive extraction.
      */
     public function test_archive_sevenz_basic(): void

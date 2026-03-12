@@ -388,20 +388,20 @@ pub extern "C" fn kreuzberg_error_code_description(code: u32) -> *const c_char {
 /// Set fields are non-NULL; unset fields are NULL.
 #[repr(C)]
 pub struct CErrorDetails {
-    /// The error message (must be freed with kreuzberg_free_string)
-    pub message: *mut c_char,
+    /// Additional context information (may be NULL)
+    pub context_info: *mut c_char,
     /// Numeric error code (0-7 for Kreuzberg errors, 1-7 for panic_shield codes)
     pub error_code: u32,
     /// Human-readable error type name (must be freed with kreuzberg_free_string)
     pub error_type: *mut c_char,
+    /// The error message (must be freed with kreuzberg_free_string)
+    pub message: *mut c_char,
     /// Source file where error occurred (may be NULL)
     pub source_file: *mut c_char,
     /// Source function where error occurred (may be NULL)
     pub source_function: *mut c_char,
     /// Line number in source file (0 if unknown)
     pub source_line: u32,
-    /// Additional context information (may be NULL)
-    pub context_info: *mut c_char,
     /// 1 if this error originated from a panic, 0 otherwise
     pub is_panic: i32,
 }
@@ -529,13 +529,13 @@ pub extern "C" fn kreuzberg_get_error_details() -> CErrorDetails {
     }
 
     CErrorDetails {
-        message: string_to_cstring_with_fallback(message, "CString error", "message"),
+        context_info: ptr::null_mut(),
         error_code,
         error_type: string_to_cstring_with_fallback(error_type, "unknown", "error_type"),
+        message: string_to_cstring_with_fallback(message, "CString error", "message"),
         source_file: optional_str_to_cstring(source_file, "source_file"),
         source_function: optional_str_to_cstring(source_function, "source_function"),
         source_line,
-        context_info: ptr::null_mut(),
         is_panic,
     }
 }

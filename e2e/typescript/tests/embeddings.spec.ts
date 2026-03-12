@@ -41,7 +41,7 @@ describe("embeddings fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, true);
+			chunkAssertions.assertChunks(result, 1, null, true, true, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -75,7 +75,7 @@ describe("embeddings fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, true);
+			chunkAssertions.assertChunks(result, 1, null, true, true, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -103,7 +103,7 @@ describe("embeddings fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, false);
+			chunkAssertions.assertChunks(result, 1, null, true, false, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -137,7 +137,7 @@ describe("embeddings fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, true);
+			chunkAssertions.assertChunks(result, 1, null, true, true, null);
 		},
 		TEST_TIMEOUT_MS,
 	);

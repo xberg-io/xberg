@@ -2,12 +2,12 @@
 
 [package]
 name = "kreuzberg-test-app-rust"
-version = "4.4.2"
+version = "4.4.5"
 edition = "2024"
 rust-version = "1.91"
 authors = ["Kreuzberg Contributors"]
 license = "MIT OR Apache-2.0"
-description = "Comprehensive API coverage test for Kreuzberg 4.4.2 Rust library"
+description = "Comprehensive API coverage test for Kreuzberg 4.4.5 Rust library"
 readme = "README.md"
 publish = false
 
@@ -15,7 +15,7 @@ publish = false
 collapsible_if = "allow"
 
 [dependencies]
-kreuzberg = { version = "4.4.1", features = ["static-pdfium", "excel", "office", "html"] }
+kreuzberg = { version = "4.4.5", features = ["static-pdfium", "excel", "office", "html"] }
 tokio = { version = "1", features = ["full"] }
 
 [[bin]]

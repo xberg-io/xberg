@@ -41,6 +41,8 @@ def resolve_document(relative: str) -> Path:
 def _build_chunking(chunking_data: dict[str, Any]) -> ChunkingConfig:
     """Convert a chunking dict with nested embedding to ChunkingConfig."""
     cd = dict(chunking_data)
+    # Strip fields not yet exposed in the Python binding
+    cd.pop("sizing", None)
     if "embedding" in cd and isinstance(cd["embedding"], dict):
         emb = dict(cd["embedding"])
         model = None
@@ -246,12 +248,20 @@ def _values_equal(lhs: Any, rhs: Any) -> bool:
     return bool(lhs == rhs)
 
 
+def _get_heading_context(chunk: Any) -> Any:
+    metadata = getattr(chunk, "metadata", None)
+    if metadata is None:
+        return None
+    return metadata.get("heading_context") if isinstance(metadata, dict) else getattr(metadata, "heading_context", None)
+
+
 def assert_chunks(
     result: Any,
     min_count: int | None = None,
     max_count: int | None = None,
     each_has_content: bool | None = None,
     each_has_embedding: bool | None = None,
+    each_has_heading_context: bool | None = None,
 ) -> None:
     chunks = getattr(result, "chunks", None)
     if chunks is None:
@@ -269,6 +279,13 @@ def assert_chunks(
         for i, chunk in enumerate(chunks):
             if not getattr(chunk, "embedding", None):
                 pytest.fail(f"Chunk {i} has no embedding")
+    if each_has_heading_context is not None:
+        for i, chunk in enumerate(chunks):
+            hc = _get_heading_context(chunk)
+            if each_has_heading_context and hc is None:
+                pytest.fail(f"Chunk {i} has no heading_context")
+            if not each_has_heading_context and hc is not None:
+                pytest.fail(f"Chunk {i} should have no heading_context")
 
 
 def assert_images(

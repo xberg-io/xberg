@@ -242,6 +242,24 @@ func TestOcrOcrTesseractElements(t *testing.T) {
 	assertOcrElements(t, result, boolPtr(true), boolPtr(true), boolPtr(true), nil)
 }
 
+func TestOcrOcrTesseractElementsMinCount(t *testing.T) {
+	skipIfFeatureUnavailable(t, "tesseract")
+	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
+"force_ocr": true,
+"ocr": {
+	"backend": "tesseract",
+	"element_config": {
+	"include_elements": true,
+	"min_level": "line"
+	},
+	"language": "eng"
+}
+}`))
+	assertExpectedMime(t, result, []string{"image/png"})
+	assertMinContentLength(t, result, 5)
+	assertOcrElements(t, result, boolPtr(true), nil, nil, intPtr(1))
+}
+
 func TestOcrOcrTesseractLanguageGerman(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "pdf/image_only_german_pdf.pdf", []byte(`{

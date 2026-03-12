@@ -627,6 +627,42 @@ fn filter_sidebar_characters(char_infos: &mut Vec<CharInfo>, page_width: f32) {
 /// Uses `page.text().all()` for correct text content (pdfium handles font matrices,
 /// CMap lookups, word boundaries) and per-character origins for line-level positioning.
 /// This produces better recall than `PdfiumParagraph::from_objects()` which can miss
+/// Build the text for a single line from character info, inserting spaces where
+/// large X-position gaps indicate word or column boundaries.
+///
+/// This is critical for positioned/tabular PDFs where characters are placed at
+/// specific coordinates without explicit space characters between words.
+fn build_line_text(chars: &[CharInfo], repair_map: Option<&[(char, &str)]>) -> String {
+    let mut line_text = String::new();
+    for (idx, ci) in chars.iter().enumerate() {
+        if ci.has_map_error
+            && !ci.is_symbolic
+            && let Some(map) = repair_map
+            && let Some((_, replacement)) = map.iter().find(|(c, _)| *c == ci.ch)
+        {
+            line_text.push_str(replacement);
+            continue;
+        }
+
+        // Insert space when there is a significant X-position gap between
+        // consecutive non-space characters on the same line.
+        if idx > 0 && ci.ch != ' ' && chars[idx - 1].ch != ' ' {
+            let prev = &chars[idx - 1];
+            let gap = ci.x - prev.x;
+            // Typical character advance ≈ font_size * 0.5–0.6.
+            // A gap larger than one full character width suggests a word break.
+            let avg_fs = (ci.font_size + prev.font_size) * 0.5;
+            let threshold = avg_fs * 0.8;
+            if gap > threshold {
+                line_text.push(' ');
+            }
+        }
+
+        line_text.push(ci.ch);
+    }
+    line_text
+}
+
 /// content when font metrics are broken.
 ///
 /// Strategy:
@@ -758,19 +794,7 @@ fn chars_to_segments(page: &PdfPage) -> Option<Vec<SegmentData>> {
         };
 
         if is_line_break {
-            // Collect text for this line, applying ligature repair.
-            let mut line_text = String::new();
-            for ci in &char_infos[line_start..i] {
-                if ci.has_map_error
-                    && !ci.is_symbolic
-                    && let Some(ref map) = repair_map
-                    && let Some((_, replacement)) = map.iter().find(|(c, _)| *c == ci.ch)
-                {
-                    line_text.push_str(replacement);
-                    continue;
-                }
-                line_text.push(ci.ch);
-            }
+            let line_text = build_line_text(&char_infos[line_start..i], repair_map.as_deref());
 
             let trimmed = line_text.trim();
             if !trimmed.is_empty() {
@@ -1167,5 +1191,89 @@ mod tests {
     #[test]
     fn test_text_has_ligature_corruption_multiple() {
         assert!(text_has_ligature_corruption("e!cient and #nancial"));
+    }
+
+    fn make_char(ch: char, x: f32, y: f32, font_size: f32) -> CharInfo {
+        CharInfo {
+            ch,
+            x,
+            y,
+            font_size,
+            is_bold: false,
+            is_italic: false,
+            is_monospace: false,
+            has_map_error: false,
+            is_symbolic: false,
+        }
+    }
+
+    /// Regression test for GitHub issue #431:
+    /// Positioned PDF text with large X-gaps between characters must have
+    /// spaces inserted, otherwise "Main Deck" becomes "MainDeck" and
+    /// "12,40" with gaps becomes "12,40" concatenated without spaces.
+    #[test]
+    fn test_issue_431_build_line_text_inserts_spaces_at_x_gaps() {
+        let fs = 12.0;
+        // "Main" at x=100 then "Deck" at x=200 (large gap = different words)
+        let chars = vec![
+            make_char('M', 100.0, 0.0, fs),
+            make_char('a', 107.0, 0.0, fs),
+            make_char('i', 114.0, 0.0, fs),
+            make_char('n', 121.0, 0.0, fs),
+            // Gap of ~79 units (>> font_size) before "Deck"
+            make_char('D', 200.0, 0.0, fs),
+            make_char('e', 207.0, 0.0, fs),
+            make_char('c', 214.0, 0.0, fs),
+            make_char('k', 221.0, 0.0, fs),
+        ];
+        let result = build_line_text(&chars, None);
+        assert_eq!(result, "Main Deck", "Large X-gap should produce a space between words");
+    }
+
+    #[test]
+    fn test_issue_431_build_line_text_no_false_spaces() {
+        let fs = 12.0;
+        // "Hello" with normal character advance (~7 units for 12pt font)
+        let chars = vec![
+            make_char('H', 100.0, 0.0, fs),
+            make_char('e', 107.0, 0.0, fs),
+            make_char('l', 114.0, 0.0, fs),
+            make_char('l', 121.0, 0.0, fs),
+            make_char('o', 128.0, 0.0, fs),
+        ];
+        let result = build_line_text(&chars, None);
+        assert_eq!(result, "Hello", "Normal spacing should not insert extra spaces");
+    }
+
+    #[test]
+    fn test_issue_431_tabular_numbers_with_gaps() {
+        let fs = 12.0;
+        // Tabular data: "12,40" at x=50 and "480" at x=200
+        let chars = vec![
+            make_char('1', 50.0, 0.0, fs),
+            make_char('2', 57.0, 0.0, fs),
+            make_char(',', 64.0, 0.0, fs),
+            make_char('4', 71.0, 0.0, fs),
+            make_char('0', 78.0, 0.0, fs),
+            // Large gap to next column
+            make_char('4', 200.0, 0.0, fs),
+            make_char('8', 207.0, 0.0, fs),
+            make_char('0', 214.0, 0.0, fs),
+        ];
+        let result = build_line_text(&chars, None);
+        assert_eq!(result, "12,40 480", "Column gap should produce space between numbers");
+    }
+
+    #[test]
+    fn test_issue_431_preserves_existing_spaces() {
+        let fs = 12.0;
+        // When pdfium already provides space characters, don't double-space
+        let chars = vec![
+            make_char('A', 100.0, 0.0, fs),
+            make_char(' ', 107.0, 0.0, fs),
+            make_char('B', 200.0, 0.0, fs),
+        ];
+        let result = build_line_text(&chars, None);
+        assert_eq!(result, "A B", "Should not insert extra space when space char exists");
     }
 }

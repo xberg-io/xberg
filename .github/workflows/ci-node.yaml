@@ -163,6 +163,11 @@ jobs:
           use-sccache: 'true'
           report-stats: 'true'
 
+      - name: Clippy (kreuzberg-node)
+        if: matrix.platform == 'linux-x64'
+        shell: bash
+        run: cargo clippy -p kreuzberg-node -- -D warnings
+
       - name: Setup Node
         uses: ./.github/actions/setup-node-workspace
 

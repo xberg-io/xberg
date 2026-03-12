@@ -20,7 +20,7 @@ use crate::core::config::ExtractionConfig;
 use crate::types::ExtractionResult;
 
 use execution::{execute_processors, execute_validators};
-use features::{execute_chunking, execute_language_detection};
+use features::{execute_chunking, execute_language_detection, execute_token_reduction};
 use initialization::{get_processors_from_cache, initialize_features, initialize_processor_cache};
 
 /// Run the post-processing pipeline on an extraction result.
@@ -75,6 +75,7 @@ pub async fn run_pipeline(mut result: ExtractionResult, config: &ExtractionConfi
 
     execute_chunking(&mut result, config)?;
     execute_language_detection(&mut result, config)?;
+    execute_token_reduction(&mut result, config)?;
     execute_validators(&result, config).await?;
 
     // Transform to element-based output if requested
@@ -139,6 +140,7 @@ pub async fn run_pipeline(mut result: ExtractionResult, config: &ExtractionConfi
 pub fn run_pipeline_sync(mut result: ExtractionResult, config: &ExtractionConfig) -> Result<ExtractionResult> {
     execute_chunking(&mut result, config)?;
     execute_language_detection(&mut result, config)?;
+    execute_token_reduction(&mut result, config)?;
 
     // Transform to element-based output if requested
     if config.result_format == crate::types::OutputFormat::ElementBased {

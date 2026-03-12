@@ -31,6 +31,7 @@ describe("token_reduction", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 5);
+		assertions.assertMaxContentLength(result, 150);
 		assertions.assertContentNotEmpty(result);
 	});
 
@@ -56,6 +57,7 @@ describe("token_reduction", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 5);
+		assertions.assertMaxContentLength(result, 200);
 		assertions.assertContentNotEmpty(result);
 	});
 
@@ -109,7 +111,8 @@ describe("token_reduction", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 5);
-		assertions.assertChunks(result, 1, null, true, null);
+		assertions.assertMaxContentLength(result, 200);
+		assertions.assertChunks(result, 1, null, true, null, null);
 		assertions.assertContentNotEmpty(result);
 	});
 });

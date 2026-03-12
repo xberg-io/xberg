@@ -13,6 +13,33 @@ const TEST_TIMEOUT_MS = 60_000;
 
 describe("archive fixtures", () => {
 	it(
+		"archive_gz_basic",
+		() => {
+			const documentPath = resolveDocument("archives/book_war_and_peace_1p.txt.gz");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping archive_gz_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "archive_gz_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/gzip", "application/x-gzip"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"archive_sevenz_basic",
 		() => {
 			const documentPath = resolveDocument("archives/documents.7z");

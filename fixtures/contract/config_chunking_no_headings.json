@@ -1,0 +1,30 @@
+{
+	"id": "config_chunking_no_headings",
+	"description": "Tests markdown chunker on text with no headings produces null heading_context",
+	"tags": ["contract", "config", "chunking", "heading-context", "edge-case"],
+	"document": {
+		"path": "text/book_war_and_peace_1p.txt"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"chunking": {
+				"chunker_type": "markdown",
+				"max_chars": 300,
+				"max_overlap": 50
+			}
+		}
+	},
+	"assertions": {
+		"min_content_length": 10,
+		"chunks": {
+			"min_count": 2,
+			"each_has_content": true,
+			"each_has_heading_context": false
+		}
+	},
+	"skip": {
+		"requires_feature": ["chunking"]
+	}
+}

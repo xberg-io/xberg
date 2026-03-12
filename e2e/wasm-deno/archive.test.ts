@@ -18,6 +18,26 @@ import {
 await initWasm();
 await enableOcr();
 
+Deno.test("archive_gz_basic", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig(undefined);
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("archives/book_war_and_peace_1p.txt.gz");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/gzip", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "archive_gz_basic", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/gzip", "application/x-gzip"]);
+	assertions.assertMinContentLength(result, 10);
+});
+
 Deno.test("archive_sevenz_basic", { permissions: { read: true, net: true } }, async () => {
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;

@@ -536,10 +536,8 @@ impl<'a> PdfPageGroupObject<'a> {
 
         self.apply_to_each(|object| {
             match object.ownership() {
-                PdfPageObjectOwnership::Page(ownership) => {
-                    if ownership.page_handle() != src_page_handle {
-                        object.remove_object_from_page()?
-                    }
+                PdfPageObjectOwnership::Page(ownership) if ownership.page_handle() != src_page_handle => {
+                    object.remove_object_from_page()?
                 }
                 PdfPageObjectOwnership::AttachedAnnotation(_) | PdfPageObjectOwnership::UnattachedAnnotation(_) => {
                     object.remove_object_from_annotation()?

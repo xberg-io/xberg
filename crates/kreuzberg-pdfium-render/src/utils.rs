@@ -209,8 +209,7 @@ pub(crate) mod utf16le {
     }
 
     /// Converts the bytes in the given buffer from UTF16-LE to a standard Rust String.
-    #[allow(unused_mut)] // The buffer must be mutable when compiling to WASM.
-    pub(crate) fn get_string_from_pdfium_utf16le_bytes(mut buffer: Vec<u8>) -> Option<String> {
+    pub(crate) fn get_string_from_pdfium_utf16le_bytes(buffer: Vec<u8>) -> Option<String> {
         #[cfg(target_arch = "wasm32")]
         {
             use web_sys::TextDecoder;
@@ -219,15 +218,15 @@ pub(crate) mod utf16le {
             // functionality; if that doesn't work, fall back to using the same WString method
             // used in non-WASM builds.
 
-            if let Ok(decoder) = TextDecoder::new_with_label("utf-16le") {
-                if let Ok(result) = decoder.decode_with_u8_array(&mut buffer) {
-                    let result = result.trim_end_matches(char::from(0));
+            if let Ok(decoder) = TextDecoder::new_with_label("utf-16le")
+                && let Ok(result) = decoder.decode_with_u8_array(&buffer)
+            {
+                let result = result.trim_end_matches(char::from(0));
 
-                    if !result.is_empty() {
-                        return Some(result.to_owned());
-                    } else {
-                        return None;
-                    }
+                if !result.is_empty() {
+                    return Some(result.to_owned());
+                } else {
+                    return None;
                 }
             }
         }

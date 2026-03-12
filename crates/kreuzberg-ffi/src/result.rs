@@ -406,6 +406,7 @@ mod tests {
                         total_chunks: 2,
                         first_page: None,
                         last_page: None,
+                        heading_context: None,
                     },
                 },
                 kreuzberg::types::Chunk {
@@ -419,6 +420,7 @@ mod tests {
                         total_chunks: 2,
                         first_page: None,
                         last_page: None,
+                        heading_context: None,
                     },
                 },
             ]),

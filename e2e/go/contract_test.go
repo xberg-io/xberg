@@ -86,7 +86,20 @@ func TestContractConfigChunking(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil)
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil)
+}
+
+func TestContractConfigChunkingHeadingContext(t *testing.T) {
+	skipIfFeatureUnavailable(t, "chunking")
+	result := runExtraction(t, "markdown/extraction_test.md", []byte(`{
+"chunking": {
+	"chunker_type": "markdown",
+	"max_chars": 300,
+	"max_overlap": 50
+}
+}`))
+	assertMinContentLength(t, result, 10)
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, boolPtr(true))
 }
 
 func TestContractConfigChunkingMarkdown(t *testing.T) {
@@ -100,7 +113,20 @@ func TestContractConfigChunkingMarkdown(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil)
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil)
+}
+
+func TestContractConfigChunkingNoHeadings(t *testing.T) {
+	skipIfFeatureUnavailable(t, "chunking")
+	result := runExtraction(t, "text/book_war_and_peace_1p.txt", []byte(`{
+"chunking": {
+	"chunker_type": "markdown",
+	"max_chars": 300,
+	"max_overlap": 50
+}
+}`))
+	assertMinContentLength(t, result, 10)
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, boolPtr(false))
 }
 
 func TestContractConfigChunkingSmall(t *testing.T) {
@@ -113,7 +139,36 @@ func TestContractConfigChunkingSmall(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil)
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, nil)
+}
+
+func TestContractConfigChunkingText(t *testing.T) {
+	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
+"chunking": {
+	"chunker_type": "text",
+	"max_chars": 500,
+	"max_overlap": 50
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 10)
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil)
+}
+
+func TestContractConfigChunkingTokenizer(t *testing.T) {
+	skipIfFeatureUnavailable(t, "chunking-tokenizers")
+	result := runExtraction(t, "markdown/comprehensive.md", []byte(`{
+"chunking": {
+	"max_chars": 200,
+	"max_overlap": 40,
+	"sizing": {
+	"model": "Xenova/gpt-4o",
+	"type": "tokenizer"
+	}
+}
+}`))
+	assertMinContentLength(t, result, 10)
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, nil)
 }
 
 func TestContractConfigDjotContent(t *testing.T) {
@@ -137,6 +192,15 @@ func TestContractConfigDocumentStructureDisabled(t *testing.T) {
 	result := runExtraction(t, "pdf/fake_memo.pdf", nil)
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertDocument(t, result, false, nil, nil, nil)
+}
+
+func TestContractConfigDocumentStructureGroups(t *testing.T) {
+	skipIfFeatureUnavailable(t, "office")
+	result := runExtraction(t, "docx/unit_test_headers.docx", []byte(`{
+"include_document_structure": true
+}`))
+	assertExpectedMime(t, result, []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document"})
+	assertDocument(t, result, true, nil, nil, boolPtr(true))
 }
 
 func TestContractConfigDocumentStructureHeadings(t *testing.T) {
@@ -195,6 +259,16 @@ func TestContractConfigImages(t *testing.T) {
 	assertImages(t, result, intPtr(1), nil, nil)
 }
 
+func TestContractConfigImagesWithFormats(t *testing.T) {
+	result := runExtraction(t, "pptx/powerpoint_with_image.pptx", []byte(`{
+"images": {
+	"extract_images": true
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/vnd.openxmlformats-officedocument.presentationml.presentation"})
+	assertImages(t, result, intPtr(1), nil, nil)
+}
+
 func TestContractConfigKeywords(t *testing.T) {
 	skipIfFeatureUnavailable(t, "keywords-yake")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
@@ -217,6 +291,19 @@ func TestContractConfigLanguageDetection(t *testing.T) {
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
 	assertDetectedLanguages(t, result, []string{"eng"}, floatPtr(0.5))
+}
+
+func TestContractConfigLanguageDetectionMulti(t *testing.T) {
+	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
+"language_detection": {
+	"detect_multiple": true,
+	"enabled": true,
+	"min_confidence": 0.3
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 10)
+	assertDetectedLanguages(t, result, []string{"eng"}, nil)
 }
 
 func TestContractConfigLanguageMulti(t *testing.T) {
@@ -245,6 +332,18 @@ func TestContractConfigPages(t *testing.T) {
 	assertContentContainsAny(t, result, []string{"PAGE"})
 }
 
+func TestContractConfigPagesExactCount(t *testing.T) {
+	skipIfFeatureUnavailable(t, "pdf")
+	result := runExtraction(t, "pdf/multi_page.pdf", []byte(`{
+"pages": {
+	"extract_pages": true
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 10)
+	assertPages(t, result, nil, intPtr(5))
+}
+
 func TestContractConfigPagesExtract(t *testing.T) {
 	skipIfFeatureUnavailable(t, "pdf")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
@@ -269,6 +368,17 @@ func TestContractConfigPagesMarkers(t *testing.T) {
 	assertContentContainsAny(t, result, []string{"PAGE"})
 }
 
+func TestContractConfigPdfAnnotationsCount(t *testing.T) {
+	skipIfFeatureUnavailable(t, "pdf")
+	result := runExtraction(t, "vendored/pdfplumber/pdf/annotations.pdf", []byte(`{
+"pdf_options": {
+	"extract_annotations": true
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertAnnotations(t, result, true, intPtr(3))
+}
+
 func TestContractConfigPdfHierarchy(t *testing.T) {
 	skipIfFeatureUnavailable(t, "pdf")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
@@ -286,6 +396,18 @@ func TestContractConfigPdfHierarchy(t *testing.T) {
 	assertMinContentLength(t, result, 50)
 }
 
+func TestContractConfigPdfMargins(t *testing.T) {
+	skipIfFeatureUnavailable(t, "pdf")
+	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
+"pdf_options": {
+	"bottom_margin_fraction": 0.1,
+	"top_margin_fraction": 0.1
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 5)
+}
+
 func TestContractConfigPostprocessor(t *testing.T) {
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "postprocessor": {
@@ -295,6 +417,13 @@ func TestContractConfigPostprocessor(t *testing.T) {
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
 	assertContentNotEmpty(t, result)
+}
+
+func TestContractConfigProcessingWarningsEmpty(t *testing.T) {
+	result := runExtraction(t, "pdf/fake_memo.pdf", nil)
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 10)
+	assertProcessingWarnings(t, result, nil, boolPtr(true))
 }
 
 func TestContractConfigQualityDisabled(t *testing.T) {
@@ -316,6 +445,27 @@ func TestContractConfigQualityEnabled(t *testing.T) {
 	assertQualityScore(t, result, boolPtr(true), floatPtr(0), floatPtr(1))
 }
 
+func TestContractConfigQualityScoreRange(t *testing.T) {
+	skipIfFeatureUnavailable(t, "quality")
+	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
+"enable_quality_processing": true
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertQualityScore(t, result, boolPtr(true), floatPtr(0.1), nil)
+}
+
+func TestContractConfigSecurityLimits(t *testing.T) {
+	result := runExtraction(t, "archives/documents.zip", []byte(`{
+"security_limits": {
+	"max_archive_size": 104857600,
+	"max_compression_ratio": 50,
+	"max_files_in_archive": 100
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/zip", "application/x-zip-compressed"})
+	assertMinContentLength(t, result, 10)
+}
+
 func TestContractConfigStructuredOutput(t *testing.T) {
 	skipIfFeatureUnavailable(t, "pdf")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
@@ -323,6 +473,12 @@ func TestContractConfigStructuredOutput(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
+}
+
+func TestContractConfigTablesContent(t *testing.T) {
+	result := runExtraction(t, "docx/docx_tables.docx", nil)
+	assertExpectedMime(t, result, []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document"})
+	assertTableCount(t, result, intPtr(1), nil)
 }
 
 func TestContractConfigUseCacheFalse(t *testing.T) {

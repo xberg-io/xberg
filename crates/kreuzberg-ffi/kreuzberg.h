@@ -9,8 +9,8 @@
 
 #define KREUZBERG_VERSION_MAJOR 4
 #define KREUZBERG_VERSION_MINOR 4
-#define KREUZBERG_VERSION_PATCH 2
-#define KREUZBERG_VERSION "4.4.2"
+#define KREUZBERG_VERSION_PATCH 5
+#define KREUZBERG_VERSION "4.4.5"
 
 
 #include <stdarg.h>
@@ -102,61 +102,25 @@ typedef struct ResultPool ResultPool;
  */
 typedef struct CExtractionResultView {
   /**
-   * Direct pointer to content bytes (UTF-8, not null-terminated)
+   * Number of chunks (0 if chunking not enabled)
    */
-  const uint8_t *content_ptr;
+  uintptr_t chunk_count;
   /**
    * Length of content in bytes
    */
   uintptr_t content_len;
   /**
-   * Direct pointer to MIME type bytes (UTF-8, not null-terminated)
+   * Direct pointer to content bytes (UTF-8, not null-terminated)
    */
-  const uint8_t *mime_type_ptr;
-  /**
-   * Length of MIME type in bytes
-   */
-  uintptr_t mime_type_len;
-  /**
-   * Direct pointer to language bytes (UTF-8, not null-terminated), or NULL
-   */
-  const uint8_t *language_ptr;
-  /**
-   * Length of language in bytes (0 if NULL)
-   */
-  uintptr_t language_len;
-  /**
-   * Direct pointer to date bytes (UTF-8, not null-terminated), or NULL
-   */
-  const uint8_t *date_ptr;
+  const uint8_t *content_ptr;
   /**
    * Length of date in bytes (0 if NULL)
    */
   uintptr_t date_len;
   /**
-   * Direct pointer to subject bytes (UTF-8, not null-terminated), or NULL
+   * Direct pointer to date bytes (UTF-8, not null-terminated), or NULL
    */
-  const uint8_t *subject_ptr;
-  /**
-   * Length of subject in bytes (0 if NULL)
-   */
-  uintptr_t subject_len;
-  /**
-   * Direct pointer to title bytes (UTF-8, not null-terminated), or NULL
-   */
-  const uint8_t *title_ptr;
-  /**
-   * Length of title in bytes (0 if NULL)
-   */
-  uintptr_t title_len;
-  /**
-   * Number of tables extracted
-   */
-  uintptr_t table_count;
-  /**
-   * Number of chunks (0 if chunking not enabled)
-   */
-  uintptr_t chunk_count;
+  const uint8_t *date_ptr;
   /**
    * Number of detected languages (0 if language detection not enabled)
    */
@@ -166,9 +130,45 @@ typedef struct CExtractionResultView {
    */
   uintptr_t image_count;
   /**
+   * Length of language in bytes (0 if NULL)
+   */
+  uintptr_t language_len;
+  /**
+   * Direct pointer to language bytes (UTF-8, not null-terminated), or NULL
+   */
+  const uint8_t *language_ptr;
+  /**
+   * Length of MIME type in bytes
+   */
+  uintptr_t mime_type_len;
+  /**
+   * Direct pointer to MIME type bytes (UTF-8, not null-terminated)
+   */
+  const uint8_t *mime_type_ptr;
+  /**
    * Total page count (0 if not applicable)
    */
   uintptr_t page_count;
+  /**
+   * Length of subject in bytes (0 if NULL)
+   */
+  uintptr_t subject_len;
+  /**
+   * Direct pointer to subject bytes (UTF-8, not null-terminated), or NULL
+   */
+  const uint8_t *subject_ptr;
+  /**
+   * Number of tables extracted
+   */
+  uintptr_t table_count;
+  /**
+   * Length of title in bytes (0 if NULL)
+   */
+  uintptr_t title_len;
+  /**
+   * Direct pointer to title bytes (UTF-8, not null-terminated), or NULL
+   */
+  const uint8_t *title_ptr;
 } CExtractionResultView;
 
 /**
@@ -205,9 +205,9 @@ typedef int (*ResultCallback)(const struct CExtractionResultView *result,
  */
 typedef struct CErrorDetails {
   /**
-   * The error message (must be freed with kreuzberg_free_string)
+   * Additional context information (may be NULL)
    */
-  char *message;
+  char *context_info;
   /**
    * Numeric error code (0-7 for Kreuzberg errors, 1-7 for panic_shield codes)
    */
@@ -216,6 +216,10 @@ typedef struct CErrorDetails {
    * Human-readable error type name (must be freed with kreuzberg_free_string)
    */
   char *error_type;
+  /**
+   * The error message (must be freed with kreuzberg_free_string)
+   */
+  char *message;
   /**
    * Source file where error occurred (may be NULL)
    */
@@ -228,10 +232,6 @@ typedef struct CErrorDetails {
    * Line number in source file (0 if unknown)
    */
   uint32_t source_line;
-  /**
-   * Additional context information (may be NULL)
-   */
-  char *context_info;
   /**
    * 1 if this error originated from a panic, 0 otherwise
    */
@@ -260,45 +260,61 @@ typedef struct CErrorDetails {
  */
 typedef struct CExtractionResult {
   /**
+   * JSON-serialized PDF annotations array (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+   */
+  char *annotations_json;
+  /**
+   * Text chunks as JSON array (null-terminated, or null pointer if not available, must be freed with kreuzberg_free_string)
+   */
+  char *chunks_json;
+  /**
    * Extracted text content (null-terminated UTF-8 string, must be freed with kreuzberg_free_string)
    */
   char *content;
-  /**
-   * Detected MIME type (null-terminated string, must be freed with kreuzberg_free_string)
-   */
-  char *mime_type;
-  /**
-   * Document language (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-   */
-  char *language;
   /**
    * Document date (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
    */
   char *date;
   /**
-   * Document subject (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-   */
-  char *subject;
-  /**
-   * Tables as JSON array (null-terminated string, or NULL if no tables, must be freed with kreuzberg_free_string)
-   */
-  char *tables_json;
-  /**
    * Detected languages as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
    */
   char *detected_languages_json;
+  /**
+   * JSON-serialized Djot content (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+   */
+  char *djot_content_json;
+  /**
+   * Document structure as JSON object (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+   */
+  char *document_json;
+  /**
+   * Semantic elements as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+   */
+  char *elements_json;
+  /**
+   * JSON-serialized extracted keywords (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+   */
+  char *extracted_keywords_json;
+  /**
+   * Extracted images as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+   */
+  char *images_json;
+  /**
+   * Document language (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+   */
+  char *language;
   /**
    * Metadata as JSON object (null-terminated string, or NULL if no metadata, must be freed with kreuzberg_free_string)
    */
   char *metadata_json;
   /**
-   * Text chunks as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+   * Detected MIME type (null-terminated string, must be freed with kreuzberg_free_string)
    */
-  char *chunks_json;
+  char *mime_type;
   /**
-   * Extracted images as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+   * OCR elements as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
    */
-  char *images_json;
+  char *ocr_elements_json;
   /**
    * Page structure as JSON object (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
    */
@@ -308,33 +324,21 @@ typedef struct CExtractionResult {
    */
   char *pages_json;
   /**
-   * Semantic elements as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
+   * JSON-serialized processing warnings array (null-terminated, or null pointer if empty, must be freed with kreuzberg_free_string)
    */
-  char *elements_json;
-  /**
-   * OCR elements as JSON array (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-   */
-  char *ocr_elements_json;
-  /**
-   * Document structure as JSON object (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
-   */
-  char *document_json;
-  /**
-   * JSON-serialized extracted keywords (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
-   */
-  char *extracted_keywords_json;
+  char *processing_warnings_json;
   /**
    * JSON-serialized quality score (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
    */
   char *quality_score_json;
   /**
-   * JSON-serialized processing warnings array (null-terminated, or null pointer if empty, must be freed with kreuzberg_free_string)
+   * Document subject (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
    */
-  char *processing_warnings_json;
+  char *subject;
   /**
-   * JSON-serialized PDF annotations array (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+   * Tables as JSON array (null-terminated string, or NULL if no tables, must be freed with kreuzberg_free_string)
    */
-  char *annotations_json;
+  char *tables_json;
   /**
    * Whether extraction was successful
    */
@@ -362,13 +366,13 @@ typedef struct CExtractionResult {
  */
 typedef struct CBatchResult {
   /**
-   * Array of extraction results
-   */
-  struct CExtractionResult **results;
-  /**
    * Number of results
    */
   uintptr_t count;
+  /**
+   * Array of extraction results
+   */
+  struct CExtractionResult **results;
   /**
    * Whether batch operation was successful
    */
@@ -524,39 +528,31 @@ typedef struct CMetadataField {
  */
 typedef struct CResultPoolStats {
   /**
-   * Current number of results stored in pool
-   */
-  uintptr_t current_count;
-  /**
    * Maximum capacity of pool (before automatic growth)
    */
   uintptr_t capacity;
   /**
-   * Total number of allocations (successful extractions)
+   * Current number of results stored in pool
    */
-  uintptr_t total_allocations;
+  uintptr_t current_count;
+  /**
+   * Estimated memory used by results in bytes
+   */
+  uintptr_t estimated_memory_bytes;
   /**
    * Number of times pool capacity was exceeded (triggered growth)
    */
   uintptr_t growth_events;
   /**
-   * Estimated memory used by results in bytes
+   * Total number of allocations (successful extractions)
    */
-  uintptr_t estimated_memory_bytes;
+  uintptr_t total_allocations;
 } CResultPoolStats;
 
 /**
  * Statistics for string interning efficiency tracking.
  */
 typedef struct CStringInternStats {
-  /**
-   * Number of unique strings currently interned
-   */
-  uintptr_t unique_count;
-  /**
-   * Total number of intern requests
-   */
-  uintptr_t total_requests;
   /**
    * Number of cache hits (string already interned)
    */
@@ -573,6 +569,14 @@ typedef struct CStringInternStats {
    * Total memory used by interned strings (bytes)
    */
   uintptr_t total_memory_bytes;
+  /**
+   * Total number of intern requests
+   */
+  uintptr_t total_requests;
+  /**
+   * Number of unique strings currently interned
+   */
+  uintptr_t unique_count;
 } CStringInternStats;
 
 /**
@@ -902,6 +906,22 @@ int32_t kreuzberg_config_builder_set_include_document_structure(struct ConfigBui
                                                                 int32_t include);
 
 /**
+ * Set the force_ocr field.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `force` - 1 for true, 0 for false
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error (NULL builder)
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_force_ocr(struct ConfigBuilder *builder,
+                                               int32_t force);
+
+/**
  * Set OCR configuration from JSON.
  *
  * # Arguments
@@ -948,6 +968,22 @@ int32_t kreuzberg_config_builder_set_ocr(struct ConfigBuilder *builder,
 KREUZBERG_EXPORT
 int32_t kreuzberg_config_builder_set_pdf(struct ConfigBuilder *builder,
                                          const char *pdf_json);
+
+/**
+ * Set token reduction configuration from JSON.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `tr_json` - JSON string for token reduction config
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_token_reduction(struct ConfigBuilder *builder,
+                                                     const char *tr_json);
 
 /**
  * Set chunking configuration from JSON.
@@ -1044,6 +1080,118 @@ int32_t kreuzberg_config_builder_set_post_processor(struct ConfigBuilder *builde
 KREUZBERG_EXPORT
 int32_t kreuzberg_config_builder_set_language_detection(struct ConfigBuilder *builder,
                                                         const char *ld_json);
+
+/**
+ * Set pages configuration from JSON.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `pages_json` - JSON string for pages config
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_pages(struct ConfigBuilder *builder,
+                                           const char *pages_json);
+
+/**
+ * Set keywords configuration from JSON.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `keywords_json` - JSON string for keywords config
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_keywords(struct ConfigBuilder *builder,
+                                              const char *keywords_json);
+
+/**
+ * Set HTML conversion options from JSON.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `html_json` - JSON string for HTML options
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_html_options(struct ConfigBuilder *builder,
+                                                  const char *html_json);
+
+/**
+ * Set the maximum concurrent extractions.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `max` - Maximum concurrent extractions (0 for default)
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_max_concurrent_extractions(struct ConfigBuilder *builder,
+                                                                uintptr_t max);
+
+/**
+ * Set the result format.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `format_str` - Format name ("Unified" or "ElementBased")
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_result_format(struct ConfigBuilder *builder,
+                                                   const char *format_str);
+
+/**
+ * Set security limits for archive extraction from JSON.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `security_json` - JSON string for security limits
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_security_limits(struct ConfigBuilder *builder,
+                                                     const char *security_json);
+
+/**
+ * Set the output format.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `format_str` - Format name ("Plain", "Markdown", "Djot", "Html")
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_builder_set_output_format(struct ConfigBuilder *builder,
+                                                   const char *format_str);
 
 /**
  * Build the final ExtractionConfig and consume the builder.

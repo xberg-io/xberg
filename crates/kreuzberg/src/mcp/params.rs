@@ -15,6 +15,9 @@ pub struct ExtractFileParams {
     /// Extraction configuration (JSON object)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
+    /// Password for encrypted PDFs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pdf_password: Option<String>,
 }
 
 /// Request parameters for bytes extraction.
@@ -28,6 +31,9 @@ pub struct ExtractBytesParams {
     /// Extraction configuration (JSON object)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
+    /// Password for encrypted PDFs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pdf_password: Option<String>,
 }
 
 /// Request parameters for batch file extraction.
@@ -38,6 +44,9 @@ pub struct BatchExtractFilesParams {
     /// Extraction configuration (JSON object)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<serde_json::Value>,
+    /// Password for encrypted PDFs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pdf_password: Option<String>,
 }
 
 /// Request parameters for MIME type detection.
@@ -126,6 +135,7 @@ mod tests {
             path: "/test.pdf".to_string(),
             mime_type: Some("application/pdf".to_string()),
             config: Some(serde_json::json!({"use_cache": false})),
+            pdf_password: None,
         };
 
         let json = serde_json::to_string(&params).unwrap();
@@ -142,6 +152,7 @@ mod tests {
             data: "SGVsbG8=".to_string(),
             mime_type: None,
             config: None,
+            pdf_password: None,
         };
 
         let json = serde_json::to_string(&params).unwrap();
@@ -155,6 +166,7 @@ mod tests {
         let params = BatchExtractFilesParams {
             paths: vec!["/a.pdf".to_string(), "/b.pdf".to_string()],
             config: Some(serde_json::json!({"use_cache": true})),
+            pdf_password: None,
         };
 
         let json = serde_json::to_string(&params).unwrap();

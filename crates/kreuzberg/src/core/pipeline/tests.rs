@@ -146,8 +146,7 @@ async fn test_pipeline_with_chunking() {
             overlap: 50,
             trim: true,
             chunker_type: crate::ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -353,8 +352,7 @@ async fn test_pipeline_with_all_features() {
             overlap: 50,
             trim: true,
             chunker_type: crate::ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         }),
         ..Default::default()
     };

@@ -177,6 +177,10 @@
 						},
 						"each_has_embedding": {
 							"type": "boolean"
+						},
+						"each_has_heading_context": {
+							"type": "boolean",
+							"description": "Assert each chunk has heading_context populated (markdown chunker only)."
 						}
 					},
 					"additionalProperties": false

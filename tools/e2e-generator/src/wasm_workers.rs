@@ -104,6 +104,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
     const config: ChunkingConfig = {};
     assignNumberField(config as PlainRecord, raw, "max_chars", "maxChars");
     assignNumberField(config as PlainRecord, raw, "max_overlap", "maxOverlap");
+    if (typeof raw.chunker_type === "string") {
+        (config as PlainRecord).chunkerType = raw.chunker_type;
+    }
     return config;
 }
 
@@ -361,6 +364,7 @@ export const assertions = {
         maxCount: number | null,
         eachHasContent: boolean | null,
         eachHasEmbedding: boolean | null,
+        eachHasHeadingContext: boolean | null,
     ): void {
         const chunks = Array.isArray(result.chunks) ? result.chunks : [];
         if (typeof minCount === "number") {
@@ -377,6 +381,16 @@ export const assertions = {
         if (eachHasEmbedding === true) {
             for (const chunk of chunks) {
                 expect(chunk.embedding !== undefined && chunk.embedding !== null).toBe(true);
+            }
+        }
+        if (eachHasHeadingContext === true) {
+            for (const chunk of chunks) {
+                expect(chunk.metadata?.headingContext !== undefined && chunk.metadata?.headingContext !== null).toBe(true);
+            }
+        }
+        if (eachHasHeadingContext === false) {
+            for (const chunk of chunks) {
+                expect(chunk.metadata?.headingContext ?? null).toBeNull();
             }
         }
     },
@@ -481,14 +495,14 @@ export const assertions = {
                 expect(nodes.length).toBeGreaterThanOrEqual(minNodeCount);
             }
             if (nodeTypesInclude && nodeTypesInclude.length > 0) {
-                const foundTypes = new Set(nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.node_type ?? (n as PlainRecord).node_type));
+                const foundTypes = new Set(nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.nodeType ?? (n as PlainRecord).nodeType));
                 for (const expected of nodeTypesInclude) {
                     const found = [...foundTypes].some((t) => typeof t === "string" && t.toLowerCase() === expected.toLowerCase());
                     expect(found).toBe(true);
                 }
             }
             if (typeof hasGroups === "boolean") {
-                const hasGroupNodes = nodes.some((n) => ((n as PlainRecord).content as PlainRecord)?.node_type === "group" || (n as PlainRecord).node_type === "group");
+                const hasGroupNodes = nodes.some((n) => ((n as PlainRecord).content as PlainRecord)?.nodeType === "group" || (n as PlainRecord).nodeType === "group");
                 expect(hasGroupNodes).toBe(hasGroups);
             }
         } else {
@@ -1006,9 +1020,10 @@ fn render_assertions(assertions: &Assertions) -> String {
 
     if !assertions.metadata.is_empty() {
         for (path, expectation) in &assertions.metadata {
+            let camel_path = to_camel_case(path);
             buffer.push_str(&format!(
                 "        assertions.assertMetadataExpectation(result, \"{}\", {});\n",
-                escape_ts_string(path),
+                escape_ts_string(&camel_path),
                 render_json_literal(expectation)
             ));
         }
@@ -1025,8 +1040,12 @@ fn render_assertions(assertions: &Assertions) -> String {
             .each_has_embedding
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".into());
+        let each_has_heading_context = chunks
+            .each_has_heading_context
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".into());
         buffer.push_str(&format!(
-            "        assertions.assertChunks(result, {min_count}, {max_count}, {each_has_content}, {each_has_embedding});\n"
+            "        assertions.assertChunks(result, {min_count}, {max_count}, {each_has_content}, {each_has_embedding}, {each_has_heading_context});\n"
         ));
     }
 

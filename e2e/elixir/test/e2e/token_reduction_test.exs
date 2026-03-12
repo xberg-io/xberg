@@ -22,6 +22,7 @@ defmodule E2E.TokenReductionTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(5)
+          |> E2E.Helpers.assert_max_content_length(150)
           |> E2E.Helpers.assert_content_not_empty()
 
         {:skipped, reason} ->
@@ -45,6 +46,7 @@ defmodule E2E.TokenReductionTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(5)
+          |> E2E.Helpers.assert_max_content_length(200)
           |> E2E.Helpers.assert_content_not_empty()
 
         {:skipped, reason} ->
@@ -91,6 +93,7 @@ defmodule E2E.TokenReductionTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(5)
+          |> E2E.Helpers.assert_max_content_length(200)
           |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true)
           |> E2E.Helpers.assert_content_not_empty()
 

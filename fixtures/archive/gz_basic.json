@@ -1,0 +1,16 @@
+{
+	"id": "archive_gz_basic",
+	"category": "archive",
+	"description": "Gzip compressed file extraction.",
+	"document": {
+		"path": "archives/book_war_and_peace_1p.txt.gz",
+		"media_type": "application/gzip"
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": ["application/gzip", "application/x-gzip"],
+		"min_content_length": 10
+	}
+}

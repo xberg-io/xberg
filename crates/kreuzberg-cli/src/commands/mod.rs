@@ -9,6 +9,7 @@
 pub mod cache;
 pub mod config;
 pub mod extract;
+#[cfg(any(feature = "api", feature = "mcp"))]
 pub mod server;
 
 // Re-export command functions for convenience

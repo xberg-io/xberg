@@ -1,0 +1,29 @@
+{
+	"id": "config_pdf_annotations_count",
+	"description": "Tests PDF annotation extraction with min_count assertion",
+	"tags": ["contract", "config", "annotations"],
+	"document": {
+		"path": "vendored/pdfplumber/pdf/annotations.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"pdf_options": {
+				"extract_annotations": true
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"annotations": {
+			"has_annotations": true,
+			"min_count": 3
+		}
+	},
+	"skip": {
+		"requires_feature": ["pdf"],
+		"skip_on_platform": ["aarch64-unknown-linux-gnu"],
+		"notes": "PDFium ARM Linux binary does not support annotation extraction"
+	}
+}

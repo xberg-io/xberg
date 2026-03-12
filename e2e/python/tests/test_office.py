@@ -28,6 +28,21 @@ def test_office_bibtex_basic() -> None:
     helpers.assert_min_content_length(result, 10)
 
 
+def test_office_commonmark_basic() -> None:
+    """CommonMark (.commonmark) text extraction."""
+
+    document_path = helpers.resolve_document("markdown/sample.commonmark")
+    if not document_path.exists():
+        pytest.skip(f"Skipping office_commonmark_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["text/markdown", "text/plain", "text/x-commonmark"])
+    helpers.assert_min_content_length(result, 5)
+
+
 def test_office_djot_basic() -> None:
     """Djot markup text extraction."""
 
@@ -483,6 +498,27 @@ def test_office_ppt_legacy() -> None:
     helpers.assert_min_content_length(result, 10)
 
 
+def test_office_pptm_basic() -> None:
+    """PowerPoint macro-enabled presentation (.pptm) extraction."""
+
+    document_path = helpers.resolve_document("pptx/powerpoint_with_image.pptm")
+    if not document_path.exists():
+        pytest.skip(f"Skipping office_pptm_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(
+        result,
+        [
+            "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ],
+    )
+    helpers.assert_content_not_empty(result)
+
+
 def test_office_pptx_basic() -> None:
     """PPTX deck should extract slides content."""
 
@@ -586,6 +622,48 @@ def test_office_xls_legacy() -> None:
 
     helpers.assert_expected_mime(result, ["application/vnd.ms-excel"])
     helpers.assert_min_content_length(result, 10)
+
+
+def test_office_xlsb_basic() -> None:
+    """Excel binary workbook (.xlsb) extraction."""
+
+    document_path = helpers.resolve_document("xlsx/test_xlsb.xlsb")
+    if not document_path.exists():
+        pytest.skip(f"Skipping office_xlsb_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(
+        result,
+        [
+            "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ],
+    )
+    helpers.assert_content_not_empty(result)
+
+
+def test_office_xlsm_basic() -> None:
+    """Excel macro-enabled workbook (.xlsm) extraction."""
+
+    document_path = helpers.resolve_document("xlsx/test_01.xlsm")
+    if not document_path.exists():
+        pytest.skip(f"Skipping office_xlsm_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(
+        result,
+        [
+            "application/vnd.ms-excel.sheet.macroEnabled.12",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ],
+    )
+    helpers.assert_content_not_empty(result)
 
 
 def test_office_xlsx_basic() -> None:

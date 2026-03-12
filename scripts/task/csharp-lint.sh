@@ -8,7 +8,6 @@ root="$(git rev-parse --show-toplevel)"
 # Each entry is "dir:target" where target is the solution/project file
 csharp_targets=(
   "packages/csharp:Kreuzberg.slnx"
-  "tests/test_apps/csharp:KreuzbergSmokeTest.csproj"
   "e2e/csharp:Kreuzberg.E2E.csproj"
 )
 

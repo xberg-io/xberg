@@ -94,7 +94,7 @@ describe("ocr", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 20);
-		assertions.assertMetadataExpectation(result, "format_type", { eq: "pdf" });
+		assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
 	});
 
 	it("ocr_pdf_rotated_90", async () => {
@@ -181,6 +181,36 @@ describe("ocr", () => {
 		assertions.assertExpectedMime(result, ["image/png"]);
 		assertions.assertMinContentLength(result, 5);
 		assertions.assertOcrElements(result, true, true, true, null);
+	});
+
+	it("ocr_tesseract_elements_min_count", async () => {
+		const documentBytes = getFixture("images/test_hello_world.png");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig({
+			force_ocr: true,
+			ocr: { backend: "tesseract", element_config: { include_elements: true, min_level: "line" }, language: "eng" },
+		});
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/png", config);
+		} catch (error) {
+			if (
+				shouldSkipFixture(error, "ocr_tesseract_elements_min_count", ["tesseract"], "Requires Tesseract OCR backend")
+			) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/png"]);
+		assertions.assertMinContentLength(result, 5);
+		assertions.assertOcrElements(result, true, null, null, 1);
 	});
 
 	it("ocr_tesseract_language_german", async () => {

@@ -21,6 +21,33 @@ pub enum ChunkerType {
     Markdown,
 }
 
+/// How chunk size is measured.
+///
+/// Defaults to `Characters` (Unicode character count). When using token-based sizing,
+/// chunks are sized by token count according to the specified tokenizer.
+///
+/// Token-based sizing uses HuggingFace tokenizers loaded at runtime. Any tokenizer
+/// available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
+/// (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ChunkSizing {
+    /// Size measured in Unicode characters (default).
+    #[default]
+    Characters,
+    /// Size measured in tokens from a HuggingFace tokenizer.
+    #[cfg(feature = "chunking-tokenizers")]
+    Tokenizer {
+        /// HuggingFace model ID or path, e.g. "Xenova/gpt-4o", "bert-base-uncased".
+        model: String,
+        /// Optional cache directory override for tokenizer files.
+        /// Defaults to hf-hub's standard cache (`~/.cache/huggingface/`).
+        /// Can also be set via `KREUZBERG_TOKENIZER_CACHE_DIR` environment variable.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cache_dir: Option<std::path::PathBuf>,
+    },
+}
+
 /// Post-processor configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostProcessorConfig {
@@ -76,39 +103,87 @@ impl Default for PostProcessorConfig {
 ///
 /// Configures text chunking for document content, including chunk size,
 /// overlap, trimming behavior, and optional embeddings.
+///
+/// Use `..Default::default()` when constructing to allow for future field additions:
+/// ```rust
+/// # use kreuzberg::ChunkingConfig;
+/// let config = ChunkingConfig {
+///     max_characters: 500,
+///     ..Default::default()
+/// };
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChunkingConfig {
-    /// Maximum characters per chunk
+    /// Maximum size per chunk (in units determined by `sizing`).
+    ///
+    /// When `sizing` is `Characters` (default), this is the max character count.
+    /// When using token-based sizing, this is the max token count.
     ///
     /// Default: 1000
     #[serde(default = "default_chunk_size", rename = "max_chars", alias = "max_characters")]
     pub max_characters: usize,
 
-    /// Overlap between chunks in characters
+    /// Overlap between chunks (in units determined by `sizing`).
     ///
     /// Default: 200
     #[serde(default = "default_chunk_overlap", rename = "max_overlap", alias = "overlap")]
     pub overlap: usize,
 
-    /// Whether to trim whitespace from chunk boundaries
+    /// Whether to trim whitespace from chunk boundaries.
     ///
     /// Default: true
     #[serde(default = "default_trim")]
     pub trim: bool,
 
-    /// Type of chunker to use (Text or Markdown)
+    /// Type of chunker to use (Text or Markdown).
     ///
     /// Default: Text
     #[serde(default = "default_chunker_type")]
     pub chunker_type: ChunkerType,
 
-    /// Optional embedding configuration for chunk embeddings
+    /// Optional embedding configuration for chunk embeddings.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embedding: Option<EmbeddingConfig>,
 
-    /// Use a preset configuration (overrides individual settings if provided)
+    /// Use a preset configuration (overrides individual settings if provided).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preset: Option<String>,
+
+    /// How to measure chunk size.
+    ///
+    /// Default: `Characters` (Unicode character count).
+    /// Enable `chunking-tiktoken` or `chunking-tokenizers` features for token-based sizing.
+    #[serde(default)]
+    pub sizing: ChunkSizing,
+}
+
+impl ChunkingConfig {
+    /// Create a new `ChunkingConfig` with the given max characters, overlap, and trim settings.
+    ///
+    /// Other fields are set to their defaults. Use the setter methods to customize further.
+    pub fn new(max_characters: usize, overlap: usize, trim: bool) -> Self {
+        Self {
+            max_characters,
+            overlap,
+            trim,
+            chunker_type: ChunkerType::Text,
+            embedding: None,
+            preset: None,
+            sizing: ChunkSizing::default(),
+        }
+    }
+
+    /// Set the chunker type.
+    pub fn with_chunker_type(mut self, chunker_type: ChunkerType) -> Self {
+        self.chunker_type = chunker_type;
+        self
+    }
+
+    /// Set the sizing strategy.
+    pub fn with_sizing(mut self, sizing: ChunkSizing) -> Self {
+        self.sizing = sizing;
+        self
+    }
 }
 
 impl Default for ChunkingConfig {
@@ -120,6 +195,7 @@ impl Default for ChunkingConfig {
             chunker_type: ChunkerType::Text,
             embedding: None,
             preset: None,
+            sizing: ChunkSizing::default(),
         }
     }
 }
@@ -249,18 +325,12 @@ mod tests {
 
     #[test]
     fn test_chunking_config_defaults() {
-        let config = ChunkingConfig {
-            max_characters: 1000,
-            overlap: 200,
-            trim: true,
-            chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
-        };
+        let config = ChunkingConfig::default();
         assert_eq!(config.max_characters, 1000);
         assert_eq!(config.overlap, 200);
         assert!(config.trim);
         assert_eq!(config.chunker_type, ChunkerType::Text);
+        assert!(matches!(config.sizing, ChunkSizing::Characters));
     }
 
     #[test]

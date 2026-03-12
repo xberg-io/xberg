@@ -90,6 +90,11 @@ tasks:
     cmds:
       - uv run pytest --cov --cov-report=html
 
+  clippy:
+    desc: Run clippy on kreuzberg-py crate
+    cmds:
+      - cargo clippy -p kreuzberg-py -- -D warnings
+
   lint:
     desc: Auto-fix Python code linting (ruff check + format)
     dir: packages/python

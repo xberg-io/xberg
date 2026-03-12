@@ -273,6 +273,9 @@ result = Kreuzberg.extract_file_sync("document.pdf", config: config)
   - `chunk_size` (Integer): Maximum chunk size in tokens. Default: 512
   - `chunk_overlap` (Integer): Overlap between chunks. Default: 50
   - `chunking_strategy` (String): Strategy ("fixed", "semantic"). Default: "fixed"
+  - `sizing_type` (String, nil): How chunk size is measured. Options: `"characters"` (default) or `"tokenizer"`. Default: nil (characters)
+  - `sizing_model` (String, nil): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `sizing_type` is `"tokenizer"`. Default: nil
+  - `sizing_cache_dir` (String, nil): Optional directory to cache downloaded tokenizer files. Default: nil
 
 - `language_detection` (Hash): Language detection options
   - `enabled` (Boolean): Enable language detection. Default: true
@@ -510,6 +513,7 @@ Metadata for a single text chunk.
 - `token_count` (Integer, nil): Estimated token count (if configured)
 - `first_page` (Integer, nil): First page this chunk appears on (1-indexed, only when page boundaries available)
 - `last_page` (Integer, nil): Last page this chunk appears on (1-indexed, only when page boundaries available)
+- `heading_context` (HeadingContext, nil): Heading hierarchy when using Markdown chunker. Only populated when chunker_type is set to markdown.
 
 **Page tracking:** When `PageStructure.boundaries` is available and chunking is enabled, `first_page` and `last_page` are automatically calculated based on byte offsets.
 

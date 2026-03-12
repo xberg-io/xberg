@@ -144,6 +144,20 @@ test_that("config_chunking", {
   assert_chunks(result, min_count = 1L, each_has_content = TRUE)
 })
 
+test_that("config_chunking_heading_context", {
+  skip_if_feature_unavailable("chunking")
+  result <- run_fixture(
+    "config_chunking_heading_context",
+    "markdown/extraction_test.md",
+    list(chunking = list(chunker_type = "markdown", max_chars = 300L, max_overlap = 50L)),
+    requirements = c("chunking"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = TRUE)
+})
+
 test_that("config_chunking_markdown", {
   skip_if_feature_unavailable("chunking")
   result <- run_fixture(
@@ -159,6 +173,20 @@ test_that("config_chunking_markdown", {
   assert_chunks(result, min_count = 1L, each_has_content = TRUE)
 })
 
+test_that("config_chunking_no_headings", {
+  skip_if_feature_unavailable("chunking")
+  result <- run_fixture(
+    "config_chunking_no_headings",
+    "text/book_war_and_peace_1p.txt",
+    list(chunking = list(chunker_type = "markdown", max_chars = 300L, max_overlap = 50L)),
+    requirements = c("chunking"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = FALSE)
+})
+
 test_that("config_chunking_small", {
   skip_if_feature_unavailable("chunking")
   result <- run_fixture(
@@ -170,6 +198,34 @@ test_that("config_chunking_small", {
     skip_if_missing = TRUE
   )
   assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE)
+})
+
+test_that("config_chunking_text", {
+  result <- run_fixture(
+    "config_chunking_text",
+    "pdf/fake_memo.pdf",
+    list(chunking = list(chunker_type = "text", max_chars = 500L, max_overlap = 50L)),
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE)
+})
+
+test_that("config_chunking_tokenizer", {
+  skip_if_feature_unavailable("chunking-tokenizers")
+  result <- run_fixture(
+    "config_chunking_tokenizer",
+    "markdown/comprehensive.md",
+    list(chunking = list(max_chars = 200L, max_overlap = 40L, sizing = list(model = "Xenova/gpt-4o", type = "tokenizer"))),
+    requirements = c("chunking-tokenizers"),
+    notes = "Requires network access for HuggingFace Hub tokenizer download",
+    skip_if_missing = TRUE
+  )
   assert_min_content_length(result, 10L)
   assert_chunks(result, min_count = 2L, each_has_content = TRUE)
 })
@@ -212,6 +268,20 @@ test_that("config_document_structure_disabled", {
   )
   assert_expected_mime(result, c("application/pdf"))
   assert_document(result, has_document = FALSE)
+})
+
+test_that("config_document_structure_groups", {
+  skip_if_feature_unavailable("office")
+  result <- run_fixture(
+    "config_document_structure_groups",
+    "docx/unit_test_headers.docx",
+    list(include_document_structure = TRUE),
+    requirements = c("office"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+  assert_document(result, has_document = TRUE, has_groups = TRUE)
 })
 
 test_that("config_document_structure_headings", {
@@ -296,6 +366,19 @@ test_that("config_images", {
   assert_images(result, min_count = 1L)
 })
 
+test_that("config_images_with_formats", {
+  result <- run_fixture(
+    "config_images_with_formats",
+    "pptx/powerpoint_with_image.pptx",
+    list(images = list(extract_images = TRUE)),
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
+  assert_images(result, min_count = 1L)
+})
+
 test_that("config_keywords", {
   skip_if_feature_unavailable("keywords-yake")
   result <- run_fixture(
@@ -323,6 +406,20 @@ test_that("config_language_detection", {
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 10L)
   assert_detected_languages(result, c("eng"), 0.5)
+})
+
+test_that("config_language_detection_multi", {
+  result <- run_fixture(
+    "config_language_detection_multi",
+    "pdf/fake_memo.pdf",
+    list(language_detection = list(detect_multiple = TRUE, enabled = TRUE, min_confidence = 0.3)),
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_detected_languages(result, c("eng"), NULL)
 })
 
 test_that("config_language_multi", {
@@ -355,6 +452,21 @@ test_that("config_pages", {
   assert_content_contains_any(result, c("PAGE"))
 })
 
+test_that("config_pages_exact_count", {
+  skip_if_feature_unavailable("pdf")
+  result <- run_fixture(
+    "config_pages_exact_count",
+    "pdf/multi_page.pdf",
+    list(pages = list(extract_pages = TRUE)),
+    requirements = c("pdf"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_pages(result, exact_count = 5L)
+})
+
 test_that("config_pages_extract", {
   skip_if_feature_unavailable("pdf")
   result <- run_fixture(
@@ -385,6 +497,20 @@ test_that("config_pages_markers", {
   assert_content_contains_any(result, c("PAGE"))
 })
 
+test_that("config_pdf_annotations_count", {
+  skip_if_feature_unavailable("pdf")
+  result <- run_fixture(
+    "config_pdf_annotations_count",
+    "vendored/pdfplumber/pdf/annotations.pdf",
+    list(pdf_options = list(extract_annotations = TRUE)),
+    requirements = c("pdf"),
+    notes = "PDFium ARM Linux binary does not support annotation extraction",
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_annotations(result, has_annotations = TRUE, min_count = 3L)
+})
+
 test_that("config_pdf_hierarchy", {
   skip_if_feature_unavailable("pdf")
   result <- run_fixture(
@@ -399,6 +525,20 @@ test_that("config_pdf_hierarchy", {
   assert_min_content_length(result, 50L)
 })
 
+test_that("config_pdf_margins", {
+  skip_if_feature_unavailable("pdf")
+  result <- run_fixture(
+    "config_pdf_margins",
+    "pdf/fake_memo.pdf",
+    list(pdf_options = list(bottom_margin_fraction = 0.1, top_margin_fraction = 0.1)),
+    requirements = c("pdf"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 5L)
+})
+
 test_that("config_postprocessor", {
   result <- run_fixture(
     "config_postprocessor",
@@ -411,6 +551,20 @@ test_that("config_postprocessor", {
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 10L)
   assert_content_not_empty(result)
+})
+
+test_that("config_processing_warnings_empty", {
+  result <- run_fixture(
+    "config_processing_warnings_empty",
+    "pdf/fake_memo.pdf",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_processing_warnings(result, is_empty = TRUE)
 })
 
 test_that("config_quality_disabled", {
@@ -442,6 +596,33 @@ test_that("config_quality_enabled", {
   assert_quality_score(result, has_score = TRUE, min_score = 0, max_score = 1)
 })
 
+test_that("config_quality_score_range", {
+  skip_if_feature_unavailable("quality")
+  result <- run_fixture(
+    "config_quality_score_range",
+    "pdf/fake_memo.pdf",
+    list(enable_quality_processing = TRUE),
+    requirements = c("quality"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_quality_score(result, has_score = TRUE, min_score = 0.1)
+})
+
+test_that("config_security_limits", {
+  result <- run_fixture(
+    "config_security_limits",
+    "archives/documents.zip",
+    list(security_limits = list(max_archive_size = 104857600L, max_compression_ratio = 50L, max_files_in_archive = 100L)),
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/zip", "application/x-zip-compressed"))
+  assert_min_content_length(result, 10L)
+})
+
 test_that("config_structured_output", {
   skip_if_feature_unavailable("pdf")
   result <- run_fixture(
@@ -454,6 +635,19 @@ test_that("config_structured_output", {
   )
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 10L)
+})
+
+test_that("config_tables_content", {
+  result <- run_fixture(
+    "config_tables_content",
+    "docx/docx_tables.docx",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+  assert_table_count(result, minimum = 1L, maximum = NULL)
 })
 
 test_that("config_use_cache_false", {

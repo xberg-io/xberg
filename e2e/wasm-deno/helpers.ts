@@ -114,6 +114,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
 	const config: PlainRecord = {};
 	assignNumberField(config, raw, "max_chars", "maxChars");
 	assignNumberField(config, raw, "max_overlap", "maxOverlap");
+	if (typeof raw.chunker_type === "string") {
+		config.chunkerType = raw.chunker_type;
+	}
 	return config as unknown as ChunkingConfig;
 }
 
@@ -390,6 +393,7 @@ export const assertions = {
 		maxCount?: number | null,
 		eachHasContent?: boolean | null,
 		eachHasEmbedding?: boolean | null,
+		eachHasHeadingContext?: boolean | null,
 	): void {
 		const chunks = (result as unknown as PlainRecord).chunks as unknown[] | undefined;
 		assertExists(chunks, "Expected chunks to be defined");
@@ -410,6 +414,20 @@ export const assertions = {
 		if (eachHasEmbedding) {
 			for (const chunk of chunks) {
 				assertExists((chunk as PlainRecord).embedding, "Chunk missing embedding");
+			}
+		}
+		if (eachHasHeadingContext === true) {
+			for (const chunk of chunks) {
+				assertExists(((chunk as PlainRecord).metadata as PlainRecord)?.headingContext, "Chunk missing heading_context");
+			}
+		}
+		if (eachHasHeadingContext === false) {
+			for (const chunk of chunks) {
+				assertEquals(
+					((chunk as PlainRecord).metadata as PlainRecord)?.headingContext ?? null,
+					null,
+					"Chunk should have no heading_context",
+				);
 			}
 		}
 	},
@@ -545,7 +563,7 @@ export const assertions = {
 			}
 			if (nodeTypesInclude && nodeTypesInclude.length > 0) {
 				const foundTypes = new Set(
-					nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.node_type ?? (n as PlainRecord).node_type),
+					nodes.map((n) => ((n as PlainRecord).content as PlainRecord)?.nodeType ?? (n as PlainRecord).nodeType),
 				);
 				for (const expected of nodeTypesInclude) {
 					assertEquals(
@@ -558,8 +576,8 @@ export const assertions = {
 			if (typeof hasGroups === "boolean") {
 				const hasGroupNodes = nodes.some(
 					(n) =>
-						((n as PlainRecord).content as PlainRecord)?.node_type === "group" ||
-						(n as PlainRecord).node_type === "group",
+						((n as PlainRecord).content as PlainRecord)?.nodeType === "group" ||
+						(n as PlainRecord).nodeType === "group",
 				);
 				assertEquals(hasGroupNodes, hasGroups, `Expected hasGroups=${hasGroups} but got ${hasGroupNodes}`);
 			}

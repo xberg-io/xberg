@@ -289,15 +289,56 @@ export function jsToExtractionResult(jsValue: unknown): ExtractionResult {
 					tokenCount = coerceToNumber(tokenCountValue, "tokenCount");
 				}
 
+				let firstPage: number | null = null;
+				const firstPageValue = metadata.firstPage ?? metadata.first_page;
+				if (firstPageValue !== null && firstPageValue !== undefined) {
+					firstPage = coerceToNumber(firstPageValue, "firstPage");
+				}
+
+				let lastPage: number | null = null;
+				const lastPageValue = metadata.lastPage ?? metadata.last_page;
+				if (lastPageValue !== null && lastPageValue !== undefined) {
+					lastPage = coerceToNumber(lastPageValue, "lastPage");
+				}
+
+				// biome-ignore lint/complexity/useLiteralKeys: dynamic property access from raw object
+				const rawHc = (metadata["heading_context"] ?? metadata["headingContext"]) as
+					| Record<string, unknown>
+					| null
+					| undefined;
+				let headingContext: import("../types.js").HeadingContext | null = null;
+				if (rawHc && typeof rawHc === "object") {
+					// biome-ignore lint/complexity/useLiteralKeys: dynamic property access from raw object
+					const rawHeadings = rawHc["headings"];
+					if (Array.isArray(rawHeadings)) {
+						headingContext = {
+							headings: rawHeadings.map((h: unknown) => {
+								const heading = h as Record<string, unknown>;
+								return {
+									// biome-ignore lint/complexity/useLiteralKeys: dynamic property access from raw object
+									level: (heading["level"] as number) ?? 0,
+									// biome-ignore lint/complexity/useLiteralKeys: dynamic property access from raw object
+									text: (heading["text"] as string) ?? "",
+								};
+							}),
+						};
+					}
+				}
+
 				return {
 					content: c.content,
 					embedding,
 					metadata: {
+						byteStart: charStart,
+						byteEnd: charEnd,
 						charStart,
 						charEnd,
 						tokenCount,
 						chunkIndex,
 						totalChunks,
+						firstPage,
+						lastPage,
+						headingContext,
 					},
 				};
 			})

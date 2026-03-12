@@ -216,7 +216,8 @@ class Helpers
         ?int $minCount,
         ?int $maxCount,
         ?bool $eachHasContent,
-        ?bool $eachHasEmbedding
+        ?bool $eachHasEmbedding,
+        ?bool $eachHasHeadingContext = null
     ): void {
         $chunks = $result->chunks ?? [];
         $count = count($chunks);
@@ -251,6 +252,23 @@ class Helpers
                 Assert::assertNotNull(
                     $chunk->embedding ?? null,
                     sprintf("Chunk %d should have embedding", $i)
+                );
+            }
+        }
+
+        if ($eachHasHeadingContext === true) {
+            foreach ($chunks as $i => $chunk) {
+                Assert::assertNotNull(
+                    $chunk->metadata->heading_context ?? null,
+                    sprintf("Chunk %d should have heading_context", $i)
+                );
+            }
+        }
+        if ($eachHasHeadingContext === false) {
+            foreach ($chunks as $i => $chunk) {
+                Assert::assertNull(
+                    $chunk->metadata->heading_context ?? null,
+                    sprintf("Chunk %d should have no heading_context", $i)
                 );
             }
         }
@@ -1129,10 +1147,14 @@ fn render_assertions(assertions: &Assertions) -> String {
             .each_has_embedding
             .map(|v| if v { "true" } else { "false" }.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let each_has_heading_context = chunks
+            .each_has_heading_context
+            .map(|v| if v { "true" } else { "false" }.to_string())
+            .unwrap_or_else(|| "null".to_string());
         writeln!(
             buffer,
-            "        Helpers::assertChunks($result, {}, {}, {}, {});",
-            min_count, max_count, each_has_content, each_has_embedding
+            "        Helpers::assertChunks($result, {}, {}, {}, {}, {});",
+            min_count, max_count, each_has_content, each_has_embedding, each_has_heading_context
         )
         .unwrap();
     }

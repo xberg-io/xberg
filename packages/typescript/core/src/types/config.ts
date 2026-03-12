@@ -109,6 +109,14 @@ export interface ChunkingConfig {
 	maxOverlap?: number;
 	preset?: string;
 	embedding?: EmbeddingConfig;
+	/** Chunker type: "text" (default) or "markdown" */
+	chunkerType?: string;
+	/** Sizing type: "characters" (default) or "tokenizer" */
+	sizingType?: "characters" | "tokenizer";
+	/** HuggingFace model ID for tokenizer sizing (e.g., "Xenova/gpt-4o") */
+	sizingModel?: string;
+	/** Optional cache directory for tokenizer files */
+	sizingCacheDir?: string;
 }
 
 export interface LanguageDetectionConfig {

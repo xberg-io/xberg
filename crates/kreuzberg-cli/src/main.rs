@@ -142,6 +142,11 @@ enum Commands {
         #[arg(long)]
         chunk_overlap: Option<usize>,
 
+        /// Tokenizer model for token-based chunk sizing (e.g., "Xenova/gpt-4o", "bert-base-uncased").
+        /// Implicitly enables chunking. Requires the chunking-tokenizers feature.
+        #[arg(long)]
+        chunking_tokenizer: Option<String>,
+
         /// Enable quality processing (overrides config file)
         #[arg(long)]
         quality: Option<bool>,
@@ -162,6 +167,10 @@ enum Commands {
         /// This flag is maintained for backward compatibility. Use --output-format for new code.
         #[arg(long, value_enum, hide = true)]
         content_format: Option<ContentOutputFormatArg>,
+
+        /// Password(s) for encrypted PDFs. Can be specified multiple times.
+        #[arg(long)]
+        pdf_password: Vec<String>,
     },
 
     /// Batch extract from multiple documents
@@ -227,6 +236,10 @@ enum Commands {
         /// This flag is maintained for backward compatibility. Use --output-format for new code.
         #[arg(long, value_enum, hide = true)]
         content_format: Option<ContentOutputFormatArg>,
+
+        /// Password(s) for encrypted PDFs. Can be specified multiple times.
+        #[arg(long)]
+        pdf_password: Vec<String>,
     },
 
     /// Detect MIME type of a file
@@ -522,10 +535,12 @@ fn main() -> Result<()> {
             chunk,
             chunk_size,
             chunk_overlap,
+            chunking_tokenizer,
             quality,
             detect_language,
             output_format,
             content_format,
+            pdf_password,
         } => {
             validate_file_exists(&path)?;
             validate_chunk_params(chunk_size, chunk_overlap)?;
@@ -561,11 +576,17 @@ fn main() -> Result<()> {
                 chunk,
                 chunk_size,
                 chunk_overlap,
+                chunking_tokenizer.as_deref(),
                 quality,
                 detect_language,
                 output_format,
                 content_format,
             );
+
+            if !pdf_password.is_empty() {
+                let pdf_opts = config.pdf_options.get_or_insert_with(Default::default);
+                pdf_opts.passwords = Some(pdf_password);
+            }
 
             extract_command(path, config, mime_type, format)?;
         }
@@ -584,6 +605,7 @@ fn main() -> Result<()> {
             quality,
             output_format,
             content_format,
+            pdf_password,
         } => {
             validate_batch_paths(&paths)?;
 
@@ -618,11 +640,17 @@ fn main() -> Result<()> {
                 None,
                 None,
                 None,
+                None,
                 quality,
                 None,
                 output_format,
                 content_format,
             );
+
+            if !pdf_password.is_empty() {
+                let pdf_opts = config.pdf_options.get_or_insert_with(Default::default);
+                pdf_opts.passwords = Some(pdf_password);
+            }
 
             batch_command(paths, config, format)?;
         }

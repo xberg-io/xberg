@@ -1,0 +1,16 @@
+{
+	"id": "office_commonmark_basic",
+	"category": "office",
+	"description": "CommonMark (.commonmark) text extraction.",
+	"document": {
+		"path": "markdown/sample.commonmark",
+		"media_type": "text/markdown"
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": ["text/markdown", "text/plain", "text/x-commonmark"],
+		"min_content_length": 5
+	}
+}

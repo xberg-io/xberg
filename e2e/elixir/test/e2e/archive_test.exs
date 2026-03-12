@@ -9,6 +9,28 @@ defmodule E2E.ArchiveTest do
   use ExUnit.Case, async: false
 
   describe "archive fixtures" do
+    test "archive_gz_basic" do
+      case E2E.Helpers.run_fixture(
+             "archive_gz_basic",
+             "archives/book_war_and_peace_1p.txt.gz",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["application/gzip", "application/x-gzip"])
+          |> E2E.Helpers.assert_min_content_length(10)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "archive_sevenz_basic" do
       case E2E.Helpers.run_fixture(
              "archive_sevenz_basic",

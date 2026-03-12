@@ -16,6 +16,69 @@ use PHPUnit\Framework\TestCase;
 class ImageTest extends TestCase
 {
     /**
+     * BMP image extraction via OCR.
+     */
+    public function test_image_bmp_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('images/bmp_24.bmp');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping image_bmp_basic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/bmp']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
+     * GIF image extraction via OCR.
+     */
+    public function test_image_gif_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('images_extra/ocr_image.gif');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping image_gif_basic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/gif']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
+     * JPEG 2000 image extraction via OCR.
+     */
+    public function test_image_jp2_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('images_extra/ocr_image.jp2');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping image_jp2_basic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/jp2', 'image/jpeg2000']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
      * JPEG image to validate metadata extraction without OCR.
      */
     public function test_image_metadata_only(): void
@@ -35,6 +98,69 @@ class ImageTest extends TestCase
     }
 
     /**
+     * PBM (portable bitmap) image extraction via OCR.
+     */
+    public function test_image_pbm_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('images_extra/ocr_image.pbm');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping image_pbm_basic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/x-portable-bitmap', 'image/x-pbm']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
+     * PGM (portable graymap) image extraction via OCR.
+     */
+    public function test_image_pgm_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('images_extra/ocr_image.pgm');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping image_pgm_basic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/x-portable-graymap', 'image/x-pgm']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
+     * PPM (portable pixmap) image extraction via OCR.
+     */
+    public function test_image_ppm_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('images_extra/ocr_image.ppm');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping image_ppm_basic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/x-portable-pixmap', 'image/x-ppm']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
      * SVG image extraction.
      */
     public function test_image_svg_basic(): void
@@ -51,6 +177,48 @@ class ImageTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['image/svg+xml']);
         Helpers::assertMinContentLength($result, 5);
+    }
+
+    /**
+     * TIFF image extraction via OCR.
+     */
+    public function test_image_tiff_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('images_extra/ocr_image.tif');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping image_tiff_basic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/tiff']);
+        Helpers::assertContentNotEmpty($result);
+    }
+
+    /**
+     * WebP image extraction via OCR.
+     */
+    public function test_image_webp_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('images_extra/ocr_image.webp');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping image_webp_basic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tesseract');
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/webp']);
+        Helpers::assertContentNotEmpty($result);
     }
 
 }

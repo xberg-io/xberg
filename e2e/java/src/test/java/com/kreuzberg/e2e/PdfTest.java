@@ -204,6 +204,24 @@ public class PdfTest {
   }
 
   @Test
+  public void pdfPasswordProtected() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "pdf_password_protected",
+        "pdf/copy_protected.pdf",
+        config,
+        Collections.emptyList(),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 50);
+          E2EHelpers.Assertions.assertContentContainsAny(
+              result, Arrays.asList("LayoutParser", "document image analysis", "deep learning"));
+        });
+  }
+
+  @Test
   public void pdfRightToLeft() throws Exception {
     JsonNode config = null;
     E2EHelpers.runFixture(

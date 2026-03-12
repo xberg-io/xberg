@@ -14,6 +14,7 @@ public final class ChunkingConfig {
 	private final String preset;
 	private final Map<String, Object> embedding;
 	private final Boolean enabled;
+	private final Map<String, Object> sizing;
 
 	private ChunkingConfig(Builder builder) {
 		this.maxChars = builder.maxChars;
@@ -21,6 +22,7 @@ public final class ChunkingConfig {
 		this.preset = builder.preset;
 		this.embedding = builder.embedding;
 		this.enabled = builder.enabled;
+		this.sizing = builder.sizing;
 	}
 
 	public static Builder builder() {
@@ -47,6 +49,10 @@ public final class ChunkingConfig {
 		return enabled;
 	}
 
+	public Map<String, Object> getSizing() {
+		return sizing;
+	}
+
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new HashMap<>();
 		map.put("max_chars", maxChars);
@@ -60,6 +66,9 @@ public final class ChunkingConfig {
 		if (enabled != null) {
 			map.put("enabled", enabled);
 		}
+		if (sizing != null) {
+			map.put("sizing", sizing);
+		}
 		return map;
 	}
 
@@ -69,6 +78,7 @@ public final class ChunkingConfig {
 		private String preset;
 		private Map<String, Object> embedding;
 		private Boolean enabled;
+		private Map<String, Object> sizing;
 
 		private Builder() {
 		}
@@ -95,6 +105,27 @@ public final class ChunkingConfig {
 
 		public Builder enabled(Boolean enabled) {
 			this.enabled = enabled;
+			return this;
+		}
+
+		/**
+		 * Set chunk sizing to token-based using a HuggingFace tokenizer model.
+		 */
+		public Builder sizingTokenizer(String model) {
+			Map<String, Object> s = new HashMap<>();
+			s.put("type", "tokenizer");
+			s.put("model", model);
+			this.sizing = s;
+			return this;
+		}
+
+		/**
+		 * Set chunk sizing to character-based (default).
+		 */
+		public Builder sizingCharacters() {
+			Map<String, Object> s = new HashMap<>();
+			s.put("type", "characters");
+			this.sizing = s;
 			return this;
 		}
 
@@ -132,6 +163,13 @@ public final class ChunkingConfig {
 			if (enabledValue instanceof Boolean) {
 				builder.enabled((Boolean) enabledValue);
 			}
+		}
+		@SuppressWarnings("unchecked")
+		Map<String, Object> sizingMap = map.get("sizing") instanceof Map
+				? (Map<String, Object>) map.get("sizing")
+				: null;
+		if (sizingMap != null && !sizingMap.isEmpty()) {
+			builder.sizing = new HashMap<>(sizingMap);
 		}
 		return builder.build();
 	}

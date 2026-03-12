@@ -120,6 +120,83 @@ int main(void) {
 
 ## Core Extraction Functions
 
+### kreuzberg_extract_bytes_sync
+
+Extract text from an in-memory byte buffer with a specified MIME type.
+
+**Signature:**
+
+```c
+CExtractionResult *kreuzberg_extract_bytes_sync(
+    const uint8_t *data,
+    uintptr_t data_len,
+    const char *mime_type
+);
+```
+
+**Parameters:**
+
+- `data` (const uint8\_t\*): Pointer to the document bytes
+- `data_len` (uintptr\_t): Length of the byte buffer
+- `mime_type` (const char\*): Null-terminated MIME type string (e.g., `"application/pdf"`)
+
+**Returns:**
+
+- `CExtractionResult*`: Populated result on success; caller must free with `kreuzberg_free_result`
+- `NULL` on error; check `kreuzberg_last_error()` or `kreuzberg_get_error_details()` for details
+
+**Example:**
+
+```c title="C"
+FILE *f = fopen("document.pdf", "rb");
+fseek(f, 0, SEEK_END);
+long len = ftell(f);
+fseek(f, 0, SEEK_SET);
+uint8_t *data = malloc(len);
+fread(data, 1, len, f);
+fclose(f);
+
+CExtractionResult *result = kreuzberg_extract_bytes_sync(
+    data, (uintptr_t)len, "application/pdf"
+);
+if (result != NULL && result->success) {
+    printf("Extracted %zu characters\n", strlen(result->content));
+    kreuzberg_free_result(result);
+}
+free(data);
+```
+
+---
+
+### kreuzberg_extract_bytes_sync_with_config
+
+Extract text from bytes with a JSON configuration string.
+
+**Signature:**
+
+```c
+CExtractionResult *kreuzberg_extract_bytes_sync_with_config(
+    const uint8_t *data,
+    uintptr_t data_len,
+    const char *mime_type,
+    const char *config_json
+);
+```
+
+**Parameters:**
+
+- `data` (const uint8\_t\*): Document bytes
+- `data_len` (uintptr\_t): Length of data
+- `mime_type` (const char\*): MIME type string
+- `config_json` (const char\*): JSON configuration, or NULL for defaults
+
+**Returns:**
+
+- `CExtractionResult*`: Result on success; free with `kreuzberg_free_result`
+- `NULL` on error
+
+---
+
 ### kreuzberg_extract_file_sync
 
 Extract text and metadata from a file.
@@ -203,84 +280,34 @@ if (result != NULL && result->success) {
 
 ---
 
-### kreuzberg_extract_bytes_sync
+## Batch Extraction
 
-Extract text from an in-memory byte buffer with a specified MIME type.
+### kreuzberg_batch_extract_bytes_sync
 
-**Signature:**
-
-```c
-CExtractionResult *kreuzberg_extract_bytes_sync(
-    const uint8_t *data,
-    uintptr_t data_len,
-    const char *mime_type
-);
-```
-
-**Parameters:**
-
-- `data` (const uint8\_t\*): Pointer to the document bytes
-- `data_len` (uintptr\_t): Length of the byte buffer
-- `mime_type` (const char\*): Null-terminated MIME type string (e.g., `"application/pdf"`)
-
-**Returns:**
-
-- `CExtractionResult*`: Result on success; free with `kreuzberg_free_result`
-- `NULL` on error
-
-**Example:**
-
-```c title="C"
-FILE *f = fopen("document.pdf", "rb");
-fseek(f, 0, SEEK_END);
-long len = ftell(f);
-fseek(f, 0, SEEK_SET);
-uint8_t *data = malloc(len);
-fread(data, 1, len, f);
-fclose(f);
-
-CExtractionResult *result = kreuzberg_extract_bytes_sync(
-    data, (uintptr_t)len, "application/pdf"
-);
-if (result != NULL && result->success) {
-    printf("Extracted %zu characters\n", strlen(result->content));
-    kreuzberg_free_result(result);
-}
-free(data);
-```
-
----
-
-### kreuzberg_extract_bytes_sync_with_config
-
-Extract text from bytes with a JSON configuration string.
+Batch extract text from multiple in-memory documents.
 
 **Signature:**
 
 ```c
-CExtractionResult *kreuzberg_extract_bytes_sync_with_config(
-    const uint8_t *data,
-    uintptr_t data_len,
-    const char *mime_type,
+CBatchResult *kreuzberg_batch_extract_bytes_sync(
+    const CBytesWithMime *items,
+    uintptr_t count,
     const char *config_json
 );
 ```
 
 **Parameters:**
 
-- `data` (const uint8\_t\*): Document bytes
-- `data_len` (uintptr\_t): Length of data
-- `mime_type` (const char\*): MIME type string
-- `config_json` (const char\*): JSON configuration, or NULL for defaults
+- `items` (const CBytesWithMime\*): Array of byte-buffer/MIME-type pairs
+- `count` (uintptr\_t): Number of items
+- `config_json` (const char\*): JSON configuration, or NULL
 
 **Returns:**
 
-- `CExtractionResult*`: Result on success; free with `kreuzberg_free_result`
+- `CBatchResult*`: Batch result; free with `kreuzberg_free_batch_result`
 - `NULL` on error
 
 ---
-
-## Batch Extraction
 
 ### kreuzberg_batch_extract_files_sync
 
@@ -327,30 +354,34 @@ if (batch != NULL && batch->success) {
 
 ---
 
-### kreuzberg_batch_extract_bytes_sync
+### kreuzberg_extract_batch_parallel
 
-Batch extract text from multiple in-memory documents.
+Parallel variant of streaming batch extraction using a thread pool.
 
 **Signature:**
 
 ```c
-CBatchResult *kreuzberg_batch_extract_bytes_sync(
-    const CBytesWithMime *items,
+int kreuzberg_extract_batch_parallel(
+    const char *const *files,
     uintptr_t count,
-    const char *config_json
+    const char *config_json,
+    ResultCallback result_callback,
+    void *user_data,
+    Option_ErrorCallback error_callback,
+    uintptr_t max_parallel
 );
 ```
 
 **Parameters:**
 
-- `items` (const CBytesWithMime\*): Array of byte-buffer/MIME-type pairs
-- `count` (uintptr\_t): Number of items
-- `config_json` (const char\*): JSON configuration, or NULL
+- Same as `kreuzberg_extract_batch_streaming`, plus:
+- `max_parallel` (uintptr\_t): Maximum concurrent extractions (0 = number of CPUs)
 
 **Returns:**
 
-- `CBatchResult*`: Batch result; free with `kreuzberg_free_batch_result`
-- `NULL` on error
+- `0` on success, `-1` on error
+
+**Note:** Both `result_callback` and `error_callback` may be invoked from multiple threads concurrently. The `user_data` pointer must be thread-safe.
 
 ---
 
@@ -403,37 +434,6 @@ kreuzberg_extract_batch_streaming(files, 3, NULL, on_result, NULL, /* no error c
 
 ---
 
-### kreuzberg_extract_batch_parallel
-
-Parallel variant of streaming batch extraction using a thread pool.
-
-**Signature:**
-
-```c
-int kreuzberg_extract_batch_parallel(
-    const char *const *files,
-    uintptr_t count,
-    const char *config_json,
-    ResultCallback result_callback,
-    void *user_data,
-    Option_ErrorCallback error_callback,
-    uintptr_t max_parallel
-);
-```
-
-**Parameters:**
-
-- Same as `kreuzberg_extract_batch_streaming`, plus:
-- `max_parallel` (uintptr\_t): Maximum concurrent extractions (0 = number of CPUs)
-
-**Returns:**
-
-- `0` on success, `-1` on error
-
-**Note:** Both `result_callback` and `error_callback` may be invoked from multiple threads concurrently. The `user_data` pointer must be thread-safe.
-
----
-
 ## Configuration
 
 ### Config Builder
@@ -444,14 +444,23 @@ Construct an `ExtractionConfig` programmatically using the builder pattern.
 
 ```c
 ConfigBuilder *kreuzberg_config_builder_new(void);
-int32_t kreuzberg_config_builder_set_use_cache(ConfigBuilder *builder, int32_t use_cache);
-int32_t kreuzberg_config_builder_set_include_document_structure(ConfigBuilder *builder, int32_t include);
-int32_t kreuzberg_config_builder_set_ocr(ConfigBuilder *builder, const char *ocr_json);
-int32_t kreuzberg_config_builder_set_pdf(ConfigBuilder *builder, const char *pdf_json);
 int32_t kreuzberg_config_builder_set_chunking(ConfigBuilder *builder, const char *chunking_json);
+int32_t kreuzberg_config_builder_set_force_ocr(ConfigBuilder *builder, int32_t force);
+int32_t kreuzberg_config_builder_set_html_options(ConfigBuilder *builder, const char *html_json);
 int32_t kreuzberg_config_builder_set_image_extraction(ConfigBuilder *builder, const char *image_json);
-int32_t kreuzberg_config_builder_set_post_processor(ConfigBuilder *builder, const char *pp_json);
+int32_t kreuzberg_config_builder_set_include_document_structure(ConfigBuilder *builder, int32_t include);
+int32_t kreuzberg_config_builder_set_keywords(ConfigBuilder *builder, const char *keywords_json);
 int32_t kreuzberg_config_builder_set_language_detection(ConfigBuilder *builder, const char *ld_json);
+int32_t kreuzberg_config_builder_set_max_concurrent_extractions(ConfigBuilder *builder, uintptr_t max);
+int32_t kreuzberg_config_builder_set_ocr(ConfigBuilder *builder, const char *ocr_json);
+int32_t kreuzberg_config_builder_set_output_format(ConfigBuilder *builder, const char *format_str);
+int32_t kreuzberg_config_builder_set_pages(ConfigBuilder *builder, const char *pages_json);
+int32_t kreuzberg_config_builder_set_pdf(ConfigBuilder *builder, const char *pdf_json);
+int32_t kreuzberg_config_builder_set_post_processor(ConfigBuilder *builder, const char *pp_json);
+int32_t kreuzberg_config_builder_set_result_format(ConfigBuilder *builder, const char *format_str);
+int32_t kreuzberg_config_builder_set_security_limits(ConfigBuilder *builder, const char *security_json);
+int32_t kreuzberg_config_builder_set_token_reduction(ConfigBuilder *builder, const char *tr_json);
+int32_t kreuzberg_config_builder_set_use_cache(ConfigBuilder *builder, int32_t use_cache);
 ExtractionConfig *kreuzberg_config_builder_build(ConfigBuilder *builder);
 void kreuzberg_config_builder_free(ConfigBuilder *builder);
 ```
@@ -463,6 +472,7 @@ void kreuzberg_config_builder_free(ConfigBuilder *builder);
 ```c title="C"
 ConfigBuilder *builder = kreuzberg_config_builder_new();
 kreuzberg_config_builder_set_use_cache(builder, 1);
+kreuzberg_config_builder_set_output_format(builder, "Markdown");
 kreuzberg_config_builder_set_ocr(builder,
     "{\"backend\": \"tesseract\", \"languages\": [\"eng\"]}");
 kreuzberg_config_builder_set_chunking(builder,
@@ -487,31 +497,47 @@ Parse, serialize, validate, and discover configuration from JSON.
 
 ```c
 ExtractionConfig *kreuzberg_config_from_json(const char *json_config);
-char *kreuzberg_config_to_json(const ExtractionConfig *config);
-int32_t kreuzberg_config_is_valid(const char *json_config);
 char *kreuzberg_config_get_field(const ExtractionConfig *config, const char *field_name);
+int32_t kreuzberg_config_is_valid(const char *json_config);
 int32_t kreuzberg_config_merge(ExtractionConfig *base, const ExtractionConfig *override_config);
+char *kreuzberg_config_to_json(const ExtractionConfig *config);
 ```
 
 **Parameters/Returns:**
 
 - `kreuzberg_config_from_json`: Parses JSON into `ExtractionConfig*`; free with `kreuzberg_config_free`. Returns NULL on error.
-- `kreuzberg_config_to_json`: Serializes config to JSON string; free with `kreuzberg_free_string`.
-- `kreuzberg_config_is_valid`: Returns 1 if valid, 0 if invalid.
 - `kreuzberg_config_get_field`: Returns a specific field as JSON; free with `kreuzberg_free_string`.
+- `kreuzberg_config_is_valid`: Returns 1 if valid, 0 if invalid.
 - `kreuzberg_config_merge`: Merges override into base (in-place). Returns 1 on success, 0 on error.
+- `kreuzberg_config_to_json`: Serializes config to JSON string; free with `kreuzberg_free_string`.
+
+---
+
+### Embeddings
+
+Retrieve information about available embedding presets and models.
+
+**Signature:**
+
+```c
+char *kreuzberg_get_embedding_preset(const char *preset_name);
+char *kreuzberg_list_embedding_presets(void);
+```
+
+- `kreuzberg_get_embedding_preset`: Returns JSON for a specific preset; free with `kreuzberg_free_string`.
+- `kreuzberg_list_embedding_presets`: Returns JSON array of all preset names; free with `kreuzberg_free_string`.
 
 ### File-based Configuration
 
 ```c
+char *kreuzberg_config_discover(void);
 ExtractionConfig *kreuzberg_config_from_file(const char *path);
 char *kreuzberg_load_extraction_config_from_file(const char *file_path);
-char *kreuzberg_config_discover(void);
 ```
 
+- `kreuzberg_config_discover`: Searches parent directories for a config file. Returns JSON string or NULL; free with `kreuzberg_free_string`.
 - `kreuzberg_config_from_file`: Loads config from a file. Returns `ExtractionConfig*`; free with `kreuzberg_config_free`.
 - `kreuzberg_load_extraction_config_from_file`: Loads config and returns raw JSON string; free with `kreuzberg_free_string`.
-- `kreuzberg_config_discover`: Searches parent directories for a config file. Returns JSON string or NULL; free with `kreuzberg_free_string`.
 
 ---
 
@@ -547,6 +573,22 @@ int32_t kreuzberg_last_error_code(void);
 **Returns:**
 
 - Numeric error code (0-7), or -1 if no error occurred
+
+---
+
+### kreuzberg_last_panic_context
+
+Get the panic context if the last error was a caught panic.
+
+**Signature:**
+
+```c
+const char *kreuzberg_last_panic_context(void);
+```
+
+**Returns:**
+
+- Static string with panic details, or NULL. Do NOT free.
 
 ---
 
@@ -613,23 +655,23 @@ void kreuzberg_free_error_details(CErrorDetails *details);
 ### Error Code Functions
 
 ```c
-uint32_t kreuzberg_error_code_validation(void);       /* returns 0 */
-uint32_t kreuzberg_error_code_parsing(void);           /* returns 1 */
-uint32_t kreuzberg_error_code_ocr(void);               /* returns 2 */
-uint32_t kreuzberg_error_code_missing_dependency(void); /* returns 3 */
+uint32_t kreuzberg_error_code_count(void);             /* returns 8 */
+uint32_t kreuzberg_error_code_internal(void);          /* returns 7 */
 uint32_t kreuzberg_error_code_io(void);                /* returns 4 */
+uint32_t kreuzberg_error_code_missing_dependency(void); /* returns 3 */
+uint32_t kreuzberg_error_code_ocr(void);               /* returns 2 */
+uint32_t kreuzberg_error_code_parsing(void);           /* returns 1 */
 uint32_t kreuzberg_error_code_plugin(void);            /* returns 5 */
 uint32_t kreuzberg_error_code_unsupported_format(void); /* returns 6 */
-uint32_t kreuzberg_error_code_internal(void);          /* returns 7 */
-uint32_t kreuzberg_error_code_count(void);             /* returns 8 */
+uint32_t kreuzberg_error_code_validation(void);       /* returns 0 */
 ```
 
 ### Error Introspection
 
 ```c
-const char *kreuzberg_error_code_name(uint32_t code);
-const char *kreuzberg_error_code_description(uint32_t code);
 uint32_t kreuzberg_classify_error(const char *error_message);
+const char *kreuzberg_error_code_description(uint32_t code);
+const char *kreuzberg_error_code_name(uint32_t code);
 ```
 
 - `kreuzberg_error_code_name`: Returns a static string like `"validation"`, `"ocr"`. Do NOT free.
@@ -666,12 +708,12 @@ Correct memory management is critical when using the C API. Every allocation has
 ### Free Functions
 
 ```c
-void kreuzberg_free_result(CExtractionResult *result);
-void kreuzberg_free_batch_result(CBatchResult *batch_result);
-void kreuzberg_free_string(char *s);
-void kreuzberg_config_free(ExtractionConfig *config);
 void kreuzberg_config_builder_free(ConfigBuilder *builder);
+void kreuzberg_config_free(ExtractionConfig *config);
+void kreuzberg_free_batch_result(CBatchResult *batch_result);
 void kreuzberg_free_error_details(CErrorDetails *details);
+void kreuzberg_free_result(CExtractionResult *result);
+void kreuzberg_free_string(char *s);
 ```
 
 All free functions accept NULL (no-op).
@@ -772,6 +814,23 @@ char *kreuzberg_detect_mime_type_from_path(const char *file_path);
 
 ---
 
+### kreuzberg_get_extensions_for_mime
+
+Get file extensions for a given MIME type.
+
+**Signature:**
+
+```c
+char *kreuzberg_get_extensions_for_mime(const char *mime_type);
+```
+
+**Returns:**
+
+- `char*`: Comma-separated list of extensions; free with `kreuzberg_free_string`
+- `NULL` on error
+
+---
+
 ### kreuzberg_validate_mime_type
 
 Validate that a MIME type is supported by Kreuzberg.
@@ -784,20 +843,8 @@ char *kreuzberg_validate_mime_type(const char *mime_type);
 
 **Returns:**
 
-- `char*`: Validation result as a string; free with `kreuzberg_free_string`
-- `NULL` on error
-
----
-
-### kreuzberg_get_extensions_for_mime
-
-Get file extensions for a given MIME type.
-
-**Signature:**
-
-```c
-char *kreuzberg_get_extensions_for_mime(const char *mime_type);
-```
+- `char*`: Validated MIME type if supported; free with `kreuzberg_free_string`
+- `NULL` if unsupported or on error
 
 **Returns:**
 
@@ -1010,6 +1057,9 @@ if (pool == NULL) {
 /* Process batches, resetting between them */
 kreuzberg_result_pool_reset(pool);
 
+/* Extract directly into the pool */
+kreuzberg_extract_file_into_pool(pool, "doc.pdf", NULL);
+
 /* Check pool efficiency */
 CResultPoolStats stats = kreuzberg_result_pool_stats(pool);
 printf("Pool: %zu/%zu results, %zu allocs, %zu bytes\n",
@@ -1017,6 +1067,19 @@ printf("Pool: %zu/%zu results, %zu allocs, %zu bytes\n",
        stats.total_allocations, stats.estimated_memory_bytes);
 
 kreuzberg_result_pool_free(pool);
+```
+
+---
+
+### Pool Functions
+
+```c
+int32_t kreuzberg_extract_file_into_pool(ResultPool *pool, const char *file_path, const char *config_json);
+CExtractionResultView *kreuzberg_extract_file_into_pool_view(ResultPool *pool, const char *file_path, const char *config_json);
+void kreuzberg_result_pool_free(ResultPool *pool);
+ResultPool *kreuzberg_result_pool_new(uintptr_t capacity);
+void kreuzberg_result_pool_reset(ResultPool *pool);
+CResultPoolStats kreuzberg_result_pool_stats(ResultPool *pool);
 ```
 
 ---
@@ -1064,25 +1127,26 @@ The primary result structure returned by extraction functions.
 
 ```c
 typedef struct CExtractionResult {
-    char *content;                  /* Extracted text (UTF-8, null-terminated) */
-    char *mime_type;                /* Detected MIME type */
-    char *language;                 /* Document language (may be NULL) */
-    char *date;                     /* Document date (may be NULL) */
-    char *subject;                  /* Document subject (may be NULL) */
-    char *tables_json;              /* JSON array of tables (may be NULL) */
-    char *detected_languages_json;  /* JSON array of detected languages (may be NULL) */
-    char *metadata_json;            /* JSON object with metadata (may be NULL) */
+    char *annotations_json;         /* JSON PDF annotations (may be NULL) */
     char *chunks_json;              /* JSON array of text chunks (may be NULL) */
+    char *content;                  /* Extracted text (UTF-8, null-terminated) */
+    char *date;                     /* Document date (may be NULL) */
+    char *detected_languages_json;  /* JSON array of detected languages (may be NULL) */
+    char *djot_content_json;        /* JSON Djot content (may be NULL) */
+    char *document_json;            /* JSON document structure (may be NULL) */
+    char *elements_json;            /* JSON semantic elements (may be NULL) */
+    char *extracted_keywords_json;  /* JSON keywords (may be NULL) */
     char *images_json;              /* JSON array of extracted images (may be NULL) */
+    char *language;                 /* Document language (may be NULL) */
+    char *metadata_json;            /* JSON object with metadata (may be NULL) */
+    char *mime_type;                /* Detected MIME type */
+    char *ocr_elements_json;        /* JSON OCR elements (may be NULL) */
     char *page_structure_json;      /* JSON page structure (may be NULL) */
     char *pages_json;               /* JSON per-page content (may be NULL) */
-    char *elements_json;            /* JSON semantic elements (may be NULL) */
-    char *ocr_elements_json;        /* JSON OCR elements (may be NULL) */
-    char *document_json;            /* JSON document structure (may be NULL) */
-    char *extracted_keywords_json;  /* JSON keywords (may be NULL) */
-    char *quality_score_json;       /* JSON quality score (may be NULL) */
     char *processing_warnings_json; /* JSON warnings array (may be NULL) */
-    char *annotations_json;         /* JSON PDF annotations (may be NULL) */
+    char *quality_score_json;       /* JSON quality score (may be NULL) */
+    char *subject;                  /* Document subject (may be NULL) */
+    char *tables_json;              /* JSON array of tables (may be NULL) */
     bool success;                   /* true if extraction succeeded */
     uint8_t _padding1[7];           /* Internal padding */
 } CExtractionResult;
@@ -1098,8 +1162,8 @@ Container for batch extraction results.
 
 ```c
 typedef struct CBatchResult {
-    CExtractionResult **results;  /* Array of result pointers */
     uintptr_t count;              /* Number of results */
+    CExtractionResult **results;  /* Array of result pointers */
     bool success;                 /* true if batch operation succeeded */
     uint8_t _padding2[7];         /* Internal padding */
 } CBatchResult;
@@ -1131,13 +1195,13 @@ Structured error information.
 
 ```c
 typedef struct CErrorDetails {
-    char *message;           /* Error message (free with kreuzberg_free_string) */
+    char *context_info;      /* Additional context (may be NULL; free if non-NULL) */
     uint32_t error_code;     /* Numeric error code (0-7) */
     char *error_type;        /* Human-readable type name (free with kreuzberg_free_string) */
+    char *message;           /* Error message (free with kreuzberg_free_string) */
     char *source_file;       /* Source file (may be NULL; free if non-NULL) */
     char *source_function;   /* Source function (may be NULL; free if non-NULL) */
     uint32_t source_line;    /* Line number (0 if unknown) */
-    char *context_info;      /* Additional context (may be NULL; free if non-NULL) */
     int32_t is_panic;        /* 1 if from a panic, 0 otherwise */
 } CErrorDetails;
 ```
@@ -1150,18 +1214,34 @@ Zero-copy view into an `ExtractionResult`. Provides direct pointers to string da
 
 ```c
 typedef struct CExtractionResultView {
-    const uint8_t *content_ptr;     uintptr_t content_len;
-    const uint8_t *mime_type_ptr;   uintptr_t mime_type_len;
-    const uint8_t *language_ptr;    uintptr_t language_len;
-    const uint8_t *date_ptr;        uintptr_t date_len;
-    const uint8_t *subject_ptr;     uintptr_t subject_len;
-    const uint8_t *title_ptr;       uintptr_t title_len;
-    uintptr_t table_count;
     uintptr_t chunk_count;
+    uintptr_t content_len;
+    const uint8_t *content_ptr;
+    uintptr_t date_len;
+    const uint8_t *date_ptr;
     uintptr_t detected_language_count;
     uintptr_t image_count;
+    uintptr_t language_len;
+    const uint8_t *language_ptr;
+    uintptr_t mime_type_len;
+    const uint8_t *mime_type_ptr;
     uintptr_t page_count;
+    uintptr_t subject_len;
+    const uint8_t *subject_ptr;
+    uintptr_t table_count;
+    uintptr_t title_len;
+    const uint8_t *title_ptr;
 } CExtractionResultView;
+
+---
+
+### View Functions
+
+```c
+int32_t kreuzberg_get_result_view(const CExtractionResult *result, CExtractionResultView *out_view);
+int32_t kreuzberg_view_get_content(const CExtractionResultView *view, const uint8_t **out_ptr, uintptr_t *out_len);
+int32_t kreuzberg_view_get_mime_type(const CExtractionResultView *view, const uint8_t **out_ptr, uintptr_t *out_len);
+```
 ```
 
 Views are used in streaming callbacks. They are valid only during the callback invocation. Copy any data you need to keep.
@@ -1182,17 +1262,63 @@ typedef struct CMetadataField {
 
 ---
 
+## Result Retrieval
+
+Functions for retrieving specific data from `CExtractionResult`.
+
+### kreuzberg_result_get_chunk_count
+
+Get the number of text chunks in the result.
+
+**Signature:**
+
+```c
+uintptr_t kreuzberg_result_get_chunk_count(const CExtractionResult *result);
+```
+
+### kreuzberg_result_get_detected_language
+
+Get a detected language at a specific index.
+
+**Signature:**
+
+```c
+char *kreuzberg_result_get_detected_language(const CExtractionResult *result, uintptr_t index);
+```
+
+### kreuzberg_result_get_metadata_field
+
+Get a specific metadata field by name.
+
+**Signature:**
+
+```c
+CMetadataField kreuzberg_result_get_metadata_field(const CExtractionResult *result, const char *name);
+```
+
+### kreuzberg_result_get_page_count
+
+Get the number of pages in the result.
+
+**Signature:**
+
+```c
+uintptr_t kreuzberg_result_get_page_count(const CExtractionResult *result);
+```
+
+---
+
 ### CResultPoolStats
 
 Statistics for result pool tracking.
 
 ```c
 typedef struct CResultPoolStats {
-    uintptr_t current_count;          /* Current results in pool */
     uintptr_t capacity;               /* Maximum capacity */
-    uintptr_t total_allocations;      /* Total allocations made */
-    uintptr_t growth_events;          /* Number of capacity growths */
+    uintptr_t current_count;          /* Current results in pool */
     uintptr_t estimated_memory_bytes; /* Estimated memory usage */
+    uintptr_t growth_events;          /* Number of capacity growths */
+    uintptr_t total_allocations;      /* Total allocations made */
 } CResultPoolStats;
 ```
 
@@ -1204,13 +1330,51 @@ Statistics for string interning efficiency.
 
 ```c
 typedef struct CStringInternStats {
-    uintptr_t unique_count;           /* Unique strings interned */
-    uintptr_t total_requests;         /* Total intern requests */
     uintptr_t cache_hits;             /* Cache hits */
     uintptr_t cache_misses;           /* Cache misses */
     uintptr_t estimated_memory_saved; /* Memory saved by deduplication */
     uintptr_t total_memory_bytes;     /* Total memory used */
+    uintptr_t total_requests;         /* Total intern requests */
+    uintptr_t unique_count;           /* Unique strings interned */
 } CStringInternStats;
+
+---
+
+### Intern Functions
+
+```c
+void kreuzberg_free_interned_string(char *s);
+char *kreuzberg_intern_string(const char *s);
+void kreuzberg_string_intern_reset(void);
+CStringInternStats kreuzberg_string_intern_stats(void);
+```
+
+---
+
+## Format Conversion Utilities
+
+Utilities for parsing and serializing configuration enums.
+
+### HTML Options Conversions
+
+```c
+const char *kreuzberg_code_block_style_to_string(int32_t style);
+const char *kreuzberg_heading_style_to_string(int32_t style);
+const char *kreuzberg_highlight_style_to_string(int32_t style);
+const char *kreuzberg_list_indent_type_to_string(int32_t type);
+const char *kreuzberg_newline_style_to_string(int32_t style);
+
+int32_t kreuzberg_parse_code_block_style(const char *s);
+int32_t kreuzberg_parse_heading_style(const char *s);
+int32_t kreuzberg_parse_highlight_style(const char *s);
+int32_t kreuzberg_parse_list_indent_type(const char *s);
+int32_t kreuzberg_parse_newline_style(const char *s);
+int32_t kreuzberg_parse_preprocessing_preset(const char *s);
+int32_t kreuzberg_parse_whitespace_mode(const char *s);
+
+const char *kreuzberg_preprocessing_preset_to_string(int32_t preset);
+const char *kreuzberg_whitespace_mode_to_string(int32_t mode);
+```
 ```
 
 Access via:

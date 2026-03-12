@@ -25,6 +25,18 @@ namespace Kreuzberg.E2E.Structured
         }
 
         [SkippableFact]
+        public void StructuredEnwBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("data_formats/sample.enw");
+            TestHelpers.SkipIfOfficeTestOnWindows("data_formats/sample.enw");
+            var documentPath = TestHelpers.EnsureDocument("data_formats/sample.enw", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/x-endnote-refer", "application/x-endnote+xml", "text/plain" });
+        }
+
+        [SkippableFact]
         public void StructuredJsonBasic()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("json/sample_document.json");
@@ -53,6 +65,32 @@ namespace Kreuzberg.E2E.Structured
         }
 
         [SkippableFact]
+        public void StructuredNbibBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("data_formats/sample.nbib");
+            TestHelpers.SkipIfOfficeTestOnWindows("data_formats/sample.nbib");
+            var documentPath = TestHelpers.EnsureDocument("data_formats/sample.nbib", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/nbib", "application/x-pubmed", "text/plain" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
+        public void StructuredRisBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("data_formats/sample.ris");
+            TestHelpers.SkipIfOfficeTestOnWindows("data_formats/sample.ris");
+            var documentPath = TestHelpers.EnsureDocument("data_formats/sample.ris", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/x-research-info-systems", "text/plain" });
+            TestHelpers.AssertContentNotEmpty(result);
+        }
+
+        [SkippableFact]
         public void StructuredTomlBasic()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("data_formats/cargo.toml");
@@ -62,6 +100,19 @@ namespace Kreuzberg.E2E.Structured
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/toml", "text/toml" });
+            TestHelpers.AssertMinContentLength(result, 10);
+        }
+
+        [SkippableFact]
+        public void StructuredTsvBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("data_formats/employees.tsv");
+            TestHelpers.SkipIfOfficeTestOnWindows("data_formats/employees.tsv");
+            var documentPath = TestHelpers.EnsureDocument("data_formats/employees.tsv", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "text/tab-separated-values", "text/plain" });
             TestHelpers.AssertMinContentLength(result, 10);
         }
 

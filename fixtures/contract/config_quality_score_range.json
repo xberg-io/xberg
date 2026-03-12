@@ -1,0 +1,25 @@
+{
+	"id": "config_quality_score_range",
+	"description": "Tests quality scoring produces a score with minimum bound assertion",
+	"tags": ["contract", "config", "quality"],
+	"document": {
+		"path": "pdf/fake_memo.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"enable_quality_processing": true
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"quality_score": {
+			"has_score": true,
+			"min_score": 0.1
+		}
+	},
+	"skip": {
+		"requires_feature": ["quality"]
+	}
+}

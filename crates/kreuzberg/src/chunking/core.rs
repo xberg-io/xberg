@@ -5,10 +5,11 @@
 
 use crate::error::Result;
 use crate::types::PageBoundary;
-use text_splitter::{MarkdownSplitter, TextSplitter};
+use text_splitter::{ChunkSizer, MarkdownSplitter, TextSplitter};
 
 use super::builder::{build_chunk_config, build_chunks};
 use super::config::{ChunkerType, ChunkingConfig, ChunkingResult};
+use super::headings::{build_heading_map, resolve_heading_context};
 use super::validation::validate_utf8_boundaries;
 
 /// Split text into chunks with optional page boundary tracking.
@@ -37,8 +38,7 @@ use super::validation::validate_utf8_boundaries;
 ///     overlap: 50,
 ///     trim: true,
 ///     chunker_type: ChunkerType::Text,
-///     embedding: None,
-///     preset: None,
+///     ..Default::default()
 /// };
 /// let result = chunk_text("Long text...", &config, None)?;
 /// assert!(!result.chunks.is_empty());
@@ -61,23 +61,52 @@ pub fn chunk_text(
         validate_utf8_boundaries(text, boundaries)?;
     }
 
-    let chunk_config = build_chunk_config(config.max_characters, config.overlap, config.trim)?;
-
-    let text_chunks: Vec<&str> = match config.chunker_type {
-        ChunkerType::Text => {
-            let splitter = TextSplitter::new(chunk_config);
-            splitter.chunks(text).collect()
+    let text_chunks: Vec<&str> = match &config.sizing {
+        #[cfg(feature = "chunking-tokenizers")]
+        crate::core::config::ChunkSizing::Tokenizer { model, .. } => {
+            let tokenizer = super::tokenizer_cache::get_or_init_tokenizer(model)?;
+            let chunk_config =
+                text_splitter::ChunkConfig::new(text_splitter::ChunkCapacity::new(config.max_characters))
+                    .with_sizer((*tokenizer).clone())
+                    .with_overlap(config.overlap)
+                    .map(|c| c.with_trim(config.trim))
+                    .map_err(|e| crate::KreuzbergError::validation(format!("Invalid chunking configuration: {}", e)))?;
+            split_with_config(text, &config.chunker_type, chunk_config)
         }
-        ChunkerType::Markdown => {
-            let splitter = MarkdownSplitter::new(chunk_config);
-            splitter.chunks(text).collect()
+        // Characters sizing (default) — also matches when no token features are enabled
+        _ => {
+            let chunk_config = build_chunk_config(config.max_characters, config.overlap, config.trim)?;
+            split_with_config(text, &config.chunker_type, chunk_config)
         }
     };
 
-    let chunks = build_chunks(text_chunks.into_iter(), config.overlap, page_boundaries)?;
+    let mut chunks = build_chunks(text, text_chunks.into_iter(), page_boundaries)?;
+
+    // For Markdown chunker, resolve heading context for each chunk.
+    if config.chunker_type == ChunkerType::Markdown {
+        let heading_map = build_heading_map(text);
+        if !heading_map.is_empty() {
+            for chunk in &mut chunks {
+                chunk.metadata.heading_context = resolve_heading_context(chunk.metadata.byte_start, &heading_map);
+            }
+        }
+    }
+
     let chunk_count = chunks.len();
 
     Ok(ChunkingResult { chunks, chunk_count })
+}
+
+/// Split text using the appropriate splitter type with a generic sizer.
+fn split_with_config<'a, S: ChunkSizer>(
+    text: &'a str,
+    chunker_type: &ChunkerType,
+    config: text_splitter::ChunkConfig<S>,
+) -> Vec<&'a str> {
+    match chunker_type {
+        ChunkerType::Text => TextSplitter::new(config).chunks(text).collect(),
+        ChunkerType::Markdown => MarkdownSplitter::new(config).chunks(text).collect(),
+    }
 }
 
 /// Chunk text with explicit type specification.
@@ -120,8 +149,7 @@ pub fn chunk_text_with_type(
         overlap,
         trim,
         chunker_type,
-        embedding: None,
-        preset: None,
+        ..Default::default()
     };
     chunk_text(text, &config, None)
 }
@@ -181,8 +209,7 @@ mod tests {
             overlap: 10,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "This is a short text.";
         let result = chunk_text(text, &config, None).unwrap();
@@ -198,8 +225,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let result = chunk_text(text, &config, None).unwrap();
@@ -215,8 +241,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "abcdefghijklmnopqrstuvwxyz0123456789";
         let result = chunk_text(text, &config, None).unwrap();
@@ -240,8 +265,7 @@ mod tests {
             overlap: 10,
             trim: true,
             chunker_type: ChunkerType::Markdown,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let markdown = "# Title\n\nParagraph one.\n\n## Section\n\nParagraph two.";
         let result = chunk_text(markdown, &config, None).unwrap();
@@ -256,8 +280,7 @@ mod tests {
             overlap: 10,
             trim: true,
             chunker_type: ChunkerType::Markdown,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let markdown = "# Code Example\n\n```python\nprint('hello')\n```\n\nSome text after code.";
         let result = chunk_text(markdown, &config, None).unwrap();
@@ -272,8 +295,7 @@ mod tests {
             overlap: 10,
             trim: true,
             chunker_type: ChunkerType::Markdown,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let markdown = "Check out [this link](https://example.com) for more info.";
         let result = chunk_text(markdown, &config, None).unwrap();
@@ -288,8 +310,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "  Leading and trailing spaces  should be trimmed  ";
         let result = chunk_text(text, &config, None).unwrap();
@@ -304,8 +325,7 @@ mod tests {
             overlap: 5,
             trim: false,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "  Text with spaces  ";
         let result = chunk_text(text, &config, None).unwrap();
@@ -320,8 +340,7 @@ mod tests {
             overlap: 20,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let result = chunk_text("Some text", &config, None);
         assert!(result.is_err());
@@ -359,8 +378,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let texts = vec!["First text", "Second text", "Third text"];
         let results = chunk_texts_batch(&texts, &config).unwrap();
@@ -375,8 +393,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let texts = vec![
             "Short",
@@ -397,8 +414,7 @@ mod tests {
             overlap: 20,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let texts = vec!["Text one", "Text two"];
         let result = chunk_texts_batch(&texts, &config);
@@ -421,8 +437,7 @@ mod tests {
             overlap: 20,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "a".repeat(1000);
         let result = chunk_text(&text, &config, None).unwrap();
@@ -437,8 +452,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Line one\nLine two\nLine three\nLine four\nLine five";
         let result = chunk_text(text, &config, None).unwrap();
@@ -452,8 +466,7 @@ mod tests {
             overlap: 10,
             trim: true,
             chunker_type: ChunkerType::Markdown,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let markdown = "# List Example\n\n- Item 1\n- Item 2\n- Item 3\n\nMore text.";
         let result = chunk_text(markdown, &config, None).unwrap();
@@ -468,8 +481,7 @@ mod tests {
             overlap: 10,
             trim: true,
             chunker_type: ChunkerType::Markdown,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let markdown = "# Table\n\n| Col1 | Col2 |\n|------|------|\n| A    | B    |\n| C    | D    |";
         let result = chunk_text(markdown, &config, None).unwrap();
@@ -484,8 +496,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Special chars: @#$%^&*()[]{}|\\<>?/~`";
         let result = chunk_text(text, &config, None).unwrap();
@@ -500,8 +511,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Unicode: 你好世界 🌍 café résumé";
         let result = chunk_text(text, &config, None).unwrap();
@@ -517,8 +527,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "日本語のテキストです。これは長い文章で、複数のチャンクに分割されるべきです。";
         let result = chunk_text(text, &config, None).unwrap();
@@ -532,8 +541,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "English text mixed with 中文文本 and some français";
         let result = chunk_text(text, &config, None).unwrap();
@@ -547,8 +555,7 @@ mod tests {
             overlap: 5,
             trim: false,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "AAAAA BBBBB CCCCC DDDDD EEEEE FFFFF";
         let result = chunk_text(text, &config, None).unwrap();
@@ -601,8 +608,7 @@ mod tests {
             overlap: 0,
             trim: false,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "AAAAA BBBBB CCCCC DDDDD EEEEE FFFFF";
         let result = chunk_text(text, &config, None).unwrap();
@@ -629,8 +635,7 @@ mod tests {
             overlap: 3,
             trim: false,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "0123456789 ABCDEFGHIJ KLMNOPQRST UVWXYZ";
         let result = chunk_text(text, &config, None).unwrap();
@@ -665,8 +670,7 @@ mod tests {
                 overlap,
                 trim: false,
                 chunker_type: ChunkerType::Text,
-                embedding: None,
-                preset: None,
+                ..Default::default()
             };
             let text = "Word ".repeat(30);
             let result = chunk_text(&text, &config, None).unwrap();
@@ -699,8 +703,7 @@ mod tests {
             overlap: 5,
             trim: false,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "AAAAA BBBBB CCCCC DDDDD EEEEE";
         let result = chunk_text(text, &config, None).unwrap();
@@ -728,8 +731,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Page one content here. Page two starts here and continues.";
 
@@ -762,8 +764,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "This is some test content that should be split into multiple chunks.";
 
@@ -783,8 +784,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Some text content here.";
         let boundaries: Vec<PageBoundary> = vec![];
@@ -803,8 +803,7 @@ mod tests {
             overlap: 5,
             trim: false,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "0123456789 AAAAAAAAAA 1111111111 BBBBBBBBBB 2222222222";
 
@@ -841,8 +840,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Page one content here. Page two content.";
 
@@ -866,8 +864,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Page one content here. Page two content.";
 
@@ -898,8 +895,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Page one content here. Page two content.";
 
@@ -930,8 +926,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "First page content here.Second page content here.Third page.";
 
@@ -967,8 +962,7 @@ mod tests {
             overlap: 10,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "All content on single page fits in one chunk.";
 
@@ -991,8 +985,7 @@ mod tests {
             overlap: 0,
             trim: false,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "AAAAA BBBBB CCCCC DDDDD";
 
@@ -1026,8 +1019,7 @@ mod tests {
             overlap: 5,
             trim: true,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "Page One Content Here.Page Two.";
 
@@ -1051,6 +1043,139 @@ mod tests {
         }
     }
 
+    /// Regression test for GitHub issue #439:
+    /// Chunk metadata reports wrong page numbers for documents with many pages.
+    /// The byte offset drift causes chunks near the end of the document to
+    /// reference pages far earlier than where their content actually resides.
+    #[test]
+    fn test_issue_439_chunk_page_metadata_many_pages() {
+        let num_pages = 50;
+        let mut full_text = String::new();
+        let mut boundaries = Vec::new();
+
+        for p in 1..=num_pages {
+            let page_content = format!(
+                "Page {} content. This is the text on page number {}. It has some words to fill space here. ",
+                p, p
+            );
+            let start = full_text.len();
+            full_text.push_str(&page_content);
+            let end = full_text.len();
+            boundaries.push(PageBoundary {
+                byte_start: start,
+                byte_end: end,
+                page_number: p,
+            });
+        }
+
+        let config = ChunkingConfig {
+            max_characters: 200,
+            overlap: 50,
+            trim: true,
+            chunker_type: ChunkerType::Text,
+            ..Default::default()
+        };
+
+        let result = chunk_text(&full_text, &config, Some(&boundaries)).unwrap();
+
+        // The last chunk must reference pages near the end of the document
+        let last_chunk = result.chunks.last().unwrap();
+        assert!(
+            last_chunk.metadata.last_page.unwrap() >= num_pages - 2,
+            "Last chunk should reference near the last page ({}), but got {:?}",
+            num_pages,
+            last_chunk.metadata.last_page
+        );
+
+        // Every chunk's byte range must correspond to where its content
+        // actually lives in the original text
+        for (i, chunk) in result.chunks.iter().enumerate() {
+            let actual_pos = full_text
+                .find(&chunk.content)
+                .expect("Chunk content must be a substring of the original text");
+            let actual_page = boundaries
+                .iter()
+                .find(|b| actual_pos >= b.byte_start && actual_pos < b.byte_end)
+                .map(|b| b.page_number);
+
+            if let (Some(reported), Some(actual)) = (chunk.metadata.first_page, actual_page) {
+                assert_eq!(
+                    reported, actual,
+                    "Chunk {} reports first_page={} but content starts on page {} \
+                     (byte_start={}, actual_pos={})",
+                    i, reported, actual, chunk.metadata.byte_start, actual_pos
+                );
+            }
+        }
+    }
+
+    /// Verify that chunk byte_start/byte_end match the actual position of the
+    /// chunk content within the original text.
+    #[test]
+    fn test_issue_439_chunk_byte_offsets_match_text_position() {
+        let text = "Alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray yankee zulu. ";
+        let repeated = text.repeat(5);
+
+        let boundaries = vec![
+            PageBoundary {
+                byte_start: 0,
+                byte_end: text.len(),
+                page_number: 1,
+            },
+            PageBoundary {
+                byte_start: text.len(),
+                byte_end: text.len() * 2,
+                page_number: 2,
+            },
+            PageBoundary {
+                byte_start: text.len() * 2,
+                byte_end: text.len() * 3,
+                page_number: 3,
+            },
+            PageBoundary {
+                byte_start: text.len() * 3,
+                byte_end: text.len() * 4,
+                page_number: 4,
+            },
+            PageBoundary {
+                byte_start: text.len() * 4,
+                byte_end: text.len() * 5,
+                page_number: 5,
+            },
+        ];
+
+        let config = ChunkingConfig {
+            max_characters: 80,
+            overlap: 20,
+            trim: true,
+            chunker_type: ChunkerType::Text,
+            ..Default::default()
+        };
+
+        let result = chunk_text(&repeated, &config, Some(&boundaries)).unwrap();
+
+        for (i, chunk) in result.chunks.iter().enumerate() {
+            // The chunk content at byte_start..byte_end must match the actual content
+            let byte_start = chunk.metadata.byte_start;
+            let byte_end = chunk.metadata.byte_end;
+            assert!(
+                byte_end <= repeated.len(),
+                "Chunk {} byte_end ({}) exceeds text length ({})",
+                i,
+                byte_end,
+                repeated.len()
+            );
+            assert_eq!(
+                &repeated[byte_start..byte_end],
+                chunk.content,
+                "Chunk {} content doesn't match text at byte_start={}..byte_end={}",
+                i,
+                byte_start,
+                byte_end
+            );
+        }
+    }
+
     #[test]
     fn test_chunk_page_range_boundary_edge_cases() {
         let config = ChunkingConfig {
@@ -1058,8 +1183,7 @@ mod tests {
             overlap: 2,
             trim: false,
             chunker_type: ChunkerType::Text,
-            embedding: None,
-            preset: None,
+            ..Default::default()
         };
         let text = "0123456789ABCDEFGHIJ";
 

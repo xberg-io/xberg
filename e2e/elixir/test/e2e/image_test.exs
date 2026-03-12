@@ -9,6 +9,72 @@ defmodule E2E.ImageTest do
   use ExUnit.Case, async: false
 
   describe "image fixtures" do
+    test "image_bmp_basic" do
+      case E2E.Helpers.run_fixture(
+             "image_bmp_basic",
+             "images/bmp_24.bmp",
+             nil,
+             requirements: ["tesseract", "tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/bmp"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "image_gif_basic" do
+      case E2E.Helpers.run_fixture(
+             "image_gif_basic",
+             "images_extra/ocr_image.gif",
+             nil,
+             requirements: ["tesseract", "tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/gif"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "image_jp2_basic" do
+      case E2E.Helpers.run_fixture(
+             "image_jp2_basic",
+             "images_extra/ocr_image.jp2",
+             nil,
+             requirements: ["tesseract", "tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/jp2", "image/jpeg2000"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "image_metadata_only" do
       case E2E.Helpers.run_fixture(
              "image_metadata_only",
@@ -31,6 +97,72 @@ defmodule E2E.ImageTest do
       end
     end
 
+    test "image_pbm_basic" do
+      case E2E.Helpers.run_fixture(
+             "image_pbm_basic",
+             "images_extra/ocr_image.pbm",
+             nil,
+             requirements: ["tesseract", "tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/x-portable-bitmap", "image/x-pbm"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "image_pgm_basic" do
+      case E2E.Helpers.run_fixture(
+             "image_pgm_basic",
+             "images_extra/ocr_image.pgm",
+             nil,
+             requirements: ["tesseract", "tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/x-portable-graymap", "image/x-pgm"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "image_ppm_basic" do
+      case E2E.Helpers.run_fixture(
+             "image_ppm_basic",
+             "images_extra/ocr_image.ppm",
+             nil,
+             requirements: ["tesseract", "tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/x-portable-pixmap", "image/x-ppm"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "image_svg_basic" do
       case E2E.Helpers.run_fixture(
              "image_svg_basic",
@@ -44,6 +176,50 @@ defmodule E2E.ImageTest do
           result
           |> E2E.Helpers.assert_expected_mime(["image/svg+xml"])
           |> E2E.Helpers.assert_min_content_length(5)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "image_tiff_basic" do
+      case E2E.Helpers.run_fixture(
+             "image_tiff_basic",
+             "images_extra/ocr_image.tif",
+             nil,
+             requirements: ["tesseract", "tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/tiff"])
+          |> E2E.Helpers.assert_content_not_empty()
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "image_webp_basic" do
+      case E2E.Helpers.run_fixture(
+             "image_webp_basic",
+             "images_extra/ocr_image.webp",
+             nil,
+             requirements: ["tesseract", "tesseract"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/webp"])
+          |> E2E.Helpers.assert_content_not_empty()
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")

@@ -37,6 +37,23 @@ public class OfficeTest {
   }
 
   @Test
+  public void officeCommonmarkBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "office_commonmark_basic",
+        "markdown/sample.commonmark",
+        config,
+        Collections.emptyList(),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(
+              result, Arrays.asList("text/markdown", "text/plain", "text/x-commonmark"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 5);
+        });
+  }
+
+  @Test
   public void officeDjotBasic() throws Exception {
     JsonNode config = null;
     E2EHelpers.runFixture(
@@ -565,6 +582,26 @@ public class OfficeTest {
   }
 
   @Test
+  public void officePptmBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "office_pptm_basic",
+        "pptx/powerpoint_with_image.pptm",
+        config,
+        Collections.emptyList(),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(
+              result,
+              Arrays.asList(
+                  "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+                  "application/vnd.openxmlformats-officedocument.presentationml.presentation"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
   public void officePptxBasic() throws Exception {
     JsonNode config = null;
     E2EHelpers.runFixture(
@@ -686,6 +723,46 @@ public class OfficeTest {
           E2EHelpers.Assertions.assertExpectedMime(
               result, Arrays.asList("application/vnd.ms-excel"));
           E2EHelpers.Assertions.assertMinContentLength(result, 10);
+        });
+  }
+
+  @Test
+  public void officeXlsbBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "office_xlsb_basic",
+        "xlsx/test_xlsb.xlsb",
+        config,
+        Collections.emptyList(),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(
+              result,
+              Arrays.asList(
+                  "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
+        });
+  }
+
+  @Test
+  public void officeXlsmBasic() throws Exception {
+    JsonNode config = null;
+    E2EHelpers.runFixture(
+        "office_xlsm_basic",
+        "xlsx/test_01.xlsm",
+        config,
+        Collections.emptyList(),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(
+              result,
+              Arrays.asList(
+                  "application/vnd.ms-excel.sheet.macroEnabled.12",
+                  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+          E2EHelpers.Assertions.assertContentNotEmpty(result);
         });
   }
 

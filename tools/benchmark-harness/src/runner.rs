@@ -828,7 +828,18 @@ impl BenchmarkRunner {
                             }
                         }
                     } else {
+                        let mut consecutive_failures: u32 = 0;
+                        const MAX_CONSECUTIVE_FAILURES: u32 = 10;
+
                         for (file_path, force_ocr) in file_paths.into_iter().zip(force_ocr_flags) {
+                            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES {
+                                eprintln!(
+                                    "Skipping remaining files for {} — {} consecutive failures",
+                                    adapter_name, MAX_CONSECUTIVE_FAILURES
+                                );
+                                break;
+                            }
+
                             let adapter = Arc::clone(adapter);
                             let config = config.clone();
                             let cold_start = self.cold_start_durations.get(adapter_name).copied();
@@ -836,10 +847,12 @@ impl BenchmarkRunner {
                             match Self::run_iterations_static(&file_path, adapter, &config, cold_start, force_ocr).await
                             {
                                 Ok(mut result) => {
+                                    consecutive_failures = 0;
                                     self.enrich_with_framework_size(&mut result);
                                     results.push(result);
                                 }
                                 Err(e) => {
+                                    consecutive_failures += 1;
                                     eprintln!("Benchmark task failed for {}: {}", adapter_name, e);
                                 }
                             }

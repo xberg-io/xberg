@@ -22,7 +22,8 @@ name = "benchmark_harness"
 path = "src/lib.rs"
 
 [dependencies]
-kreuzberg = { path = "../../crates/kreuzberg", features = ["full", "bundled-pdfium"] }
+kreuzberg = { workspace = true, features = ["bundled-pdfium", "full"] }
+
 tokio = { workspace = true, features = ["full"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

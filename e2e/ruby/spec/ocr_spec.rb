@@ -306,6 +306,26 @@ RSpec.describe 'ocr fixtures' do
     end
   end
 
+  it 'ocr_tesseract_elements_min_count' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'ocr_tesseract_elements_min_count',
+      'images/test_hello_world.png',
+      { force_ocr: true,
+        ocr: { backend: 'tesseract', element_config: { include_elements: true, min_level: 'line' }, language: 'eng' } },
+      requirements: %w[tesseract tesseract],
+      notes: 'Requires Tesseract OCR backend',
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/png']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 5)
+      E2ERuby::Assertions.assert_ocr_elements(result, has_elements: true, min_count: 1)
+    end
+  end
+
   it 'ocr_tesseract_language_german' do
     E2ERuby.skip_if_feature_unavailable('tesseract')
     E2ERuby.run_fixture(

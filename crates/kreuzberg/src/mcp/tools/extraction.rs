@@ -31,8 +31,13 @@ pub(in crate::mcp) trait ExtractionTool {
         &self,
         Parameters(params): Parameters<ExtractFileParams>,
     ) -> Result<CallToolResult, McpError> {
-        let config = build_config(self.default_config(), params.config)
+        let mut config = build_config(self.default_config(), params.config)
             .map_err(|e| McpError::invalid_params(e, None))?;
+
+        if let Some(ref pwd) = params.pdf_password {
+            let pdf_opts = config.pdf_options.get_or_insert_with(Default::default);
+            pdf_opts.passwords.get_or_insert_with(Vec::new).push(pwd.clone());
+        }
 
         let result = extract_file(&params.path, params.mime_type.as_deref(), &config)
             .await
@@ -57,8 +62,13 @@ pub(in crate::mcp) trait ExtractionTool {
             .decode(&params.data)
             .map_err(|e| McpError::invalid_params(format!("Invalid base64: {}", e), None))?;
 
-        let config = build_config(self.default_config(), params.config)
+        let mut config = build_config(self.default_config(), params.config)
             .map_err(|e| McpError::invalid_params(e, None))?;
+
+        if let Some(ref pwd) = params.pdf_password {
+            let pdf_opts = config.pdf_options.get_or_insert_with(Default::default);
+            pdf_opts.passwords.get_or_insert_with(Vec::new).push(pwd.clone());
+        }
 
         let mime_type = params.mime_type.as_deref().unwrap_or("");
 
@@ -81,8 +91,13 @@ pub(in crate::mcp) trait ExtractionTool {
         &self,
         Parameters(params): Parameters<BatchExtractFilesParams>,
     ) -> Result<CallToolResult, McpError> {
-        let config = build_config(self.default_config(), params.config)
+        let mut config = build_config(self.default_config(), params.config)
             .map_err(|e| McpError::invalid_params(e, None))?;
+
+        if let Some(ref pwd) = params.pdf_password {
+            let pdf_opts = config.pdf_options.get_or_insert_with(Default::default);
+            pdf_opts.passwords.get_or_insert_with(Vec::new).push(pwd.clone());
+        }
 
         let results = batch_extract_file(params.paths.clone(), &config)
             .await
@@ -140,6 +155,7 @@ mod tests {
             path: get_test_path("pdf/tiny.pdf").to_string(),
             mime_type: None,
             config: None,
+            pdf_password: None,
                     };
 
         let result = server.extract_file(Parameters(params)).await;
@@ -166,6 +182,7 @@ mod tests {
             path: get_test_path("pdf/tiny.pdf").to_string(),
             mime_type: None,
             config: None,
+            pdf_password: None,
                     };
 
         let result = server.extract_file(Parameters(params)).await;
@@ -191,6 +208,7 @@ mod tests {
             path: "/nonexistent/file.pdf".to_string(),
             mime_type: None,
             config: None,
+            pdf_password: None,
                     };
 
         let result = server.extract_file(Parameters(params)).await;
@@ -207,6 +225,7 @@ mod tests {
             path: get_test_path("pdf/tiny.pdf").to_string(),
             mime_type: Some(Cow::Borrowed("application/pdf")),
             config: None,
+            pdf_password: None,
                     };
 
         let result = server.extract_file(Parameters(params)).await;
@@ -225,6 +244,7 @@ mod tests {
             data: encoded,
             mime_type: Some(Cow::Borrowed("text/plain")),
             config: None,
+            pdf_password: None,
                     };
 
         let result = server.extract_bytes(Parameters(params)).await;
@@ -251,6 +271,7 @@ mod tests {
             data: "not-valid-base64!!!".to_string(),
             mime_type: None,
             config: None,
+            pdf_password: None,
                     };
 
         let result = server.extract_bytes(Parameters(params)).await;
@@ -267,6 +288,7 @@ mod tests {
         let params = BatchExtractFilesParams {
             paths: vec![get_test_path("pdf/tiny.pdf").to_string()],
             config: None,
+            pdf_password: None,
                     };
 
         let result = server.batch_extract_files(Parameters(params)).await;
@@ -292,6 +314,7 @@ mod tests {
         let params = BatchExtractFilesParams {
             paths: vec![],
             config: None,
+            pdf_password: None,
                     };
 
         let result = server.batch_extract_files(Parameters(params)).await;

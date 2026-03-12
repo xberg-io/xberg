@@ -8,6 +8,7 @@ async def main() -> None:
             extract_images=True,
             target_dpi=200,
             max_image_dimension=2048,
+            inject_placeholders=True,  # set to False to extract images without markdown references
             auto_adjust_dpi=True,
         )
     )

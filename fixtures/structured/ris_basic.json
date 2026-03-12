@@ -1,0 +1,16 @@
+{
+	"id": "structured_ris_basic",
+	"category": "structured",
+	"description": "RIS citation format extraction.",
+	"document": {
+		"path": "data_formats/sample.ris",
+		"media_type": "application/x-research-info-systems"
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": ["application/x-research-info-systems", "text/plain"],
+		"content_not_empty": true
+	}
+}

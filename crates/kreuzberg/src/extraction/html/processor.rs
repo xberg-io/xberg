@@ -2,6 +2,8 @@
 //!
 //! This module provides the main processing functions that tie together
 //! HTML conversion, image extraction, and metadata handling.
+//!
+//! Note: `process_html` and helpers are currently only exercised by tests in this module.
 
 use super::converter::{convert_html_to_markdown, resolve_conversion_options};
 use super::image_handling::inline_image_to_extracted;

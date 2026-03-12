@@ -77,6 +77,8 @@ export type {
 	ElementType,
 	ExtractedImage,
 	ExtractionResult,
+	HeadingContext,
+	HeadingLevel,
 	HierarchicalBlock,
 	PageContent,
 	PageHierarchy,

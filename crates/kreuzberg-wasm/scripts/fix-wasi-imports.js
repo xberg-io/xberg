@@ -88,11 +88,18 @@ function __wasi_view() {
     return new DataView(__wasi_mem_ref.memory.buffer);
 }
 
-// env stubs: system() and mkstemp() are never called at runtime in WASM OCR
-const __env_stubs__ = {
+// env stubs: system() and mkstemp() are never called at runtime in WASM OCR.
+// The Proxy catch-all handles any additional env imports (e.g. TessDeleteText and
+// other Tesseract FFI symbols) that the linker may leave unresolved on some platforms.
+const __env_stubs__ = new Proxy({
     system: () => -1,
     mkstemp: () => -1,
-};
+}, {
+    get(target, prop) {
+        if (prop in target) return target[prop];
+        return () => {};
+    }
+});
 
 // WASI stubs: minimal implementations for WASI preview1 syscalls.
 // Functions that take output pointers write proper values to WASM memory.

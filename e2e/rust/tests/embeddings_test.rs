@@ -54,7 +54,7 @@ async fn test_embedding_async() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), Some(true));
+    assertions::assert_chunks(&result, Some(1), None, Some(true), Some(true), None);
 }
 
 #[test]
@@ -107,7 +107,7 @@ fn test_embedding_balanced_preset() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), Some(true));
+    assertions::assert_chunks(&result, Some(1), None, Some(true), Some(true), None);
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn test_embedding_disabled() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), Some(false));
+    assertions::assert_chunks(&result, Some(1), None, Some(true), Some(false), None);
 }
 
 #[test]
@@ -189,5 +189,5 @@ fn test_embedding_fast_preset() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), Some(true));
+    assertions::assert_chunks(&result, Some(1), None, Some(true), Some(true), None);
 }

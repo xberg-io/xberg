@@ -128,16 +128,55 @@ if ($result5->chunks !== null) {
     }
 }
 
+echo "\n\n";
+
+echo "Example 6: Markdown Chunker with Token-Based Sizing and Heading Context\n";
+echo "========================================================================\n";
+
+$config6 = new ExtractionConfig(
+    chunking: new ChunkingConfig(
+        chunkerType: 'markdown',
+        sizing: [
+            'type' => 'tokenizer',
+            'model' => 'Xenova/gpt-4o'
+        ]
+    )
+);
+
+$result6 = (new Kreuzberg($config6))->extractFile('document.md');
+
+if ($result6->chunks !== null) {
+    echo "Total chunks: " . count($result6->chunks) . "\n";
+
+    foreach ($result6->chunks as $i => $chunk) {
+        echo "\nChunk {$i}:\n";
+        echo "- Text preview: " . substr($chunk->text, 0, 60) . "...\n";
+
+        if (isset($chunk->metadata->headingContext->headings)) {
+            $headings = $chunk->metadata->headingContext->headings;
+            echo "- Headings in context:\n";
+            foreach ($headings as $heading) {
+                echo "  - Level {$heading->level}: {$heading->text}\n";
+            }
+        }
+    }
+}
+
 echo "\n\nChunking Configuration Parameters:\n";
 echo "==================================\n";
 echo "- maxChunkSize: Maximum number of characters per chunk\n";
 echo "- chunkOverlap: Number of overlapping characters between chunks\n";
 echo "- respectSentences: Split at sentence boundaries when possible\n";
 echo "- respectParagraphs: Split at paragraph boundaries when possible\n";
+echo "- chunkerType: Type of chunker ('simple' or 'markdown')\n";
+echo "- sizing: Sizing strategy configuration\n";
+echo "  - type: 'character' or 'tokenizer'\n";
+echo "  - model: Tokenizer model (e.g., 'Xenova/gpt-4o')\n";
 echo "\nBest Practices:\n";
 echo "- Use 256-512 chars for fine-grained retrieval\n";
 echo "- Use 1000-2000 chars for more context\n";
 echo "- Set overlap to ~10% of chunk size\n";
 echo "- Enable respectSentences for better coherence\n";
-echo "- Enable respectParagraphs for topic coherence\n";
+echo "- Use markdown chunker for structured documents with headings\n";
+echo "- Use token-based sizing for LLM token budgets\n";
 ```

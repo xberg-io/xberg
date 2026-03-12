@@ -144,3 +144,55 @@ pub(super) fn execute_language_detection(result: &mut ExtractionResult, config: 
 
     Ok(())
 }
+
+/// Execute token reduction if configured.
+pub(super) fn execute_token_reduction(result: &mut ExtractionResult, config: &ExtractionConfig) -> Result<()> {
+    #[cfg(feature = "quality")]
+    if let Some(ref tr_config) = config.token_reduction {
+        let level = crate::text::token_reduction::ReductionLevel::from(tr_config.mode.as_str());
+
+        if !matches!(level, crate::text::token_reduction::ReductionLevel::Off) {
+            let impl_config = crate::text::token_reduction::TokenReductionConfig {
+                level,
+                ..Default::default()
+            };
+
+            let lang_hint: Option<&str> = result
+                .detected_languages
+                .as_deref()
+                .and_then(|langs| langs.first().map(|s| s.as_str()));
+
+            match crate::text::token_reduction::reduce_tokens(&result.content, &impl_config, lang_hint) {
+                Ok(reduced) => {
+                    result.content = reduced;
+                }
+                Err(e) => {
+                    let error_msg = e.to_string();
+                    result.processing_warnings.push(ProcessingWarning {
+                        source: "token_reduction".to_string(),
+                        message: error_msg.clone(),
+                    });
+                    result.metadata.additional.insert(
+                        Cow::Borrowed("token_reduction_error"),
+                        serde_json::Value::String(error_msg),
+                    );
+                }
+            }
+        }
+    }
+
+    #[cfg(not(feature = "quality"))]
+    if config.token_reduction.is_some() {
+        let error_msg = "Token reduction requires the quality feature".to_string();
+        result.processing_warnings.push(ProcessingWarning {
+            source: "token_reduction".to_string(),
+            message: error_msg.clone(),
+        });
+        result.metadata.additional.insert(
+            Cow::Borrowed("token_reduction_error"),
+            serde_json::Value::String(error_msg),
+        );
+    }
+
+    Ok(())
+}

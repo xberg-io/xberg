@@ -17,6 +17,19 @@ test_that("office_bibtex_basic", {
   assert_min_content_length(result, 10L)
 })
 
+test_that("office_commonmark_basic", {
+  result <- run_fixture(
+    "office_commonmark_basic",
+    "markdown/sample.commonmark",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("text/markdown", "text/plain", "text/x-commonmark"))
+  assert_min_content_length(result, 5L)
+})
+
 test_that("office_djot_basic", {
   result <- run_fixture(
     "office_djot_basic",
@@ -414,6 +427,19 @@ test_that("office_ppt_legacy", {
   assert_min_content_length(result, 10L)
 })
 
+test_that("office_pptm_basic", {
+  result <- run_fixture(
+    "office_pptm_basic",
+    "pptx/powerpoint_with_image.pptm",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation"))
+  assert_content_not_empty(result)
+})
+
 test_that("office_pptx_basic", {
   result <- run_fixture(
     "office_pptx_basic",
@@ -503,6 +529,32 @@ test_that("office_xls_legacy", {
   )
   assert_expected_mime(result, c("application/vnd.ms-excel"))
   assert_min_content_length(result, 10L)
+})
+
+test_that("office_xlsb_basic", {
+  result <- run_fixture(
+    "office_xlsb_basic",
+    "xlsx/test_xlsb.xlsb",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+  assert_content_not_empty(result)
+})
+
+test_that("office_xlsm_basic", {
+  result <- run_fixture(
+    "office_xlsm_basic",
+    "xlsx/test_01.xlsm",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+  assert_content_not_empty(result)
 })
 
 test_that("office_xlsx_basic", {

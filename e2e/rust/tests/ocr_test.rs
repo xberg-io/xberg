@@ -701,6 +701,57 @@ fn test_ocr_tesseract_elements() {
 }
 
 #[test]
+fn test_ocr_tesseract_elements_min_count() {
+    // Tests Tesseract OCR element output with min_count assertion
+
+    let document_path = resolve_document("images/test_hello_world.png");
+    if !document_path.exists() {
+        println!(
+            "Skipping ocr_tesseract_elements_min_count: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "force_ocr": true,
+  "ocr": {
+    "backend": "tesseract",
+    "element_config": {
+      "include_elements": true,
+      "min_level": "line"
+    },
+    "language": "eng"
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping ocr_tesseract_elements_min_count: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping ocr_tesseract_elements_min_count: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for ocr_tesseract_elements_min_count: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/png"]);
+    assertions::assert_min_content_length(&result, 5);
+    assertions::assert_ocr_elements(&result, Some(true), None, None, Some(1));
+}
+
+#[test]
 fn test_ocr_tesseract_language_german() {
     // Tests Tesseract OCR with German language configuration
 

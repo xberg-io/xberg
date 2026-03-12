@@ -778,6 +778,9 @@ readonly class ChunkingConfig
         public int $chunkOverlap = 50,
         public bool $respectSentences = true,
         public bool $respectParagraphs = false,
+        public ?string $sizingType = null,
+        public ?string $sizingModel = null,
+        public ?string $sizingCacheDir = null,
     );
 }
 ```
@@ -788,6 +791,9 @@ readonly class ChunkingConfig
 - `$chunkOverlap` (int): Overlap between chunks in characters. Default: 50
 - `$respectSentences` (bool): Try to split at sentence boundaries. Default: true
 - `$respectParagraphs` (bool): Try to split at paragraph boundaries. Default: false
+- `$sizingType` (string|null): How chunk size is measured. Options: `"characters"` (default) or `"tokenizer"` (use a HuggingFace tokenizer). Default: null (characters)
+- `$sizingModel` (string|null): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `$sizingType` is `"tokenizer"`. Default: null
+- `$sizingCacheDir` (string|null): Optional directory to cache downloaded tokenizer files. Default: null
 
 **Examples:**
 
@@ -1223,6 +1229,7 @@ readonly class ChunkMetadata
         public ?int $tokenCount = null,
         public ?int $firstPage = null,
         public ?int $lastPage = null,
+        public ?HeadingContext $headingContext = null,
     );
 }
 ```
@@ -1235,6 +1242,7 @@ readonly class ChunkMetadata
 - `$tokenCount` (int|null): Estimated token count (if configured)
 - `$firstPage` (int|null): First page this chunk appears on (1-indexed)
 - `$lastPage` (int|null): Last page this chunk appears on (1-indexed)
+- `$headingContext` (?HeadingContext): Heading hierarchy when using Markdown chunker. Only populated when chunker_type is set to markdown.
 
 ---
 

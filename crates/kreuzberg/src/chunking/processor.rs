@@ -91,8 +91,7 @@ mod tests {
                 overlap: 10,
                 trim: true,
                 chunker_type: crate::chunking::ChunkerType::Text,
-                embedding: None,
-                preset: None,
+                ..Default::default()
             }),
             ..Default::default()
         };
@@ -199,8 +198,7 @@ mod tests {
                 overlap: 10,
                 trim: true,
                 chunker_type: crate::chunking::ChunkerType::Text,
-                embedding: None,
-                preset: None,
+                ..Default::default()
             }),
             ..Default::default()
         };

@@ -1,5 +1,3 @@
-#![cfg(feature = "office")]
-
 //! Native PPT extractor for PowerPoint 97-2003 binary format.
 //!
 //! Extracts text directly from OLE/CFB compound documents without LibreOffice.

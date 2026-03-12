@@ -11,6 +11,7 @@ pub mod quality;
 #[cfg(feature = "quality")]
 pub mod string_utils;
 
+pub mod json_utils;
 pub mod pool;
 pub mod pool_sizing;
 pub mod string_pool;
@@ -28,4 +29,4 @@ pub use pool::{
 
 pub use pool_sizing::{PoolSizeHint, estimate_pool_size};
 
-pub use string_pool::{InternedString, intern_language_code, intern_mime_type};
+pub use json_utils::{camel_to_snake, snake_to_camel};

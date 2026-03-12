@@ -149,6 +149,20 @@ test_that("pdf_non_english_german", {
   assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
+test_that("pdf_password_protected", {
+  result <- run_fixture(
+    "pdf_password_protected",
+    "pdf/copy_protected.pdf",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 50L)
+  assert_content_contains_any(result, c("LayoutParser", "document image analysis", "deep learning"))
+})
+
 test_that("pdf_right_to_left", {
   result <- run_fixture(
     "pdf_right_to_left",

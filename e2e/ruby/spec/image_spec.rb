@@ -8,6 +8,60 @@
 require_relative 'spec_helper'
 
 RSpec.describe 'image fixtures' do
+  it 'image_bmp_basic' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'image_bmp_basic',
+      'images/bmp_24.bmp',
+      nil,
+      requirements: %w[tesseract tesseract],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/bmp']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
+  it 'image_gif_basic' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'image_gif_basic',
+      'images_extra/ocr_image.gif',
+      nil,
+      requirements: %w[tesseract tesseract],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/gif']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
+  it 'image_jp2_basic' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'image_jp2_basic',
+      'images_extra/ocr_image.jp2',
+      nil,
+      requirements: %w[tesseract tesseract],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/jp2', 'image/jpeg2000']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
   it 'image_metadata_only' do
     E2ERuby.run_fixture(
       'image_metadata_only',
@@ -25,6 +79,60 @@ RSpec.describe 'image fixtures' do
     end
   end
 
+  it 'image_pbm_basic' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'image_pbm_basic',
+      'images_extra/ocr_image.pbm',
+      nil,
+      requirements: %w[tesseract tesseract],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/x-portable-bitmap', 'image/x-pbm']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
+  it 'image_pgm_basic' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'image_pgm_basic',
+      'images_extra/ocr_image.pgm',
+      nil,
+      requirements: %w[tesseract tesseract],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/x-portable-graymap', 'image/x-pgm']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
+  it 'image_ppm_basic' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'image_ppm_basic',
+      'images_extra/ocr_image.ppm',
+      nil,
+      requirements: %w[tesseract tesseract],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/x-portable-pixmap', 'image/x-ppm']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
   it 'image_svg_basic' do
     E2ERuby.run_fixture(
       'image_svg_basic',
@@ -39,6 +147,42 @@ RSpec.describe 'image fixtures' do
         ['image/svg+xml']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 5)
+    end
+  end
+
+  it 'image_tiff_basic' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'image_tiff_basic',
+      'images_extra/ocr_image.tif',
+      nil,
+      requirements: %w[tesseract tesseract],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/tiff']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
+    end
+  end
+
+  it 'image_webp_basic' do
+    E2ERuby.skip_if_feature_unavailable('tesseract')
+    E2ERuby.run_fixture(
+      'image_webp_basic',
+      'images_extra/ocr_image.webp',
+      nil,
+      requirements: %w[tesseract tesseract],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/webp']
+      )
+      E2ERuby::Assertions.assert_content_not_empty(result)
     end
   end
 end

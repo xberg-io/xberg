@@ -259,15 +259,20 @@ Ships prebuilt NIF binaries via RustlerPrecompiled. Falls back to compiling from
 
 Enable features selectively:
 
-```bash
-cargo add kreuzberg --features "excel stopwords ocr"
+Add to Maven `pom.xml`:
+
+```xml title="pom.xml"
+<dependency>
+    <groupId>dev.kreuzberg</groupId>
+    <artifactId>kreuzberg</artifactId>
+    <version>4.4.5</version>
+</dependency>
 ```
 
 Or pin a version in `Cargo.toml`:
 
-```toml
-[dependencies]
-kreuzberg = "4.0"
+```gradle title="build.gradle"
+implementation 'dev.kreuzberg:kreuzberg:4.4.5'
 ```
 
 ### C / C++ <span class="version-badge unreleased">Unreleased</span>

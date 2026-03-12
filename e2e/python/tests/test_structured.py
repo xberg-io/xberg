@@ -28,6 +28,20 @@ def test_structured_csv_basic() -> None:
     helpers.assert_min_content_length(result, 20)
 
 
+def test_structured_enw_basic() -> None:
+    """EndNote ENW citation format extraction."""
+
+    document_path = helpers.resolve_document("data_formats/sample.enw")
+    if not document_path.exists():
+        pytest.skip(f"Skipping structured_enw_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"])
+
+
 def test_structured_json_basic() -> None:
     """Structured JSON extraction should stream and preserve content."""
 
@@ -60,6 +74,36 @@ def test_structured_json_simple() -> None:
     helpers.assert_content_contains_any(result, ["{", "name"])
 
 
+def test_structured_nbib_basic() -> None:
+    """PubMed NBIB citation format extraction."""
+
+    document_path = helpers.resolve_document("data_formats/sample.nbib")
+    if not document_path.exists():
+        pytest.skip(f"Skipping structured_nbib_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/nbib", "application/x-pubmed", "text/plain"])
+    helpers.assert_content_not_empty(result)
+
+
+def test_structured_ris_basic() -> None:
+    """RIS citation format extraction."""
+
+    document_path = helpers.resolve_document("data_formats/sample.ris")
+    if not document_path.exists():
+        pytest.skip(f"Skipping structured_ris_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/x-research-info-systems", "text/plain"])
+    helpers.assert_content_not_empty(result)
+
+
 def test_structured_toml_basic() -> None:
     """TOML configuration file extraction."""
 
@@ -72,6 +116,21 @@ def test_structured_toml_basic() -> None:
     result = extract_file_sync(document_path, None, config)
 
     helpers.assert_expected_mime(result, ["application/toml", "text/toml"])
+    helpers.assert_min_content_length(result, 10)
+
+
+def test_structured_tsv_basic() -> None:
+    """TSV (tab-separated values) data file extraction."""
+
+    document_path = helpers.resolve_document("data_formats/employees.tsv")
+    if not document_path.exists():
+        pytest.skip(f"Skipping structured_tsv_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["text/tab-separated-values", "text/plain"])
     helpers.assert_min_content_length(result, 10)
 
 

@@ -250,18 +250,46 @@ pub struct JsChunkingConfig {
     pub embedding: Option<JsEmbeddingConfig>,
     /// Optional preset name for chunking parameters
     pub preset: Option<String>,
+    /// Chunker type: "text" (default) or "markdown"
+    pub chunker_type: Option<String>,
+    /// Sizing type: "characters" (default) or "tokenizer"
+    pub sizing_type: Option<String>,
+    /// HuggingFace model ID for tokenizer sizing (e.g., "Xenova/gpt-4o")
+    pub sizing_model: Option<String>,
+    /// Optional cache directory for tokenizer files
+    pub sizing_cache_dir: Option<String>,
 }
 
 impl From<JsChunkingConfig> for RustChunkingConfig {
     fn from(val: JsChunkingConfig) -> Self {
+        let ct = match val.chunker_type.as_deref() {
+            Some("markdown") => ChunkerType::Markdown,
+            _ => ChunkerType::Text,
+        };
+        let sizing = resolve_chunk_sizing(val.sizing_type, val.sizing_model, val.sizing_cache_dir);
         RustChunkingConfig {
             max_characters: val.max_chars.unwrap_or(1000) as usize,
             overlap: val.max_overlap.unwrap_or(200) as usize,
             trim: true,
-            chunker_type: ChunkerType::Text,
+            chunker_type: ct,
             embedding: val.embedding.map(Into::into),
             preset: val.preset,
+            sizing,
         }
+    }
+}
+
+fn resolve_chunk_sizing(
+    sizing_type: Option<String>,
+    sizing_model: Option<String>,
+    sizing_cache_dir: Option<String>,
+) -> kreuzberg::ChunkSizing {
+    match sizing_type.as_deref() {
+        Some("tokenizer") => kreuzberg::ChunkSizing::Tokenizer {
+            model: sizing_model.unwrap_or_else(|| "Xenova/gpt-4o".to_string()),
+            cache_dir: sizing_cache_dir.map(std::path::PathBuf::from),
+        },
+        _ => kreuzberg::ChunkSizing::Characters,
     }
 }
 
@@ -346,6 +374,7 @@ pub struct JsImageExtractionConfig {
     pub extract_images: Option<bool>,
     pub target_dpi: Option<i32>,
     pub max_image_dimension: Option<i32>,
+    pub inject_placeholders: Option<bool>,
     pub auto_adjust_dpi: Option<bool>,
     pub min_dpi: Option<i32>,
     pub max_dpi: Option<i32>,
@@ -357,6 +386,7 @@ impl From<JsImageExtractionConfig> for RustImageExtractionConfig {
             extract_images: val.extract_images.unwrap_or(true),
             target_dpi: val.target_dpi.unwrap_or(300),
             max_image_dimension: val.max_image_dimension.unwrap_or(4096),
+            inject_placeholders: val.inject_placeholders.unwrap_or(true),
             auto_adjust_dpi: val.auto_adjust_dpi.unwrap_or(true),
             min_dpi: val.min_dpi.unwrap_or(72),
             max_dpi: val.max_dpi.unwrap_or(600),
@@ -1112,11 +1142,30 @@ impl TryFrom<ExtractionConfig> for JsExtractionConfig {
                     cache_dir: emb.cache_dir.and_then(|p| p.to_str().map(String::from)),
                 }),
                 preset: chunk.preset,
+                chunker_type: match chunk.chunker_type {
+                    ChunkerType::Text => None,
+                    ChunkerType::Markdown => Some("markdown".to_string()),
+                },
+                sizing_type: match &chunk.sizing {
+                    kreuzberg::ChunkSizing::Characters => None,
+                    kreuzberg::ChunkSizing::Tokenizer { .. } => Some("tokenizer".to_string()),
+                },
+                sizing_model: match &chunk.sizing {
+                    kreuzberg::ChunkSizing::Tokenizer { model, .. } => Some(model.clone()),
+                    _ => None,
+                },
+                sizing_cache_dir: match &chunk.sizing {
+                    kreuzberg::ChunkSizing::Tokenizer { cache_dir, .. } => {
+                        cache_dir.as_ref().and_then(|p| p.to_str().map(String::from))
+                    }
+                    _ => None,
+                },
             }),
             images: val.images.map(|img| JsImageExtractionConfig {
                 extract_images: Some(img.extract_images),
                 target_dpi: Some(img.target_dpi),
                 max_image_dimension: Some(img.max_image_dimension),
+                inject_placeholders: Some(img.inject_placeholders),
                 auto_adjust_dpi: Some(img.auto_adjust_dpi),
                 min_dpi: Some(img.min_dpi),
                 max_dpi: Some(img.max_dpi),

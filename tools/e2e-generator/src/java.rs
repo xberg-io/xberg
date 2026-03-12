@@ -372,7 +372,8 @@ public final class E2EHelpers {
                 Integer minCount,
                 Integer maxCount,
                 Boolean eachHasContent,
-                Boolean eachHasEmbedding
+                Boolean eachHasEmbedding,
+                Boolean eachHasHeadingContext
         ) {
             var chunks = result.getChunks();
             int count = chunks != null ? chunks.size() : 0;
@@ -395,6 +396,18 @@ public final class E2EHelpers {
                 for (var chunk : chunks) {
                     assertNotNull(chunk.getEmbedding(),
                             "Expected each chunk to have an embedding");
+                }
+            }
+            if (chunks != null && eachHasHeadingContext != null && eachHasHeadingContext) {
+                for (var chunk : chunks) {
+                    assertNotNull(chunk.getMetadata().getHeadingContext(),
+                            "Expected each chunk to have heading_context");
+                }
+            }
+            if (chunks != null && eachHasHeadingContext != null && !eachHasHeadingContext) {
+                for (var chunk : chunks) {
+                    assertNull(chunk.getMetadata().getHeadingContext(),
+                            "Expected each chunk to have no heading_context");
                 }
             }
         }
@@ -481,7 +494,7 @@ public final class E2EHelpers {
         public static void assertOcrElements(
                 ExtractionResult result,
                 boolean hasElements,
-                boolean hasGeometry,
+                Boolean hasGeometry,
                 Boolean hasConfidence,
                 Integer minCount
         ) {
@@ -489,7 +502,7 @@ public final class E2EHelpers {
             if (hasElements) {
                 assertTrue(!ocrElements.isEmpty(), "Expected OCR elements, but none found");
             }
-            if (hasGeometry) {
+            if (hasGeometry != null && hasGeometry) {
                 for (int i = 0; i < ocrElements.size(); i++) {
                     assertNotNull(ocrElements.get(i).getGeometry(),
                             String.format("OCR element %d expected to have geometry", i));
@@ -690,16 +703,16 @@ const JAVA_POM_TEMPLATE: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.11.3</junit.version>
         <jackson.version>2.18.2</jackson.version>
-        <kreuzberg.version>4.4.2</kreuzberg.version>
+        <kreuzberg.version>4.4.5</kreuzberg.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>dev.kreuzberg</groupId>
             <artifactId>kreuzberg</artifactId>
-            <version>4.4.2</version>
+            <version>4.4.5</version>
             <scope>system</scope>
-            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.4.2.jar</systemPath>
+            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.4.5.jar</systemPath>
         </dependency>
 
         <dependency>
@@ -1581,9 +1594,13 @@ fn render_assertions(assertions: &Assertions) -> String {
             .each_has_embedding
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let has_heading_context = chunks
+            .each_has_heading_context
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".to_string());
         buffer.push_str(&format!(
-            "                E2EHelpers.Assertions.assertChunks(result, {}, {}, {}, {});\n",
-            min_literal, max_literal, has_content, has_embedding
+            "                E2EHelpers.Assertions.assertChunks(result, {}, {}, {}, {}, {});\n",
+            min_literal, max_literal, has_content, has_embedding, has_heading_context
         ));
     }
 

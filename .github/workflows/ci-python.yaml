@@ -113,6 +113,11 @@ jobs:
           use-sccache: 'true'
           report-stats: 'true'
 
+      - name: Clippy (kreuzberg-py)
+        if: matrix.platform == 'linux-x86_64'
+        shell: bash
+        run: cargo clippy -p kreuzberg-py -- -D warnings
+
       - name: Setup Python
         uses: ./.github/actions/setup-python-env
         with:

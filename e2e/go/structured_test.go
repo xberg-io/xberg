@@ -11,6 +11,11 @@ func TestStructuredStructuredCsvBasic(t *testing.T) {
 	assertMinContentLength(t, result, 20)
 }
 
+func TestStructuredStructuredEnwBasic(t *testing.T) {
+	result := runExtraction(t, "data_formats/sample.enw", nil)
+	assertExpectedMime(t, result, []string{"application/x-endnote-refer", "application/x-endnote+xml", "text/plain"})
+}
+
 func TestStructuredStructuredJsonBasic(t *testing.T) {
 	result := runExtraction(t, "json/sample_document.json", nil)
 	assertExpectedMime(t, result, []string{"application/json"})
@@ -25,9 +30,27 @@ func TestStructuredStructuredJsonSimple(t *testing.T) {
 	assertContentContainsAny(t, result, []string{"{", "name"})
 }
 
+func TestStructuredStructuredNbibBasic(t *testing.T) {
+	result := runExtraction(t, "data_formats/sample.nbib", nil)
+	assertExpectedMime(t, result, []string{"application/nbib", "application/x-pubmed", "text/plain"})
+	assertContentNotEmpty(t, result)
+}
+
+func TestStructuredStructuredRisBasic(t *testing.T) {
+	result := runExtraction(t, "data_formats/sample.ris", nil)
+	assertExpectedMime(t, result, []string{"application/x-research-info-systems", "text/plain"})
+	assertContentNotEmpty(t, result)
+}
+
 func TestStructuredStructuredTomlBasic(t *testing.T) {
 	result := runExtraction(t, "data_formats/cargo.toml", nil)
 	assertExpectedMime(t, result, []string{"application/toml", "text/toml"})
+	assertMinContentLength(t, result, 10)
+}
+
+func TestStructuredStructuredTsvBasic(t *testing.T) {
+	result := runExtraction(t, "data_formats/employees.tsv", nil)
+	assertExpectedMime(t, result, []string{"text/tab-separated-values", "text/plain"})
 	assertMinContentLength(t, result, 10)
 }
 

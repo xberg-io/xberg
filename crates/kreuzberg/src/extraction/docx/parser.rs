@@ -3343,7 +3343,7 @@ mod tests {
         if let Ok(bytes) = std::fs::read(&path) {
             let text = super::super::extract_text(&bytes).unwrap();
             // Document with images should still extract any surrounding text
-            assert!(text.len() >= 0, "Should not crash on images document");
+            let _ = text; // Should not crash on images document
         }
     }
 

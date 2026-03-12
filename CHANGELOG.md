@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.4.5]
+
+### Fixed
+
+- **PDF markdown garbles positioned text (#431)**: PDFs with positioned/tabular text (CVs, addresses, data tables) had their line breaks destroyed during paragraph grouping. Added page-level positioned text detection: when fewer than 30% of lines on a page reach the right margin, short lines are split into separate paragraphs to preserve the document's visual structure.
+- **Node worker pool password bug**: `extractFileInWorker` was passing the `password` argument as `mime_type` to `extract_file_sync`, meaning passwords were never applied and MIME detection could break. Password is now correctly injected into `config.pdf_options.passwords`.
+- **Unused import in kreuzberg-node**: Removed unused `use serde_json::Value` import in `result.rs` that caused clippy warnings.
+- **WASM Deno OCR test hang**: OCR tests hung indefinitely on WASM Deno because Tesseract synchronous initialization blocks the single-threaded runtime. OCR fixtures are now skipped for the wasm-deno target.
+- **WASM camelCase config deserialization**: JS consumers send camelCase config keys (e.g. `includeDocumentStructure`) but `serde` expects snake_case. Added `camel_to_snake` transform in `parse_config()` so config fields are properly deserialized. Fixes document structure extraction returning empty results via WASM.
+- **PHP 8.5 array coercion on macOS**: On PHP 8.5 + macOS, ext-php-rs coerces `#[php_class]` return values to arrays instead of objects. Added `normalizeExtractionResult()` wrapper that transparently converts arrays via `ExtractionResult::fromArray()`.
+- **PHP 8.5 support**: Upgraded ext-php-rs to 0.15.6 for PHP 8.5 compatibility.
+- **Vendoring scripts missing path deps**: Ruby and R vendoring scripts failed when workspace dependencies use `path` instead of `version`. Added path field handling to `format_dependency()` and kreuzberg-ffi fixup block to the Ruby vendoring script.
+- **pdfium-render clippy lints**: Fixed clippy warnings in kreuzberg-pdfium-render crate.
+
+### Added
+
+- **CLI `--pdf-password` flag**: New `--pdf-password` option on `extract` and `batch` commands for encrypted PDF support. Can be specified multiple times.
+- **MCP `pdf_password` parameter**: Added `pdf_password` field to `extract_file`, `extract_bytes`, and `batch_extract_files` MCP tool params for better discoverability.
+- **API `pdf_password` multipart field**: The HTTP API extract endpoint now accepts a `pdf_password` multipart field for encrypted PDFs.
+- **`PdfConfig` Default impl**: Added `Default` implementation for `PdfConfig` to support ergonomic config construction.
+- **Binding crate clippy in CI**: Added clippy steps to `ci-node`, `ci-python`, and `ci-wasm` workflows (gated to Linux). Added `node:clippy`, `python:clippy`, and `wasm:clippy` task commands.
+- **E2E password-protected PDF fixture**: Added `pdf_password_protected` fixture testing copy-protected PDF extraction across all bindings.
+
+### Changed
+
+- **All binding crates linted in pre-commit**: Removed clippy exclusions for kreuzberg-php, kreuzberg-node, and kreuzberg-wasm from pre-commit config.
+- **golangci-lint v2.11.3**: Upgraded from v2.9.0 across Taskfile, CI workflows, and install scripts.
+
+## [4.4.4]
+
+### Fixed
+
+- **CLI test app fixes**: Fixed broken symlinks in CLI test documents, corrected `--format` to `--output-format` flag usage, fixed multipart form field name (`file=` → `files=`) in serve tests, and rewrote MCP test to use JSON-RPC stdin protocol instead of background process detection.
+- **Publish idempotency check scripts**: Fixed `check_nuget.sh` and `check-nuget-version.sh` using bash 4+ `${var,,}` syntax incompatible with bash 3.x. Fixed `check_pypi.sh` and `check_packagist.sh` writing to `$GITHUB_OUTPUT` internally instead of stdout (conflicting with workflow-level redirect). Fixed `check-rubygems-version.sh` false negatives for native gems by switching from `gem search` to RubyGems JSON API. Fixed `check-rubygems-version-python.sh` Python operator precedence bug. Fixed `check-maven-version.sh` using unreliable Solr search API instead of direct repo HEAD request. Fixed stderr redirect missing on diagnostic messages in multiple scripts.
+- **Node test app version**: Updated Node.js test app to reference v4.4.4 package version.
+
+### Changed
+
+- **CLI install with all features**: CLI test install script now uses `--all-features` flag to enable API server and MCP server subcommands.
+- **Publish workflow republish support**: Added `republish` input to publish workflow that deletes and re-creates the tag on current HEAD before publishing, enabling clean retag + full republish.
+
+## [4.4.3]
+
+### Added
+
+- **PDF image placeholder toggle**: New `inject_placeholders` option on `ImageExtractionConfig` (default: `true`). Set to `false` to extract images as data without injecting `![image](...)` references into the markdown content.
+
+### Fixed
+
+- **Token reduction not applied** ([#436](https://github.com/kreuzberg-dev/kreuzberg/issues/436)): Token reduction config was accepted but never executed during extraction. The pipeline now applies `reduce_tokens()` when `token_reduction.mode` is configured.
+- **Nested HTML table extraction**: Nested HTML tables now extract correctly with proper cell data and markdown rendering, using the visitor-based table extraction API from html-to-markdown-rs.
+- **hOCR plain text output**: hOCR conversion now correctly produces plain text when `OutputFormat::Plain` is requested, instead of silently falling back to Markdown.
+- **PDF garbled text for positioned/tabular content** ([#431](https://github.com/kreuzberg-dev/kreuzberg/issues/431)): PDF text extraction now detects X-position gaps between consecutive characters and inserts spaces when the gap exceeds `0.8 × avg_font_size`. Previously, characters placed at specific coordinates without explicit space characters were concatenated without spaces.
+- **Chunk page metadata drift with overlap** ([#439](https://github.com/kreuzberg-dev/kreuzberg/issues/439)): Chunk byte offsets are now computed via pointer arithmetic from the source text, fixing cumulative drift that caused chunks to report incorrect page numbers when overlap is enabled.
+- **Node.js metadata casing**: Standardized all `Metadata` and `EmailMetadata` fields to `camelCase` (e.g., `pageCount`, `creationDate`, `fromEmail`) in the Node.js/TypeScript bindings. Also corrected pluralization for `authors` and `keywords`.
+- **WASM build failure on Windows CI**: CMake try-compile checks on Windows used the host MSVC compiler (`cl.exe`), which rejected GCC/Clang flags like `-Wno-implicit-function-declaration`. Added `CMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY` to both `build_leptonica_wasm` and `build_tesseract_wasm` to skip linking during cross-compilation checks.
+- **WASM OCR build panic when `git`/`patch` unavailable**: The tesseract WASM patch (`tesseract.diff`) application panicked when both `git apply` and `patch` commands failed. Added programmatic C++ source fixups as a fallback, applying all necessary changes (CPUID guard, pixa_debug_ unique_ptr conversion, source list trimming) via string replacement when the diff patch cannot be applied.
+
 ## [4.4.2]
 
 ### Fixed

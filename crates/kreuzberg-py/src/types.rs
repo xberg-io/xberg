@@ -440,6 +440,19 @@ impl ExtractionResult {
                     chunk_metadata_dict.set_item("last_page", last_page)?;
                 }
 
+                if let Some(ref hc) = chunk.metadata.heading_context {
+                    let headings_list = PyList::empty(py);
+                    for h in &hc.headings {
+                        let heading_dict = PyDict::new(py);
+                        heading_dict.set_item("level", h.level)?;
+                        heading_dict.set_item("text", &h.text)?;
+                        headings_list.append(heading_dict)?;
+                    }
+                    let hc_dict = PyDict::new(py);
+                    hc_dict.set_item("headings", headings_list)?;
+                    chunk_metadata_dict.set_item("heading_context", hc_dict)?;
+                }
+
                 let py_chunk = PyChunk {
                     content: chunk.content,
                     embedding,

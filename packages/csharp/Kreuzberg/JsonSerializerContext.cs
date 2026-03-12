@@ -30,6 +30,7 @@ namespace Kreuzberg;
 [JsonSerializable(typeof(TesseractConfig))]
 [JsonSerializable(typeof(ImagePreprocessingConfig))]
 [JsonSerializable(typeof(ChunkingConfig))]
+[JsonSerializable(typeof(ChunkSizingConfig))]
 [JsonSerializable(typeof(ImageExtractionConfig))]
 [JsonSerializable(typeof(FontConfig))]
 [JsonSerializable(typeof(HierarchyConfig))]

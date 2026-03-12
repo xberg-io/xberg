@@ -11,6 +11,12 @@ func TestOfficeOfficeBibtexBasic(t *testing.T) {
 	assertMinContentLength(t, result, 10)
 }
 
+func TestOfficeOfficeCommonmarkBasic(t *testing.T) {
+	result := runExtraction(t, "markdown/sample.commonmark", nil)
+	assertExpectedMime(t, result, []string{"text/markdown", "text/plain", "text/x-commonmark"})
+	assertMinContentLength(t, result, 5)
+}
+
 func TestOfficeOfficeDjotBasic(t *testing.T) {
 	result := runExtraction(t, "markdown/tables.djot", nil)
 	assertExpectedMime(t, result, []string{"text/x-djot", "text/djot"})
@@ -198,6 +204,12 @@ func TestOfficeOfficePptLegacy(t *testing.T) {
 	assertMinContentLength(t, result, 10)
 }
 
+func TestOfficeOfficePptmBasic(t *testing.T) {
+	result := runExtraction(t, "pptx/powerpoint_with_image.pptm", nil)
+	assertExpectedMime(t, result, []string{"application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation"})
+	assertContentNotEmpty(t, result)
+}
+
 func TestOfficeOfficePptxBasic(t *testing.T) {
 	result := runExtraction(t, "pptx/simple.pptx", nil)
 	assertExpectedMime(t, result, []string{"application/vnd.openxmlformats-officedocument.presentationml.presentation"})
@@ -238,6 +250,18 @@ func TestOfficeOfficeXlsLegacy(t *testing.T) {
 	result := runExtraction(t, "xls/test_excel.xls", nil)
 	assertExpectedMime(t, result, []string{"application/vnd.ms-excel"})
 	assertMinContentLength(t, result, 10)
+}
+
+func TestOfficeOfficeXlsbBasic(t *testing.T) {
+	result := runExtraction(t, "xlsx/test_xlsb.xlsb", nil)
+	assertExpectedMime(t, result, []string{"application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+	assertContentNotEmpty(t, result)
+}
+
+func TestOfficeOfficeXlsmBasic(t *testing.T) {
+	result := runExtraction(t, "xlsx/test_01.xlsm", nil)
+	assertExpectedMime(t, result, []string{"application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"})
+	assertContentNotEmpty(t, result)
 }
 
 func TestOfficeOfficeXlsxBasic(t *testing.T) {

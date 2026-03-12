@@ -579,12 +579,23 @@ def main():
         ),
         (
             repo_root / "crates/kreuzberg/Cargo.toml",
-            r'^(kreuzberg-tesseract\s*=\s*\{\s*version\s*=\s*")[^"]+("\s*,\s*optional\s*=\s*true\s*\})',
+            r'^(kreuzberg-tesseract\s*=\s*\{\s*path\s*=\s*"[^"]+"\s*,\s*version\s*=\s*")[^"]+("\s*,\s*optional\s*=\s*true\s*\})',
             rf"\g<1>{version}\g<2>",
         ),
         (
-            repo_root / "crates/kreuzberg-cli/Cargo.toml",
-            r'^(kreuzberg\s*=\s*\{\s*path\s*=\s*"../kreuzberg"\s*,\s*version\s*=\s*")[^"]+(".*\}\s*)$',
+            repo_root / "crates/kreuzberg/Cargo.toml",
+            r'^(kreuzberg-paddle-ocr\s*=\s*\{\s*path\s*=\s*"[^"]+"\s*,\s*version\s*=\s*")[^"]+("\s*,\s*optional\s*=\s*true\s*\})',
+            rf"\g<1>{version}\g<2>",
+        ),
+        # Workspace dependency versions in root Cargo.toml
+        (
+            repo_root / "Cargo.toml",
+            r'^(kreuzberg\s*=\s*\{\s*path\s*=\s*"[^"]+"\s*,\s*version\s*=\s*")[^"]+("\s*,\s*default-features)',
+            rf"\g<1>{version}\g<2>",
+        ),
+        (
+            repo_root / "Cargo.toml",
+            r'^(kreuzberg-ffi\s*=\s*\{\s*path\s*=\s*"[^"]+"\s*,\s*version\s*=\s*")[^"]+("\s*\})',
             rf"\g<1>{version}\g<2>",
         ),
         (

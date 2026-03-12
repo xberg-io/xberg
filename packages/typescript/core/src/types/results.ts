@@ -25,6 +25,18 @@ export interface Table {
 	boundingBox?: BoundingBox | null;
 }
 
+export interface HeadingLevel {
+	/** Heading depth (1 = h1, 2 = h2, etc.) */
+	level: number;
+	/** Text content of the heading */
+	text: string;
+}
+
+export interface HeadingContext {
+	/** Heading hierarchy from document root to this chunk's section */
+	headings: HeadingLevel[];
+}
+
 export interface ChunkMetadata {
 	byteStart: number;
 	byteEnd: number;
@@ -33,6 +45,7 @@ export interface ChunkMetadata {
 	totalChunks: number;
 	firstPage?: number | null;
 	lastPage?: number | null;
+	headingContext?: HeadingContext | null;
 }
 
 export interface Chunk {

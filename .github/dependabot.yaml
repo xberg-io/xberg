@@ -13,11 +13,12 @@ updates:
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "cargo"
-    directory: "/"
+    # Explicitly list root only — packages/ruby/ext has a standalone workspace
+    # with path deps to vendored crates that only exist at build time
+    directories:
+      - "/"
     schedule:
       interval: "weekly"
     ignore:
-      # Ignore vendored kreuzberg dependencies in Ruby/Elixir native extensions
-      # These use relative path dependencies that Dependabot cannot resolve
       - dependency-name: "kreuzberg"
       - dependency-name: "kreuzberg-ffi"

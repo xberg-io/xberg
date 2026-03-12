@@ -261,6 +261,7 @@ mod tests {
             page_structure_json: CString::new("{}").unwrap().into_raw(),
             pages_json: CString::new("[]").unwrap().into_raw(),
             elements_json: CString::new("[]").unwrap().into_raw(),
+            djot_content_json: ptr::null_mut(),
             ocr_elements_json: ptr::null_mut(),
             document_json: ptr::null_mut(),
             extracted_keywords_json: ptr::null_mut(),
@@ -288,6 +289,7 @@ mod tests {
             page_structure_json: ptr::null_mut(),
             pages_json: ptr::null_mut(),
             elements_json: ptr::null_mut(),
+            djot_content_json: ptr::null_mut(),
             ocr_elements_json: ptr::null_mut(),
             document_json: ptr::null_mut(),
             extracted_keywords_json: ptr::null_mut(),
@@ -386,6 +388,7 @@ mod tests {
             page_structure_json: CString::new("{\"pages\": []}").unwrap().into_raw(),
             pages_json: CString::new("[{\"content\": \"page 1\"}]").unwrap().into_raw(),
             elements_json: ptr::null_mut(),
+            djot_content_json: ptr::null_mut(),
             ocr_elements_json: ptr::null_mut(),
             document_json: ptr::null_mut(),
             extracted_keywords_json: ptr::null_mut(),
@@ -419,6 +422,7 @@ mod tests {
             elements_json: CString::new(r#"[{"element_id":"abc","element_type":"title","text":"Hello"}]"#)
                 .unwrap()
                 .into_raw(),
+            djot_content_json: ptr::null_mut(),
             ocr_elements_json: ptr::null_mut(),
             document_json: ptr::null_mut(),
             extracted_keywords_json: ptr::null_mut(),

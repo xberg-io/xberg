@@ -9,10 +9,13 @@
 use crate::ffi_panic_guard;
 use crate::ffi_panic_guard_i32;
 use crate::helpers::{clear_last_error, set_last_error};
+use kreuzberg::TokenReductionConfig;
+use kreuzberg::core::config::formats::OutputFormat;
 use kreuzberg::core::config::{
-    ChunkingConfig, ExtractionConfig, ImageExtractionConfig, LanguageDetectionConfig, OcrConfig, PdfConfig,
-    PostProcessorConfig,
+    ChunkingConfig, ImageExtractionConfig, LanguageDetectionConfig, OcrConfig, PdfConfig, PostProcessorConfig,
 };
+use kreuzberg::types::OutputFormat as ResultFormat;
+use kreuzberg::{ExtractionConfig, PageConfig};
 use std::ffi::{CStr, c_char};
 use std::ptr;
 
@@ -39,6 +42,10 @@ impl ConfigBuilder {
         self.config.include_document_structure = include;
     }
 
+    fn set_force_ocr(&mut self, force: bool) {
+        self.config.force_ocr = force;
+    }
+
     fn set_ocr_from_json(&mut self, ocr_json: &str) -> Result<(), String> {
         let ocr_config: OcrConfig =
             serde_json::from_str(ocr_json).map_err(|e| format!("Failed to parse OCR config JSON: {}", e))?;
@@ -50,6 +57,13 @@ impl ConfigBuilder {
         let pdf_config: PdfConfig =
             serde_json::from_str(pdf_json).map_err(|e| format!("Failed to parse PDF config JSON: {}", e))?;
         self.config.pdf_options = Some(pdf_config);
+        Ok(())
+    }
+
+    fn set_token_reduction_from_json(&mut self, tr_json: &str) -> Result<(), String> {
+        let tr_config: TokenReductionConfig =
+            serde_json::from_str(tr_json).map_err(|e| format!("Failed to parse token reduction config JSON: {}", e))?;
+        self.config.token_reduction = Some(tr_config);
         Ok(())
     }
 
@@ -78,6 +92,53 @@ impl ConfigBuilder {
         let ld_config: LanguageDetectionConfig = serde_json::from_str(ld_json)
             .map_err(|e| format!("Failed to parse language detection config JSON: {}", e))?;
         self.config.language_detection = Some(ld_config);
+        Ok(())
+    }
+
+    fn set_pages_from_json(&mut self, pages_json: &str) -> Result<(), String> {
+        let pages_config: PageConfig =
+            serde_json::from_str(pages_json).map_err(|e| format!("Failed to parse pages config JSON: {}", e))?;
+        self.config.pages = Some(pages_config);
+        Ok(())
+    }
+
+    #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
+    fn set_keywords_from_json(&mut self, keywords_json: &str) -> Result<(), String> {
+        let keywords_config: kreuzberg::keywords::KeywordConfig =
+            serde_json::from_str(keywords_json).map_err(|e| format!("Failed to parse keywords config JSON: {}", e))?;
+        self.config.keywords = Some(keywords_config);
+        Ok(())
+    }
+
+    fn set_html_options_from_json(&mut self, html_json: &str) -> Result<(), String> {
+        let html_opts: html_to_markdown_rs::ConversionOptions =
+            serde_json::from_str(html_json).map_err(|e| format!("Failed to parse HTML options JSON: {}", e))?;
+        self.config.html_options = Some(html_opts);
+        Ok(())
+    }
+
+    fn set_max_concurrent_extractions(&mut self, max: usize) {
+        self.config.max_concurrent_extractions = if max > 0 { Some(max) } else { None };
+    }
+
+    fn set_result_format(&mut self, format_str: &str) -> Result<(), String> {
+        let format: ResultFormat = serde_json::from_str(&format!("\"{}\"", format_str))
+            .map_err(|e| format!("Invalid result format '{}': {}", format_str, e))?;
+        self.config.result_format = format;
+        Ok(())
+    }
+
+    fn set_security_limits_from_json(&mut self, security_json: &str) -> Result<(), String> {
+        let security_limits: kreuzberg::extractors::security::SecurityLimits =
+            serde_json::from_str(security_json).map_err(|e| format!("Failed to parse security limits JSON: {}", e))?;
+        self.config.security_limits = Some(security_limits);
+        Ok(())
+    }
+
+    fn set_output_format(&mut self, format_str: &str) -> Result<(), String> {
+        let format: OutputFormat = serde_json::from_str(&format!("\"{}\"", format_str))
+            .map_err(|e| format!("Invalid output format '{}': {}", format_str, e))?;
+        self.config.output_format = format;
         Ok(())
     }
 
@@ -176,6 +237,30 @@ pub unsafe extern "C" fn kreuzberg_config_builder_set_include_document_structure
     })
 }
 
+/// Set the force_ocr field.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `force` - 1 for true, 0 for false
+///
+/// # Returns
+///
+/// 0 on success, -1 on error (NULL builder)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_force_ocr(builder: *mut ConfigBuilder, force: i32) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_force_ocr", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+        unsafe { (*builder).set_force_ocr(force != 0) };
+        0
+    })
+}
+
 /// Set OCR configuration from JSON.
 ///
 /// # Arguments
@@ -267,6 +352,51 @@ pub unsafe extern "C" fn kreuzberg_config_builder_set_pdf(builder: *mut ConfigBu
         };
 
         match unsafe { (*builder).set_pdf_from_json(json_str) } {
+            Ok(()) => 0,
+            Err(e) => {
+                set_last_error(e);
+                -1
+            }
+        }
+    })
+}
+
+/// Set token reduction configuration from JSON.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `tr_json` - JSON string for token reduction config
+///
+/// # Returns
+///
+/// 0 on success, -1 on error
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_token_reduction(
+    builder: *mut ConfigBuilder,
+    tr_json: *const c_char,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_token_reduction", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+        if tr_json.is_null() {
+            set_last_error("Token reduction JSON cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+
+        let json_str = match unsafe { CStr::from_ptr(tr_json) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in token reduction JSON: {}", e));
+                return -1;
+            }
+        };
+
+        match unsafe { (*builder).set_token_reduction_from_json(json_str) } {
             Ok(()) => 0,
             Err(e) => {
                 set_last_error(e);
@@ -479,6 +609,316 @@ pub unsafe extern "C" fn kreuzberg_config_builder_set_language_detection(
         };
 
         match unsafe { (*builder).set_language_detection_from_json(json_str) } {
+            Ok(()) => 0,
+            Err(e) => {
+                set_last_error(e);
+                -1
+            }
+        }
+    })
+}
+
+/// Set pages configuration from JSON.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `pages_json` - JSON string for pages config
+///
+/// # Returns
+///
+/// 0 on success, -1 on error
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_pages(
+    builder: *mut ConfigBuilder,
+    pages_json: *const c_char,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_pages", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+        if pages_json.is_null() {
+            set_last_error("Pages JSON cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+
+        let json_str = match unsafe { CStr::from_ptr(pages_json) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in pages JSON: {}", e));
+                return -1;
+            }
+        };
+
+        match unsafe { (*builder).set_pages_from_json(json_str) } {
+            Ok(()) => 0,
+            Err(e) => {
+                set_last_error(e);
+                -1
+            }
+        }
+    })
+}
+
+/// Set keywords configuration from JSON.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `keywords_json` - JSON string for keywords config
+///
+/// # Returns
+///
+/// 0 on success, -1 on error
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_keywords(
+    builder: *mut ConfigBuilder,
+    keywords_json: *const c_char,
+) -> i32 {
+    let _ = keywords_json;
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_keywords", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+
+        #[cfg(not(any(feature = "keywords-yake", feature = "keywords-rake")))]
+        {
+            set_last_error("Keyword extraction features not enabled".to_string());
+            return -1;
+        }
+
+        #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
+        {
+            if keywords_json.is_null() {
+                set_last_error("Keywords JSON cannot be NULL".to_string());
+                return -1;
+            }
+
+            clear_last_error();
+
+            let json_str = match unsafe { CStr::from_ptr(keywords_json) }.to_str() {
+                Ok(s) => s,
+                Err(e) => {
+                    set_last_error(format!("Invalid UTF-8 in keywords JSON: {}", e));
+                    return -1;
+                }
+            };
+
+            match unsafe { (*builder).set_keywords_from_json(json_str) } {
+                Ok(()) => 0,
+                Err(e) => {
+                    set_last_error(e);
+                    -1
+                }
+            }
+        }
+    })
+}
+
+/// Set HTML conversion options from JSON.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `html_json` - JSON string for HTML options
+///
+/// # Returns
+///
+/// 0 on success, -1 on error
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_html_options(
+    builder: *mut ConfigBuilder,
+    html_json: *const c_char,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_html_options", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+
+        if html_json.is_null() {
+            set_last_error("HTML JSON cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+
+        let json_str = match unsafe { CStr::from_ptr(html_json) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in HTML JSON: {}", e));
+                return -1;
+            }
+        };
+
+        match unsafe { (*builder).set_html_options_from_json(json_str) } {
+            Ok(()) => 0,
+            Err(e) => {
+                set_last_error(e);
+                -1
+            }
+        }
+    })
+}
+
+/// Set the maximum concurrent extractions.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `max` - Maximum concurrent extractions (0 for default)
+///
+/// # Returns
+///
+/// 0 on success, -1 on error
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_max_concurrent_extractions(
+    builder: *mut ConfigBuilder,
+    max: usize,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_max_concurrent_extractions", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+        unsafe { (*builder).set_max_concurrent_extractions(max) };
+        0
+    })
+}
+
+/// Set the result format.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `format_str` - Format name ("Unified" or "ElementBased")
+///
+/// # Returns
+///
+/// 0 on success, -1 on error
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_result_format(
+    builder: *mut ConfigBuilder,
+    format_str: *const c_char,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_result_format", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+        if format_str.is_null() {
+            set_last_error("Format string cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+
+        let s = match unsafe { CStr::from_ptr(format_str) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in format string: {}", e));
+                return -1;
+            }
+        };
+
+        match unsafe { (*builder).set_result_format(s) } {
+            Ok(()) => 0,
+            Err(e) => {
+                set_last_error(e);
+                -1
+            }
+        }
+    })
+}
+
+/// Set security limits for archive extraction from JSON.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `security_json` - JSON string for security limits
+///
+/// # Returns
+///
+/// 0 on success, -1 on error
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_security_limits(
+    builder: *mut ConfigBuilder,
+    security_json: *const c_char,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_security_limits", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+
+        if security_json.is_null() {
+            set_last_error("Security limits JSON cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+
+        let json_str = match unsafe { CStr::from_ptr(security_json) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in security limits JSON: {}", e));
+                return -1;
+            }
+        };
+
+        match unsafe { (*builder).set_security_limits_from_json(json_str) } {
+            Ok(()) => 0,
+            Err(e) => {
+                set_last_error(e);
+                -1
+            }
+        }
+    })
+}
+
+/// Set the output format.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `format_str` - Format name ("Plain", "Markdown", "Djot", "Html")
+///
+/// # Returns
+///
+/// 0 on success, -1 on error
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_builder_set_output_format(
+    builder: *mut ConfigBuilder,
+    format_str: *const c_char,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_builder_set_output_format", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+        if format_str.is_null() {
+            set_last_error("Format string cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+
+        let s = match unsafe { CStr::from_ptr(format_str) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_last_error(format!("Invalid UTF-8 in format string: {}", e));
+                return -1;
+            }
+        };
+
+        match unsafe { (*builder).set_output_format(s) } {
             Ok(()) => 0,
             Err(e) => {
                 set_last_error(e);
