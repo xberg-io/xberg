@@ -178,28 +178,28 @@ async fn run_pipeline(
     gt_text: &str,
     gt_markdown: Option<&str>,
 ) -> PipelineResult {
-    let t = Instant::now();
-    let content = match pipeline {
+    let (content, time_ms) = match pipeline {
         Pipeline::Docling => {
-            // Docling: read vendored output
-            // Convention: vendored/docling/md/{name}.md
+            // Docling: read vendored (pre-computed) output — no meaningful extraction time
             let docling_dir = doc
                 .document_path
                 .parent()
                 .and_then(|p| p.parent())
                 .map(|p| p.join("vendored/docling/md"));
 
-            if let Some(dir) = docling_dir {
+            let md = if let Some(dir) = docling_dir {
                 let md_name = doc.document_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 let md_path = dir.join(format!("{}.md", md_name));
                 std::fs::read_to_string(&md_path).unwrap_or_default()
             } else {
                 String::new()
-            }
+            };
+            (md, f64::NAN)
         }
         _ => {
+            let t = Instant::now();
             let config = build_extraction_config(pipeline);
-            match tokio::time::timeout(
+            let result = match tokio::time::timeout(
                 std::time::Duration::from_secs(60),
                 kreuzberg::core::batch_mode::with_batch_mode(kreuzberg::extract_file(
                     &doc.document_path,
@@ -218,10 +218,10 @@ async fn run_pipeline(
                     eprintln!("  TIMEOUT {}/{}: exceeded 60s", doc.name, pipeline.name());
                     String::new()
                 }
-            }
+            };
+            (result, t.elapsed().as_secs_f64() * 1000.0)
         }
     };
-    let time_ms = t.elapsed().as_secs_f64() * 1000.0;
 
     // Score
     let tf1 = {

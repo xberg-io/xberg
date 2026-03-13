@@ -55,7 +55,13 @@ impl SortMetric {
         match self {
             SortMetric::Sf1 => pr.sf1,
             SortMetric::Tf1 => pr.tf1,
-            SortMetric::Time => -pr.time_ms, // negate so ascending sort = slowest first
+            SortMetric::Time => {
+                if pr.time_ms.is_nan() {
+                    f64::NEG_INFINITY
+                } else {
+                    -pr.time_ms // negate so ascending sort = slowest first
+                }
+            }
         }
     }
 }
@@ -187,13 +193,12 @@ async fn extract_and_score(
     gt_markdown: Option<&str>,
     fixtures_dir: &Path,
 ) -> PipelineResult {
-    let t = Instant::now();
-    let content = if pipeline == Pipeline::Docling {
-        // Docling: read vendored output from fixtures/vendored/docling/md/{name}.md
+    let (content, time_ms) = if pipeline == Pipeline::Docling {
+        // Docling: read vendored (pre-computed) output — no extraction timing
         let vendored_path = fixtures_dir
             .join("vendored/docling/md")
             .join(format!("{}.md", doc.name));
-        match std::fs::read_to_string(&vendored_path) {
+        let md = match std::fs::read_to_string(&vendored_path) {
             Ok(md) => md,
             Err(_) => {
                 eprintln!(
@@ -203,13 +208,16 @@ async fn extract_and_score(
                 );
                 String::new()
             }
-        }
+        };
+        // Report NaN for vendored output — no meaningful extraction time
+        (md, f64::NAN)
     } else {
+        let t = Instant::now();
         let config = build_config(pipeline);
         let doc_path = doc.document_path.clone();
         // Use extract_file_sync on a blocking thread so the timeout can work.
         let handle = tokio::task::spawn_blocking(move || kreuzberg::extract_file_sync(&doc_path, None, &config));
-        match tokio::time::timeout(std::time::Duration::from_secs(DOC_TIMEOUT_SECS), handle).await {
+        let result = match tokio::time::timeout(std::time::Duration::from_secs(DOC_TIMEOUT_SECS), handle).await {
             Ok(Ok(Ok(r))) => r.content,
             Ok(Ok(Err(e))) => {
                 eprintln!("  ERROR {}/{}: {}", doc.name, pipeline.name(), e);
@@ -228,9 +236,9 @@ async fn extract_and_score(
                 );
                 String::new()
             }
-        }
+        };
+        (result, t.elapsed().as_secs_f64() * 1000.0)
     };
-    let time_ms = t.elapsed().as_secs_f64() * 1000.0;
 
     let tf1 = compute_f1(&tokenize(&content), &tokenize(gt_text));
     let (sf1, order_score, per_type_sf1) = match gt_markdown {
@@ -335,15 +343,29 @@ pub async fn run_pipeline_benchmark(config: &PipelineBenchmarkConfig) -> Result<
         }
 
         let best_sf1 = pipeline_results.iter().map(|r| r.sf1).fold(0.0_f64, f64::max);
-        let best_time = pipeline_results.iter().map(|r| r.time_ms).fold(f64::INFINITY, f64::min);
-        eprint!(
-            "\r[{}/{}] {:<30} SF1:{:.0}% {:.0}ms\n",
-            idx + 1,
-            total,
-            doc.name,
-            best_sf1 * 100.0,
-            best_time
-        );
+        let best_time = pipeline_results
+            .iter()
+            .map(|r| r.time_ms)
+            .filter(|t| !t.is_nan())
+            .fold(f64::INFINITY, f64::min);
+        if best_time.is_infinite() {
+            eprint!(
+                "\r[{}/{}] {:<30} SF1:{:.0}%\n",
+                idx + 1,
+                total,
+                doc.name,
+                best_sf1 * 100.0,
+            );
+        } else {
+            eprint!(
+                "\r[{}/{}] {:<30} SF1:{:.0}% {:.0}ms\n",
+                idx + 1,
+                total,
+                doc.name,
+                best_sf1 * 100.0,
+                best_time
+            );
+        }
 
         results.push(PipelineDocResult {
             name: doc.name.clone(),
@@ -404,7 +426,11 @@ pub fn print_pipeline_table(results: &[PipelineDocResult], sort_by: SortMetric, 
             }
         );
         for pr in &doc.results {
-            eprint!(" {:>7.1}% {:>7.1}% {:>7.0}", pr.sf1 * 100.0, pr.tf1 * 100.0, pr.time_ms);
+            if pr.time_ms.is_nan() {
+                eprint!(" {:>7.1}% {:>7.1}% {:>7}", pr.sf1 * 100.0, pr.tf1 * 100.0, "N/A");
+            } else {
+                eprint!(" {:>7.1}% {:>7.1}% {:>7.0}", pr.sf1 * 100.0, pr.tf1 * 100.0, pr.time_ms);
+            }
         }
         eprintln!();
     }
@@ -426,8 +452,17 @@ pub fn print_pipeline_table(results: &[PipelineDocResult], sort_by: SortMetric, 
             0.0
         };
         let tf1: f64 = results.iter().map(|r| r.results[i].tf1).sum::<f64>() / n;
-        let ms: f64 = results.iter().map(|r| r.results[i].time_ms).sum::<f64>() / n;
-        eprint!(" {:>7.1}% {:>7.1}% {:>7.0}", sf1 * 100.0, tf1 * 100.0, ms);
+        let time_vals: Vec<f64> = results
+            .iter()
+            .map(|r| r.results[i].time_ms)
+            .filter(|v| !v.is_nan())
+            .collect();
+        if time_vals.is_empty() {
+            eprint!(" {:>7.1}% {:>7.1}% {:>7}", sf1 * 100.0, tf1 * 100.0, "N/A");
+        } else {
+            let ms: f64 = time_vals.iter().sum::<f64>() / time_vals.len() as f64;
+            eprint!(" {:>7.1}% {:>7.1}% {:>7.0}", sf1 * 100.0, tf1 * 100.0, ms);
+        }
     }
     eprintln!();
     // Report how many docs were excluded from SF1 average
@@ -515,7 +550,11 @@ pub fn compute_aggregates(results: &[PipelineDocResult]) -> Vec<PipelineAggregat
             .filter(|v| !v.is_nan())
             .collect();
         let mut tf1s: Vec<f64> = results.iter().map(|r| r.results[i].tf1).collect();
-        let mut times: Vec<f64> = results.iter().map(|r| r.results[i].time_ms).collect();
+        let mut times: Vec<f64> = results
+            .iter()
+            .map(|r| r.results[i].time_ms)
+            .filter(|v| !v.is_nan())
+            .collect();
 
         sf1s.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         tf1s.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
@@ -531,7 +570,11 @@ pub fn compute_aggregates(results: &[PipelineDocResult]) -> Vec<PipelineAggregat
                 0.0
             },
             mean_tf1: tf1s.iter().sum::<f64>() / n,
-            mean_time_ms: times.iter().sum::<f64>() / n,
+            mean_time_ms: if times.is_empty() {
+                f64::NAN
+            } else {
+                times.iter().sum::<f64>() / times.len() as f64
+            },
             p50_sf1: percentile(&sf1s, 0.5),
             p50_tf1: percentile(&tf1s, 0.5),
             p50_time_ms: percentile(&times, 0.5),
