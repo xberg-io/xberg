@@ -16,7 +16,7 @@ pub use extraction::{ExtractionConfig, ImageExtractionConfig, LanguageDetectionC
 pub use formats::OutputFormat;
 #[cfg(feature = "layout-detection")]
 pub use layout::LayoutDetectionConfig;
-pub use ocr::OcrConfig;
+pub use ocr::{OcrConfig, OcrPipelineConfig, OcrPipelineStage, OcrQualityThresholds};
 pub use page::PageConfig;
 #[cfg(feature = "pdf")]
 pub use pdf::{HierarchyConfig, PdfConfig};

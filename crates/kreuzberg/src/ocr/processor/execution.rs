@@ -23,6 +23,72 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::types::OcrElement;
 
+/// Rotate raw RGB image data by the given degrees (0, 90, 180, 270).
+///
+/// Returns the rotated pixel data and the new (width, height).
+/// For 90° and 270° rotations, width and height are swapped.
+fn rotate_rgb_image_data(data: &[u8], width: u32, height: u32, degrees: i32) -> (Vec<u8>, u32, u32) {
+    let bpp = 3usize; // bytes per pixel (RGB)
+    let w = width as usize;
+    let h = height as usize;
+
+    match degrees {
+        0 => (data.to_vec(), width, height),
+        90 => {
+            // 90° clockwise: new dimensions are (height, width)
+            let new_w = h;
+            let new_h = w;
+            let mut out = vec![0u8; new_w * new_h * bpp];
+            for y in 0..h {
+                for x in 0..w {
+                    let src_idx = (y * w + x) * bpp;
+                    // (x, y) -> (h - 1 - y, x) in new coordinates
+                    let dst_x = h - 1 - y;
+                    let dst_y = x;
+                    let dst_idx = (dst_y * new_w + dst_x) * bpp;
+                    out[dst_idx..dst_idx + bpp].copy_from_slice(&data[src_idx..src_idx + bpp]);
+                }
+            }
+            (out, new_w as u32, new_h as u32)
+        }
+        180 => {
+            // 180°: same dimensions, pixels reversed
+            let mut out = vec![0u8; w * h * bpp];
+            for y in 0..h {
+                for x in 0..w {
+                    let src_idx = (y * w + x) * bpp;
+                    let dst_x = w - 1 - x;
+                    let dst_y = h - 1 - y;
+                    let dst_idx = (dst_y * w + dst_x) * bpp;
+                    out[dst_idx..dst_idx + bpp].copy_from_slice(&data[src_idx..src_idx + bpp]);
+                }
+            }
+            (out, width, height)
+        }
+        270 => {
+            // 270° clockwise (= 90° counter-clockwise): new dimensions are (height, width)
+            let new_w = h;
+            let new_h = w;
+            let mut out = vec![0u8; new_w * new_h * bpp];
+            for y in 0..h {
+                for x in 0..w {
+                    let src_idx = (y * w + x) * bpp;
+                    // (x, y) -> (y, w - 1 - x) in new coordinates
+                    let dst_x = y;
+                    let dst_y = w - 1 - x;
+                    let dst_idx = (dst_y * new_w + dst_x) * bpp;
+                    out[dst_idx..dst_idx + bpp].copy_from_slice(&data[src_idx..src_idx + bpp]);
+                }
+            }
+            (out, new_w as u32, new_h as u32)
+        }
+        _ => {
+            tracing::warn!("Unsupported rotation angle: {}°, skipping rotation", degrees);
+            (data.to_vec(), width, height)
+        }
+    }
+}
+
 /// Parse Tesseract TSV output into structured OcrElements.
 ///
 /// TSV format columns: level, page_num, block_num, par_num, line_num, word_num, left, top, width, height, conf, text
@@ -279,6 +345,9 @@ fn build_content_with_inline_tables(tsv_data: &str, tables: &[OcrTable], min_con
     output
 }
 
+/// Minimum confidence for accepting orientation detection results.
+const MIN_ORIENTATION_CONFIDENCE: f32 = 0.5;
+
 /// Perform OCR on an image using Tesseract.
 ///
 /// This function handles the complete OCR pipeline:
@@ -465,10 +534,118 @@ pub(super) fn perform_ocr(
         )
     });
 
+    // Orientation detection and auto-rotation.
+    // DetectOrientationScript requires PSM_OSD_ONLY (0) or PSM_AUTO_OSD (1).
+    // We temporarily switch PSM, detect orientation, rotate if needed, then restore.
+    let mut detected_orientation: Option<(i32, f32, String, f32)> = None;
+    let auto_rotate_enabled =
+        config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false) || config.auto_rotate;
+
+    if auto_rotate_enabled {
+        // Save current PSM and switch to OSD_ONLY for orientation detection
+        let original_psm = psm_mode;
+        api.set_page_seg_mode(TessPageSegMode::PSM_OSD_ONLY)
+            .map_err(|e| OcrError::ProcessingFailed(format!("Failed to set PSM for OSD: {}", e)))?;
+
+        match api.detect_os() {
+            Ok((orient_deg, orient_conf, script_name, script_conf)) => {
+                log_ci_debug(ci_debug_enabled, "orientation_detection", || {
+                    format!(
+                        "orientation={}° confidence={:.2} script={} script_confidence={:.2}",
+                        orient_deg, orient_conf, script_name, script_conf
+                    )
+                });
+                detected_orientation = Some((orient_deg, orient_conf, script_name, script_conf));
+
+                // Restore original PSM
+                api.set_page_seg_mode(original_psm)
+                    .map_err(|e| OcrError::ProcessingFailed(format!("Failed to restore PSM: {}", e)))?;
+
+                // If orientation is non-zero with sufficient confidence, rotate the image
+                if orient_deg != 0 && orient_conf > MIN_ORIENTATION_CONFIDENCE {
+                    tracing::info!(
+                        "Auto-rotating image by {} degrees (confidence: {:.2})",
+                        orient_deg,
+                        orient_conf
+                    );
+
+                    let (rotated_data, new_width, new_height) =
+                        rotate_rgb_image_data(&image_data, width, height, orient_deg);
+                    let new_bytes_per_line = new_width * bytes_per_pixel;
+
+                    // Re-set the rotated image in Tesseract
+                    api.set_image(
+                        &rotated_data,
+                        new_width as i32,
+                        new_height as i32,
+                        bytes_per_pixel as i32,
+                        new_bytes_per_line as i32,
+                    )
+                    .map_err(|e| OcrError::ProcessingFailed(format!("Failed to set rotated image: {}", e)))?;
+
+                    api.set_source_resolution(source_dpi).map_err(|e| {
+                        OcrError::ProcessingFailed(format!("Failed to set source resolution after rotation: {}", e))
+                    })?;
+
+                    log_ci_debug(ci_debug_enabled, "auto_rotate", || {
+                        format!("rotated={}° new_dimensions={}x{}", orient_deg, new_width, new_height)
+                    });
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Orientation detection failed, proceeding without rotation: {}", e);
+                // Restore original PSM
+                let _ = api.set_page_seg_mode(original_psm);
+            }
+        }
+    }
+
     api.recognize()
         .map_err(|e| OcrError::ProcessingFailed(format!("Failed to recognize text: {}", e)))?;
 
-    log_ci_debug(ci_debug_enabled, "recognize", || "completed".to_string());
+    // Capture mean text confidence (0-100) immediately after recognition.
+    let mean_text_conf = api.mean_text_conf().unwrap_or(-1);
+
+    log_ci_debug(ci_debug_enabled, "recognize", || {
+        format!("completed mean_text_conf={}", mean_text_conf)
+    });
+
+    // Collect word-level confidence statistics from Tesseract for quality heuristics.
+    let word_confidence_stats = match api.all_word_confidences() {
+        Ok(confidences) if !confidences.is_empty() => {
+            let word_count = confidences.len();
+            let low_conf_word_count = confidences.iter().filter(|&&c| c < 50).count();
+
+            // Compute median
+            let mut sorted = confidences.clone();
+            sorted.sort_unstable();
+            let median_word_conf = if word_count % 2 == 0 {
+                (sorted[word_count / 2 - 1] + sorted[word_count / 2]) / 2
+            } else {
+                sorted[word_count / 2]
+            };
+
+            // Compute 10th percentile (index = floor(0.1 * (n - 1)))
+            let p10_idx = ((word_count as f64 - 1.0) * 0.1).floor() as usize;
+            let p10_word_conf = sorted[p10_idx.min(word_count - 1)];
+
+            Some((median_word_conf, p10_word_conf, word_count, low_conf_word_count))
+        }
+        Ok(_) => {
+            // Empty confidences array — fall back to mean_text_conf
+            match api.mean_text_conf() {
+                Ok(mean_conf) => Some((mean_conf, mean_conf, 0usize, 0usize)),
+                Err(_) => None,
+            }
+        }
+        Err(_) => {
+            // all_word_confidences failed — fall back to mean_text_conf
+            match api.mean_text_conf() {
+                Ok(mean_conf) => Some((mean_conf, mean_conf, 0usize, 0usize)),
+                Err(_) => None,
+            }
+        }
+    };
 
     let tsv_data_for_tables = if config.enable_table_detection || config.output_format == "tsv" {
         Some(
@@ -546,6 +723,61 @@ pub(super) fn perform_ocr(
             "source_format".to_string(),
             serde_json::Value::String("hocr".to_string()),
         );
+    }
+
+    // Store mean text confidence (0-100) for quality scoring.
+    if mean_text_conf >= 0 {
+        metadata.insert(
+            "mean_text_conf".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(mean_text_conf)),
+        );
+    }
+
+    // Store word confidence statistics for quality heuristics.
+    if let Some((median_conf, p10_conf, word_count, low_conf_count)) = word_confidence_stats {
+        metadata.insert(
+            "median_word_conf".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(median_conf)),
+        );
+        metadata.insert(
+            "p10_word_conf".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(p10_conf)),
+        );
+        metadata.insert(
+            "word_count".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(word_count)),
+        );
+        metadata.insert(
+            "low_conf_word_count".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(low_conf_count)),
+        );
+    }
+
+    // Store orientation detection results in metadata.
+    if let Some((orient_deg, orient_conf, ref script_name, script_conf)) = detected_orientation {
+        metadata.insert(
+            "orientation_degrees".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(orient_deg)),
+        );
+        metadata.insert(
+            "orientation_confidence".to_string(),
+            serde_json::Value::Number(
+                serde_json::Number::from_f64(orient_conf as f64).unwrap_or(serde_json::Number::from(0)),
+            ),
+        );
+        metadata.insert(
+            "script_name".to_string(),
+            serde_json::Value::String(script_name.clone()),
+        );
+        metadata.insert(
+            "script_confidence".to_string(),
+            serde_json::Value::Number(
+                serde_json::Number::from_f64(script_conf as f64).unwrap_or(serde_json::Number::from(0)),
+            ),
+        );
+        if orient_deg != 0 && orient_conf > MIN_ORIENTATION_CONFIDENCE {
+            metadata.insert("auto_rotated".to_string(), serde_json::Value::Bool(true));
+        }
     }
 
     let mut tables = Vec::new();
@@ -947,5 +1179,67 @@ mod tests {
         let result = process_image_with_cache(&invalid_data, &config, &cache, None);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rotate_rgb_image_data_identity() {
+        // 2x3 RGB image (6 pixels, 18 bytes)
+        let data: Vec<u8> = (0..18).collect();
+        let (out, w, h) = rotate_rgb_image_data(&data, 2, 3, 0);
+        assert_eq!(out, data);
+        assert_eq!(w, 2);
+        assert_eq!(h, 3);
+    }
+
+    #[test]
+    fn test_rotate_rgb_image_data_180() {
+        // 2x2 RGB image: pixels [A, B, C, D] reversed to [D, C, B, A]
+        let data = vec![
+            1, 2, 3, // pixel (0,0)
+            4, 5, 6, // pixel (1,0)
+            7, 8, 9, // pixel (0,1)
+            10, 11, 12, // pixel (1,1)
+        ];
+        let (out, w, h) = rotate_rgb_image_data(&data, 2, 2, 180);
+        assert_eq!(w, 2);
+        assert_eq!(h, 2);
+        // 180° rotation reverses pixel order
+        assert_eq!(out, vec![10, 11, 12, 7, 8, 9, 4, 5, 6, 1, 2, 3]);
+    }
+
+    #[test]
+    fn test_rotate_rgb_image_data_90_swaps_dimensions() {
+        // 2x3 image -> 3x2 image after 90° rotation
+        let data: Vec<u8> = (0..18).collect();
+        let (_, w, h) = rotate_rgb_image_data(&data, 2, 3, 90);
+        assert_eq!(w, 3); // height becomes width
+        assert_eq!(h, 2); // width becomes height
+    }
+
+    #[test]
+    fn test_rotate_rgb_image_data_270_swaps_dimensions() {
+        let data: Vec<u8> = (0..18).collect();
+        let (_, w, h) = rotate_rgb_image_data(&data, 2, 3, 270);
+        assert_eq!(w, 3);
+        assert_eq!(h, 2);
+    }
+
+    #[test]
+    fn test_rotate_rgb_image_data_90_then_270_is_identity() {
+        let data: Vec<u8> = (0..18).collect();
+        let (rotated_90, w1, h1) = rotate_rgb_image_data(&data, 2, 3, 90);
+        let (back, w2, h2) = rotate_rgb_image_data(&rotated_90, w1, h1, 270);
+        assert_eq!(w2, 2);
+        assert_eq!(h2, 3);
+        assert_eq!(back, data);
+    }
+
+    #[test]
+    fn test_rotate_rgb_image_data_unsupported_angle() {
+        let data: Vec<u8> = (0..12).collect();
+        let (out, w, h) = rotate_rgb_image_data(&data, 2, 2, 45);
+        assert_eq!(out, data); // unchanged
+        assert_eq!(w, 2);
+        assert_eq!(h, 2);
     }
 }

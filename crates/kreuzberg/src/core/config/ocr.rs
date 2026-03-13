@@ -1,7 +1,7 @@
 //! OCR configuration.
 //!
 //! Defines OCR-specific configuration including backend selection, language settings,
-//! and Tesseract-specific parameters.
+//! Tesseract-specific parameters, quality thresholds, and multi-backend pipeline config.
 
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +9,193 @@ use super::formats::OutputFormat;
 use crate::core::config_validation::validate_ocr_backend;
 use crate::error::KreuzbergError;
 use crate::types::OcrElementConfig;
+
+/// Quality thresholds for OCR fallback decisions and pipeline quality gating.
+///
+/// All fields default to the values that match the previous hardcoded behavior,
+/// so `OcrQualityThresholds::default()` preserves existing semantics exactly.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcrQualityThresholds {
+    /// Minimum total non-whitespace characters to consider text substantive.
+    #[serde(default = "default_min_total_non_whitespace")]
+    pub min_total_non_whitespace: usize,
+
+    /// Minimum non-whitespace characters per page on average.
+    #[serde(default = "default_min_non_whitespace_per_page")]
+    pub min_non_whitespace_per_page: f64,
+
+    /// Minimum character count for a word to be "meaningful".
+    #[serde(default = "default_min_meaningful_word_len")]
+    pub min_meaningful_word_len: usize,
+
+    /// Minimum count of meaningful words before text is accepted.
+    #[serde(default = "default_min_meaningful_words")]
+    pub min_meaningful_words: usize,
+
+    /// Minimum alphanumeric ratio (non-whitespace chars that are alphanumeric).
+    #[serde(default = "default_min_alnum_ratio")]
+    pub min_alnum_ratio: f64,
+
+    /// Minimum Unicode replacement characters (U+FFFD) to trigger OCR fallback.
+    #[serde(default = "default_min_garbage_chars")]
+    pub min_garbage_chars: usize,
+
+    /// Maximum fraction of short (1-2 char) words before text is considered fragmented.
+    #[serde(default = "default_max_fragmented_word_ratio")]
+    pub max_fragmented_word_ratio: f64,
+
+    /// Critical fragmentation threshold — triggers OCR regardless of meaningful words.
+    /// Normal English text has ~20-30% short words. 80%+ is definitive garbage.
+    #[serde(default = "default_critical_fragmented_word_ratio")]
+    pub critical_fragmented_word_ratio: f64,
+
+    /// Minimum average word length. Below this with enough words indicates garbled extraction.
+    #[serde(default = "default_min_avg_word_length")]
+    pub min_avg_word_length: f64,
+
+    /// Minimum word count before average word length check applies.
+    #[serde(default = "default_min_words_for_avg_length_check")]
+    pub min_words_for_avg_length_check: usize,
+
+    /// Minimum consecutive word repetition ratio to detect column scrambling.
+    #[serde(default = "default_min_consecutive_repeat_ratio")]
+    pub min_consecutive_repeat_ratio: f64,
+
+    /// Minimum word count before consecutive repetition check is applied.
+    #[serde(default = "default_min_words_for_repeat_check")]
+    pub min_words_for_repeat_check: usize,
+
+    /// Minimum character count for "substantive markdown" OCR skip gate.
+    #[serde(default = "default_substantive_min_chars")]
+    pub substantive_min_chars: usize,
+
+    /// Minimum character count for "non-text content" OCR skip gate.
+    #[serde(default = "default_non_text_min_chars")]
+    pub non_text_min_chars: usize,
+
+    /// Alphanumeric+whitespace ratio threshold for skip decisions.
+    #[serde(default = "default_alnum_ws_ratio_threshold")]
+    pub alnum_ws_ratio_threshold: f64,
+
+    /// Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted.
+    /// If the result from a backend scores below this, try the next backend.
+    #[serde(default = "default_pipeline_min_quality")]
+    pub pipeline_min_quality: f64,
+}
+
+impl Default for OcrQualityThresholds {
+    fn default() -> Self {
+        Self {
+            min_total_non_whitespace: 64,
+            min_non_whitespace_per_page: 32.0,
+            min_meaningful_word_len: 4,
+            min_meaningful_words: 3,
+            min_alnum_ratio: 0.3,
+            min_garbage_chars: 5,
+            max_fragmented_word_ratio: 0.6,
+            critical_fragmented_word_ratio: 0.80,
+            min_avg_word_length: 2.0,
+            min_words_for_avg_length_check: 50,
+            min_consecutive_repeat_ratio: 0.08,
+            min_words_for_repeat_check: 50,
+            substantive_min_chars: 100,
+            non_text_min_chars: 20,
+            alnum_ws_ratio_threshold: 0.4,
+            pipeline_min_quality: 0.5,
+        }
+    }
+}
+
+fn default_min_total_non_whitespace() -> usize {
+    64
+}
+fn default_min_non_whitespace_per_page() -> f64 {
+    32.0
+}
+fn default_min_meaningful_word_len() -> usize {
+    4
+}
+fn default_min_meaningful_words() -> usize {
+    3
+}
+fn default_min_alnum_ratio() -> f64 {
+    0.3
+}
+fn default_min_garbage_chars() -> usize {
+    5
+}
+fn default_max_fragmented_word_ratio() -> f64 {
+    0.6
+}
+fn default_critical_fragmented_word_ratio() -> f64 {
+    0.80
+}
+fn default_min_avg_word_length() -> f64 {
+    2.0
+}
+fn default_min_words_for_avg_length_check() -> usize {
+    50
+}
+fn default_min_consecutive_repeat_ratio() -> f64 {
+    0.08
+}
+fn default_min_words_for_repeat_check() -> usize {
+    50
+}
+fn default_substantive_min_chars() -> usize {
+    100
+}
+fn default_non_text_min_chars() -> usize {
+    20
+}
+fn default_alnum_ws_ratio_threshold() -> f64 {
+    0.4
+}
+fn default_pipeline_min_quality() -> f64 {
+    0.5
+}
+
+/// A single backend stage in the OCR pipeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcrPipelineStage {
+    /// Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name.
+    pub backend: String,
+
+    /// Priority weight (higher = tried first). Stages are sorted by priority descending.
+    #[serde(default = "default_priority")]
+    pub priority: u32,
+
+    /// Language override for this stage (None = use parent OcrConfig.language).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+
+    /// Tesseract-specific config override for this stage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tesseract_config: Option<crate::types::TesseractConfig>,
+
+    /// PaddleOCR-specific config for this stage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paddle_ocr_config: Option<serde_json::Value>,
+}
+
+fn default_priority() -> u32 {
+    100
+}
+
+/// Multi-backend OCR pipeline with quality-based fallback.
+///
+/// Backends are tried in priority order (highest first). After each backend
+/// produces output, quality is evaluated. If it meets `quality_thresholds.pipeline_min_quality`,
+/// the result is accepted. Otherwise the next backend is tried.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcrPipelineConfig {
+    /// Ordered list of backends to try. Sorted by priority (descending) at runtime.
+    pub stages: Vec<OcrPipelineStage>,
+
+    /// Quality thresholds for deciding whether to accept a result or try the next backend.
+    #[serde(default)]
+    pub quality_thresholds: OcrQualityThresholds,
+}
 
 /// OCR configuration.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,6 +223,26 @@ pub struct OcrConfig {
     /// OCR element extraction configuration
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub element_config: Option<OcrElementConfig>,
+
+    /// Quality thresholds for the native-text-to-OCR fallback decision.
+    /// When None, uses compiled defaults (matching previous hardcoded behavior).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quality_thresholds: Option<OcrQualityThresholds>,
+
+    /// Multi-backend OCR pipeline configuration. When set, enables weighted
+    /// fallback across multiple OCR backends based on output quality.
+    /// When None, uses the single `backend` field (same as today).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pipeline: Option<OcrPipelineConfig>,
+
+    /// Enable automatic page rotation based on orientation detection.
+    ///
+    /// When enabled, uses Tesseract's `DetectOrientationScript()` to detect
+    /// page orientation (0/90/180/270 degrees) before OCR. If the page is
+    /// rotated with high confidence, the image is corrected before recognition.
+    /// This is critical for handling rotated scanned documents.
+    #[serde(default)]
+    pub auto_rotate: bool,
 }
 
 impl Default for OcrConfig {
@@ -47,6 +254,9 @@ impl Default for OcrConfig {
             output_format: None,
             paddle_ocr_config: None,
             element_config: None,
+            quality_thresholds: None,
+            pipeline: None,
+            auto_rotate: false,
         }
     }
 }
@@ -60,32 +270,62 @@ impl OcrConfig {
     /// - paddleocr
     ///
     /// Typos in backend names are caught at configuration validation time, not at runtime.
-    ///
-    /// # Errors
-    ///
-    /// Returns a `KreuzbergError::Validation` if the backend is not recognized.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use kreuzberg::core::config::OcrConfig;
-    ///
-    /// let config = OcrConfig {
-    ///     backend: "tesseract".to_string(),
-    ///     ..Default::default()
-    /// };
-    ///
-    /// assert!(config.validate().is_ok());
-    ///
-    /// let bad_config = OcrConfig {
-    ///     backend: "typo_backend".to_string(),
-    ///     ..Default::default()
-    /// };
-    ///
-    /// assert!(bad_config.validate().is_err());
-    /// ```
+    /// Also validates pipeline stage backends when a pipeline is configured.
     pub fn validate(&self) -> Result<(), KreuzbergError> {
-        validate_ocr_backend(&self.backend)
+        validate_ocr_backend(&self.backend)?;
+        if let Some(ref pipeline) = self.pipeline {
+            for stage in &pipeline.stages {
+                validate_ocr_backend(&stage.backend)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns the effective quality thresholds, using configured values or defaults.
+    pub fn effective_thresholds(&self) -> OcrQualityThresholds {
+        self.quality_thresholds.clone().unwrap_or_default()
+    }
+
+    /// Returns the effective pipeline config.
+    ///
+    /// - If `pipeline` is explicitly set, returns it.
+    /// - If `paddle-ocr` feature is compiled in and no explicit pipeline is set,
+    ///   auto-constructs a default pipeline: primary backend (priority 100) + paddleocr (priority 50).
+    /// - Otherwise returns `None` (single-backend mode, same as today).
+    pub fn effective_pipeline(&self) -> Option<OcrPipelineConfig> {
+        if self.pipeline.is_some() {
+            return self.pipeline.clone();
+        }
+
+        #[cfg(feature = "paddle-ocr")]
+        {
+            let mut stages = vec![OcrPipelineStage {
+                backend: self.backend.clone(),
+                priority: 100,
+                language: None,
+                tesseract_config: self.tesseract_config.clone(),
+                paddle_ocr_config: None,
+            }];
+            // Only add paddleocr fallback if primary backend isn't already paddleocr
+            if self.backend != "paddleocr" {
+                stages.push(OcrPipelineStage {
+                    backend: "paddleocr".to_string(),
+                    priority: 50,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: self.paddle_ocr_config.clone(),
+                });
+            }
+            Some(OcrPipelineConfig {
+                stages,
+                quality_thresholds: self.effective_thresholds(),
+            })
+        }
+
+        #[cfg(not(feature = "paddle-ocr"))]
+        {
+            None
+        }
     }
 }
 
@@ -175,6 +415,232 @@ mod tests {
     #[test]
     fn test_validate_default_backend() {
         let config = OcrConfig::default();
+        assert!(config.validate().is_ok());
+    }
+
+    // ── effective_pipeline tests ──
+
+    #[test]
+    fn test_effective_pipeline_explicit_pipeline_returned_unchanged() {
+        let explicit_pipeline = OcrPipelineConfig {
+            stages: vec![OcrPipelineStage {
+                backend: "easyocr".to_string(),
+                priority: 200,
+                language: Some("fra".to_string()),
+                tesseract_config: None,
+                paddle_ocr_config: None,
+            }],
+            quality_thresholds: OcrQualityThresholds::default(),
+        };
+        let config = OcrConfig {
+            pipeline: Some(explicit_pipeline.clone()),
+            ..Default::default()
+        };
+        let result = config.effective_pipeline().unwrap();
+        assert_eq!(result.stages.len(), 1);
+        assert_eq!(result.stages[0].backend, "easyocr");
+        assert_eq!(result.stages[0].priority, 200);
+        assert_eq!(result.stages[0].language, Some("fra".to_string()));
+    }
+
+    #[test]
+    fn test_effective_pipeline_paddleocr_backend_no_duplicate() {
+        // When primary backend is "paddleocr", effective_pipeline should NOT add
+        // a second paddleocr stage (issue #6 fix).
+        let config = OcrConfig {
+            backend: "paddleocr".to_string(),
+            ..Default::default()
+        };
+        let result = config.effective_pipeline();
+        // With paddle-ocr feature: should have exactly 1 stage (no duplicate)
+        // Without paddle-ocr feature: should be None
+        #[cfg(feature = "paddle-ocr")]
+        {
+            let pipeline = result.unwrap();
+            let paddle_count = pipeline.stages.iter().filter(|s| s.backend == "paddleocr").count();
+            assert_eq!(
+                paddle_count, 1,
+                "Should not have duplicate paddleocr stages, found {paddle_count}"
+            );
+        }
+        #[cfg(not(feature = "paddle-ocr"))]
+        {
+            assert!(result.is_none());
+        }
+    }
+
+    #[test]
+    fn test_effective_pipeline_default_tesseract_backend() {
+        let config = OcrConfig::default();
+        let result = config.effective_pipeline();
+        #[cfg(feature = "paddle-ocr")]
+        {
+            let pipeline = result.unwrap();
+            assert_eq!(pipeline.stages.len(), 2);
+            assert_eq!(pipeline.stages[0].backend, "tesseract");
+            assert_eq!(pipeline.stages[0].priority, 100);
+            assert_eq!(pipeline.stages[1].backend, "paddleocr");
+            assert_eq!(pipeline.stages[1].priority, 50);
+        }
+        #[cfg(not(feature = "paddle-ocr"))]
+        {
+            assert!(result.is_none());
+        }
+    }
+
+    #[test]
+    fn test_effective_thresholds_custom_vs_default() {
+        // With custom thresholds
+        let custom = OcrQualityThresholds {
+            min_total_non_whitespace: 128,
+            min_meaningful_words: 10,
+            ..Default::default()
+        };
+        let config_custom = OcrConfig {
+            quality_thresholds: Some(custom.clone()),
+            ..Default::default()
+        };
+        let eff = config_custom.effective_thresholds();
+        assert_eq!(eff.min_total_non_whitespace, 128);
+        assert_eq!(eff.min_meaningful_words, 10);
+
+        // Without custom thresholds (should return defaults)
+        let config_default = OcrConfig::default();
+        let eff_default = config_default.effective_thresholds();
+        assert_eq!(eff_default.min_total_non_whitespace, 64);
+        assert_eq!(eff_default.min_meaningful_words, 3);
+    }
+
+    // ── Serde tests ──
+
+    #[test]
+    fn test_pipeline_config_serde_roundtrip() {
+        let pipeline = OcrPipelineConfig {
+            stages: vec![
+                OcrPipelineStage {
+                    backend: "tesseract".to_string(),
+                    priority: 100,
+                    language: Some("eng".to_string()),
+                    tesseract_config: None,
+                    paddle_ocr_config: None,
+                },
+                OcrPipelineStage {
+                    backend: "paddleocr".to_string(),
+                    priority: 50,
+                    language: None,
+                    tesseract_config: None,
+                    paddle_ocr_config: Some(serde_json::json!({"use_gpu": false})),
+                },
+            ],
+            quality_thresholds: OcrQualityThresholds::default(),
+        };
+        let json = serde_json::to_string(&pipeline).unwrap();
+        let deserialized: OcrPipelineConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.stages.len(), 2);
+        assert_eq!(deserialized.stages[0].backend, "tesseract");
+        assert_eq!(deserialized.stages[0].priority, 100);
+        assert_eq!(deserialized.stages[1].backend, "paddleocr");
+        assert_eq!(deserialized.stages[1].priority, 50);
+        assert!(deserialized.stages[1].paddle_ocr_config.is_some());
+    }
+
+    #[test]
+    fn test_pipeline_stage_deserialization_missing_optional_fields() {
+        // Only backend is required; everything else should use defaults
+        let json = r#"{"backend": "tesseract"}"#;
+        let stage: OcrPipelineStage = serde_json::from_str(json).unwrap();
+        assert_eq!(stage.backend, "tesseract");
+        assert_eq!(stage.priority, 100); // default_priority
+        assert!(stage.language.is_none());
+        assert!(stage.tesseract_config.is_none());
+        assert!(stage.paddle_ocr_config.is_none());
+    }
+
+    #[test]
+    fn test_pipeline_stage_default_priority_is_100() {
+        let json = r#"{"backend": "easyocr"}"#;
+        let stage: OcrPipelineStage = serde_json::from_str(json).unwrap();
+        assert_eq!(stage.priority, 100);
+    }
+
+    #[test]
+    fn test_ocr_config_deserialization_missing_optional_fields() {
+        let json = r#"{}"#;
+        let config: OcrConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.backend, "tesseract");
+        assert_eq!(config.language, "eng");
+        assert!(config.pipeline.is_none());
+        assert!(config.quality_thresholds.is_none());
+        assert!(config.element_config.is_none());
+    }
+
+    #[test]
+    fn test_quality_thresholds_deserialization_partial() {
+        let json = r#"{"min_total_non_whitespace": 256}"#;
+        let thresholds: OcrQualityThresholds = serde_json::from_str(json).unwrap();
+        assert_eq!(thresholds.min_total_non_whitespace, 256);
+        // All other fields should be defaults
+        assert_eq!(thresholds.min_meaningful_words, 3);
+        assert_eq!(thresholds.min_garbage_chars, 5);
+        assert!((thresholds.pipeline_min_quality - 0.5).abs() < f64::EPSILON);
+    }
+
+    // ── Validation tests ──
+
+    #[test]
+    fn test_validate_catches_invalid_pipeline_stage_backend() {
+        let config = OcrConfig {
+            pipeline: Some(OcrPipelineConfig {
+                stages: vec![
+                    OcrPipelineStage {
+                        backend: "tesseract".to_string(),
+                        priority: 100,
+                        language: None,
+                        tesseract_config: None,
+                        paddle_ocr_config: None,
+                    },
+                    OcrPipelineStage {
+                        backend: "invalid_backend".to_string(),
+                        priority: 50,
+                        language: None,
+                        tesseract_config: None,
+                        paddle_ocr_config: None,
+                    },
+                ],
+                quality_thresholds: OcrQualityThresholds::default(),
+            }),
+            ..Default::default()
+        };
+        let result = config.validate();
+        assert!(result.is_err(), "Should catch invalid backend in pipeline stages");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("Invalid OCR backend") || err_msg.contains("invalid_backend"));
+    }
+
+    #[test]
+    fn test_validate_passes_with_valid_pipeline_stages() {
+        let config = OcrConfig {
+            pipeline: Some(OcrPipelineConfig {
+                stages: vec![
+                    OcrPipelineStage {
+                        backend: "tesseract".to_string(),
+                        priority: 100,
+                        language: None,
+                        tesseract_config: None,
+                        paddle_ocr_config: None,
+                    },
+                    OcrPipelineStage {
+                        backend: "paddleocr".to_string(),
+                        priority: 50,
+                        language: None,
+                        tesseract_config: None,
+                        paddle_ocr_config: None,
+                    },
+                ],
+                quality_thresholds: OcrQualityThresholds::default(),
+            }),
+            ..Default::default()
+        };
         assert!(config.validate().is_ok());
     }
 }

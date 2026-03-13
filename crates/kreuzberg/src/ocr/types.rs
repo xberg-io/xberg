@@ -73,6 +73,13 @@ pub struct TesseractConfig {
     pub tessedit_use_primary_params_model: bool,
     pub textord_space_size_is_variable: bool,
     pub thresholding_method: bool,
+
+    /// Enable automatic page rotation based on orientation detection.
+    ///
+    /// When enabled, uses Tesseract's `DetectOrientationScript()` to detect
+    /// page orientation (0/90/180/270 degrees) before OCR. If the page is
+    /// rotated with high confidence, the image is corrected before recognition.
+    pub auto_rotate: bool,
 }
 
 impl Default for TesseractConfig {
@@ -99,6 +106,7 @@ impl Default for TesseractConfig {
             tessedit_use_primary_params_model: true,
             textord_space_size_is_variable: true,
             thresholding_method: false,
+            auto_rotate: false,
         }
     }
 }
@@ -144,6 +152,7 @@ impl From<&crate::types::TesseractConfig> for TesseractConfig {
             tessedit_use_primary_params_model: config.tessedit_use_primary_params_model,
             textord_space_size_is_variable: config.textord_space_size_is_variable,
             thresholding_method: config.thresholding_method,
+            auto_rotate: config.preprocessing.as_ref().map(|p| p.auto_rotate).unwrap_or(false),
         }
     }
 }

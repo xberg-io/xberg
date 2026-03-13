@@ -81,6 +81,11 @@ impl TesseractBackend {
             tessedit_use_primary_params_model: public_config.tessedit_use_primary_params_model,
             textord_space_size_is_variable: public_config.textord_space_size_is_variable,
             thresholding_method: public_config.thresholding_method,
+            auto_rotate: public_config
+                .preprocessing
+                .as_ref()
+                .map(|p| p.auto_rotate)
+                .unwrap_or(false),
         }
     }
 
@@ -89,13 +94,18 @@ impl TesseractBackend {
     /// Uses tesseract_config from OcrConfig if provided, otherwise uses defaults
     /// with the language from OcrConfig.
     fn config_to_tesseract(&self, config: &OcrConfig) -> InternalTesseractConfig {
-        match &config.tesseract_config {
+        let mut internal = match &config.tesseract_config {
             Some(tess_config) => Self::convert_config(tess_config),
             None => InternalTesseractConfig {
                 language: config.language.clone(),
                 ..Default::default()
             },
+        };
+        // Propagate top-level OcrConfig.auto_rotate (OR with any preprocessing setting)
+        if config.auto_rotate {
+            internal.auto_rotate = true;
         }
+        internal
     }
 
     /// Get cached available languages, lazily querying Tesseract if needed.

@@ -409,7 +409,7 @@ fn type_compat(ext_block: &MdBlock, gt_block: &MdBlock) -> f64 {
     if (ext == MdBlockType::Table && gt == MdBlockType::Paragraph)
         || (ext == MdBlockType::Paragraph && gt == MdBlockType::Table)
     {
-        return 0.15;
+        return 0.25;
     }
 
     // Everything else cross-category: incompatible
@@ -577,7 +577,7 @@ fn match_blocks_global(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<Bl
 
             let content_sim = crate::quality::compute_f1(ext_tok, gt_tok);
             let score = content_sim * compat;
-            if score >= 0.15 {
+            if score >= 0.10 {
                 candidates.push((gi, ei, content_sim, compat, score, false));
             }
 
@@ -591,7 +591,7 @@ fn match_blocks_global(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<Bl
                 concat_tokens.extend(ext_tokens[ei + 1].iter().cloned());
                 let concat_sim = crate::quality::compute_f1(&concat_tokens, gt_tok);
                 let concat_score = concat_sim * concat_compat;
-                if concat_score > score && concat_score >= 0.15 {
+                if concat_score > score && concat_score >= 0.10 {
                     candidates.push((gi, ei, concat_sim, concat_compat, concat_score, true));
                 }
             }
@@ -1100,7 +1100,7 @@ mod tests {
             content: "X".into(),
             index: 0,
         };
-        assert!((type_compat(&a, &b)).abs() < 0.01);
+        assert!((type_compat(&a, &b) - 0.2).abs() < 0.01);
     }
 
     #[test]
@@ -1115,7 +1115,22 @@ mod tests {
             content: "X".into(),
             index: 0,
         };
-        assert!((type_compat(&a, &b) - 0.15).abs() < 0.01);
+        assert!((type_compat(&a, &b) - 0.4).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_type_compat_table_paragraph() {
+        let a = MdBlock {
+            block_type: MdBlockType::Table,
+            content: "X".into(),
+            index: 0,
+        };
+        let b = MdBlock {
+            block_type: MdBlockType::Paragraph,
+            content: "X".into(),
+            index: 0,
+        };
+        assert!((type_compat(&a, &b) - 0.25).abs() < 0.01);
     }
 
     #[test]
@@ -1126,7 +1141,7 @@ mod tests {
             index: 0,
         };
         let b = MdBlock {
-            block_type: MdBlockType::Paragraph,
+            block_type: MdBlockType::CodeBlock,
             content: "X".into(),
             index: 0,
         };

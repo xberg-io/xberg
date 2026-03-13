@@ -123,6 +123,9 @@ pub fn apply_extraction_overrides(
                 output_format: None,
                 paddle_ocr_config: existing_paddle_config,
                 element_config: existing_element_config,
+                quality_thresholds: None,
+                pipeline: None,
+                auto_rotate: false,
             });
         } else {
             config.ocr = None;
@@ -377,6 +380,9 @@ mod tests {
                 output_format: None,
                 paddle_ocr_config: None,
                 element_config: None,
+                quality_thresholds: None,
+                pipeline: None,
+                auto_rotate: false,
             }),
             ..Default::default()
         };

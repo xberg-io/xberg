@@ -133,7 +133,9 @@ fn run_layout_detection_on_images(
 /// Render PDF pages, optionally run layout detection, then run OCR.
 ///
 /// Renders images once and shares them between layout detection and OCR
-/// to avoid redundant PDF rendering.
+/// to avoid redundant PDF rendering. When a multi-backend pipeline is
+/// configured (or auto-constructed), uses quality-based fallback across
+/// backends.
 #[cfg(feature = "ocr")]
 async fn run_ocr_with_layout(content: &[u8], config: &ExtractionConfig) -> crate::Result<String> {
     let images = ocr::render_pages_for_ocr(content)?;
@@ -141,13 +143,28 @@ async fn run_ocr_with_layout(content: &[u8], config: &ExtractionConfig) -> crate
     #[cfg(feature = "layout-detection")]
     let layout_detections = run_layout_detection_on_images(&images, config);
 
-    extract_with_ocr(
+    // Check for pipeline configuration
+    if let Some(ref ocr_config) = config.ocr
+        && let Some(pipeline) = ocr_config.effective_pipeline()
+    {
+        return ocr::run_ocr_pipeline(
+            &images,
+            #[cfg(feature = "layout-detection")]
+            layout_detections.as_deref(),
+            config,
+            &pipeline,
+        )
+        .await;
+    }
+
+    let (text, _mean_conf) = extract_with_ocr(
         &images,
         #[cfg(feature = "layout-detection")]
         layout_detections.as_deref(),
         config,
     )
-    .await
+    .await?;
+    Ok(text)
 }
 
 /// PDF document extractor using pypdfium2 and playa-pdf.
@@ -377,11 +394,13 @@ impl DocumentExtractor for PdfExtractor {
             } else {
                 (native_text, false)
             }
-        } else if config.ocr.is_some() {
+        } else if let Some(ocr_config) = config.ocr.as_ref() {
+            let thresholds = ocr_config.effective_thresholds();
             let decision = ocr::evaluate_per_page_ocr(
                 &native_text,
                 boundaries.as_deref(),
                 pdf_metadata.pdf_specific.page_count,
+                &thresholds,
             );
 
             if std::env::var("KREUZBERG_DEBUG_OCR").is_ok() {
@@ -427,12 +446,13 @@ impl DocumentExtractor for PdfExtractor {
                 1.0
             };
 
-            // Pre-rendered markdown is substantive if it has reasonable length
-            // and the native text has meaningful alphanumeric content.
-            let has_substantive_markdown =
-                pre_rendered_markdown.is_some() && total_chars >= 100 && alnum_ws_ratio >= 0.4;
+            let has_substantive_markdown = pre_rendered_markdown.is_some()
+                && total_chars >= thresholds.substantive_min_chars
+                && alnum_ws_ratio >= thresholds.alnum_ws_ratio_threshold;
 
-            let skip_ocr_for_non_text = pre_rendered_markdown.is_some() && total_chars >= 20 && alnum_ws_ratio < 0.4;
+            let skip_ocr_for_non_text = pre_rendered_markdown.is_some()
+                && total_chars >= thresholds.non_text_min_chars
+                && alnum_ws_ratio < thresholds.alnum_ws_ratio_threshold;
 
             if skip_ocr_for_non_text {
                 tracing::debug!(
@@ -443,10 +463,6 @@ impl DocumentExtractor for PdfExtractor {
                 );
                 (native_text, false)
             } else if has_substantive_markdown {
-                // Pre-rendered markdown exists with good native text — skip OCR.
-                // The markdown pipeline already applies ligature repair for font
-                // encoding issues, so OCR would only degrade quality (especially
-                // on multi-column documents where tesseract interleaves columns).
                 tracing::debug!(
                     total_chars,
                     alnum_ws_ratio,
@@ -717,6 +733,8 @@ fn load_pdf_from_byte_slice<'pdf>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "ocr")]
+    use crate::core::config::OcrQualityThresholds;
 
     #[test]
     fn test_pdf_extractor_plugin_interface() {
@@ -743,28 +761,28 @@ mod tests {
     #[cfg(feature = "ocr")]
     #[test]
     fn test_should_fallback_to_ocr_for_empty_text() {
-        assert!(ocr::evaluate_native_text_for_ocr("", Some(1)).fallback);
+        assert!(ocr::evaluate_native_text_for_ocr("", Some(1), &OcrQualityThresholds::default()).fallback);
     }
 
     #[cfg(feature = "ocr")]
     #[test]
     fn test_should_not_fallback_for_meaningful_text() {
         let sample = "This page has searchable vector text and should avoid OCR.";
-        assert!(!ocr::evaluate_native_text_for_ocr(sample, Some(1)).fallback);
+        assert!(!ocr::evaluate_native_text_for_ocr(sample, Some(1), &OcrQualityThresholds::default()).fallback);
     }
 
     #[cfg(feature = "ocr")]
     #[test]
     fn test_should_fallback_for_punctuation_only_text() {
         let sample = " . , ; : -- -- ";
-        assert!(ocr::evaluate_native_text_for_ocr(sample, Some(2)).fallback);
+        assert!(ocr::evaluate_native_text_for_ocr(sample, Some(2), &OcrQualityThresholds::default()).fallback);
     }
 
     #[cfg(feature = "ocr")]
     #[test]
     fn test_per_page_ocr_no_boundaries_falls_back_to_whole_doc() {
         let text = "This document has enough meaningful words for evaluation purposes here.";
-        let decision = ocr::evaluate_per_page_ocr(text, None, Some(1));
+        let decision = ocr::evaluate_per_page_ocr(text, None, Some(1), &OcrQualityThresholds::default());
         assert!(!decision.fallback);
     }
 
@@ -772,7 +790,7 @@ mod tests {
     #[test]
     fn test_per_page_ocr_empty_boundaries_falls_back_to_whole_doc() {
         let text = "This document has enough meaningful words for evaluation purposes here.";
-        let decision = ocr::evaluate_per_page_ocr(text, Some(&[]), Some(1));
+        let decision = ocr::evaluate_per_page_ocr(text, Some(&[]), Some(1), &OcrQualityThresholds::default());
         assert!(!decision.fallback);
     }
 
@@ -797,7 +815,7 @@ mod tests {
             },
         ];
 
-        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2));
+        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &OcrQualityThresholds::default());
         assert!(!decision.fallback);
     }
 
@@ -822,7 +840,7 @@ mod tests {
             },
         ];
 
-        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2));
+        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &OcrQualityThresholds::default());
         assert!(decision.fallback);
     }
 
@@ -847,7 +865,7 @@ mod tests {
             },
         ];
 
-        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2));
+        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &OcrQualityThresholds::default());
         assert!(decision.fallback);
     }
 
@@ -872,7 +890,7 @@ mod tests {
             },
         ];
 
-        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2));
+        let decision = ocr::evaluate_per_page_ocr(&text, Some(&boundaries), Some(2), &OcrQualityThresholds::default());
         assert!(decision.fallback);
         assert!(decision.stats.non_whitespace > 0);
         assert!(decision.stats.meaningful_words > 0);
@@ -897,7 +915,7 @@ mod tests {
             },
         ];
 
-        let decision = ocr::evaluate_per_page_ocr(text, Some(&boundaries), Some(1));
+        let decision = ocr::evaluate_per_page_ocr(text, Some(&boundaries), Some(1), &OcrQualityThresholds::default());
         assert!(!decision.fallback);
     }
 
@@ -905,8 +923,8 @@ mod tests {
     #[test]
     fn test_per_page_ocr_multi_page_correct_page_count() {
         let text = "ab cd ef";
-        let decision_wrong = ocr::evaluate_native_text_for_ocr(text, None);
-        let decision_correct = ocr::evaluate_native_text_for_ocr(text, Some(20));
+        let decision_wrong = ocr::evaluate_native_text_for_ocr(text, None, &OcrQualityThresholds::default());
+        let decision_correct = ocr::evaluate_native_text_for_ocr(text, Some(20), &OcrQualityThresholds::default());
         assert!(
             decision_correct.avg_non_whitespace < decision_wrong.avg_non_whitespace,
             "Correct page count should produce lower per-page averages"

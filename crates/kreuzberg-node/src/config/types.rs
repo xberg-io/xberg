@@ -151,6 +151,9 @@ impl From<JsOcrConfig> for RustOcrConfig {
                 min_confidence: ec.min_confidence.unwrap_or(0.0),
                 build_hierarchy: ec.build_hierarchy.unwrap_or(false),
             }),
+            quality_thresholds: None,
+            pipeline: None,
+            auto_rotate: false,
         }
     }
 }

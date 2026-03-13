@@ -108,16 +108,23 @@ pub(in crate::pdf::markdown) fn assign_segments_to_regions<'a>(
             continue;
         }
 
-        // Also suppress segments inside Picture regions. These are typically
-        // OCR artifacts from embedded images (garbled hex, figure labels, etc.)
-        // that should not appear in the text output.
+        // Suppress segments inside Picture regions — but only if the text
+        // looks like OCR artifacts (garbled hex, figure labels, etc.).
+        // Substantive text (lyrics, captions, embedded prose) is preserved
+        // as unassigned so it still appears in the output.
         let in_picture = picture_hints.iter().any(|ph| {
             intersection_over_self(
                 seg_left, seg_bottom, seg_right, seg_top, seg_area, ph.left, ph.bottom, ph.right, ph.top,
             ) >= 0.5
         });
         if in_picture {
-            suppressed_count += 1;
+            let trimmed = seg.text.trim();
+            if is_substantive_text(trimmed) {
+                // Keep substantive text — push to unassigned
+                unassigned.push(seg_idx);
+            } else {
+                suppressed_count += 1;
+            }
             continue;
         }
 
@@ -351,4 +358,27 @@ fn intersection_over_self(
 
     let inter_area = (inter_right - inter_left) * (inter_top - inter_bottom);
     inter_area / seg_area
+}
+
+/// Minimum alphanumeric character count for text inside a Picture region
+/// to be considered substantive (and thus preserved rather than suppressed).
+const PICTURE_SUBSTANTIVE_MIN_ALNUM: usize = 10;
+
+/// Minimum alphanumeric ratio for text inside a Picture region to be
+/// considered substantive.
+const PICTURE_SUBSTANTIVE_MIN_ALNUM_RATIO: f64 = 0.4;
+
+/// Check whether a text segment is substantive content (lyrics, captions,
+/// prose) rather than OCR artifacts (garbled hex, stray labels).
+///
+/// We use a simple two-part heuristic:
+/// 1. At least `PICTURE_SUBSTANTIVE_MIN_ALNUM` alphanumeric characters
+/// 2. Alphanumeric ratio >= `PICTURE_SUBSTANTIVE_MIN_ALNUM_RATIO`
+fn is_substantive_text(text: &str) -> bool {
+    let total = text.chars().count();
+    if total == 0 {
+        return false;
+    }
+    let alnum = text.chars().filter(|c| c.is_alphanumeric()).count();
+    alnum >= PICTURE_SUBSTANTIVE_MIN_ALNUM && (alnum as f64 / total as f64) >= PICTURE_SUBSTANTIVE_MIN_ALNUM_RATIO
 }

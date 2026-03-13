@@ -464,6 +464,9 @@ impl OcrConfig {
                 output_format: None,
                 paddle_ocr_config: paddle_ocr_json,
                 element_config: element_cfg,
+                quality_thresholds: None,
+                pipeline: None,
+                auto_rotate: false,
             },
         })
     }

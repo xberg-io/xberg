@@ -777,7 +777,50 @@ fn retain_page_furniture_safely(paragraphs: &mut Vec<PdfParagraph>) {
         return;
     }
 
-    paragraphs.retain(|p| !p.is_page_furniture);
+    // Safety valve: if stripping furniture would remove >30% of total text
+    // content, the layout model likely misclassified substantive content.
+    // In that case, clear furniture markings entirely rather than risk
+    // dropping document titles, section headers, or other real content.
+    let total_alphanum: usize = paragraphs.iter().map(paragraph_alphanum_len).sum();
+
+    if total_alphanum > 0 {
+        let furniture_alphanum: usize = paragraphs
+            .iter()
+            .filter(|p| p.is_page_furniture)
+            .map(paragraph_alphanum_len)
+            .sum();
+
+        if furniture_alphanum * 100 > total_alphanum * 30 {
+            // Removing furniture would drop >30% of text — likely misclassified.
+            for para in paragraphs.iter_mut() {
+                para.is_page_furniture = false;
+            }
+            return;
+        }
+    }
+
+    // Per-paragraph guard: don't strip furniture paragraphs that contain
+    // substantive content (>80 alphanumeric chars). Short page numbers,
+    // dates, and running titles are typically well under this threshold,
+    // while misclassified body text or document titles exceed it.
+    const MIN_SUBSTANTIVE_CHARS: usize = 80;
+
+    paragraphs.retain(|p| {
+        if !p.is_page_furniture {
+            return true;
+        }
+        paragraph_alphanum_len(p) > MIN_SUBSTANTIVE_CHARS
+    });
+}
+
+/// Count alphanumeric characters in a paragraph's text content.
+fn paragraph_alphanum_len(para: &PdfParagraph) -> usize {
+    para.lines
+        .iter()
+        .flat_map(|line| line.segments.iter())
+        .flat_map(|seg| seg.text.chars())
+        .filter(|c| c.is_alphanumeric())
+        .count()
 }
 
 /// Remove standalone page numbers from segments.
