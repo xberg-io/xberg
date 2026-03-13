@@ -2397,9 +2397,9 @@ dependencies = [
 
 [[package]]
 name = "hayro-jpeg2000"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16bca62a003c7e4f4bedc659500e0be1b8fd7b0a432b1884418a86d35de5b04c"
+checksum = "c1a74cfc18c0093ef8009a0d6c1ba3024df0cce228503a14c1372e1e23eed43e"
 dependencies = [
  "fearless_simd",
 ]
