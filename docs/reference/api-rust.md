@@ -388,6 +388,7 @@ pub struct ExtractionConfig {
     pub include_document_structure: bool,
     pub keywords: Option<KeywordConfig>,
     pub language_detection: Option<LanguageDetectionConfig>,
+    pub layout: Option<LayoutDetectionConfig>,
     pub max_concurrent_extractions: Option<usize>,
     pub ocr: Option<OcrConfig>,
     pub output_format: OutputFormat,
@@ -413,6 +414,7 @@ pub struct ExtractionConfig {
 - `include_document_structure` (bool): Populate `document` field with hierarchical DocumentStructure. Default: false
 - `keywords` (Option<KeywordConfig>): Keyword extraction (requires `keywords-yake` or `keywords-rake`). Default: None
 - `language_detection` (Option<LanguageDetectionConfig>): Language detection configuration. Default: None
+- `layout` (Option<LayoutDetectionConfig>): Layout detection settings (requires `layout-detection` feature). Default: None
 - `max_concurrent_extractions` (Option<usize>): Max concurrent extractions in batch; None = (num_cpus × 1.5).ceil(). Default: None
 - `ocr` (Option<OcrConfig>): OCR configuration. Default: None (no OCR)
 - `output_format` (OutputFormat): Content format: Plain, Markdown, Djot, Html, or Structured. Default: Plain
@@ -622,6 +624,29 @@ pub struct HierarchyConfig {
 - `k_clusters` (usize): Number of font size clusters (1-7, typically 6 for H1-H6). Default: 6
 - `include_bbox` (bool): Include bounding box in hierarchy blocks. Default: true
 - `ocr_coverage_threshold` (Option<f32>): Trigger OCR when text blocks cover less than this fraction of page (0.0-1.0). Default: None
+
+---
+
+### LayoutDetectionConfig
+
+Layout detection configuration (requires `layout-detection` feature). Analyzes document structure using RT-DETR/YOLO models.
+
+**Definition:**
+
+```rust title="Rust"
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutDetectionConfig {
+    pub preset: String,
+    pub confidence_threshold: Option<f32>,
+    pub apply_heuristics: bool,
+}
+```
+
+**Fields:**
+
+- `preset` (String): Model selection preset. `"fast"` (YOLOv8) or `"accurate"` (RT-DETR). Default: `"fast"`
+- `confidence_threshold` (Option<f32>): Confidence threshold for layout detection (0.0-1.0). Default: None (use model default)
+- `apply_heuristics` (bool): Apply post-processing heuristics to improve layout grouping. Default: true
 
 ---
 
