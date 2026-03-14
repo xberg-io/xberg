@@ -120,168 +120,6 @@ int main(void) {
 
 ## Core Extraction Functions
 
-### kreuzberg_extract_bytes_sync
-
-Extract text from an in-memory byte buffer with a specified MIME type.
-
-**Signature:**
-
-```c
-CExtractionResult *kreuzberg_extract_bytes_sync(
-    const uint8_t *data,
-    uintptr_t data_len,
-    const char *mime_type
-);
-```
-
-**Parameters:**
-
-- `data` (const uint8\_t\*): Pointer to the document bytes
-- `data_len` (uintptr\_t): Length of the byte buffer
-- `mime_type` (const char\*): Null-terminated MIME type string (e.g., `"application/pdf"`)
-
-**Returns:**
-
-- `CExtractionResult*`: Populated result on success; caller must free with `kreuzberg_free_result`
-- `NULL` on error; check `kreuzberg_last_error()` or `kreuzberg_get_error_details()` for details
-
-**Example:**
-
-```c title="C"
-FILE *f = fopen("document.pdf", "rb");
-fseek(f, 0, SEEK_END);
-long len = ftell(f);
-fseek(f, 0, SEEK_SET);
-uint8_t *data = malloc(len);
-fread(data, 1, len, f);
-fclose(f);
-
-CExtractionResult *result = kreuzberg_extract_bytes_sync(
-    data, (uintptr_t)len, "application/pdf"
-);
-if (result != NULL && result->success) {
-    printf("Extracted %zu characters\n", strlen(result->content));
-    kreuzberg_free_result(result);
-}
-free(data);
-```
-
----
-
-### kreuzberg_extract_bytes_sync_with_config
-
-Extract text from bytes with a JSON configuration string.
-
-**Signature:**
-
-```c
-CExtractionResult *kreuzberg_extract_bytes_sync_with_config(
-    const uint8_t *data,
-    uintptr_t data_len,
-    const char *mime_type,
-    const char *config_json
-);
-```
-
-**Parameters:**
-
-- `data` (const uint8\_t\*): Document bytes
-- `data_len` (uintptr\_t): Length of data
-- `mime_type` (const char\*): MIME type string
-- `config_json` (const char\*): JSON configuration, or NULL for defaults
-
-**Returns:**
-
-- `CExtractionResult*`: Result on success; free with `kreuzberg_free_result`
-- `NULL` on error
-
----
-
-### kreuzberg_extract_file_sync
-
-Extract text and metadata from a file.
-
-**Signature:**
-
-```c
-CExtractionResult *kreuzberg_extract_file_sync(const char *file_path);
-```
-
-**Parameters:**
-
-- `file_path` (const char\*): Null-terminated path to the document file
-
-**Returns:**
-
-- `CExtractionResult*`: Populated result on success; caller must free with `kreuzberg_free_result`
-- `NULL` on error; check `kreuzberg_last_error()` or `kreuzberg_get_error_details()` for details
-
-**Errors:**
-
-- Validation error if `file_path` is NULL or empty
-- I/O error if the file does not exist or is not readable
-- Parsing error if document parsing fails
-- Unsupported format if the MIME type is not recognized
-
-**Example:**
-
-```c title="C"
-CExtractionResult *result = kreuzberg_extract_file_sync("/path/to/report.pdf");
-if (result != NULL && result->success) {
-    printf("Content: %s\n", result->content);
-    printf("MIME: %s\n", result->mime_type);
-    if (result->tables_json != NULL) {
-        printf("Tables: %s\n", result->tables_json);
-    }
-    kreuzberg_free_result(result);
-} else {
-    const char *error = kreuzberg_last_error();
-    fprintf(stderr, "Error: %s\n", error);
-}
-```
-
----
-
-### kreuzberg_extract_file_sync_with_config
-
-Extract text and metadata from a file with custom JSON configuration.
-
-**Signature:**
-
-```c
-CExtractionResult *kreuzberg_extract_file_sync_with_config(
-    const char *file_path,
-    const char *config_json
-);
-```
-
-**Parameters:**
-
-- `file_path` (const char\*): Null-terminated path to the document
-- `config_json` (const char\*): Null-terminated JSON configuration string, or NULL for defaults
-
-**Returns:**
-
-- `CExtractionResult*`: Result on success; free with `kreuzberg_free_result`
-- `NULL` on error
-
-**Example:**
-
-```c title="C"
-const char *config = "{\"force_ocr\": true, \"ocr\": {\"language\": \"deu\"}}";
-CExtractionResult *result = kreuzberg_extract_file_sync_with_config(
-    "scanned-german.pdf", config
-);
-if (result != NULL && result->success) {
-    printf("Content: %s\n", result->content);
-    kreuzberg_free_result(result);
-}
-```
-
----
-
-## Batch Extraction
-
 ### kreuzberg_batch_extract_bytes_sync
 
 Batch extract text from multiple in-memory documents.
@@ -298,9 +136,9 @@ CBatchResult *kreuzberg_batch_extract_bytes_sync(
 
 **Parameters:**
 
-- `items` (const CBytesWithMime\*): Array of byte-buffer/MIME-type pairs
-- `count` (uintptr\_t): Number of items
-- `config_json` (const char\*): JSON configuration, or NULL
+- `items` (const CBytesWithMime*): Array of byte-buffer/MIME-type pairs
+- `count` (uintptr_t): Number of items
+- `config_json` (const char*): JSON configuration, or NULL
 
 **Returns:**
 
@@ -325,32 +163,14 @@ CBatchResult *kreuzberg_batch_extract_files_sync(
 
 **Parameters:**
 
-- `file_paths` (const char\* const\*): Array of null-terminated file path strings
-- `count` (uintptr\_t): Number of file paths in the array
-- `config_json` (const char\*): JSON configuration applied to all files, or NULL
+- `file_paths` (const char* const*): Array of null-terminated file path strings
+- `count` (uintptr_t): Number of file paths in the array
+- `config_json` (const char*): JSON configuration applied to all files, or NULL
 
 **Returns:**
 
 - `CBatchResult*`: Batch result containing an array of individual results; free with `kreuzberg_free_batch_result`
 - `NULL` on error (e.g., invalid arguments)
-
-**Example:**
-
-```c title="C"
-const char *files[] = {"doc1.pdf", "doc2.docx", "doc3.txt"};
-CBatchResult *batch = kreuzberg_batch_extract_files_sync(files, 3, NULL);
-if (batch != NULL && batch->success) {
-    for (uintptr_t i = 0; i < batch->count; i++) {
-        CExtractionResult *r = batch->results[i];
-        if (r != NULL && r->success) {
-            printf("File %zu: %zu chars\n", i, strlen(r->content));
-        } else {
-            printf("File %zu: extraction failed\n", i);
-        }
-    }
-    kreuzberg_free_batch_result(batch);
-}
-```
 
 ---
 
@@ -374,14 +194,17 @@ int kreuzberg_extract_batch_parallel(
 
 **Parameters:**
 
-- Same as `kreuzberg_extract_batch_streaming`, plus:
-- `max_parallel` (uintptr\_t): Maximum concurrent extractions (0 = number of CPUs)
+- `files` (const char* const*): Array of file paths
+- `count` (uintptr_t): Number of files
+- `config_json` (const char*): JSON config or NULL
+- `result_callback` (ResultCallback): Called for each successful extraction
+- `user_data` (void*): Opaque pointer passed through to callbacks
+- `error_callback` (Option_ErrorCallback): Called on per-file failures
+- `max_parallel` (uintptr_t): Maximum concurrent extractions (0 = number of CPUs)
 
 **Returns:**
 
 - `0` on success, `-1` on error
-
-**Note:** Both `result_callback` and `error_callback` may be invoked from multiple threads concurrently. The `user_data` pointer must be thread-safe.
 
 ---
 
@@ -404,35 +227,118 @@ int kreuzberg_extract_batch_streaming(
 
 **Parameters:**
 
-- `files` (const char\* const\*): Array of file paths
-- `count` (uintptr\_t): Number of files
-- `config_json` (const char\*): JSON config or NULL
+- `files` (const char* const*): Array of file paths
+- `count` (uintptr_t): Number of files
+- `config_json` (const char*): JSON config or NULL
 - `result_callback` (ResultCallback): Called for each successful extraction
-- `user_data` (void\*): Opaque pointer passed through to callbacks
-- `error_callback` (Option\_ErrorCallback): Called on per-file failures (optional)
+- `user_data` (void*): Opaque pointer passed through to callbacks
+- `error_callback` (Option_ErrorCallback): Called on per-file failures (optional)
 
 **Returns:**
 
-- `0` on success (all files processed or cancelled by callback)
-- `-1` on error (invalid arguments or config parsing failure)
-
-**Example:**
-
-```c title="C"
-int on_result(const CExtractionResultView *result, size_t index, void *data) {
-    char buf[256];
-    size_t copy_len = result->content_len < 255 ? result->content_len : 255;
-    memcpy(buf, result->content_ptr, copy_len);
-    buf[copy_len] = '\0';
-    printf("File %zu: %s...\n", index, buf);
-    return 0; /* continue processing */
-}
-
-const char *files[] = {"a.pdf", "b.txt", "c.docx"};
-kreuzberg_extract_batch_streaming(files, 3, NULL, on_result, NULL, /* no error cb */ 0);
-```
+- `0` on success, `-1` on error
 
 ---
+
+### kreuzberg_extract_bytes_sync
+
+Extract text from an in-memory byte buffer with a specified MIME type.
+
+**Signature:**
+
+```c
+CExtractionResult *kreuzberg_extract_bytes_sync(
+    const uint8_t *data,
+    uintptr_t data_len,
+    const char *mime_type
+);
+```
+
+**Parameters:**
+
+- `data` (const uint8_t*): Pointer to the document bytes
+- `data_len` (uintptr_t): Length of the byte buffer
+- `mime_type` (const char*): Null-terminated MIME type string (e.g., `"application/pdf"`)
+
+**Returns:**
+
+- `CExtractionResult*`: Populated result on success; caller must free with `kreuzberg_free_result`
+- `NULL` on error; check `kreuzberg_last_error()` or `kreuzberg_get_error_details()` for details
+
+---
+
+### kreuzberg_extract_bytes_sync_with_config
+
+Extract text from bytes with a JSON configuration string.
+
+**Signature:**
+
+```c
+CExtractionResult *kreuzberg_extract_bytes_sync_with_config(
+    const uint8_t *data,
+    uintptr_t data_len,
+    const char *mime_type,
+    const char *config_json
+);
+```
+
+**Parameters:**
+
+- `data` (const uint8_t*): Document bytes
+- `data_len` (uintptr_t): Length of data
+- `mime_type` (const char*): MIME type string
+- `config_json` (const char*): JSON configuration, or NULL for defaults
+
+**Returns:**
+
+- `CExtractionResult*`: Result on success; free with `kreuzberg_free_result`
+- `NULL` on error
+
+---
+
+### kreuzberg_extract_file_sync
+
+Extract text and metadata from a file.
+
+**Signature:**
+
+```c
+CExtractionResult *kreuzberg_extract_file_sync(const char *file_path);
+```
+
+**Parameters:**
+
+- `file_path` (const char*): Null-terminated path to the document file
+
+**Returns:**
+
+- `CExtractionResult*`: Populated result on success; caller must free with `kreuzberg_free_result`
+- `NULL` on error; check `kreuzberg_last_error()` or `kreuzberg_get_error_details()` for details
+
+---
+
+### kreuzberg_extract_file_sync_with_config
+
+Extract text and metadata from a file with custom JSON configuration.
+
+**Signature:**
+
+```c
+CExtractionResult *kreuzberg_extract_file_sync_with_config(
+    const char *file_path,
+    const char *config_json
+);
+```
+
+**Parameters:**
+
+- `file_path` (const char*): Null-terminated path to the document
+- `config_json` (const char*): Null-terminated JSON configuration string, or NULL for defaults
+
+**Returns:**
+
+- `CExtractionResult*`: Result on success; free with `kreuzberg_free_result`
+- `NULL` on error
 
 ## Configuration
 
@@ -445,21 +351,13 @@ Construct an `ExtractionConfig` programmatically using the builder pattern.
 ```c
 ConfigBuilder *kreuzberg_config_builder_new(void);
 int32_t kreuzberg_config_builder_set_chunking(ConfigBuilder *builder, const char *chunking_json);
-int32_t kreuzberg_config_builder_set_force_ocr(ConfigBuilder *builder, int32_t force);
-int32_t kreuzberg_config_builder_set_html_options(ConfigBuilder *builder, const char *html_json);
 int32_t kreuzberg_config_builder_set_image_extraction(ConfigBuilder *builder, const char *image_json);
 int32_t kreuzberg_config_builder_set_include_document_structure(ConfigBuilder *builder, int32_t include);
-int32_t kreuzberg_config_builder_set_keywords(ConfigBuilder *builder, const char *keywords_json);
 int32_t kreuzberg_config_builder_set_language_detection(ConfigBuilder *builder, const char *ld_json);
-int32_t kreuzberg_config_builder_set_max_concurrent_extractions(ConfigBuilder *builder, uintptr_t max);
+int32_t kreuzberg_config_builder_set_layout(ConfigBuilder *builder, const char *layout_json);
 int32_t kreuzberg_config_builder_set_ocr(ConfigBuilder *builder, const char *ocr_json);
-int32_t kreuzberg_config_builder_set_output_format(ConfigBuilder *builder, const char *format_str);
-int32_t kreuzberg_config_builder_set_pages(ConfigBuilder *builder, const char *pages_json);
 int32_t kreuzberg_config_builder_set_pdf(ConfigBuilder *builder, const char *pdf_json);
 int32_t kreuzberg_config_builder_set_post_processor(ConfigBuilder *builder, const char *pp_json);
-int32_t kreuzberg_config_builder_set_result_format(ConfigBuilder *builder, const char *format_str);
-int32_t kreuzberg_config_builder_set_security_limits(ConfigBuilder *builder, const char *security_json);
-int32_t kreuzberg_config_builder_set_token_reduction(ConfigBuilder *builder, const char *tr_json);
 int32_t kreuzberg_config_builder_set_use_cache(ConfigBuilder *builder, int32_t use_cache);
 ExtractionConfig *kreuzberg_config_builder_build(ConfigBuilder *builder);
 void kreuzberg_config_builder_free(ConfigBuilder *builder);
@@ -1260,6 +1158,27 @@ typedef struct CMetadataField {
 } CMetadataField;
 ```
 
+#### Standard Metadata Fields
+
+The following fields are standard across all document types and can be queried via `kreuzberg_result_get_metadata_field`:
+
+| Field | Description | Type (JSON) |
+|-------|-------------|-------------|
+| `author` | Document author | `string` |
+| `characters` | Character count | `number` |
+| `created_at` | Creation timestamp | `string` (ISO 8601) |
+| `creator` | Document creator/application | `string` |
+| `description` | Document description | `string` |
+| `keywords` | Document keywords | `array<string>` |
+| `language` | Primary language | `string` (ISO 639-1) |
+| `modified_at` | Modification timestamp | `string` (ISO 8601) |
+| `pages` | Page count info | `object` |
+| `producer` | PDF producer | `string` |
+| `subject` | Document subject | `string` |
+| `title` | Document title | `string` |
+| `version` | Document version | `string` |
+```
+
 ---
 
 ## Result Retrieval
@@ -1276,6 +1195,8 @@ Get the number of text chunks in the result.
 uintptr_t kreuzberg_result_get_chunk_count(const CExtractionResult *result);
 ```
 
+---
+
 ### kreuzberg_result_get_detected_language
 
 Get a detected language at a specific index.
@@ -1286,6 +1207,8 @@ Get a detected language at a specific index.
 char *kreuzberg_result_get_detected_language(const CExtractionResult *result, uintptr_t index);
 ```
 
+---
+
 ### kreuzberg_result_get_metadata_field
 
 Get a specific metadata field by name.
@@ -1295,6 +1218,8 @@ Get a specific metadata field by name.
 ```c
 CMetadataField kreuzberg_result_get_metadata_field(const CExtractionResult *result, const char *name);
 ```
+
+---
 
 ### kreuzberg_result_get_page_count
 
@@ -1355,24 +1280,87 @@ CStringInternStats kreuzberg_string_intern_stats(void);
 
 Utilities for parsing and serializing configuration enums.
 
-### HTML Options Conversions
+### kreuzberg_code_block_style_to_string
 
 ```c
 const char *kreuzberg_code_block_style_to_string(int32_t style);
+```
+
+### kreuzberg_heading_style_to_string
+
+```c
 const char *kreuzberg_heading_style_to_string(int32_t style);
+```
+
+### kreuzberg_highlight_style_to_string
+
+```c
 const char *kreuzberg_highlight_style_to_string(int32_t style);
+```
+
+### kreuzberg_list_indent_type_to_string
+
+```c
 const char *kreuzberg_list_indent_type_to_string(int32_t type);
+```
+
+### kreuzberg_newline_style_to_string
+
+```c
 const char *kreuzberg_newline_style_to_string(int32_t style);
+```
 
+### kreuzberg_parse_code_block_style
+
+```c
 int32_t kreuzberg_parse_code_block_style(const char *s);
-int32_t kreuzberg_parse_heading_style(const char *s);
-int32_t kreuzberg_parse_highlight_style(const char *s);
-int32_t kreuzberg_parse_list_indent_type(const char *s);
-int32_t kreuzberg_parse_newline_style(const char *s);
-int32_t kreuzberg_parse_preprocessing_preset(const char *s);
-int32_t kreuzberg_parse_whitespace_mode(const char *s);
+```
 
+### kreuzberg_parse_heading_style
+
+```c
+int32_t kreuzberg_parse_heading_style(const char *s);
+```
+
+### kreuzberg_parse_highlight_style
+
+```c
+int32_t kreuzberg_parse_highlight_style(const char *s);
+```
+
+### kreuzberg_parse_list_indent_type
+
+```c
+int32_t kreuzberg_parse_list_indent_type(const char *s);
+```
+
+### kreuzberg_parse_newline_style
+
+```c
+int32_t kreuzberg_parse_newline_style(const char *s);
+```
+
+### kreuzberg_parse_preprocessing_preset
+
+```c
+int32_t kreuzberg_parse_preprocessing_preset(const char *s);
+```
+
+### kreuzberg_parse_whitespace_mode
+
+```c
+int32_t kreuzberg_parse_whitespace_mode(const char *s);
+```
+
+### kreuzberg_preprocessing_preset_to_string
+
+```c
 const char *kreuzberg_preprocessing_preset_to_string(int32_t preset);
+```
+
+### kreuzberg_whitespace_mode_to_string
+
+```c
 const char *kreuzberg_whitespace_mode_to_string(int32_t mode);
 ```
 ```
