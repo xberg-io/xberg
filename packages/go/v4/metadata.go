@@ -12,6 +12,9 @@ var metadataCoreKeys = map[string]struct{}{
 	"modified_at":            {},
 	"created_by":             {},
 	"modified_by":            {},
+	"date":                   {},
+	"producer":               {},
+	"page_count":             {},
 	"pages":                  {},
 	"format_type":            {},
 	"image_preprocessing":    {},
@@ -99,6 +102,14 @@ func (m *Metadata) decodeCoreFields(raw map[string]json.RawMessage) {
 	m.ModifiedAt = decodeRawString(raw, "modified_at")
 	m.CreatedBy = decodeRawString(raw, "created_by")
 	m.ModifiedBy = decodeRawString(raw, "modified_by")
+	m.Date = decodeRawString(raw, "date")
+	m.Producer = decodeRawString(raw, "producer")
+	if value, exists := raw["page_count"]; exists {
+		var pc int
+		if err := json.Unmarshal(value, &pc); err == nil {
+			m.PageCount = &pc
+		}
+	}
 	m.Category = decodeRawString(raw, "category")
 	m.Tags = decodeRawStringSlice(raw, "tags")
 	m.DocumentVersion = decodeRawString(raw, "document_version")
@@ -209,6 +220,15 @@ func (m Metadata) MarshalJSON() ([]byte, error) {
 	}
 	if m.ModifiedBy != nil {
 		out["modified_by"] = *m.ModifiedBy
+	}
+	if m.Date != nil {
+		out["date"] = *m.Date
+	}
+	if m.Producer != nil {
+		out["producer"] = *m.Producer
+	}
+	if m.PageCount != nil {
+		out["page_count"] = *m.PageCount
 	}
 	if m.Pages != nil {
 		out["pages"] = m.Pages
