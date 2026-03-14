@@ -1890,6 +1890,12 @@ impl TesseractAPI {
         let count = unsafe { boxaGetCount(boxa) };
         let n = count as usize;
         let mut boxes = Vec::with_capacity(n);
+        // Collect block_ids and para_ids in lock-step with boxes: only push an ID
+        // when the corresponding box is successfully pushed (boxGetGeometry succeeded).
+        // Collecting all `count` IDs unconditionally would leave the ID vecs longer
+        // than the boxes vec whenever boxGetGeometry fails for some indices.
+        let mut block_ids_vec: Option<Vec<i32>> = if blockids_ptr.is_null() { None } else { Some(Vec::with_capacity(n)) };
+        let mut para_ids_vec: Option<Vec<i32>> = if paraids_ptr.is_null() { None } else { Some(Vec::with_capacity(n)) };
         for i in 0..count {
             let mut x = 0_i32;
             let mut y = 0_i32;
@@ -1898,47 +1904,36 @@ impl TesseractAPI {
             let bx = unsafe { boxaGetBox(boxa, i, 0) };
             if !bx.is_null() {
                 // Only push if boxGetGeometry succeeds (returns 1); skip on failure.
+                // Push IDs in the same branch so boxes and ID arrays stay in sync.
                 let ok = unsafe { boxGetGeometry(bx, &mut x, &mut y, &mut w, &mut h) };
                 if ok != 0 {
                     boxes.push((x, y, w, h));
+                    // SAFETY: blockids_ptr/paraids_ptr are valid int arrays of `count`
+                    // elements (Tesseract-allocated); index i is within [0, count).
+                    if let Some(ref mut ids) = block_ids_vec {
+                        ids.push(unsafe { *blockids_ptr.offset(i as isize) });
+                    }
+                    if let Some(ref mut ids) = para_ids_vec {
+                        ids.push(unsafe { *paraids_ptr.offset(i as isize) });
+                    }
                 }
             }
         }
-        // Collect blockids if Tesseract allocated the array.
-        // SAFETY: blockids_ptr is either null (Tesseract chose not to populate it) or a valid
-        // heap-allocated int array of exactly `count` elements written by Tesseract.
-        // We copy the values into a Vec and then free the array with TessDeleteIntArray, which
-        // is the correct Tesseract-provided free function for int arrays.
-        let block_ids = if blockids_ptr.is_null() {
-            None
-        } else {
-            let mut v = Vec::with_capacity(n);
-            for i in 0..count {
-                v.push(unsafe { *blockids_ptr.offset(i as isize) });
-            }
-            // SAFETY: TessDeleteIntArray frees the Tesseract-allocated int array exactly once.
+        // Free the Tesseract-allocated int arrays now that we have copied the needed values.
+        // SAFETY: TessDeleteIntArray frees the Tesseract-allocated int array exactly once.
+        if !blockids_ptr.is_null() {
             unsafe { TessDeleteIntArray(blockids_ptr) };
-            Some(v)
-        };
-        // Collect paraids if Tesseract allocated the array — same pattern as blockids.
-        let para_ids = if paraids_ptr.is_null() {
-            None
-        } else {
-            let mut v = Vec::with_capacity(n);
-            for i in 0..count {
-                v.push(unsafe { *paraids_ptr.offset(i as isize) });
-            }
-            // SAFETY: TessDeleteIntArray frees the Tesseract-allocated int array exactly once.
+        }
+        if !paraids_ptr.is_null() {
             unsafe { TessDeleteIntArray(paraids_ptr) };
-            Some(v)
-        };
+        }
         let mut boxa_mut = boxa;
         // SAFETY: boxaDestroy sets boxa_mut to null after freeing — called exactly once.
         unsafe { boxaDestroy(&mut boxa_mut) };
         Ok(BoundingBoxArray {
             boxes,
-            block_ids,
-            para_ids,
+            block_ids: block_ids_vec,
+            para_ids: para_ids_vec,
         })
     }
 
@@ -2001,6 +1996,10 @@ impl TesseractAPI {
         let count = unsafe { boxaGetCount(boxa) };
         let n = count as usize;
         let mut boxes = Vec::with_capacity(n);
+        // Collect block_ids in lock-step with boxes so the two arrays stay aligned.
+        // Pushing IDs unconditionally for all `count` indices would leave block_ids
+        // longer than boxes when boxGetGeometry fails for some entries.
+        let mut block_ids_vec: Option<Vec<i32>> = if blockids_ptr.is_null() { None } else { Some(Vec::with_capacity(n)) };
         for i in 0..count {
             let mut x = 0_i32;
             let mut y = 0_i32;
@@ -2009,31 +2008,28 @@ impl TesseractAPI {
             let bx = unsafe { boxaGetBox(boxa, i, 0) };
             if !bx.is_null() {
                 // Only push if boxGetGeometry succeeds (returns 1); skip on failure.
+                // Push the block ID in the same branch so boxes and block_ids stay in sync.
                 let ok = unsafe { boxGetGeometry(bx, &mut x, &mut y, &mut w, &mut h) };
                 if ok != 0 {
                     boxes.push((x, y, w, h));
+                    // SAFETY: blockids_ptr is a valid int array of `count` elements; i < count.
+                    if let Some(ref mut ids) = block_ids_vec {
+                        ids.push(unsafe { *blockids_ptr.offset(i as isize) });
+                    }
                 }
             }
         }
-        // Collect blockids if Tesseract allocated the array.
-        // SAFETY: Same pattern as get_textlines() blockids collection.
-        let block_ids = if blockids_ptr.is_null() {
-            None
-        } else {
-            let mut v = Vec::with_capacity(n);
-            for i in 0..count {
-                v.push(unsafe { *blockids_ptr.offset(i as isize) });
-            }
-            // SAFETY: TessDeleteIntArray frees the Tesseract-allocated int array exactly once.
+        // Free the Tesseract-allocated block IDs array now that we have copied the values.
+        // SAFETY: TessDeleteIntArray frees the Tesseract-allocated int array exactly once.
+        if !blockids_ptr.is_null() {
             unsafe { TessDeleteIntArray(blockids_ptr) };
-            Some(v)
-        };
+        }
         let mut boxa_mut = boxa;
         // SAFETY: boxaDestroy sets boxa_mut to null after freeing — called exactly once.
         unsafe { boxaDestroy(&mut boxa_mut) };
         Ok(BoundingBoxArray {
             boxes,
-            block_ids,
+            block_ids: block_ids_vec,
             para_ids: None,
         })
     }

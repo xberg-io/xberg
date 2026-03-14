@@ -720,7 +720,7 @@ pub(super) fn perform_ocr(
     // holding a dangling Pix pointer — the Pix is already freed at that point, and
     // Tesseract's internal reference to it has been cleared by `api.clear()` (called at
     // the top of `get_or_init_api` on the next reuse). No dangling pointer issue.
-    let pix_guard: Option<kreuzberg_tesseract::Pix> = {
+    let mut pix_guard: Option<kreuzberg_tesseract::Pix> = {
         match kreuzberg_tesseract::Pix::from_raw_rgb(&image_data, width, height) {
             Ok(pix) => {
                 // Pipeline: background normalization → unsharp mask → grayscale.
@@ -813,10 +813,9 @@ pub(super) fn perform_ocr(
                     // If preprocessing succeeds we set the image via set_image_2; otherwise
                     // we fall back to the raw rotated RGB bytes via set_image.
                     //
-                    // NOTE: `pix_guard` (declared above) is intentionally shadowed here.
-                    // The previous Pix (built from the un-rotated data) is dropped as the
-                    // binding goes out of scope, freeing its Leptonica allocation before the
-                    // new one is registered with Tesseract.
+                    // Build a new preprocessed Pix from the rotated image data.
+                    // If preprocessing succeeds the result is assigned to `pix_guard` below,
+                    // replacing the un-rotated Pix so Tesseract keeps a valid image pointer.
                     let rotated_pix = kreuzberg_tesseract::Pix::from_raw_rgb(&rotated_data, new_width, new_height)
                         .ok()
                         .and_then(|pix| {
@@ -842,11 +841,10 @@ pub(super) fn perform_ocr(
                         .map_err(|e| OcrError::ProcessingFailed(format!("Failed to set rotated image: {}", e)))?;
                     }
 
-                    // Keep the rotated Pix alive until after recognize() by re-assigning the
-                    // outer pix_guard binding. The previous (un-rotated) Pix is dropped here.
-                    let _ = pix_guard; // explicitly drop the un-rotated Pix
-                    let pix_guard = rotated_pix; // shadowed; dropped after recognize()
-                    let _ = &pix_guard; // prevent the compiler from eliding the binding
+                    // Replace the outer `pix_guard` with the rotated Pix so that it
+                    // stays alive until after `api.recognize()` completes. The previous
+                    // un-rotated Pix is dropped here when the old value is overwritten.
+                    pix_guard = rotated_pix;
 
                     api.set_source_resolution(source_dpi).map_err(|e| {
                         OcrError::ProcessingFailed(format!("Failed to set source resolution after rotation: {}", e))
