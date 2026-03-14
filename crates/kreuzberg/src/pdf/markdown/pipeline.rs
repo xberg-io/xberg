@@ -721,7 +721,7 @@ pub fn render_document_as_markdown_with_tables(
         })
         .collect();
 
-    let all_page_paragraphs: Vec<Vec<PdfParagraph>> = page_inputs
+    let mut all_page_paragraphs: Vec<Vec<PdfParagraph>> = page_inputs
         .into_par_iter()
         .map(|input| process_single_page(input, &heading_map, doc_body_font_size))
         .collect();
