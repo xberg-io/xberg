@@ -11,7 +11,8 @@ use super::types::{LayoutHintClass, PdfLine, PdfParagraph};
 pub(crate) fn render_paragraph_to_output(para: &PdfParagraph, output: &mut String) {
     if let Some(level) = para.heading_level {
         let prefix = "#".repeat(level as usize);
-        let text = escape_html_entities(&join_line_texts(&para.lines));
+        let joined = join_line_texts(&para.lines);
+        let text = escape_html_entities(&joined);
         output.push_str(&prefix);
         output.push(' ');
         output.push_str(&text);
@@ -41,7 +42,8 @@ pub(crate) fn render_paragraph_to_output(para: &PdfParagraph, output: &mut Strin
         // Captions are rendered in italic to visually distinguish them from body text.
         // Asterisks in the caption text must be escaped so they don't break the italic
         // delimiter (`*...*`) and produce malformed markdown.
-        let text = escape_html_entities(&join_line_texts(&para.lines));
+        let joined = join_line_texts(&para.lines);
+        let text = escape_html_entities(&joined);
         let escaped = text.replace('*', "\\*");
         output.push('*');
         output.push_str(&escaped);

@@ -74,7 +74,7 @@ fn extract_structure_tree_pages(
                 // Try error-flag-based repair first (most accurate).
                 if let Some(repair_map) = build_ligature_repair_map(&page) {
                     has_font_encoding_issues = true;
-                    apply_to_all_segments(&mut paragraphs, |t| apply_ligature_repairs(t, &repair_map));
+                    apply_to_all_segments(&mut paragraphs, |t| apply_ligature_repairs(t, &repair_map).into());
                 }
                 // Then apply contextual ligature repair for fonts where
                 // pdfium doesn't flag encoding errors. Check the actual
@@ -736,7 +736,7 @@ pub fn render_document_as_markdown_with_tables(
     let final_markdown = repair_contextual_ligatures(&final_markdown);
     let final_markdown = normalize_unicode_text(&final_markdown);
 
-    Ok((final_markdown, has_font_encoding_issues))
+    Ok((final_markdown.into_owned(), has_font_encoding_issues))
 }
 
 /// Deduplicate tables that overlap on the same page.

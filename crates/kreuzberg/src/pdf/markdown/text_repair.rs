@@ -476,18 +476,14 @@ pub(super) fn normalize_text_encoding(text: &str) -> Cow<'_, str> {
 /// The repair function returns `Cow<'_, str>`: if it returns `Cow::Borrowed`,
 /// the segment text is unchanged and no allocation is performed. Only
 /// `Cow::Owned` results trigger an update.
-pub(super) fn apply_to_all_segments<'a>(paragraphs: &mut [PdfParagraph], repair_fn: impl Fn(&'a str) -> Cow<'a, str>) {
+pub(super) fn apply_to_all_segments(paragraphs: &mut [PdfParagraph], repair_fn: impl Fn(&str) -> Cow<'_, str>) {
     for para in paragraphs {
         for line in &mut para.lines {
             for seg in &mut line.segments {
-                // SAFETY: We extend the lifetime of the borrow to 'a here.
-                // This is sound because we only use the Cow result before the next
-                // mutable access to seg.text, and Cow::Borrowed does not escape.
-                let text_ref: &'a str = unsafe { &*(seg.text.as_str() as *const str) };
-                if let Cow::Owned(s) = repair_fn(text_ref) {
+                let input = seg.text.clone();
+                if let Cow::Owned(s) = repair_fn(&input) {
                     seg.text = s;
                 }
-                // Cow::Borrowed means unchanged — no allocation needed
             }
         }
     }

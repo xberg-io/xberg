@@ -737,7 +737,7 @@ fn extract_paragraphs_to_segments(paragraphs: Vec<PdfiumParagraph>, segments: &m
                         let estimated_width = text.len() as f32 * font_size * 0.5;
 
                         segments.push(SegmentData {
-                            text,
+                            text: text.into_owned(),
                             x: running_x,
                             y: line_baseline,
                             width: estimated_width,
