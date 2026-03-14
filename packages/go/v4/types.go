@@ -222,6 +222,9 @@ type Metadata struct {
 	ModifiedAt         *string                     `json:"modified_at,omitempty"`
 	CreatedBy          *string                     `json:"created_by,omitempty"`
 	ModifiedBy         *string                     `json:"modified_by,omitempty"`
+	Date               *string                     `json:"date,omitempty"`
+	Producer           *string                     `json:"producer,omitempty"`
+	PageCount          *int                        `json:"page_count,omitempty"`
 	Pages              *PageStructure              `json:"pages,omitempty"`
 	Format             FormatMetadata              `json:"-"`
 	ImagePreprocessing *ImagePreprocessingMetadata `json:"image_preprocessing,omitempty"`
