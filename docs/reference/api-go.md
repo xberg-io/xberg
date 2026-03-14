@@ -121,6 +121,274 @@ func main() {
 
 ## Core Functions
 
+### BatchExtractBytes
+
+Batch extract in-memory documents asynchronously.
+
+**Signature:**
+
+```go title="Go"
+func BatchExtractBytes(ctx context.Context, items []BytesWithMime, config *ExtractionConfig) ([]*ExtractionResult, error)
+```
+
+**Parameters:**
+
+- `ctx` (context.Context): Context for cancellation
+- `items` ([]BytesWithMime): Document slice
+- `config` (*ExtractionConfig): Configuration
+
+**Returns:**
+
+- `[]*ExtractionResult`: Results slice
+- `error`: Context or setup errors
+
+---
+
+### BatchExtractBytesSync
+
+Extract multiple in-memory documents in a single batch operation.
+
+**Signature:**
+
+```go title="Go"
+func BatchExtractBytesSync(items []BytesWithMime, config *ExtractionConfig) ([]*ExtractionResult, error)
+```
+
+**Parameters:**
+
+- `items` ([]BytesWithMime): Slice of {Data, MimeType} pairs
+- `config` (*ExtractionConfig): Configuration applied to all items
+
+**Returns:**
+
+- `[]*ExtractionResult`: Results slice
+- `error`: Setup error or validation error
+
+**BytesWithMime structure:**
+
+```go title="Go"
+type BytesWithMime struct {
+	Data     []byte
+	MimeType string
+}
+```
+
+**Example - Batch extract multiple formats:**
+
+```go title="batch_extract_bytes.go"
+items := []kreuzberg.BytesWithMime{
+	{Data: pdfData, MimeType: "application/pdf"},
+	{Data: docxData, MimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+	{Data: htmlData, MimeType: "text/html"},
+}
+
+results, err := kreuzberg.BatchExtractBytesSync(items, nil)
+if err != nil {
+	log.Fatalf("batch extraction failed: %v", err)
+}
+
+for i, result := range results {
+	if result == nil || !result.Success {
+		log.Printf("Item %d extraction failed\n", i)
+		continue
+	}
+	log.Printf("Item %d: %s format\n", i, result.MimeType)
+}
+```
+```
+
+---
+
+### BatchExtractFiles
+
+Batch extract multiple files asynchronously.
+
+**Signature:**
+
+```go title="Go"
+func BatchExtractFiles(ctx context.Context, paths []string, config *ExtractionConfig) ([]*ExtractionResult, error)
+```
+
+**Parameters:**
+
+- `ctx` (context.Context): Context for cancellation
+- `paths` ([]string): File paths
+- `config` (*ExtractionConfig): Configuration for all files
+
+**Returns:**
+
+- `[]*ExtractionResult`: Results slice
+- `error`: Context or setup errors
+
+---
+
+### BatchExtractFilesSync
+
+Extract multiple files sequentially using the optimized batch pipeline.
+
+**Signature:**
+
+```go title="Go"
+func BatchExtractFilesSync(paths []string, config *ExtractionConfig) ([]*ExtractionResult, error)
+```
+
+**Parameters:**
+
+- `paths` ([]string): Slice of file paths
+- `config` (*ExtractionConfig): Configuration applied to all files
+
+**Returns:**
+
+- `[]*ExtractionResult`: Slice of results (one per input file; may contain nils for failed extractions)
+- `error`: Returned only if batch setup fails; individual file errors are captured in ErrorMetadata
+
+**Example - Batch extract multiple PDFs:**
+
+```go title="batch_extract_pdfs.go"
+files := []string{"doc1.pdf", "doc2.pdf", "doc3.pdf"}
+
+results, err := kreuzberg.BatchExtractFilesSync(files, nil)
+if err != nil {
+	log.Fatalf("batch extraction setup failed: %v", err)
+}
+
+for i, result := range results {
+	if result == nil {
+		fmt.Printf("File %d: extraction failed\n", i)
+		continue
+	}
+
+	if result.Metadata.Error != nil {
+		fmt.Printf("File %d: %s (%s)\n", i, result.Metadata.Error.ErrorType, result.Metadata.Error.Message)
+		continue
+	}
+
+	fmt.Printf("File %d: extracted %d chars\n", i, len(result.Content))
+}
+```
+```
+
+---
+
+### ExtractBytes
+
+Extract content from in-memory bytes asynchronously.
+
+**Signature:**
+
+```go title="Go"
+func ExtractBytes(ctx context.Context, data []byte, mimeType string, config *ExtractionConfig) (*ExtractionResult, error)
+```
+
+**Parameters:**
+
+- `ctx` (context.Context): Context for cancellation and timeout
+- `data` ([]byte): Document bytes
+- `mimeType` (string): MIME type
+- `config` (*ExtractionConfig): Optional configuration
+
+**Returns:**
+
+- `*ExtractionResult`: Extraction result
+- `error`: KreuzbergError or context error
+
+**Example:**
+
+```go title="extract_bytes_async.go"
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+
+result, err := kreuzberg.ExtractBytes(ctx, data, "text/html", nil)
+if err != nil {
+	log.Fatalf("extraction failed: %v", err)
+}
+
+---
+
+### ExtractBytesSync
+
+Extract content from an in-memory byte slice with specified MIME type.
+
+**Signature:**
+
+```go title="Go"
+func ExtractBytesSync(data []byte, mimeType string, config *ExtractionConfig) (*ExtractionResult, error)
+```
+
+**Parameters:**
+
+- `data` ([]byte): Document bytes
+- `mimeType` (string): MIME type (e.g., "application/pdf", "text/plain")
+- `config` (*ExtractionConfig): Optional configuration
+
+**Returns:**
+
+- `*ExtractionResult`: Extraction result
+- `error`: KreuzbergError on extraction failure
+
+**Example - Extract from downloaded PDF:**
+
+```go title="extract_from_http.go"
+httpResp, err := http.Get("https://example.com/document.pdf")
+if err != nil {
+	log.Fatal(err)
+}
+defer httpResp.Body.Close()
+
+data, err := io.ReadAll(httpResp.Body)
+if err != nil {
+	log.Fatal(err)
+}
+
+result, err := kreuzberg.ExtractBytesSync(data, "application/pdf", nil)
+if err != nil {
+	log.Fatalf("extraction failed: %v", err)
+}
+
+fmt.Printf("Extracted %d words\n", len(strings.Fields(result.Content)))
+
+---
+
+### ExtractFile
+
+Extract content from a file asynchronously with context support.
+
+**Signature:**
+
+```go title="Go"
+func ExtractFile(ctx context.Context, path string, config *ExtractionConfig) (*ExtractionResult, error)
+```
+
+**Parameters:**
+
+- `ctx` (context.Context): Context for cancellation and timeout
+- `path` (string): Path to the file
+- `config` (*ExtractionConfig): Optional configuration
+
+**Returns:**
+
+- `*ExtractionResult`: Extraction result
+- `error`: May include context errors (context.DeadlineExceeded, context.Canceled)
+
+**Note:** Context cancellation is best-effort. The underlying C call cannot be interrupted, but the function returns immediately with ctx.Err() when the context deadline is exceeded or cancelled.
+
+**Example - With deadline:**
+
+```go title="extract_with_deadline.go"
+ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
+defer cancel()
+
+result, err := kreuzberg.ExtractFile(ctx, "large.docx", nil)
+if errors.Is(err, context.DeadlineExceeded) {
+	log.Println("extraction took too long")
+	return
+}
+if err != nil {
+	log.Fatalf("extraction failed: %v", err)
+}
+
+---
+
 ### ExtractFileSync
 
 Extract content and metadata from a file synchronously.
@@ -134,7 +402,7 @@ func ExtractFileSync(path string, config *ExtractionConfig) (*ExtractionResult, 
 **Parameters:**
 
 - `path` (string): Path to the file to extract (absolute or relative)
-- `config` (\*ExtractionConfig): Optional extraction configuration; uses defaults if nil
+- `config` (*ExtractionConfig): Optional extraction configuration; uses defaults if nil
 
 **Returns:**
 
@@ -177,278 +445,9 @@ result, err := kreuzberg.ExtractFileSync("scanned.pdf", cfg)
 if err != nil {
 	log.Fatalf("extraction failed: %v", err)
 }
-```
 
 ---
 
-### ExtractFile
-
-Extract content from a file asynchronously with context support.
-
-**Signature:**
-
-```go title="Go"
-func ExtractFile(ctx context.Context, path string, config *ExtractionConfig) (*ExtractionResult, error)
-```
-
-**Parameters:**
-
-- `ctx` (context.Context): Context for cancellation and timeout
-- `path` (string): Path to the file
-- `config` (\*ExtractionConfig): Optional configuration
-
-**Returns:**
-
-- `*ExtractionResult`: Extraction result
-- `error`: May include context errors (context.DeadlineExceeded, context.Canceled)
-
-**Note:** Context cancellation is best-effort. The underlying C call cannot be interrupted, but the function returns immediately with ctx.Err() when the context deadline is exceeded or cancelled.
-
-**Example - With deadline:**
-
-```go title="extract_with_deadline.go"
-ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(30*time.Second))
-defer cancel()
-
-result, err := kreuzberg.ExtractFile(ctx, "large.docx", nil)
-if errors.Is(err, context.DeadlineExceeded) {
-	log.Println("extraction took too long")
-	return
-}
-if err != nil {
-	log.Fatalf("extraction failed: %v", err)
-}
-```
-
----
-
-### ExtractBytesSync
-
-Extract content from an in-memory byte slice with specified MIME type.
-
-**Signature:**
-
-```go title="Go"
-func ExtractBytesSync(data []byte, mimeType string, config *ExtractionConfig) (*ExtractionResult, error)
-```
-
-**Parameters:**
-
-- `data` ([]byte): Document bytes
-- `mimeType` (string): MIME type (e.g., "application/pdf", "text/plain")
-- `config` (\*ExtractionConfig): Optional configuration
-
-**Returns:**
-
-- `*ExtractionResult`: Extraction result
-- `error`: KreuzbergError on extraction failure
-
-**Example - Extract from downloaded PDF:**
-
-```go title="extract_from_http.go"
-httpResp, err := http.Get("https://example.com/document.pdf")
-if err != nil {
-	log.Fatal(err)
-}
-defer httpResp.Body.Close()
-
-data, err := io.ReadAll(httpResp.Body)
-if err != nil {
-	log.Fatal(err)
-}
-
-result, err := kreuzberg.ExtractBytesSync(data, "application/pdf", nil)
-if err != nil {
-	log.Fatalf("extraction failed: %v", err)
-}
-
-fmt.Printf("Extracted %d words\n", len(strings.Fields(result.Content)))
-```
-
----
-
-### ExtractBytes
-
-Extract content from in-memory bytes asynchronously.
-
-**Signature:**
-
-```go title="Go"
-func ExtractBytes(ctx context.Context, data []byte, mimeType string, config *ExtractionConfig) (*ExtractionResult, error)
-```
-
-**Parameters:**
-
-- `ctx` (context.Context): Context for cancellation and timeout
-- `data` ([]byte): Document bytes
-- `mimeType` (string): MIME type
-- `config` (\*ExtractionConfig): Optional configuration
-
-**Returns:**
-
-- `*ExtractionResult`: Extraction result
-- `error`: KreuzbergError or context error
-
-**Example:**
-
-```go title="extract_bytes_async.go"
-ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-defer cancel()
-
-result, err := kreuzberg.ExtractBytes(ctx, data, "text/html", nil)
-if err != nil {
-	log.Fatalf("extraction failed: %v", err)
-}
-```
-
----
-
-### BatchExtractFilesSync
-
-Extract multiple files sequentially using the optimized batch pipeline.
-
-**Signature:**
-
-```go title="Go"
-func BatchExtractFilesSync(paths []string, config *ExtractionConfig) ([]*ExtractionResult, error)
-```
-
-**Parameters:**
-
-- `paths` ([]string): Slice of file paths
-- `config` (\*ExtractionConfig): Configuration applied to all files
-
-**Returns:**
-
-- `[]*ExtractionResult`: Slice of results (one per input file; may contain nils for failed extractions)
-- `error`: Returned only if batch setup fails; individual file errors are captured in ErrorMetadata
-
-**Example - Batch extract multiple PDFs:**
-
-```go title="batch_extract_pdfs.go"
-files := []string{"doc1.pdf", "doc2.pdf", "doc3.pdf"}
-
-results, err := kreuzberg.BatchExtractFilesSync(files, nil)
-if err != nil {
-	log.Fatalf("batch extraction setup failed: %v", err)
-}
-
-for i, result := range results {
-	if result == nil {
-		fmt.Printf("File %d: extraction failed\n", i)
-		continue
-	}
-
-	if result.Metadata.Error != nil {
-		fmt.Printf("File %d: %s (%s)\n", i, result.Metadata.Error.ErrorType, result.Metadata.Error.Message)
-		continue
-	}
-
-	fmt.Printf("File %d: extracted %d chars\n", i, len(result.Content))
-}
-```
-
----
-
-### BatchExtractFiles
-
-Batch extract multiple files asynchronously.
-
-**Signature:**
-
-```go title="Go"
-func BatchExtractFiles(ctx context.Context, paths []string, config *ExtractionConfig) ([]*ExtractionResult, error)
-```
-
-**Parameters:**
-
-- `ctx` (context.Context): Context for cancellation
-- `paths` ([]string): File paths
-- `config` (\*ExtractionConfig): Configuration for all files
-
-**Returns:**
-
-- `[]*ExtractionResult`: Results slice
-- `error`: Context or setup errors
-
----
-
-### BatchExtractBytesSync
-
-Extract multiple in-memory documents in a single batch operation.
-
-**Signature:**
-
-```go title="Go"
-func BatchExtractBytesSync(items []BytesWithMime, config *ExtractionConfig) ([]*ExtractionResult, error)
-```
-
-**Parameters:**
-
-- `items` ([]BytesWithMime): Slice of {Data, MimeType} pairs
-- `config` (\*ExtractionConfig): Configuration applied to all items
-
-**Returns:**
-
-- `[]*ExtractionResult`: Results slice
-- `error`: Setup error or validation error
-
-**BytesWithMime structure:**
-
-```go title="Go"
-type BytesWithMime struct {
-	Data     []byte
-	MimeType string
-}
-```
-
-**Example - Batch extract multiple formats:**
-
-```go title="batch_extract_bytes.go"
-items := []kreuzberg.BytesWithMime{
-	{Data: pdfData, MimeType: "application/pdf"},
-	{Data: docxData, MimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
-	{Data: htmlData, MimeType: "text/html"},
-}
-
-results, err := kreuzberg.BatchExtractBytesSync(items, nil)
-if err != nil {
-	log.Fatalf("batch extraction failed: %v", err)
-}
-
-for i, result := range results {
-	if result == nil || !result.Success {
-		log.Printf("Item %d extraction failed\n", i)
-		continue
-	}
-	log.Printf("Item %d: %s format\n", i, result.MimeType)
-}
-```
-
----
-
-### BatchExtractBytes
-
-Batch extract in-memory documents asynchronously.
-
-**Signature:**
-
-```go title="Go"
-func BatchExtractBytes(ctx context.Context, items []BytesWithMime, config *ExtractionConfig) ([]*ExtractionResult, error)
-```
-
-**Parameters:**
-
-- `ctx` (context.Context): Context for cancellation
-- `items` ([]BytesWithMime): Document slice
-- `config` (\*ExtractionConfig): Configuration
-
-**Returns:**
-
-- `[]*ExtractionResult`: Results slice
-- `error`: Context or setup errors
-
----
 
 ### LibraryVersion
 
@@ -491,6 +490,7 @@ type ExtractionConfig struct {
 	Keywords                 *KeywordConfig           // Keyword extraction settings
 	LanguageDetection        *LanguageDetectionConfig // Language detection settings
 	MaxConcurrentExtractions *int                     // Batch concurrency limit
+	Layout                   *LayoutDetectionConfig   // Layout detection settings
 	OCR                      *OCRConfig               // OCR backend and settings
 	OutputFormat             string                   // Applied output format ("markdown", "djot", etc.)
 	Pages                    *PageConfig              // Page extraction settings
@@ -712,6 +712,22 @@ type YakeParams struct {
 type RakeParams struct {
 	MinWordLength     *int
 	MaxWordsPerPhrase *int
+}
+```
+
+---
+
+### LayoutDetectionConfig
+
+Configure ONNX-based document layout detection.
+
+**Signature:**
+
+```go title="Go"
+type LayoutDetectionConfig struct {
+	ApplyHeuristics     *bool    // Whether to apply heuristic post-processing
+	ConfidenceThreshold *float64 // Minimum confidence threshold (0.0-1.0)
+	Preset              *string  // Model preset: "fast", "accurate"
 }
 ```
 
@@ -1046,6 +1062,7 @@ type Metadata struct {
 	Category             *string                     // Document category (classification/frontmatter)
 	CreatedAt            *string                     // Creation timestamp (ISO 8601)
 	CreatedBy            *string                     // User who created the document
+	Date                 *string                     // Document date
 	DocumentVersion      *string                     // Document version string (from frontmatter)
 	Error                *ErrorMetadata              // Error info for batch operations
 	ExtractionDurationMs *uint64                     // Extraction duration in milliseconds
@@ -1057,7 +1074,9 @@ type Metadata struct {
 	ModifiedAt           *string                     // Last modification timestamp (ISO 8601)
 	ModifiedBy           *string                     // User who last modified the document
 	OutputFormat         *string                     // Applied output format (e.g., "markdown")
+	PageCount            *int                        // Total page count
 	Pages                *PageStructure              // Page/slide/sheet structure
+	Producer             *string                     // Document producer
 	Subject              *string                     // Document subject or description
 	Tags                 []string                    // Document tags (from frontmatter)
 	Title                *string                     // Document title
