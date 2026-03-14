@@ -713,10 +713,7 @@ pub fn render_document_as_markdown_with_tables(
             struct_paragraphs: struct_tree_results[i].take(),
             heuristic_segments: std::mem::take(&mut all_page_segments[i]),
             page_hints: layout_hints.and_then(|h| h.get(i)).cloned(),
-            table_bboxes: extracted_table_bboxes_by_page
-                .get(&i)
-                .cloned()
-                .unwrap_or_default(),
+            table_bboxes: extracted_table_bboxes_by_page.get(&i).cloned().unwrap_or_default(),
             needs_classify: struct_tree_needs_classify.contains(&i),
         })
         .collect();
@@ -1036,7 +1033,10 @@ fn dehyphenate_paragraph_lines(para: &mut PdfParagraph) {
             && leading_word.starts_with(|c: char| c.is_lowercase())
         {
             let joined = format!("{}{}", stem, leading_word);
-            apply_dehyphenation_join(para, i, trailing_word, leading_word, &joined);
+            // Clone to break the immutable borrow on `para` before mutating it.
+            let tw = trailing_word.to_string();
+            let lw = leading_word.to_string();
+            apply_dehyphenation_join(para, i, &tw, &lw, &joined);
             continue;
         }
 
@@ -1083,7 +1083,9 @@ fn dehyphenate_hyphen_only(para: &mut PdfParagraph) {
         let stem = &trailing_word[..trailing_word.len() - 1];
         if !stem.is_empty() && leading_word.starts_with(|c: char| c.is_lowercase()) {
             let joined = format!("{}{}", stem, leading_word);
-            apply_dehyphenation_join(para, i, trailing_word, leading_word, &joined);
+            let tw = trailing_word.to_string();
+            let lw = leading_word.to_string();
+            apply_dehyphenation_join(para, i, &tw, &lw, &joined);
         }
     }
 }

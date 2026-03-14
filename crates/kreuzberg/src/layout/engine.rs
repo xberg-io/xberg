@@ -6,8 +6,8 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::time::Instant;
 use std::str::FromStr;
+use std::time::Instant;
 
 use image::RgbImage;
 use serde::{Deserialize, Serialize};
@@ -265,18 +265,13 @@ impl LayoutEngine {
     /// Timing note: `preprocess_ms` and `onnx_ms` in each `DetectTimings` are the
     /// amortized per-image share of the batch operation (total / N), not independent
     /// per-image measurements.
-    pub fn detect_batch(
-        &mut self,
-        images: &[&RgbImage],
-    ) -> Result<Vec<(DetectionResult, DetectTimings)>, LayoutError> {
+    pub fn detect_batch(&mut self, images: &[&RgbImage]) -> Result<Vec<(DetectionResult, DetectTimings)>, LayoutError> {
         if images.is_empty() {
             return Ok(Vec::new());
         }
 
         let model_start = Instant::now();
-        let per_image_detections = self
-            .model
-            .detect_batch(images, self.config.confidence_threshold)?;
+        let per_image_detections = self.model.detect_batch(images, self.config.confidence_threshold)?;
         let model_total_ms = model_start.elapsed().as_secs_f64() * 1000.0;
 
         // Retrieve amortized timings written by the batch implementation.
@@ -293,12 +288,15 @@ impl LayoutEngine {
                 heuristics::apply_heuristics(&mut detections, page_width as f32, page_height as f32);
             }
 
-            results.push((DetectionResult::new(page_width, page_height, detections), DetectTimings {
-                preprocess_ms,
-                onnx_ms,
-                model_total_ms,
-                postprocess_ms: 0.0, // filled in after the loop
-            }));
+            results.push((
+                DetectionResult::new(page_width, page_height, detections),
+                DetectTimings {
+                    preprocess_ms,
+                    onnx_ms,
+                    model_total_ms,
+                    postprocess_ms: 0.0, // filled in after the loop
+                },
+            ));
         }
 
         let postprocess_ms = postprocess_start.elapsed().as_secs_f64() * 1000.0;

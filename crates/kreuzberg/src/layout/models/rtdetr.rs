@@ -257,7 +257,11 @@ impl RtDetrModel {
         let box_shape = &float_shapes[0];
 
         // box_shape is [N, num_queries, 4]; resolve num_queries.
-        let num_queries = if box_shape.len() == 3 { box_shape[1] } else { box_shape[0] };
+        let num_queries = if box_shape.len() == 3 {
+            box_shape[1]
+        } else {
+            box_shape[0]
+        };
 
         // Publish timings via side-channel (amortized preprocess per batch).
         crate::layout::inference_timings::set(preprocess_ms / batch as f64, onnx_ms / batch as f64);
@@ -305,12 +309,7 @@ impl RtDetrModel {
             results.push(detections);
         }
 
-        tracing::debug!(
-            preprocess_ms,
-            onnx_ms,
-            batch,
-            "RT-DETR batch inference breakdown"
-        );
+        tracing::debug!(preprocess_ms, onnx_ms, batch, "RT-DETR batch inference breakdown");
 
         Ok(results)
     }

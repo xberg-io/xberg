@@ -209,7 +209,11 @@ pub fn detect_layout_for_document(
     tracing::Span::current().record("page_count", page_count);
 
     // Amortize render time evenly across pages for per-page reporting.
-    let render_ms_per_page = if page_count > 0 { total_render_ms / page_count as f64 } else { 0.0 };
+    let render_ms_per_page = if page_count > 0 {
+        total_render_ms / page_count as f64
+    } else {
+        0.0
+    };
 
     tracing::info!(
         total_render_ms,

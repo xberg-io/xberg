@@ -109,9 +109,7 @@ pub fn take_or_create_slanet() -> Option<models::slanet::SlaNetModel> {
         Err(e) => {
             // Only log and set the flag on the first failure.
             SLANET_TRIED.get_or_init(|| {
-                tracing::warn!(
-                    "SLANet model unavailable, table structure recognition disabled: {e}"
-                );
+                tracing::warn!("SLANet model unavailable, table structure recognition disabled: {e}");
                 false
             });
             None
