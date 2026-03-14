@@ -225,7 +225,34 @@ pub fn detect_layout_for_document(
     // This prevents many-page documents from timing out the entire extraction.
     const MAX_LAYOUT_MS: f64 = 30_000.0;
 
-    for (page_index, image) in images.iter().enumerate() {
+    // Process pages in batches so RT-DETR (and other batch-capable models) can
+    // execute a single session.run() per chunk rather than one per page.
+    const LAYOUT_BATCH_SIZE: usize = 4;
+
+    // Convert all DynamicImages to RgbImage up front (borrowed or owned).
+    // We need to keep owned conversions alive for the duration of the loop.
+    let rgb_owned: Vec<Option<image::RgbImage>> = images
+        .iter()
+        .map(|img| match img {
+            image::DynamicImage::ImageRgb8(_) => None,
+            other => Some(other.to_rgb8()),
+        })
+        .collect();
+    let rgb_refs: Vec<&image::RgbImage> = images
+        .iter()
+        .zip(rgb_owned.iter())
+        .map(|(img, owned)| match owned {
+            Some(r) => r,
+            None => match img {
+                image::DynamicImage::ImageRgb8(r) => r,
+                _ => unreachable!(),
+            },
+        })
+        .collect();
+
+    let mut page_index = 0;
+    while page_index < page_count {
+        // Check the time budget before starting each batch.
         let elapsed_ms = total_start.elapsed().as_secs_f64() * 1000.0;
         if elapsed_ms > MAX_LAYOUT_MS {
             tracing::warn!(
@@ -257,46 +284,58 @@ pub fn detect_layout_for_document(
             break;
         }
 
-        let rgb_image = match image {
-            image::DynamicImage::ImageRgb8(rgb) => std::borrow::Cow::Borrowed(rgb),
-            other => std::borrow::Cow::Owned(other.to_rgb8()),
-        };
+        let chunk_end = (page_index + LAYOUT_BATCH_SIZE).min(page_count);
+        let chunk_size = chunk_end - page_index;
+        let chunk_images = &rgb_refs[page_index..chunk_end];
 
         let inference_start = Instant::now();
-        let (detection, detect_timings) = engine.detect_timed(&rgb_image).map_err(|e| {
+        let batch_results = engine.detect_batch(chunk_images).map_err(|e| {
             crate::pdf::error::PdfError::RenderingFailed(format!(
-                "Layout detection failed on page {}: {}",
-                page_index, e
+                "Layout detection failed on pages {}–{}: {}",
+                page_index,
+                chunk_end - 1,
+                e
             ))
         })?;
-        let inference_ms = inference_start.elapsed().as_secs_f64() * 1000.0;
+        // Amortize the batch inference time evenly across pages in the chunk.
+        let batch_inference_ms = inference_start.elapsed().as_secs_f64() * 1000.0;
+        let inference_ms_per_page = batch_inference_ms / chunk_size as f64;
 
         let mapping_start = Instant::now();
-        let (page_w, page_h) = page_dimensions.get(page_index).copied().unwrap_or((612.0, 792.0));
-        let page_result = detection_to_page_result(page_index, &detection, page_w, page_h);
+        for (chunk_offset, (detection, detect_timings)) in batch_results.into_iter().enumerate() {
+            let abs_page = page_index + chunk_offset;
+            let (page_w, page_h) = page_dimensions.get(abs_page).copied().unwrap_or((612.0, 792.0));
+            let page_result = detection_to_page_result(abs_page, &detection, page_w, page_h);
+
+            tracing::debug!(
+                page = abs_page,
+                detections = page_result.regions.len(),
+                render_ms = render_ms_per_page,
+                preprocess_ms = detect_timings.preprocess_ms,
+                onnx_ms = detect_timings.onnx_ms,
+                inference_ms = inference_ms_per_page,
+                postprocess_ms = detect_timings.postprocess_ms,
+                "Layout detection complete for page"
+            );
+
+            timings.push(PageTiming {
+                render_ms: render_ms_per_page,
+                preprocess_ms: detect_timings.preprocess_ms,
+                onnx_ms: detect_timings.onnx_ms,
+                inference_ms: inference_ms_per_page,
+                postprocess_ms: detect_timings.postprocess_ms,
+                mapping_ms: 0.0, // filled in after the inner loop
+            });
+            results.push(page_result);
+        }
         let mapping_ms = mapping_start.elapsed().as_secs_f64() * 1000.0;
+        // Distribute mapping time across the chunk's timing entries.
+        let mapping_ms_per_page = mapping_ms / chunk_size as f64;
+        for timing in timings.iter_mut().rev().take(chunk_size) {
+            timing.mapping_ms = mapping_ms_per_page;
+        }
 
-        tracing::debug!(
-            page = page_index,
-            detections = page_result.regions.len(),
-            render_ms = render_ms_per_page,
-            preprocess_ms = detect_timings.preprocess_ms,
-            onnx_ms = detect_timings.onnx_ms,
-            inference_ms,
-            postprocess_ms = detect_timings.postprocess_ms,
-            mapping_ms,
-            "Layout detection complete for page"
-        );
-
-        timings.push(PageTiming {
-            render_ms: render_ms_per_page,
-            preprocess_ms: detect_timings.preprocess_ms,
-            onnx_ms: detect_timings.onnx_ms,
-            inference_ms,
-            postprocess_ms: detect_timings.postprocess_ms,
-            mapping_ms,
-        });
-        results.push(page_result);
+        page_index = chunk_end;
     }
 
     let total_ms = total_start.elapsed().as_secs_f64() * 1000.0;
@@ -336,28 +375,49 @@ pub fn detect_layout_for_images(
     images: &[image::DynamicImage],
     engine: &mut LayoutEngine,
 ) -> Result<Vec<DetectionResult>> {
+    const LAYOUT_BATCH_SIZE: usize = 4;
+
+    // Pre-convert any non-RGB8 images once so we can borrow them in chunks.
+    let rgb_owned: Vec<Option<image::RgbImage>> = images
+        .iter()
+        .map(|img| match img {
+            image::DynamicImage::ImageRgb8(_) => None,
+            other => Some(other.to_rgb8()),
+        })
+        .collect();
+    let rgb_refs: Vec<&image::RgbImage> = images
+        .iter()
+        .zip(rgb_owned.iter())
+        .map(|(img, owned)| match owned {
+            Some(r) => r,
+            None => match img {
+                image::DynamicImage::ImageRgb8(r) => r,
+                _ => unreachable!(),
+            },
+        })
+        .collect();
+
     let mut results = Vec::with_capacity(images.len());
 
-    for (page_index, image) in images.iter().enumerate() {
-        let rgb_image = match image {
-            image::DynamicImage::ImageRgb8(rgb) => std::borrow::Cow::Borrowed(rgb),
-            other => std::borrow::Cow::Owned(other.to_rgb8()),
-        };
-
-        let detection = engine.detect(&rgb_image).map_err(|e| {
+    for (chunk_start, chunk) in rgb_refs.chunks(LAYOUT_BATCH_SIZE).enumerate() {
+        let page_base = chunk_start * LAYOUT_BATCH_SIZE;
+        let batch_results = engine.detect_batch(chunk).map_err(|e| {
             crate::pdf::error::PdfError::RenderingFailed(format!(
-                "Layout detection failed on page {}: {}",
-                page_index, e
+                "Layout detection failed on pages {}–{}: {}",
+                page_base,
+                page_base + chunk.len() - 1,
+                e
             ))
         })?;
 
-        tracing::debug!(
-            page = page_index,
-            detections = detection.detections.len(),
-            "Layout detection complete for pre-rendered page"
-        );
-
-        results.push(detection);
+        for (offset, (detection, _timings)) in batch_results.into_iter().enumerate() {
+            tracing::debug!(
+                page = page_base + offset,
+                detections = detection.detections.len(),
+                "Layout detection complete for pre-rendered page"
+            );
+            results.push(detection);
+        }
     }
 
     Ok(results)
