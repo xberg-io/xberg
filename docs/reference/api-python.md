@@ -28,6 +28,238 @@ pip install "kreuzberg[all]"
 
 ## Core Functions
 
+### batch_extract_bytes()
+
+Extract content from multiple byte arrays in parallel (asynchronous).
+
+**Signature:**
+
+```python title="Python"
+async def batch_extract_bytes(
+    data_list: list[bytes | bytearray],
+    mime_types: list[str],
+    config: ExtractionConfig | None = None,
+    *,
+    easyocr_kwargs: dict[str, Any] | None = None,
+) -> list[ExtractionResult]
+```
+
+**Parameters:**
+
+Same as [`batch_extract_bytes_sync()`](#batch_extract_bytes_sync).
+
+**Returns:**
+
+- `list[ExtractionResult]`: List of extraction results (one per data item)
+
+---
+
+### batch_extract_bytes_sync()
+
+Extract content from multiple byte arrays in parallel (synchronous).
+
+**Signature:**
+
+```python title="Python"
+def batch_extract_bytes_sync(
+    data_list: list[bytes | bytearray],
+    mime_types: list[str],
+    config: ExtractionConfig | None = None,
+    *,
+    easyocr_kwargs: dict[str, Any] | None = None,
+) -> list[ExtractionResult]
+```
+
+**Parameters:**
+
+- `data_list` (list[bytes | bytearray]): List of file contents as bytes/bytearray
+- `mime_types` (list[str]): List of MIME types (one per data item, same length as data_list)
+- `config` (ExtractionConfig | None): Extraction configuration applied to all items
+- `easyocr_kwargs` (dict | None): EasyOCR initialization options
+
+
+**Returns:**
+
+- `list[ExtractionResult]`: List of extraction results (one per data item)
+
+---
+
+### batch_extract_files()
+
+Extract content from multiple files in parallel (asynchronous).
+
+**Signature:**
+
+```python title="Python"
+async def batch_extract_files(
+    paths: list[str | Path],
+    config: ExtractionConfig | None = None,
+    *,
+    easyocr_kwargs: dict[str, Any] | None = None,
+) -> list[ExtractionResult]
+```
+
+**Parameters:**
+
+Same as [`batch_extract_files_sync()`](#batch_extract_files_sync).
+
+**Returns:**
+
+- `list[ExtractionResult]`: List of extraction results (one per file)
+
+---
+
+### batch_extract_files_sync()
+
+Extract content from multiple files in parallel (synchronous).
+
+**Signature:**
+
+```python title="Python"
+def batch_extract_files_sync(
+    paths: list[str | Path],
+    config: ExtractionConfig | None = None,
+    *,
+    easyocr_kwargs: dict[str, Any] | None = None,
+) -> list[ExtractionResult]
+```
+
+**Parameters:**
+
+- `paths` (list[str | Path]): List of file paths to extract
+- `config` (ExtractionConfig | None): Extraction configuration applied to all files
+- `easyocr_kwargs` (dict | None): EasyOCR initialization options
+
+
+**Returns:**
+
+- `list[ExtractionResult]`: List of extraction results (one per file)
+
+**Examples:**
+
+```python title="basic_extraction.py"
+from kreuzberg import batch_extract_files_sync
+
+paths = ["doc1.pdf", "doc2.docx", "doc3.xlsx"]
+results = batch_extract_files_sync(paths)
+
+for path, result in zip(paths, results):
+    print(f"{path}: {len(result.content)} characters")
+```
+
+---
+
+### extract_bytes()
+
+Extract content from bytes (asynchronous).
+
+**Signature:**
+
+```python title="Python"
+async def extract_bytes(
+    data: bytes | bytearray,
+    mime_type: str,
+    config: ExtractionConfig | None = None,
+    *,
+    easyocr_kwargs: dict[str, Any] | None = None,
+) -> ExtractionResult
+```
+
+**Parameters:**
+
+Same as [`extract_bytes_sync()`](#extract_bytes_sync).
+
+**Returns:**
+
+- `ExtractionResult`: Extraction result containing content, metadata, and tables
+
+---
+
+### extract_bytes_sync()
+
+Extract content from bytes (synchronous).
+
+**Signature:**
+
+```python title="Python"
+def extract_bytes_sync(
+    data: bytes | bytearray,
+    mime_type: str,
+    config: ExtractionConfig | None = None,
+    *,
+    easyocr_kwargs: dict[str, Any] | None = None,
+) -> ExtractionResult
+```
+
+**Parameters:**
+
+- `data` (bytes | bytearray): File content as bytes or bytearray
+- `mime_type` (str): MIME type of the data (required for format detection)
+- `config` (ExtractionConfig | None): Extraction configuration. Uses defaults if None
+- `easyocr_kwargs` (dict | None): EasyOCR initialization options
+
+
+**Returns:**
+
+- `ExtractionResult`: Extraction result containing content, metadata, and tables
+
+**Examples:**
+
+```python title="basic_extraction.py"
+from kreuzberg import extract_bytes_sync
+
+with open("document.pdf", "rb") as f:
+    data = f.read()
+
+result = extract_bytes_sync(data, "application/pdf")
+print(result.content)
+```
+
+---
+
+### extract_file()
+
+Extract content from a file (asynchronous).
+
+**Signature:**
+
+```python title="Python"
+async def extract_file(
+    file_path: str | Path,
+    mime_type: str | None = None,
+    config: ExtractionConfig | None = None,
+    *,
+    easyocr_kwargs: dict[str, Any] | None = None,
+) -> ExtractionResult
+```
+
+**Parameters:**
+
+Same as [`extract_file_sync()`](#extract_file_sync).
+
+**Returns:**
+
+- `ExtractionResult`: Extraction result containing content, metadata, and tables
+
+**Examples:**
+
+```python title="basic_extraction.py"
+import asyncio
+from kreuzberg import extract_file
+
+async def main():
+    result = await extract_file("document.pdf")
+    print(result.content)
+
+async def main():
+    result = await extract_file("document.pdf")
+    print(result.content)
+
+asyncio.run(main())
+```
+
+---
+
 ### extract_file_sync()
 
 Extract content from a file (synchronous).
@@ -102,234 +334,6 @@ result = extract_file_sync(
 
 ---
 
-### extract_file()
-
-Extract content from a file (asynchronous).
-
-**Signature:**
-
-```python title="Python"
-async def extract_file(
-    file_path: str | Path,
-    mime_type: str | None = None,
-    config: ExtractionConfig | None = None,
-    *,
-    easyocr_kwargs: dict[str, Any] | None = None,
-) -> ExtractionResult
-```
-
-**Parameters:**
-
-Same as [`extract_file_sync()`](#extract_file_sync).
-
-**Returns:**
-
-- `ExtractionResult`: Extraction result containing content, metadata, and tables
-
-**Examples:**
-
-```python title="basic_extraction.py"
-import asyncio
-from kreuzberg import extract_file
-
-async def main():
-    result = await extract_file("document.pdf")
-    print(result.content)
-
-asyncio.run(main())
-```
-
----
-
-### extract_bytes_sync()
-
-Extract content from bytes (synchronous).
-
-**Signature:**
-
-```python title="Python"
-def extract_bytes_sync(
-    data: bytes | bytearray,
-    mime_type: str,
-    config: ExtractionConfig | None = None,
-    *,
-    easyocr_kwargs: dict[str, Any] | None = None,
-) -> ExtractionResult
-```
-
-**Parameters:**
-
-- `data` (bytes | bytearray): File content as bytes or bytearray
-- `mime_type` (str): MIME type of the data (required for format detection)
-- `config` (ExtractionConfig | None): Extraction configuration. Uses defaults if None
-- `easyocr_kwargs` (dict | None): EasyOCR initialization options
-
-
-**Returns:**
-
-- `ExtractionResult`: Extraction result containing content, metadata, and tables
-
-**Examples:**
-
-```python title="basic_extraction.py"
-from kreuzberg import extract_bytes_sync
-
-with open("document.pdf", "rb") as f:
-    data = f.read()
-
-result = extract_bytes_sync(data, "application/pdf")
-print(result.content)
-```
-
----
-
-### extract_bytes()
-
-Extract content from bytes (asynchronous).
-
-**Signature:**
-
-```python title="Python"
-async def extract_bytes(
-    data: bytes | bytearray,
-    mime_type: str,
-    config: ExtractionConfig | None = None,
-    *,
-    easyocr_kwargs: dict[str, Any] | None = None,
-) -> ExtractionResult
-```
-
-**Parameters:**
-
-Same as [`extract_bytes_sync()`](#extract_bytes_sync).
-
-**Returns:**
-
-- `ExtractionResult`: Extraction result containing content, metadata, and tables
-
----
-
-### batch_extract_files_sync()
-
-Extract content from multiple files in parallel (synchronous).
-
-**Signature:**
-
-```python title="Python"
-def batch_extract_files_sync(
-    paths: list[str | Path],
-    config: ExtractionConfig | None = None,
-    *,
-    easyocr_kwargs: dict[str, Any] | None = None,
-) -> list[ExtractionResult]
-```
-
-**Parameters:**
-
-- `paths` (list[str | Path]): List of file paths to extract
-- `config` (ExtractionConfig | None): Extraction configuration applied to all files
-- `easyocr_kwargs` (dict | None): EasyOCR initialization options
-
-
-**Returns:**
-
-- `list[ExtractionResult]`: List of extraction results (one per file)
-
-**Examples:**
-
-```python title="basic_extraction.py"
-from kreuzberg import batch_extract_files_sync
-
-paths = ["doc1.pdf", "doc2.docx", "doc3.xlsx"]
-results = batch_extract_files_sync(paths)
-
-for path, result in zip(paths, results):
-    print(f"{path}: {len(result.content)} characters")
-```
-
----
-
-### batch_extract_files()
-
-Extract content from multiple files in parallel (asynchronous).
-
-**Signature:**
-
-```python title="Python"
-async def batch_extract_files(
-    paths: list[str | Path],
-    config: ExtractionConfig | None = None,
-    *,
-    easyocr_kwargs: dict[str, Any] | None = None,
-) -> list[ExtractionResult]
-```
-
-**Parameters:**
-
-Same as [`batch_extract_files_sync()`](#batch_extract_files_sync).
-
-**Returns:**
-
-- `list[ExtractionResult]`: List of extraction results (one per file)
-
----
-
-### batch_extract_bytes_sync()
-
-Extract content from multiple byte arrays in parallel (synchronous).
-
-**Signature:**
-
-```python title="Python"
-def batch_extract_bytes_sync(
-    data_list: list[bytes | bytearray],
-    mime_types: list[str],
-    config: ExtractionConfig | None = None,
-    *,
-    easyocr_kwargs: dict[str, Any] | None = None,
-) -> list[ExtractionResult]
-```
-
-**Parameters:**
-
-- `data_list` (list[bytes | bytearray]): List of file contents as bytes/bytearray
-- `mime_types` (list[str]): List of MIME types (one per data item, same length as data_list)
-- `config` (ExtractionConfig | None): Extraction configuration applied to all items
-- `easyocr_kwargs` (dict | None): EasyOCR initialization options
-
-
-**Returns:**
-
-- `list[ExtractionResult]`: List of extraction results (one per data item)
-
----
-
-### batch_extract_bytes()
-
-Extract content from multiple byte arrays in parallel (asynchronous).
-
-**Signature:**
-
-```python title="Python"
-async def batch_extract_bytes(
-    data_list: list[bytes | bytearray],
-    mime_types: list[str],
-    config: ExtractionConfig | None = None,
-    *,
-    easyocr_kwargs: dict[str, Any] | None = None,
-) -> list[ExtractionResult]
-```
-
-**Parameters:**
-
-Same as [`batch_extract_bytes_sync()`](#batch_extract_bytes_sync).
-
-**Returns:**
-
-- `list[ExtractionResult]`: List of extraction results (one per data item)
-
----
-
 ## Configuration
 
 ### ExtractionConfig
@@ -360,7 +364,9 @@ Main configuration class for extraction operations.
 - `force_ocr` (`bool`): Force OCR processing even for searchable documents. Default: `False`
 - `html_options` (`HtmlConversionOptions | None`): HTML-specific conversion options. Default: `None`
 - `images` (`ImageExtractionConfig | None`): Image extraction configuration. Default: `None`
+- `include_document_structure` (`bool`): Include hierarchical document structure in the result. Default: `False`
 - `language_detection` (`LanguageDetectionConfig | None`): Language detection settings. Default: `None`
+- `layout` (`LayoutDetectionConfig | None`): Layout detection configuration. Default: `None`
 - `max_concurrent_extractions` (`int | None`): Max concurrent batch extractions. Default: `None`
 - `ocr` (`OcrConfig | None`): OCR configuration. Default: `None`
 - `output_format` (`str`): Output content format (plain, markdown, djot, html). Default: `"plain"`
@@ -506,6 +512,20 @@ Document hierarchy detection configuration (used with `PdfConfig.hierarchy`).
 - `k_clusters` (int): Number of clusters for k-means clustering. Default: 6
 - `include_bbox` (bool): Include bounding box information in hierarchy output. Default: True
 - `ocr_coverage_threshold` (float | None): Optional threshold for OCR coverage before enabling hierarchy detection. Default: None
+
+---
+
+### LayoutDetectionConfig
+
+Layout detection configuration (requires `layout-detection` feature).
+
+**Fields:**
+
+- `preset` (str): Model selection preset. `"fast"` (YOLOv8) or `"accurate"` (RT-DETR). Default: `"fast"`
+- `confidence_threshold` (float | None): Confidence threshold for layout detection (0.0-1.0). Default: `None`
+- `apply_heuristics` (bool): Apply post-processing heuristics to improve layout grouping. Default: `True`
+
+---
 
 ---
 
@@ -666,6 +686,7 @@ class ExtractionResult:
     extracted_keywords: list[ExtractedKeyword] | None
     images: list[ExtractedImage] | None
     metadata: Metadata
+    metadata_json: str
     mime_type: str
     ocr_elements: list[OcrElement] | None
     output_format: str | None
@@ -673,6 +694,7 @@ class ExtractionResult:
     processing_warnings: list[ProcessingWarning]
     quality_score: float | None
     result_format: str | None
+    tables: list[ExtractedTable]
     def get_page_count(self) -> int: ...
     def get_chunk_count(self) -> int: ...
     def get_detected_language(self) -> str | None: ...
@@ -691,6 +713,7 @@ class ExtractionResult:
 - `extracted_keywords` (list[ExtractedKeyword] | None): Keywords extracted with RAKE/YAKE
 - `images` (list[ExtractedImage] | None): Extracted images
 - `metadata` (Metadata): Document metadata (format-specific fields)
+- `metadata_json` (str): Raw JSON string of all metadata
 - `mime_type` (str): MIME type of the document
 - `ocr_elements` (list[OcrElement] | None): Granular OCR blocks with bounding boxes
 - `output_format` (str | None): Effective output format
@@ -794,27 +817,23 @@ if result.pages:
 
 Strongly-typed metadata dictionary. Fields vary by document format.
 
-**Common Fields:**
+**Standard 13 Fields:**
 
-- `language` (str): Document language (ISO 639-1 code)
-- `created_at` (str): Creation date (ISO 8601 format)
-- `modified_at` (str): Modification date (ISO 8601 format)
-- `created_by` (str): Creator application
-- `modified_by` (str): Last modifier application
-- `subject` (str): Document subject
-- `format_type` (str): Format discriminator ("pdf", "excel", "email", "pptx", "archive", "image", "xml", "text", "html", "ocr")
+- `authors` (list[str]): Primary author(s)
+- `created_at` (str): Creation timestamp (ISO 8601)
+- `created_by` (str): User/agent who created the document
+- `custom` (dict[str, Any]): Custom metadata fields (replaces the deprecated `additional`)
+- `date` (str): Document date string
+- `format_type` (str): Document format type (e.g., "pdf", "docx")
+- `keywords` (list[str]): Document keywords
+- `language` (str): Primary document language (ISO 639-1 code)
+- `modified_at` (str): Last modification timestamp
+- `modified_by` (str): User who last modified the document
+- `page_count` (int): Total number of pages
+- `producer` (str): Document producer/generator
+- `subject` (str): Document subject/description
+- `title` (str): Document title
 
-**PDF-Specific Fields** (when `format_type == "pdf"`):
-
-- `title` (str): PDF title
-- `authors` (list[str]): PDF author(s)
-- `page_count` (int): Number of pages
-- `created_at` (str): Creation date (ISO 8601)
-- `modified_at` (str): Modification date (ISO 8601)
-- `created_by` (str): Creator application
-- `producer` (str): Producer application
-- `keywords` (str): PDF keywords
-- `subject` (str): PDF subject
 
 **Excel-Specific Fields** (when `format_type == "excel"`):
 
