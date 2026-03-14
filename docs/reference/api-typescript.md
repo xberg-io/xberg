@@ -26,6 +26,227 @@ pnpm add @kreuzberg/node
 
 ## Core Functions
 
+### batchExtractBytes()
+
+Extract content from multiple byte arrays in parallel (asynchronous).
+
+**Signature:**
+
+```typescript title="TypeScript"
+async function batchExtractBytes(
+  dataList: Uint8Array[],
+  mimeTypes: string[],
+  config: ExtractionConfig | null = null
+): Promise<ExtractionResult[]>
+```
+
+**Parameters:**
+
+Same as [`batchExtractBytesSync()`](#batchextractbytessync).
+
+**Returns:**
+
+- `Promise<ExtractionResult[]>`: Promise resolving to array of extraction results
+
+---
+
+### batchExtractBytesSync()
+
+Extract content from multiple byte arrays in parallel (synchronous).
+
+**Signature:**
+
+```typescript title="TypeScript"
+function batchExtractBytesSync(
+  dataList: Uint8Array[],
+  mimeTypes: string[],
+  config: ExtractionConfig | null = null
+): ExtractionResult[]
+```
+
+**Parameters:**
+
+- `dataList` (Uint8Array[]): Array of file contents as Uint8Array
+- `mimeTypes` (string[]): Array of MIME types (one per data item, same length as dataList)
+- `config` (ExtractionConfig | null): Extraction configuration applied to all items
+
+**Returns:**
+
+- `ExtractionResult[]`: Array of extraction results (one per data item)
+
+---
+
+### batchExtractFiles()
+
+Extract content from multiple files in parallel (asynchronous).
+
+**Signature:**
+
+```typescript title="TypeScript"
+async function batchExtractFiles(
+  paths: string[],
+  config: ExtractionConfig | null = null
+): Promise<ExtractionResult[]>
+```
+
+**Parameters:**
+
+Same as [`batchExtractFilesSync()`](#batchextractfilessync).
+
+**Returns:**
+
+- `Promise<ExtractionResult[]>`: Promise resolving to array of extraction results
+
+**Examples:**
+
+```typescript title="async_batch_extraction.ts"
+import { batchExtractFiles } from '@kreuzberg/node';
+
+const files = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
+const results = await batchExtractFiles(files);
+
+for (const result of results) {
+  console.log(result.content);
+}
+```
+
+---
+
+### batchExtractFilesSync()
+
+Extract content from multiple files in parallel (synchronous).
+
+**Signature:**
+
+```typescript title="TypeScript"
+function batchExtractFilesSync(
+  paths: string[],
+  config: ExtractionConfig | null = null
+): ExtractionResult[]
+```
+
+**Parameters:**
+
+- `paths` (string[]): Array of file paths to extract
+- `config` (ExtractionConfig | null): Extraction configuration applied to all files
+
+**Returns:**
+
+- `ExtractionResult[]`: Array of extraction results (one per file)
+
+**Examples:**
+
+```typescript title="parallel_batch_extraction.ts"
+import { batchExtractFilesSync } from '@kreuzberg/node';
+
+const paths = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
+const results = batchExtractFilesSync(paths);
+
+results.forEach((result, i) => {
+  console.log(`${paths[i]}: ${result.content.length} characters`);
+});
+```
+
+---
+
+### extractBytes()
+
+Extract content from bytes (asynchronous).
+
+**Signature:**
+
+```typescript title="TypeScript"
+async function extractBytes(
+  data: Uint8Array,
+  mimeType: string,
+  config: ExtractionConfig | null = null
+): Promise<ExtractionResult>
+```
+
+**Parameters:**
+
+Same as [`extractBytesSync()`](#extractbytessync).
+
+**Returns:**
+
+- `Promise<ExtractionResult>`: Promise resolving to extraction result
+
+---
+
+### extractBytesSync()
+
+Extract content from bytes (synchronous).
+
+**Signature:**
+
+```typescript title="TypeScript"
+function extractBytesSync(
+  data: Uint8Array,
+  mimeType: string,
+  config: ExtractionConfig | null = null
+): ExtractionResult
+```
+
+**Parameters:**
+
+- `data` (Uint8Array): File content as Uint8Array
+- `mimeType` (string): MIME type of the data (required for format detection)
+- `config` (ExtractionConfig | null): Extraction configuration. Uses defaults if null
+
+**Returns:**
+
+- `ExtractionResult`: Extraction result containing content, metadata, and tables
+
+**Examples:**
+
+```typescript title="extract_from_buffer.ts"
+import { extractBytesSync } from '@kreuzberg/node';
+import { readFileSync } from 'fs';
+
+const data = readFileSync('document.pdf');
+const result = extractBytesSync(data, 'application/pdf');
+console.log(result.content);
+```
+
+---
+
+### extractFile()
+
+Extract content from a file (asynchronous).
+
+**Signature:**
+
+```typescript title="TypeScript"
+async function extractFile(
+  filePath: string,
+  mimeType: string | null = null,
+  config: ExtractionConfig | null = null
+): Promise<ExtractionResult>
+```
+
+**Parameters:**
+
+Same as [`extractFileSync()`](#extractfilesync).
+
+**Returns:**
+
+- `Promise<ExtractionResult>`: Promise resolving to extraction result
+
+**Examples:**
+
+```typescript title="async_extraction.ts"
+import { extractFile } from '@kreuzberg/node';
+
+async function main() {
+  const result = await extractFile('document.pdf');
+  console.log(result.content);
+}
+
+main();
+```
+
+---
+
 ### extractFileSync()
 
 Extract content from a file (synchronous).
@@ -88,227 +309,6 @@ const result = extractFileSync('document.pdf', 'application/pdf');
 
 ---
 
-### extractFile()
-
-Extract content from a file (asynchronous).
-
-**Signature:**
-
-```typescript title="TypeScript"
-async function extractFile(
-  filePath: string,
-  mimeType: string | null = null,
-  config: ExtractionConfig | null = null
-): Promise<ExtractionResult>
-```
-
-**Parameters:**
-
-Same as [`extractFileSync()`](#extractfilesync).
-
-**Returns:**
-
-- `Promise<ExtractionResult>`: Promise resolving to extraction result
-
-**Examples:**
-
-```typescript title="async_extraction.ts"
-import { extractFile } from '@kreuzberg/node';
-
-async function main() {
-  const result = await extractFile('document.pdf');
-  console.log(result.content);
-}
-
-main();
-```
-
----
-
-### extractBytesSync()
-
-Extract content from bytes (synchronous).
-
-**Signature:**
-
-```typescript title="TypeScript"
-function extractBytesSync(
-  data: Uint8Array,
-  mimeType: string,
-  config: ExtractionConfig | null = null
-): ExtractionResult
-```
-
-**Parameters:**
-
-- `data` (Uint8Array): File content as Uint8Array
-- `mimeType` (string): MIME type of the data (required for format detection)
-- `config` (ExtractionConfig | null): Extraction configuration. Uses defaults if null
-
-**Returns:**
-
-- `ExtractionResult`: Extraction result containing content, metadata, and tables
-
-**Examples:**
-
-```typescript title="extract_from_buffer.ts"
-import { extractBytesSync } from '@kreuzberg/node';
-import { readFileSync } from 'fs';
-
-const data = readFileSync('document.pdf');
-const result = extractBytesSync(data, 'application/pdf');
-console.log(result.content);
-```
-
----
-
-### extractBytes()
-
-Extract content from bytes (asynchronous).
-
-**Signature:**
-
-```typescript title="TypeScript"
-async function extractBytes(
-  data: Uint8Array,
-  mimeType: string,
-  config: ExtractionConfig | null = null
-): Promise<ExtractionResult>
-```
-
-**Parameters:**
-
-Same as [`extractBytesSync()`](#extractbytessync).
-
-**Returns:**
-
-- `Promise<ExtractionResult>`: Promise resolving to extraction result
-
----
-
-### batchExtractFilesSync()
-
-Extract content from multiple files in parallel (synchronous).
-
-**Signature:**
-
-```typescript title="TypeScript"
-function batchExtractFilesSync(
-  paths: string[],
-  config: ExtractionConfig | null = null
-): ExtractionResult[]
-```
-
-**Parameters:**
-
-- `paths` (string[]): Array of file paths to extract
-- `config` (ExtractionConfig | null): Extraction configuration applied to all files
-
-**Returns:**
-
-- `ExtractionResult[]`: Array of extraction results (one per file)
-
-**Examples:**
-
-```typescript title="parallel_batch_extraction.ts"
-import { batchExtractFilesSync } from '@kreuzberg/node';
-
-const paths = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
-const results = batchExtractFilesSync(paths);
-
-results.forEach((result, i) => {
-  console.log(`${paths[i]}: ${result.content.length} characters`);
-});
-```
-
----
-
-### batchExtractFiles()
-
-Extract content from multiple files in parallel (asynchronous).
-
-**Signature:**
-
-```typescript title="TypeScript"
-async function batchExtractFiles(
-  paths: string[],
-  config: ExtractionConfig | null = null
-): Promise<ExtractionResult[]>
-```
-
-**Parameters:**
-
-Same as [`batchExtractFilesSync()`](#batchextractfilessync).
-
-**Returns:**
-
-- `Promise<ExtractionResult[]>`: Promise resolving to array of extraction results
-
-**Examples:**
-
-```typescript title="async_batch_extraction.ts"
-import { batchExtractFiles } from '@kreuzberg/node';
-
-const files = ['doc1.pdf', 'doc2.docx', 'doc3.xlsx'];
-const results = await batchExtractFiles(files);
-
-for (const result of results) {
-  console.log(result.content);
-}
-```
-
----
-
-### batchExtractBytesSync()
-
-Extract content from multiple byte arrays in parallel (synchronous).
-
-**Signature:**
-
-```typescript title="TypeScript"
-function batchExtractBytesSync(
-  dataList: Uint8Array[],
-  mimeTypes: string[],
-  config: ExtractionConfig | null = null
-): ExtractionResult[]
-```
-
-**Parameters:**
-
-- `dataList` (Uint8Array[]): Array of file contents as Uint8Array
-- `mimeTypes` (string[]): Array of MIME types (one per data item, same length as dataList)
-- `config` (ExtractionConfig | null): Extraction configuration applied to all items
-
-**Returns:**
-
-- `ExtractionResult[]`: Array of extraction results (one per data item)
-
----
-
-### batchExtractBytes()
-
-Extract content from multiple byte arrays in parallel (asynchronous).
-
-**Signature:**
-
-```typescript title="TypeScript"
-async function batchExtractBytes(
-  dataList: Uint8Array[],
-  mimeTypes: string[],
-  config: ExtractionConfig | null = null
-): Promise<ExtractionResult[]>
-```
-
-**Parameters:**
-
-Same as [`batchExtractBytesSync()`](#batchextractbytessync).
-
-**Returns:**
-
-- `Promise<ExtractionResult[]>`: Promise resolving to array of extraction results
-
----
-
 ## Configuration
 
 ### ExtractionConfig
@@ -319,24 +319,24 @@ Main configuration interface for extraction operations.
 
 ```typescript title="TypeScript"
 interface ExtractionConfig {
-  useCache?: boolean;
-  enableQualityProcessing?: boolean;
-  ocr?: OcrConfig | null;
-  forceOcr?: boolean;
-  pdfOptions?: PdfConfig | null;
   chunking?: ChunkingConfig | null;
-  imageExtraction?: ImageExtractionConfig | null;
-  languageDetection?: LanguageDetectionConfig | null;
-  tokenReduction?: TokenReductionConfig | null;
-  postProcessor?: PostProcessorConfig | null;
+  enableQualityProcessing?: boolean;
+  forceOcr?: boolean;
   htmlOptions?: HtmlConversionOptions | null;
-  keywords?: KeywordConfig | null;
-  pages?: PageConfig | null;
-  securityLimits?: Record<string, number> | null;
-  maxConcurrentExtractions?: number;
-  outputFormat?: "plain" | "markdown" | "djot" | "html";
-  resultFormat?: "unified" | "element_based";
+  imageExtraction?: ImageExtractionConfig | null;
   includeDocumentStructure?: boolean;
+  keywords?: KeywordConfig | null;
+  languageDetection?: LanguageDetectionConfig | null;
+  maxConcurrentExtractions?: number;
+  ocr?: OcrConfig | null;
+  outputFormat?: "plain" | "markdown" | "djot" | "html";
+  pages?: PageConfig | null;
+  pdfOptions?: PdfConfig | null;
+  postProcessor?: PostProcessorConfig | null;
+  resultFormat?: "unified" | "element_based";
+  securityLimits?: Record<string, number> | null;
+  tokenReduction?: TokenReductionConfig | null;
+  useCache?: boolean;
 }
 ```
 
@@ -695,11 +695,14 @@ interface ExtractionResult {
   extractedKeywords?: ExtractedKeyword[];
   images?: ExtractedImage[];
   metadata: Metadata;
+  metadataJson: string;
   mimeType: string;
   ocrElements?: OcrElement[];
+  outputFormat?: string | null;
   pages?: PageContent[];
   processingWarnings: ProcessingWarning[];
   qualityScore?: number;
+  resultFormat?: string | null;
   tables: Table[];
 }
 ```
@@ -818,33 +821,25 @@ Document metadata with format-specific fields.
 
 ```typescript title="TypeScript"
 interface Metadata {
-  // Common fields (camelCase alignment for TS)
-  language?: string;
-  createdAt?: string;
-  modifiedAt?: string;
-  subject?: string;
-  formatType?: string;
-  category?: string;
-  tags?: string[];
-  documentVersion?: string;
-  abstractText?: string;
-  outputFormat?: string;
-
-  // PDF-specific fields
-  title?: string;
+  // Standard 13 Fields
   authors?: string[];
-  pageCount?: number;
-  creationDate?: string;
-  modificationDate?: string;
-  creator?: string;
-  producer?: string;
+  createdAt?: string;
+  createdBy?: string;
+  custom?: Record<string, any>;
+  date?: string;
+  formatType?: string;
   keywords?: string[];
+  language?: string;
+  modifiedAt?: string;
+  modifiedBy?: string;
+  pageCount?: number;
+  producer?: string;
+  subject?: string;
+  title?: string;
 
-  // Excel-specific fields
+  // Format-specific fields
   sheetCount?: number;
   sheetNames?: string[];
-
-  // Email-specific fields
   fromEmail?: string;
   fromName?: string;
   toEmails?: string[];
@@ -853,33 +848,32 @@ interface Metadata {
   messageId?: string;
   attachments?: string[];
 
-  // Additional fields...
+  // Allow for any other fields
   [key: string]: any;
 }
 ```
 
 **Common Fields:**
 
-- `language` (string): Document language (ISO 639-1 code)
-- `date` (string): Document date (ISO 8601 format)
-- `subject` (string): Document subject
-- `format_type` (string): Format discriminator ("pdf", "excel", "email", etc.)
-- `category` (string): Document category classification
-- `tags` (string[]): Associated concept tags
-- `document_version` (string): Document version string
-- `abstract_text` (string): Document abstract or summary
-- `output_format` (string): The generated output format identifier
-
-**PDF-Specific Fields** (when `format_type === "pdf"`):
-
-- `title` (string): PDF title
-- `author` (string): PDF author
-- `page_count` (number): Number of pages
-- `creation_date` (string): Creation date (ISO 8601)
-- `modification_date` (string): Modification date (ISO 8601)
-- `creator` (string): Creator application
+- `authors` (string[]): Document authors
+- `createdAt` (string): Creation date (ISO 8601)
+- `createdBy` (string): Creator application/user
+- `custom` (Record<string, any>): Custom metadata fields
+- `date` (string): Document date
+- `formatType` (string): Format discriminator ("pdf", "docx", etc.)
+- `keywords` (string[]): Document keywords
+- `language` (string): Document language (ISO 639-1)
+- `modifiedAt` (string): Modification date (ISO 8601)
+- `modifiedBy` (string): Last modifier
+- `pageCount` (number): Total number of pages
 - `producer` (string): Producer application
-- `keywords` (string): PDF keywords
+- `subject` (string): Document subject
+- `title` (string): Document title
+
+**Excel-Specific Fields** (when `formatType === "excel"`):
+
+- `sheetCount` (number): Number of sheets
+- `sheetNames` (string[]): Names of the sheets
 
 **Example:**
 
