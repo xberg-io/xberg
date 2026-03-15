@@ -156,6 +156,13 @@ pub struct ExtractionConfig {
     /// Linux, CPU on Windows).
     #[serde(default)]
     pub acceleration: Option<AccelerationConfig>,
+
+    /// Email extraction configuration (None = use defaults).
+    ///
+    /// Currently supports configuring the fallback codepage for MSG files
+    /// that do not specify one. See [`crate::core::config::EmailConfig`] for details.
+    #[serde(default)]
+    pub email: Option<super::super::email::EmailConfig>,
 }
 
 impl Default for ExtractionConfig {
@@ -186,6 +193,7 @@ impl Default for ExtractionConfig {
             output_format: OutputFormat::Plain,
             include_document_structure: false,
             acceleration: None,
+            email: None,
         }
     }
 }
