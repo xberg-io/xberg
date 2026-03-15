@@ -1526,4 +1526,28 @@ mod tests {
         let result = extract_email_content(eml, "message/rfc822", Some(99999));
         assert!(result.is_ok());
     }
+
+    #[test]
+    fn test_parse_msg_default_unchanged_with_real_fixture() {
+        // Existing fixture — behavior with None fallback must be identical to before.
+        // This is a Western English fixture, so windows-1252 default is correct.
+        let data = include_bytes!(
+            "../../../../test_documents/vendored/unstructured/msg/fake-email.msg"
+        );
+        let result_default = parse_msg_content(data, None).unwrap();
+        assert!(!result_default.cleaned_text.is_empty());
+    }
+
+    #[test]
+    fn test_parse_msg_invalid_codepage_falls_back_silently() {
+        // codepage 99999 is unrecognized → silently falls back to windows-1252.
+        // For a Western English fixture, the result must be identical to None fallback.
+        let data = include_bytes!(
+            "../../../../test_documents/vendored/unstructured/msg/fake-email.msg"
+        );
+        let result_invalid = parse_msg_content(data, Some(99999)).unwrap();
+        let result_default = parse_msg_content(data, None).unwrap();
+        assert_eq!(result_invalid.subject, result_default.subject);
+        assert_eq!(result_invalid.cleaned_text, result_default.cleaned_text);
+    }
 }
