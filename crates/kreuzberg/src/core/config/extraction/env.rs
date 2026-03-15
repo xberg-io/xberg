@@ -23,6 +23,7 @@ impl ExtractionConfig {
     /// - `KREUZBERG_CACHE_ENABLED`: Cache enabled flag ("true" or "false")
     /// - `KREUZBERG_TOKEN_REDUCTION_MODE`: Token reduction mode ("off", "light", "moderate", "aggressive", or "maximum")
     /// - `KREUZBERG_CHUNKING_TOKENIZER`: HuggingFace tokenizer model ID for token-based chunk sizing (requires `chunking-tokenizers` feature)
+    /// - `KREUZBERG_MSG_FALLBACK_CODEPAGE`: (deferred) Windows codepage for MSG PT_STRING8 fallback
     ///
     /// # Behavior
     ///

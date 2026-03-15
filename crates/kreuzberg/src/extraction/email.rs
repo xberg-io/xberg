@@ -359,6 +359,10 @@ fn collect_nested_message_html(message: &mail_parser::Message<'_>, out: &mut Vec
 /// happens we pad the data with zero bytes so the sector count matches
 /// the FAT and retry – the real streams are still within the original
 /// data range and parse correctly.
+///
+/// `fallback_codepage` is a Windows code page number to use when the MSG file
+/// does not specify one via `PR_MESSAGE_CODEPAGE` or `PR_INTERNET_CPID`.
+/// Pass `None` to fall back to windows-1252.
 pub fn parse_msg_content(data: &[u8], fallback_codepage: Option<u32>) -> Result<EmailExtractionResult> {
     use std::borrow::Cow;
     use std::io::Cursor;

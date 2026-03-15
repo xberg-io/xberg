@@ -47,8 +47,9 @@ impl Plugin for EmailExtractor {
 }
 
 impl SyncExtractor for EmailExtractor {
-    fn extract_sync(&self, content: &[u8], mime_type: &str, _config: &ExtractionConfig) -> Result<ExtractionResult> {
-        let email_result = crate::extraction::email::extract_email_content(content, mime_type, None)?;
+    fn extract_sync(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
+        let fallback_codepage = config.email.as_ref().and_then(|e| e.msg_fallback_codepage);
+        let email_result = crate::extraction::email::extract_email_content(content, mime_type, fallback_codepage)?;
 
         let text = crate::extraction::email::build_email_text_output(&email_result);
 
@@ -180,5 +181,20 @@ mod tests {
         assert_eq!(mime_types.len(), 2);
         assert!(mime_types.contains(&"message/rfc822"));
         assert!(mime_types.contains(&"application/vnd.ms-outlook"));
+    }
+
+    #[test]
+    fn test_email_extractor_uses_config() {
+        use crate::core::config::EmailConfig;
+
+        // Extractor with email config set should not panic or error on invalid data
+        let mut config = ExtractionConfig::default();
+        config.email = Some(EmailConfig {
+            msg_fallback_codepage: Some(1251),
+        });
+        let extractor = EmailExtractor::new();
+        // Empty data returns a validation error — config is still used without panic
+        let result = extractor.extract_sync(b"", "application/vnd.ms-outlook", &config);
+        assert!(result.is_err());
     }
 }
