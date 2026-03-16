@@ -182,7 +182,7 @@ jobs:
         shell: bash
 
       - name: Setup Elixir
-        uses: erlef/setup-elixir@9d5b75ddfda22fb979d2270283237aef8aa68d6b # v1.22.0
+        uses: erlef/setup-elixir@ee09b1e59bb240681c382eb1f0abc6a04af72764 # v1.23.0
         with:
           elixir-version: '1.17'
           otp-version: '27.2'
