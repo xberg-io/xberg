@@ -151,7 +151,7 @@ const KNOWN_THIRD_PARTY_SIZES: &[(&str, u64, u64, u64, &str)] = &[
     // mineru (MinerU): PaddlePaddle 194 MB + paddleocr + torch 916 MB + torchvision +
     // opencv-python 70 MB + numerous transitive deps. pip-weigh: ~2 GB.
     // Models: DocLayout-YOLO ~100 MB + PaddleOCR det/rec/cls ~150 MB +
-    // UniMERNet ~200 MB + SLANet + PP-FormulaNet = ~650 MB.
+    // UniMERNet ~200 MB + TATR + PP-FormulaNet = ~650 MB.
     ("mineru", 2_000_000_000, 0, 650_000_000, "MinerU document intelligence"),
     // playa-pdf: pure Python PDF library, very lightweight.
     // pip-weigh: ~2.5 MB total (playa-pdf + pdfminer.six dependency).

@@ -37,7 +37,7 @@ use pages::assign_tables_and_images_to_pages;
 /// continues without layout hints (graceful degradation).
 /// Layout detection result bundle: hints for markdown pipeline, rendered images, and raw results.
 ///
-/// Images and raw results are used by SLANet table recognition in the native path.
+/// Images and raw results are used by TATR table recognition in the native path.
 #[cfg(all(feature = "pdf", feature = "layout-detection"))]
 struct LayoutDetectionBundle {
     hints: Vec<Vec<crate::pdf::markdown::types::LayoutHint>>,

@@ -14,17 +14,17 @@ pub fn batch_extract_files_sync(
     config: Option<JsExtractionConfig>,
     file_configs: Option<Vec<Option<JsFileExtractionConfig>>>,
 ) -> Result<Vec<JsExtractionResult>> {
-    if let Some(ref fcs) = file_configs {
-        if paths.len() != fcs.len() {
-            return Err(Error::new(
-                Status::InvalidArg,
-                format!(
-                    "paths length ({}) must match fileConfigs length ({})",
-                    paths.len(),
-                    fcs.len()
-                ),
-            ));
-        }
+    if let Some(ref fcs) = file_configs
+        && paths.len() != fcs.len()
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "paths length ({}) must match fileConfigs length ({})",
+                paths.len(),
+                fcs.len()
+            ),
+        ));
     }
 
     let rust_config = resolve_config(config)?;
@@ -73,17 +73,17 @@ pub async fn batch_extract_files(
     config: Option<JsExtractionConfig>,
     file_configs: Option<Vec<Option<JsFileExtractionConfig>>>,
 ) -> Result<Vec<JsExtractionResult>> {
-    if let Some(ref fcs) = file_configs {
-        if paths.len() != fcs.len() {
-            return Err(Error::new(
-                Status::InvalidArg,
-                format!(
-                    "paths length ({}) must match fileConfigs length ({})",
-                    paths.len(),
-                    fcs.len()
-                ),
-            ));
-        }
+    if let Some(ref fcs) = file_configs
+        && paths.len() != fcs.len()
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "paths length ({}) must match fileConfigs length ({})",
+                paths.len(),
+                fcs.len()
+            ),
+        ));
     }
 
     let rust_config = resolve_config(config)?;
@@ -153,17 +153,17 @@ pub fn batch_extract_bytes_sync(
         ));
     }
 
-    if let Some(ref fcs) = file_configs {
-        if data_list.len() != fcs.len() {
-            return Err(Error::new(
-                Status::InvalidArg,
-                format!(
-                    "data_list length ({}) must match fileConfigs length ({})",
-                    data_list.len(),
-                    fcs.len()
-                ),
-            ));
-        }
+    if let Some(ref fcs) = file_configs
+        && data_list.len() != fcs.len()
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "data_list length ({}) must match fileConfigs length ({})",
+                data_list.len(),
+                fcs.len()
+            ),
+        ));
     }
 
     let rust_config = resolve_config(config)?;
@@ -171,13 +171,13 @@ pub fn batch_extract_bytes_sync(
     let items: Vec<(Vec<u8>, String, Option<kreuzberg::FileExtractionConfig>)> = match file_configs {
         Some(fcs) => data_list
             .iter()
-            .zip(mime_types.into_iter())
+            .zip(mime_types)
             .zip(fcs)
             .map(|((data, mime), fc)| Ok((data.to_vec(), mime, resolve_file_config(fc)?)))
             .collect::<Result<Vec<_>>>()?,
         None => data_list
             .iter()
-            .zip(mime_types.into_iter())
+            .zip(mime_types)
             .map(|(data, mime)| (data.to_vec(), mime, None))
             .collect(),
     };
@@ -239,17 +239,17 @@ pub async fn batch_extract_bytes(
         ));
     }
 
-    if let Some(ref fcs) = file_configs {
-        if data_list.len() != fcs.len() {
-            return Err(Error::new(
-                Status::InvalidArg,
-                format!(
-                    "data_list length ({}) must match fileConfigs length ({})",
-                    data_list.len(),
-                    fcs.len()
-                ),
-            ));
-        }
+    if let Some(ref fcs) = file_configs
+        && data_list.len() != fcs.len()
+    {
+        return Err(Error::new(
+            Status::InvalidArg,
+            format!(
+                "data_list length ({}) must match fileConfigs length ({})",
+                data_list.len(),
+                fcs.len()
+            ),
+        ));
     }
 
     let rust_config = resolve_config(config)?;

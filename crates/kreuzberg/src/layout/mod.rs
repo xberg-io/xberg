@@ -33,15 +33,15 @@ use crate::model_cache::ModelCache;
 /// Global cached layout engine.
 static CACHED_ENGINE: ModelCache<LayoutEngine> = ModelCache::new();
 
-/// Global cached SLANet table structure recognition model.
-static CACHED_SLANET: ModelCache<models::slanet::SlaNetModel> = ModelCache::new();
+/// Global cached TATR table structure recognition model.
+static CACHED_TATR: ModelCache<models::tatr::TatrModel> = ModelCache::new();
 
-/// Tracks whether SLANet loading has been attempted.
+/// Tracks whether TATR loading has been attempted.
 ///
 /// `true` means loading succeeded at least once; `false` means it failed and
 /// we should not retry (avoids repeated model-download attempts and redundant
 /// warning logs on every document).
-static SLANET_TRIED: OnceLock<bool> = OnceLock::new();
+static TATR_TRIED: OnceLock<bool> = OnceLock::new();
 
 /// Convert an [`LayoutDetectionConfig`] into a [`LayoutEngineConfig`].
 pub fn config_from_extraction(layout_config: &LayoutDetectionConfig) -> LayoutEngineConfig {
@@ -82,34 +82,34 @@ pub fn return_engine(engine: LayoutEngine) {
     CACHED_ENGINE.put(engine);
 }
 
-/// Take the cached SLANet model, or create a new one if the cache is empty.
+/// Take the cached TATR model, or create a new one if the cache is empty.
 ///
 /// Returns `None` if the model cannot be loaded. Once a load attempt fails,
 /// subsequent calls return `None` immediately without retrying, avoiding
 /// repeated download attempts and redundant warning logs.
-pub fn take_or_create_slanet() -> Option<models::slanet::SlaNetModel> {
-    // Fast path: if we already know SLANet is unavailable, skip immediately.
-    if let Some(&false) = SLANET_TRIED.get() {
+pub fn take_or_create_tatr() -> Option<models::tatr::TatrModel> {
+    // Fast path: if we already know TATR is unavailable, skip immediately.
+    if let Some(&false) = TATR_TRIED.get() {
         return None;
     }
 
-    let result = CACHED_SLANET.take_or_create(|| {
+    let result = CACHED_TATR.take_or_create(|| {
         crate::ort_discovery::ensure_ort_available();
         let manager = LayoutModelManager::new(None);
         let model_path = manager.ensure_tatr_model()?;
-        models::slanet::SlaNetModel::from_file(&model_path.to_string_lossy())
+        models::tatr::TatrModel::from_file(&model_path.to_string_lossy())
     });
 
     match result {
         Ok(model) => {
             // Mark as available (no-op if already set to true).
-            SLANET_TRIED.get_or_init(|| true);
+            TATR_TRIED.get_or_init(|| true);
             Some(model)
         }
         Err(e) => {
             // Only log and set the flag on the first failure.
-            SLANET_TRIED.get_or_init(|| {
-                tracing::warn!("SLANet model unavailable, table structure recognition disabled: {e}");
+            TATR_TRIED.get_or_init(|| {
+                tracing::warn!("TATR table structure model unavailable, table structure recognition disabled: {e}");
                 false
             });
             None
@@ -117,7 +117,7 @@ pub fn take_or_create_slanet() -> Option<models::slanet::SlaNetModel> {
     }
 }
 
-/// Return a SLANet model to the global cache for reuse.
-pub fn return_slanet(model: models::slanet::SlaNetModel) {
-    CACHED_SLANET.put(model);
+/// Return a TATR model to the global cache for reuse.
+pub fn return_tatr(model: models::tatr::TatrModel) {
+    CACHED_TATR.put(model);
 }

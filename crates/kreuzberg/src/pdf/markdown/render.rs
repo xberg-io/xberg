@@ -225,7 +225,7 @@ fn should_dehyphenate(prev: &str, next: &str) -> bool {
 /// borrowed `Cow` with no allocation.
 ///
 /// Visibility is `pub(in crate::pdf::markdown)` so child modules such as
-/// `crate::pdf::markdown::regions::slanet` can import it.
+/// `crate::pdf::markdown::regions::table_recognition` can import it.
 pub(in crate::pdf::markdown) fn escape_html_entities(text: &str) -> Cow<'_, str> {
     // Determine which replacements are needed with a fast pre-scan.
     let is_url = text.contains("://");

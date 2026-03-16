@@ -4,7 +4,7 @@ use crate::pdf::markdown::types::{LayoutHint, LayoutHintClass};
 use crate::pdf::table_reconstruct::{post_process_table, reconstruct_table, table_to_markdown};
 use crate::types::Table;
 
-use super::slanet::word_hint_iow;
+use super::table_recognition::word_hint_iow;
 
 /// Extract tables from layout-detected Table regions using character-level words.
 ///

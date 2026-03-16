@@ -393,11 +393,11 @@ pub(crate) async fn extract_with_ocr(
         ocr_results[page_idx] = Some(ocr_result?);
     }
 
-    // Initialize SLANet for table structure recognition when layout detection is active.
-    // SLANet requires mutable access so pages are processed sequentially after OCR.
+    // Initialize TATR for table structure recognition when layout detection is active.
+    // TATR requires mutable access so pages are processed sequentially after OCR.
     #[cfg(feature = "layout-detection")]
-    let mut slanet = if layout_detections.is_some() {
-        crate::layout::take_or_create_slanet()
+    let mut tatr_model = if layout_detections.is_some() {
+        crate::layout::take_or_create_tatr()
     } else {
         None
     };
@@ -433,8 +433,8 @@ pub(crate) async fn extract_with_ocr(
         {
             let detection = detections.get(page_idx);
 
-            // Run SLANet table recognition if available (requires mutable model).
-            let recognized_tables = match (detection, slanet.as_mut()) {
+            // Run TATR table recognition if available (requires mutable model).
+            let recognized_tables = match (detection, tatr_model.as_mut()) {
                 (Some(det), Some(model)) => {
                     let rgb = images[page_idx].to_rgb8();
                     crate::ocr::layout_assembly::recognize_page_tables(&rgb, det, elements, model)
@@ -455,7 +455,7 @@ pub(crate) async fn extract_with_ocr(
             // Filter page furniture (headers/footers).
             let paragraphs: Vec<_> = paragraphs.into_iter().filter(|p| !p.is_page_furniture).collect();
 
-            // Interleave paragraphs and SLANet tables by vertical position.
+            // Interleave paragraphs and TATR tables by vertical position.
             //
             // Paragraphs have baseline_y in PDF space (y=0 at bottom; higher = top of page).
             // RecognizedTable.detection_bbox is in image space (y=0 at top; smaller = top of page).
@@ -515,10 +515,10 @@ pub(crate) async fn extract_with_ocr(
         page_texts.push(ocr_result.content);
     }
 
-    // Return SLANet model to global cache for reuse
+    // Return TATR model to global cache for reuse
     #[cfg(feature = "layout-detection")]
-    if let Some(model) = slanet.take() {
-        crate::layout::return_slanet(model);
+    if let Some(model) = tatr_model.take() {
+        crate::layout::return_tatr(model);
     }
 
     // Compute average mean_text_conf across all pages, normalized to 0.0-1.0.

@@ -7,7 +7,7 @@
 //! is needed because both OCR elements and layout detections use the same
 //! image coordinate system (origin top-left, y increases downward).
 
-use crate::layout::models::slanet::{self, SlaNetModel};
+use crate::layout::models::tatr::{self, TatrModel};
 use crate::layout::types::{BBox, DetectionResult, LayoutClass, LayoutDetection};
 use crate::types::OcrElement;
 
@@ -44,7 +44,7 @@ pub struct RecognizedTable {
 /// rendered page image). Returns plain text join when `detection` is `None`.
 ///
 /// `recognized_tables` provides pre-computed markdown for Table regions
-/// (from SLANet or other table structure recognizer). When empty, Table
+/// (from TATR or other table structure recognizer). When empty, Table
 /// regions fall back to heuristic grid reconstruction from OCR elements.
 pub fn assemble_ocr_markdown(
     elements: &[OcrElement],
@@ -119,15 +119,15 @@ pub fn assemble_ocr_markdown(
     output
 }
 
-/// Run SLANet table recognition for all Table regions in a page.
+/// Run TATR table recognition for all Table regions in a page.
 ///
-/// For each Table detection, crops the page image, runs SLANet inference,
+/// For each Table detection, crops the page image, runs TATR inference,
 /// matches OCR elements to cells, and produces markdown tables.
 pub fn recognize_page_tables(
     page_image: &image::RgbImage,
     detection: &DetectionResult,
     elements: &[OcrElement],
-    slanet: &mut SlaNetModel,
+    tatr_model: &mut TatrModel,
 ) -> Vec<RecognizedTable> {
     let mut tables = Vec::new();
 
@@ -136,7 +136,7 @@ pub fn recognize_page_tables(
             continue;
         }
 
-        let md = recognize_single_table(page_image, &det.bbox, elements, slanet);
+        let md = recognize_single_table(page_image, &det.bbox, elements, tatr_model);
         if let Some(markdown) = md {
             tables.push(RecognizedTable {
                 detection_bbox: det.bbox,
@@ -153,7 +153,7 @@ fn recognize_single_table(
     page_image: &image::RgbImage,
     table_bbox: &BBox,
     elements: &[OcrElement],
-    slanet: &mut SlaNetModel,
+    tatr_model: &mut TatrModel,
 ) -> Option<String> {
     // Crop the table region from the page image
     let crop_x = table_bbox.x1.max(0.0) as u32;
@@ -167,22 +167,23 @@ fn recognize_single_table(
 
     let cropped = image::imageops::crop_imm(page_image, crop_x, crop_y, crop_w, crop_h).to_image();
 
-    // Run SLANet inference
-    let slanet_result = match slanet.recognize(&cropped) {
+    // Run TATR inference
+    let tatr_result = match tatr_model.recognize(&cropped) {
         Ok(r) => r,
         Err(e) => {
-            tracing::warn!("SLANet inference failed: {e}");
+            tracing::warn!("TATR inference failed: {e}");
             return None;
         }
     };
 
-    if slanet_result.structure_tokens.is_empty() {
+    // Check if TATR detected any rows and columns
+    if tatr_result.rows.is_empty() || tatr_result.columns.is_empty() {
         return None;
     }
 
-    // Parse the table structure
-    let rows = slanet::parse_table_structure(&slanet_result);
-    if rows.is_empty() {
+    // Build cell grid from row × column intersections
+    let cell_grid = tatr::build_cell_grid(&tatr_result, None);
+    if cell_grid.is_empty() || cell_grid[0].is_empty() {
         return None;
     }
 
@@ -199,66 +200,48 @@ fn recognize_single_table(
 
     // Build markdown table by matching OCR elements to cells
     Some(build_markdown_table(
-        &rows,
+        &cell_grid,
         &table_elements,
         crop_x as f32,
         crop_y as f32,
     ))
 }
 
-/// Build a markdown table from SLANet structure + OCR elements.
+/// Build a markdown table from TATR cell grid + OCR elements.
 ///
-/// Cell bboxes from SLANet are in cropped-image coordinates.
+/// Cell bboxes from TATR are in cropped-image coordinates.
 /// OCR elements are in page coordinates. `offset_x/y` translates between them.
 fn build_markdown_table(
-    rows: &[Vec<slanet::TableCell>],
+    cell_grid: &[Vec<tatr::CellBBox>],
     elements: &[&OcrElement],
     offset_x: f32,
     offset_y: f32,
 ) -> String {
-    if rows.is_empty() {
+    if cell_grid.is_empty() {
         return String::new();
     }
 
-    // Determine grid dimensions
-    let max_cols = rows
-        .iter()
-        .map(|row| row.iter().map(|c| c.colspan).sum::<u32>())
-        .max()
-        .unwrap_or(0) as usize;
+    let num_cols = cell_grid[0].len();
 
-    if max_cols == 0 {
+    if num_cols == 0 {
         return String::new();
     }
 
     // Fill grid with cell text
-    let mut grid: Vec<Vec<String>> = Vec::with_capacity(rows.len());
+    let mut grid: Vec<Vec<String>> = Vec::with_capacity(cell_grid.len());
 
-    for row in rows {
-        let mut grid_row = vec![String::new(); max_cols];
-        let mut col_idx = 0usize;
+    for row in cell_grid {
+        let mut grid_row = vec![String::new(); num_cols];
 
-        for cell in row {
-            if col_idx >= max_cols {
-                break;
-            }
-
-            // Get cell text from OCR elements matching the cell bbox
-            let cell_text = if let Some(ref bbox) = cell.bbox {
-                // Translate cell bbox from crop coords to page coords
-                let page_bbox = BBox::new(
-                    bbox.x1 + offset_x,
-                    bbox.y1 + offset_y,
-                    bbox.x2 + offset_x,
-                    bbox.y2 + offset_y,
-                );
-                match_elements_to_cell(elements, &page_bbox)
-            } else {
-                String::new()
-            };
-
-            grid_row[col_idx] = cell_text;
-            col_idx += cell.colspan as usize;
+        for (col_idx, cell) in row.iter().enumerate() {
+            // Translate cell bbox from crop coords to page coords
+            let page_bbox = BBox::new(
+                cell.x1 + offset_x,
+                cell.y1 + offset_y,
+                cell.x2 + offset_x,
+                cell.y2 + offset_y,
+            );
+            grid_row[col_idx] = match_elements_to_cell(elements, &page_bbox);
         }
 
         grid.push(grid_row);
@@ -281,7 +264,7 @@ fn build_markdown_table(
         // Add separator after first row (header)
         if row_idx == 0 {
             md.push('|');
-            for _ in 0..max_cols {
+            for _ in 0..num_cols {
                 md.push_str(" --- |");
             }
             md.push('\n');
@@ -328,14 +311,14 @@ fn match_elements_to_cell(elements: &[&OcrElement], cell_bbox: &BBox) -> String 
         .join(" ")
 }
 
-/// Render a Table region: use pre-computed SLANet markdown if available,
+/// Render a Table region: use pre-computed TATR markdown if available,
 /// otherwise fall back to heuristic grid reconstruction from OCR elements.
 fn render_table_region(
     detection: &LayoutDetection,
     elements: &[&OcrElement],
     recognized_tables: &[RecognizedTable],
 ) -> String {
-    // Look for pre-computed SLANet table markdown matching this detection
+    // Look for pre-computed TATR table markdown matching this detection
     for rt in recognized_tables {
         if bboxes_match(&rt.detection_bbox, &detection.bbox) {
             return rt.markdown.clone();

@@ -1347,8 +1347,8 @@ public final class Kreuzberg {
 	 * strings. Returns MemorySegment.NULL when fileConfigs is null (no per-file
 	 * overrides).
 	 */
-	private static MemorySegment encodeFileConfigs(Arena arena, List<FileExtractionConfig> fileConfigs, int expectedSize)
-			throws KreuzbergException {
+	private static MemorySegment encodeFileConfigs(Arena arena, List<FileExtractionConfig> fileConfigs,
+			int expectedSize) throws KreuzbergException {
 		if (fileConfigs == null) {
 			return MemorySegment.NULL;
 		}

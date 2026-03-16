@@ -620,17 +620,17 @@ pub fn render_document_as_markdown_with_tables(
     // word extraction. This must happen before segments are consumed by Stage 3.
     let mut layout_tables: Vec<crate::types::Table> = Vec::new();
     if let Some(hints_pages) = layout_hints {
-        // Try SLANet for neural table structure recognition when layout images are available.
+        // Try TATR for neural table structure recognition when layout images are available.
         #[cfg(feature = "layout-detection")]
-        let mut slanet_model = if layout_images.is_some() {
-            crate::layout::take_or_create_slanet()
+        let mut tatr_model = if layout_images.is_some() {
+            crate::layout::take_or_create_tatr()
         } else {
             None
         };
 
         // Run table extraction on ALL pages with Table hints, including
         // structure-tree pages. The structure tree flattens tables into
-        // paragraphs — layout-detected tables with SLANet structure
+        // paragraphs — layout-detected tables with TATR structure
         // recognition produce proper markdown tables.
         for page_idx in 0..page_count as usize {
             let Some(hints) = hints_pages.get(page_idx) else {
@@ -677,31 +677,31 @@ pub fn render_document_as_markdown_with_tables(
                 word_count = words.len(),
                 has_images = layout_images.is_some(),
                 has_results = layout_results.is_some(),
-                "table extraction: attempting SLANet"
+                "table extraction: attempting TATR"
             );
 
-            // Try SLANet path first if we have images, results, and model
+            // Try TATR path first if we have images, results, and model
             #[cfg(feature = "layout-detection")]
-            if let (Some(images), Some(results), Some(ref mut slanet)) =
-                (layout_images, layout_results, slanet_model.as_mut())
+            if let (Some(images), Some(results), Some(ref mut tatr)) =
+                (layout_images, layout_results, tatr_model.as_mut())
                 && let (Some(page_image), Some(page_result)) = (images.get(page_idx), results.get(page_idx))
             {
-                let slanet_tables = super::regions::recognize_tables_for_native_page(
+                let tatr_tables = super::regions::recognize_tables_for_native_page(
                     page_image,
                     hints,
                     &words,
                     page_result,
                     page_height,
                     page_idx,
-                    slanet,
+                    tatr,
                 );
                 tracing::debug!(
                     page = page_idx,
-                    slanet_tables = slanet_tables.len(),
-                    "SLANet table extraction result"
+                    tatr_tables = tatr_tables.len(),
+                    "TATR table extraction result"
                 );
-                if !slanet_tables.is_empty() {
-                    layout_tables.extend(slanet_tables);
+                if !tatr_tables.is_empty() {
+                    layout_tables.extend(tatr_tables);
                     continue;
                 }
             }
@@ -716,10 +716,10 @@ pub fn render_document_as_markdown_with_tables(
             ));
         }
 
-        // Return SLANet model to global cache for reuse by future extractions
+        // Return TATR model to global cache for reuse by future extractions
         #[cfg(feature = "layout-detection")]
-        if let Some(model) = slanet_model.take() {
-            crate::layout::return_slanet(model);
+        if let Some(model) = tatr_model.take() {
+            crate::layout::return_tatr(model);
         }
     }
 

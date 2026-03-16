@@ -8,7 +8,7 @@ mod assignment;
 mod heading;
 mod merge;
 mod reading_order;
-pub(super) mod slanet;
+pub(super) mod table_recognition;
 mod tables;
 
 use crate::pdf::hierarchy::SegmentData;
@@ -22,7 +22,7 @@ use super::types::{LayoutHint, LayoutHintClass, PdfParagraph};
 // Re-exports for use by pipeline.rs and other siblings
 pub(super) use heading::looks_like_figure_label;
 #[cfg(feature = "layout-detection")]
-pub(super) use slanet::recognize_tables_for_native_page;
+pub(super) use table_recognition::recognize_tables_for_native_page;
 pub(super) use tables::extract_tables_from_layout_hints;
 
 /// A layout region with its assigned segment indices.

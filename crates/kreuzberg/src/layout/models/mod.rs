@@ -1,5 +1,5 @@
 pub mod rtdetr;
-pub mod slanet;
+pub mod tatr;
 pub mod yolo;
 
 use image::RgbImage;

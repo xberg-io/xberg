@@ -1,4 +1,4 @@
-//! SLANet-based table recognition for native PDF pages.
+//! TATR-based table recognition for native PDF pages.
 
 use super::super::geometry::Rect;
 
@@ -32,9 +32,9 @@ pub(in crate::pdf::markdown) fn word_hint_iow(
     word_rect.intersection_over_self(&region_rect)
 }
 
-/// Recognize tables on a native PDF page using SLANet structure prediction.
+/// Recognize tables on a native PDF page using TATR structure prediction.
 ///
-/// Crops table regions from the rendered layout detection image, runs SLANet
+/// Crops table regions from the rendered layout detection image, runs TATR
 /// inference, then matches predicted cell bboxes against native PDF words.
 ///
 /// # Coordinate conversion
@@ -43,7 +43,7 @@ pub(in crate::pdf::markdown) fn word_hint_iow(
 /// - **PDF coords**: LayoutHint bboxes and HocrWord positions (y=0 at bottom for hints;
 ///   HocrWord uses image-coords with y=0 at top, converted via `page_height - pdf_top`).
 /// - **Rendered image pixels**: The ~640px image used for layout detection.
-/// - **SLANet crop pixels**: Cell bboxes relative to the cropped table region.
+/// - **TATR crop pixels**: Cell bboxes relative to the cropped table region.
 #[cfg(feature = "layout-detection")]
 pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
     page_image: &image::DynamicImage,
@@ -52,7 +52,7 @@ pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
     page_result: &crate::pdf::layout_runner::PageLayoutResult,
     page_height: f32,
     page_index: usize,
-    slanet: &mut crate::layout::models::slanet::SlaNetModel,
+    tatr_model: &mut crate::layout::models::tatr::TatrModel,
 ) -> Vec<Table> {
     let rgb_image = page_image.to_rgb8();
     let img_w = rgb_image.width();
@@ -85,13 +85,13 @@ pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
             continue;
         }
 
-        // Guard: skip SLANet on extremely large crops that would slow inference
+        // Guard: skip TATR on extremely large crops that would slow inference
         if (crop_w as u64) * (crop_h as u64) > 1_000_000 {
             tracing::debug!(
                 page = page_index,
                 crop_w,
                 crop_h,
-                "Skipping SLANet for oversized table crop"
+                "Skipping TATR for oversized table crop"
             );
             continue;
         }
@@ -99,38 +99,42 @@ pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
         // Crop table region from rendered image
         let cropped = image::imageops::crop_imm(&rgb_image, px_left, px_top, crop_w, crop_h).to_image();
 
-        // Run SLANet inference
-        let slanet_result = match slanet.recognize(&cropped) {
+        // Run TATR inference
+        let tatr_result = match tatr_model.recognize(&cropped) {
             Ok(r) => r,
             Err(e) => {
-                tracing::warn!("SLANet inference failed for table on page {}: {e}", page_index);
+                tracing::warn!("TATR inference failed for table on page {}: {e}", page_index);
                 continue;
             }
         };
 
-        if slanet_result.structure_tokens.is_empty() {
-            tracing::debug!(page = page_index, "SLANet: empty structure tokens");
+        // Check if TATR detected any rows and columns
+        if tatr_result.rows.is_empty() || tatr_result.columns.is_empty() {
+            tracing::debug!(
+                page = page_index,
+                rows = tatr_result.rows.len(),
+                columns = tatr_result.columns.len(),
+                "TATR: no rows or columns detected"
+            );
             continue;
         }
 
-        let rows = crate::layout::models::slanet::parse_table_structure(&slanet_result);
+        // Build cell grid from row × column intersections
+        let cell_grid = crate::layout::models::tatr::build_cell_grid(&tatr_result, None);
+        let num_rows = cell_grid.len();
+        let num_cols = if num_rows > 0 { cell_grid[0].len() } else { 0 };
+
         tracing::debug!(
             page = page_index,
-            structure_tokens = slanet_result.structure_tokens.len(),
-            rows = rows.len(),
-            cells = rows.iter().map(|r| r.len()).sum::<usize>(),
-            cell_bboxes = slanet_result.cell_bboxes.len(),
+            detected_rows = tatr_result.rows.len(),
+            detected_columns = tatr_result.columns.len(),
+            grid_rows = num_rows,
+            grid_cols = num_cols,
             crop = format!("{}x{}", crop_w, crop_h),
-            tokens_preview = slanet_result
-                .structure_tokens
-                .iter()
-                .take(15)
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(", "),
-            "SLANet inference result"
+            "TATR inference result"
         );
-        if rows.is_empty() {
+
+        if num_rows == 0 || num_cols == 0 {
             continue;
         }
 
@@ -149,24 +153,24 @@ pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
             })
             .collect();
 
-        // Build markdown by matching words to SLANet cells
-        let markdown = build_native_slanet_table(&rows, &table_words, px_left as f32, px_top as f32, sx, sy);
+        // Match words to cells and build markdown table.
+        // Cell bboxes are in crop-pixel space; words are in PDF coords.
+        // Convert cell bboxes to PDF coords for matching.
+        let markdown = build_tatr_grid_table(&cell_grid, &table_words, px_left as f32, px_top as f32, sx, sy);
 
         tracing::debug!(
             page = page_index,
             table_words = table_words.len(),
             markdown_len = markdown.len(),
-            "SLANet: word matching and markdown generation"
+            "TATR: word matching and markdown generation"
         );
         if markdown.is_empty() {
-            tracing::debug!(page = page_index, "SLANet: empty markdown output");
+            tracing::debug!(page = page_index, "TATR: empty markdown output");
             continue;
         }
 
-        // Validate: reject SLANet output if too few cells have content.
-        // This catches cases where SLANet cell bboxes don't align with the
-        // actual text, producing mostly empty cells.
-        let total_cells: usize = rows.iter().map(|r| r.len()).sum();
+        // Validate: reject TATR output if too few cells have content.
+        let total_cells = num_rows * num_cols;
         let filled_cells = markdown
             .split('|')
             .filter(|s| !s.trim().is_empty() && s.trim() != "---")
@@ -176,7 +180,7 @@ pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
                 page = page_index,
                 total_cells,
                 filled_cells,
-                "SLANet table rejected: too few filled cells"
+                "TATR table rejected: too few filled cells"
             );
             continue;
         }
@@ -199,61 +203,50 @@ pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
     tables
 }
 
-/// Build markdown table from SLANet structure + native PDF words.
+/// Build markdown table from TATR structure + native PDF words.
 ///
-/// SLANet cell bboxes are in crop-pixel space. Words are in PDF image-coord space
+/// TATR cell bboxes are in crop-pixel space. Words are in PDF image-coord space
 /// (HocrWord: left in PDF x-units, top = page_height - pdf_top).
 #[cfg(feature = "layout-detection")]
-fn build_native_slanet_table(
-    rows: &[Vec<crate::layout::models::slanet::TableCell>],
+/// Build markdown table from TATR cell grid + PDF words.
+///
+/// Cell bboxes are in crop-pixel space. Words are in PDF image-coord space
+/// (HocrWord: left in PDF x-units, top = page_height - pdf_top).
+/// Converts cell coords to word space via crop offset + scale factors.
+#[cfg(feature = "layout-detection")]
+fn build_tatr_grid_table(
+    cell_grid: &[Vec<crate::layout::models::tatr::CellBBox>],
     words: &[&crate::pdf::table_reconstruct::HocrWord],
     crop_offset_px_x: f32,
     crop_offset_px_y: f32,
     sx: f32,
     sy: f32,
 ) -> String {
-    if rows.is_empty() {
+    if cell_grid.is_empty() {
         return String::new();
     }
 
-    let max_cols = rows
-        .iter()
-        .map(|row| row.iter().map(|c| c.colspan).sum::<u32>())
-        .max()
-        .unwrap_or(0) as usize;
-
-    if max_cols == 0 {
+    let num_cols = cell_grid[0].len();
+    if num_cols == 0 {
         return String::new();
     }
 
-    let mut grid: Vec<Vec<String>> = Vec::with_capacity(rows.len());
+    let mut grid: Vec<Vec<String>> = Vec::with_capacity(cell_grid.len());
 
-    for row in rows {
-        let mut grid_row = vec![String::new(); max_cols];
-        let mut col_idx = 0usize;
+    for row in cell_grid {
+        let mut grid_row = vec![String::new(); num_cols];
 
-        for cell in row {
-            if col_idx >= max_cols {
-                break;
-            }
+        for (col_idx, cell) in row.iter().enumerate() {
+            // Convert TATR crop-pixel bbox to HocrWord coordinate space:
+            // 1. Add crop offset to get page-image-pixel coords
+            // 2. Divide by scale factors to get PDF point coords
+            let cell_left = (cell.x1 + crop_offset_px_x) / sx;
+            let cell_right = (cell.x2 + crop_offset_px_x) / sx;
+            let cell_top = (cell.y1 + crop_offset_px_y) / sy;
+            let cell_bottom = (cell.y2 + crop_offset_px_y) / sy;
 
-            let cell_text = if let Some(ref bbox) = cell.bbox {
-                // Convert SLANet crop-pixel bbox to HocrWord coordinate space:
-                // 1. Add crop offset to get page-image-pixel coords
-                // 2. Divide by scale factors to get PDF point coords
-                //    (HocrWord.left is in PDF x-units, HocrWord.top is page_height - pdf_y)
-                let cell_left = (bbox.x1 + crop_offset_px_x) / sx;
-                let cell_right = (bbox.x2 + crop_offset_px_x) / sx;
-                let cell_top = (bbox.y1 + crop_offset_px_y) / sy;
-                let cell_bottom = (bbox.y2 + crop_offset_px_y) / sy;
-
-                match_words_to_cell(words, cell_left, cell_top, cell_right, cell_bottom)
-            } else {
-                String::new()
-            };
-
+            let cell_text = match_words_to_cell(words, cell_left, cell_top, cell_right, cell_bottom);
             grid_row[col_idx] = cell_text;
-            col_idx += cell.colspan as usize;
         }
 
         grid.push(grid_row);
