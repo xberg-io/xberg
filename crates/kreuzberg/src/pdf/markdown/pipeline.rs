@@ -662,8 +662,23 @@ pub fn render_document_as_markdown_with_tables(
             // Extract character-level words from the page (accurate positions)
             let words = match crate::pdf::table::extract_words_from_page(&page, 0.0) {
                 Ok(w) if !w.is_empty() => w,
-                _ => continue,
+                Ok(_) => {
+                    tracing::debug!(page = page_idx, "table extraction: no words on page, skipping");
+                    continue;
+                }
+                Err(e) => {
+                    tracing::debug!(page = page_idx, error = %e, "table extraction: word extraction failed");
+                    continue;
+                }
             };
+
+            tracing::debug!(
+                page = page_idx,
+                word_count = words.len(),
+                has_images = layout_images.is_some(),
+                has_results = layout_results.is_some(),
+                "table extraction: attempting SLANet"
+            );
 
             // Try SLANet path first if we have images, results, and model
             #[cfg(feature = "layout-detection")]
@@ -679,6 +694,11 @@ pub fn render_document_as_markdown_with_tables(
                     page_height,
                     page_idx,
                     slanet,
+                );
+                tracing::debug!(
+                    page = page_idx,
+                    slanet_tables = slanet_tables.len(),
+                    "SLANet table extraction result"
                 );
                 if !slanet_tables.is_empty() {
                     layout_tables.extend(slanet_tables);

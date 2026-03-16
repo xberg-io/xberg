@@ -109,10 +109,21 @@ pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
         };
 
         if slanet_result.structure_tokens.is_empty() {
+            tracing::debug!(page = page_index, "SLANet: empty structure tokens");
             continue;
         }
 
         let rows = crate::layout::models::slanet::parse_table_structure(&slanet_result);
+        tracing::debug!(
+            page = page_index,
+            structure_tokens = slanet_result.structure_tokens.len(),
+            rows = rows.len(),
+            cells = rows.iter().map(|r| r.len()).sum::<usize>(),
+            cell_bboxes = slanet_result.cell_bboxes.len(),
+            crop = format!("{}x{}", crop_w, crop_h),
+            tokens_preview = slanet_result.structure_tokens.iter().take(15).cloned().collect::<Vec<_>>().join(", "),
+            "SLANet inference result"
+        );
         if rows.is_empty() {
             continue;
         }
@@ -135,7 +146,14 @@ pub(in crate::pdf::markdown) fn recognize_tables_for_native_page(
         // Build markdown by matching words to SLANet cells
         let markdown = build_native_slanet_table(&rows, &table_words, px_left as f32, px_top as f32, sx, sy);
 
+        tracing::debug!(
+            page = page_index,
+            table_words = table_words.len(),
+            markdown_len = markdown.len(),
+            "SLANet: word matching and markdown generation"
+        );
         if markdown.is_empty() {
+            tracing::debug!(page = page_index, "SLANet: empty markdown output");
             continue;
         }
 
