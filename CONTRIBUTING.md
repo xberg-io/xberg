@@ -1,538 +1,90 @@
 # Contributing to Kreuzberg
 
-Thank you for your interest in contributing to Kreuzberg! This guide will help you get started with development.
+Thank you for your interest in contributing to Kreuzberg! Whether you're fixing a typo, adding a feature, or improving documentation, every contribution makes a difference.
 
-## Table of Contents
+## First time contributing?
 
-- [Development Setup](#development-setup)
-  - [Task Installation](#task-installation)
-  - [Quick Start](#quick-start)
-- [Development Workflow](#development-workflow)
-  - [Common Commands](#common-commands)
-  - [Language-Specific Tasks](#language-specific-tasks)
-  - [Build Profiles](#build-profiles)
-- [Exploring Tasks](#exploring-tasks)
-- [CI/CD Integration](#cicd-integration)
-- [Code Quality](#code-quality)
+Welcome! We're glad you're here. Start by choosing an issue that matches your experience level:
 
-## Development Setup
+- [Good first issue](https://github.com/kreuzberg-dev/kreuzberg/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) — small, well-scoped tasks ideal for newcomers
+- [Help wanted](https://github.com/kreuzberg-dev/kreuzberg/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) — tasks where we'd especially appreciate community help
 
-### Task Installation
+> **Tip:** Pick an issue you feel confident about. If you're unsure about scope or approach, leave a comment on the issue and we'll help you get started.
 
-This project uses [Task](https://taskfile.dev/) for task automation and orchestration. Task is a task runner that simplifies development workflows across multiple languages and platforms.
+Want to work on something bigger or propose a new feature? [Open a discussion](https://github.com/kreuzberg-dev/kreuzberg/issues) with maintainers first.
 
-#### Install Task
+## Jump right in!
 
-Choose the installation method for your platform:
+**Quick fixes** (typos, small doc improvements):
 
-**macOS (Homebrew):**
-```bash
-brew install go-task
-```
+1. Edit the file directly on GitHub
+2. Submit a pull request — that's it!
 
-**Linux:**
-```bash
-# Using the installer script
-sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin
-# Or via package managers:
-apt install go-task  # Debian/Ubuntu
-pacman -S go-task    # Arch
-```
+**Larger contributions** (features, new bindings, bug fixes):
 
-**Windows:**
-```powershell
-# Using Scoop
-scoop install task
+1. Read the full [Contributing Guide](https://docs.kreuzberg.dev/contributing/) on our docs site
+2. Set up your development environment (see below)
+3. Follow our workflow: branch → code → test → PR
 
-# Or using Chocolatey
-choco install go-task
-```
+## What can I contribute to?
 
-**All Platforms:**
-Download the latest release from [https://github.com/go-task/task/releases](https://github.com/go-task/task/releases)
+Kreuzberg is a polyglot project with many areas where you can help:
 
-For complete installation instructions, visit the [official Task documentation](https://taskfile.dev/installation/).
+| Area | Description |
+|------|-------------|
+| **Rust core** | Parser implementations, extraction pipeline, performance |
+| **Language bindings** | Python, TypeScript, Ruby, Go, Java, C#, PHP, R, Elixir, WASM |
+| **Documentation** | Guides, API references, examples, tutorials |
+| **Testing** | Unit tests, E2E test fixtures, cross-language coverage |
+| **Plugins** | New extraction plugins, plugin system improvements |
+| **CI/CD** | Build pipeline, cross-architecture support, release automation |
 
-### Quick Start
+## Development setup
 
-After installing Task, set up your development environment with a single command:
+Get up and running in two steps:
+
+1. **Install [Task](https://taskfile.dev/installation/)** — our task runner for all build and test workflows
+2. **Run setup:**
 
 ```bash
-# One-time setup - installs all dependencies for all languages
 task setup
 ```
 
-This idempotent setup command will:
-- Install Rust, Python, Node.js, Ruby, Java, Go, C#, and PHP tools
-- Set up language-specific dependencies
-- Initialize development environments
+This installs all toolchains and dependencies across every language. Safe to re-run anytime.
 
-You can safely re-run `task setup` anytime without side effects.
+## Quick reference
 
-## Development Workflow
+| Command | What it does |
+|---------|-------------|
+| `task setup` | Install all dependencies (idempotent) |
+| `task build` | Build all language bindings |
+| `task test` | Run all test suites |
+| `task lint` | Run all linters (with auto-fix) |
+| `task format` | Format all code |
+| `task check` | Combined lint + format check (no modifications) |
 
-### Common Commands
+For language-specific commands, use the namespace pattern: `task rust:test`, `task python:build`, `task node:format`, etc.
 
-The following top-level commands are available for common development tasks:
+For the complete development workflow, build profiles, coding standards, and PR guidelines, see the full [Contributing Guide](https://docs.kreuzberg.dev/contributing/).
 
-**Build**
-```bash
-# Build all language bindings
-task build
+## Commit messages
 
-# Or build everything explicitly
-task build:all
-```
+We use [Conventional Commits](https://www.conventionalcommits.org/). Prefix your commit messages with a type:
 
-**Test**
-```bash
-# Run test suites for all languages
-task test
+- `feat:` — new feature
+- `fix:` — bug fix
+- `docs:` — documentation changes
+- `perf:` — performance improvement
+- `chore:` — maintenance, dependencies, CI
+- `test:` — adding or updating tests
+- `refactor:` — code restructuring without behavior change
 
-# Or be explicit
-task test:all
-```
+## Community
 
-**Code Quality**
-```bash
-# Format code for all languages
-task format
+- **Star the repo:** [Give us a star on GitHub](https://github.com/kreuzberg-dev/kreuzberg) — it helps others discover Kreuzberg!
+- **Documentation:** [docs.kreuzberg.dev](https://docs.kreuzberg.dev)
+- **Discord:** [Join our community](https://discord.gg/xt9WY3GnKR)
+- **Issues:** [GitHub Issues](https://github.com/kreuzberg-dev/kreuzberg/issues)
+- **License:** [MIT](LICENSE)
 
-# Check formatting without modifications
-task format:check
-
-# Run all linters (with auto-fix)
-task lint
-
-# Check linting without modifications
-task lint:check
-
-# Combined check (lint + format) without modifications
-task check
-```
-
-**Dependencies**
-```bash
-# Update all language dependencies
-task update
-
-# Clean all build artifacts
-task clean
-```
-
-### Language-Specific Tasks
-
-Each language binding has its own namespace. Common patterns work across all languages:
-
-**Rust:**
-```bash
-# Build development version
-task rust:build:dev
-
-# Build release version (optimized)
-task rust:build:release
-
-# Run tests
-task rust:test
-
-# Format code
-task rust:format
-
-# Check formatting
-task rust:format:check
-```
-
-**Python:**
-```bash
-# Build Python extension
-task python:build
-
-# Run Python tests
-task python:test
-
-# Format Python code
-task python:format
-
-# Install dependencies
-task python:install
-```
-
-**TypeScript/Node.js:**
-```bash
-# Build TypeScript bindings
-task node:build
-
-# Run tests
-task node:test
-
-# Format code
-task node:format
-
-# Install dependencies
-task node:install
-```
-
-**Ruby:**
-```bash
-# Build Ruby extension
-task ruby:build
-
-# Run tests
-task ruby:test
-
-# Format code
-task ruby:format
-```
-
-**Go:**
-```bash
-# Build Go bindings
-task go:build
-
-# Run tests
-task go:test
-
-# Format code
-task go:format
-```
-
-**Java:**
-```bash
-# Build Java bindings
-task java:build
-
-# Run tests
-task java:test
-
-# Format code
-task java:format
-```
-
-**C#:**
-```bash
-# Build C# bindings
-task csharp:build
-
-# Run tests
-task csharp:test
-
-# Format code
-task csharp:format
-```
-
-**PHP:**
-```bash
-# Build PHP extension
-task php:build
-
-# Run tests
-task php:test
-
-# Format code
-task php:format
-```
-
-**WebAssembly:**
-```bash
-# Build WASM bindings
-task wasm:build
-
-# Run tests
-task wasm:test
-
-# Clean WASM artifacts
-task wasm:clean
-```
-
-### Build Profiles
-
-Kreuzberg supports multiple build profiles optimized for different scenarios:
-
-| Profile | Purpose | Use Case |
-|---------|---------|----------|
-| `dev` | Development builds with debug symbols and minimal optimizations | Local development, fast iteration |
-| `release` | Optimized production builds | Performance-critical deployments, releases |
-| `ci` | CI-specific builds with extra diagnostics and checks | Continuous integration pipelines |
-
-**Using Build Profiles:**
-
-```bash
-# Development build (default, fastest to compile)
-task build
-
-# Or explicitly use dev profile
-BUILD_PROFILE=dev task build
-
-# Release build (slower to compile, faster to run)
-BUILD_PROFILE=release task build
-
-# CI build (with diagnostics)
-BUILD_PROFILE=ci task build
-
-# Language-specific with profile
-BUILD_PROFILE=dev task rust:build
-BUILD_PROFILE=release task python:build
-```
-
-### Workflow Commands
-
-For orchestrated multi-language operations:
-
-```bash
-# Build all bindings in debug mode
-task build:all:dev
-
-# Build all bindings in release mode
-task build:all:release
-
-# Build all bindings in CI mode
-task build:all:ci
-
-# Run all tests in parallel (faster)
-task test:all:parallel
-
-# Run all tests in CI mode (with diagnostics)
-task test:all:ci
-
-# Generate all E2E tests from fixtures
-task e2e:generate:all
-
-# Run all E2E tests
-task e2e:test:all
-```
-
-## Exploring Tasks
-
-### List All Available Tasks
-
-View all tasks available in the project:
-
-```bash
-# Show simple list of all public tasks
-task --list
-
-# Show all tasks including internal ones
-task --list-all
-
-# Show tasks for a specific namespace (e.g., rust)
-task --list rust
-```
-
-### Get Help for a Specific Task
-
-Display detailed information about a task:
-
-```bash
-# View task description and syntax
-task -h build
-task -h rust:build
-task -h test:all:parallel
-
-# View variables used by a task
-task -h setup
-```
-
-### Example Output
-
-```bash
-$ task --list
-task: Available tasks for this project:
-
-* setup              Install all dependencies and initialize project. Idempotent - safe to re-run anytime.
-* build             Build core libraries and language bindings
-* test              Run test suites for all languages
-* format            Format code for all languages (with modifications)
-* format:check      Check code formatting without modifications
-* check             Run all checks without modifications (lint + format checks)
-* update            Update all dependencies to latest versions
-* clean             Clean all build artifacts
-* rust:build        Build Rust crate
-* rust:test         Run Rust tests
-* python:build      Build Python extension
-* python:test       Run Python tests
-...and more
-```
-
-## CI/CD Integration
-
-The same Taskfile used locally is also used in continuous integration workflows. This ensures consistency between local development and CI pipelines.
-
-### Build Profile in CI
-
-CI pipelines use the `ci` build profile for enhanced diagnostics and consistency:
-
-```bash
-# In GitHub Actions and other CI systems:
-BUILD_PROFILE=ci task build:all:ci
-BUILD_PROFILE=ci task test:all:ci
-```
-
-### Running CI Checks Locally
-
-To test your changes before pushing, run the same commands CI uses:
-
-```bash
-# Verify code quality (no modifications)
-task check
-
-# Run all tests with CI-level diagnostics
-task test:all:ci
-
-# Build all bindings in CI mode
-BUILD_PROFILE=ci task build:all:ci
-```
-
-This helps catch issues before your PR reaches CI.
-
-### Cross-Architecture Testing
-
-Kreuzberg maintains continuous integration testing across multiple architectures:
-
-- **x86_64**: Standard Linux and Windows runners
-- **aarch64**: Linux ARM64 (`ubuntu-24.04-arm`) and macOS ARM64 (Apple Silicon) runners
-
-Each language binding is tested on aarch64 to ensure:
-- Native compilation works correctly
-- Precompiled binaries function as expected
-- No architecture-specific regressions
-- Performance characteristics match expectations
-
-**When Contributing**:
-- Changes affecting platform-specific code: Monitor CI results for aarch64 jobs
-- Binary packaging changes: Ensure CI matrix includes aarch64 testing
-- System dependencies: Verify availability on both x86_64 and aarch64
-
-The CI pipeline automatically tests your changes on all supported architectures.
-
-## Code Quality
-
-### Formatting
-
-The project enforces consistent code formatting across all languages:
-
-```bash
-# Auto-format all code
-task format
-
-# Check if code is formatted correctly (for CI)
-task format:check
-```
-
-Supported formatters:
-- **Rust**: `rustfmt`
-- **Python**: `black` and `isort`
-- **TypeScript**: `prettier` and `biome`
-- **Ruby**: `ruby-linter`
-- **Java**: `google-java-format`
-- **Go**: `gofmt`
-- **C#**: `dotnet format`
-- **PHP**: `php-cs-fixer`
-- **TOML**: `taplo`
-
-### Linting
-
-Lint checks ensure code quality and consistency:
-
-```bash
-# Run all linters with auto-fix
-task lint
-
-# Check only (no modifications)
-task lint:check
-```
-
-Supported linters vary by language. Check `task -h lint` for details.
-
-### Pre-commit Hooks
-
-The project includes pre-commit hooks configuration (`.pre-commit-config.yaml`). To use it:
-
-```bash
-# Install pre-commit hooks (requires pre-commit to be installed)
-pre-commit install
-
-# Run hooks on all files
-pre-commit run --all-files
-
-# Run specific hooks
-pre-commit run rust-fmt --all-files
-```
-
-## Testing
-
-### Running Tests
-
-```bash
-# Run all language tests
-task test
-
-# Run tests for a specific language
-task rust:test
-task python:test
-task node:test
-
-# Run all tests in parallel (faster)
-task test:all:parallel
-
-# Run tests with CI-level diagnostics
-task test:all:ci
-```
-
-### E2E Tests
-
-End-to-end tests validate functionality across languages:
-
-```bash
-# Generate E2E test code from fixtures
-task e2e:generate:all
-
-# Run all E2E tests
-task e2e:test:all
-
-# Lint generated E2E test code
-task e2e:lint:all
-```
-
-## Development Best Practices
-
-1. **Use `task setup` first**: Ensure all dependencies are installed before starting development
-
-2. **Run `task check` before committing**: Verify formatting and linting locally:
-   ```bash
-   task check
-   ```
-
-3. **Use language-specific tasks for focused work**:
-   ```bash
-   # Working on Rust? Focus on Rust tasks
-   task rust:build:dev
-   task rust:test
-   task rust:format:check
-   ```
-
-4. **Leverage build profiles**: Use `dev` for rapid iteration, `release` when optimizing
-   ```bash
-   BUILD_PROFILE=dev task rust:build  # Fast iteration
-   BUILD_PROFILE=release task rust:build  # Performance testing
-   ```
-
-5. **Test before pushing**: Run CI-level tests locally to catch issues early:
-   ```bash
-   BUILD_PROFILE=ci task test:all:ci
-   ```
-
-## Documentation and Help
-
-- **Task documentation**: [https://taskfile.dev/](https://taskfile.dev/)
-- **Kreuzberg documentation**: [https://kreuzberg.dev/](https://kreuzberg.dev/)
-- **Get help**: Use `task -h <taskname>` to see options and descriptions
-- **Contribute documentation**: Submit PRs to improve our docs
-
-## Questions?
-
-Have questions about contributing? Please:
-- Check the [Kreuzberg documentation](https://kreuzberg.dev/)
-- Open an issue on [GitHub](https://github.com/kreuzberg-dev/kreuzberg/issues)
-- Join our [Discord community](https://discord.gg/xt9WY3GnKR)
-
-Thank you for contributing to Kreuzberg!
+Thank you for helping make Kreuzberg better!

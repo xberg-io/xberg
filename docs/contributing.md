@@ -1,208 +1,198 @@
 # Contributing Guide
 
-Thanks for helping improve Kreuzberg! This guide summarizes the workflow, tooling, and expectations for contributions across all language bindings.
+Thank you for your interest in contributing to Kreuzberg! This guide covers everything you need — from picking an issue to getting your pull request merged.
+
+---
+
+## First time contributing?
+
+Welcome! Here's how to get started:
+
+1. **Pick an issue** that matches your experience level:
+      - [Good first issue](https://github.com/kreuzberg-dev/kreuzberg/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) — small, well-scoped tasks ideal for newcomers
+      - [Help wanted](https://github.com/kreuzberg-dev/kreuzberg/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) — tasks where we'd especially appreciate community help
+2. **Read through the issue** and any existing comments
+3. **Leave a comment** letting maintainers know you'd like to work on it
+4. **Ask questions** — we're here to help!
+
+Congratulations — that's really all it takes to start contributing! Fork, fix, and open a PR. We keep the process simple so you can focus on what matters: the code.
+
+!!! tip
+    Start small. A focused contribution you understand well is more valuable than an ambitious one that stalls.
+
+Want to propose a larger change or new feature? [Open an issue](https://github.com/kreuzberg-dev/kreuzberg/issues) to discuss it with maintainers first.
+
+---
 
 ## Prerequisites
 
-- Rust toolchain (`rustup`) with the stable channel.
-- Python 3.10+ (we use `uv` for virtualenv and dependency management).
-- Node.js 20+ with `pnpm`.
-- Ruby 3.2.0 or higher (including Ruby 4.x) via `rbenv` (preferred) or `rvm`.
-- go 1.26+ (install via `brew install go`, `asdf install golang`, or the official installer).
-- Java 25+ (required for FFM API bindings).
-- .NET 10+ (required for C# bindings).
-- Homebrew (macOS) or system equivalents for Tesseract/Pdfium dependencies.
+You only need the toolchains for the areas you plan to work on.
 
-Install all project dependencies in one shot:
+**Required for all contributions:**
+
+- [Git](https://git-scm.com/) - 
+- [Task](https://taskfile.dev/installation/) — our task runner for all build and test workflows
+- Rust stable (via `rustup`) — required for core and all bindings
+
+**Language-specific toolchains** (only install what you need):
+
+| Language | Version | Tool |
+|----------|---------|------|
+| Python | 3.10+ | `uv` |
+| Node.js | 20+ | `pnpm` |
+| Ruby | 3.2+ | `rbenv` or `rvm` |
+| Go | 1.26+ | Official installer |
+| Java | 25+ | JDK |
+| .NET | 10+ | `dotnet` |
+| PHP | 8.1+ | `composer` |
+
+For platform-specific build dependencies (compilers, OpenSSL, etc.), see the [Installation guide](getting-started/installation.md).
+
+---
+
+## Development setup
+
+Set up your entire environment with a single command:
 
 ```bash title="Terminal"
 task setup
 ```
 
-This runs language-specific installers (Python `uv sync`, `pnpm install`, `bundle install`) and builds the Rust workspace.
+This installs all toolchains and dependencies. Safe to re-run anytime.
 
-## Building from Source
-
-### Build-Time Dependencies
-
-Kreuzberg uses pure Rust dependencies and requires no system libraries beyond standard build tools (the embeddings feature requires ONNX Runtime, which is optional).
-
-### Platform-Specific Requirements
-
-**Linux**:
-```bash title="Terminal"
-# Ubuntu/Debian
-sudo apt-get install build-essential libssl-dev pkg-config
-
-# Fedora/RHEL
-sudo dnf groupinstall "Development Tools"
-sudo dnf install openssl-devel pkg-config
-```
-
-**macOS**:
-```bash title="Terminal"
-# Install OpenSSL 3.x
-brew install openssl@3
-
-# Install Xcode Command Line Tools (required for compilation)
-xcode-select --install
-```
-
-**Windows**:
-- Install [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022) with C++ support
-- Or use MSYS2 with MinGW-w64: `pacman -S mingw-w64-x86_64-toolchain`
-
-### Building the Rust Core
+For building individual language bindings, use the namespace pattern:
 
 ```bash title="Terminal"
-# Build all workspace crates
-cargo build --workspace
-
-# Build with specific features
-cargo build -p kreuzberg --features full
-
-# Build release binaries
-cargo build --release --workspace
+task rust:build
+task python:build
+task node:build
 ```
 
-### Building Language Bindings
+---
 
-**Python** (PyO3):
+## Development workflow
+
+### 1. Fork and clone
+
+Fork the repository on GitHub, then clone your fork:
+
 ```bash title="Terminal"
-cd packages/python
-
-# Build and install in development mode (editable install)
-maturin develop
-
-# Build wheel package for distribution
-maturin build
+git clone git@github.com:<your-username>/kreuzberg.git
+cd kreuzberg
+git remote add upstream https://github.com/kreuzberg-dev/kreuzberg.git
 ```
 
-**TypeScript** (NAPI-RS):
+### 2. Create a branch
+
 ```bash title="Terminal"
-cd packages/typescript
-
-# Build native module and generate TypeScript declarations
-pnpm build
+git checkout -b feat/your-feature-name main
 ```
 
-**Ruby** (Magnus):
+Use a prefix that matches your change type: `feat/`, `fix/`, `docs/`, `perf/`, `chore/`, `test/`.
+
+### 3. Make your changes
+
+Keep commits small and focused.
+
+### 4. Run checks
+
 ```bash title="Terminal"
-cd packages/ruby
-
-# Compile native extension
-bundle exec rake compile
-
-# Build platform-specific gem
-bundle exec rake native:gem
+task check
 ```
 
-**Go** (cgo):
+This runs both linting and formatting checks. For language-specific tests:
+
 ```bash title="Terminal"
-# Build FFI library with full features (Linux/macOS)
-cargo build -p kreuzberg-ffi --release
-
-# Build FFI library for Windows (MinGW cannot link ONNX Runtime, so use core features only)
-cargo build -p kreuzberg-ffi --release --target x86_64-pc-windows-gnu --no-default-features --features core
-
-# Set library paths for Go to find the FFI library
-export DYLD_FALLBACK_LIBRARY_PATH=$PWD/target/release  # macOS
-export LD_LIBRARY_PATH=$PWD/target/release             # Linux
-# Windows: Add target\release to PATH environment variable
-
-# Install Go development tools (golangci-lint) and download modules
-task go:install
-
-# Run code formatters and linters (gofmt + golangci-lint)
-task go:lint
-
-# Run Go tests (requires libkreuzberg_ffi in target/release)
-task go:test
-
-# Regenerate test fixtures and run end-to-end Go tests
-task e2e:go:verify
+task rust:test
+task python:test
+task node:test
 ```
 
-**Note:** Windows Go builds use MinGW (GNU toolchain) which cannot link MSVC-only ONNX Runtime. The `core` feature excludes embeddings but includes all other functionality.
+### 5. Commit with conventional messages
 
-**Java** (FFM API):
-```bash title="Terminal"
-cd packages/java
+We use [Conventional Commits](https://www.conventionalcommits.org/). The pre-commit hook validates this.
 
-# Clean, compile, and run tests
-mvn clean compile test
-
-# Run code quality checks (Checkstyle)
-mvn checkstyle:check
+```
+feat: add PDF table extraction support
+fix: handle empty MIME type in archive entries
+docs: update Python API reference for v4.4
+perf: parallelize layout inference
 ```
 
-**C#** (.NET):
-```bash title="Terminal"
-cd packages/csharp
+### 6. Update documentation
 
-# Build the C# project
-dotnet build
+When adding user-facing features, add or update pages under `docs/` and reference them in `mkdocs.yaml`.
 
-# Run all tests
-dotnet test
-```
+---
 
-### Common Build Issues
+## Issues
 
-**Cross-compilation**:
-```bash title="Terminal"
-# Install target
-rustup target add x86_64-unknown-linux-musl
+### Finding issues
 
-# Build with cross
-cargo install cross
-cross build --target x86_64-unknown-linux-musl
-```
+Browse the [issue tracker](https://github.com/kreuzberg-dev/kreuzberg/issues) and filter by labels: `good first issue`, `help wanted`, `bug`, or `enhancement`.
 
-**Linker errors on Linux**:
-Ensure you have `gcc` and `binutils` installed:
-```bash title="Terminal"
-sudo apt-get install build-essential
-```
+### Reporting a bug
 
-## Development Workflow
+Include: what you expected, what happened (with error output), steps to reproduce, your environment (OS, language version, Kreuzberg version), and a minimal sample file if applicable.
 
-1. **Create a branch** off `main` with a descriptive name (e.g., `feat/python-config-alias`).
-2. **Make changes** with small, focused commits. Code should compile on all supported platforms.
-3. **Run tests/lint** for the areas you touched:
-   - `task lint` – cross-language linters (cargo clippy, Ruff, Rubocop, Biome/Oxlint, Mypy).
-   - `task dev:test` – full test matrix (Rust + Python + Ruby + TypeScript + Go + Java + C#).
-   - Language-specific shortcuts: `task python:test`, `task typescript:test`, `task ruby:test`, `task rust:test`, `task go:test`, `task java:test`, `task csharp:test`.
-4. **Write/Update docs** when adding features. User-facing content lives under `docs/` and must be referenced in `mkdocs.yaml`.
-5. **Ensure conventional commits** (`feat: ...`, `fix: ...`, `docs: ...`). The pre-commit hook checks commit messages.
-6. **Create a pull request** with a clear summary, screenshots/logs if relevant, and a checklist of tests you ran.
+### Suggesting improvements
 
-## Coding Standards
+Search for existing issues first. Describe the use case and keep scope focused — break large ideas into smaller, actionable issues.
 
-- **Rust**: edition 2024, no `unwrap` in production paths, document all public items, add `SAFETY` comments for unsafe blocks.
-- **Python**: dataclasses use `frozen=True`, `slots=True`; function-based pytest tests; follow Ruff/Mypy rules.
-- **TypeScript**: maintain strict types, avoid `any`, keep bindings in `packages/typescript/src` and tests under `tests/binding|smoke|cli`.
-- **Ruby**: no global state outside `Kreuzberg` module, keep native bridge panic-free, follow Rubocop defaults.
-- **Java**: FFM API (Foreign Function & Memory), sealed classes, records, pattern matching; JUnit 5; follow Checkstyle rules.
-- **C#**: .NET 10+; follow Microsoft C# coding conventions; use records for data types, nullable reference types enabled.
-- **Testing strategy**: Only language-specific smoke/binding tests live in each package; shared behavior belongs to the `e2e/` fixtures (Python, Ruby, TypeScript, Rust, Go, Java, C# runners). When adding a new feature, update the relevant fixture and regenerate via `task e2e:<lang>:generate`.
+!!! tip "Filing great issues"
+    Be specific: "PDF tables lose column alignment" is better than "PDF parsing is broken." Explain impact and link related issues with `#123`.
 
-## Documentation
+---
 
-- User docs only belong under `docs/`. Each new page must be added to `mkdocs.yaml`.
-- Prefer linking to existing guides or references rather than duplicating explanations.
-- Run `mkdocs build` (or `task docs:build`) if you add/rename files to ensure nav entries resolve.
+## Submitting a pull request
 
-## Submitting a PR
+### PR checklist
 
-Before opening a PR, verify:
+Before opening a PR, verify locally:
 
-- [ ] `task lint` passes.
-- [ ] Targeted tests or `task dev:test` pass.
-- [ ] Docs and changelog entries are updated (if applicable).
-- [ ] New files include appropriate licenses/headers where required.
-- [ ] Commit messages follow Conventional Commits.
+- [ ] `task check` passes
+- [ ] Targeted tests pass
+- [ ] Docs updated (if applicable)
+- [ ] Commits follow Conventional Commits
 
-Once reviewed and merged, GitHub Actions will produce updated wheels, gems, N-API bundles, CLI binaries, and Docker images.
+### Writing a good PR description
 
-Thanks again for contributing!
+Include **what** changed, **why**, and **how** you tested it. Use `Fixes #123` to auto-close related issues.
+
+!!! tip
+    Set your PR to **Draft** while it's in progress. Maintainers may leave early comments but won't do a full review until you mark it ready.
+
+### Review and merge
+
+1. **CI runs** — automated builds and tests across platforms
+2. **Maintainers review** — code correctness, style, and design
+3. **Feedback rounds** — make requested changes and push
+4. **Merge** — once approved with all checks passing
+
+**Merge requirements:** all CI checks pass, at least one maintainer approval, no unresolved conversations, branch up to date with `main`.
+
+!!! info
+    Don't worry about failing CI on your first PR. Maintainers will help you resolve issues.
+
+---
+
+## Coding standards
+
+- **Rust:** Edition 2024, no `unwrap()` in production paths, document all public items, `SAFETY` comments for `unsafe` blocks
+- **Python:** `frozen=True` / `slots=True` dataclasses, function-based pytest, follow Ruff and Mypy rules
+- **TypeScript:** Strict types, no `any`, bindings in `packages/typescript/src`
+- **Ruby:** No global state outside `Kreuzberg` module, panic-free native bridge, follow RuboCop
+- **Go / Java / C#:** Follow standard language conventions and project linters
+
+**Testing:** language-specific tests live in each package; shared E2E behavior belongs in `e2e/` fixtures. When adding features, regenerate with `task e2e:<lang>:generate`.
+
+---
+
+## Community and support
+
+- **Star the repo:** [Give us a star on GitHub](https://github.com/kreuzberg-dev/kreuzberg) — it helps others discover Kreuzberg!
+- **Discord:** [Join our community](https://discord.gg/xt9WY3GnKR)
+- **Issues:** [GitHub Issues](https://github.com/kreuzberg-dev/kreuzberg/issues)
+- **License:** [MIT](https://github.com/kreuzberg-dev/kreuzberg/blob/main/LICENSE)
+
+Thank you for contributing to Kreuzberg!

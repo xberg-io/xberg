@@ -1018,9 +1018,7 @@ strong {
 	background: linear-gradient(90deg, rgba(218, 42, 224, 0.18) 0%, transparent 100%);
 	box-shadow: none;
 	border-radius: 4px;
-	padding: 8px 60px 8px 12px;
-	align-items: center;
-	margin-left: -12px;
+	padding: 8px 12px;
 	color: #da2ae0;
 	font-weight: 500;
 }
@@ -1034,7 +1032,7 @@ strong {
 }
 
 .md-nav--secondary .md-nav__list .md-nav__link {
-	margin-top: 20px;
+	margin-top: 8px;
 	margin-right: 0;
 }
 
