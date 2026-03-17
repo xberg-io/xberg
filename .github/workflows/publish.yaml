@@ -1203,7 +1203,7 @@ jobs:
           use-sccache: true
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@dffb23f65a78bba8db45d387d5ea1bbd6be3ef18 # v1.293.0
+        uses: ruby/setup-ruby@c984c1a20bb35a1cbda04477c816cea024418be9 # v1.294.0
         with:
           ruby-version: "3.3"
           bundler: none
@@ -2930,7 +2930,7 @@ jobs:
           merge-multiple: true
 
       - name: Set up Ruby
-        uses: ruby/setup-ruby@dffb23f65a78bba8db45d387d5ea1bbd6be3ef18 # v1.293.0
+        uses: ruby/setup-ruby@c984c1a20bb35a1cbda04477c816cea024418be9 # v1.294.0
         with:
           ruby-version: '3.3'
           bundler: none
