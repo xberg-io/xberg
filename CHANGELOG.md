@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **PDF image extraction decoding**: Images returned from PDFs (FlateDecode, DCTDecode, JPXDecode) are now automatically decoded and re-encoded as standard formats (PNG/JPEG/etc.) instead of returning raw compressed bytes. Updated the image format mapping to reflect standard MIME-compatible types.
 - **PDF structure tree heading trust**: Structure tree heading tags (H1–H6) are now trusted as author-intent metadata with only a word-count guard. Previously, font-size validation rejected valid headings when the font was close to body size.
 - **PDF structure tree extraction performance**: MCID text and style maps are now built in a single pass over page objects (was two passes). Uses the pre-loaded `FPDFText` page handle instead of calling `FPDFText_LoadPage` per text object, eliminating multi-second extraction times on complex pages.
 - **OCR layout: Picture regions no longer suppress text**: Layout-detected Picture regions (diagrams, figures) now preserve any embedded text as plain paragraphs instead of silently dropping it. Uses content-aware `is_substantive_text()` heuristic to distinguish real text from OCR artifacts.
