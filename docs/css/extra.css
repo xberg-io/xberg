@@ -1472,6 +1472,42 @@ body:has(.full-width-iframe) article {
 	color: #50fa7b;
 }
 
+/* Format chips — compact inline badges for format listings */
+.format-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3em;
+	padding: 0.25em 0;
+}
+
+.format-chip {
+	display: inline-block;
+	font-size: 0.8rem;
+	font-family: Inter, sans-serif;
+	font-weight: 500;
+	line-height: 1;
+	padding: 0.35em 0.7em;
+	margin: 0.2em 0.15em;
+	border-radius: 6px;
+	background-color: #f2f2f4;
+	color: #323040;
+	white-space: nowrap;
+}
+
+.format-chip code {
+	font-size: 0.75rem;
+	font-weight: 400;
+	opacity: 0.65;
+	background: transparent !important;
+	padding: 0 !important;
+	color: inherit !important;
+}
+
+[data-md-color-scheme="slate"] .format-chip {
+	background-color: #3c3a4a;
+	color: #ffffff;
+}
+
 /* =====================================================
    Homepage Styles
    ===================================================== */

@@ -14,35 +14,91 @@ Kreuzberg handles 88+ file formats through native Rust extractors. No external t
 
 === "Documents"
 
-    PDF, Word (`.docx`, `.doc`), OpenDocument (`.odt`), PowerPoint (`.pptx`, `.ppt`), Plain text, Markdown, Djot, MDX, RTF, reStructuredText, Org Mode, Hangul (`.hwp`, `.hwpx`)
+    <div class="format-chips">
+    <span class="format-chip">PDF <code>.pdf</code></span>
+    <span class="format-chip">Word <code>.docx .doc</code></span>
+    <span class="format-chip">PowerPoint <code>.pptx .ppt</code></span>
+    <span class="format-chip">OpenDocument <code>.odt</code></span>
+    <span class="format-chip">Plain text <code>.txt</code></span>
+    <span class="format-chip">Markdown <code>.md</code></span>
+    <span class="format-chip">Djot <code>.djot</code></span>
+    <span class="format-chip">MDX <code>.mdx</code></span>
+    <span class="format-chip">RTF <code>.rtf</code></span>
+    <span class="format-chip">reStructuredText <code>.rst</code></span>
+    <span class="format-chip">Org <code>.org</code></span>
+    <span class="format-chip">Hangul <code>.hwp .hwpx</code></span>
+    </div>
 
 === "Spreadsheets"
 
-    Excel (`.xlsx`, `.xls`, `.xlsm`, `.xlsb`), OpenDocument Spreadsheet (`.ods`), CSV, TSV, dBASE (`.dbf`)
+    <div class="format-chips">
+    <span class="format-chip">Excel <code>.xlsx .xls .xlsm .xlsb</code></span>
+    <span class="format-chip">OpenDocument <code>.ods</code></span>
+    <span class="format-chip">CSV <code>.csv</code></span>
+    <span class="format-chip">TSV <code>.tsv</code></span>
+    <span class="format-chip">dBASE <code>.dbf</code></span>
+    </div>
 
 === "Images"
 
-    JPEG, PNG, GIF, BMP, TIFF, WebP, JPEG 2000 (`.jp2`, `.jpx`, `.jpm`, `.mj2`), JBIG2, PNM/PBM/PGM/PPM
+    <div class="format-chips">
+    <span class="format-chip">JPEG <code>.jpg .jpeg</code></span>
+    <span class="format-chip">PNG <code>.png</code></span>
+    <span class="format-chip">GIF <code>.gif</code></span>
+    <span class="format-chip">BMP <code>.bmp</code></span>
+    <span class="format-chip">TIFF <code>.tiff .tif</code></span>
+    <span class="format-chip">WebP <code>.webp</code></span>
+    <span class="format-chip">JPEG 2000 <code>.jp2 .jpx .jpm .mj2</code></span>
+    <span class="format-chip">JBIG2 <code>.jbig2</code></span>
+    <span class="format-chip">PNM <code>.pnm .pbm .pgm .ppm</code></span>
+    </div>
 
 === "Email"
 
-    EML (RFC 822), MSG (Outlook)
+    <div class="format-chips">
+    <span class="format-chip">EML <code>.eml</code></span>
+    <span class="format-chip">MSG <code>.msg</code></span>
+    </div>
 
 === "Web and Markup"
 
-    HTML, XHTML, XML, SVG
+    <div class="format-chips">
+    <span class="format-chip">HTML <code>.html .htm</code></span>
+    <span class="format-chip">XHTML <code>.xhtml</code></span>
+    <span class="format-chip">XML <code>.xml</code></span>
+    <span class="format-chip">SVG <code>.svg</code></span>
+    </div>
 
 === "Structured Data"
 
-    JSON, YAML, TOML
+    <div class="format-chips">
+    <span class="format-chip">JSON <code>.json</code></span>
+    <span class="format-chip">YAML <code>.yaml</code></span>
+    <span class="format-chip">TOML <code>.toml</code></span>
+    </div>
 
 === "Archives"
 
-    ZIP, TAR, GZIP, 7-Zip
+    <div class="format-chips">
+    <span class="format-chip">ZIP <code>.zip</code></span>
+    <span class="format-chip">TAR <code>.tar .tgz</code></span>
+    <span class="format-chip">GZIP <code>.gz</code></span>
+    <span class="format-chip">7-Zip <code>.7z</code></span>
+    </div>
 
 === "Academic"
 
-    EPUB, BibTeX, RIS, CSL, LaTeX, Typst, JATS, DocBook, OPML
+    <div class="format-chips">
+    <span class="format-chip">EPUB <code>.epub</code></span>
+    <span class="format-chip">BibTeX <code>.bib</code></span>
+    <span class="format-chip">RIS <code>.ris</code></span>
+    <span class="format-chip">CSL <code>.csl</code></span>
+    <span class="format-chip">LaTeX <code>.tex</code></span>
+    <span class="format-chip">Typst <code>.typ</code></span>
+    <span class="format-chip">JATS <code>.jats</code></span>
+    <span class="format-chip">DocBook <code>.docbook</code></span>
+    <span class="format-chip">OPML <code>.opml</code></span>
+    </div>
 
 For the full format matrix with MIME types, extraction methods, and special capabilities, see the [Format Support Reference](reference/formats.md).
 
