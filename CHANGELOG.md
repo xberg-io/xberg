@@ -9,30 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [4.5.0] - Unreleased
 
-### Breaking
-
-- **Batch API unification**: All `_with_configs` batch functions have been removed across all language bindings. Per-file `FileExtractionConfig` overrides are now an optional parameter on the unified batch functions (`batch_extract_file`, `batch_extract_file_sync`, `batch_extract_bytes`, `batch_extract_bytes_sync`). This applies to Rust, Python, TypeScript/Node, Go, Java, C#, PHP, Ruby, Elixir, R, WASM, and C FFI.
-
-  **Migration:**
-
-  ```python
-  # Before (v4.4.x)
-  from kreuzberg import batch_extract_files_with_configs_sync
-  results = batch_extract_files_with_configs_sync(items, config)
-
-  # After (v4.5.0)
-  from kreuzberg import batch_extract_files_sync
-  results = batch_extract_files_sync(paths, config, file_configs=file_configs)
-  ```
-
-  ```rust
-  // Before (v4.4.x)
-  let results = batch_extract_file_with_configs(items, &config).await?;
-
-  // After (v4.5.0)
-  let results = batch_extract_file(paths, &config, Some(&file_configs)).await?;
-  ```
-
 ### Added
 
 - **Experimental: pdf_oxide text extraction backend** (`pdf-oxide` feature): Pure Rust PDF text extraction using [pdf_oxide](https://crates.io/crates/pdf_oxide). Parses PDF content streams directly with adaptive TJ-offset thresholds, providing an alternative to pdfium for text extraction. Opt-in only, not included in `full` feature set.

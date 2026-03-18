@@ -30,7 +30,7 @@ You only need the toolchains for the areas you plan to work on.
 
 **Required for all contributions:**
 
-- [Git](https://git-scm.com/) - 
+- [Git](https://git-scm.com/) -
 - [Task](https://taskfile.dev/installation/) — our task runner for all build and test workflows
 - Rust stable (via `rustup`) — required for core and all bindings
 

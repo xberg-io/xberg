@@ -23,9 +23,6 @@ const MAX_REFINEMENT_ITERATIONS: usize = 3;
 /// Among qualifying regions, the one with highest IoS wins; ties broken by
 /// smallest area (most specific region).
 ///
-/// Table regions participate in assignment so that segments at the table-text
-/// boundary are assigned to whichever region they overlap most, rather than
-/// being suppressed with a hard threshold. Segments assigned to Table regions
 /// Table and Picture regions are excluded from assignment — handled separately.
 /// Segments overlapping successfully extracted tables are suppressed (>=50% IoS).
 /// Segments overlapping Picture regions are suppressed unless substantive.

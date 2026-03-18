@@ -1548,8 +1548,9 @@ struct CExtractionResult *kreuzberg_extract_bytes_sync_with_config(const uint8_t
  * # Safety
  *
  * - `file_paths` must be a valid pointer to an array of null-terminated C strings
- * - `file_config_jsons` must be a valid pointer to an array of `count` nullable C strings
- *   (null entries use the base config, non-null entries are parsed as JSON `FileExtractionConfig`)
+ * - `file_config_jsons` must be NULL (no per-file configs) or a valid pointer to an array of
+ *   `count` nullable C strings (null entries use the base config, non-null entries are parsed as
+ *   JSON `FileExtractionConfig`)
  * - `count` must be the number of items in both arrays
  * - `config_json` must be a valid null-terminated C string containing JSON, or NULL for default config
  * - The returned pointer must be freed with `kreuzberg_free_batch_result`
@@ -1573,8 +1574,9 @@ struct CBatchResult *kreuzberg_batch_extract_files_sync(const char *const *file_
  * # Safety
  *
  * - `items` must be a valid pointer to an array of CBytesWithMime structures
- * - `file_config_jsons` must be a valid pointer to an array of `count` nullable C strings
- *   (null entries use the base config, non-null entries are parsed as JSON `FileExtractionConfig`)
+ * - `file_config_jsons` must be NULL (no per-file configs) or a valid pointer to an array of
+ *   `count` nullable C strings (null entries use the base config, non-null entries are parsed as
+ *   JSON `FileExtractionConfig`)
  * - `count` must be the number of items in both arrays
  * - `config_json` must be a valid null-terminated C string containing JSON, or NULL for default config
  * - The returned pointer must be freed with `kreuzberg_free_batch_result`
