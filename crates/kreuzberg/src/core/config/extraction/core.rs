@@ -315,7 +315,7 @@ impl ExtractionConfig {
     /// decompression can improve CPU utilization by 5-10% by avoiding wasteful
     /// image I/O and processing when results won't be used.
     pub fn needs_image_processing(&self) -> bool {
-        let ocr_enabled = self.ocr.is_some();
+        let ocr_enabled = self.ocr.is_some() || self.force_ocr;
 
         let image_extraction_enabled = self.images.as_ref().map(|i| i.extract_images).unwrap_or(false);
 
