@@ -1,6 +1,6 @@
 # Kreuzberg vs Unstructured
 
-Both Kreuzberg and Unstructured are open-source tools for extracting text, tables, and metadata from documents. They solve similar problems but make very different architectural choices. This page breaks down where each one shines so you can pick the right tool for your project.
+Both Kreuzberg and Unstructured are open-source tools for extracting text, tables, and metadata from documents. They solve similar problems but make very different architectural choices. This doc breaks down where each one shines so you can pick the right tool for your project.
 
 ## At a Glance
 
