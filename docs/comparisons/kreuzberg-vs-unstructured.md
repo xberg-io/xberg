@@ -1,257 +1,88 @@
-# Kreuzberg vs Unstructured: Feature Comparison
+# Kreuzberg vs Unstructured
 
-A comprehensive comparison of Kreuzberg and Unstructured.io for document intelligence workloads.
+Both Kreuzberg and Unstructured are open-source tools for extracting text, tables, and metadata from documents. They solve similar problems but make very different architectural choices. This page breaks down where each one shines so you can pick the right tool for your project.
 
-## Executive Summary
+## At a Glance
 
-| Aspect | Kreuzberg | Unstructured |
-|--------|-----------|--------------|
-| **Core Language** | Rust | Python |
-| **Performance** | Rust-based native speed | Python-based |
-| **Formats Supported** | 88+ | ~30 |
-| **Language Bindings** | 10 (Python, TS, Ruby, PHP, Go, Java, C#, Elixir, Rust, WASM) | Python + API |
-| **Deployment** | Self-hosted (CLI, API, library) | Cloud API + self-hosted |
-| **Pricing** | Free & open-source | Free tier + paid plans |
-| **Best For** | High-performance, polyglot stacks, self-hosted | Rapid prototyping, managed service |
+| | Kreuzberg | Unstructured |
+|---|---|---|
+| **Written in** | Rust | Python |
+| **File formats** | 88+ | ~30 |
+| **Use from** | Python, TypeScript, Go, Ruby, Java, C#, PHP, Elixir, Rust, WASM | Python, or any language via REST API |
+| **Run it as** | Library, CLI, self-hosted API, browser (WASM) | Python library, managed cloud API, self-hosted API |
+| **Pricing** | Free, Apache 2.0 | Free (open-source) + paid managed API |
+| **Sweet spot** | High-throughput pipelines, polyglot stacks, on-prem | Managed service, ML-heavy layout analysis, quick prototyping |
 
-## Feature Matrix
+---
 
-### Document Processing
+## How They Differ
 
-| Feature | Kreuzberg | Unstructured | Notes |
-|---------|-----------|--------------|-------|
-| **PDF Extraction** | ✅ Full support | ✅ Full support | Kreuzberg has native hierarchy detection |
-| **PDF Hierarchy (h1-h6)** | ✅ Font-size clustering | ✅ ML-based layout | Kreuzberg uses statistical clustering |
-| **OCR (Tesseract)** | ✅ Built-in | ✅ Built-in | Both support Tesseract |
-| **Table Detection** | ✅ Native | ✅ ML-based | Unstructured has better complex table support |
-| **Image Extraction** | ✅ Full support | ✅ Full support | Both extract images with metadata |
-| **Bounding Boxes** | ✅ Native (PDF) | ✅ Available | Kreuzberg preserves from source |
-| **Multi-Page Support** | ✅ Per-page content | ✅ Page numbers | Kreuzberg has richer per-page metadata |
+### Architecture and Performance
 
-### Output Formats
+The core difference is what's under the hood.
 
-| Format | Kreuzberg | Unstructured |
-|--------|-----------|--------------|
-| **Unified Text** | ✅ Default | ❌ |
-| **Element-Based** | ✅ Optional | ✅ Default |
-| **Per-Page JSON** | ✅ Native | ⚠️ Via elements |
-| **Markdown** | ✅ Native (HTML→MD) | ❌ |
-| **Structured Data** | ✅ JSON/YAML/TOML | ✅ JSON |
+- **Kreuzberg** -- Rust library with native bindings for each language. Your Python, TypeScript, or Go code calls directly into compiled Rust with no subprocess spawning or HTTP overhead.
+- **Unstructured** -- Python library with an optional managed cloud API. Well-optimized for Python workflows, but other languages go through HTTP.
 
-### Element Types
+Bottom line: if you're processing thousands of documents in a pipeline, the Rust core gives Kreuzberg a throughput advantage. If you're in a Python-only stack, Unstructured is a natural fit.
 
-| Element Type | Kreuzberg | Unstructured | Notes |
-|--------------|-----------|--------------|-------|
-| Title | ✅ | ✅ | Kreuzberg adds hierarchy level metadata |
-| NarrativeText | ✅ | ✅ | Both detect paragraphs |
-| ListItem | ✅ | ✅ | Kreuzberg: bullets, numbered, lettered, indented |
-| Table | ✅ | ✅ | Kreuzberg: tab-separated text |
-| Image | ✅ | ✅ | Both include dimensions, format |
-| PageBreak | ✅ | ✅ | Between multi-page content |
-| Header | ⚠️ → Title | ✅ | Kreuzberg maps to title |
-| Footer | ⚠️ → NarrativeText | ✅ | Kreuzberg treats as narrative |
-| Address | ❌ | ✅ | Unstructured-specific |
-| EmailAddress | ❌ | ✅ | Unstructured-specific |
-| Formula | ❌ | ✅ | Unstructured-specific |
+### Format Coverage
 
-### Supported File Formats
+How much of your document zoo each tool can handle.
 
-**Kreuzberg (88+ formats)**:
-- Documents: PDF, DOCX, DOC, ODT, RTF, TXT, Markdown, RST, LaTeX, Typst
-- Presentations: PPTX, PPT, ODP, Keynote
-- Spreadsheets: XLSX, XLS, ODS, CSV
-- Web: HTML, XML, EPUB, FictionBook
-- Code: Jupyter Notebooks, Source code (via tree-sitter)
-- Data: JSON, YAML, TOML, BibTeX, OPML, OrgMode
-- Images: PNG, JPEG, TIFF, WebP (via OCR)
-- Email: EML, MSG
+- **Kreuzberg (88+ formats)** -- PDFs, Office docs, spreadsheets, HTML, images (via OCR), email, archives, source code, structured data (JSON/YAML/TOML), plus niche formats like LaTeX, Typst, BibTeX, Jupyter notebooks, EPUB, and OrgMode.
+- **Unstructured (~30 formats)** -- PDFs, Office files, HTML, images, email, and the most common document types. Covers the essentials well.
 
-**Unstructured (~30 formats)**:
-- Documents: PDF, DOCX, DOC, ODT, RTF, TXT
-- Presentations: PPTX, PPT
-- Spreadsheets: XLSX, XLS, CSV
-- Web: HTML, XML, EPUB
-- Data: JSON, Markdown
-- Images: PNG, JPEG, TIFF (via OCR)
-- Email: EML, MSG
+If your pipeline only deals with PDFs and Word docs, both work. If you need to ingest Jupyter notebooks or OrgMode files, Kreuzberg has you covered.
 
-**Winner**: Kreuzberg (broader format coverage)
+### Language Support and Deployment
 
-### Metadata Richness
+How you integrate each tool into your stack.
 
-**Kreuzberg Metadata** (format-specific discriminated unions):
-```json
-{
-  "title": "Document Title",
-  "authors": ["Author 1", "Author 2"],
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-20T14:45:00Z",
-  "language": "en",
-  "format": {
-    "format_type": "pdf",
-    "page_count": 10,
-    "version": "1.7",
-    "is_encrypted": false,
-    "permissions": {
-      "print": true,
-      "modify": false
-    }
-  }
-}
-```
+- **Kreuzberg** -- Native bindings for **10 languages** (Python, TypeScript, Go, Ruby, Java, C#, PHP, Elixir, Rust, WASM). Each binding calls directly into the Rust core -- same performance, same features. Also runs in the browser via WASM.
+- **Unstructured** -- Python-first. Other languages go through a **REST API**, either self-hosted or via their managed cloud. The managed API is a genuine advantage if you don't want to run infrastructure.
 
-**Unstructured Metadata**:
-```json
-{
-  "filename": "document.pdf",
-  "page_number": 1,
-  "filetype": "application/pdf"
-}
-```
+### OCR and Layout Analysis
 
-**Winner**: Kreuzberg (richer, format-specific metadata)
+Both tools handle OCR and document layout, but with different approaches.
 
-### Chunking & Embeddings
+- **OCR** -- Both integrate Tesseract. Kreuzberg adds a native **PaddleOCR** backend (ONNX-based, no Python needed) and a **multi-backend pipeline** that auto-falls back between engines based on output quality.
+- **Layout detection** -- Kreuzberg ships ONNX-based models with two presets: YOLO (fast) and RT-DETR v2 (accurate), covering 17 element classes plus SLANet table structure recognition. Unstructured offers mature ML-based layout detection with strong complex table support.
 
-| Feature | Kreuzberg | Unstructured | Notes |
-|---------|-----------|--------------|-------|
-| **Text Chunking** | ✅ Basic (fixed-size) | ✅ Advanced (by_title) | Unstructured has smarter strategies |
-| **Chunk Overlap** | ✅ Configurable | ✅ Configurable | Both support overlap |
-| **Embedding Generation** | ✅ Built-in (ONNX) | ⚠️ External API | Kreuzberg: local ONNX models |
-| **Embedding Models** | ✅ ONNX-based presets | ✅ OpenAI, Cohere, etc. | Kreuzberg: offline ONNX, Unstructured: API-based |
-| **Page Range Tracking** | ✅ Native | ✅ Via metadata | Kreuzberg tracks first_page/last_page |
+### Embeddings and Chunking
 
-### Language Bindings & Integrations
+How each tool prepares extracted text for RAG pipelines.
 
-**Kreuzberg**:
-- ✅ Python (PyO3)
-- ✅ TypeScript (NAPI-RS)
-- ✅ Ruby (Magnus)
-- ✅ PHP (ext-php-rs)
-- ✅ Go (cgo FFI)
-- ✅ Java (JNI FFI)
-- ✅ C# (P/Invoke FFI)
-- ✅ Elixir (Rustler NIFs)
-- ✅ Rust (native)
-- ✅ WASM (browser/Node/Deno/Workers)
+- **Kreuzberg** -- Generates embeddings **locally** with ONNX models (no API keys needed). Supports recursive, semantic, and markdown-aware chunking with optional token-based sizing via HuggingFace tokenizers.
+- **Unstructured** -- Uses **external APIs** (OpenAI, Cohere, etc.) for embeddings. Offers its own chunking strategies including a `by_title` chunker that respects document structure. Integrates cleanly if you're already paying for an embedding API.
 
-**Unstructured**:
-- ✅ Python (native)
-- ✅ REST API (language-agnostic)
-- ⚠️ Other languages via API only
+### Privacy and Cost
 
-**Winner**: Kreuzberg (native bindings for 10 languages)
+Where your documents go and what you pay.
 
-### Deployment Options
+- **Kreuzberg** -- Fully self-hosted. Documents never leave your infrastructure. No API fees -- you pay only for compute.
+- **Unstructured** -- Self-host for free, or use their **managed API** (free tier: 1,000 pages/month, paid plans beyond). The managed option trades cost for convenience -- no servers to maintain, no OCR dependencies to install.
 
-**Kreuzberg**:
-- ✅ CLI (single binary)
-- ✅ Self-hosted API (Docker, native)
-- ✅ Library (embedded in applications)
-- ✅ WASM (browser-based processing)
-- ❌ Managed cloud service
+---
 
-**Unstructured**:
-- ✅ Managed API (cloud-hosted)
-- ✅ Self-hosted API (Docker)
-- ✅ Python library
-- ❌ CLI
-- ❌ Browser-based
+## When to Use Kreuzberg
 
-### Cost Analysis
+- You're processing **high volumes** of documents and need throughput
+- Your stack isn't Python-only -- you need native support in **Go, TypeScript, Ruby, Java**, or other languages
+- You need to keep documents **on-prem** for privacy, compliance, or air-gapped environments
+- You want **local embeddings** without external API dependencies
+- You need to handle **uncommon formats** like LaTeX, Typst, Jupyter notebooks, or archives
 
-**Kreuzberg**:
-- **License**: Apache 2.0 (free, open-source)
-- **Infrastructure**: Self-hosted only (compute costs)
-- **Total Cost**: Infrastructure + maintenance
+## When to Use Unstructured
 
-**Unstructured**:
-- **License**: Apache 2.0 (free, open-source)
-- **Managed API**: Free tier (100 pages/month) + paid plans ($0.01-0.10/page)
-- **Self-hosted**: Infrastructure costs only
-- **Total Cost**: API fees OR infrastructure + maintenance
+- You want a **managed cloud service** so you don't run any infrastructure
+- You're in a **Python-only** environment and want the simplest setup
+- You need **mature ML models** for complex table extraction and layout analysis
+- You're prototyping and want to **get started quickly** with their hosted API
+- You're already using **OpenAI or Cohere** for embeddings and want a unified pipeline
 
-### Security & Compliance
+---
 
-| Feature | Kreuzberg | Unstructured |
-|---------|-----------|--------------|
-| **Data Privacy** | ✅ 100% on-prem | ⚠️ Cloud API or on-prem |
-| **GDPR Compliance** | ✅ Self-managed | ⚠️ Varies (cloud API) |
-| **SOC 2** | N/A (self-hosted) | ✅ (managed API) |
-| **Air-Gapped** | ✅ Fully supported | ⚠️ Self-hosted only |
-| **Audit Logs** | ⚠️ Basic (via API logs) | ✅ Advanced (managed) |
+!!! tip "Switching over?"
 
-## Use Case Recommendations
-
-### Choose Kreuzberg If:
-- ✅ You need **maximum performance** (Rust-based native speed)
-- ✅ You're building a **polyglot stack** (Python, TS, Go, etc.)
-- ✅ You require **strict data privacy** (on-prem processing)
-- ✅ You need to process **88+ file formats**
-- ✅ You want **zero API fees** (fully self-hosted)
-- ✅ You need **native bindings** for your language
-- ✅ You're processing **large document volumes** (high throughput)
-- ✅ You need **offline embeddings** (no external API calls)
-
-### Choose Unstructured If:
-- ✅ You need **ML-based layout detection** (GPU-accelerated)
-- ✅ You want a **managed cloud service** (zero ops)
-- ✅ You need **advanced chunking strategies** (by_title, semantic)
-- ✅ You're prototyping and want **fast setup**
-- ✅ You need **more granular element types** (Address, Formula, etc.)
-- ✅ You're already using **OpenAI/Cohere APIs** for embeddings
-- ✅ You have **low document volume** (free tier sufficient)
-
-## Migration Path
-
-**From Unstructured to Kreuzberg**:
-1. Deploy Kreuzberg API (Docker or native)
-2. Update endpoint URLs in your code
-3. Add `output_format=element_based` for Unstructured-compatible output
-4. Test with sample documents
-5. Optimize with Kreuzberg-specific features (hierarchy, per-page, embeddings)
-
-**From Kreuzberg to Unstructured**:
-1. Sign up for Unstructured API key
-2. Update endpoint URLs
-3. Remove `output_format` parameter (element-based is default)
-4. Adjust for different metadata structure
-
-## Roadmap & Future Features
-
-### Kreuzberg Planned Features:
-- ⏳ Enhanced chunking strategies (by_title, semantic)
-- ⏳ Layout detection models (optional GPU acceleration)
-- ⏳ More element types (Header, Footer, Formula)
-- ⏳ Cloud-hosted option (for non-self-hosters)
-
-### Unstructured Strengths:
-- ✅ Mature ML models (layout, tables)
-- ✅ Large community & integrations
-- ✅ Managed service with SLA
-
-## Verdict
-
-**Kreuzberg** excels at:
-- Performance (Rust native)
-- Polyglot support (10 language bindings)
-- Format coverage (88+ formats)
-- Self-hosted deployments
-- Cost efficiency (zero API fees)
-
-**Unstructured** excels at:
-- ML-powered layout analysis
-- Managed cloud service
-- Advanced chunking strategies
-- Larger ecosystem
-
-**Recommendation**:
-- **High-volume, polyglot, self-hosted** → Kreuzberg
-- **Rapid prototyping, managed service** → Unstructured
-- **Hybrid approach**: Use both (Kreuzberg for bulk processing, Unstructured for complex layouts)
-
-## Further Reading
-
-- [Migration Guide: Unstructured → Kreuzberg](../migration/from-unstructured.md)
-- [Kreuzberg Documentation](https://github.com/kreuzberg-dev/kreuzberg)
-- [Unstructured Documentation](https://unstructured.io/docs)
+    If you're currently using Unstructured and want to try Kreuzberg, check out the [Migration Guide](../migration/from-unstructured.md) for a step-by-step walkthrough.
