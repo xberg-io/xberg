@@ -262,8 +262,9 @@ impl PaddleOcrBackend {
         let text = text_blocks
             .iter()
             .map(|block| block.text.as_str())
+            .filter(|t| !t.is_empty())
             .collect::<Vec<_>>()
-            .join("\n");
+            .join("\n\n");
 
         Ok((text, ocr_elements))
     }
