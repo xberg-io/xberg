@@ -57,7 +57,7 @@
         <maven-javadoc-plugin.version>3.12.0</maven-javadoc-plugin.version>
         <maven-gpg-plugin.version>3.2.8</maven-gpg-plugin.version>
         <jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
-        <central-publishing-plugin.version>0.9.0</central-publishing-plugin.version>
+        <central-publishing-plugin.version>0.10.0</central-publishing-plugin.version>
         <!-- Skip GPG signing by default, only enable for publish profile -->
         <gpg.skip>true</gpg.skip>
     </properties>
