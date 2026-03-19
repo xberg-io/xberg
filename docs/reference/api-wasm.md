@@ -1299,6 +1299,7 @@ Configuration object for extraction. All fields are optional; defaults are used 
 **Fields:**
 
 - `chunkingConfig` (ChunkingConfig): Text chunking configuration
+- `concurrencyConfig` (ConcurrencyConfig): Concurrency configuration for extraction parallelization
 - `enableChunking` (boolean): Split text into semantic chunks
 - `enableLanguageDetection` (boolean): Detect document language
 - `enableQuality` (boolean): Enable encoding detection and normalization

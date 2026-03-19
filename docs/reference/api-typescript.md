@@ -411,6 +411,7 @@ Main configuration interface for extraction operations.
 ```typescript title="TypeScript"
 interface ExtractionConfig {
   chunking?: ChunkingConfig | null;
+  concurrency?: ConcurrencyConfig | null;
   enableQualityProcessing?: boolean;
   forceOcr?: boolean;
   htmlOptions?: HtmlConversionOptions | null;
@@ -439,6 +440,7 @@ interface ExtractionConfig {
 - `forceOcr` (boolean): Force OCR even for text-based PDFs. Default: false
 - `pdfOptions` (PdfConfig | null): PDF-specific configuration. Default: null
 - `chunking` (ChunkingConfig | null): Text chunking configuration. Default: null
+- `concurrency` (ConcurrencyConfig | null): Concurrency configuration. Default: null
 - `imageExtraction` (ImageExtractionConfig | null): Image extraction from documents. Default: null
 - `languageDetection` (LanguageDetectionConfig | null): Language detection configuration. Default: null
 - `tokenReduction` (TokenReductionConfig | null): Token reduction configuration. Default: null
@@ -673,6 +675,7 @@ PDF-specific configuration.
 
 ```typescript title="TypeScript"
 interface PdfConfig {
+  allowSingleColumnTables?: boolean;
   passwords?: string[] | null;
   extractImages?: boolean;
   imageDpi?: number;
@@ -681,6 +684,7 @@ interface PdfConfig {
 
 **Fields:**
 
+- `allowSingleColumnTables` (boolean): Allow extraction of single-column tables. Default: false
 - `passwords` (string[] | null): List of passwords to try for encrypted PDFs. Default: null
 - `extractImages` (boolean): Extract images from PDF. Default: false
 - `imageDpi` (number): DPI for image extraction. Default: 300
@@ -689,9 +693,38 @@ interface PdfConfig {
 
 ```typescript title="pdf_config.ts"
 const pdfConfig: PdfConfig = {
+  allowSingleColumnTables: false,
   passwords: ['password1', 'password2'],
   extractImages: true,
   imageDpi: 300
+};
+```
+
+---
+
+### ConcurrencyConfig <span class="version-badge">v4.5.0</span>
+
+Concurrency configuration for controlling parallel extraction.
+
+**Type Definition:**
+
+```typescript title="TypeScript"
+interface ConcurrencyConfig {
+  maxThreads?: number | null;
+}
+```
+
+**Fields:**
+
+- `maxThreads` (number | null): Maximum number of concurrent threads. Default: null (use system default)
+
+**Example:**
+
+```typescript title="concurrency_config.ts"
+const config: ExtractionConfig = {
+  concurrency: {
+    maxThreads: 4
+  }
 };
 ```
 

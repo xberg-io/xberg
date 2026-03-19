@@ -863,6 +863,7 @@ Main configuration struct for extraction operations.
 ```elixir title="Elixir"
 @type t :: %Kreuzberg.ExtractionConfig{
   chunking: map() | nil,
+  concurrency: map() | nil,
   enable_quality_processing: boolean(),
   force_ocr: boolean(),
   html_options: map() | nil,
@@ -887,6 +888,7 @@ Main configuration struct for extraction operations.
 **Fields:**
 
 - `chunking` (map | nil): Text chunking configuration.
+- `concurrency` (map | nil): Concurrency configuration for extraction parallelization.
 - `enable_quality_processing` (boolean): Enable quality post-processing (default: true).
 - `force_ocr` (boolean): Force OCR even for searchable PDFs (default: false).
 - `html_options` (map | nil): HTML to Markdown conversion options.
@@ -1002,6 +1004,39 @@ if result.images do
   IO.puts("Extracted #{length(result.images)} images")
 end
 ```
+
+**Example - PDF options with concurrency:**
+
+```elixir title="pdf_config.exs"
+config = %Kreuzberg.ExtractionConfig{
+  pdf_options: %{
+    "extract_images" => true,
+    "extract_annotations" => true,
+    "allow_single_column_tables" => true
+  },
+  concurrency: %{
+    "max_threads" => 4
+  }
+}
+
+{:ok, result} = Kreuzberg.extract_file("document.pdf", nil, config)
+```
+
+**PDF Options Fields:**
+
+When configuring `pdf_options` map:
+
+- `"allow_single_column_tables"` (Boolean): Allow extraction of single-column tables. Default: false
+- `"extract_annotations"` (Boolean): Extract PDF annotations. Default: false
+- `"extract_images"` (Boolean): Extract images from PDF. Default: false
+- `"extract_metadata"` (Boolean): Extract PDF metadata. Default: true
+- `"passwords"` (List<String>): Passwords to try for encrypted PDFs. Default: nil
+
+**Concurrency Configuration:**
+
+When configuring `concurrency` map:
+
+- `"max_threads"` (Integer): Maximum number of threads for parallel extraction. Default: nil (system default)
 
 ---
 

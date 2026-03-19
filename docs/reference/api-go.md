@@ -545,6 +545,7 @@ Root configuration struct for all extraction operations. All fields are optional
 ```go title="Go"
 type ExtractionConfig struct {
 	Chunking                 *ChunkingConfig          // Text chunking and embeddings
+	Concurrency              *ConcurrencyConfig       // Concurrency control settings
 	EnableQualityProcessing  *bool                    // Run quality improvements
 	ForceOCR                 *bool                    // Force OCR even for text-extractable docs
 	HTMLOptions              *HTMLConversionOptions   // HTML-to-Markdown conversion
@@ -713,13 +714,38 @@ PDF-specific extraction options.
 
 ```go title="Go"
 type PdfConfig struct {
-	BottomMarginFraction *float64    // Bottom margin to ignore during extraction
-	ExtractAnnotations   *bool       // Extract PDF annotations
-	ExtractImages        *bool       // Extract embedded images
-	ExtractMetadata      *bool       // Extract document metadata
-	FontConfig           *FontConfig // Font provider configuration
-	Passwords            []string    // List of passwords for encrypted PDFs
-	TopMarginFraction    *float64    // Top margin to ignore during extraction
+	AllowSingleColumnTables *bool       // Allow extraction of single-column tables
+	BottomMarginFraction    *float64    // Bottom margin to ignore during extraction
+	ExtractAnnotations      *bool       // Extract PDF annotations
+	ExtractImages           *bool       // Extract embedded images
+	ExtractMetadata         *bool       // Extract document metadata
+	FontConfig              *FontConfig // Font provider configuration
+	Passwords               []string    // List of passwords for encrypted PDFs
+	TopMarginFraction       *float64    // Top margin to ignore during extraction
+}
+```
+
+---
+
+### ConcurrencyConfig
+
+Concurrency configuration for controlling parallel extraction.
+
+**Signature:**
+
+```go title="Go"
+type ConcurrencyConfig struct {
+	MaxThreads *int // Maximum number of concurrent threads
+}
+```
+
+**Example:**
+
+```go title="concurrency_config.go"
+cfg := &kreuzberg.ExtractionConfig{
+	Concurrency: &kreuzberg.ConcurrencyConfig{
+		MaxThreads: intPtr(4),
+	},
 }
 ```
 

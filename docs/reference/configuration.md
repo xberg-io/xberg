@@ -245,6 +245,7 @@ Main extraction configuration controlling all aspects of document processing.
 | `postprocessor`              | `PostProcessorConfig?`     | `None`                 | Post-processing pipeline configuration                                                                                                                                                           |
 | `pages`                      | `PageConfig?`              | `None`                 | Page extraction and tracking configuration                                                                                                                                                       |
 | `max_concurrent_extractions` | `int?`                     | `None`                 | Maximum concurrent batch extractions (defaults to num_cpus \* 2)                                                                                                                                 |
+| `concurrency`                | `ConcurrencyConfig?`       | `None`                 | Concurrency configuration for threading (max_threads caps Rayon, ONNX intra-op threads, and batch semaphore)                                                                                    |
 | `result_format`              | `OutputFormat`             | `Unified`              | Result structure format: `Unified` (content in single field) or `ElementBased` (semantic elements array)                                                                                         |
 | `output_format`              | `OutputFormat`             | `Plain`                | Output format for extracted text content (Plain, Markdown, Djot, Html, Structured)                                                                                                               |
 | `html_options`               | `ConversionOptions`        | `None`                 | HTML to Markdown conversion options (heading styles, list formatting, code block styles). Only available with `html` feature.                                                                    |
@@ -1579,12 +1580,13 @@ Set `language: None` to disable stopword filtering and extract keywords in any l
 
 PDF-specific extraction configuration.
 
-| Field              | Type               | Default | Description                                                               |
-| ------------------ | ------------------ | ------- | ------------------------------------------------------------------------- |
-| `extract_images`   | `bool`             | `false` | Extract embedded images from PDF pages                                    |
-| `extract_metadata` | `bool`             | `true`  | Extract PDF metadata (title, author, creation date, etc.)                 |
-| `passwords`        | `list[str]?`       | `None`  | List of passwords to try for encrypted PDFs (tries in order)              |
-| `hierarchy`        | `HierarchyConfig?` | `None`  | Hierarchy extraction configuration (None = hierarchy extraction disabled) |
+| Field                      | Type               | Default | Description                                                               |
+| -------------------------- | ------------------ | ------- | ------------------------------------------------------------------------- |
+| `extract_images`           | `bool`             | `false` | Extract embedded images from PDF pages                                    |
+| `extract_metadata`         | `bool`             | `true`  | Extract PDF metadata (title, author, creation date, etc.)                 |
+| `passwords`                | `list[str]?`       | `None`  | List of passwords to try for encrypted PDFs (tries in order)              |
+| `hierarchy`                | `HierarchyConfig?` | `None`  | Hierarchy extraction configuration (None = hierarchy extraction disabled) |
+| `allow_single_column_tables` | `bool`             | `false` | Relax min column count from 2-3 to 1, allowing single-column table extraction |
 
 ### Example
 
@@ -3503,6 +3505,99 @@ ORT silently falls back to CPU if the requested provider is unavailable.
     acceleration:
       provider: cpu
       device_id: 0
+    ```
+
+---
+
+## ConcurrencyConfig
+
+Controls thread pool and concurrency limits for Rayon parallelism, ONNX Runtime intra-op threading, and batch extraction semaphore.
+
+### Fields
+
+| Field        | Type    | Default | Description                                                                   |
+| ------------ | ------- | ------- | ----------------------------------------------------------------------------- |
+| `max_threads` | `int?` | `None`  | Maximum number of threads for Rayon thread pool, ONNX intra-op, batch concurrency |
+
+### Overview
+
+Use `ConcurrencyConfig` to constrain resource usage on systems with limited hardware. When set, `max_threads` caps:
+
+- **Rayon thread pool size** for text extraction and parsing parallelism
+- **ONNX Runtime intra-op parallelism** for layout detection and embeddings inference
+- **Batch extraction semaphore** for limiting concurrent file extractions
+
+Setting `max_threads: None` disables concurrency limits and allows libraries to use all available cores (default behavior).
+
+### Configuration Examples
+
+=== "Python"
+
+    ```python title="concurrency_config.py"
+    from kreuzberg import ExtractionConfig, ConcurrencyConfig
+
+    # Limit to 4 threads for constrained hardware
+    config = ExtractionConfig(
+        concurrency=ConcurrencyConfig(max_threads=4)
+    )
+    ```
+
+=== "TypeScript"
+
+    ```typescript title="concurrency_config.ts"
+    import { extract } from "kreuzberg";
+
+    const result = await extract("document.pdf", {
+      concurrency: { maxThreads: 4 },
+    });
+    ```
+
+=== "Rust"
+
+    ```rust title="concurrency_config.rs"
+    use kreuzberg::core::{ExtractionConfig, ConcurrencyConfig};
+
+    let config = ExtractionConfig {
+        concurrency: Some(ConcurrencyConfig {
+            max_threads: Some(4),
+        }),
+        ..Default::default()
+    };
+    ```
+
+=== "Go"
+
+    ```go title="concurrency_config.go"
+    package main
+
+    import "kreuzberg"
+
+    config := &kreuzberg.ExtractionConfig{
+        Concurrency: &kreuzberg.ConcurrencyConfig{
+            MaxThreads: intPtr(4),
+        },
+    }
+    ```
+
+=== "Java"
+
+    ```java title="ConcurrencyConfig.java"
+    ConcurrencyConfig concurrency = new ConcurrencyConfig(4);
+    ExtractionConfig config = new ExtractionConfig(
+        /* ... other fields ... */
+        Optional.of(concurrency)
+    );
+    ```
+
+=== "C#"
+
+    ```csharp title="concurrency_config.cs"
+    using Kreuzberg;
+
+    var config = new ExtractionConfig
+    {
+        Concurrency = new ConcurrencyConfig { MaxThreads = 4 }
+    };
     ```
 
 ---

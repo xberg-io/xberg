@@ -1117,6 +1117,7 @@ Configuration for document extraction, controlling extraction behavior and featu
 - `Ocr` (OcrConfig?): OCR configuration for handling scanned documents and images. If null, OCR is disabled.
 - `Pages` (PageConfig?): Page extraction and tracking configuration.
 - `PdfOptions` (PdfConfig?): PDF-specific extraction options.
+- `Concurrency` (ConcurrencyConfig?): Concurrency configuration for extraction parallelization.
 - `Postprocessor` (PostProcessorConfig?): Post-processor configuration.
 - `TokenReduction` (TokenReductionConfig?): Token reduction configuration.
 - `UseCache` (bool?): Whether to use caching for extraction results. Default is null (use server default).
@@ -1795,6 +1796,16 @@ The C# bindings use P/Invoke to load the native `libkreuzberg_ffi` library. The 
 - [Data Types Reference](types.md)
 - [Error Handling Guide](errors.md)
 - [Supported Formats](formats.md)
+
+---
+
+### ConcurrencyConfig
+
+Configuration for concurrent extraction parallelization.
+
+**Properties:**
+
+- `MaxThreads` (int?): Maximum number of threads to use for concurrent extraction operations. If null, uses system default.
 
 ---
 

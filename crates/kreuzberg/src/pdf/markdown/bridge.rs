@@ -157,30 +157,57 @@ pub(super) fn objects_to_page_data(
     let page_height = page.height().value;
     let page_width = page.width().value;
 
-    // Primary path: segment-level extraction from DTO.
-    // Uses pdfium's segment API for text (no character-level reconstruction),
-    // groups segments into rows, concatenates with geometric space detection.
-    // Quality gate: validates against full page text to catch missing content.
+    // Best-of-two extraction: run both segment-from-DTO and segment-merged,
+    // compare token counts against the full page text, pick the one that
+    // preserves more content. Prefer DTO when counts are close (better word
+    // boundaries, no \x02 markers).
     if let Some(data) = extract_page_text_data(page) {
-        if let Some(segments) = extract_segments_from_dto(&data, page_width) {
+        let ref_tokens = data.full_text.split_whitespace().count();
+
+        let dto_result = extract_segments_from_dto(&data, page_width);
+        let merged_result = extract_segments_merged(page, page_height);
+
+        let dto_tokens = dto_result.as_ref().map_or(0, |segs| {
+            segs.iter()
+                .map(|s| s.text.split_whitespace().count())
+                .sum::<usize>()
+        });
+        let merged_tokens = merged_result.as_ref().map_or(0, |segs| {
+            segs.iter()
+                .map(|s| s.text.split_whitespace().count())
+                .sum::<usize>()
+        });
+
+        // Pick the result whose token count is closer to the reference.
+        // If DTO is within 10% of merged, prefer DTO (better word boundaries).
+        let best = if ref_tokens == 0 {
+            dto_result.or(merged_result)
+        } else {
+            let dto_diff = (dto_tokens as f64 - ref_tokens as f64).abs();
+            let merged_diff = (merged_tokens as f64 - ref_tokens as f64).abs();
+
+            if dto_result.is_some() && merged_result.is_some() {
+                // Both available: pick closer to reference, prefer DTO on ties
+                let dto_within_10pct = dto_diff <= merged_diff * 1.1;
+                if dto_within_10pct {
+                    dto_result
+                } else {
+                    merged_result
+                }
+            } else {
+                // Only one available
+                dto_result.or(merged_result)
+            }
+        };
+
+        if let Some(segments) = best {
             return (segments, images);
         }
+
         // Fallback: char-level with column detection.
         if let Some(segments) = chars_to_segments_from_data(&data, page_width) {
             return (segments, images);
         }
-    }
-
-    // Fallback: Segment-based extraction with inside_rect() re-extraction.
-    if let Some(segments) = extract_segments_merged(page, page_height) {
-        return (segments, images);
-    }
-
-    // Last resort: character-level without DTO.
-    if let Some(data) = extract_page_text_data(page)
-        && let Some(segments) = chars_to_segments_from_data(&data, page_width)
-    {
-        return (segments, images);
     }
 
     // Last resort: page objects API with column detection.
@@ -572,6 +599,11 @@ fn extract_segments_from_dto(data: &PageTextData, page_width: f32) -> Option<Vec
         let mut sorted_segs = row.segments.clone();
         sorted_segs.sort_by(|a, b| a.left.partial_cmp(&b.left).unwrap_or(std::cmp::Ordering::Equal));
 
+        // De-duplicate overlapping segments with identical text (bold/shadow rendering).
+        sorted_segs.dedup_by(|b_seg, a_seg| {
+            a_seg.text == b_seg.text && (a_seg.left - b_seg.left).abs() < 1.0
+        });
+
         let mut row_text = String::new();
         let mut row_left = f32::MAX;
         let mut row_right = f32::MIN;
@@ -592,9 +624,15 @@ fn extract_segments_from_dto(data: &PageTextData, page_width: f32) -> Option<Vec
                 row_mono = seg.is_monospace;
                 row_baseline = seg.baseline_y;
             } else {
-                // Insert space between segments if there's a gap.
+                // Insert space between segments if the gap exceeds a fraction
+                // of the average character width. This avoids inserting spaces
+                // between character-level segments in the same word.
                 let gap = seg.left - prev_right;
-                if gap > 0.1 {
+                let seg_width = (seg.right - seg.left).max(0.1);
+                let seg_chars = seg.text.chars().count().max(1) as f32;
+                let avg_char_w = seg_width / seg_chars;
+                let space_threshold = avg_char_w * 0.33;
+                if gap > space_threshold {
                     row_text.push(' ');
                 }
             }
@@ -623,14 +661,6 @@ fn extract_segments_from_dto(data: &PageTextData, page_width: f32) -> Option<Vec
     }
 
     if result.is_empty() {
-        return None;
-    }
-
-    // Quality gate: if we extracted far less text than the full page has,
-    // return None to fall through to a more complete extraction path.
-    let extracted_chars: usize = result.iter().map(|s| s.text.len()).sum();
-    let full_text_chars = data.full_text.trim().len();
-    if full_text_chars > 50 && extracted_chars < full_text_chars / 3 {
         return None;
     }
 

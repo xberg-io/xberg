@@ -436,6 +436,7 @@ pub struct ExtractionConfig {
 **Fields:**
 
 - `chunking` (Option<ChunkingConfig>): Text chunking configuration. Default: None
+- `concurrency` (Option<ConcurrencyConfig>): Concurrency configuration. Default: None
 - `enable_quality_processing` (bool): Enable quality post-processing. Default: true
 - `force_ocr` (bool): Force OCR even for text-based PDFs. Default: false
 - `html_options` (Option<[ConversionOptions](https://docs.html-to-markdown.kreuzberg.dev/reference/configuration/)>): HTML conversion options from [html-to-markdown](https://docs.html-to-markdown.kreuzberg.dev) (when feature `html`). Default: None
@@ -602,6 +603,7 @@ PDF-specific configuration (requires `pdf` feature).
 ```rust title="Rust"
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PdfConfig {
+    pub allow_single_column_tables: bool,
     pub extract_images: bool,
     pub passwords: Option<Vec<String>>,
     pub extract_metadata: bool,
@@ -611,6 +613,7 @@ pub struct PdfConfig {
 
 **Fields:**
 
+- `allow_single_column_tables` (bool): Allow extraction of single-column tables. Default: false
 - `extract_images` (bool): Extract images from PDF. Default: false
 - `passwords` (Option<Vec<String>>): List of passwords to try for encrypted PDFs. Default: None
 - `extract_metadata` (bool): Extract PDF metadata. Default: true
@@ -622,10 +625,43 @@ pub struct PdfConfig {
 use kreuzberg::PdfConfig;
 
 let pdf_config = PdfConfig {
+    allow_single_column_tables: false,
     extract_images: true,
     passwords: Some(vec!["password1".to_string(), "password2".to_string()]),
     extract_metadata: true,
     hierarchy: None,
+};
+```
+
+---
+
+### ConcurrencyConfig
+
+Concurrency configuration for controlling parallel extraction.
+
+**Definition:**
+
+```rust title="Rust"
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConcurrencyConfig {
+    pub max_threads: Option<usize>,
+}
+```
+
+**Fields:**
+
+- `max_threads` (Option<usize>): Maximum number of concurrent threads. Default: None (use system default)
+
+**Example:**
+
+```rust title="concurrency_config.rs"
+use kreuzberg::{ExtractionConfig, ConcurrencyConfig};
+
+let config = ExtractionConfig {
+    concurrency: Some(ConcurrencyConfig {
+        max_threads: Some(4),
+    }),
+    ..Default::default()
 };
 ```
 

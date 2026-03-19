@@ -2379,6 +2379,7 @@ pub struct ExtractionConfig {
     pub postprocessor: Option<PostProcessorConfig>,
     pub layout: Option<LayoutDetectionConfig>,
     pub max_concurrent_extractions: Option<usize>,
+    pub concurrency: Option<ConcurrencyConfig>,
 }
 ```
 
@@ -2400,6 +2401,7 @@ class ExtractionConfig:
     postprocessor: PostProcessorConfig | None = None
     layout: LayoutDetectionConfig | None = None
     max_concurrent_extractions: int | None = None
+    concurrency: ConcurrencyConfig | None = None
 ```
 
 #### TypeScript
@@ -2419,6 +2421,7 @@ export interface ExtractionConfig {
   postprocessor?: PostProcessorConfig;
   layout?: LayoutDetectionConfig;
   maxConcurrentExtractions?: number;
+  concurrency?: ConcurrencyConfig;
 }
 ```
 
@@ -2438,7 +2441,8 @@ public record ExtractionConfig(
     Optional<KeywordConfig> keywords,
     Optional<PostProcessorConfig> postprocessor,
     Optional<LayoutDetectionConfig> layout,
-    Optional<Integer> maxConcurrentExtractions
+    Optional<Integer> maxConcurrentExtractions,
+    Optional<ConcurrencyConfig> concurrency
 ) {}
 ```
 
@@ -2459,6 +2463,7 @@ type ExtractionConfig struct {
     PostProcessor               *PostProcessorConfig
     Layout                      *LayoutDetectionConfig
     MaxConcurrentExtractions    *int
+    Concurrency                 *ConcurrencyConfig
 }
 ```
 
@@ -4057,6 +4062,91 @@ pdfConfig := &kreuzberg.PdfConfig{
     Hierarchy: hierarchyConfig,
 }
 ```
+
+### ConcurrencyConfig
+
+Thread pool and concurrency configuration for constraining resource usage on limited hardware.
+
+#### Rust
+
+```rust title="concurrency_config.rs"
+pub struct ConcurrencyConfig {
+    pub max_threads: Option<usize>,
+}
+```
+
+#### Python
+
+```python title="concurrency_config.py"
+@dataclass
+class ConcurrencyConfig:
+    max_threads: int | None = None
+```
+
+#### TypeScript
+
+```typescript title="concurrency_config.ts"
+export interface ConcurrencyConfig {
+  maxThreads?: number;
+}
+```
+
+#### Ruby
+
+```ruby title="concurrency_config.rb"
+class Kreuzberg::Config::ConcurrencyConfig
+    attr_accessor :max_threads
+end
+```
+
+#### Java
+
+```java title="ConcurrencyConfig.java"
+public final class ConcurrencyConfig {
+    private final Integer maxThreads;
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public Integer getMaxThreads() { return maxThreads; }
+
+    public static final class Builder {
+        private Integer maxThreads;
+
+        public Builder maxThreads(Integer maxThreads) { ... }
+        public ConcurrencyConfig build() { ... }
+    }
+}
+```
+
+#### Go
+
+```go title="concurrency_config.go"
+type ConcurrencyConfig struct {
+    MaxThreads *int `json:"max_threads,omitempty"`
+}
+```
+
+#### C#
+
+```csharp title="ConcurrencyConfig.cs"
+public sealed class ConcurrencyConfig
+{
+    /// <summary>
+    /// Maximum number of threads for Rayon thread pool, ONNX intra-op, and batch concurrency.
+    /// </summary>
+    [JsonPropertyName("max_threads")]
+    public int? MaxThreads { get; set; }
+}
+```
+
+**Fields:**
+
+- `max_threads`: Cap thread pool size for Rayon, ONNX Runtime intra-op parallelism, and batch extraction concurrency (Default: `null` — no limit)
+  - When `null`, allows libraries to use all available cores
+  - When set to positive integer (e.g., 4), limits all concurrent operations to that thread count
+  - Useful for constrained hardware (VMs, containers, embedded systems)
 
 ## PageHierarchy
 

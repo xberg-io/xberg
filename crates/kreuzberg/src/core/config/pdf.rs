@@ -162,6 +162,7 @@ mod tests {
             extract_annotations: false,
             top_margin_fraction: Some(0.10),
             bottom_margin_fraction: Some(0.08),
+            allow_single_column_tables: false,
         };
         assert_eq!(config.top_margin_fraction, Some(0.10));
         assert_eq!(config.bottom_margin_fraction, Some(0.08));

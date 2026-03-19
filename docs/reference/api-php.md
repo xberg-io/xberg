@@ -585,6 +585,7 @@ readonly class ExtractionConfig
 {
     public function __construct(
         public ?ChunkingConfig $chunking = null,
+        public ?ConcurrencyConfig $concurrency = null,
         public bool $enableQualityProcessing = true,
         public bool $extractImages = false,
         public bool $extractTables = true,
@@ -611,6 +612,7 @@ readonly class ExtractionConfig
 **Fields:**
 
 - `$chunking` (ChunkingConfig|null): Text chunking configuration. Default: null
+- `$concurrency` (ConcurrencyConfig|null): Concurrency configuration for extraction parallelization. Default: null
 - `$enableQualityProcessing` (bool): Enable quality post-processing enhancements. Default: true
 - `$extractImages` (bool): Extract images from documents. Default: false
 - `$extractTables` (bool): Extract tables from documents. Default: true
@@ -675,6 +677,7 @@ class ExtractionConfigBuilder
 {
     public function build(): ExtractionConfig;
     public function withChunking(?ChunkingConfig $chunking): self;
+    public function withConcurrency(?ConcurrencyConfig $concurrency): self;
     public function withEnableQualityProcessing(bool $enableQualityProcessing): self;
     public function withForceOcr(bool $forceOcr): self;
     public function withHtmlOptions(?array $htmlOptions = null): self;
@@ -822,6 +825,7 @@ readonly class PdfConfig
         public ?int $startPage = null,
         public ?int $endPage = null,
         public int $imageQuality = 95,
+        public bool $allowSingleColumnTables = false,
     );
 }
 ```
@@ -834,6 +838,7 @@ readonly class PdfConfig
 - `$startPage` (int|null): Start page for extraction (0-indexed). Default: null (all pages)
 - `$endPage` (int|null): End page for extraction (0-indexed). Default: null (all pages)
 - `$imageQuality` (int): JPEG quality for extracted images (1-100). Default: 95
+- `$allowSingleColumnTables` (bool): Allow extraction of single-column tables. Default: false
 
 **Examples:**
 
@@ -903,6 +908,27 @@ $config = new ChunkingConfig(
     respectParagraphs: true
 );
 ```
+
+---
+
+### ConcurrencyConfig
+
+Concurrency configuration for extraction parallelization.
+
+**Signature:**
+
+```php title="PHP"
+readonly class ConcurrencyConfig
+{
+    public function __construct(
+        public ?int $maxThreads = null,
+    );
+}
+```
+
+**Fields:**
+
+- `$maxThreads` (int|null): Maximum number of threads for parallel extraction. Default: null (uses system default)
 
 ---
 

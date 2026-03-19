@@ -225,14 +225,14 @@ type FontConfig struct {
 
 // PdfConfig exposes PDF-specific options.
 type PdfConfig struct {
-	ExtractImages        *bool       `json:"extract_images,omitempty"`
-	Passwords            []string    `json:"passwords,omitempty"`
-	ExtractMetadata      *bool       `json:"extract_metadata,omitempty"`
-	FontConfig           *FontConfig `json:"font_config,omitempty"`
-	ExtractAnnotations   *bool       `json:"extract_annotations,omitempty"`
-	TopMarginFraction         *float64    `json:"top_margin_fraction,omitempty"`
-	BottomMarginFraction      *float64    `json:"bottom_margin_fraction,omitempty"`
-	AllowSingleColumnTables   *bool       `json:"allow_single_column_tables,omitempty"`
+	ExtractImages           *bool       `json:"extract_images,omitempty"`
+	Passwords               []string    `json:"passwords,omitempty"`
+	ExtractMetadata         *bool       `json:"extract_metadata,omitempty"`
+	FontConfig              *FontConfig `json:"font_config,omitempty"`
+	ExtractAnnotations      *bool       `json:"extract_annotations,omitempty"`
+	TopMarginFraction       *float64    `json:"top_margin_fraction,omitempty"`
+	BottomMarginFraction    *float64    `json:"bottom_margin_fraction,omitempty"`
+	AllowSingleColumnTables *bool       `json:"allow_single_column_tables,omitempty"`
 }
 
 // HierarchyConfig controls PDF hierarchy extraction based on font sizes.

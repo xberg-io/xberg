@@ -617,6 +617,7 @@ Main extraction configuration using builder pattern.
 // Build extraction configuration with all available options
 ExtractionConfig config = ExtractionConfig.builder()
     .chunking(ChunkingConfig)                          // Text chunking configuration
+    .concurrency(ConcurrencyConfig)                    // Concurrency control settings
     .enableQualityProcessing(false)                    // Enable quality processing (default: false)
     .forceOcr(false)                                   // Force OCR on all pages (default: false)
     .htmlOptions(HtmlOptions)                          // HTML conversion options
@@ -787,6 +788,7 @@ PDF-specific extraction options.
 ```java title="PdfConfiguration.java"
 // Configure PDF-specific extraction options
 PdfConfig pdf = PdfConfig.builder()
+    .allowSingleColumnTables(false) // Allow extraction of single-column tables
     .extractImages(true)         // Extract images from PDF
     .extractMetadata(true)       // Extract PDF metadata
     .renderImages(false)         // Render pages as images for processing
@@ -825,6 +827,31 @@ ImagePreprocessingConfig preproc = ImagePreprocessingConfig.builder()
     .denoise(true)               // Apply denoising
     .deskew(true)                // Deskew images
     .contrastEnhance(true)       // Enhance contrast
+    .build();
+```
+
+---
+
+### ConcurrencyConfig <span class="version-badge">v4.5.0</span>
+
+Concurrency configuration for controlling parallel extraction.
+
+**Builder Methods:**
+
+```java title="ConcurrencyConfiguration.java"
+// Configure concurrency control for parallel extraction
+ConcurrencyConfig concurrency = ConcurrencyConfig.builder()
+    .maxThreads(4)               // Maximum number of concurrent threads
+    .build();
+```
+
+**Example:**
+
+```java title="ConcurrencyExample.java"
+var config = ExtractionConfig.builder()
+    .concurrency(ConcurrencyConfig.builder()
+        .maxThreads(4)
+        .build())
     .build();
 ```
 
