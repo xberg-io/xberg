@@ -6,7 +6,7 @@
 		"typecheck": "pnpm -r --if-present run typecheck"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "^2.4.7",
+		"@biomejs/biome": "^2.4.8",
 		"@vitest/coverage-v8": "^4.1.0",
 		"tsx": "^4.21.0",
 		"typescript": "^5.9.3",
