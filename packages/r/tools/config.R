@@ -18,6 +18,12 @@ if (.Platform$OS.type == "windows") {
   }
 }
 
+# Link ONNX Runtime if available
+ort_lib_location <- Sys.getenv("ORT_LIB_LOCATION", "")
+if (nzchar(ort_lib_location)) {
+  additional_libs <- paste(additional_libs, sprintf("-L%s -lonnxruntime", ort_lib_location))
+}
+
 makevars_content <- readLines(makevars_in)
 makevars_content <- gsub("@ADDITIONAL_PKG_LIBS@", additional_libs, makevars_content)
 writeLines(makevars_content, makevars_out)

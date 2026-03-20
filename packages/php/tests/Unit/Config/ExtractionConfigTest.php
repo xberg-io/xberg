@@ -268,7 +268,7 @@ final class ExtractionConfigTest extends TestCase
         $this->assertSame($original->maxConcurrentExtractions, $restored->maxConcurrentExtractions);
         $this->assertSame($original->resultFormat, $restored->resultFormat);
         $this->assertSame($original->outputFormat, $restored->outputFormat);
-        $this->assertSame($original->htmlOptions, $restored->htmlOptions);
+        $this->assertEquals($original->htmlOptions, $restored->htmlOptions);
     }
 
     #[Test]

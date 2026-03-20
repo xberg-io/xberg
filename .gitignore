@@ -135,6 +135,9 @@ libpdfium.a
 # Generated pkg-config files
 *.pc
 
+# Java JAR files (downloaded at build/benchmark time)
+*.jar
+
 # Rust coverage profiling artifacts
 *.profraw
 

@@ -333,9 +333,10 @@ fn get_tika_jar_path() -> Result<PathBuf> {
         }
     }
 
-    Err(crate::Error::Config(
-        "Tika JAR not found. Download: curl -LO https://repo1.maven.org/maven2/org/apache/tika/tika-app/3.2.3/tika-app-3.2.3.jar && mv tika-app-3.2.3.jar tools/benchmark-harness/libs/".to_string()
-    ))
+    let version = env::var("TIKA_VERSION").unwrap_or_else(|_| "3.2.3".to_string());
+    Err(crate::Error::Config(format!(
+        "Tika JAR not found. Download: curl -fsSL -o tools/benchmark-harness/libs/tika-app-{version}.jar https://repo1.maven.org/maven2/org/apache/tika/tika-app/{version}/tika-app-{version}.jar"
+    )))
 }
 
 /// Creates a subprocess adapter for Apache Tika (persistent server mode)
