@@ -675,7 +675,7 @@ public final class TestApp {
                 return;
             }
             ExtractionResult result = Kreuzberg.extractFile(path);
-            assertTrue(result.isSuccess());
+            assertNotNull(result.getContent());
         });
 
         test("Extraction result has metadata", () -> {

@@ -310,8 +310,8 @@ describe("Kreuzberg TypeScript/Node.js Bindings - Corrected API Tests", () => {
 			expect(__version__).toMatch(/^\d+\.\d+\.\d+/);
 		});
 
-		it("version is 4.4.4", () => {
-			expect(__version__).toBe("4.4.4");
+		it("version is 4.5.0", () => {
+			expect(__version__).toBe("4.5.0");
 		});
 	});
 
