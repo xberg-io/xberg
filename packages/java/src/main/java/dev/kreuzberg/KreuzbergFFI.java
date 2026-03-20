@@ -169,7 +169,7 @@ public final class KreuzbergFFI {
 			.byteOffset(MemoryLayout.PathElement.groupElement("success"));
 
 	public static final StructLayout C_BATCH_RESULT_LAYOUT = MemoryLayout.structLayout(
-			ValueLayout.ADDRESS.withName("results"), ValueLayout.JAVA_LONG.withName("count"),
+			ValueLayout.JAVA_LONG.withName("count"), ValueLayout.ADDRESS.withName("results"),
 			ValueLayout.JAVA_BOOLEAN.withName("success"), MemoryLayout.paddingLayout(7));
 
 	public static final long BATCH_RESULTS_PTR_OFFSET = C_BATCH_RESULT_LAYOUT
