@@ -160,6 +160,7 @@ extra_css:
 
 nav:
   - Home: index.md
+  - Live Demo: demo.html
   - Installation: getting-started/installation.md
   - Quick Start: getting-started/quickstart.md
   - Features: features.md

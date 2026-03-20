@@ -50,6 +50,9 @@
   <a href="https://docs.kreuzberg.dev">
     <img src="https://img.shields.io/badge/docs-kreuzberg.dev-blue" alt="Documentation">
   </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img src="https://img.shields.io/badge/play-Live_Demo-success" alt="Live Demo">
+  </a>
   <a href="https://huggingface.co/Kreuzberg">
     <img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-yellow" alt="Hugging Face">
   </a>
@@ -75,7 +78,7 @@ Extract text and metadata from a wide range of file formats (88+), generate embe
 - **Flexible deployment** – Use as library, CLI tool, REST API server, or MCP server
 - **Memory efficient** – Streaming parsers for multi-GB files
 
-**[Complete Documentation](https://kreuzberg.dev/)** | **[Installation Guides](#installation)**
+**[Complete Documentation](https://kreuzberg.dev/)** | **[Live Demo](https://docs.kreuzberg.dev/demo.html)** | **[Installation Guides](#installation)**
 
 ## Installation
 

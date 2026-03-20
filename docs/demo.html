@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin" />
+    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp" />
+    <title>Kreuzberg | Live Demo</title>
+
+    <!-- SEO Meta Tags -->
+    <link rel="icon" type="image/x-icon" href="./assets/favicon.ico" />
+    <meta name="description" content="Extract text, tables, and metadata from 88+ file formats directly in your browser using WebAssembly. No uploading to a server required." />
+    <meta property="og:title" content="Kreuzberg | Live Demo" />
+    <meta property="og:description" content="Secure, in-browser document intelligence and text extraction." />
+    <meta property="og:url" content="https://kreuzberg.dev" />
+    <meta property="og:type" content="website" />
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@100..800&family=Exo+2:ital,wght@0,100..900;1,100..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sora: ["Sora", "sans-serif"],
+              exo: ["Exo 2", "sans-serif"],
+              mono: ["JetBrains Mono", "monospace"],
+            },
+            colors: {
+              black: "#323040",
+              green: "#58FBDA",
+              "green-100": "#e6f6f3",
+              purple: "#da2ae0",
+              "dark-purple": "#26203a",
+              "grey-50": "#f6f5f9",
+              "app-red": "#ff456d",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family: "Exo 2", sans-serif;
+        background-color: #323040;
+        color: white;
+         font-optical-sizing: auto;
+      }
+
+      /* Premium conic gradient border from Na'aman's React component */
+      .gradient-border-conic {
+        position: relative;
+        border-radius: 22px;
+      }
+
+      .gradient-border-conic::before {
+        content: "";
+        pointer-events: none;
+        position: absolute;
+        inset: 0;
+        z-index: 10;
+        border-radius: 22px;
+        padding: 2px;
+        background-image: conic-gradient(from 90deg, #58FBDA, #da2ae0, #58FBDA);
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+      }
+
+      @keyframes blob {
+        0% { transform: translate(0px, 0px) scale(1); }
+        33% { transform: translate(30px, -50px) scale(1.1); }
+        66% { transform: translate(-20px, 20px) scale(0.9); }
+        100% { transform: translate(0px, 0px) scale(1); }
+      }
+      .animate-blob { animation: blob 7s infinite; }
+      .animation-delay-2000 { animation-delay: 2s; }
+
+      
+    </style>
+  </head>
+
+  <body class="min-h-screen flex flex-col bg-black relative overflow-x-hidden">
+    <!-- Animated Background Blobs -->
+   <div class="pointer-events-none fixed inset-0 z-[-1]">
+      <div
+        class="absolute top-0 right-0 -translate-x-1/4 -translate-y-1/4 md:left-auto md:translate-x-[20%] md:translate-y-[-20%]"
+      >
+        <div class="relative">
+          <div
+            class="animation-delay-2000 absolute top-0 right-0 h-[300px] w-[300px] animate-blob rounded-full bg-green opacity-50 mix-blend-multiply blur-[80px] filter md:top-30 md:h-[600px] md:w-[600px]"
+          ></div>
+          <div
+            class="absolute top-20 right-0 h-[300px] w-[300px] animate-blob rounded-full bg-purple opacity-50 mix-blend-multiply blur-[80px] filter md:top-90 md:h-[600px] md:w-[600px]"
+          ></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Header -->
+   <header class="w-full px-4 py-4 lg:px-6 lg:py-6">
+      <div class="grid grid-cols-[1fr_1fr] items-center gap-4 w-full max-w-9xl mx-auto px-4 md:px-0">
+        <a href="/" aria-label="Go to home" class="justify-self-start">
+          <img
+            src="./assets/icons/mobile-logo.svg"
+            alt="Kreuzberg Logo"
+            class="h-10 w-10 lg:h-[65px] lg:w-[65px]"
+          />
+        </a>
+
+        <div class="flex items-center gap-3 justify-self-end">
+          <a
+            href="https://discord.gg/xt9WY3GnKR"
+            rel="noopener noreferrer"
+            target="_blank"
+            aria-label="Join our Discord"
+          >
+            <button
+              class="flex size-9 cursor-pointer items-center justify-center rounded-[8px] border border-green bg-dark-purple p-0 transition-colors hover:bg-black lg:size-10 xl:size-11"
+            >
+              <img src="./assets/icons/discord-white-bg.svg" alt="Discord" class="w-6 h-6" />
+            </button>
+          </a>
+
+          <a
+            href="https://github.com/kreuzberg-dev/kreuzberg/"
+            rel="noopener noreferrer"
+            target="_blank"
+            aria-label="View on GitHub"
+          >
+            <button
+              class="group flex cursor-pointer items-center gap-2 border border-green transition-colors hover:bg-black h-9 rounded-[8px] bg-dark-purple px-3 py-2 lg:h-12 lg:rounded-[12px] lg:px-4 lg:py-3"
+            >
+              <img src="./assets/icons/github-white-bg.svg" alt="GitHub" class="w-6 h-6" />
+              <span
+                class="font-normal text-base text-white hidden font-sora lg:block"
+                >View on GitHub</span
+              >
+            </button>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex flex-1 w-full">
+      <div class="w-full h-full px-4 md:px-[60px] pb-[40px]">
+        <div class="flex flex-col items-center gap-10 md:gap-[60px]">
+          <div class="flex flex-col gap-6 text-center">
+            <h1 class="text-4xl md:text-[100px] font-bold text-grey-50 leading-tight md:leading-[120px]">
+              Live Demo
+            </h1>
+            <p class="text-base md:text-2xl font-light text-grey-50 px-4 md:px-0">
+              Drop a file. Kreuzberg extracts text, tables, and metadata - no
+              server, no upload, no API <br class="hidden md:block" />
+              key. Everything runs in your browser via WASM.
+            </p>
+          </div>
+          <div
+            class="relative w-full max-w-[1063px] bg-black rounded-[22px] gradient-border-conic p-6 md:p-10 flex flex-col items-center gap-8"
+          >
+            <div
+              id="btn-back"
+              style="display: none"
+              class="flex gap-1 px-3 py-2 items-center self-start cursor-pointer hover:opacity-80 transition-opacity"
+            >
+              <img src="./assets/icons/chrevon-left.svg" alt="Back" class="size-[16px]" />
+              <p class="font-sora text-base text-green leading-[22px]">
+                Back to Upload
+              </p>
+            </div>
+            <div class="w-full h-full flex flex-col items-center gap-2">
+              <img src="./assets/icons/flask-fill.svg" alt="Flask" class="size-[37px]" />
+              <p class="text-[28px] font-bold text-white leading-[32px]">
+                Try it yourself!
+              </p>
+              <p class="text-[14px] font-light text-white leading-[18px]">
+                Processed internally in your browser via WebAssembly. Your file
+                never leaves your device.
+              </p>
+            </div>
+
+            <div
+            id="file-info"
+            style="display: none;"
+              class="p-3 border border-green rounded-[12px] w-full flex items-center justify-between"
+            >
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-1">
+                  <img src="./assets/icons/file-fill.svg" alt="File" class="size-[24px]" />
+                  <p id="file-name-display" class="font-semibold text-base text-white">my-file.pdf</p>
+                </div>
+                <p id="file-size-display" class="font-light text-sm text-white">4.00MB</p>
+              </div>
+              <img
+               id="btn-remove-file"
+                src="./assets/icons/close.svg"
+                alt="Close"
+                class="size-[24px] cursor-pointer hover:opacity-80 transition-opacity"
+              />
+            </div>
+
+            <div
+              id="error-message"
+              style="display: none;"
+              class="w-full p-6 flex flex-col bg-app-red/10 border border-app-red rounded-[12px]"
+            >
+              <div class="space-y-1">
+                <p class="text-base font-semibold text-white">File too large</p>
+                <p class="text-sm font-light text-white">
+                  File exceeds the 1MB sandbox limit. Reduce file size or use
+                  the API for larger documents.
+                </p>
+              </div>
+            </div>
+
+            <div
+            id="output-screen"
+            style="display: none;"
+              class="min-h-[500px] h-[865px] max-h-[90vh] md:max-h-none w-full flex flex-col gap-8 bg-dark-purple p-6 md:p-10 rounded-[12px]"
+            >
+              <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <p class="font-bold text-2xl text-green-100">Output</p>
+                <div
+                  class="relative inline-flex w-full sm:w-[238px] h-[38px] items-center rounded-[16px] bg-dark-purple border border-green p-1 text-slate-400"
+                >
+                  <div
+                    id="tab-indicator"
+                    class="absolute left-1 top-1 bottom-1 w-[calc(50%-4px)] sm:w-[114px] rounded-[12px] bg-green transition-transform duration-300 ease-in-out"
+                  ></div>
+                  <button
+                    id="tab-markdown"
+                    onclick="switchTab('markdown')"
+                    class="relative z-10 flex w-1/2 h-full items-center justify-center whitespace-nowrap text-base font-normal font-sora text-black hover:opacity-80 transition-colors focus:outline-none"
+                  >
+                    Markdown
+                  </button>
+                  <button
+                    id="tab-json"
+                    onclick="switchTab('json')"
+                    class="relative z-10 flex w-1/2 h-full items-center justify-center whitespace-nowrap text-base font-normal font-sora text-green hover:opacity-80 transition-colors focus:outline-none"
+                  >
+                    JSON
+                  </button>
+                </div>
+              </div>
+              <div
+                id="tab-content"
+                class="w-full h-full bg-black rounded-[12px] px-6 py-8 overflow-y-auto text-sm"
+              >
+                <div class="w-full h-6 flex items-center justify-end gap-2">
+                  <span id="copy-feedback" class="text-green text-xs font-sora font-semibold opacity-0 transition-opacity duration-300">
+                    Copied!
+                  </span>
+                  <img
+                    id="btn-copy"
+                    src="./assets/icons/file-copy-fill-2.svg"
+                    alt="Copy"
+                    class="size-[24px] cursor-pointer hover:opacity-80 transition-opacity"
+                  />
+                </div>
+                <!-- Markdown Content -->
+                <div
+                  id="content-markdown"
+                  class="block text-white  whitespace-pre-wrap"
+                >
+                  # Markdown output will appear here...
+                </div>
+                <!-- JSON Content -->
+                <div
+                  id="content-json"
+                  class="hidden text-green  whitespace-pre-wrap"
+                >
+                  { "status": "waiting", "message": "JSON output will appear
+                  here..." }
+                </div>
+              </div>
+            </div>
+
+            <div id="upload-screen" class="w-full h-full">
+              <label
+                id="dropZone"
+                for="fileInput"
+                class="flex w-full h-full cursor-pointer flex-col items-center justify-center gap-2 rounded-[12px] border border-dashed border-gray-500 bg-[#302D3F] px-[12px] py-[24px] transition-all hover:border-green hover:bg-[#302D3F]/80"
+              >
+                <div class="relative size-6">
+                  <img
+                    src="./assets/icons/upload.svg"
+                    alt="Upload"
+                    class="w-full h-full object-contain"
+                  />
+                </div>
+                <div class="space-y-1 text-center">
+                  <h3 class="font-bold text-[18px] text-white">
+                    Drop a file here
+                  </h3>
+                  <p class="font-light text-sm text-white">
+                    Or click to browse
+                  </p>
+                </div>
+
+                <input type="file" id="fileInput" class="hidden" />
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="px-6 py-2.5 h-[63px] bg-black/20 flex items-center">
+      <a
+        href="https://kreuzberg.dev"
+        class="font-normal text-sm text-green hover:underline transition-all"
+      >
+        Join Kreuzberg Cloud Waitlist 
+      </a>
+    </footer>
+
+    <script type="module">
+      import { initWasm, extractFromFile } from 'https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/dist/index.js';
+
+      const dropZone = document.getElementById("dropZone");
+      const fileInput = document.getElementById("fileInput");
+      const uploadScreen = document.getElementById("upload-screen");
+      const fileInfo = document.getElementById("file-info");
+      const outputScreen = document.getElementById("output-screen");
+      const btnBack = document.getElementById("btn-back");
+
+      // ── Init WASM on page load ─────────────────────────────────────────────
+      let wasmReady = false;
+      try {
+        await initWasm('https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/dist/pkg/kreuzberg_wasm_bg.wasm');
+        wasmReady = true;
+      } catch (e) {
+        console.error('WASM initialization failed:', e);
+      }
+
+      // ── Drag & Drop ────────────────────────────────────────────────────────
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+          dropZone.classList.add('border-green');
+          dropZone.classList.remove('border-gray-500');
+        }, false);
+      });
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+          dropZone.classList.remove('border-green');
+          dropZone.classList.add('border-gray-500');
+        }, false);
+      });
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files.length > 0) processFile(e.target.files[0]);
+      }, false);
+      dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length > 0) processFile(dt.files[0]);
+      }, false);
+
+      // ── Markdown Renderer ──────────────────────────────────────────────────
+      function renderMarkdown(md) {
+        let html = md
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/```([\w]*)?\n([\s\S]*?)```/gm, (_, lang, code) =>
+            `<pre style="background:#1a172a;padding:12px;border-radius:8px;overflow-x:auto"><code${lang ? ` class="language-${lang}"` : ''}>${code.trimEnd()}</code></pre>`)
+          .replace(/^###### (.+)$/gm, '<h6 style="font-size:0.85em;font-weight:700;margin:8px 0">$1</h6>')
+          .replace(/^##### (.+)$/gm,  '<h5 style="font-size:0.9em;font-weight:700;margin:8px 0">$1</h5>')
+          .replace(/^#### (.+)$/gm,   '<h4 style="font-size:1em;font-weight:700;margin:10px 0">$1</h4>')
+          .replace(/^### (.+)$/gm,    '<h3 style="font-size:1.1em;font-weight:700;margin:12px 0">$1</h3>')
+          .replace(/^## (.+)$/gm,     '<h2 style="font-size:1.2em;font-weight:700;margin:14px 0;color:#58FBDA">$1</h2>')
+          .replace(/^# (.+)$/gm,      '<h1 style="font-size:1.4em;font-weight:700;margin:16px 0;color:#58FBDA">$1</h1>')
+          .replace(/^---+$/gm, '<hr style="border-color:#58FBDA33;margin:16px 0">')
+          .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\*(.+?)\*/g, '<em>$1</em>')
+          .replace(/`([^`]+)`/g, '<code style="background:#1a172a;padding:2px 6px;border-radius:4px;font-family:JetBrains Mono,monospace">$1</code>')
+          .replace(/^&gt; (.+)$/gm, '<blockquote style="border-left:3px solid #58FBDA;padding-left:12px;color:#aaa;margin:8px 0">$1</blockquote>')
+          .replace(/^[ \t]*[-*+] (.+)$/gm, '<li>$1</li>')
+          .replace(/^[ \t]*\d+\. (.+)$/gm, '<oli>$1</oli>');
+
+        html = html.replace(/(<li>[\s\S]*?<\/li>\n?)+/g, m => `<ul style="padding-left:20px;margin:8px 0">${m}</ul>`);
+        html = html.replace(/(<oli>[\s\S]*?<\/oli>\n?)+/g, m =>
+          `<ol style="padding-left:20px;margin:8px 0">${m.replace(/<oli>/g, '<li>').replace(/<\/oli>/g, '</li>')}</ol>`);
+
+        const blockTags = /^<(h[1-6]|ul|ol|li|pre|blockquote|hr)/;
+        html = html.split('\n').map(line => {
+          if (!line.trim()) return '';
+          if (blockTags.test(line.trim())) return line;
+          return `<p style="margin:4px 0;line-height:1.6">${line}</p>`;
+        }).join('\n');
+        return html;
+      }
+
+      // ── JSON Syntax Highlighter ────────────────────────────────────────────
+      function highlightJson(obj) {
+        const raw = JSON.stringify(obj, null, 2);
+        return raw.replace(
+          /("[^"]*"\s*:)|("[^"]*")|(-?\d+\.?\d*(?:[eE][+-]?\d+)?)|(true|false)|(null)/g,
+          (_, key, str, num, bool, nil) => {
+            if (key)  return `<span style="color:#58FBDA">${key}</span>`;
+            if (str)  return `<span style="color:#e6f6f3">${str}</span>`;
+            if (num)  return `<span style="color:#da2ae0">${num}</span>`;
+            if (bool) return `<span style="color:#ff456d">${bool}</span>`;
+            if (nil)  return `<span style="color:#888">${nil}</span>`;
+            return _;
+          }
+        );
+      }
+
+      // ── Process File ───────────────────────────────────────────────────────
+      async function processFile(file) {
+        if (!wasmReady) {
+          console.error("WASM not ready yet.");
+          return;
+        }
+
+        uploadScreen.style.display = "none";
+        document.getElementById("file-name-display").textContent = file.name;
+        document.getElementById("file-size-display").textContent = (file.size / 1024 / 1024).toFixed(2) + "MB";
+        btnBack.style.display = 'flex';
+        fileInfo.style.display = 'flex';
+
+        if (file.size > 1024 * 1024) {
+          const errorBox = document.getElementById("error-message");
+          if (errorBox) { errorBox.style.display = 'flex'; fileInfo.style.borderColor = "#FF456D"; }
+          return;
+        }
+
+        outputScreen.style.display = "flex";
+        try {
+          const result = await extractFromFile(file, file.type || null, {
+            extractTables: true,
+            extractMetadata: true,
+          });
+          const mdEl   = document.getElementById("content-markdown");
+          const jsonEl = document.getElementById("content-json");
+          if (mdEl)   mdEl.innerHTML  = result.content ? renderMarkdown(result.content) : '<p style="color:#888">No content extracted.</p>';
+          if (jsonEl) jsonEl.innerHTML = highlightJson(result);
+        } catch (e) {
+          console.error("WASM Extraction failed:", e);
+        }
+      }
+
+      // ── Reset ──────────────────────────────────────────────────────────────
+      function resetUI() {
+        fileInput.value = "";
+        fileInfo.style.display = "none";
+        fileInfo.style.borderColor = "";
+        outputScreen.style.display = "none";
+        btnBack.style.display = "none";
+        const errorBox = document.getElementById("error-message");
+        if (errorBox) errorBox.style.display = "none";
+        uploadScreen.style.display = "flex";
+      }
+      btnBack.addEventListener("click", resetUI, false);
+      document.getElementById("btn-remove-file").addEventListener("click", resetUI, false);
+
+      // ── Copy ───────────────────────────────────────────────────────────────
+      const copyFeedback = document.getElementById("copy-feedback");
+      document.getElementById("btn-copy").addEventListener("click", async () => {
+        const mdEl   = document.getElementById("content-markdown");
+        const jsonEl = document.getElementById("content-json");
+        const isMd   = mdEl && mdEl.classList.contains("block");
+        const text   = isMd ? mdEl.innerText : jsonEl.innerText;
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text.trim());
+          if (copyFeedback) {
+            copyFeedback.classList.remove("opacity-0");
+            copyFeedback.classList.add("opacity-100");
+            setTimeout(() => { copyFeedback.classList.remove("opacity-100"); copyFeedback.classList.add("opacity-0"); }, 2000);
+          }
+        } catch (err) { console.error("Copy failed:", err); }
+      });
+
+      // ── Tab Switcher ───────────────────────────────────────────────────────
+      window.switchTab = (tab) => {
+        const ind     = document.getElementById('tab-indicator');
+        const mdBtn   = document.getElementById('tab-markdown');
+        const jsonBtn = document.getElementById('tab-json');
+        const mdEl    = document.getElementById("content-markdown");
+        const jsonEl  = document.getElementById("content-json");
+        const isMd    = tab === 'markdown';
+        ind.style.transform = isMd ? "translateX(0)" : "translateX(100%)";
+        mdBtn.classList.toggle('text-black', isMd);
+        mdBtn.classList.toggle('text-green',  !isMd);
+        jsonBtn.classList.toggle('text-black', !isMd);
+        jsonBtn.classList.toggle('text-green',  isMd);
+        mdEl.classList.toggle('hidden', !isMd);
+        mdEl.classList.toggle('block',   isMd);
+        jsonEl.classList.toggle('hidden',  isMd);
+        jsonEl.classList.toggle('block',  !isMd);
+      };
+    </script>
+  </body>
+</html>

@@ -12,7 +12,8 @@ Kreuzberg is a document intelligence platform with a high‑performance Rust cor
 
 <div class="hero-badges" markdown>
 
-[:material-lightning-bolt: Quick Start](getting-started/quickstart.md){ .md-button .md-button--primary }
+[:material-play-circle: Live Demo](demo.html){ .md-button .md-button--primary }
+[:material-lightning-bolt: Quick Start](getting-started/quickstart.md){ .md-button }
 [:material-package-variant: Installation](getting-started/installation.md){ .md-button }
 [:fontawesome-brands-discord: Join our Community](https://discord.gg/xt9WY3GnKR){ .md-button }
 
