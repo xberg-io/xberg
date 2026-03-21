@@ -57,14 +57,16 @@ mod commands;
 
 use anyhow::{Context, Result};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+#[cfg(feature = "embeddings")]
+use commands::embed_command;
 #[cfg(feature = "mcp")]
 use commands::mcp_command;
 #[cfg(feature = "api")]
 use commands::serve_command;
 use commands::{
-    apply_extraction_overrides, batch_command, clear_command, extract_command, load_config, manifest_command,
-    stats_command, warm_command,
+    apply_extraction_overrides, batch_command, chunk_command, clear_command, extract_command, load_config,
+    manifest_command, stats_command, warm_command,
 };
 use kreuzberg::{OutputFormat as ContentOutputFormat, detect_mime_type};
 use serde_json::json;
@@ -76,6 +78,10 @@ use tracing_subscriber::EnvFilter;
 #[command(name = "kreuzberg")]
 #[command(version, about, long_about = None)]
 struct Cli {
+    /// Set log level (trace, debug, info, warn, error). Overrides RUST_LOG env var.
+    #[arg(long, global = true)]
+    log_level: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -223,9 +229,30 @@ enum Commands {
         #[arg(long)]
         no_cache: Option<bool>,
 
+        /// Enable chunking (overrides config file)
+        #[arg(long)]
+        chunk: Option<bool>,
+
+        /// Chunk size in characters (overrides config file)
+        #[arg(long)]
+        chunk_size: Option<usize>,
+
+        /// Chunk overlap in characters (overrides config file)
+        #[arg(long)]
+        chunk_overlap: Option<usize>,
+
+        /// Tokenizer model for token-based chunk sizing (e.g., "Xenova/gpt-4o", "bert-base-uncased").
+        /// Implicitly enables chunking. Requires the chunking-tokenizers feature.
+        #[arg(long)]
+        chunking_tokenizer: Option<String>,
+
         /// Enable quality processing (overrides config file)
         #[arg(long)]
         quality: Option<bool>,
+
+        /// Enable language detection (overrides config file)
+        #[arg(long)]
+        detect_language: Option<bool>,
 
         /// Content output format (plain, markdown, djot, html). Canonical flag.
         ///
@@ -323,6 +350,70 @@ enum Commands {
         /// HTTP port (only for --transport http)
         #[arg(long, default_value = "8001")]
         port: u16,
+    },
+
+    /// Generate embeddings for text
+    ///
+    /// Generates vector embeddings for one or more text inputs using a specified preset model.
+    /// Reads from --text flag or stdin if no text is provided.
+    #[cfg(feature = "embeddings")]
+    Embed {
+        /// Text to embed. Can be specified multiple times for batch embedding.
+        #[arg(long)]
+        text: Vec<String>,
+
+        /// Embedding preset (fast, balanced, quality, multilingual)
+        #[arg(long, default_value = "balanced")]
+        preset: String,
+
+        /// Output format (text or json)
+        #[arg(short, long, default_value = "json")]
+        format: OutputFormat,
+    },
+
+    /// Chunk text for processing
+    ///
+    /// Splits text into chunks using configurable size and overlap.
+    /// Reads from --text flag or stdin if no text is provided.
+    Chunk {
+        /// Text to chunk. If not provided, reads from stdin.
+        #[arg(long)]
+        text: Option<String>,
+
+        /// Path to config file (TOML, YAML, or JSON)
+        #[arg(short, long)]
+        config: Option<PathBuf>,
+
+        /// Chunk size in characters
+        #[arg(long)]
+        chunk_size: Option<usize>,
+
+        /// Chunk overlap in characters
+        #[arg(long)]
+        chunk_overlap: Option<usize>,
+
+        /// Chunker type: text or markdown
+        #[arg(long, default_value = "text")]
+        chunker_type: String,
+
+        /// Tokenizer model for token-based chunk sizing (e.g., "Xenova/gpt-4o").
+        /// Requires the chunking-tokenizers feature.
+        #[arg(long)]
+        chunking_tokenizer: Option<String>,
+
+        /// Output format (text or json)
+        #[arg(short, long, default_value = "json")]
+        format: OutputFormat,
+    },
+
+    /// Generate shell completions
+    ///
+    /// Outputs shell completion scripts for the specified shell.
+    /// Install with: eval "$(kreuzberg completions bash)"
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
     },
 }
 
@@ -558,12 +649,18 @@ fn merge_json_into_config(
 }
 
 fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    let env_filter = if let Some(ref level) = cli.log_level {
+        EnvFilter::new(level)
+    } else {
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+    };
+
     let _ = tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(env_filter)
         .with_writer(std::io::stderr)
         .try_init();
-
-    let cli = Cli::parse();
 
     match cli.command {
         Commands::Extract {
@@ -648,13 +745,19 @@ fn main() -> Result<()> {
             ocr_language,
             force_ocr,
             no_cache,
+            chunk,
+            chunk_size,
+            chunk_overlap,
+            chunking_tokenizer,
             quality,
+            detect_language,
             output_format,
             content_format,
             pdf_password,
             file_configs,
         } => {
             validate_batch_paths(&paths)?;
+            validate_chunk_params(chunk_size, chunk_overlap)?;
 
             let mut config = load_config(config_path)?;
 
@@ -684,12 +787,12 @@ fn main() -> Result<()> {
                 ocr_language.as_deref(),
                 force_ocr,
                 no_cache,
-                None,
-                None,
-                None,
-                None,
+                chunk,
+                chunk_size,
+                chunk_overlap,
+                chunking_tokenizer.as_deref(),
                 quality,
-                None,
+                detect_language,
                 output_format,
                 content_format,
             );
@@ -832,6 +935,64 @@ fn main() -> Result<()> {
                 warm_command(cache_dir, format, all_embeddings, embedding_model)?;
             }
         },
+
+        #[cfg(feature = "embeddings")]
+        Commands::Embed { text, preset, format } => {
+            let texts = if text.is_empty() {
+                vec![commands::read_stdin()?]
+            } else {
+                text
+            };
+            embed_command(texts, &preset, format)?;
+        }
+
+        Commands::Chunk {
+            text,
+            config: config_path,
+            chunk_size,
+            chunk_overlap,
+            chunker_type,
+            chunking_tokenizer,
+            format,
+        } => {
+            let input = match text {
+                Some(t) => t,
+                None => commands::read_stdin().context("No --text provided and failed to read from stdin")?,
+            };
+
+            validate_chunk_params(chunk_size, chunk_overlap)?;
+
+            let base_config = load_config(config_path)?;
+            let mut chunking_config = base_config.chunking.unwrap_or_default();
+
+            if let Some(size) = chunk_size {
+                chunking_config.max_characters = size;
+                // If user set chunk_size but not overlap, clamp overlap to fit
+                if chunk_overlap.is_none() && chunking_config.overlap >= size {
+                    chunking_config.overlap = size / 4;
+                }
+            }
+            if let Some(overlap) = chunk_overlap {
+                chunking_config.overlap = overlap;
+            }
+            match chunker_type.as_str() {
+                "markdown" => chunking_config.chunker_type = kreuzberg::ChunkerType::Markdown,
+                _ => chunking_config.chunker_type = kreuzberg::ChunkerType::Text,
+            }
+            if let Some(ref tokenizer) = chunking_tokenizer {
+                chunking_config.sizing = kreuzberg::ChunkSizing::Tokenizer {
+                    model: tokenizer.clone(),
+                    cache_dir: None,
+                };
+            }
+
+            chunk_command(input, chunking_config, format)?;
+        }
+
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+            clap_complete::generate(shell, &mut cmd, "kreuzberg", &mut std::io::stdout());
+        }
     }
 
     Ok(())

@@ -309,6 +309,395 @@ impl KreuzbergMcp {
 
         Ok(CallToolResult::success(vec![Content::text(response)]))
     }
+
+    /// Get Kreuzberg version information.
+    ///
+    /// Returns the current version of the Kreuzberg library.
+    #[tool(
+        description = "Get the current Kreuzberg library version.",
+        annotations(title = "Get Version", read_only_hint = true, idempotent_hint = true)
+    )]
+    fn get_version(
+        &self,
+        Parameters(_): Parameters<super::params::EmptyParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let response = serde_json::json!({
+            "version": env!("CARGO_PKG_VERSION"),
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap_or_default(),
+        )]))
+    }
+
+    /// Get model manifest with expected model files and checksums.
+    ///
+    /// Returns a manifest of all model files Kreuzberg expects, including
+    /// their sizes and SHA256 checksums.
+    #[tool(
+        description = "Get model manifest listing expected model files, sizes, and SHA256 checksums.",
+        annotations(title = "Cache Manifest", read_only_hint = true, idempotent_hint = true)
+    )]
+    fn cache_manifest(
+        &self,
+        Parameters(_): Parameters<super::params::EmptyParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        #[allow(unused_mut)]
+        let mut entries: Vec<serde_json::Value> = Vec::new();
+
+        #[cfg(feature = "paddle-ocr")]
+        {
+            let manifest = crate::paddle_ocr::ModelManager::manifest();
+            for entry in manifest {
+                entries.push(serde_json::to_value(&entry).unwrap_or_default());
+            }
+        }
+
+        #[cfg(feature = "layout-detection")]
+        {
+            let manifest = crate::layout::LayoutModelManager::manifest();
+            for entry in manifest {
+                entries.push(serde_json::to_value(&entry).unwrap_or_default());
+            }
+        }
+
+        let total_size_bytes: u64 = entries
+            .iter()
+            .filter_map(|e| e.get("size_bytes").and_then(|v| v.as_u64()))
+            .sum();
+        let version = env!("CARGO_PKG_VERSION");
+
+        let response = serde_json::json!({
+            "kreuzberg_version": version,
+            "total_size_bytes": total_size_bytes,
+            "model_count": entries.len(),
+            "models": entries,
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap_or_default(),
+        )]))
+    }
+
+    /// Download and cache model files.
+    ///
+    /// Eagerly downloads model files (OCR, layout detection, embeddings)
+    /// so they are available for offline use.
+    #[tool(
+        description = "Download and cache model files for offline use. Optionally download embedding models.",
+        annotations(title = "Cache Warm", destructive_hint = false)
+    )]
+    #[allow(unused_mut)]
+    fn cache_warm(
+        &self,
+        Parameters(params): Parameters<super::params::CacheWarmParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let cache_base = resolve_cache_base();
+
+        let mut downloaded: Vec<String> = Vec::new();
+        let mut already_cached: Vec<String> = Vec::new();
+
+        #[cfg(feature = "paddle-ocr")]
+        {
+            let paddle_dir = cache_base.join("paddle-ocr");
+            let manager = crate::paddle_ocr::ModelManager::new(paddle_dir);
+            manager.ensure_all_models().map_err(|e| {
+                rmcp::ErrorData::internal_error(format!("Failed to download PaddleOCR models: {}", e), None)
+            })?;
+            downloaded.push("paddle-ocr v2 (server+mobile det, cls, doc_ori, unified+per-script rec)".to_string());
+        }
+
+        #[cfg(feature = "layout-detection")]
+        {
+            let layout_dir = cache_base.join("layout");
+            let manager = crate::layout::LayoutModelManager::new(Some(layout_dir));
+            let was_cached = manager.is_rtdetr_cached() && manager.is_tatr_cached();
+            if was_cached {
+                already_cached.push("layout (rtdetr, tatr)".to_string());
+            } else {
+                manager.ensure_all_models().map_err(|e| {
+                    rmcp::ErrorData::internal_error(format!("Failed to download layout models: {}", e), None)
+                })?;
+                downloaded.push("layout (rtdetr, tatr)".to_string());
+            }
+        }
+
+        #[cfg(feature = "embeddings")]
+        {
+            let embeddings_dir = cache_base.join("embeddings");
+            let presets_to_warm: Vec<&crate::EmbeddingPreset> = if params.all_embeddings {
+                crate::EMBEDDING_PRESETS.iter().collect()
+            } else if let Some(ref name) = params.embedding_model {
+                match crate::get_preset(name) {
+                    Some(preset) => vec![preset],
+                    None => {
+                        let available: Vec<&str> = crate::list_presets();
+                        return Err(rmcp::ErrorData::invalid_params(
+                            format!(
+                                "Unknown embedding preset '{}'. Available: {}",
+                                name,
+                                available.join(", ")
+                            ),
+                            None,
+                        ));
+                    }
+                }
+            } else {
+                vec![]
+            };
+
+            for preset in &presets_to_warm {
+                let label = format!("embedding ({})", preset.name);
+                crate::warm_model(
+                    &crate::core::config::EmbeddingModelType::Preset {
+                        name: preset.name.to_string(),
+                    },
+                    Some(embeddings_dir.clone()),
+                )
+                .map_err(|e| {
+                    rmcp::ErrorData::internal_error(
+                        format!("Failed to download embedding model '{}': {}", preset.name, e),
+                        None,
+                    )
+                })?;
+                downloaded.push(label);
+            }
+        }
+
+        #[cfg(not(feature = "embeddings"))]
+        {
+            if params.all_embeddings || params.embedding_model.is_some() {
+                return Err(rmcp::ErrorData::invalid_params(
+                    "Embedding model warming requires the 'embeddings' feature to be enabled".to_string(),
+                    None,
+                ));
+            }
+        }
+
+        let response = serde_json::json!({
+            "cache_dir": cache_base.to_string_lossy(),
+            "downloaded": downloaded,
+            "already_cached": already_cached,
+        });
+
+        Ok(CallToolResult::success(vec![Content::text(
+            serde_json::to_string_pretty(&response).unwrap_or_default(),
+        )]))
+    }
+
+    /// Generate vector embeddings for text strings.
+    ///
+    /// Uses the specified preset model (or "balanced" by default) to generate
+    /// vector embeddings for the provided texts.
+    /// Requires the `embeddings` feature to be enabled.
+    #[tool(
+        description = "Generate vector embeddings for text strings. Use preset: 'speed', 'balanced', or 'quality'.",
+        annotations(title = "Embed Text", read_only_hint = true, idempotent_hint = true)
+    )]
+    fn embed_text(
+        &self,
+        Parameters(params): Parameters<super::params::EmbedTextParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        embed_text_impl(params)
+    }
+
+    /// Split text into chunks with configurable size and overlap.
+    ///
+    /// Supports text and markdown chunking modes. Useful for preparing
+    /// text for embedding generation or other downstream processing.
+    /// Requires the `chunking` feature to be enabled.
+    #[tool(
+        description = "Split text into chunks with configurable size and overlap. Supports 'text' and 'markdown' chunker types.",
+        annotations(title = "Chunk Text", read_only_hint = true, idempotent_hint = true)
+    )]
+    fn chunk_text(
+        &self,
+        Parameters(params): Parameters<super::params::ChunkTextParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        chunk_text_impl(params)
+    }
+}
+
+/// Resolve the cache base directory.
+fn resolve_cache_base() -> std::path::PathBuf {
+    if let Ok(env_path) = std::env::var("KREUZBERG_CACHE_DIR") {
+        return std::path::PathBuf::from(env_path);
+    }
+    std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join(".kreuzberg")
+}
+
+/// Embed text implementation when embeddings feature is enabled.
+#[cfg(feature = "embeddings")]
+fn embed_text_impl(params: super::params::EmbedTextParams) -> Result<CallToolResult, rmcp::ErrorData> {
+    use crate::embeddings::generate_embeddings_for_chunks;
+    use crate::types::{Chunk, ChunkMetadata};
+
+    if params.texts.is_empty() {
+        return Err(rmcp::ErrorData::invalid_params(
+            "No texts provided for embedding generation",
+            None,
+        ));
+    }
+
+    if params.texts.iter().any(|t| t.is_empty()) {
+        return Err(rmcp::ErrorData::invalid_params(
+            "All text entries must be non-empty strings",
+            None,
+        ));
+    }
+
+    let preset_name = params.preset.as_deref().unwrap_or("balanced");
+
+    if crate::get_preset(preset_name).is_none() {
+        let available: Vec<&str> = crate::list_presets();
+        return Err(rmcp::ErrorData::invalid_params(
+            format!(
+                "Unknown embedding preset '{}'. Available: {}",
+                preset_name,
+                available.join(", ")
+            ),
+            None,
+        ));
+    }
+
+    let config = crate::core::config::EmbeddingConfig {
+        model: crate::core::config::EmbeddingModelType::Preset {
+            name: preset_name.to_string(),
+        },
+        ..Default::default()
+    };
+
+    let mut chunks: Vec<Chunk> = params
+        .texts
+        .iter()
+        .enumerate()
+        .map(|(idx, text)| Chunk {
+            content: text.clone(),
+            embedding: None,
+            metadata: ChunkMetadata {
+                byte_start: 0,
+                byte_end: text.len(),
+                token_count: None,
+                chunk_index: idx,
+                total_chunks: params.texts.len(),
+                first_page: None,
+                last_page: None,
+                heading_context: None,
+            },
+        })
+        .collect();
+
+    generate_embeddings_for_chunks(&mut chunks, &config).map_err(super::errors::map_kreuzberg_error_to_mcp)?;
+
+    let embeddings: Vec<Vec<f32>> = chunks
+        .into_iter()
+        .map(|chunk| {
+            chunk.embedding.ok_or_else(|| {
+                rmcp::ErrorData::internal_error("Failed to generate embedding for text".to_string(), None)
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let dimensions = embeddings.first().map(|e| e.len()).unwrap_or(0);
+
+    let response = serde_json::json!({
+        "embeddings": embeddings,
+        "model": preset_name,
+        "dimensions": dimensions,
+        "count": params.texts.len(),
+    });
+
+    Ok(CallToolResult::success(vec![Content::text(
+        serde_json::to_string_pretty(&response).unwrap_or_default(),
+    )]))
+}
+
+/// Embed text implementation when embeddings feature is disabled.
+#[cfg(not(feature = "embeddings"))]
+fn embed_text_impl(_params: super::params::EmbedTextParams) -> Result<CallToolResult, rmcp::ErrorData> {
+    Err(rmcp::ErrorData::invalid_params(
+        "Embeddings feature is not enabled. Rebuild with --features embeddings".to_string(),
+        None,
+    ))
+}
+
+/// Chunk text implementation when chunking feature is enabled.
+#[cfg(feature = "chunking")]
+fn chunk_text_impl(params: super::params::ChunkTextParams) -> Result<CallToolResult, rmcp::ErrorData> {
+    use crate::chunking::{ChunkingConfig, chunk_text};
+    use crate::core::config::ChunkerType;
+
+    if params.text.is_empty() {
+        return Err(rmcp::ErrorData::invalid_params("Text cannot be empty", None));
+    }
+
+    let chunker_type = match params.chunker_type.as_deref().unwrap_or("text") {
+        "text" => ChunkerType::Text,
+        "markdown" => ChunkerType::Markdown,
+        other => {
+            return Err(rmcp::ErrorData::invalid_params(
+                format!("Invalid chunker_type: '{}'. Valid values: 'text', 'markdown'", other),
+                None,
+            ));
+        }
+    };
+
+    let max_characters = params.max_characters.unwrap_or(2000);
+    let overlap = params.overlap.unwrap_or(100);
+
+    if overlap >= max_characters {
+        return Err(rmcp::ErrorData::invalid_params(
+            format!(
+                "overlap ({}) must be less than max_characters ({})",
+                overlap, max_characters
+            ),
+            None,
+        ));
+    }
+
+    let config = ChunkingConfig {
+        max_characters,
+        overlap,
+        trim: true,
+        chunker_type,
+        ..Default::default()
+    };
+
+    let result = chunk_text(&params.text, &config, None).map_err(super::errors::map_kreuzberg_error_to_mcp)?;
+
+    let response = serde_json::json!({
+        "chunk_count": result.chunk_count,
+        "input_size_bytes": params.text.len(),
+        "config": {
+            "max_characters": config.max_characters,
+            "overlap": config.overlap,
+            "chunker_type": format!("{:?}", config.chunker_type).to_lowercase(),
+        },
+        "chunks": result.chunks.iter().map(|c| {
+            serde_json::json!({
+                "content": c.content,
+                "byte_start": c.metadata.byte_start,
+                "byte_end": c.metadata.byte_end,
+                "chunk_index": c.metadata.chunk_index,
+                "total_chunks": c.metadata.total_chunks,
+            })
+        }).collect::<Vec<_>>(),
+    });
+
+    Ok(CallToolResult::success(vec![Content::text(
+        serde_json::to_string_pretty(&response).unwrap_or_default(),
+    )]))
+}
+
+/// Chunk text implementation when chunking feature is disabled.
+#[cfg(not(feature = "chunking"))]
+fn chunk_text_impl(_params: super::params::ChunkTextParams) -> Result<CallToolResult, rmcp::ErrorData> {
+    Err(rmcp::ErrorData::invalid_params(
+        "Chunking feature is not enabled. Rebuild with --features chunking".to_string(),
+        None,
+    ))
 }
 
 #[tool_handler]
@@ -504,9 +893,11 @@ mod tests {
         assert!(router.has_route("list_formats"));
         assert!(router.has_route("cache_stats"));
         assert!(router.has_route("cache_clear"));
-
-        let tools = router.list_all();
-        assert_eq!(tools.len(), 7);
+        assert!(router.has_route("get_version"));
+        assert!(router.has_route("cache_manifest"));
+        assert!(router.has_route("cache_warm"));
+        assert!(router.has_route("chunk_text"));
+        assert!(router.has_route("embed_text"));
     }
 
     #[test]
@@ -636,9 +1027,15 @@ mod tests {
             "list_formats",
             "cache_stats",
             "cache_clear",
+            "get_version",
+            "cache_manifest",
+            "cache_warm",
+            "chunk_text",
         ];
 
-        for tool_name in expected_tools {
+        let expected_tools_extra = ["embed_text"];
+
+        for tool_name in expected_tools.iter().chain(expected_tools_extra.iter()) {
             assert!(router.has_route(tool_name), "Tool '{}' should be registered", tool_name);
         }
     }
@@ -648,7 +1045,7 @@ mod tests {
         let router = KreuzbergMcp::tool_router();
         let tools = router.list_all();
 
-        assert_eq!(tools.len(), 7, "Expected 7 tools, found {}", tools.len());
+        assert_eq!(tools.len(), 12, "Expected 12 tools, found {}", tools.len());
     }
 
     #[tokio::test]
@@ -743,5 +1140,112 @@ mod tests {
         let info2 = handle2.await.unwrap();
 
         assert_eq!(info1.server_info.name, info2.server_info.name);
+    }
+
+    #[test]
+    fn test_get_version_returns_version() {
+        let server = KreuzbergMcp::with_config(ExtractionConfig::default());
+
+        let result = server.get_version(rmcp::handler::server::wrapper::Parameters(
+            crate::mcp::params::EmptyParams {},
+        ));
+
+        assert!(result.is_ok());
+        let call_result = result.unwrap();
+        if let Some(content) = call_result.content.first() {
+            match &content.raw {
+                RawContent::Text(text) => {
+                    let parsed: serde_json::Value = serde_json::from_str(&text.text).expect("Should be valid JSON");
+                    assert_eq!(parsed["version"], env!("CARGO_PKG_VERSION"));
+                }
+                _ => panic!("Expected text content"),
+            }
+        } else {
+            panic!("Expected content in result");
+        }
+    }
+
+    #[test]
+    fn test_cache_manifest_returns_json() {
+        let server = KreuzbergMcp::with_config(ExtractionConfig::default());
+
+        let result = server.cache_manifest(rmcp::handler::server::wrapper::Parameters(
+            crate::mcp::params::EmptyParams {},
+        ));
+
+        assert!(result.is_ok());
+        let call_result = result.unwrap();
+        if let Some(content) = call_result.content.first() {
+            match &content.raw {
+                RawContent::Text(text) => {
+                    let parsed: serde_json::Value = serde_json::from_str(&text.text).expect("Should be valid JSON");
+                    assert!(parsed.get("kreuzberg_version").is_some());
+                    assert!(parsed.get("model_count").is_some());
+                    assert!(parsed.get("models").is_some());
+                }
+                _ => panic!("Expected text content"),
+            }
+        } else {
+            panic!("Expected content in result");
+        }
+    }
+
+    #[cfg(feature = "chunking")]
+    #[test]
+    fn test_chunk_text_returns_chunks() {
+        let server = KreuzbergMcp::with_config(ExtractionConfig::default());
+        let params = crate::mcp::params::ChunkTextParams {
+            text: "Hello world. This is a test.".to_string(),
+            max_characters: None,
+            overlap: None,
+            chunker_type: None,
+        };
+
+        let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
+
+        assert!(result.is_ok());
+        let call_result = result.unwrap();
+        if let Some(content) = call_result.content.first() {
+            match &content.raw {
+                RawContent::Text(text) => {
+                    let parsed: serde_json::Value = serde_json::from_str(&text.text).expect("Should be valid JSON");
+                    assert!(parsed.get("chunk_count").is_some());
+                    assert!(parsed.get("chunks").is_some());
+                }
+                _ => panic!("Expected text content"),
+            }
+        } else {
+            panic!("Expected content in result");
+        }
+    }
+
+    #[test]
+    fn test_chunk_text_rejects_empty_input() {
+        let server = KreuzbergMcp::with_config(ExtractionConfig::default());
+        let params = crate::mcp::params::ChunkTextParams {
+            text: String::new(),
+            max_characters: None,
+            overlap: None,
+            chunker_type: None,
+        };
+
+        let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code.0, -32602);
+    }
+
+    #[test]
+    fn test_chunk_text_rejects_invalid_chunker_type() {
+        let server = KreuzbergMcp::with_config(ExtractionConfig::default());
+        let params = crate::mcp::params::ChunkTextParams {
+            text: "Some text".to_string(),
+            max_characters: None,
+            overlap: None,
+            chunker_type: Some("invalid".to_string()),
+        };
+
+        let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().code.0, -32602);
     }
 }

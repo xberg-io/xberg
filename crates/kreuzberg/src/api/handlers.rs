@@ -7,8 +7,9 @@ use crate::{batch_extract_bytes, cache, extract_bytes};
 use super::{
     error::{ApiError, JsonApi, MultipartApi},
     types::{
-        ApiState, CacheClearResponse, CacheStatsResponse, ChunkRequest, ChunkResponse, EmbedRequest, EmbedResponse,
-        ExtractResponse, HealthResponse, InfoResponse,
+        ApiState, CacheClearResponse, CacheStatsResponse, ChunkRequest, ChunkResponse, DetectResponse, EmbedRequest,
+        EmbedResponse, ExtractResponse, HealthResponse, InfoResponse, ManifestEntryResponse, ManifestResponse,
+        VersionResponse, WarmRequest, WarmResponse,
     },
 };
 
@@ -574,4 +575,376 @@ pub async fn chunk_handler(JsonApi(request): JsonApi<ChunkRequest>) -> Result<Js
         input_size_bytes: request.text.len(),
         chunker_type: request.chunker_type.to_lowercase(),
     }))
+}
+
+/// Version endpoint handler.
+///
+/// GET /version
+///
+/// Returns the current kreuzberg version.
+#[utoipa::path(
+    get,
+    path = "/version",
+    tag = "health",
+    responses(
+        (status = 200, description = "Version information", body = VersionResponse),
+    )
+)]
+#[cfg_attr(feature = "otel", tracing::instrument(name = "api.version"))]
+pub async fn version_handler() -> Json<VersionResponse> {
+    Json(VersionResponse {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+    })
+}
+
+/// MIME type detection endpoint handler.
+///
+/// POST /detect
+///
+/// Accepts multipart form data with a single file and returns its detected MIME type.
+///
+/// # Errors
+///
+/// Returns `ApiError::Validation` if no file is provided.
+/// Returns `ApiError::Internal` if MIME type detection fails.
+#[utoipa::path(
+    post,
+    path = "/detect",
+    tag = "extraction",
+    request_body(content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "MIME type detected", body = DetectResponse),
+        (status = 400, description = "Bad request - no file provided", body = crate::api::types::ErrorResponse),
+        (status = 500, description = "Internal server error", body = crate::api::types::ErrorResponse),
+    )
+)]
+#[cfg_attr(feature = "otel", tracing::instrument(name = "api.detect", skip(multipart)))]
+pub async fn detect_handler(MultipartApi(mut multipart): MultipartApi) -> Result<Json<DetectResponse>, ApiError> {
+    let mut file_data: Option<(Vec<u8>, Option<String>)> = None;
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?
+    {
+        let field_name = field.name().unwrap_or("").to_string();
+
+        if field_name == "file" || field_name == "files" {
+            let file_name = field.file_name().map(|s| s.to_string());
+            let data = field
+                .bytes()
+                .await
+                .map_err(|e| ApiError::validation(crate::error::KreuzbergError::validation(e.to_string())))?;
+            file_data = Some((data.to_vec(), file_name));
+            break;
+        }
+    }
+
+    let (data, file_name) = file_data.ok_or_else(|| {
+        ApiError::validation(crate::error::KreuzbergError::validation(
+            "No file provided for MIME type detection. Upload a file with field name 'file' or 'files'.",
+        ))
+    })?;
+
+    // Try detection from bytes first, fall back to extension-based detection
+    let mime_type = crate::core::mime::detect_mime_type_from_bytes(&data).or_else(|_| {
+        if let Some(ref name) = file_name {
+            crate::core::mime::detect_mime_type(name, false)
+        } else {
+            Err(crate::error::KreuzbergError::Other(
+                "Could not detect MIME type from file content or filename".to_string(),
+            ))
+        }
+    })?;
+
+    Ok(Json(DetectResponse {
+        mime_type,
+        filename: file_name,
+    }))
+}
+
+/// Model manifest endpoint handler.
+///
+/// GET /cache/manifest
+///
+/// Returns the expected model files with checksums and sizes.
+#[utoipa::path(
+    get,
+    path = "/cache/manifest",
+    tag = "cache",
+    responses(
+        (status = 200, description = "Model manifest", body = ManifestResponse),
+    )
+)]
+#[cfg_attr(feature = "otel", tracing::instrument(name = "api.cache_manifest"))]
+pub async fn cache_manifest_handler() -> Json<ManifestResponse> {
+    #[allow(unused_mut)]
+    let mut models: Vec<ManifestEntryResponse> = Vec::new();
+
+    #[cfg(feature = "paddle-ocr")]
+    {
+        models.extend(
+            crate::paddle_ocr::ModelManager::manifest()
+                .into_iter()
+                .map(|e| ManifestEntryResponse {
+                    relative_path: e.relative_path,
+                    sha256: e.sha256,
+                    size_bytes: e.size_bytes,
+                    source_url: e.source_url,
+                }),
+        );
+    }
+
+    #[cfg(feature = "layout-detection")]
+    {
+        models.extend(
+            crate::layout::LayoutModelManager::manifest()
+                .into_iter()
+                .map(|e| ManifestEntryResponse {
+                    relative_path: e.relative_path,
+                    sha256: e.sha256,
+                    size_bytes: e.size_bytes,
+                    source_url: e.source_url,
+                }),
+        );
+    }
+
+    let total_size_bytes: u64 = models.iter().map(|e| e.size_bytes).sum();
+    let model_count = models.len();
+
+    Json(ManifestResponse {
+        kreuzberg_version: env!("CARGO_PKG_VERSION").to_string(),
+        total_size_bytes,
+        model_count,
+        models,
+    })
+}
+
+/// Cache warm endpoint handler.
+///
+/// POST /cache/warm
+///
+/// Eagerly downloads all required models to the cache directory.
+/// Optionally downloads embedding models when the `embeddings` feature is enabled.
+///
+/// # Errors
+///
+/// Returns `ApiError::Internal` if model downloading fails.
+/// Returns `ApiError::Validation` if an unknown embedding preset is requested.
+#[utoipa::path(
+    post,
+    path = "/cache/warm",
+    tag = "cache",
+    request_body = WarmRequest,
+    responses(
+        (status = 200, description = "Models warmed", body = WarmResponse),
+        (status = 400, description = "Bad request - unknown embedding model", body = crate::api::types::ErrorResponse),
+        (status = 500, description = "Internal server error", body = crate::api::types::ErrorResponse),
+    )
+)]
+#[cfg_attr(feature = "otel", tracing::instrument(name = "api.cache_warm", skip(request)))]
+pub async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -> Result<Json<WarmResponse>, ApiError> {
+    let cache_base = resolve_cache_base();
+
+    #[allow(unused_mut)]
+    let mut downloaded: Vec<String> = Vec::new();
+    #[allow(unused_mut)]
+    let mut already_cached: Vec<String> = Vec::new();
+
+    #[cfg(feature = "paddle-ocr")]
+    {
+        let paddle_dir = cache_base.join("paddle-ocr");
+        let manager = crate::paddle_ocr::ModelManager::new(paddle_dir);
+
+        manager.ensure_all_models().map_err(ApiError::internal)?;
+        downloaded.push("paddle-ocr v2 (server+mobile det, cls, doc_ori, unified+per-script rec)".to_string());
+    }
+
+    #[cfg(feature = "layout-detection")]
+    {
+        let layout_dir = cache_base.join("layout");
+        let manager = crate::layout::LayoutModelManager::new(Some(layout_dir));
+
+        let was_cached = manager.is_rtdetr_cached() && manager.is_tatr_cached();
+
+        if was_cached {
+            already_cached.push("layout (rtdetr, tatr)".to_string());
+        } else {
+            manager.ensure_all_models().map_err(|e| {
+                ApiError::internal(crate::error::KreuzbergError::Other(format!(
+                    "Failed to download layout models: {}",
+                    e
+                )))
+            })?;
+            downloaded.push("layout (rtdetr, tatr)".to_string());
+        }
+    }
+
+    #[cfg(feature = "embeddings")]
+    {
+        let embeddings_dir = cache_base.join("embeddings");
+        let presets_to_warm: Vec<&crate::EmbeddingPreset> = if request.all_embeddings {
+            crate::EMBEDDING_PRESETS.iter().collect()
+        } else if let Some(ref name) = request.embedding_model {
+            match crate::get_preset(name) {
+                Some(preset) => vec![preset],
+                None => {
+                    let available: Vec<&str> = crate::list_presets();
+                    return Err(ApiError::validation(crate::error::KreuzbergError::validation(format!(
+                        "Unknown embedding preset '{}'. Available: {}",
+                        name,
+                        available.join(", ")
+                    ))));
+                }
+            }
+        } else {
+            vec![]
+        };
+
+        for preset in &presets_to_warm {
+            let label = format!("embedding ({})", preset.name);
+            crate::warm_model(
+                &crate::core::config::EmbeddingModelType::Preset {
+                    name: preset.name.to_string(),
+                },
+                Some(embeddings_dir.clone()),
+            )
+            .map_err(|e| {
+                ApiError::internal(crate::error::KreuzbergError::Other(format!(
+                    "Failed to download embedding model '{}': {}",
+                    preset.name, e
+                )))
+            })?;
+            downloaded.push(label);
+        }
+    }
+
+    #[cfg(not(feature = "embeddings"))]
+    {
+        if request.all_embeddings || request.embedding_model.is_some() {
+            return Err(ApiError::validation(crate::error::KreuzbergError::validation(
+                "Embedding model warming requires the 'embeddings' feature to be enabled",
+            )));
+        }
+    }
+
+    Ok(Json(WarmResponse {
+        cache_dir: cache_base.to_string_lossy().to_string(),
+        downloaded,
+        already_cached,
+    }))
+}
+
+/// Resolve the cache base directory.
+fn resolve_cache_base() -> std::path::PathBuf {
+    if let Ok(env_path) = std::env::var("KREUZBERG_CACHE_DIR") {
+        return std::path::PathBuf::from(env_path);
+    }
+    std::env::current_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."))
+        .join(".kreuzberg")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        Router,
+        body::Body,
+        http::{Request, StatusCode},
+        routing::{get, post},
+    };
+    use tower::ServiceExt;
+
+    fn test_router() -> Router {
+        let state = ApiState {
+            default_config: std::sync::Arc::new(crate::ExtractionConfig::default()),
+        };
+        Router::new()
+            .route("/version", get(version_handler))
+            .route("/detect", post(detect_handler))
+            .route("/cache/manifest", get(cache_manifest_handler))
+            .route("/cache/warm", post(cache_warm_handler))
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn test_version_handler_returns_200() {
+        let app = test_router();
+        let response = app
+            .oneshot(Request::builder().uri("/version").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["version"].is_string());
+        assert!(!json["version"].as_str().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_cache_manifest_handler_returns_200() {
+        let app = test_router();
+        let response = app
+            .oneshot(Request::builder().uri("/cache/manifest").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["kreuzberg_version"].is_string());
+        assert!(json["total_size_bytes"].is_number());
+        assert!(json["model_count"].is_number());
+        assert!(json["models"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_detect_handler_no_file_returns_400() {
+        let app = test_router();
+
+        // Send a request without multipart content type - should get an error
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/detect")
+                    .header("content-type", "multipart/form-data; boundary=testboundary")
+                    .body(Body::from("--testboundary--\r\n"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Should fail because no file field is provided
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_cache_warm_handler_empty_request_returns_200() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/cache/warm")
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // With no features requesting downloads, should succeed
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(json["cache_dir"].is_string());
+        assert!(json["downloaded"].is_array());
+        assert!(json["already_cached"].is_array());
+    }
 }

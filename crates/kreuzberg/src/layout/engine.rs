@@ -204,6 +204,9 @@ impl LayoutEngine {
     /// If `apply_heuristics` is enabled in config, postprocessing is applied automatically.
     pub fn detect(&mut self, img: &RgbImage) -> Result<DetectionResult, LayoutError> {
         let (result, _timings) = self.detect_timed(img)?;
+        for detection in &result.detections {
+            tracing::trace!(class = ?detection.class, confidence = detection.confidence, "Layout detection result");
+        }
         Ok(result)
     }
 

@@ -769,8 +769,7 @@ pub fn create_go_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
         env.push(("KREUZBERG_BENCHMARK_DEBUG".to_string(), "true".to_string()));
     }
     let supported_formats = get_kreuzberg_supported_formats();
-    let mut adapter =
-        SubprocessAdapter::with_batch_support("kreuzberg-go", command, args, env, supported_formats);
+    let mut adapter = SubprocessAdapter::with_batch_support("kreuzberg-go", command, args, env, supported_formats);
     adapter.set_working_dir(scripts_dir);
     Ok(adapter)
 }

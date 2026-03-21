@@ -181,8 +181,10 @@ pub(crate) fn convert_results_to_hints(
 
     results
         .iter()
-        .map(|page| {
-            page.regions
+        .enumerate()
+        .map(|(page_idx, page)| {
+            let hints: Vec<LayoutHint> = page
+                .regions
                 .iter()
                 .map(|region| {
                     let class = match region.class {
@@ -209,7 +211,16 @@ pub(crate) fn convert_results_to_hints(
                         top: region.bbox.top,
                     }
                 })
-                .collect()
+                .collect();
+            tracing::trace!(
+                page = page_idx,
+                table_hints = hints
+                    .iter()
+                    .filter(|h| matches!(h.class, LayoutHintClass::Table))
+                    .count(),
+                "Layout hints for page"
+            );
+            hints
         })
         .collect()
 }

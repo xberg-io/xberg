@@ -33,11 +33,15 @@ use utoipa::OpenApi;
         crate::api::handlers::health_handler,
         crate::api::handlers::info_handler,
         crate::api::handlers::extract_handler,
+        crate::api::handlers::detect_handler,
         crate::api::handlers::formats_handler,
         crate::api::handlers::cache_stats_handler,
         crate::api::handlers::cache_clear_handler,
+        crate::api::handlers::cache_manifest_handler,
+        crate::api::handlers::cache_warm_handler,
         crate::api::handlers::embed_handler,
         crate::api::handlers::chunk_handler,
+        crate::api::handlers::version_handler,
     ),
     components(
         schemas(
@@ -54,6 +58,12 @@ use utoipa::OpenApi;
             crate::api::types::ChunkItem,
             crate::api::types::ChunkingConfigRequest,
             crate::api::types::ChunkingConfigResponse,
+            crate::api::types::VersionResponse,
+            crate::api::types::DetectResponse,
+            crate::api::types::ManifestResponse,
+            crate::api::types::ManifestEntryResponse,
+            crate::api::types::WarmRequest,
+            crate::api::types::WarmResponse,
             crate::core::mime::SupportedFormat,
             crate::types::extraction::ExtractionResult,
             crate::types::extraction::Chunk,
@@ -133,11 +143,15 @@ mod tests {
         // Health endpoints
         assert!(schema.contains("/health"));
         assert!(schema.contains("/info"));
+        assert!(schema.contains("/version"));
         // Extraction
         assert!(schema.contains("/extract"));
+        assert!(schema.contains("/detect"));
         // Cache
         assert!(schema.contains("/cache/stats"));
         assert!(schema.contains("/cache/clear"));
+        assert!(schema.contains("/cache/manifest"));
+        assert!(schema.contains("/cache/warm"));
         // Embeddings
         assert!(schema.contains("/embed"));
         // Chunking
@@ -152,5 +166,10 @@ mod tests {
         assert!(schema.contains("ErrorResponse"));
         assert!(schema.contains("EmbedRequest"));
         assert!(schema.contains("ChunkRequest"));
+        assert!(schema.contains("VersionResponse"));
+        assert!(schema.contains("DetectResponse"));
+        assert!(schema.contains("ManifestResponse"));
+        assert!(schema.contains("WarmRequest"));
+        assert!(schema.contains("WarmResponse"));
     }
 }

@@ -519,6 +519,19 @@ pub fn render_document_as_markdown_with_tables(
 ) -> Result<(String, bool)> {
     let pages = document.pages();
     let page_count = pages.len();
+    let total_table_hints = layout_hints
+        .map(|h| {
+            h.iter()
+                .flat_map(|p| p.iter())
+                .filter(|hint| matches!(hint.class, super::types::LayoutHintClass::Table))
+                .count()
+        })
+        .unwrap_or(0);
+    tracing::trace!(
+        has_layout = layout_hints.is_some(),
+        total_table_hints,
+        "Starting markdown with tables pipeline"
+    );
     tracing::debug!(page_count, "PDF markdown pipeline: starting render");
 
     let mut has_font_encoding_issues = false;
@@ -672,8 +685,15 @@ pub fn render_document_as_markdown_with_tables(
             };
 
             if words.is_empty() {
+                tracing::trace!(page = page_idx, "Table extraction: no words found, skipping");
                 continue;
             }
+            tracing::trace!(
+                page = page_idx,
+                word_count = words.len(),
+                page_height,
+                "Table page prepared"
+            );
             table_pages.push(TablePageData {
                 page_idx,
                 words,
@@ -698,6 +718,18 @@ pub fn render_document_as_markdown_with_tables(
                 None
             };
             let has_tatr = seed_model.is_some();
+            tracing::debug!(
+                has_tatr,
+                table_page_count = table_pages.len(),
+                "Table extraction phase 2: TATR availability"
+            );
+            if !has_tatr && !table_pages.is_empty() {
+                return Err(crate::pdf::error::PdfError::TextExtractionFailed(
+                    "Layout detection found table regions but TATR model is not available. \
+                     Ensure the TATR ONNX model is downloaded. Tables cannot be extracted without it."
+                        .to_string(),
+                ));
+            }
             if let Some(model) = seed_model {
                 TL_TATR.with(|cell| {
                     *cell.borrow_mut() = Some(model);
@@ -732,6 +764,11 @@ pub fn render_document_as_markdown_with_tables(
                                         tp.page_idx,
                                         tatr,
                                     );
+                                    tracing::trace!(
+                                        page = tp.page_idx,
+                                        tatr_tables = tatr_tables.len(),
+                                        "TATR table recognition result"
+                                    );
                                     if !tatr_tables.is_empty() {
                                         return tatr_tables;
                                     }
@@ -764,6 +801,10 @@ pub fn render_document_as_markdown_with_tables(
                 }
             } else {
                 // No TATR — run heuristic fallback sequentially
+                tracing::debug!(
+                    table_page_count = table_pages.len(),
+                    "Running heuristic table extraction (no TATR)"
+                );
                 for tp in &table_pages {
                     let hints = &hints_pages[tp.page_idx];
                     layout_tables.extend(super::regions::extract_tables_from_layout_hints(
@@ -794,6 +835,8 @@ pub fn render_document_as_markdown_with_tables(
             }
         }
     }
+
+    tracing::debug!(tables_found = layout_tables.len(), "Table extraction complete");
 
     // Build per-page index of successfully extracted table bounding boxes.
     // This tells assign_segments_to_regions which Table bboxes actually produced
