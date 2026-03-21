@@ -299,9 +299,11 @@ pub(crate) fn render_pages_for_ocr(content: &[u8]) -> crate::Result<Vec<image::D
 /// Concatenated text from all pages, with markdown structure when layout is available
 #[cfg(feature = "ocr")]
 pub(crate) async fn extract_with_ocr(
-    images: &[image::DynamicImage],
+    content: Option<&[u8]>,
+    images: Option<&[image::DynamicImage]>,
     #[cfg(feature = "layout-detection")] layout_detections: Option<&[crate::layout::DetectionResult]>,
     config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
 ) -> crate::Result<(String, Option<f64>)> {
     use crate::plugins::registry::get_ocr_backend_registry;
     use image::ImageEncoder;
@@ -338,6 +340,46 @@ pub(crate) async fn extract_with_ocr(
         registry.get(&ocr_config.backend)?
     };
 
+    // If the backend supports direct document processing and we have a path,
+    // use it to process the entire document at once, bypassing page rendering.
+    // This is currently only supported when layout detection is NOT active,
+    // as layout assembly requires per-rendering results.
+    #[cfg(not(feature = "layout-detection"))]
+    let supports_doc = backend.supports_document_processing();
+    #[cfg(feature = "layout-detection")]
+    let supports_doc = backend.supports_document_processing() && layout_detections.is_none();
+
+    let rendered_images;
+    let images_to_use = if let Some(imgs) = images {
+        imgs
+    } else if !supports_doc || path.is_none() {
+        // We need images but don't have them. Render now if we have content.
+        if let Some(bytes) = content {
+            rendered_images = render_pages_for_ocr(bytes)?;
+            rendered_images.as_slice()
+        } else {
+            // No images and no content to render from.
+            &[] as &[image::DynamicImage]
+        }
+    } else {
+        // We have a path and support doc processing, so we might not need images.
+        &[] as &[image::DynamicImage]
+    };
+
+    if let Some(doc_path) = path
+        && supports_doc
+    {
+        tracing::debug!(backend = %ocr_config.backend, "Using document-level OCR processing");
+        let result = backend.process_document(doc_path, ocr_config).await?;
+        let mean_conf = result
+            .metadata
+            .additional
+            .get("mean_text_conf")
+            .and_then(|v| v.as_f64())
+            .map(|v| v / 100.0);
+        return Ok((result.content, mean_conf));
+    }
+
     // Encode all page images to PNG bytes in parallel (CPU-bound).
     // Each element is (page_idx, image_data, width, height).
     // We wrap image bytes in Arc so that spawning per-page OCR tasks only
@@ -345,7 +387,7 @@ pub(crate) async fn extract_with_ocr(
     use rayon::prelude::*;
     use std::sync::Arc;
     #[allow(clippy::type_complexity)]
-    let encoded_pages: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = images
+    let encoded_pages: crate::Result<Vec<(usize, Arc<Vec<u8>>, u32, u32)>> = images_to_use
         .par_iter()
         .enumerate()
         .map(|(page_idx, image)| {
@@ -370,8 +412,9 @@ pub(crate) async fn extract_with_ocr(
     // `backend` is already an `Arc<dyn OcrBackend>`; clone it cheaply per task.
     let ocr_config_owned = ocr_config.clone();
 
-    let mut join_set: tokio::task::JoinSet<(usize, crate::Result<crate::types::ExtractionResult>)> =
-        tokio::task::JoinSet::new();
+    use tokio::task::JoinSet;
+    let mut join_set: JoinSet<(usize, crate::Result<crate::types::ExtractionResult>)> =
+        JoinSet::new();
 
     for (page_idx, image_data, _width, _height) in &encoded_pages {
         let backend_clone = std::sync::Arc::clone(&backend);
@@ -385,7 +428,7 @@ pub(crate) async fn extract_with_ocr(
     }
 
     // Collect results, preserving page order.
-    let mut ocr_results: Vec<Option<crate::types::ExtractionResult>> = vec![None; images.len()];
+    let mut ocr_results: Vec<Option<crate::types::ExtractionResult>> = vec![None; images_to_use.len()];
     while let Some(join_result) = join_set.join_next().await {
         let (page_idx, ocr_result) = join_result.map_err(|e| crate::KreuzbergError::Plugin {
             message: format!("OCR task panicked: {}", e),
@@ -403,7 +446,7 @@ pub(crate) async fn extract_with_ocr(
         None
     };
 
-    let mut page_texts = Vec::with_capacity(images.len());
+    let mut page_texts = Vec::with_capacity(images_to_use.len());
     let mut conf_sum: f64 = 0.0;
     let mut conf_count: usize = 0;
 
@@ -432,12 +475,10 @@ pub(crate) async fn extract_with_ocr(
             && let Some(ref elements) = ocr_result.ocr_elements
             && !elements.is_empty()
         {
-            let detection = detections.get(page_idx);
-
-            // Run TATR table recognition if available (requires mutable model).
+            let detection = detections.get(page_idx);            // Run TATR table recognition if available (requires mutable model).
             let recognized_tables = match (detection, tatr_model.as_mut()) {
                 (Some(det), Some(model)) => {
-                    let rgb = images[page_idx].to_rgb8();
+                    let rgb = images_to_use[page_idx].to_rgb8();
                     crate::ocr::layout_assembly::recognize_page_tables(&rgb, det, elements, model)
                 }
                 _ => Vec::new(),
@@ -560,16 +601,17 @@ pub(crate) async fn extract_with_ocr(
 /// backend is tried. Returns the best result seen across all stages.
 #[cfg(feature = "ocr")]
 pub(crate) async fn run_ocr_pipeline(
-    images: &[image::DynamicImage],
+    content: Option<&[u8]>,
+    images: Option<&[image::DynamicImage]>,
     #[cfg(feature = "layout-detection")] layout_detections: Option<&[crate::layout::DetectionResult]>,
     config: &ExtractionConfig,
     pipeline: &crate::core::config::OcrPipelineConfig,
+    path: Option<&std::path::Path>,
 ) -> crate::Result<String> {
     use crate::plugins::registry::get_ocr_backend_registry;
 
-    let base_ocr = config.ocr.as_ref().ok_or_else(|| crate::KreuzbergError::Parsing {
-        message: "OCR config required for pipeline".to_string(),
-        source: None,
+    let ocr_config = config.ocr.as_ref().ok_or_else(|| {
+        crate::error::KreuzbergError::parsing("OCR configuration missing")
     })?;
 
     // Sort stages by priority (highest first)
@@ -604,7 +646,7 @@ pub(crate) async fn run_ocr_pipeline(
 
     for stage in &available_stages {
         // Build a modified config for this stage
-        let mut stage_ocr = base_ocr.clone();
+        let mut stage_ocr = ocr_config.clone();
         stage_ocr.backend = stage.backend.clone();
         if let Some(ref lang) = stage.language {
             stage_ocr.language = lang.clone();
@@ -628,10 +670,12 @@ pub(crate) async fn run_ocr_pipeline(
         );
 
         let result = extract_with_ocr(
+            content,
             images,
             #[cfg(feature = "layout-detection")]
             layout_detections,
             &stage_config,
+            path,
         )
         .await;
 
@@ -1422,5 +1466,71 @@ mod tests {
         assert_eq!(stats.alnum, 1);
         assert_eq!(stats.meaningful_words, 0); // "x" has len 1 < min_meaningful_word_len (4)
         assert_eq!(stats.avg_word_length, 1.0);
+    }
+
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    async fn test_process_document_propagation() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+        use crate::core::config::OcrConfig;
+        use crate::types::ExtractionResult;
+        use std::path::Path;
+
+        struct MockBackend {
+            called: Arc<AtomicBool>,
+        }
+
+        #[async_trait::async_trait]
+        impl OcrBackend for MockBackend {
+            fn backend_type(&self) -> OcrBackendType { OcrBackendType::Custom }
+            fn supports_language(&self, _: &str) -> bool { true }
+            async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractionResult> {
+                panic!("Should not call process_image");
+            }
+            fn supports_document_processing(&self) -> bool { true }
+            async fn process_document(&self, path: &Path, _: &OcrConfig) -> crate::Result<ExtractionResult> {
+                assert!(path.to_string_lossy().contains("test.pdf"));
+                self.called.store(true, Ordering::SeqCst);
+                Ok(ExtractionResult::default())
+            }
+        }
+
+        impl Plugin for MockBackend {
+            fn name(&self) -> &str { "mock" }
+            fn version(&self) -> String { "1.0.0".to_string() }
+            fn initialize(&self) -> crate::Result<()> { Ok(()) }
+            fn shutdown(&self) -> crate::Result<()> { Ok(()) }
+        }
+
+        let called = Arc::new(AtomicBool::new(false));
+        let backend = Arc::new(MockBackend { called: called.clone() });
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "mock".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        // Register the mock backend so extract_with_ocr can find it
+        crate::plugins::register_ocr_backend(backend).unwrap();
+
+        let path = Path::new("test.pdf");
+        let result = extract_with_ocr(
+            None, // No content
+            Some(&[]), // No images
+            #[cfg(feature = "layout-detection")]
+            None, // No layout
+            &config,
+            Some(path),
+        ).await;
+
+        assert!(result.is_ok());
+        assert!(called.load(Ordering::SeqCst), "process_document was not called");
+
+        // Clean up
+        crate::plugins::unregister_ocr_backend("mock").unwrap();
     }
 }
