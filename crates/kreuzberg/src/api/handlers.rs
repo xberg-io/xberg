@@ -759,6 +759,7 @@ pub async fn cache_manifest_handler() -> Json<ManifestResponse> {
     responses(
         (status = 200, description = "Models warmed", body = WarmResponse),
         (status = 400, description = "Bad request - unknown embedding model", body = crate::api::types::ErrorResponse),
+        (status = 422, description = "Unprocessable entity - invalid JSON body", body = crate::api::types::ErrorResponse),
         (status = 500, description = "Internal server error", body = crate::api::types::ErrorResponse),
     )
 )]
