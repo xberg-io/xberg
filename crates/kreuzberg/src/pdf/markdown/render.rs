@@ -274,7 +274,9 @@ fn should_dehyphenate(prev: &str, next: &str) -> bool {
 /// - `<` → `&lt;`
 /// - `>` → `&gt;`
 ///
-/// Also escapes `_` as `\_` unless the text contains `://` (to preserve URLs).
+/// Also escapes `_` as `\_` unless the text contains `://` (to preserve URLs)
+/// or `escape_underscores` is false (e.g. inside table cells where markdown
+/// italic parsing does not apply).
 ///
 /// Uses a single-pass scan: if no special characters are found, returns a
 /// borrowed `Cow` with no allocation.
@@ -282,25 +284,34 @@ fn should_dehyphenate(prev: &str, next: &str) -> bool {
 /// Visibility is `pub(in crate::pdf::markdown)` so child modules such as
 /// `crate::pdf::markdown::regions::table_recognition` can import it.
 pub(in crate::pdf::markdown) fn escape_html_entities(text: &str) -> Cow<'_, str> {
-    // Determine which replacements are needed with a fast pre-scan.
+    escape_html_entities_impl(text, true)
+}
+
+/// Escape HTML entities without escaping underscores.
+///
+/// Use this for table cell content where `_` should be preserved literally.
+pub(in crate::pdf::markdown) fn escape_html_entities_no_underscores(text: &str) -> Cow<'_, str> {
+    escape_html_entities_impl(text, false)
+}
+
+fn escape_html_entities_impl(text: &str, escape_underscores: bool) -> Cow<'_, str> {
     let is_url = text.contains("://");
     let needs_amp = text.contains('&');
     let needs_lt = text.contains('<');
     let needs_gt = text.contains('>');
-    let needs_underscore = !is_url && text.contains('_');
+    let needs_underscore = escape_underscores && !is_url && text.contains('_');
 
     if !needs_amp && !needs_lt && !needs_gt && !needs_underscore {
         return Cow::Borrowed(text);
     }
 
-    // Single allocation: build result in one pass.
     let mut result = String::with_capacity(text.len() + 16);
     for ch in text.chars() {
         match ch {
             '&' => result.push_str("&amp;"),
             '<' => result.push_str("&lt;"),
             '>' => result.push_str("&gt;"),
-            '_' if !is_url => result.push_str("\\_"),
+            '_' if needs_underscore => result.push_str("\\_"),
             _ => result.push(ch),
         }
     }

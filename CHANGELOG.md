@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.5.2] - Unreleased
+
+### Fixed
+
+- **Table cell underscore escaping**: Underscores in table cell content (e.g. `CTC_ARP_01`) were incorrectly escaped as `CTC\_ARP\_01`, breaking identifier readability. Table cells now preserve underscores literally since markdown italic parsing does not apply inside pipe tables.
+- **R batch function spurious NULL argument**: R wrapper batch functions passed an extra `NULL` positional argument to native Rust functions, causing "unused argument" errors on all batch operations.
+- **Elixir Windows ORT DLL staging**: ONNX Runtime DLL was only staged in `target/release/` but not in `priv/native/` where the BEAM VM loads NIFs. OCR/layout/embedding features now work correctly on Windows CI.
+- **Benchmark batch mode**: Batch benchmarks now use real batch adapters (`batch_extract_file_sync`) instead of sequential single-file processing. Third-party frameworks without batch APIs are excluded from batch benchmarks for fair comparison.
+
+### Added
+
+- **Pipeline table extraction tracing**: Added zero-cost `tracing::trace!` and `tracing::debug!` logging throughout the layout detection and table extraction pipeline for easier debugging.
+- **TATR model availability check**: Layout detection now returns an error if table regions are detected but the TATR model is unavailable, instead of silently falling back to degraded extraction.
+- **Publish idempotency checks**: All publish jobs now have re-check steps using `check-registry@v1` before publishing. Added `check-elixir-release` job for GitHub release asset verification.
+- **ARM benchmark runners**: Benchmark workflows switched to `runner-medium-arm64` for ARM-native performance testing.
+- **Registry check tool**: `python3 scripts/publish/check_all_registries.py <version>` checks all 10+ registries and GitHub release assets locally.
+
+---
+
 ## [4.5.1] - 2026-03-20
 
 ### Fixed
