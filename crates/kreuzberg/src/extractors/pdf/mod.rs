@@ -145,31 +145,41 @@ fn run_layout_detection_on_images(
 /// configured (or auto-constructed), uses quality-based fallback across
 /// backends.
 #[cfg(feature = "ocr")]
-async fn run_ocr_with_layout(content: &[u8], config: &ExtractionConfig) -> crate::Result<String> {
+async fn run_ocr_with_layout(
+    content: &[u8],
+    config: &ExtractionConfig,
+    path: Option<&std::path::Path>,
+) -> crate::Result<String> {
+    let ocr_config = config.ocr.as_ref().ok_or_else(|| {
+        crate::error::KreuzbergError::parsing("OCR configuration missing")
+    })?;
+
+    // Check for pipeline configuration
+    if let Some(pipeline) = ocr_config.effective_pipeline() {
+        return ocr::run_ocr_pipeline(
+            Some(content),
+            None, // No images rendered yet
+            #[cfg(feature = "layout-detection")]
+            None, // No layout detected yet
+            config,
+            &pipeline,
+            path,
+        )
+        .await;
+    }
+
     let images = ocr::render_pages_for_ocr(content)?;
 
     #[cfg(feature = "layout-detection")]
     let layout_detections = run_layout_detection_on_images(&images, config);
 
-    // Check for pipeline configuration
-    if let Some(ref ocr_config) = config.ocr
-        && let Some(pipeline) = ocr_config.effective_pipeline()
-    {
-        return ocr::run_ocr_pipeline(
-            &images,
-            #[cfg(feature = "layout-detection")]
-            layout_detections.as_deref(),
-            config,
-            &pipeline,
-        )
-        .await;
-    }
-
     let (text, _mean_conf) = extract_with_ocr(
-        &images,
+        Some(content),
+        Some(&images),
         #[cfg(feature = "layout-detection")]
         layout_detections.as_deref(),
         config,
+        path,
     )
     .await?;
     Ok(text)
@@ -211,18 +221,43 @@ impl Plugin for PdfExtractor {
 #[cfg_attr(not(target_arch = "wasm32"), async_trait)]
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl DocumentExtractor for PdfExtractor {
-    #[cfg_attr(feature = "otel", tracing::instrument(
-        skip(self, content, config),
-        fields(
-            extractor.name = self.name(),
-            content.size_bytes = content.len(),
-        )
-    ))]
     async fn extract_bytes(
         &self,
         content: &[u8],
         mime_type: &str,
         config: &ExtractionConfig,
+    ) -> Result<ExtractionResult> {
+        self.extract_core(content, mime_type, config, None).await
+    }
+
+    #[cfg(feature = "tokio-runtime")]
+    async fn extract_file(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
+        // Set the PDF file path for pdf_oxide text extraction (thread-local).
+        #[cfg(feature = "pdf")]
+        crate::pdf::oxide_text::set_current_pdf_path(Some(path.to_path_buf()));
+        let bytes = tokio::fs::read(path).await?;
+        let result = self.extract_core(&bytes, mime_type, config, Some(path)).await;
+        #[cfg(feature = "pdf")]
+        crate::pdf::oxide_text::set_current_pdf_path(None);
+        result
+    }
+
+    fn supported_mime_types(&self) -> &[&str] {
+        &["application/pdf"]
+    }
+}
+
+impl PdfExtractor {
+    /// Core extraction logic shared between extract_bytes and extract_file.
+    ///
+    /// Accepts an optional `path` which is passed to OCR backends to allow
+    /// direct document-level processing (bypassing page rendering).
+    async fn extract_core(
+        &self,
+        content: &[u8],
+        mime_type: &str,
+        config: &ExtractionConfig,
+        path: Option<&std::path::Path>,
     ) -> Result<ExtractionResult> {
         // Strip /Rotate from page dicts to work around pdfium text extraction bug
         // where FPDFText_CountChars returns 0 for 90°/270° rotated pages.
@@ -406,7 +441,7 @@ impl DocumentExtractor for PdfExtractor {
 
         #[cfg(feature = "ocr")]
         let (text, used_ocr) = if config.force_ocr {
-            (run_ocr_with_layout(content, config).await?, true)
+            (run_ocr_with_layout(content, config, path).await?, true)
         } else if let Some(ocr_config) = config.ocr.as_ref() {
             let thresholds = ocr_config.effective_thresholds();
             let decision = ocr::evaluate_per_page_ocr(
@@ -485,7 +520,7 @@ impl DocumentExtractor for PdfExtractor {
                 );
                 (native_text, false)
             } else if decision.fallback || has_font_encoding_issues {
-                (run_ocr_with_layout(content, config).await?, true)
+                (run_ocr_with_layout(content, config, path).await?, true)
             } else {
                 (native_text, false)
             }
@@ -714,22 +749,6 @@ impl DocumentExtractor for PdfExtractor {
             #[cfg(not(feature = "pdf"))]
             annotations: None,
         })
-    }
-
-    #[cfg(feature = "tokio-runtime")]
-    async fn extract_file(&self, path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
-        // Set the PDF file path for pdf_oxide text extraction (thread-local).
-        #[cfg(feature = "pdf")]
-        crate::pdf::oxide_text::set_current_pdf_path(Some(path.to_path_buf()));
-        let bytes = tokio::fs::read(path).await?;
-        let result = self.extract_bytes(&bytes, mime_type, config).await;
-        #[cfg(feature = "pdf")]
-        crate::pdf::oxide_text::set_current_pdf_path(None);
-        result
-    }
-
-    fn supported_mime_types(&self) -> &[&str] {
-        &["application/pdf"]
     }
 
     fn priority(&self) -> i32 {
