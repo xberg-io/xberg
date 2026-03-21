@@ -189,6 +189,19 @@ The original Apache-2.0 license is fully compatible with Kreuzberg's MIT license
 
 ---
 
-**Last Updated**: March 15, 2026
+## numbers-parser Test Fixtures
+
+Test documents derived from the `numbers-parser` test suite:
+
+- **Source**: https://github.com/masaccio/numbers-parser
+- **License**: MIT
+- **Author**: Jon Connell (masaccio)
+- **Usage**: Test documents and reference baselines only (no code copied)
+- **Modifications**: Fixtures downloaded directly for integration testing.
+- **Location**: `test_documents/iwork/`
+
+---
+
+**Last Updated**: March 21, 2026
 **Pandoc Version Used**: 3.8.3
 **Baseline Generation Date**: December 6, 2025
