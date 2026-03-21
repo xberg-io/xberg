@@ -166,6 +166,12 @@ flowchart TD
     F -->|No| G[Return Best Result]
 ```
 
+### Document-Level Optimization
+
+!!! info "Added in v4.5.1"
+
+Some OCR backends (including EasyOCR) now support **document-level processing**. When a file path is provided, the extractor can bypass the expensive page-by-page rendering stage and delegate the entire document to the OCR engine. This significantly reduces memory overhead and improves throughput for large PDFs and multi-page images.
+
 For backend configuration, language selection, and PSM/OEM modes, see the [OCR Guide](guides/ocr.md).
 
 ---
