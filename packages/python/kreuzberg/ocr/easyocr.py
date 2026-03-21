@@ -279,6 +279,109 @@ class EasyOCRBackend:
             msg = f"EasyOCR processing failed: {e}"
             raise OCRError(msg) from e
 
+    def process_document(self, path: str, language: str) -> dict[str, Any]:
+        """Process multi-page document using EasyOCR.
+
+        Args:
+            path: Path to the document file (PDF or multi-page image).
+            language: Language code.
+
+        Returns:
+            Dictionary with concatenated content and aggregated metadata.
+
+        """
+        if self._reader is None:
+            self.initialize()
+
+        if self._reader is None:
+            msg = "EasyOCR reader failed to initialize"
+            raise RuntimeError(msg)
+
+        from pathlib import Path as PathLib  # noqa: PLC0415
+        suffix = PathLib(path).suffix.lower()
+
+        if suffix == ".pdf":
+            return self._process_pdf(path, language)
+
+        # Fallback for image files (including multi-page TIFFs)
+        try:
+            from PIL import Image, ImageSequence  # noqa: PLC0415
+            with Image.open(path) as img:
+                pages = []
+                for i, page in enumerate(ImageSequence.Iterator(img)):
+                    page_data = self._process_pil_image(page, language)
+                    pages.append(page_data)
+
+                return self._aggregate_pages(pages)
+        except Exception as e:
+            logger.warning("Failed to process multi-page image via PIL, falling back to process_image: %s", e)
+            with PathLib(path).open("rb") as f:
+                return self.process_image(f.read(), language)
+
+    def _process_pdf(self, path: str, language: str) -> dict[str, Any]:
+        """Process PDF by converting pages to images."""
+        try:
+            # Try pdf2image first
+            from pdf2image import convert_from_path  # noqa: PLC0415
+            images = convert_from_path(path)
+            pages = [self._process_pil_image(img, language) for img in images]
+            return self._aggregate_pages(pages)
+        except ImportError:
+            try:
+                # Try pymupdf (fitz)
+                import fitz  # noqa: PLC0415
+                doc = fitz.open(path)
+                pages = []
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+                    pix = page.get_pixmap()
+                    from PIL import Image as PILImage  # noqa: PLC0415
+                    img = PILImage.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                    pages.append(self._process_pil_image(img, language))
+                doc.close()
+                return self._aggregate_pages(pages)
+            except ImportError:
+                msg = "Efficient PDF OCR requires 'pdf2image' or 'pymupdf'. Please install one of them."
+                logger.warning(msg)
+                # Fallback to single page or error if we can't even read it
+                with open(path, "rb") as f:
+                    return self.process_image(f.read(), language)
+
+    def _process_pil_image(self, image: Any, language: str) -> dict[str, Any]:
+        """Process a PIL Image object."""
+        import numpy as np  # noqa: PLC0415  # type: ignore[import-not-found]
+        width, height = image.size
+        image_array = np.array(image.convert("RGB"))
+        result = self._reader.readtext(image_array, beamWidth=self.beam_width)  # type: ignore[unreachable]
+        content, confidence, text_regions = self._process_easyocr_result(result)
+        return {
+            "content": content,
+            "metadata": {
+                "width": width,
+                "height": height,
+                "confidence": confidence,
+                "text_regions": text_regions,
+            },
+        }
+
+    def _aggregate_pages(self, pages: list[dict[str, Any]]) -> dict[str, Any]:
+        """Aggregate multiple page results into one."""
+        if not pages:
+            return {"content": "", "metadata": {}, "tables": []}
+
+        content = "\n\n".join(p["content"] for p in pages)
+        total_conf = sum(p["metadata"].get("confidence", 0.0) for p in pages)
+        avg_conf = total_conf / len(pages) if pages else 0.0
+
+        return {
+            "content": content,
+            "metadata": {
+                "mean_text_conf": int(avg_conf * 100),
+                "page_count": len(pages),
+            },
+            "tables": [],
+        }
+
     def process_file(self, path: str, language: str) -> dict[str, Any]:
         """Process image file using EasyOCR.
 
