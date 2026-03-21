@@ -1,6 +1,6 @@
 # Kreuzberg
 
-> High-performance document intelligence library with a Rust core and bindings for Python, TypeScript, Ruby, Go, Java, C#, PHP, Elixir, and WebAssembly. Extract text, metadata, and structured data from 75+ file formats including PDF, DOCX, PPTX, XLSX, HTML, images (with OCR), email, archives, and more.
+> High-performance document intelligence library with a Rust core and bindings for 12 languages. Extract text, metadata, and structured data from 88+ file formats including PDF, DOCX, PPTX, XLSX, HTML, images (with OCR), email, archives, and more.
 
 Kreuzberg provides async/sync APIs, text chunking, language detection, keyword extraction, and an extensible plugin system. It is 10-50x faster than pure-Python alternatives thanks to its Rust core.
 
