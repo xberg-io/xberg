@@ -1,20 +1,20 @@
 {
-  "name": "@kreuzberg/e2e-tests",
-  "version": "4.5.2",
-  "type": "module",
-  "description": "End-to-end tests for Kreuzberg TypeScript bindings config parity",
-  "scripts": {
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:ui": "vitest --ui"
-  },
-  "dependencies": {
-    "@kreuzberg/node": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/node": "^25.5.0",
-    "@vitest/ui": "^4.1.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.1.0"
-  }
+	"name": "@kreuzberg/e2e-tests",
+	"version": "4.5.2",
+	"type": "module",
+	"description": "End-to-end tests for Kreuzberg TypeScript bindings config parity",
+	"scripts": {
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:ui": "vitest --ui"
+	},
+	"dependencies": {
+		"@kreuzberg/node": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^25.5.0",
+		"@vitest/ui": "^4.1.0",
+		"typescript": "^5.9.3",
+		"vitest": "^4.1.0"
+	}
 }
