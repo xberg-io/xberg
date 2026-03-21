@@ -51,6 +51,10 @@ pub const EXCEL_TEMPLATE_MIME_TYPE: &str = "application/vnd.ms-excel.template.ma
 
 pub const OPENDOC_SPREADSHEET_MIME_TYPE: &str = "application/vnd.oasis.opendocument.spreadsheet";
 
+pub const IWORK_PAGES_MIME_TYPE: &str = "application/x-iwork-pages-sffpages";
+pub const IWORK_NUMBERS_MIME_TYPE: &str = "application/x-iwork-numbers-sffnumbers";
+pub const IWORK_KEYNOTE_MIME_TYPE: &str = "application/x-iwork-keynote-sffkey";
+
 /// A format definition in the centralized registry.
 ///
 /// Each entry defines a document format with its file extensions, primary MIME type,
@@ -492,6 +496,22 @@ static FORMATS: &[FormatEntry] = &[
         mime_type: "application/x-typst",
         aliases: &["text/x-typst"],
     },
+    // ── Apple iWork ─────────────────────────────────────────────────────
+    FormatEntry {
+        extensions: &["pages"],
+        mime_type: "application/x-iwork-pages-sffpages",
+        aliases: &[],
+    },
+    FormatEntry {
+        extensions: &["numbers"],
+        mime_type: "application/x-iwork-numbers-sffnumbers",
+        aliases: &[],
+    },
+    FormatEntry {
+        extensions: &["key"],
+        mime_type: "application/x-iwork-keynote-sffkey",
+        aliases: &[],
+    },
 ];
 
 /// Extension to MIME type mapping, derived from [`FORMATS`].
@@ -702,6 +722,11 @@ pub fn detect_mime_type_from_bytes(content: &[u8]) -> Result<String> {
 /// - XLSX: contains `xl/workbook.xml`
 /// - PPTX: contains `ppt/presentation.xml`
 ///
+/// Apple iWork formats (2013+) also use ZIP with IWA files:
+/// - Pages: contains `Index/Document.iwa`
+/// - Numbers: contains `Index/CalculationEngine.iwa`
+/// - Keynote: contains `Index/Presentation.iwa`
+///
 /// This function scans the ZIP's local file headers without fully parsing the archive,
 /// making it efficient for MIME type detection.
 fn detect_office_format_from_zip(content: &[u8]) -> Option<&'static str> {
@@ -710,7 +735,23 @@ fn detect_office_format_from_zip(content: &[u8]) -> Option<&'static str> {
     const XLSX_MARKER: &[u8] = b"xl/workbook.xml";
     const PPTX_MARKER: &[u8] = b"ppt/presentation.xml";
 
-    // Check for each marker using a sliding window search
+    // Apple iWork markers
+    const PAGES_MARKER: &[u8] = b"Index/Document.iwa";
+    const NUMBERS_MARKER: &[u8] = b"Index/CalculationEngine.iwa";
+    const KEYNOTE_MARKER: &[u8] = b"Index/Presentation.iwa";
+
+    // Check iWork first (before generic Office) since iWork ZIPs also contain XML
+    if contains_subsequence(content, PAGES_MARKER) {
+        return Some(IWORK_PAGES_MIME_TYPE);
+    }
+    if contains_subsequence(content, NUMBERS_MARKER) {
+        return Some(IWORK_NUMBERS_MIME_TYPE);
+    }
+    if contains_subsequence(content, KEYNOTE_MARKER) {
+        return Some(IWORK_KEYNOTE_MIME_TYPE);
+    }
+
+    // Check for each Office marker using a sliding window search
     if contains_subsequence(content, DOCX_MARKER) {
         return Some(DOCX_MIME_TYPE);
     }
