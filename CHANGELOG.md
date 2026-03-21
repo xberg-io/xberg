@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Document-level OCR optimization**: The `OcrBackend` trait now supports native `process_document()` for efficient whole-file extraction without rasterizing individual PDFs to images when the backend supports it (e.g., Python's EasyOCR backend).
+
 ### Fixed
 
 - **PDF image extraction panic on mismatched buffer lengths** (#552): Replaced `assert!` in `pdf/images.rs` with graceful error handling. Malformed PDF images with wrong buffer sizes are now skipped instead of panicking. Regression from v4.5.0.
