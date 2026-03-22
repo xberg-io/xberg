@@ -11,13 +11,13 @@ defmodule E2E.KeywordsTest do
   describe "keywords fixtures" do
     test "keywords_rake" do
       case E2E.Helpers.run_fixture(
-             "keywords_rake",
-             "pdf/fake_memo.pdf",
-             %{keywords: %{algorithm: "rake", max_keywords: 10}},
-             requirements: ["keywords-rake"],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "keywords_rake",
+        "pdf/fake_memo.pdf",
+        %{keywords: %{algorithm: "rake", max_keywords: 10}},
+        requirements: ["keywords-rake"],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -34,13 +34,13 @@ defmodule E2E.KeywordsTest do
 
     test "keywords_yake" do
       case E2E.Helpers.run_fixture(
-             "keywords_yake",
-             "pdf/fake_memo.pdf",
-             %{keywords: %{algorithm: "yake", max_keywords: 10}},
-             requirements: ["keywords-yake"],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "keywords_yake",
+        "pdf/fake_memo.pdf",
+        %{keywords: %{algorithm: "yake", max_keywords: 10}},
+        requirements: ["keywords-yake"],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])

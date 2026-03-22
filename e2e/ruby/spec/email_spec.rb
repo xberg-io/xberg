@@ -5,6 +5,7 @@
 #
 # Tests for email fixtures.
 
+# rubocop:disable Metrics/BlockLength
 require_relative 'spec_helper'
 
 RSpec.describe 'email fixtures' do
@@ -94,3 +95,4 @@ RSpec.describe 'email fixtures' do
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

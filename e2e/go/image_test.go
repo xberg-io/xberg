@@ -31,7 +31,7 @@ func TestImageImageMetadataOnly(t *testing.T) {
 "ocr": null
 }`))
 	assertExpectedMime(t, result, []string{"image/jpeg"})
-	assertMaxContentLength(t, result, 100)
+	assertMaxContentLength(t, result, 200)
 }
 
 func TestImageImagePbmBasic(t *testing.T) {

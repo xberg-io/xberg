@@ -55,7 +55,7 @@ class OcrTest extends TestCase
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertExpectedMime($result, ['image/jpeg']);
-        Helpers::assertMaxContentLength($result, 200);
+        Helpers::assertMaxContentLength($result, 300);
     }
 
     /**

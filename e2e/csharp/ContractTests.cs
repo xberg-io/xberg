@@ -7,8 +7,7 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.Contract
-{
+namespace Kreuzberg.E2E.Contract {
     public class ContractTests
     {
         [SkippableFact]

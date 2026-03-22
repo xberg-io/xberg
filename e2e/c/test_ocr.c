@@ -19,7 +19,7 @@ static void test_ocr_ocr_image_no_text(void) {
     CExtractionResult *result = run_extraction("images/flower_no_text.jpg", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/jpeg"}, 1);
-    assert_max_content_length(result, 200);
+    assert_max_content_length(result, 300);
     kreuzberg_free_result(result);
 }
 

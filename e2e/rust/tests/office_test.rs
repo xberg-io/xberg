@@ -538,6 +538,29 @@ fn test_office_jupyter_basic() {
 }
 
 #[test]
+fn test_office_keynote_basic() {
+    // Keynote document extraction baseline.
+
+    let document_path = resolve_document("iwork/test.key");
+    if !document_path.exists() {
+        println!(
+            "Skipping office_keynote_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for office_keynote_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/x-iwork-keynote-sffkey"]);
+    assertions::assert_min_content_length(&result, 5);
+}
+
+#[test]
 fn test_office_latex_basic() {
     // LaTeX document text extraction.
 
@@ -673,6 +696,29 @@ fn test_office_mdx_using_mdx() {
 
     assertions::assert_expected_mime(&result, &["text/mdx", "text/x-mdx"]);
     assertions::assert_min_content_length(&result, 2000);
+}
+
+#[test]
+fn test_office_numbers_basic() {
+    // Numbers document extraction baseline.
+
+    let document_path = resolve_document("iwork/test.numbers");
+    if !document_path.exists() {
+        println!(
+            "Skipping office_numbers_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for office_numbers_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/x-iwork-numbers-sffnumbers"]);
+    assertions::assert_min_content_length(&result, 10);
 }
 
 #[test]
@@ -840,6 +886,29 @@ fn test_office_org_basic() {
 
     assertions::assert_expected_mime(&result, &["text/x-org", "text/org"]);
     assertions::assert_min_content_length(&result, 20);
+}
+
+#[test]
+fn test_office_pages_basic() {
+    // Pages document extraction baseline.
+
+    let document_path = resolve_document("iwork/test.pages");
+    if !document_path.exists() {
+        println!(
+            "Skipping office_pages_basic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config = ExtractionConfig::default();
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for office_pages_basic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/x-iwork-pages-sffpages"]);
+    assertions::assert_min_content_length(&result, 5);
 }
 
 #[test]

@@ -7,8 +7,7 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.Structured
-{
+namespace Kreuzberg.E2E.Structured {
     public class StructuredTests
     {
         [SkippableFact]

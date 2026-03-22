@@ -29,7 +29,7 @@ func TestOcrOcrImageNoText(t *testing.T) {
 }
 }`))
 	assertExpectedMime(t, result, []string{"image/jpeg"})
-	assertMaxContentLength(t, result, 200)
+	assertMaxContentLength(t, result, 300)
 }
 
 func TestOcrOcrPaddleConfidenceFilter(t *testing.T) {

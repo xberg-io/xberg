@@ -7,8 +7,7 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.Office
-{
+namespace Kreuzberg.E2E.Office {
     public class OfficeTests
     {
         [SkippableFact]
@@ -279,6 +278,19 @@ namespace Kreuzberg.E2E.Office
         }
 
         [SkippableFact]
+        public void OfficeKeynoteBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("iwork/test.key");
+            TestHelpers.SkipIfOfficeTestOnWindows("iwork/test.key");
+            var documentPath = TestHelpers.EnsureDocument("iwork/test.key", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/x-iwork-keynote-sffkey" });
+            TestHelpers.AssertMinContentLength(result, 5);
+        }
+
+        [SkippableFact]
         public void OfficeLatexBasic()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("latex/basic_sections.tex");
@@ -354,6 +366,19 @@ namespace Kreuzberg.E2E.Office
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "text/mdx", "text/x-mdx" });
             TestHelpers.AssertMinContentLength(result, 2000);
+        }
+
+        [SkippableFact]
+        public void OfficeNumbersBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("iwork/test.numbers");
+            TestHelpers.SkipIfOfficeTestOnWindows("iwork/test.numbers");
+            var documentPath = TestHelpers.EnsureDocument("iwork/test.numbers", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/x-iwork-numbers-sffnumbers" });
+            TestHelpers.AssertMinContentLength(result, 10);
         }
 
         [SkippableFact]
@@ -448,6 +473,19 @@ namespace Kreuzberg.E2E.Office
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "text/x-org", "text/org" });
             TestHelpers.AssertMinContentLength(result, 20);
+        }
+
+        [SkippableFact]
+        public void OfficePagesBasic()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("iwork/test.pages");
+            TestHelpers.SkipIfOfficeTestOnWindows("iwork/test.pages");
+            var documentPath = TestHelpers.EnsureDocument("iwork/test.pages", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/x-iwork-pages-sffpages" });
+            TestHelpers.AssertMinContentLength(result, 5);
         }
 
         [SkippableFact]

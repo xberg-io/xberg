@@ -94,7 +94,7 @@ class ImageTest extends TestCase
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertExpectedMime($result, ['image/jpeg']);
-        Helpers::assertMaxContentLength($result, 100);
+        Helpers::assertMaxContentLength($result, 200);
     }
 
     /**

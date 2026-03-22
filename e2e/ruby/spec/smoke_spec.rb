@@ -5,6 +5,7 @@
 #
 # Tests for smoke fixtures.
 
+# rubocop:disable Metrics/BlockLength
 require_relative 'spec_helper'
 
 RSpec.describe 'smoke fixtures' do
@@ -127,12 +128,11 @@ RSpec.describe 'smoke fixtures' do
         ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 100)
-      E2ERuby::Assertions.assert_content_contains_all(result,
-                                                      ['Team', 'Location', 'Stanley Cups', 'Blues', 'Flyers',
-                                                       'Maple Leafs', 'STL', 'PHI', 'TOR'])
+      E2ERuby::Assertions.assert_content_contains_all(result, ['Team', 'Location', 'Stanley Cups', 'Blues', 'Flyers', 'Maple Leafs', 'STL', 'PHI', 'TOR'])
       E2ERuby::Assertions.assert_table_count(result, 1, nil)
       E2ERuby::Assertions.assert_metadata_expectation(result, 'sheet_count', { gte: 2 })
       E2ERuby::Assertions.assert_metadata_expectation(result, 'sheet_names', { contains: ['Stanley Cups'] })
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

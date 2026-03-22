@@ -13,8 +13,8 @@ test_that("pdf_annotations", {
     notes = "PDFium ARM Linux binary does not support annotation extraction",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_annotations(result, has_annotations = TRUE, min_count = 1L)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_annotations(result, has_annotations = TRUE, min_count = 1L)
 })
 
 test_that("pdf_assembly_technical", {
@@ -26,10 +26,10 @@ test_that("pdf_assembly_technical", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 5000L)
-  assert_content_contains_any(result, c("assembly", "register", "instruction"))
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 5000L)
+      assert_content_contains_any(result, c("assembly", "register", "instruction"))
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
 test_that("pdf_bayesian_data_analysis", {
@@ -41,10 +41,10 @@ test_that("pdf_bayesian_data_analysis", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 10000L)
-  assert_content_contains_any(result, c("Bayesian", "probability", "distribution"))
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 10000L)
+      assert_content_contains_any(result, c("Bayesian", "probability", "distribution"))
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
 test_that("pdf_bounding_boxes", {
@@ -57,10 +57,10 @@ test_that("pdf_bounding_boxes", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 50L)
-  assert_table_count(result, minimum = 1L, maximum = NULL)
-  assert_table_bounding_boxes(result)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 50L)
+      assert_table_count(result, minimum = 1L, maximum = NULL)
+      assert_table_bounding_boxes(result)
 })
 
 test_that("pdf_code_and_formula", {
@@ -72,8 +72,8 @@ test_that("pdf_code_and_formula", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 100L)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 100L)
 })
 
 test_that("pdf_deep_learning", {
@@ -85,10 +85,10 @@ test_that("pdf_deep_learning", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 1000L)
-  assert_content_contains_any(result, c("neural", "network", "deep learning"))
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 1000L)
+      assert_content_contains_any(result, c("neural", "network", "deep learning"))
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
 test_that("pdf_embedded_images", {
@@ -100,9 +100,9 @@ test_that("pdf_embedded_images", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 50L)
-  assert_table_count(result, minimum = 0L, maximum = NULL)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 50L)
+      assert_table_count(result, minimum = 0L, maximum = NULL)
 })
 
 test_that("pdf_google_doc", {
@@ -114,9 +114,9 @@ test_that("pdf_google_doc", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 50L)
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 50L)
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
 test_that("pdf_large_ciml", {
@@ -128,10 +128,10 @@ test_that("pdf_large_ciml", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 10000L)
-  assert_content_contains_any(result, c("machine learning", "algorithm", "training"))
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 10000L)
+      assert_content_contains_any(result, c("machine learning", "algorithm", "training"))
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
 test_that("pdf_layout_detection", {
@@ -144,9 +144,9 @@ test_that("pdf_layout_detection", {
     notes = "Requires layout-detection feature with ONNX Runtime",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 100L)
-  assert_content_not_empty(result)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 100L)
+      assert_content_not_empty(result)
 })
 
 test_that("pdf_non_english_german", {
@@ -158,10 +158,10 @@ test_that("pdf_non_english_german", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 100L)
-  assert_content_contains_any(result, c("Intel", "paging"))
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 100L)
+      assert_content_contains_any(result, c("Intel", "paging"))
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
 test_that("pdf_password_protected", {
@@ -173,9 +173,9 @@ test_that("pdf_password_protected", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 50L)
-  assert_content_contains_any(result, c("LayoutParser", "document image analysis", "deep learning"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 50L)
+      assert_content_contains_any(result, c("LayoutParser", "document image analysis", "deep learning"))
 })
 
 test_that("pdf_right_to_left", {
@@ -187,9 +187,9 @@ test_that("pdf_right_to_left", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 50L)
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 50L)
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
 test_that("pdf_simple_text", {
@@ -201,9 +201,9 @@ test_that("pdf_simple_text", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 50L)
-  assert_content_contains_any(result, c("May 5, 2023", "To Whom it May Concern", "Mallori"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 50L)
+      assert_content_contains_any(result, c("May 5, 2023", "To Whom it May Concern", "Mallori"))
 })
 
 test_that("pdf_tables_large", {
@@ -215,8 +215,8 @@ test_that("pdf_tables_large", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 500L)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 500L)
 })
 
 test_that("pdf_tables_medium", {
@@ -228,8 +228,8 @@ test_that("pdf_tables_medium", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 100L)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 100L)
 })
 
 test_that("pdf_tables_small", {
@@ -242,10 +242,10 @@ test_that("pdf_tables_small", {
     notes = "PDF table extraction requires OCR feature",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 50L)
-  assert_content_contains_all(result, c("Table 1", "Selected Numbers", "Celsius", "Fahrenheit", "Water Freezing Point", "Water Boiling Point"))
-  assert_table_count(result, minimum = 1L, maximum = NULL)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 50L)
+      assert_content_contains_all(result, c("Table 1", "Selected Numbers", "Celsius", "Fahrenheit", "Water Freezing Point", "Water Boiling Point"))
+      assert_table_count(result, minimum = 1L, maximum = NULL)
 })
 
 test_that("pdf_technical_stat_learning", {
@@ -257,9 +257,9 @@ test_that("pdf_technical_stat_learning", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 10000L)
-  assert_content_contains_any(result, c("statistical", "regression", "learning"))
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 10000L)
+      assert_content_contains_any(result, c("statistical", "regression", "learning"))
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 # nolint end

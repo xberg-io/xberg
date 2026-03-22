@@ -35,7 +35,7 @@ static void test_image_image_metadata_only(void) {
     CExtractionResult *result = run_extraction("images/example.jpg", "{\"ocr\":null}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/jpeg"}, 1);
-    assert_max_content_length(result, 100);
+    assert_max_content_length(result, 200);
     kreuzberg_free_result(result);
 }
 

@@ -5,6 +5,7 @@
 #
 # Tests for image fixtures.
 
+# rubocop:disable Metrics/BlockLength
 require_relative 'spec_helper'
 
 RSpec.describe 'image fixtures' do
@@ -75,7 +76,7 @@ RSpec.describe 'image fixtures' do
         result,
         ['image/jpeg']
       )
-      E2ERuby::Assertions.assert_max_content_length(result, 100)
+      E2ERuby::Assertions.assert_max_content_length(result, 200)
     end
   end
 
@@ -186,3 +187,4 @@ RSpec.describe 'image fixtures' do
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

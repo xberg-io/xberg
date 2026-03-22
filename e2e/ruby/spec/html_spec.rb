@@ -5,6 +5,7 @@
 #
 # Tests for html fixtures.
 
+# rubocop:disable Metrics/BlockLength
 require_relative 'spec_helper'
 
 RSpec.describe 'html fixtures' do
@@ -39,9 +40,8 @@ RSpec.describe 'html fixtures' do
         ['text/html']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 100)
-      E2ERuby::Assertions.assert_content_contains_all(result,
-                                                      ['Product', 'Category', 'Price', 'Stock', 'Laptop',
-                                                       'Electronics', 'Sample Data Table'])
+      E2ERuby::Assertions.assert_content_contains_all(result, ['Product', 'Category', 'Price', 'Stock', 'Laptop', 'Electronics', 'Sample Data Table'])
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

@@ -13,8 +13,8 @@ test_that("office_bibtex_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-bibtex", "text/x-bibtex"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/x-bibtex", "text/x-bibtex"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_commonmark_basic", {
@@ -26,8 +26,8 @@ test_that("office_commonmark_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/markdown", "text/plain", "text/x-commonmark"))
-  assert_min_content_length(result, 5L)
+      assert_expected_mime(result, c("text/markdown", "text/plain", "text/x-commonmark"))
+      assert_min_content_length(result, 5L)
 })
 
 test_that("office_dbf_basic", {
@@ -40,9 +40,9 @@ test_that("office_dbf_basic", {
     notes = "Requires the office feature.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-dbf"))
-  assert_min_content_length(result, 10L)
-  assert_content_contains_any(result, c("|"))
+      assert_expected_mime(result, c("application/x-dbf"))
+      assert_min_content_length(result, 10L)
+      assert_content_contains_any(result, c("|"))
 })
 
 test_that("office_djot_basic", {
@@ -54,8 +54,8 @@ test_that("office_djot_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/x-djot", "text/djot"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("text/x-djot", "text/djot"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_doc_legacy", {
@@ -68,8 +68,8 @@ test_that("office_doc_legacy", {
     notes = "Requires the office feature.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/msword"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("application/msword"))
+      assert_min_content_length(result, 20L)
 })
 
 test_that("office_docbook_basic", {
@@ -81,8 +81,8 @@ test_that("office_docbook_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/docbook+xml", "text/docbook"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/docbook+xml", "text/docbook"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_docx_basic", {
@@ -94,8 +94,8 @@ test_that("office_docx_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_docx_equations", {
@@ -107,8 +107,8 @@ test_that("office_docx_equations", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+      assert_min_content_length(result, 20L)
 })
 
 test_that("office_docx_fake", {
@@ -120,8 +120,8 @@ test_that("office_docx_fake", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+      assert_min_content_length(result, 20L)
 })
 
 test_that("office_docx_formatting", {
@@ -133,8 +133,8 @@ test_that("office_docx_formatting", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+      assert_min_content_length(result, 20L)
 })
 
 test_that("office_docx_headers", {
@@ -146,8 +146,8 @@ test_that("office_docx_headers", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+      assert_min_content_length(result, 20L)
 })
 
 test_that("office_docx_lists", {
@@ -159,8 +159,8 @@ test_that("office_docx_lists", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+      assert_min_content_length(result, 20L)
 })
 
 test_that("office_docx_tables", {
@@ -172,10 +172,10 @@ test_that("office_docx_tables", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-  assert_min_content_length(result, 50L)
-  assert_content_contains_all(result, c("Simple uniform table", "Nested Table", "merged cells", "Header Col"))
-  assert_table_count(result, minimum = 1L, maximum = NULL)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+      assert_min_content_length(result, 50L)
+      assert_content_contains_all(result, c("Simple uniform table", "Nested Table", "merged cells", "Header Col"))
+      assert_table_count(result, minimum = 1L, maximum = NULL)
 })
 
 test_that("office_epub_basic", {
@@ -187,8 +187,8 @@ test_that("office_epub_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/epub+zip"))
-  assert_min_content_length(result, 50L)
+      assert_expected_mime(result, c("application/epub+zip"))
+      assert_min_content_length(result, 50L)
 })
 
 test_that("office_fb2_basic", {
@@ -200,8 +200,8 @@ test_that("office_fb2_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-fictionbook+xml"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/x-fictionbook+xml"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_fictionbook_basic", {
@@ -213,8 +213,8 @@ test_that("office_fictionbook_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-fictionbook+xml", "application/x-fictionbook"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/x-fictionbook+xml", "application/x-fictionbook"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_hwp_basic", {
@@ -227,8 +227,8 @@ test_that("office_hwp_basic", {
     notes = "Requires the office feature.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-hwp"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/x-hwp"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_hwp_styled", {
@@ -241,8 +241,8 @@ test_that("office_hwp_styled", {
     notes = "Requires the office feature.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-hwp"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/x-hwp"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_jats_basic", {
@@ -254,8 +254,8 @@ test_that("office_jats_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-jats+xml", "text/jats"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/x-jats+xml", "text/jats"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_jupyter_basic", {
@@ -267,8 +267,21 @@ test_that("office_jupyter_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-ipynb+json"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/x-ipynb+json"))
+      assert_min_content_length(result, 10L)
+})
+
+test_that("office_keynote_basic", {
+  result <- run_fixture(
+    "office_keynote_basic",
+    "iwork/test.key",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+      assert_expected_mime(result, c("application/x-iwork-keynote-sffkey"))
+      assert_min_content_length(result, 5L)
 })
 
 test_that("office_latex_basic", {
@@ -280,8 +293,8 @@ test_that("office_latex_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-latex", "text/x-latex"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("application/x-latex", "text/x-latex"))
+      assert_min_content_length(result, 20L)
 })
 
 test_that("office_markdown_basic", {
@@ -293,8 +306,8 @@ test_that("office_markdown_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/markdown"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("text/markdown"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_mdx_basic", {
@@ -306,8 +319,8 @@ test_that("office_mdx_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/mdx", "text/x-mdx"))
-  assert_min_content_length(result, 50L)
+      assert_expected_mime(result, c("text/mdx", "text/x-mdx"))
+      assert_min_content_length(result, 50L)
 })
 
 test_that("office_mdx_getting_started", {
@@ -319,8 +332,8 @@ test_that("office_mdx_getting_started", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/mdx", "text/x-mdx"))
-  assert_min_content_length(result, 2000L)
+      assert_expected_mime(result, c("text/mdx", "text/x-mdx"))
+      assert_min_content_length(result, 2000L)
 })
 
 test_that("office_mdx_troubleshooting", {
@@ -332,8 +345,8 @@ test_that("office_mdx_troubleshooting", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/mdx", "text/x-mdx"))
-  assert_min_content_length(result, 2000L)
+      assert_expected_mime(result, c("text/mdx", "text/x-mdx"))
+      assert_min_content_length(result, 2000L)
 })
 
 test_that("office_mdx_using_mdx", {
@@ -345,8 +358,21 @@ test_that("office_mdx_using_mdx", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/mdx", "text/x-mdx"))
-  assert_min_content_length(result, 2000L)
+      assert_expected_mime(result, c("text/mdx", "text/x-mdx"))
+      assert_min_content_length(result, 2000L)
+})
+
+test_that("office_numbers_basic", {
+  result <- run_fixture(
+    "office_numbers_basic",
+    "iwork/test.numbers",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+      assert_expected_mime(result, c("application/x-iwork-numbers-sffnumbers"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_ods_basic", {
@@ -358,8 +384,8 @@ test_that("office_ods_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.oasis.opendocument.spreadsheet"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/vnd.oasis.opendocument.spreadsheet"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_odt_bold", {
@@ -371,8 +397,8 @@ test_that("office_odt_bold", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.oasis.opendocument.text"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/vnd.oasis.opendocument.text"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_odt_list", {
@@ -384,9 +410,9 @@ test_that("office_odt_list", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.oasis.opendocument.text"))
-  assert_min_content_length(result, 30L)
-  assert_content_contains_any(result, c("list item", "New level", "Pushed us"))
+      assert_expected_mime(result, c("application/vnd.oasis.opendocument.text"))
+      assert_min_content_length(result, 30L)
+      assert_content_contains_any(result, c("list item", "New level", "Pushed us"))
 })
 
 test_that("office_odt_simple", {
@@ -398,9 +424,9 @@ test_that("office_odt_simple", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.oasis.opendocument.text"))
-  assert_min_content_length(result, 50L)
-  assert_content_contains_any(result, c("favorite things", "Parrots", "Analysis"))
+      assert_expected_mime(result, c("application/vnd.oasis.opendocument.text"))
+      assert_min_content_length(result, 50L)
+      assert_content_contains_any(result, c("favorite things", "Parrots", "Analysis"))
 })
 
 test_that("office_odt_table", {
@@ -412,9 +438,9 @@ test_that("office_odt_table", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.oasis.opendocument.text"))
-  assert_min_content_length(result, 10L)
-  assert_table_count(result, minimum = 1L, maximum = NULL)
+      assert_expected_mime(result, c("application/vnd.oasis.opendocument.text"))
+      assert_min_content_length(result, 10L)
+      assert_table_count(result, minimum = 1L, maximum = NULL)
 })
 
 test_that("office_opml_basic", {
@@ -426,8 +452,8 @@ test_that("office_opml_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/xml+opml", "text/x-opml", "application/x-opml+xml"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/xml+opml", "text/x-opml", "application/x-opml+xml"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_org_basic", {
@@ -439,8 +465,21 @@ test_that("office_org_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/x-org", "text/org"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("text/x-org", "text/org"))
+      assert_min_content_length(result, 20L)
+})
+
+test_that("office_pages_basic", {
+  result <- run_fixture(
+    "office_pages_basic",
+    "iwork/test.pages",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+      assert_expected_mime(result, c("application/x-iwork-pages-sffpages"))
+      assert_min_content_length(result, 5L)
 })
 
 test_that("office_ppsx_slideshow", {
@@ -452,8 +491,8 @@ test_that("office_ppsx_slideshow", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.slideshow"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.slideshow"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_ppt_legacy", {
@@ -466,8 +505,8 @@ test_that("office_ppt_legacy", {
     notes = "Requires the office feature.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.ms-powerpoint"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/vnd.ms-powerpoint"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_pptm_basic", {
@@ -479,8 +518,8 @@ test_that("office_pptm_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation"))
-  assert_content_not_empty(result)
+      assert_expected_mime(result, c("application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation"))
+      assert_content_not_empty(result)
 })
 
 test_that("office_pptx_basic", {
@@ -492,8 +531,8 @@ test_that("office_pptx_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
-  assert_min_content_length(result, 50L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
+      assert_min_content_length(result, 50L)
 })
 
 test_that("office_pptx_images", {
@@ -505,8 +544,8 @@ test_that("office_pptx_images", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
-  assert_min_content_length(result, 15L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
+      assert_min_content_length(result, 15L)
 })
 
 test_that("office_pptx_pitch_deck", {
@@ -518,8 +557,8 @@ test_that("office_pptx_pitch_deck", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
-  assert_min_content_length(result, 100L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
+      assert_min_content_length(result, 100L)
 })
 
 test_that("office_rst_basic", {
@@ -531,8 +570,8 @@ test_that("office_rst_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/x-rst", "text/prs.fallenstein.rst"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("text/x-rst", "text/prs.fallenstein.rst"))
+      assert_min_content_length(result, 20L)
 })
 
 test_that("office_rtf_basic", {
@@ -544,8 +583,8 @@ test_that("office_rtf_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/rtf", "text/rtf"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/rtf", "text/rtf"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_typst_basic", {
@@ -557,8 +596,8 @@ test_that("office_typst_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/x-typst", "text/x-typst"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/x-typst", "text/x-typst"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_xls_legacy", {
@@ -570,8 +609,8 @@ test_that("office_xls_legacy", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.ms-excel"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/vnd.ms-excel"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("office_xlsb_basic", {
@@ -583,8 +622,8 @@ test_that("office_xlsb_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-  assert_content_not_empty(result)
+      assert_expected_mime(result, c("application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+      assert_content_not_empty(result)
 })
 
 test_that("office_xlsm_basic", {
@@ -596,8 +635,8 @@ test_that("office_xlsm_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-  assert_content_not_empty(result)
+      assert_expected_mime(result, c("application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+      assert_content_not_empty(result)
 })
 
 test_that("office_xlsx_basic", {
@@ -609,12 +648,12 @@ test_that("office_xlsx_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-  assert_min_content_length(result, 100L)
-  assert_content_contains_all(result, c("Team", "Location", "Stanley Cups"))
-  assert_table_count(result, minimum = 1L, maximum = NULL)
-  assert_metadata_expectation(result, "sheet_count", list(gte = 2L))
-  assert_metadata_expectation(result, "sheet_names", list(contains = c("Stanley Cups")))
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+      assert_min_content_length(result, 100L)
+      assert_content_contains_all(result, c("Team", "Location", "Stanley Cups"))
+      assert_table_count(result, minimum = 1L, maximum = NULL)
+      assert_metadata_expectation(result, "sheet_count", list(gte = 2L))
+      assert_metadata_expectation(result, "sheet_names", list(contains = c("Stanley Cups")))
 })
 
 test_that("office_xlsx_multi_sheet", {
@@ -626,9 +665,9 @@ test_that("office_xlsx_multi_sheet", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-  assert_min_content_length(result, 20L)
-  assert_metadata_expectation(result, "sheet_count", list(gte = 2L))
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+      assert_min_content_length(result, 20L)
+      assert_metadata_expectation(result, "sheet_count", list(gte = 2L))
 })
 
 test_that("office_xlsx_office_example", {
@@ -640,7 +679,7 @@ test_that("office_xlsx_office_example", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+      assert_min_content_length(result, 10L)
 })
 # nolint end

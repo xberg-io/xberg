@@ -7,8 +7,7 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.Pdf
-{
+namespace Kreuzberg.E2E.Pdf {
     public class PdfTests
     {
         [SkippableFact]

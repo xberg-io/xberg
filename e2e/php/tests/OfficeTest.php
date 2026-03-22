@@ -407,6 +407,25 @@ class OfficeTest extends TestCase
     }
 
     /**
+     * Keynote document extraction baseline.
+     */
+    public function test_office_keynote_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('iwork/test.key');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping office_keynote_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/x-iwork-keynote-sffkey']);
+        Helpers::assertMinContentLength($result, 5);
+    }
+
+    /**
      * LaTeX document text extraction.
      */
     public function test_office_latex_basic(): void
@@ -518,6 +537,25 @@ class OfficeTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['text/mdx', 'text/x-mdx']);
         Helpers::assertMinContentLength($result, 2000);
+    }
+
+    /**
+     * Numbers document extraction baseline.
+     */
+    public function test_office_numbers_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('iwork/test.numbers');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping office_numbers_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/x-iwork-numbers-sffnumbers']);
+        Helpers::assertMinContentLength($result, 10);
     }
 
     /**
@@ -654,6 +692,25 @@ class OfficeTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['text/x-org', 'text/org']);
         Helpers::assertMinContentLength($result, 20);
+    }
+
+    /**
+     * Pages document extraction baseline.
+     */
+    public function test_office_pages_basic(): void
+    {
+        $documentPath = Helpers::resolveDocument('iwork/test.pages');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping office_pages_basic: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/x-iwork-pages-sffpages']);
+        Helpers::assertMinContentLength($result, 5);
     }
 
     /**

@@ -7,8 +7,7 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.Embeddings
-{
+namespace Kreuzberg.E2E.Embeddings {
     public class EmbeddingsTests
     {
         [SkippableFact]

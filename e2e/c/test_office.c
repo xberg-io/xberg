@@ -171,6 +171,14 @@ static void test_office_office_jupyter_basic(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_office_office_keynote_basic(void) {
+    CExtractionResult *result = run_extraction("iwork/test.key", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/x-iwork-keynote-sffkey"}, 1);
+    assert_min_content_length(result, 5);
+    kreuzberg_free_result(result);
+}
+
 static void test_office_office_latex_basic(void) {
     CExtractionResult *result = run_extraction("latex/basic_sections.tex", NULL);
     if (!result) return; /* skipped */
@@ -216,6 +224,14 @@ static void test_office_office_mdx_using_mdx(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"text/mdx", "text/x-mdx"}, 2);
     assert_min_content_length(result, 2000);
+    kreuzberg_free_result(result);
+}
+
+static void test_office_office_numbers_basic(void) {
+    CExtractionResult *result = run_extraction("iwork/test.numbers", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/x-iwork-numbers-sffnumbers"}, 1);
+    assert_min_content_length(result, 10);
     kreuzberg_free_result(result);
 }
 
@@ -275,6 +291,14 @@ static void test_office_office_org_basic(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"text/x-org", "text/org"}, 2);
     assert_min_content_length(result, 20);
+    kreuzberg_free_result(result);
+}
+
+static void test_office_office_pages_basic(void) {
+    CExtractionResult *result = run_extraction("iwork/test.pages", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/x-iwork-pages-sffpages"}, 1);
+    assert_min_content_length(result, 5);
     kreuzberg_free_result(result);
 }
 
@@ -428,12 +452,14 @@ int main(void) {
     test_office_office_hwp_styled();
     test_office_office_jats_basic();
     test_office_office_jupyter_basic();
+    test_office_office_keynote_basic();
     test_office_office_latex_basic();
     test_office_office_markdown_basic();
     test_office_office_mdx_basic();
     test_office_office_mdx_getting_started();
     test_office_office_mdx_troubleshooting();
     test_office_office_mdx_using_mdx();
+    test_office_office_numbers_basic();
     test_office_office_ods_basic();
     test_office_office_odt_bold();
     test_office_office_odt_list();
@@ -441,6 +467,7 @@ int main(void) {
     test_office_office_odt_table();
     test_office_office_opml_basic();
     test_office_office_org_basic();
+    test_office_office_pages_basic();
     test_office_office_ppsx_slideshow();
     test_office_office_ppt_legacy();
     test_office_office_pptm_basic();

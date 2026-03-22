@@ -4,141 +4,124 @@
 // Tests for embeddings fixtures.
 
 import { existsSync, readFileSync } from "node:fs";
-import type { ExtractionResult } from "@kreuzberg/node";
-import { extractFile, extractFileSync } from "@kreuzberg/node";
 import { describe, it } from "vitest";
 import { assertions, buildConfig, chunkAssertions, resolveDocument, shouldSkipFixture } from "./helpers.js";
+import { extractFile, extractFileSync } from "@kreuzberg/node";
+import type { ExtractionResult } from "@kreuzberg/node";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 describe("embeddings fixtures", () => {
-	it(
-		"embedding_async",
-		async () => {
-			const documentPath = resolveDocument("pdf/fake_memo.pdf");
-			if (!existsSync(documentPath)) {
-				console.warn("Skipping embedding_async: missing document at", documentPath);
-				return;
-			}
-			const config = buildConfig({
-				chunking: {
-					embedding: { model: { name: "balanced", type: "preset" }, normalize: true },
-					max_chars: 500,
-					max_overlap: 50,
-				},
-			});
-			let result: ExtractionResult | null = null;
-			try {
-				result = await extractFile(documentPath, null, config);
-			} catch (error) {
-				if (shouldSkipFixture(error, "embedding_async", ["embeddings"], undefined)) {
-					return;
-				}
-				throw error;
-			}
-			if (result === null) {
-				return;
-			}
-			assertions.assertExpectedMime(result, ["application/pdf"]);
-			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, true, null);
-		},
-		TEST_TIMEOUT_MS,
-	);
+  it("embedding_async", async () => {
+    const documentPath = resolveDocument("pdf/fake_memo.pdf");
+    if (!existsSync(documentPath)) {
+      console.warn("Skipping embedding_async: missing document at", documentPath);
+      console.warn("Notes: Embeddings not supported on Windows");
+      return;
+    }
+    if ((process.arch === "x64" && process.platform === "win32")) {
+      console.warn("Skipping embedding_async: not supported on this platform");
+      return;
+    }
+    const config = buildConfig({"chunking":{"embedding":{"model":{"name":"balanced","type":"preset"},"normalize":true},"max_chars":500,"max_overlap":50}});
+    let result: ExtractionResult | null = null;
+    try {
+      result = await extractFile(documentPath, null, config);
+    } catch (error) {
+      if (shouldSkipFixture(error, "embedding_async", ["embeddings"], "Embeddings not supported on Windows")) {
+        return;
+      }
+      throw error;
+    }
+    if (result === null) {
+      return;
+    }
+    assertions.assertExpectedMime(result, ["application/pdf"]);
+    assertions.assertMinContentLength(result, 10);
+    chunkAssertions.assertChunks(result, 1, null, true, true, null);
+  }, TEST_TIMEOUT_MS);
 
-	it(
-		"embedding_balanced_preset",
-		() => {
-			const documentPath = resolveDocument("pdf/fake_memo.pdf");
-			if (!existsSync(documentPath)) {
-				console.warn("Skipping embedding_balanced_preset: missing document at", documentPath);
-				return;
-			}
-			const config = buildConfig({
-				chunking: {
-					embedding: { model: { name: "balanced", type: "preset" }, normalize: true },
-					max_chars: 500,
-					max_overlap: 50,
-				},
-			});
-			let result: ExtractionResult | null = null;
-			try {
-				result = extractFileSync(documentPath, null, config);
-			} catch (error) {
-				if (shouldSkipFixture(error, "embedding_balanced_preset", ["embeddings"], undefined)) {
-					return;
-				}
-				throw error;
-			}
-			if (result === null) {
-				return;
-			}
-			assertions.assertExpectedMime(result, ["application/pdf"]);
-			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, true, null);
-		},
-		TEST_TIMEOUT_MS,
-	);
+  it("embedding_balanced_preset", () => {
+    const documentPath = resolveDocument("pdf/fake_memo.pdf");
+    if (!existsSync(documentPath)) {
+      console.warn("Skipping embedding_balanced_preset: missing document at", documentPath);
+      console.warn("Notes: Embeddings not supported on Windows");
+      return;
+    }
+    if ((process.arch === "x64" && process.platform === "win32")) {
+      console.warn("Skipping embedding_balanced_preset: not supported on this platform");
+      return;
+    }
+    const config = buildConfig({"chunking":{"embedding":{"model":{"name":"balanced","type":"preset"},"normalize":true},"max_chars":500,"max_overlap":50}});
+    let result: ExtractionResult | null = null;
+    try {
+      result = extractFileSync(documentPath, null, config);
+    } catch (error) {
+      if (shouldSkipFixture(error, "embedding_balanced_preset", ["embeddings"], "Embeddings not supported on Windows")) {
+        return;
+      }
+      throw error;
+    }
+    if (result === null) {
+      return;
+    }
+    assertions.assertExpectedMime(result, ["application/pdf"]);
+    assertions.assertMinContentLength(result, 10);
+    chunkAssertions.assertChunks(result, 1, null, true, true, null);
+  }, TEST_TIMEOUT_MS);
 
-	it(
-		"embedding_disabled",
-		() => {
-			const documentPath = resolveDocument("pdf/fake_memo.pdf");
-			if (!existsSync(documentPath)) {
-				console.warn("Skipping embedding_disabled: missing document at", documentPath);
-				return;
-			}
-			const config = buildConfig({ chunking: { max_chars: 500, max_overlap: 50 } });
-			let result: ExtractionResult | null = null;
-			try {
-				result = extractFileSync(documentPath, null, config);
-			} catch (error) {
-				if (shouldSkipFixture(error, "embedding_disabled", [], undefined)) {
-					return;
-				}
-				throw error;
-			}
-			if (result === null) {
-				return;
-			}
-			assertions.assertExpectedMime(result, ["application/pdf"]);
-			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, false, null);
-		},
-		TEST_TIMEOUT_MS,
-	);
+  it("embedding_disabled", () => {
+    const documentPath = resolveDocument("pdf/fake_memo.pdf");
+    if (!existsSync(documentPath)) {
+      console.warn("Skipping embedding_disabled: missing document at", documentPath);
+      return;
+    }
+    const config = buildConfig({"chunking":{"max_chars":500,"max_overlap":50}});
+    let result: ExtractionResult | null = null;
+    try {
+      result = extractFileSync(documentPath, null, config);
+    } catch (error) {
+      if (shouldSkipFixture(error, "embedding_disabled", [], undefined)) {
+        return;
+      }
+      throw error;
+    }
+    if (result === null) {
+      return;
+    }
+    assertions.assertExpectedMime(result, ["application/pdf"]);
+    assertions.assertMinContentLength(result, 10);
+    chunkAssertions.assertChunks(result, 1, null, true, false, null);
+  }, TEST_TIMEOUT_MS);
 
-	it(
-		"embedding_fast_preset",
-		() => {
-			const documentPath = resolveDocument("pdf/fake_memo.pdf");
-			if (!existsSync(documentPath)) {
-				console.warn("Skipping embedding_fast_preset: missing document at", documentPath);
-				return;
-			}
-			const config = buildConfig({
-				chunking: {
-					embedding: { model: { name: "fast", type: "preset" }, normalize: true },
-					max_chars: 500,
-					max_overlap: 50,
-				},
-			});
-			let result: ExtractionResult | null = null;
-			try {
-				result = extractFileSync(documentPath, null, config);
-			} catch (error) {
-				if (shouldSkipFixture(error, "embedding_fast_preset", ["embeddings"], undefined)) {
-					return;
-				}
-				throw error;
-			}
-			if (result === null) {
-				return;
-			}
-			assertions.assertExpectedMime(result, ["application/pdf"]);
-			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, true, null);
-		},
-		TEST_TIMEOUT_MS,
-	);
+  it("embedding_fast_preset", () => {
+    const documentPath = resolveDocument("pdf/fake_memo.pdf");
+    if (!existsSync(documentPath)) {
+      console.warn("Skipping embedding_fast_preset: missing document at", documentPath);
+      console.warn("Notes: Embeddings not supported on Windows");
+      return;
+    }
+    if ((process.arch === "x64" && process.platform === "win32")) {
+      console.warn("Skipping embedding_fast_preset: not supported on this platform");
+      return;
+    }
+    const config = buildConfig({"chunking":{"embedding":{"model":{"name":"fast","type":"preset"},"normalize":true},"max_chars":500,"max_overlap":50}});
+    let result: ExtractionResult | null = null;
+    try {
+      result = extractFileSync(documentPath, null, config);
+    } catch (error) {
+      if (shouldSkipFixture(error, "embedding_fast_preset", ["embeddings"], "Embeddings not supported on Windows")) {
+        return;
+      }
+      throw error;
+    }
+    if (result === null) {
+      return;
+    }
+    assertions.assertExpectedMime(result, ["application/pdf"]);
+    assertions.assertMinContentLength(result, 10);
+    chunkAssertions.assertChunks(result, 1, null, true, true, null);
+  }, TEST_TIMEOUT_MS);
+
 });
+

@@ -316,6 +316,21 @@ def test_office_jupyter_basic() -> None:
     helpers.assert_min_content_length(result, 10)
 
 
+def test_office_keynote_basic() -> None:
+    """Keynote document extraction baseline."""
+
+    document_path = helpers.resolve_document("iwork/test.key")
+    if not document_path.exists():
+        pytest.skip(f"Skipping office_keynote_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/x-iwork-keynote-sffkey"])
+    helpers.assert_min_content_length(result, 5)
+
+
 def test_office_latex_basic() -> None:
     """LaTeX document text extraction."""
 
@@ -404,6 +419,21 @@ def test_office_mdx_using_mdx() -> None:
 
     helpers.assert_expected_mime(result, ["text/mdx", "text/x-mdx"])
     helpers.assert_min_content_length(result, 2000)
+
+
+def test_office_numbers_basic() -> None:
+    """Numbers document extraction baseline."""
+
+    document_path = helpers.resolve_document("iwork/test.numbers")
+    if not document_path.exists():
+        pytest.skip(f"Skipping office_numbers_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/x-iwork-numbers-sffnumbers"])
+    helpers.assert_min_content_length(result, 10)
 
 
 def test_office_ods_basic() -> None:
@@ -512,6 +542,21 @@ def test_office_org_basic() -> None:
 
     helpers.assert_expected_mime(result, ["text/x-org", "text/org"])
     helpers.assert_min_content_length(result, 20)
+
+
+def test_office_pages_basic() -> None:
+    """Pages document extraction baseline."""
+
+    document_path = helpers.resolve_document("iwork/test.pages")
+    if not document_path.exists():
+        pytest.skip(f"Skipping office_pages_basic: missing document at {document_path}")
+
+    config = helpers.build_config(None)
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/x-iwork-pages-sffpages"])
+    helpers.assert_min_content_length(result, 5)
 
 
 def test_office_ppsx_slideshow() -> None:

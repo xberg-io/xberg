@@ -5,6 +5,7 @@
 #
 # Tests for pdf fixtures.
 
+# rubocop:disable Metrics/BlockLength
 require_relative 'spec_helper'
 
 RSpec.describe 'pdf fixtures' do
@@ -226,8 +227,7 @@ RSpec.describe 'pdf fixtures' do
         ['application/pdf']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 50)
-      E2ERuby::Assertions.assert_content_contains_any(result,
-                                                      ['LayoutParser', 'document image analysis', 'deep learning'])
+      E2ERuby::Assertions.assert_content_contains_any(result, ['LayoutParser', 'document image analysis', 'deep learning'])
     end
   end
 
@@ -316,9 +316,7 @@ RSpec.describe 'pdf fixtures' do
         ['application/pdf']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 50)
-      E2ERuby::Assertions.assert_content_contains_all(result,
-                                                      ['Table 1', 'Selected Numbers', 'Celsius', 'Fahrenheit',
-                                                       'Water Freezing Point', 'Water Boiling Point'])
+      E2ERuby::Assertions.assert_content_contains_all(result, ['Table 1', 'Selected Numbers', 'Celsius', 'Fahrenheit', 'Water Freezing Point', 'Water Boiling Point'])
       E2ERuby::Assertions.assert_table_count(result, 1, nil)
     end
   end
@@ -342,3 +340,4 @@ RSpec.describe 'pdf fixtures' do
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

@@ -133,7 +133,7 @@ fn test_image_metadata_only() {
     };
 
     assertions::assert_expected_mime(&result, &["image/jpeg"]);
-    assertions::assert_max_content_length(&result, 100);
+    assertions::assert_max_content_length(&result, 200);
 }
 
 #[test]

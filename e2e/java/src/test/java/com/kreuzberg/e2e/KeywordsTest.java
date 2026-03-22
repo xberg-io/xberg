@@ -4,9 +4,20 @@ package com.kreuzberg.e2e;
 // CHECKSTYLE.OFF: LineLength - generated code
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Arrays;
+import dev.kreuzberg.BytesWithMime;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.config.ExtractionConfig;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 // CHECKSTYLE.ON: UnusedImports
 // CHECKSTYLE.ON: LineLength
 
@@ -15,41 +26,42 @@ import org.junit.jupiter.api.Test;
 
 /** Tests for keywords fixtures. */
 public class KeywordsTest {
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Test
-  public void keywordsRake() throws Exception {
-    JsonNode config =
-        MAPPER.readTree("{\"keywords\":{\"algorithm\":\"rake\",\"max_keywords\":10}}");
-    E2EHelpers.runFixture(
-        "keywords_rake",
-        "pdf/fake_memo.pdf",
-        config,
-        Arrays.asList("keywords-rake"),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertKeywords(result, true, 1, 10);
-        });
-  }
+    @Test
+    public void keywordsRake() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"keywords\":{\"algorithm\":\"rake\",\"max_keywords\":10}}");
+        E2EHelpers.runFixture(
+            "keywords_rake",
+            "pdf/fake_memo.pdf",
+            config,
+            Arrays.asList("keywords-rake"),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+                E2EHelpers.Assertions.assertKeywords(result, true, 1, 10);
+            }
+        );
+    }
 
-  @Test
-  public void keywordsYake() throws Exception {
-    JsonNode config =
-        MAPPER.readTree("{\"keywords\":{\"algorithm\":\"yake\",\"max_keywords\":10}}");
-    E2EHelpers.runFixture(
-        "keywords_yake",
-        "pdf/fake_memo.pdf",
-        config,
-        Arrays.asList("keywords-yake"),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertKeywords(result, true, 1, 10);
-        });
-  }
+    @Test
+    public void keywordsYake() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"keywords\":{\"algorithm\":\"yake\",\"max_keywords\":10}}");
+        E2EHelpers.runFixture(
+            "keywords_yake",
+            "pdf/fake_memo.pdf",
+            config,
+            Arrays.asList("keywords-yake"),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+                E2EHelpers.Assertions.assertKeywords(result, true, 1, 10);
+            }
+        );
+    }
+
 }

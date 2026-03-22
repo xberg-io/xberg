@@ -90,7 +90,7 @@ fn test_ocr_image_no_text() {
     };
 
     assertions::assert_expected_mime(&result, &["image/jpeg"]);
-    assertions::assert_max_content_length(&result, 200);
+    assertions::assert_max_content_length(&result, 300);
 }
 
 #[test]

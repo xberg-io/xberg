@@ -132,6 +132,12 @@ func TestOfficeOfficeJupyterBasic(t *testing.T) {
 	assertMinContentLength(t, result, 10)
 }
 
+func TestOfficeOfficeKeynoteBasic(t *testing.T) {
+	result := runExtraction(t, "iwork/test.key", nil)
+	assertExpectedMime(t, result, []string{"application/x-iwork-keynote-sffkey"})
+	assertMinContentLength(t, result, 5)
+}
+
 func TestOfficeOfficeLatexBasic(t *testing.T) {
 	result := runExtraction(t, "latex/basic_sections.tex", nil)
 	assertExpectedMime(t, result, []string{"application/x-latex", "text/x-latex"})
@@ -166,6 +172,12 @@ func TestOfficeOfficeMdxUsingMdx(t *testing.T) {
 	result := runExtraction(t, "markdown/mdx_using_mdx.mdx", nil)
 	assertExpectedMime(t, result, []string{"text/mdx", "text/x-mdx"})
 	assertMinContentLength(t, result, 2000)
+}
+
+func TestOfficeOfficeNumbersBasic(t *testing.T) {
+	result := runExtraction(t, "iwork/test.numbers", nil)
+	assertExpectedMime(t, result, []string{"application/x-iwork-numbers-sffnumbers"})
+	assertMinContentLength(t, result, 10)
 }
 
 func TestOfficeOfficeOdsBasic(t *testing.T) {
@@ -211,6 +223,12 @@ func TestOfficeOfficeOrgBasic(t *testing.T) {
 	result := runExtraction(t, "org/comprehensive.org", nil)
 	assertExpectedMime(t, result, []string{"text/x-org", "text/org"})
 	assertMinContentLength(t, result, 20)
+}
+
+func TestOfficeOfficePagesBasic(t *testing.T) {
+	result := runExtraction(t, "iwork/test.pages", nil)
+	assertExpectedMime(t, result, []string{"application/x-iwork-pages-sffpages"})
+	assertMinContentLength(t, result, 5)
 }
 
 func TestOfficeOfficePpsxSlideshow(t *testing.T) {
