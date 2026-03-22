@@ -15,6 +15,18 @@ use serial_test::serial;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
+struct BackendRegistryGuard;
+
+impl Drop for BackendRegistryGuard {
+    fn drop(&mut self) {
+        let registry = get_ocr_backend_registry();
+        if let Ok(mut reg) = registry.write() {
+            let _ = reg.shutdown_all();
+        }
+    }
+}
+
+
 struct MockOcrBackend {
     name: String,
     return_text: String,
@@ -285,6 +297,7 @@ impl OcrBackend for DocumentProcessingOcrBackend {
 #[serial]
 #[test]
 fn test_register_custom_ocr_backend() {
+    let _guard = BackendRegistryGuard;
     let registry = get_ocr_backend_registry();
 
     {
@@ -327,6 +340,7 @@ fn test_register_custom_ocr_backend() {
 #[serial]
 #[test]
 fn test_ocr_backend_used_for_image_extraction() {
+    let _guard = BackendRegistryGuard;
     let test_image = "../../test_documents/images/test_hello_world.png";
     let registry = get_ocr_backend_registry();
 
@@ -387,6 +401,7 @@ fn test_ocr_backend_used_for_image_extraction() {
 #[serial]
 #[test]
 fn test_ocr_backend_receives_correct_parameters() {
+    let _guard = BackendRegistryGuard;
     let test_image = "../../test_documents/images/test_hello_world.png";
     let registry = get_ocr_backend_registry();
 
@@ -440,6 +455,7 @@ fn test_ocr_backend_receives_correct_parameters() {
 #[serial]
 #[test]
 fn test_ocr_backend_returns_correct_format() {
+    let _guard = BackendRegistryGuard;
     let test_image = "../../test_documents/images/test_hello_world.png";
     let registry = get_ocr_backend_registry();
 
@@ -490,6 +506,7 @@ fn test_ocr_backend_returns_correct_format() {
 #[serial]
 #[test]
 fn test_ocr_backend_error_handling() {
+    let _guard = BackendRegistryGuard;
     let test_image = "../../test_documents/images/test_hello_world.png";
     let registry = get_ocr_backend_registry();
 
@@ -539,6 +556,7 @@ fn test_ocr_backend_error_handling() {
 #[serial]
 #[test]
 fn test_ocr_backend_validation_error() {
+    let _guard = BackendRegistryGuard;
     let test_image = "../../test_documents/images/test_hello_world.png";
     let registry = get_ocr_backend_registry();
 
@@ -589,6 +607,7 @@ fn test_ocr_backend_validation_error() {
 #[serial]
 #[test]
 fn test_switching_between_ocr_backends() {
+    let _guard = BackendRegistryGuard;
     let test_image = "../../test_documents/images/test_hello_world.png";
     let registry = get_ocr_backend_registry();
 
@@ -676,6 +695,7 @@ fn test_switching_between_ocr_backends() {
 #[serial]
 #[test]
 fn test_ocr_backend_language_support() {
+    let _guard = BackendRegistryGuard;
     let registry = get_ocr_backend_registry();
 
     {
@@ -717,6 +737,7 @@ fn test_ocr_backend_language_support() {
 #[serial]
 #[test]
 fn test_ocr_backend_type() {
+    let _guard = BackendRegistryGuard;
     let backend = MockOcrBackend {
         name: "type-test".to_string(),
         return_text: "Test".to_string(),
@@ -731,6 +752,7 @@ fn test_ocr_backend_type() {
 #[serial]
 #[test]
 fn test_ocr_backend_invalid_name() {
+    let _guard = BackendRegistryGuard;
     let registry = get_ocr_backend_registry();
 
     {
@@ -766,6 +788,7 @@ fn test_ocr_backend_invalid_name() {
 #[serial]
 #[test]
 fn test_ocr_backend_initialization_lifecycle() {
+    let _guard = BackendRegistryGuard;
     let registry = get_ocr_backend_registry();
 
     {
@@ -811,6 +834,7 @@ fn test_ocr_backend_initialization_lifecycle() {
 #[serial]
 #[test]
 fn test_unregister_ocr_backend() {
+    let _guard = BackendRegistryGuard;
     let registry = get_ocr_backend_registry();
 
     {
@@ -852,7 +876,8 @@ fn test_unregister_ocr_backend() {
 #[serial]
 #[test]
 fn test_ocr_backend_document_processing_fallback() {
-    let test_document = "../../test_documents/pdf/ocr_test.pdf";
+    let _guard = BackendRegistryGuard;
+    let test_document = concat!(env!("CARGO_MANIFEST_DIR"), "/../../test_documents/pdf/ocr_test.pdf");
     let registry = get_ocr_backend_registry();
 
     {
@@ -918,7 +943,8 @@ fn test_ocr_backend_document_processing_fallback() {
 #[serial]
 #[test]
 fn test_ocr_backend_document_processing_override() {
-    let test_document = "../../test_documents/pdf/ocr_test.pdf";
+    let _guard = BackendRegistryGuard;
+    let test_document = concat!(env!("CARGO_MANIFEST_DIR"), "/../../test_documents/pdf/ocr_test.pdf");
     let registry = get_ocr_backend_registry();
 
     {
@@ -979,4 +1005,60 @@ fn test_ocr_backend_document_processing_override() {
         let mut reg = registry.write().expect("Operation failed");
         reg.shutdown_all().expect("Operation failed");
     }
+}
+
+#[serial]
+#[test]
+fn test_ocr_backend_document_processing_missing_path_fallback() {
+    let _guard = BackendRegistryGuard;
+    let test_document = concat!(env!("CARGO_MANIFEST_DIR"), "/../../test_documents/pdf/ocr_test.pdf");
+    
+    let bytes = std::fs::read(test_document).expect("Failed to read test document");
+    
+    let backend = std::sync::Arc::new(DocumentProcessingOcrBackend {
+        name: "missing-path-ocr".to_string(),
+        image_call_count: std::sync::atomic::AtomicUsize::new(0),
+        document_call_count: std::sync::atomic::AtomicUsize::new(0),
+        supports_doc_override: true,
+    });
+
+    {
+        let registry = get_ocr_backend_registry();
+        let mut reg = registry.write().expect("Operation failed");
+        reg.register(std::sync::Arc::clone(&backend) as std::sync::Arc<dyn OcrBackend>)
+            .expect("Operation failed");
+    }
+
+    let ocr_config = OcrConfig {
+        backend: "missing-path-ocr".to_string(),
+        language: "eng".to_string(),
+        ..Default::default()
+    };
+
+    let config = ExtractionConfig {
+        ocr: Some(ocr_config),
+        force_ocr: true,
+        ..Default::default()
+    };
+
+    let result = kreuzberg::extract_bytes_sync(&bytes, "application/pdf", &config);
+
+    assert!(result.is_ok(), "Extraction failed: {:?}", result.err());
+
+    let extraction_result = result.expect("Operation failed");
+    assert!(
+        extraction_result.content.contains("Processed via image extraction"),
+        "Custom OCR fallback was not used. Content: {}",
+        extraction_result.content
+    );
+
+    assert!(
+        backend.image_call_count.load(std::sync::atomic::Ordering::SeqCst) > 0,
+        "OCR fallback to image extraction was not called"
+    );
+    assert_eq!(
+        backend.document_call_count.load(std::sync::atomic::Ordering::SeqCst),
+        0,
+        "Native process_document was called unexpectedly on memory bytes"
+    );
 }
