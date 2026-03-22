@@ -252,6 +252,7 @@ impl PdfExtractor {
     ///
     /// Accepts an optional `path` which is passed to OCR backends to allow
     /// direct document-level processing (bypassing page rendering).
+    #[cfg_attr(feature = "otel", tracing::instrument(skip(self, content)))]
     async fn extract_core(
         &self,
         content: &[u8],
