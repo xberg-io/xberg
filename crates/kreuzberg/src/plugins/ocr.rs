@@ -81,7 +81,7 @@ pub enum OcrBackendType {
 ///         })
 ///     }
 ///
-///     async fn process_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
+///     async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
 ///         let bytes = std::fs::read(path)?;
 ///         self.process_image(&bytes, config).await
 ///     }
@@ -136,7 +136,7 @@ pub trait OcrBackend: Plugin {
     /// # impl OcrBackend for MyOcr {
     /// #     fn supports_language(&self, _: &str) -> bool { true }
     /// #     fn backend_type(&self) -> OcrBackendType { OcrBackendType::Custom }
-    /// #     async fn process_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
+    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
     /// async fn process_image(&self, image_bytes: &[u8], config: &OcrConfig) -> Result<ExtractionResult> {
     ///     // Validate image format
     ///     if image_bytes.is_empty() {
@@ -186,7 +186,7 @@ pub trait OcrBackend: Plugin {
     /// # Errors
     ///
     /// Same as `process_image`, plus file I/O errors.
-    async fn process_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
+    async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
         #[cfg(feature = "tokio-runtime")]
         {
             use crate::core::io;
@@ -232,7 +232,7 @@ pub trait OcrBackend: Plugin {
     /// # impl OcrBackend for MyOcr {
     /// #     fn backend_type(&self) -> OcrBackendType { OcrBackendType::Custom }
     /// #     async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
-    /// #     async fn process_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
+    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
     /// fn supports_language(&self, lang: &str) -> bool {
     ///     self.languages.contains(&lang.to_string())
     /// }
@@ -265,7 +265,7 @@ pub trait OcrBackend: Plugin {
     /// # impl OcrBackend for TesseractBackend {
     /// #     fn supports_language(&self, _: &str) -> bool { true }
     /// #     async fn process_image(&self, _: &[u8], _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
-    /// #     async fn process_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
+    /// #     async fn process_image_file(&self, _: &Path, _: &OcrConfig) -> Result<ExtractionResult> { todo!() }
     /// fn backend_type(&self) -> OcrBackendType {
     ///     OcrBackendType::Tesseract
     /// }
@@ -637,7 +637,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_ocr_backend_process_file_default_impl() {
+    async fn test_ocr_backend_process_image_file_default_impl() {
         use std::io::Write;
         use tempfile::NamedTempFile;
 
@@ -655,7 +655,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = backend.process_file(path, &config).await.unwrap();
+        let result = backend.process_image_file(path, &config).await.unwrap();
         assert_eq!(result.content, "Mocked OCR text");
     }
 

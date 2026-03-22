@@ -460,7 +460,7 @@ impl OcrBackend for PaddleOcrBackend {
         })
     }
 
-    async fn process_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
+    async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
         let bytes = tokio::fs::read(path).await?;
         self.process_image(&bytes, config).await
     }

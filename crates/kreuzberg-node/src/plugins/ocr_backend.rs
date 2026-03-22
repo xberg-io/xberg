@@ -150,7 +150,7 @@ impl RustOcrBackend for JsOcrBackend {
         })
     }
 
-    async fn process_file(
+    async fn process_image_file(
         &self,
         path: &std::path::Path,
         config: &kreuzberg::OcrConfig,

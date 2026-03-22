@@ -25,7 +25,7 @@
 //! ```rust
 //! use kreuzberg::{KreuzbergError, Result};
 //!
-//! fn process_file(path: &str) -> Result<String> {
+//! fn process_image_file(path: &str) -> Result<String> {
 //!     // IO errors bubble up automatically via ?
 //!     let content = std::fs::read_to_string(path)?;
 //!

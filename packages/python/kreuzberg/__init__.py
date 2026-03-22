@@ -736,7 +736,7 @@ def register_ocr_backend(backend: Any) -> None:
         - process_image(image_bytes: bytes, language: str) -> dict: Process image and return result dict
 
     Optional methods:
-        - process_file(path: str, language: str) -> dict: Custom file processing
+        - process_image_file(path: str, language: str) -> dict: Custom file processing
         - initialize(): Called when backend is registered
         - shutdown(): Called when backend is unregistered
         - version() -> str: Backend version (defaults to "1.0.0")

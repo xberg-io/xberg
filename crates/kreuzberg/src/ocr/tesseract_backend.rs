@@ -285,7 +285,7 @@ impl OcrBackend for TesseractBackend {
         })
     }
 
-    async fn process_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
+    async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> Result<ExtractionResult> {
         let tess_config = self.config_to_tesseract(config);
         let tess_config_clone = tess_config.clone();
         let output_format = config.output_format;
@@ -294,8 +294,8 @@ impl OcrBackend for TesseractBackend {
         let path_str = path.to_string_lossy().to_string();
 
         let ocr_result = tokio::task::spawn_blocking(move || match output_format {
-            Some(fmt) => processor.process_file_with_format(&path_str, &tess_config_clone, fmt),
-            None => processor.process_file(&path_str, &tess_config_clone),
+            Some(fmt) => processor.process_image_file_with_format(&path_str, &tess_config_clone, fmt),
+            None => processor.process_image_file(&path_str, &tess_config_clone),
         })
         .await
         .map_err(|e| crate::KreuzbergError::Plugin {

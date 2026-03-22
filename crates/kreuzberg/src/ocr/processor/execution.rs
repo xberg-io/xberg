@@ -1184,7 +1184,7 @@ pub(super) fn perform_ocr(
 /// # Returns
 ///
 /// OCR extraction result
-pub(super) fn process_file_with_cache(
+pub(super) fn process_image_file_with_cache(
     file_path: &str,
     config: &TesseractConfig,
     cache: &OcrCache,
@@ -1297,7 +1297,7 @@ fn process_image_resolved(
 /// per-image resolution).
 ///
 /// Results are returned in the same order as the input file paths.
-pub(super) fn process_files_batch(
+pub(super) fn process_image_files_batch(
     file_paths: Vec<String>,
     config: &TesseractConfig,
     cache: &OcrCache,
@@ -1425,7 +1425,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_file_nonexistent() {
+    fn test_process_image_file_nonexistent() {
         let temp_dir = tempdir().unwrap();
         let cache = OcrCache::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let config = TesseractConfig {
@@ -1435,7 +1435,7 @@ mod tests {
             ..TesseractConfig::default()
         };
 
-        let result = process_file_with_cache("/nonexistent/file.png", &config, &cache, None);
+        let result = process_image_file_with_cache("/nonexistent/file.png", &config, &cache, None);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Failed to read file"));
     }

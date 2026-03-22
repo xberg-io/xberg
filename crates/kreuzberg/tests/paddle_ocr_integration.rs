@@ -280,7 +280,7 @@ async fn test_invalid_image_error() {
 /// Test processing an image file directly.
 #[tokio::test]
 #[ignore = "requires ONNX Runtime and downloaded models"]
-async fn test_process_file() {
+async fn test_process_image_file() {
     let image_path = test_documents_dir().join("images/test_hello_world.png");
     assert!(image_path.exists(), "Test image not found: {:?}", image_path);
 
@@ -293,7 +293,7 @@ async fn test_process_file() {
         ..Default::default()
     };
 
-    let result: kreuzberg::Result<ExtractionResult> = backend.process_file(&image_path, &ocr_config).await;
+    let result: kreuzberg::Result<ExtractionResult> = backend.process_image_file(&image_path, &ocr_config).await;
     assert!(result.is_ok(), "OCR failed: {:?}", result.err());
 
     let extraction: ExtractionResult = result.unwrap();

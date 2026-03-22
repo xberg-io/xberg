@@ -46,7 +46,7 @@ fn test_rayon_batch_stress_many_images() {
     let file_paths: Vec<String> = (0..100).map(|_| file_path.to_string_lossy().to_string()).collect();
 
     let start = Instant::now();
-    let results = processor.process_files_batch(file_paths, &config);
+    let results = processor.process_image_files_batch(file_paths, &config);
     let duration = start.elapsed();
 
     let success_count = results.iter().filter(|r| r.success).count();
@@ -112,7 +112,7 @@ fn test_concurrent_rayon_batches() {
         let total = Arc::clone(&total_processed);
 
         handles.push(std::thread::spawn(move || {
-            let results = processor.process_files_batch(file_paths, &config);
+            let results = processor.process_image_files_batch(file_paths, &config);
 
             let success_count = results.iter().filter(|r| r.success).count();
             assert_eq!(
@@ -162,7 +162,7 @@ fn test_rayon_batch_memory_pressure() {
         let file_paths: Vec<String> = (0..50).map(|_| file_path.to_string_lossy().to_string()).collect();
 
         let start = Instant::now();
-        let results = processor.process_files_batch(file_paths, &config);
+        let results = processor.process_image_files_batch(file_paths, &config);
         let duration = start.elapsed();
 
         let success_count = results.iter().filter(|r| r.success).count();
@@ -277,7 +277,7 @@ fn test_sustained_concurrent_ocr_load() {
             for batch in 0..2 {
                 let file_paths: Vec<String> = (0..5).map(|_| file_path.to_string_lossy().to_string()).collect();
 
-                let results = processor.process_files_batch(file_paths, &config);
+                let results = processor.process_image_files_batch(file_paths, &config);
 
                 let success_count = results.iter().filter(|r| r.success).count();
                 assert_eq!(
@@ -326,7 +326,7 @@ fn test_concurrent_batch_with_cache() {
     let file_path = get_test_file_path("images/ocr_image.jpg");
 
     let warm_paths: Vec<String> = (0..10).map(|_| file_path.to_string_lossy().to_string()).collect();
-    let _ = processor.process_files_batch(warm_paths, &config);
+    let _ = processor.process_image_files_batch(warm_paths, &config);
 
     let processor = Arc::new(processor);
     let config = Arc::new(config);
@@ -342,7 +342,7 @@ fn test_concurrent_batch_with_cache() {
         handles.push(std::thread::spawn(move || {
             let file_paths: Vec<String> = (0..5).map(|_| file_path.to_string_lossy().to_string()).collect();
 
-            let results = processor.process_files_batch(file_paths, &config);
+            let results = processor.process_image_files_batch(file_paths, &config);
 
             let success_count = results.iter().filter(|r| r.success).count();
             total.fetch_add(success_count, Ordering::Relaxed);
@@ -396,7 +396,7 @@ fn test_rayon_parallel_speedup() {
 
     let sequential_start = Instant::now();
     for _ in 0..test_size {
-        let result = processor.process_file(&file_path.to_string_lossy(), &config);
+        let result = processor.process_image_file(&file_path.to_string_lossy(), &config);
         assert!(result.is_ok(), "Sequential OCR should succeed");
     }
     let sequential_duration = sequential_start.elapsed();
@@ -406,7 +406,7 @@ fn test_rayon_parallel_speedup() {
         .collect();
 
     let parallel_start = Instant::now();
-    let results = processor.process_files_batch(file_paths, &config);
+    let results = processor.process_image_files_batch(file_paths, &config);
     let parallel_duration = parallel_start.elapsed();
 
     assert_eq!(results.len(), test_size as usize, "Should process all images");
@@ -455,7 +455,7 @@ fn test_rayon_batch_error_handling() {
         file_paths.push(format!("/nonexistent/file_{}.jpg", i));
     }
 
-    let results = processor.process_files_batch(file_paths, &config);
+    let results = processor.process_image_files_batch(file_paths, &config);
 
     assert_eq!(results.len(), 10, "Should return results for all files");
 

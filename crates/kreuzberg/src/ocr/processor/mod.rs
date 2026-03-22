@@ -65,29 +65,29 @@ impl OcrProcessor {
         self.cache.get_stats()
     }
 
-    pub fn process_file(&self, file_path: &str, config: &TesseractConfig) -> Result<OcrExtractionResult, OcrError> {
-        execution::process_file_with_cache(file_path, config, &self.cache, None)
+    pub fn process_image_file(&self, file_path: &str, config: &TesseractConfig) -> Result<OcrExtractionResult, OcrError> {
+        execution::process_image_file_with_cache(file_path, config, &self.cache, None)
     }
 
     /// Process a file with OCR and respect the output format from ExtractionConfig.
     ///
     /// This variant allows specifying an output format (Plain, Markdown, Djot) which
     /// affects how the OCR result's mime_type is set when markdown output is requested.
-    pub fn process_file_with_format(
+    pub fn process_image_file_with_format(
         &self,
         file_path: &str,
         config: &TesseractConfig,
         output_format: crate::core::config::OutputFormat,
     ) -> Result<OcrExtractionResult, OcrError> {
-        execution::process_file_with_cache(file_path, config, &self.cache, Some(output_format))
+        execution::process_image_file_with_cache(file_path, config, &self.cache, Some(output_format))
     }
 
     /// Process multiple image files in parallel using Rayon.
     ///
     /// This method processes OCR operations in parallel across CPU cores for improved throughput.
     /// Results are returned in the same order as the input file paths.
-    pub fn process_files_batch(&self, file_paths: Vec<String>, config: &TesseractConfig) -> Vec<BatchItemResult> {
-        execution::process_files_batch(file_paths, config, &self.cache)
+    pub fn process_image_files_batch(&self, file_paths: Vec<String>, config: &TesseractConfig) -> Vec<BatchItemResult> {
+        execution::process_image_files_batch(file_paths, config, &self.cache)
     }
 }
 
@@ -130,23 +130,23 @@ mod tests {
     }
 
     #[test]
-    fn test_process_file_nonexistent() {
+    fn test_process_image_file_nonexistent() {
         let temp_dir = tempdir().unwrap();
         let processor = OcrProcessor::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let config = create_test_config();
 
-        let result = processor.process_file("/nonexistent/file.png", &config);
+        let result = processor.process_image_file("/nonexistent/file.png", &config);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Failed to read file"));
     }
 
     #[test]
-    fn test_process_files_batch_empty() {
+    fn test_process_image_files_batch_empty() {
         let temp_dir = tempdir().unwrap();
         let processor = OcrProcessor::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let config = create_test_config();
 
-        let results = processor.process_files_batch(vec![], &config);
+        let results = processor.process_image_files_batch(vec![], &config);
         assert_eq!(results.len(), 0);
     }
 
@@ -163,12 +163,12 @@ mod tests {
     }
 
     #[test]
-    fn test_process_files_batch_single_file() {
+    fn test_process_image_files_batch_single_file() {
         let temp_dir = tempdir().unwrap();
         let processor = OcrProcessor::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let config = create_test_config();
 
-        let results = processor.process_files_batch(vec!["/nonexistent.png".to_string()], &config);
+        let results = processor.process_image_files_batch(vec!["/nonexistent.png".to_string()], &config);
         assert_eq!(results.len(), 1);
         assert!(!results[0].success);
         assert!(results[0].error.is_some());
@@ -176,7 +176,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_files_batch_multiple_files() {
+    fn test_process_image_files_batch_multiple_files() {
         let temp_dir = tempdir().unwrap();
         let processor = OcrProcessor::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let config = create_test_config();
@@ -187,7 +187,7 @@ mod tests {
             "/nonexistent3.png".to_string(),
         ];
 
-        let results = processor.process_files_batch(file_paths, &config);
+        let results = processor.process_image_files_batch(file_paths, &config);
         assert_eq!(results.len(), 3);
 
         for result in &results {
@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn test_process_files_batch_preserves_order() {
+    fn test_process_image_files_batch_preserves_order() {
         let temp_dir = tempdir().unwrap();
         let processor = OcrProcessor::new(Some(temp_dir.path().to_path_buf())).unwrap();
         let config = create_test_config();
@@ -242,7 +242,7 @@ mod tests {
             "file3.png".to_string(),
         ];
 
-        let results = processor.process_files_batch(file_paths.clone(), &config);
+        let results = processor.process_image_files_batch(file_paths.clone(), &config);
 
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].file_path, "file1.png");

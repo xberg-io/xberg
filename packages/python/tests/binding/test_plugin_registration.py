@@ -194,7 +194,7 @@ class MockOcrBackend:
     def process_image(self, image_bytes: bytes, language: str) -> dict[str, Any]:
         return {"content": "mocked text", "metadata": {}, "tables": []}
 
-    def process_file(self, path: str, language: str) -> dict[str, Any]:
+    def process_image_file(self, path: str, language: str) -> dict[str, Any]:
         return {"content": "mocked text from file", "metadata": {}, "tables": []}
 
     def initialize(self) -> None:
@@ -219,7 +219,7 @@ class MockOcrBackend2:
     def process_image(self, image_bytes: bytes, language: str) -> dict[str, Any]:
         return {"content": "mocked text 2", "metadata": {}, "tables": []}
 
-    def process_file(self, path: str, language: str) -> dict[str, Any]:
+    def process_image_file(self, path: str, language: str) -> dict[str, Any]:
         return {"content": "mocked text 2 from file", "metadata": {}, "tables": []}
 
     def initialize(self) -> None:

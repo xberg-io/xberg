@@ -105,7 +105,7 @@ class OcrBackendProtocol(Protocol):
         """
         ...
 
-    def process_file(self, path: str, language: str) -> dict[str, Any]:
+    def process_image_file(self, path: str, language: str) -> dict[str, Any]:
         """Process image file from path (optional, defaults to reading and calling process_image).
 
         Backends can override this method if they have optimized file processing

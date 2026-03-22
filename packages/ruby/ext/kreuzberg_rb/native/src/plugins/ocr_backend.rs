@@ -109,7 +109,7 @@ impl OcrBackend for RubyOcrBackend {
         })
     }
 
-    async fn process_file(&self, path: &Path, config: &OcrConfig) -> kreuzberg::Result<ExtractionResult> {
+    async fn process_image_file(&self, path: &Path, config: &OcrConfig) -> kreuzberg::Result<ExtractionResult> {
         let bytes = std::fs::read(path)?;
         self.process_image(&bytes, config).await
     }
