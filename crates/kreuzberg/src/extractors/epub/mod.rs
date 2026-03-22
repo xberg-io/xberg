@@ -9,7 +9,7 @@
 //! Uses only permissive-licensed crates:
 //! - `zip` (MIT/Apache) - for reading EPUB container
 //! - `roxmltree` (MIT) - for parsing XML
-//! - `html-to-markdown-rs` (MIT) - for converting XHTML to plain text
+//! - `html-to-markdown-rs` (MIT) - for converting XHTML to Markdown/Djot when requested
 
 mod content;
 mod metadata;
@@ -81,7 +81,7 @@ impl DocumentExtractor for EpubExtractor {
     #[cfg_attr(
         feature = "otel",
         tracing::instrument(
-            skip(self, content, _config),
+            skip(self, content, config),
             fields(
                 extractor.name = self.name(),
                 content.size_bytes = content.len(),
@@ -92,7 +92,7 @@ impl DocumentExtractor for EpubExtractor {
         &self,
         content: &[u8],
         mime_type: &str,
-        _config: &ExtractionConfig,
+        config: &ExtractionConfig,
     ) -> Result<ExtractionResult> {
         let cursor = Cursor::new(content.to_vec());
 
@@ -112,13 +112,26 @@ impl DocumentExtractor for EpubExtractor {
 
         let opf_xml = read_file_from_zip(&mut archive, &opf_path)?;
 
-        let extracted_content = extract_content(&mut archive, &opf_path, &manifest_dir)?;
+        let (extracted_content, fully_converted, processing_warnings) =
+            extract_content(&mut archive, &opf_path, &manifest_dir, config)?;
 
         let (epub_metadata, additional_metadata) = extract_metadata(&opf_xml)?;
         let metadata_map: AHashMap<Cow<'static, str>, serde_json::Value> = additional_metadata
             .into_iter()
             .map(|(k, v)| (Cow::Owned(k), v))
             .collect();
+
+        // Signal that the extractor already formatted the output so the pipeline
+        // does not double-convert (mirrors HtmlExtractor behavior).
+        let pre_formatted = if fully_converted {
+            match config.output_format {
+                crate::core::config::OutputFormat::Markdown => Some("markdown".to_string()),
+                crate::core::config::OutputFormat::Djot => Some("djot".to_string()),
+                _ => None,
+            }
+        } else {
+            None
+        };
 
         Ok(ExtractionResult {
             content: extracted_content,
@@ -129,6 +142,7 @@ impl DocumentExtractor for EpubExtractor {
                 language: epub_metadata.language,
                 created_at: epub_metadata.date,
                 additional: metadata_map,
+                output_format: pre_formatted,
                 ..Default::default()
             },
             pages: None,
@@ -143,7 +157,7 @@ impl DocumentExtractor for EpubExtractor {
             #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
             extracted_keywords: None,
             quality_score: None,
-            processing_warnings: Vec::new(),
+            processing_warnings,
             annotations: None,
         })
     }

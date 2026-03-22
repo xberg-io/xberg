@@ -1,47 +1,98 @@
 //! EPUB content extraction and text processing.
 //!
 //! Handles extraction of text content from XHTML files in spine order.
-//! Uses direct XML tree traversal to avoid double-lossy conversion through markdown.
+//!
+//! For `OutputFormat::Plain`, this uses direct XML tree traversal to avoid lossy conversions.
+//! For `OutputFormat::Markdown` / `OutputFormat::Djot`, this converts XHTML through the HTML
+//! conversion pipeline so structural elements (like headings) are preserved.
 
 use crate::Result;
+use crate::core::config::{ExtractionConfig, OutputFormat};
+use crate::types::ProcessingWarning;
 use std::io::Cursor;
 use zip::ZipArchive;
 
 use super::metadata::parse_opf;
 use super::parsing::{read_file_from_zip, resolve_path};
 
+fn trim_trailing_newlines(s: &str) -> &str {
+    s.trim_end_matches(['\n', '\r'])
+}
+
 /// Extract text content from an EPUB document by reading in spine order
 pub(super) fn extract_content(
     archive: &mut ZipArchive<Cursor<Vec<u8>>>,
     opf_path: &str,
     manifest_dir: &str,
-) -> Result<String> {
+    config: &ExtractionConfig,
+) -> Result<(String, bool, Vec<ProcessingWarning>)> {
     let opf_xml = read_file_from_zip(archive, opf_path)?;
     let (_, spine_hrefs) = parse_opf(&opf_xml)?;
 
     let mut content = String::new();
+    let wants_markup = matches!(config.output_format, OutputFormat::Markdown | OutputFormat::Djot);
+    let mut warnings: Vec<ProcessingWarning> = Vec::new();
+    let mut had_markup_fallback = false;
 
     for (index, href) in spine_hrefs.iter().enumerate() {
         let file_path = resolve_path(manifest_dir, href);
 
         match read_file_from_zip(archive, &file_path) {
             Ok(xhtml_content) => {
-                let text = extract_text_from_xhtml(&xhtml_content);
-                if !text.is_empty() {
+                // Preserve structural elements like headings by converting XHTML → Markdown/Djot
+                // using the same conversion pipeline as the HTML extractor. Use the API variant
+                // that disables YAML/frontmatter injection.
+                let extracted = if wants_markup {
+                    match crate::extraction::html::convert_html_to_markdown_with_metadata(
+                        &xhtml_content,
+                        config.html_options.clone(),
+                        Some(config.output_format),
+                    ) {
+                        Ok((converted, _)) => converted,
+                        Err(err) => {
+                            had_markup_fallback = true;
+                            warnings.push(ProcessingWarning {
+                                source: "epub".to_string(),
+                                message: format!(
+                                    "XHTML conversion failed for spine item '{}'; falling back to plain text: {}",
+                                    file_path, err
+                                ),
+                            });
+                            extract_text_from_xhtml(&xhtml_content)
+                        }
+                    }
+                } else {
+                    // Default: plain text extraction (no markup syntax).
+                    extract_text_from_xhtml(&xhtml_content)
+                };
+
+                let extracted = if wants_markup {
+                    trim_trailing_newlines(&extracted)
+                } else {
+                    extracted.trim_end()
+                };
+
+                if !extracted.is_empty() {
                     if index > 0 && !content.ends_with('\n') {
                         content.push('\n');
                     }
-                    content.push_str(&text);
+                    content.push_str(extracted);
                     content.push('\n');
                 }
             }
-            Err(_) => {
+            Err(err) => {
+                warnings.push(ProcessingWarning {
+                    source: "epub".to_string(),
+                    message: format!("Failed to read spine item '{}' from EPUB archive: {}", file_path, err),
+                });
                 continue;
             }
         }
     }
 
-    Ok(content.trim().to_string())
+    let content = trim_trailing_newlines(&content).to_string();
+    let fully_converted = wants_markup && !had_markup_fallback;
+    Ok((content, fully_converted, warnings))
 }
 
 /// Block-level HTML/XHTML elements that should produce newlines before/after their content.
