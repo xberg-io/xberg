@@ -260,6 +260,28 @@ readonly class ExtractionConfig
          * @default null
          */
         public ?ConcurrencyConfig $concurrency = null,
+
+        /**
+         * Cache namespace for tenant isolation.
+         *
+         * When set, cache keys are scoped to this namespace, enabling tenant
+         * isolation so that different tenants' cached results do not collide.
+         *
+         * @var string|null
+         * @default null
+         */
+        public ?string $cacheNamespace = null,
+
+        /**
+         * Per-request cache TTL in seconds.
+         *
+         * Overrides the default cache time-to-live for this extraction request.
+         * When null, the server default TTL is used.
+         *
+         * @var int|null
+         * @default null
+         */
+        public ?int $cacheTtlSecs = null,
     ) {
     }
 
@@ -422,6 +444,20 @@ readonly class ExtractionConfig
             $concurrency = ConcurrencyConfig::fromArray($concurrencyData);
         }
 
+        /** @var string|null $cacheNamespace */
+        $cacheNamespace = $data['cache_namespace'] ?? null;
+        if ($cacheNamespace !== null && !is_string($cacheNamespace)) {
+            /** @var string $cacheNamespace */
+            $cacheNamespace = (string) $cacheNamespace;
+        }
+
+        /** @var int|null $cacheTtlSecs */
+        $cacheTtlSecs = $data['cache_ttl_secs'] ?? null;
+        if ($cacheTtlSecs !== null && !is_int($cacheTtlSecs)) {
+            /** @var int $cacheTtlSecs */
+            $cacheTtlSecs = (int) $cacheTtlSecs;
+        }
+
         $securityLimits = null;
         if (isset($data['security_limits']) && is_array($data['security_limits'])) {
             /** @var array<string, mixed> $securityLimitsData */
@@ -451,6 +487,8 @@ readonly class ExtractionConfig
             acceleration: $acceleration,
             email: $email,
             concurrency: $concurrency,
+            cacheNamespace: $cacheNamespace,
+            cacheTtlSecs: $cacheTtlSecs,
         );
     }
 
@@ -651,6 +689,14 @@ readonly class ExtractionConfig
         // includeDocumentStructure defaults to false, so only add if true
         if ($this->includeDocumentStructure) {
             $result['include_document_structure'] = true;
+        }
+        // cacheNamespace defaults to null, so only add if set
+        if ($this->cacheNamespace !== null) {
+            $result['cache_namespace'] = $this->cacheNamespace;
+        }
+        // cacheTtlSecs defaults to null, so only add if set
+        if ($this->cacheTtlSecs !== null) {
+            $result['cache_ttl_secs'] = $this->cacheTtlSecs;
         }
 
         return array_filter($result, static fn ($value): bool => $value !== null);

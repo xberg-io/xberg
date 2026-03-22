@@ -9,8 +9,8 @@
 
 #define KREUZBERG_VERSION_MAJOR 4
 #define KREUZBERG_VERSION_MINOR 5
-#define KREUZBERG_VERSION_PATCH 1
-#define KREUZBERG_VERSION "4.5.1"
+#define KREUZBERG_VERSION_PATCH 2
+#define KREUZBERG_VERSION "4.5.2"
 
 
 #include <stdarg.h>
@@ -904,6 +904,50 @@ int32_t kreuzberg_config_builder_set_use_cache(struct ConfigBuilder *builder,
 KREUZBERG_EXPORT
 int32_t kreuzberg_config_builder_set_include_document_structure(struct ConfigBuilder *builder,
                                                                 int32_t include);
+
+/**
+ * Set the cache_namespace field for tenant isolation.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `namespace` - Cache namespace string; empty string clears the field
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error (NULL builder or NULL namespace)
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - `namespace` must be a valid, non-null, null-terminated C string
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_set_cache_namespace(struct ConfigBuilder *builder,
+                                             const char *namespace_);
+
+/**
+ * Set the cache_ttl_secs field for per-request cache TTL.
+ *
+ * # Arguments
+ *
+ * * `builder` - Non-null pointer to ConfigBuilder
+ * * `ttl_secs` - Cache TTL in seconds; 0 skips the cache for this request
+ *
+ * # Returns
+ *
+ * 0 on success, -1 on error (NULL builder)
+ *
+ * # Safety
+ *
+ * This function is meant to be called from C/FFI code. The caller must ensure:
+ * - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+ * - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+ */
+KREUZBERG_EXPORT
+int32_t kreuzberg_config_set_cache_ttl_secs(struct ConfigBuilder *builder,
+                                            uint64_t ttl_secs);
 
 /**
  * Set OCR configuration from JSON.

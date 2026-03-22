@@ -6,11 +6,15 @@
 //! # Endpoints
 //!
 //! - `POST /extract` - Extract text from uploaded files (multipart form data)
+//! - `POST /detect` - Detect MIME type of an uploaded file (multipart form data)
 //! - `POST /embed` - Generate embeddings for text (JSON body with texts array)
 //! - `POST /chunk` - Chunk text into smaller pieces (JSON body with text and config)
 //! - `GET /health` - Health check endpoint
 //! - `GET /info` - Server information
+//! - `GET /version` - Version information
 //! - `GET /cache/stats` - Get cache statistics
+//! - `GET /cache/manifest` - Get model manifest with checksums and sizes
+//! - `POST /cache/warm` - Pre-download models to cache
 //! - `DELETE /cache/clear` - Clear all cached files
 //!
 //! # Examples
@@ -98,6 +102,7 @@ pub use error::ApiError;
 pub use router::{create_router, create_router_with_limits, create_router_with_limits_and_server_config};
 pub use startup::{serve, serve_default, serve_with_config, serve_with_config_and_limits, serve_with_server_config};
 pub use types::{
-    ApiSizeLimits, ApiState, CacheClearResponse, CacheStatsResponse, ChunkRequest, ChunkResponse, EmbedRequest,
-    EmbedResponse, ErrorResponse, ExtractResponse, HealthResponse, InfoResponse,
+    ApiSizeLimits, ApiState, CacheClearResponse, CacheStatsResponse, ChunkRequest, ChunkResponse, DetectResponse,
+    EmbedRequest, EmbedResponse, ErrorResponse, ExtractResponse, HealthResponse, InfoResponse, ManifestEntryResponse,
+    ManifestResponse, VersionResponse, WarmRequest, WarmResponse,
 };

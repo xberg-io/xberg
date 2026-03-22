@@ -27,9 +27,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Generate test assets for a language.
+    /// Generate test assets for a language (or all languages).
     Generate {
-        /// Target language.
+        /// Target language (use "all" to generate for every language).
         #[arg(long, value_enum)]
         lang: Language,
         /// Fixture directory (defaults to workspace fixtures/).
@@ -49,6 +49,7 @@ enum Commands {
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum Language {
+    All,
     C,
     Rust,
     Python,
@@ -64,65 +65,93 @@ enum Language {
     WasmWorkers,
 }
 
+impl Language {
+    fn all_concrete() -> &'static [Language] {
+        &[
+            Language::C,
+            Language::Rust,
+            Language::Python,
+            Language::Typescript,
+            Language::Ruby,
+            Language::Java,
+            Language::Go,
+            Language::Csharp,
+            Language::Php,
+            Language::Elixir,
+            Language::R,
+            Language::WasmDeno,
+            Language::WasmWorkers,
+        ]
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Generate { lang, fixtures, output } => {
             let fixtures = load_fixtures(fixtures.as_path())?;
-            match lang {
-                Language::C => {
-                    c::generate(&fixtures, output.as_path())?;
-                }
-                Language::Rust => {
-                    rust::generate(&fixtures, output.as_path())?;
-                    run_cargo_fmt(&output.join("rust"));
-                }
-                Language::Python => {
-                    python::generate(&fixtures, output.as_path())?;
-                    run_ruff_format(&output.join("python/tests"));
-                }
-                Language::Typescript => {
-                    typescript::generate(&fixtures, output.as_path())?;
-                    run_biome_format(&output.join("typescript"));
-                }
-                Language::Ruby => {
-                    ruby::generate(&fixtures, output.as_path())?;
-                    run_rubocop_format(&output.join("ruby"));
-                }
-                Language::Java => {
-                    java::generate(&fixtures, output.as_path())?;
-                    run_google_java_format(&output.join("java"));
-                }
-                Language::Go => {
-                    go::generate(&fixtures, output.as_path())?;
-                    run_go_format(&output.join("go"));
-                }
-                Language::Csharp => {
-                    csharp::generate(&fixtures, output.as_path())?;
-                    run_dotnet_format(&output.join("csharp"));
-                }
-                Language::Php => {
-                    php::generate(&fixtures, output.as_path())?;
-                    run_php_format(&output.join("php"));
-                }
-                Language::Elixir => {
-                    elixir::generate(&fixtures, output.as_path())?;
-                    run_mix_format(&output.join("elixir"));
-                }
-                Language::R => {
-                    r::generate(&fixtures, output.as_path())?;
-                    run_styler_format(&output.join("r"));
-                }
-                Language::WasmDeno => {
-                    wasm_deno::generate(&fixtures, output.as_path())?;
-                    run_biome_format(&output.join("wasm-deno"));
-                }
-                Language::WasmWorkers => {
-                    wasm_workers::generate(&fixtures, output.as_path())?;
-                    run_biome_format(&output.join("wasm-workers"));
-                }
+            let langs = if matches!(lang, Language::All) {
+                Language::all_concrete().to_vec()
+            } else {
+                vec![lang]
             };
+            for lang in langs {
+                match lang {
+                    Language::All => unreachable!(),
+                    Language::C => {
+                        c::generate(&fixtures, output.as_path())?;
+                    }
+                    Language::Rust => {
+                        rust::generate(&fixtures, output.as_path())?;
+                        run_cargo_fmt(&output.join("rust"));
+                    }
+                    Language::Python => {
+                        python::generate(&fixtures, output.as_path())?;
+                        run_ruff_format(&output.join("python/tests"));
+                    }
+                    Language::Typescript => {
+                        typescript::generate(&fixtures, output.as_path())?;
+                        run_biome_format(&output.join("typescript"));
+                    }
+                    Language::Ruby => {
+                        ruby::generate(&fixtures, output.as_path())?;
+                        run_rubocop_format(&output.join("ruby"));
+                    }
+                    Language::Java => {
+                        java::generate(&fixtures, output.as_path())?;
+                        run_google_java_format(&output.join("java"));
+                    }
+                    Language::Go => {
+                        go::generate(&fixtures, output.as_path())?;
+                        run_go_format(&output.join("go"));
+                    }
+                    Language::Csharp => {
+                        csharp::generate(&fixtures, output.as_path())?;
+                        run_dotnet_format(&output.join("csharp"));
+                    }
+                    Language::Php => {
+                        php::generate(&fixtures, output.as_path())?;
+                        run_php_format(&output.join("php"));
+                    }
+                    Language::Elixir => {
+                        elixir::generate(&fixtures, output.as_path())?;
+                        run_mix_format(&output.join("elixir"));
+                    }
+                    Language::R => {
+                        r::generate(&fixtures, output.as_path())?;
+                        run_styler_format(&output.join("r"));
+                    }
+                    Language::WasmDeno => {
+                        wasm_deno::generate(&fixtures, output.as_path())?;
+                        run_biome_format(&output.join("wasm-deno"));
+                    }
+                    Language::WasmWorkers => {
+                        wasm_workers::generate(&fixtures, output.as_path())?;
+                        run_biome_format(&output.join("wasm-workers"));
+                    }
+                };
+            }
         }
         Commands::List { fixtures } => {
             let fixtures = load_fixtures(fixtures.as_path())?;
@@ -278,12 +307,13 @@ fn run_mix_format(dir: &Utf8Path) {
 }
 
 fn run_styler_format(dir: &Utf8Path) {
+    let tests_dir = dir.join("tests").join("testthat");
     let status = std::process::Command::new("Rscript")
-        .args(["-e", &format!("styler::style_dir('{}')", dir.as_str())])
+        .args(["-e", &format!("styler::style_dir('{}')", tests_dir.as_str())])
         .status();
     match status {
         Ok(s) if s.success() => {}
-        Ok(_) => eprintln!("Warning: styler::style_dir returned non-zero for {dir}"),
+        Ok(_) => eprintln!("Warning: styler::style_dir returned non-zero for {tests_dir}"),
         Err(e) => eprintln!("Warning: failed to run Rscript styler: {e}"),
     }
 }

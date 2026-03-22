@@ -242,7 +242,7 @@ mod tests {
         let key2 = cache.generate_cache_key("abc123", "tesseract", "eng");
 
         assert_eq!(key1, key2);
-        assert_eq!(key1.len(), 16);
+        assert_eq!(key1.len(), 32);
     }
 
     #[test]

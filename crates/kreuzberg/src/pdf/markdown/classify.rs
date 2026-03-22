@@ -471,16 +471,32 @@ fn merge_consecutive_h1s(page: &mut Vec<PdfParagraph>) {
 /// Paragraphs whose normalized text appears on >50% of pages are marked as
 /// page furniture. Only considers short paragraphs (≤8 words) to avoid
 /// false positives on repeated body text.
+///
+/// Two normalization passes are used:
+/// 1. **Exact**: lowercase + trim — catches identical running headers.
+/// 2. **Fuzzy**: alphanumeric-only — catches variants caused by PDF extraction
+///    artefacts such as `©` → `O` (so `© ISO 2021` and `OISO 2021` both
+///    reduce to `oiso2021`), missing spaces, or punctuation differences.
+///    Fuzzy matching is only applied to candidates with ≥6 alphanumeric
+///    characters to avoid spurious matches on very short strings.
 pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]) {
     if all_pages.len() < 4 {
         return; // Not enough pages to detect repeats meaningfully.
     }
 
-    // Count occurrences of each short normalized text across pages.
+    // Build per-page candidate list: (exact_normalized, alphanum_key) pairs.
+    // Collect all exact keys per page first (deduped), then count occurrences.
     let mut text_page_count: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    // Also track alphanum_key → set-of-exact-keys for the fuzzy pass.
+    let mut alphanum_to_exact: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    // Count per alphanum_key across pages (deduped per page).
+    let mut alphanum_page_count: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
     for page in all_pages.iter() {
-        // Use a set per page to count each text only once per page.
-        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        // Use sets per page to count each key only once per page.
+        let mut seen_exact: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut seen_alphanum: std::collections::HashSet<String> = std::collections::HashSet::new();
         for para in page {
             if para.is_page_furniture {
                 continue;
@@ -494,18 +510,48 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
             if word_count == 0 || word_count > 8 {
                 continue;
             }
-            if seen.insert(normalized.clone()) {
-                *text_page_count.entry(normalized).or_insert(0) += 1;
+
+            // Pass 1: exact normalized key.
+            if seen_exact.insert(normalized.clone()) {
+                *text_page_count.entry(normalized.clone()).or_insert(0) += 1;
+            }
+
+            // Pass 2: alphanumeric-only key for fuzzy matching.
+            // Only build the key for candidates with enough alphanumeric chars
+            // to avoid false positives on very short strings like page numbers.
+            let alphanum_key: String = normalized.chars().filter(|c| c.is_alphanumeric()).collect();
+            if alphanum_key.len() >= 6 {
+                alphanum_to_exact
+                    .entry(alphanum_key.clone())
+                    .or_default()
+                    .insert(normalized.clone());
+                if seen_alphanum.insert(alphanum_key.clone()) {
+                    *alphanum_page_count.entry(alphanum_key).or_insert(0) += 1;
+                }
             }
         }
     }
 
     let threshold = all_pages.len() / 2;
-    let repeating: std::collections::HashSet<String> = text_page_count
+
+    // Exact-match repeating set.
+    let mut repeating: std::collections::HashSet<String> = text_page_count
         .into_iter()
         .filter(|(_, count)| *count > threshold)
         .map(|(text, _)| text)
         .collect();
+
+    // Fuzzy-match repeating set: an alphanum key that appears on >50% of pages
+    // means ALL exact variants that share that key are running headers.
+    for (alphanum_key, count) in alphanum_page_count {
+        if count > threshold
+            && let Some(exact_variants) = alphanum_to_exact.get(&alphanum_key)
+        {
+            for variant in exact_variants {
+                repeating.insert(variant.clone());
+            }
+        }
+    }
 
     if repeating.is_empty() {
         return;
@@ -513,6 +559,7 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
 
     // Mark matching paragraphs as furniture (including headings that are
     // actually running headers misclassified by the layout model).
+    // Check both exact key and alphanum key against the repeating set.
     for page in all_pages.iter_mut() {
         for para in page.iter_mut() {
             if para.is_page_furniture {
@@ -756,6 +803,51 @@ mod tests {
         // they should be marked as furniture and demoted from heading.
         assert!(pages[0][0].is_page_furniture);
         assert!(pages[0][0].heading_level.is_none());
+    }
+
+    #[test]
+    fn test_cross_page_repeating_fuzzy_matches_iso_variants() {
+        // Simulate ISO running header extracted with copyright-symbol artefacts:
+        // "© ISO 2021 – All rights reserved" appears on every page but with
+        // varying extraction artefacts (© → O, spaces dropped, punctuation varies).
+        let make_body = |text: &str| {
+            let mut p = make_paragraph(12.0, 1);
+            p.lines[0].segments[0].text = text.to_string();
+            p
+        };
+        let mut pages = vec![
+            // Even pages: copyright symbol extracted as "O" with spaces
+            vec![
+                make_body("O ISO 2021 All rights reserved"),
+                make_body("Section content A"),
+            ],
+            vec![
+                make_body("O ISO 2021 All rights reserved"),
+                make_body("Section content B"),
+            ],
+            vec![
+                make_body("O ISO 2021 All rights reserved"),
+                make_body("Section content C"),
+            ],
+            // Odd pages: copyright symbol merged, no spaces, punctuation variant
+            vec![make_body("OISO 2021Allrightsreserved"), make_body("Section content D")],
+            vec![make_body("OISO 2021Allrightsreserved"), make_body("Section content E")],
+            vec![make_body("OISO 2021Allrightsreserved"), make_body("Section content F")],
+        ];
+        mark_cross_page_repeating_text(&mut pages);
+        // Both variants reduce to "oiso2021allrightsreserved" (alphanum-only key)
+        // and appear on all 6 pages (>50%) → both should be marked as furniture.
+        assert!(
+            pages[0][0].is_page_furniture,
+            "even-page copyright variant should be furniture"
+        );
+        assert!(
+            pages[3][0].is_page_furniture,
+            "odd-page copyright variant should be furniture"
+        );
+        // Unique body content should NOT be marked as furniture.
+        assert!(!pages[0][1].is_page_furniture);
+        assert!(!pages[3][1].is_page_furniture);
     }
 
     #[test]

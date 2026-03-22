@@ -1260,10 +1260,7 @@ fn process_image_resolved(
     cache: &OcrCache,
     output_format: Option<crate::core::config::OutputFormat>,
 ) -> Result<OcrExtractionResult, OcrError> {
-    let mut hasher = ahash::AHasher::default();
-    use std::hash::{Hash, Hasher};
-    image_bytes.hash(&mut hasher);
-    let image_hash = format!("{:016x}", hasher.finish());
+    let image_hash = crate::cache::blake3_hash_bytes(image_bytes);
 
     let config_str = hash_config(config);
 
@@ -1397,38 +1394,22 @@ mod tests {
 
     #[test]
     fn test_compute_image_hash_deterministic() {
-        use ahash::AHasher;
-        use std::hash::{Hash, Hasher};
-
         let image_bytes = vec![1, 2, 3, 4, 5];
 
-        let mut hasher1 = AHasher::default();
-        image_bytes.hash(&mut hasher1);
-        let hash1 = format!("{:016x}", hasher1.finish());
-
-        let mut hasher2 = AHasher::default();
-        image_bytes.hash(&mut hasher2);
-        let hash2 = format!("{:016x}", hasher2.finish());
+        let hash1 = crate::cache::blake3_hash_bytes(&image_bytes);
+        let hash2 = crate::cache::blake3_hash_bytes(&image_bytes);
 
         assert_eq!(hash1, hash2);
-        assert_eq!(hash1.len(), 16);
+        assert_eq!(hash1.len(), 32);
     }
 
     #[test]
     fn test_compute_image_hash_different_data() {
-        use ahash::AHasher;
-        use std::hash::{Hash, Hasher};
-
         let image_bytes1 = vec![1, 2, 3, 4, 5];
         let image_bytes2 = vec![5, 4, 3, 2, 1];
 
-        let mut hasher1 = AHasher::default();
-        image_bytes1.hash(&mut hasher1);
-        let hash1 = format!("{:016x}", hasher1.finish());
-
-        let mut hasher2 = AHasher::default();
-        image_bytes2.hash(&mut hasher2);
-        let hash2 = format!("{:016x}", hasher2.finish());
+        let hash1 = crate::cache::blake3_hash_bytes(&image_bytes1);
+        let hash2 = crate::cache::blake3_hash_bytes(&image_bytes2);
 
         assert_ne!(hash1, hash2);
     }

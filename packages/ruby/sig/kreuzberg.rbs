@@ -478,6 +478,8 @@ module Kreuzberg
     class Extraction
       attr_reader use_cache: bool
       attr_reader enable_quality_processing: bool
+      attr_reader cache_namespace: String?
+      attr_reader cache_ttl_secs: Integer?
       attr_reader force_ocr: bool
       attr_reader include_document_structure: bool
       attr_reader ocr: OCR?
@@ -520,7 +522,9 @@ module Kreuzberg
         ?concurrency: (Concurrency | Hash[Symbol, untyped])?,
         ?max_concurrent_extractions: Integer?,
         ?output_format: String?,
-        ?result_format: String?
+        ?result_format: String?,
+        ?cache_namespace: String?,
+        ?cache_ttl_secs: Integer?
       ) -> void
       def to_h: () -> Hash[Symbol, untyped]
       def to_json: (*untyped) -> String

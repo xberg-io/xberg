@@ -13,6 +13,21 @@ from kreuzberg import (
 from . import helpers
 
 
+def test_smoke_cache_namespace() -> None:
+    """Smoke test: Extraction with cache namespace and TTL configuration"""
+
+    document_path = helpers.resolve_document("text/report.txt")
+    if not document_path.exists():
+        pytest.skip(f"Skipping smoke_cache_namespace: missing document at {document_path}")
+
+    config = helpers.build_config({"cache_namespace": "test_tenant", "cache_ttl_secs": 3600, "use_cache": True})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["text/plain"])
+    helpers.assert_min_content_length(result, 5)
+
+
 def test_smoke_docx_basic() -> None:
     """Smoke test: DOCX with formatted text"""
 

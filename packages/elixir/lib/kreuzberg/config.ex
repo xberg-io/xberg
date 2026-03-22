@@ -41,6 +41,8 @@ defmodule Kreuzberg.ExtractionConfig do
     * `:security_limits` - Security limits for archive extraction (max sizes, compression ratio, etc.)
     * `:email` - Email extraction configuration (msg_fallback_codepage)
     * `:max_concurrent_extractions` - Maximum concurrent extractions in batch operations (positive integer or nil)
+    * `:cache_namespace` - Cache namespace for tenant isolation (string or nil)
+    * `:cache_ttl_secs` - Per-request cache TTL in seconds (non-negative integer or nil)
 
   ## Default Values
 
@@ -106,6 +108,8 @@ defmodule Kreuzberg.ExtractionConfig do
       iex> Kreuzberg.ExtractionConfig.to_map(config)
       %{
         "acceleration" => nil,
+        "cache_namespace" => nil,
+        "cache_ttl_secs" => nil,
         "chunking" => %{"size" => 512},
         "concurrency" => nil,
         "email" => nil,
@@ -164,7 +168,9 @@ defmodule Kreuzberg.ExtractionConfig do
           force_ocr: boolean(),
           output_format: output_format,
           result_format: result_format,
-          include_document_structure: boolean()
+          include_document_structure: boolean(),
+          cache_namespace: String.t() | nil,
+          cache_ttl_secs: non_neg_integer() | nil
         }
 
   @derive Jason.Encoder
@@ -185,6 +191,8 @@ defmodule Kreuzberg.ExtractionConfig do
     :security_limits,
     :email,
     :concurrency,
+    :cache_namespace,
+    :cache_ttl_secs,
     use_cache: true,
     enable_quality_processing: true,
     force_ocr: false,
@@ -291,6 +299,8 @@ defmodule Kreuzberg.ExtractionConfig do
       iex> Kreuzberg.ExtractionConfig.to_map(config)
       %{
         "acceleration" => nil,
+        "cache_namespace" => nil,
+        "cache_ttl_secs" => nil,
         "chunking" => %{"size" => 512},
         "concurrency" => nil,
         "email" => nil,
@@ -318,6 +328,8 @@ defmodule Kreuzberg.ExtractionConfig do
       iex> Kreuzberg.ExtractionConfig.to_map(config)
       %{
         "acceleration" => nil,
+        "cache_namespace" => nil,
+        "cache_ttl_secs" => nil,
         "chunking" => nil,
         "concurrency" => nil,
         "email" => nil,
@@ -377,7 +389,9 @@ defmodule Kreuzberg.ExtractionConfig do
       "force_ocr" => config.force_ocr,
       "output_format" => normalize_format_value(config.output_format),
       "result_format" => normalize_format_value(config.result_format),
-      "include_document_structure" => config.include_document_structure
+      "include_document_structure" => config.include_document_structure,
+      "cache_namespace" => config.cache_namespace,
+      "cache_ttl_secs" => config.cache_ttl_secs
     }
   end
 
@@ -772,7 +786,9 @@ defmodule Kreuzberg.ExtractionConfig do
       enable_quality_processing: Map.get(map, "enable_quality_processing", true),
       force_ocr: Map.get(map, "force_ocr", false),
       output_format: Map.get(map, "output_format", "plain"),
-      result_format: Map.get(map, "result_format", "unified")
+      result_format: Map.get(map, "result_format", "unified"),
+      cache_namespace: Map.get(map, "cache_namespace"),
+      cache_ttl_secs: Map.get(map, "cache_ttl_secs")
     }
 
     {:ok, config}

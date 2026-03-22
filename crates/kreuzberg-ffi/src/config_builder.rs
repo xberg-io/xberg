@@ -41,6 +41,18 @@ impl ConfigBuilder {
         self.config.include_document_structure = include;
     }
 
+    fn set_cache_namespace(&mut self, namespace: &str) {
+        self.config.cache_namespace = if namespace.is_empty() {
+            None
+        } else {
+            Some(namespace.to_string())
+        };
+    }
+
+    fn set_cache_ttl_secs(&mut self, ttl_secs: u64) {
+        self.config.cache_ttl_secs = Some(ttl_secs);
+    }
+
     fn set_ocr_from_json(&mut self, ocr_json: &str) -> Result<(), String> {
         let ocr_config: OcrConfig =
             serde_json::from_str(ocr_json).map_err(|e| format!("Failed to parse OCR config JSON: {}", e))?;
@@ -189,6 +201,75 @@ pub unsafe extern "C" fn kreuzberg_config_builder_set_include_document_structure
 
         clear_last_error();
         unsafe { (*builder).set_include_document_structure(include != 0) };
+        0
+    })
+}
+
+/// Set the cache_namespace field for tenant isolation.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `namespace` - Cache namespace string; empty string clears the field
+///
+/// # Returns
+///
+/// 0 on success, -1 on error (NULL builder or NULL namespace)
+///
+/// # Safety
+///
+/// This function is meant to be called from C/FFI code. The caller must ensure:
+/// - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+/// - `namespace` must be a valid, non-null, null-terminated C string
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_set_cache_namespace(
+    builder: *mut ConfigBuilder,
+    namespace: *const c_char,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_set_cache_namespace", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+        if namespace.is_null() {
+            set_last_error("namespace pointer cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+        // SAFETY: caller guarantees namespace is a valid null-terminated C string
+        let namespace_str = unsafe { CStr::from_ptr(namespace) }.to_string_lossy();
+        unsafe { (*builder).set_cache_namespace(&namespace_str) };
+        0
+    })
+}
+
+/// Set the cache_ttl_secs field for per-request cache TTL.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `ttl_secs` - Cache TTL in seconds; 0 skips the cache for this request
+///
+/// # Returns
+///
+/// 0 on success, -1 on error (NULL builder)
+///
+/// # Safety
+///
+/// This function is meant to be called from C/FFI code. The caller must ensure:
+/// - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+/// - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_set_cache_ttl_secs(builder: *mut ConfigBuilder, ttl_secs: u64) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_set_cache_ttl_secs", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+        unsafe { (*builder).set_cache_ttl_secs(ttl_secs) };
         0
     })
 }

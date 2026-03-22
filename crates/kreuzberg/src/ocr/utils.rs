@@ -1,6 +1,3 @@
-use ahash::AHasher;
-use std::hash::{Hash, Hasher};
-
 /// Minimal supported Tesseract version
 pub const MINIMAL_SUPPORTED_TESSERACT_VERSION: u32 = 5;
 
@@ -11,12 +8,11 @@ pub const TSV_MIN_FIELDS: usize = 12;
 /// Table formatting constants
 pub const MIN_COLUMN_WIDTH: usize = 3;
 
-/// Compute a hash string from input data
+/// Compute a blake3 hash string from input data.
+///
+/// Returns a 32-character hex string (128 bits of blake3 output).
 pub fn compute_hash(data: &str) -> String {
-    let mut hasher = AHasher::default();
-    data.hash(&mut hasher);
-    let hash = hasher.finish();
-    format!("{:016x}", hash)
+    crate::cache::blake3_hash_bytes(data.as_bytes())
 }
 
 #[cfg(test)]
@@ -29,7 +25,7 @@ mod tests {
         let hash1 = compute_hash(input);
         let hash2 = compute_hash(input);
         assert_eq!(hash1, hash2);
-        assert_eq!(hash1.len(), 16);
+        assert_eq!(hash1.len(), 32);
     }
 
     #[test]
@@ -42,6 +38,6 @@ mod tests {
     #[test]
     fn test_compute_hash_empty() {
         let hash = compute_hash("");
-        assert_eq!(hash.len(), 16);
+        assert_eq!(hash.len(), 32);
     }
 }

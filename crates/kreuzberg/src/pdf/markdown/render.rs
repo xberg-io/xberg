@@ -274,7 +274,10 @@ fn should_dehyphenate(prev: &str, next: &str) -> bool {
 /// - `<` → `&lt;`
 /// - `>` → `&gt;`
 ///
-/// Also escapes `_` as `\_` unless the text contains `://` (to preserve URLs).
+/// Underscores are intentionally **not** escaped. In extracted PDF text they are
+/// literal content (e.g. identifiers like `CTC_ARP_01`), not markdown italic
+/// delimiters. Escaping every underscore produces thousands of spurious `\_`
+/// sequences in technical documents.
 ///
 /// Uses a single-pass scan: if no special characters are found, returns a
 /// borrowed `Cow` with no allocation.
@@ -282,25 +285,20 @@ fn should_dehyphenate(prev: &str, next: &str) -> bool {
 /// Visibility is `pub(in crate::pdf::markdown)` so child modules such as
 /// `crate::pdf::markdown::regions::table_recognition` can import it.
 pub(in crate::pdf::markdown) fn escape_html_entities(text: &str) -> Cow<'_, str> {
-    // Determine which replacements are needed with a fast pre-scan.
-    let is_url = text.contains("://");
     let needs_amp = text.contains('&');
     let needs_lt = text.contains('<');
     let needs_gt = text.contains('>');
-    let needs_underscore = !is_url && text.contains('_');
 
-    if !needs_amp && !needs_lt && !needs_gt && !needs_underscore {
+    if !needs_amp && !needs_lt && !needs_gt {
         return Cow::Borrowed(text);
     }
 
-    // Single allocation: build result in one pass.
     let mut result = String::with_capacity(text.len() + 16);
     for ch in text.chars() {
         match ch {
             '&' => result.push_str("&amp;"),
             '<' => result.push_str("&lt;"),
             '>' => result.push_str("&gt;"),
-            '_' if !is_url => result.push_str("\\_"),
             _ => result.push(ch),
         }
     }
@@ -740,13 +738,15 @@ mod tests {
     }
 
     #[test]
-    fn test_escape_html_entities_underscore() {
-        assert_eq!(escape_html_entities("foo_bar"), "foo\\_bar");
+    fn test_escape_html_entities_underscore_preserved() {
+        // Underscores are literal content — never escaped
+        assert_eq!(escape_html_entities("foo_bar"), "foo_bar");
+        assert_eq!(escape_html_entities("CTC_ARP_01"), "CTC_ARP_01");
     }
 
     #[test]
     fn test_escape_html_entities_url_preserves_underscore() {
-        // URLs with :// should not have underscores escaped
+        // URLs with :// must also keep underscores intact
         assert_eq!(
             escape_html_entities("https://example.com/foo_bar"),
             "https://example.com/foo_bar"
@@ -826,20 +826,20 @@ mod tests {
     }
 
     #[test]
-    fn test_escape_underscores() {
-        // Underscores are escaped to \_ when the text does not contain "://"
-        assert_eq!(escape_html_entities("foo_bar"), "foo\\_bar");
-        assert_eq!(escape_html_entities("a_b_c"), "a\\_b\\_c");
+    fn test_escape_underscores_not_escaped() {
+        // Underscores are never escaped — they are literal content in extracted PDF text
+        assert_eq!(escape_html_entities("foo_bar"), "foo_bar");
+        assert_eq!(escape_html_entities("a_b_c"), "a_b_c");
+        assert_eq!(escape_html_entities("CTC_ARP_01"), "CTC_ARP_01");
         // Plain text without underscores is unchanged
         assert_eq!(escape_html_entities("no underscores here"), "no underscores here");
     }
 
     #[test]
     fn test_escape_preserves_urls() {
-        // URLs containing "://" must NOT have underscores escaped
+        // URLs containing "://" are passed through unchanged
         let url = "https://example.com/path_to_resource";
         assert_eq!(escape_html_entities(url), url);
-        // Protocol-relative URL also counts
         let proto = "ftp://host/file_name.txt";
         assert_eq!(escape_html_entities(proto), proto);
     }
@@ -1098,5 +1098,11 @@ mod tests {
 
         let result = render_multiline_para(vec![vec!["they are"], vec!["here"]]);
         assert_eq!(result, "they are here");
+    }
+
+    #[test]
+    fn test_escape_preserves_identifiers() {
+        // Underscores in technical identifiers must pass through unchanged.
+        assert_eq!(escape_html_entities("CTC_ARP_01"), "CTC_ARP_01");
     }
 }

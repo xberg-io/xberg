@@ -157,6 +157,22 @@ pub struct ExtractionConfig {
     #[serde(default)]
     pub acceleration: Option<AccelerationConfig>,
 
+    /// Cache namespace for tenant isolation.
+    ///
+    /// When set, cache entries are stored under `{cache_dir}/{namespace}/`.
+    /// Must be alphanumeric, hyphens, or underscores only (max 64 chars).
+    /// Different namespaces have isolated cache spaces on the same filesystem.
+    #[serde(default)]
+    pub cache_namespace: Option<String>,
+
+    /// Per-request cache TTL in seconds.
+    ///
+    /// Overrides the global `max_age_days` for this specific extraction.
+    /// When `0`, caching is completely skipped (no read or write).
+    /// When `None`, the global TTL applies.
+    #[serde(default)]
+    pub cache_ttl_secs: Option<u64>,
+
     /// Email extraction configuration (None = use defaults).
     ///
     /// Currently supports configuring the fallback codepage for MSG files
@@ -201,6 +217,8 @@ impl Default for ExtractionConfig {
             output_format: OutputFormat::Plain,
             include_document_structure: false,
             acceleration: None,
+            cache_namespace: None,
+            cache_ttl_secs: None,
             email: None,
             concurrency: None,
         }

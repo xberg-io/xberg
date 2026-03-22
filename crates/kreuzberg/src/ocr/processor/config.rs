@@ -20,28 +20,26 @@ use kreuzberg_tesseract::TesseractAPI;
 ///
 /// Hexadecimal string representation of the configuration hash
 pub(super) fn hash_config(config: &TesseractConfig) -> String {
-    use ahash::AHasher;
-    use std::hash::{Hash, Hasher};
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(config.language.as_bytes());
+    hasher.update(&config.psm.to_le_bytes());
+    hasher.update(config.output_format.as_bytes());
+    hasher.update(&[config.enable_table_detection as u8]);
+    hasher.update(&config.table_min_confidence.to_bits().to_le_bytes());
+    hasher.update(&config.table_column_threshold.to_le_bytes());
+    hasher.update(&config.table_row_threshold_ratio.to_bits().to_le_bytes());
+    hasher.update(&[config.classify_use_pre_adapted_templates as u8]);
+    hasher.update(&[config.language_model_ngram_on as u8]);
+    hasher.update(&[config.tessedit_dont_blkrej_good_wds as u8]);
+    hasher.update(&[config.tessedit_dont_rowrej_good_wds as u8]);
+    hasher.update(&[config.tessedit_enable_dict_correction as u8]);
+    hasher.update(config.tessedit_char_whitelist.as_bytes());
+    hasher.update(&[config.tessedit_use_primary_params_model as u8]);
+    hasher.update(&[config.textord_space_size_is_variable as u8]);
+    hasher.update(&[config.thresholding_method as u8]);
 
-    let mut hasher = AHasher::default();
-    config.language.hash(&mut hasher);
-    config.psm.hash(&mut hasher);
-    config.output_format.hash(&mut hasher);
-    config.enable_table_detection.hash(&mut hasher);
-    config.table_min_confidence.to_bits().hash(&mut hasher);
-    config.table_column_threshold.hash(&mut hasher);
-    config.table_row_threshold_ratio.to_bits().hash(&mut hasher);
-    config.classify_use_pre_adapted_templates.hash(&mut hasher);
-    config.language_model_ngram_on.hash(&mut hasher);
-    config.tessedit_dont_blkrej_good_wds.hash(&mut hasher);
-    config.tessedit_dont_rowrej_good_wds.hash(&mut hasher);
-    config.tessedit_enable_dict_correction.hash(&mut hasher);
-    config.tessedit_char_whitelist.hash(&mut hasher);
-    config.tessedit_use_primary_params_model.hash(&mut hasher);
-    config.textord_space_size_is_variable.hash(&mut hasher);
-    config.thresholding_method.hash(&mut hasher);
-
-    format!("{:016x}", hasher.finish())
+    let hash = hasher.finalize();
+    hex::encode(&hash.as_bytes()[..16])
 }
 
 /// Apply Tesseract configuration variables to the API.
@@ -128,7 +126,7 @@ mod tests {
         let hash2 = hash_config(&config);
 
         assert_eq!(hash1, hash2);
-        assert_eq!(hash1.len(), 16);
+        assert_eq!(hash1.len(), 32);
     }
 
     #[test]

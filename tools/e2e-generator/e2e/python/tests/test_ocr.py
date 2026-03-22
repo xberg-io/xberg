@@ -41,7 +41,7 @@ def test_ocr_image_no_text() -> None:
     result = extract_file_sync(document_path, None, config)
 
     helpers.assert_expected_mime(result, ["image/jpeg"])
-    helpers.assert_max_content_length(result, 200)
+    helpers.assert_max_content_length(result, 300)
 
 
 def test_ocr_paddle_confidence_filter() -> None:

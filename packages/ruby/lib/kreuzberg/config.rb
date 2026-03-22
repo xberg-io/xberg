@@ -930,7 +930,8 @@ module Kreuzberg
                   :images, :postprocessor,
                   :token_reduction, :keywords, :html_options, :pages,
                   :max_concurrent_extractions, :output_format, :result_format,
-                  :security_limits, :layout, :concurrency
+                  :security_limits, :layout, :concurrency,
+                  :cache_namespace, :cache_ttl_secs
 
       # Alias for backward compatibility - image_extraction is the canonical name
       alias image_extraction images
@@ -955,7 +956,7 @@ module Kreuzberg
         language_detection pdf_options image_extraction
         postprocessor token_reduction keywords html_options pages
         max_concurrent_extractions output_format result_format
-        security_limits layout concurrency
+        security_limits layout concurrency cache_namespace cache_ttl_secs
       ].freeze
 
       # Aliases for backward compatibility
@@ -1032,7 +1033,9 @@ module Kreuzberg
                      result_format: nil,
                      security_limits: nil,
                      layout: nil,
-                     concurrency: nil)
+                     concurrency: nil,
+                     cache_namespace: nil,
+                     cache_ttl_secs: nil)
         kwargs = {
           use_cache: use_cache, enable_quality_processing: enable_quality_processing,
           force_ocr: force_ocr, include_document_structure: include_document_structure,
@@ -1043,7 +1046,9 @@ module Kreuzberg
           pages: pages, max_concurrent_extractions: max_concurrent_extractions,
           output_format: output_format, result_format: result_format,
           security_limits: security_limits, layout: layout,
-          concurrency: concurrency
+          concurrency: concurrency,
+          cache_namespace: cache_namespace,
+          cache_ttl_secs: cache_ttl_secs
         }
         extracted = extract_from_hash(hash, kwargs)
 
@@ -1077,6 +1082,8 @@ module Kreuzberg
         @max_concurrent_extractions = params[:max_concurrent_extractions]&.to_i
         @output_format = validate_output_format(params[:output_format])
         @result_format = validate_result_format(params[:result_format])
+        @cache_namespace = params[:cache_namespace]
+        @cache_ttl_secs = params[:cache_ttl_secs]&.to_i
         @security_limits = params[:security_limits]
       end
 
@@ -1112,7 +1119,9 @@ module Kreuzberg
           include_document_structure: @include_document_structure,
           max_concurrent_extractions: @max_concurrent_extractions,
           output_format: @output_format,
-          result_format: @result_format
+          result_format: @result_format,
+          cache_namespace: @cache_namespace,
+          cache_ttl_secs: @cache_ttl_secs
         }
       end
 
@@ -1271,6 +1280,10 @@ module Kreuzberg
           @output_format = validate_output_format(value)
         when :result_format
           @result_format = validate_result_format(value)
+        when :cache_namespace
+          @cache_namespace = value
+        when :cache_ttl_secs
+          @cache_ttl_secs = value&.to_i
         else
           raise ArgumentError, "Unknown configuration key: #{key}"
         end
@@ -1352,6 +1365,8 @@ module Kreuzberg
         @max_concurrent_extractions = merged.max_concurrent_extractions
         @output_format = merged.output_format
         @result_format = merged.result_format
+        @cache_namespace = merged.cache_namespace
+        @cache_ttl_secs = merged.cache_ttl_secs
       end
     end
   end

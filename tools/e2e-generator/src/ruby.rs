@@ -479,12 +479,44 @@ RSpec.configure do |config|
 end
 "#;
 
+const RUBY_GEMFILE_TEMPLATE: &str = r#"# frozen_string_literal: true
+
+source 'https://rubygems.org'
+
+gem 'kreuzberg', path: '../../../../packages/ruby'
+gem 'rspec', '~> 3.12'
+gem 'rubocop', '~> 1.66'
+gem 'rubocop-performance', '~> 1.21'
+gem 'rubocop-rspec', '~> 3.0'
+"#;
+
+const RUBY_RUBOCOP_TEMPLATE: &str = r#"inherit_from: ../../../../packages/ruby/.rubocop.yaml
+
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+  SuggestExtensions: false
+
+RSpec/PredicateMatcher:
+  Enabled: false
+
+RSpec/NoExpectationExample:
+  Enabled: false
+"#;
+
+const RUBY_RSPEC_TEMPLATE: &str = "--format progress\n--color\n--require spec_helper\n";
+
 pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
     let ruby_root = output_root.join("ruby");
     let spec_dir = ruby_root.join("spec");
 
     fs::create_dir_all(&spec_dir).context("Failed to create Ruby spec directory")?;
 
+    write_gemfile(&ruby_root)?;
+    write_rubocop(&ruby_root)?;
+    write_rspec(&ruby_root)?;
     write_helpers(&spec_dir)?;
     write_spec_helper(&spec_dir)?;
     clean_spec_files(&spec_dir)?;
@@ -535,6 +567,21 @@ fn clean_spec_files(spec_dir: &Utf8Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn write_gemfile(ruby_root: &Utf8Path) -> Result<()> {
+    let path = ruby_root.join("Gemfile");
+    fs::write(&path, RUBY_GEMFILE_TEMPLATE).context("Failed to write Gemfile")
+}
+
+fn write_rubocop(ruby_root: &Utf8Path) -> Result<()> {
+    let path = ruby_root.join(".rubocop.yaml");
+    fs::write(&path, RUBY_RUBOCOP_TEMPLATE).context("Failed to write .rubocop.yaml")
+}
+
+fn write_rspec(ruby_root: &Utf8Path) -> Result<()> {
+    let path = ruby_root.join(".rspec");
+    fs::write(&path, RUBY_RSPEC_TEMPLATE).context("Failed to write .rspec")
 }
 
 fn write_helpers(spec_dir: &Utf8Path) -> Result<()> {

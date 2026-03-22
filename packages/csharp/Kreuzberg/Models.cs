@@ -2198,6 +2198,14 @@ public sealed class ExtractionConfig
     [JsonPropertyName("concurrency")]
     public ConcurrencyConfig? Concurrency { get; init; }
 
+    /// <summary>Cache namespace for tenant isolation.</summary>
+    [JsonPropertyName("cache_namespace")]
+    public string? CacheNamespace { get; init; }
+
+    /// <summary>Per-request cache TTL in seconds (0 = skip cache).</summary>
+    [JsonPropertyName("cache_ttl_secs")]
+    public ulong? CacheTtlSecs { get; init; }
+
 }
 
 /// <summary>

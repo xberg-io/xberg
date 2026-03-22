@@ -430,4 +430,8 @@ export interface ExtractionConfig {
 	 * of nodes representing the document tree structure with semantic content types.
 	 */
 	includeDocumentStructure?: boolean;
+	/** Cache namespace for tenant isolation. Alphanumeric, hyphens, underscores only. */
+	cacheNamespace?: string;
+	/** Per-request cache TTL in seconds. 0 = skip cache entirely. */
+	cacheTtlSecs?: number;
 }

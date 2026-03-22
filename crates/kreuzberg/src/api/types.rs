@@ -314,6 +314,81 @@ pub struct ChunkItem {
     pub last_page: Option<usize>,
 }
 
+/// Version response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct VersionResponse {
+    /// Kreuzberg version string
+    #[cfg_attr(feature = "api", schema(example = "0.8.0"))]
+    pub version: String,
+}
+
+/// MIME type detection response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct DetectResponse {
+    /// Detected MIME type
+    #[cfg_attr(feature = "api", schema(example = "application/pdf"))]
+    pub mime_type: String,
+    /// Original filename (if provided)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
+}
+
+/// Model manifest entry for cache management.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct ManifestEntryResponse {
+    /// Relative path within the cache directory
+    #[cfg_attr(feature = "api", schema(example = "paddle-ocr/det/model.onnx"))]
+    pub relative_path: String,
+    /// SHA256 checksum of the model file
+    pub sha256: String,
+    /// Expected file size in bytes
+    pub size_bytes: u64,
+    /// HuggingFace source URL for downloading
+    pub source_url: String,
+}
+
+/// Model manifest response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct ManifestResponse {
+    /// Kreuzberg version
+    #[cfg_attr(feature = "api", schema(example = "0.8.0"))]
+    pub kreuzberg_version: String,
+    /// Total size of all models in bytes
+    pub total_size_bytes: u64,
+    /// Number of models in the manifest
+    pub model_count: usize,
+    /// Individual model entries
+    pub models: Vec<ManifestEntryResponse>,
+}
+
+/// Cache warm request.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct WarmRequest {
+    /// Download all embedding model presets
+    #[serde(default)]
+    pub all_embeddings: bool,
+    /// Specific embedding model preset to download
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_model: Option<String>,
+}
+
+/// Cache warm response.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct WarmResponse {
+    /// Cache directory used
+    pub cache_dir: String,
+    /// Models that were downloaded
+    pub downloaded: Vec<String>,
+    /// Models that were already cached
+    pub already_cached: Vec<String>,
+}
+
 /// Chunking configuration response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]

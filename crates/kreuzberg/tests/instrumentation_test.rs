@@ -46,10 +46,10 @@ async fn test_cache_instrumentation() {
     .expect("Operation failed");
 
     cache
-        .set("test_key", b"test data".to_vec(), None)
+        .set_simple("test_key", b"test data".to_vec(), None)
         .expect("Operation failed");
 
-    let _ = cache.get("test_key", None).expect("Value not found");
+    let _ = cache.get_simple("test_key", None).expect("Value not found");
 
     let span_names = spans.lock().expect("Operation failed");
     assert!(span_names.contains(&"set".to_string()), "Expected 'set' span");

@@ -180,12 +180,91 @@ pub(in crate::core::extractor) async fn extract_file_with_extractor(
     mime_type: &str,
     config: &ExtractionConfig,
 ) -> Result<ExtractionResult> {
+    // Skip cache if disabled or TTL=0
+    if !config.use_cache || config.cache_ttl_secs == Some(0) {
+        return extract_file_uncached(path, mime_type, config).await;
+    }
+
+    // Generate cache key from file content hash + config fingerprint
+    let content_hash = crate::cache::blake3_hash_file(path)?;
+    let config_hash = hash_extraction_config(config, mime_type);
+    let cache_key = format!("{content_hash}_{config_hash}");
+
+    let namespace = config.cache_namespace.as_deref();
+
+    // Try cache read
+    if let Some(cache) = get_extraction_cache()
+        && let Ok(Some(data)) = cache.get(&cache_key, path.to_str(), namespace, config.cache_ttl_secs)
+        && let Ok(result) = rmp_serde::from_slice::<ExtractionResult>(&data)
+    {
+        tracing::debug!(cache_key = %cache_key, "Extraction cache hit");
+        return Ok(result);
+    }
+
+    // Cache miss — extract
+    let result = extract_file_uncached(path, mime_type, config).await?;
+
+    // Cache write (best-effort)
+    if let Some(cache) = get_extraction_cache()
+        && let Ok(data) = rmp_serde::to_vec(&result)
+    {
+        let _ = cache.set(&cache_key, data, path.to_str(), namespace, config.cache_ttl_secs);
+    }
+
+    Ok(result)
+}
+
+/// Extract without caching logic.
+async fn extract_file_uncached(path: &Path, mime_type: &str, config: &ExtractionConfig) -> Result<ExtractionResult> {
     crate::extractors::ensure_initialized()?;
 
     let extractor = get_extractor(mime_type)?;
     let mut result = extractor.extract_file(path, mime_type, config).await?;
     result = crate::core::pipeline::run_pipeline(result, config).await?;
     Ok(result)
+}
+
+/// Hash ExtractionConfig fields that affect extraction output.
+///
+/// Excludes cache-control fields (use_cache, cache_namespace, cache_ttl_secs)
+/// since they don't affect the extraction result. Uses a clone-and-normalize
+/// approach to ensure determinism: cache fields are zeroed, then the struct
+/// is serialized to canonical JSON via serde_json's sorted-keys representation.
+fn hash_extraction_config(config: &ExtractionConfig, mime_type: &str) -> String {
+    let mut normalized = config.clone();
+    // Zero out cache-control fields so they don't affect the hash
+    normalized.use_cache = true;
+    normalized.cache_namespace = None;
+    normalized.cache_ttl_secs = None;
+
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(mime_type.as_bytes());
+    // Use MessagePack for deterministic serialization (no float formatting issues,
+    // no HashMap key ordering issues — serde serializes struct fields in declaration order).
+    if let Ok(bytes) = rmp_serde::to_vec(&normalized) {
+        hasher.update(&bytes);
+    }
+    let hash = hasher.finalize();
+    hex::encode(&hash.as_bytes()[..16])
+}
+
+/// Get or initialize the global extraction cache.
+fn get_extraction_cache() -> Option<&'static crate::cache::GenericCache> {
+    use std::sync::OnceLock;
+    static CACHE: OnceLock<Option<crate::cache::GenericCache>> = OnceLock::new();
+
+    CACHE
+        .get_or_init(|| {
+            crate::cache::GenericCache::new(
+                "extraction".to_string(),
+                None,
+                30.0,   // 30-day default TTL
+                2000.0, // 2 GB max cache size
+                500.0,  // 500 MB min free space
+            )
+            .ok()
+        })
+        .as_ref()
 }
 
 pub(in crate::core::extractor) async fn extract_bytes_with_extractor(

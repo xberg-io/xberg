@@ -38,6 +38,34 @@ The Kreuzberg CLI provides command-line access to all extraction features. This 
 
     - All features enabled including embeddings (ONNX Runtime included)
 
+## Global Flags <span class="version-badge">v4.5.2</span>
+
+### Log Level <span class="version-badge">v4.5.2</span>
+
+Control the verbosity of log output with the `--log-level` flag. This overrides the `RUST_LOG` environment variable.
+
+```bash title="Terminal"
+# Set log level to debug for troubleshooting
+kreuzberg --log-level debug extract document.pdf
+
+# Suppress all but error messages
+kreuzberg --log-level error batch documents/*.pdf
+
+# Trace-level logging for maximum detail
+kreuzberg --log-level trace extract document.pdf
+```
+
+Valid levels: `trace`, `debug`, `info` (default), `warn`, `error`.
+
+### Colored Output
+
+Text output is colored by default. To disable colors, set the `NO_COLOR` environment variable:
+
+```bash title="Terminal"
+# Disable colored output
+NO_COLOR=1 kreuzberg extract document.pdf
+```
+
 ## Basic Usage
 
 ### Extract from Single File
@@ -358,6 +386,158 @@ kreuzberg cache clear
 kreuzberg cache stats
 ```
 
+## Extraction Override Flags <span class="version-badge">v4.5.2</span>
+
+The `extract` and `batch` commands support a comprehensive set of flags to override extraction configuration. These flags take precedence over config file settings.
+
+### OCR Flags
+
+| Flag | Description |
+|------|-------------|
+| `--ocr <true\|false>` | Enable or disable OCR. Defaults to tesseract backend when enabled. |
+| `--ocr-backend <BACKEND>` | OCR backend: `tesseract`, `paddle-ocr`, or `easyocr`. |
+| `--ocr-language <LANG>` | OCR language code. Tesseract uses ISO 639-3 (`eng`, `fra`, `deu`). PaddleOCR/EasyOCR use short codes (`en`, `ch`, `korean`). |
+| `--force-ocr <true\|false>` | Force OCR even if the document has an existing text layer. |
+| `--ocr-auto-rotate <true\|false>` | Automatically rotate images before OCR based on detected orientation. |
+
+```bash title="Terminal"
+kreuzberg extract scanned.pdf --ocr true --ocr-backend paddle-ocr --ocr-language ch
+kreuzberg extract document.pdf --force-ocr true --ocr-auto-rotate true
+```
+
+### Chunking Flags
+
+| Flag | Description |
+|------|-------------|
+| `--chunk <true\|false>` | Enable or disable text chunking. |
+| `--chunk-size <N>` | Maximum chunk size in characters (default: 1000). |
+| `--chunk-overlap <N>` | Overlap between consecutive chunks in characters (default: 200). |
+| `--chunking-tokenizer <MODEL>` | Tokenizer model for token-based chunk sizing (e.g. `Xenova/gpt-4o`). Implicitly enables chunking. Requires the `chunking-tokenizers` feature. |
+
+```bash title="Terminal"
+kreuzberg extract document.pdf --chunk true --chunk-size 512 --chunk-overlap 50
+kreuzberg extract document.pdf --chunking-tokenizer "Xenova/gpt-4o"
+```
+
+### Output Flags
+
+| Flag | Description |
+|------|-------------|
+| `--output-format <FORMAT>` | Content output format: `plain`, `markdown`, `djot`, or `html`. Controls how extracted text is formatted. |
+| `--include-structure <true\|false>` | Include hierarchical document structure in results. |
+
+```bash title="Terminal"
+kreuzberg extract document.pdf --output-format markdown --include-structure true
+```
+
+### Layout Detection Flags
+
+| Flag | Description |
+|------|-------------|
+| `--layout-preset <PRESET>` | Layout detection preset (e.g. `accurate`). Requires the `layout-detection` feature. |
+| `--layout-confidence <FLOAT>` | Layout detection confidence threshold (0.0 - 1.0). |
+
+```bash title="Terminal"
+kreuzberg extract document.pdf --layout-preset accurate --layout-confidence 0.7
+```
+
+### Acceleration Flags
+
+| Flag | Description |
+|------|-------------|
+| `--acceleration <PROVIDER>` | ONNX Runtime execution provider for model inference: `auto`, `cpu`, `coreml`, `cuda`, or `tensorrt`. |
+
+```bash title="Terminal"
+# Use CoreML on macOS for GPU acceleration
+kreuzberg extract document.pdf --acceleration coreml
+
+# Use CUDA on Linux with NVIDIA GPU
+kreuzberg extract document.pdf --acceleration cuda
+```
+
+### Page Flags
+
+| Flag | Description |
+|------|-------------|
+| `--extract-pages <true\|false>` | Extract pages as a separate array in results. |
+| `--page-markers <true\|false>` | Insert page marker comments into the main content string. |
+
+```bash title="Terminal"
+kreuzberg extract document.pdf --extract-pages true --page-markers true --format json
+```
+
+### Image Flags
+
+| Flag | Description |
+|------|-------------|
+| `--extract-images <true\|false>` | Enable image extraction from documents. |
+| `--target-dpi <N>` | Target DPI for image normalisation (36 - 2400). |
+
+```bash title="Terminal"
+kreuzberg extract document.pdf --extract-images true --target-dpi 300
+```
+
+### PDF Flags
+
+| Flag | Description |
+|------|-------------|
+| `--pdf-password <PASSWORD>` | Password for encrypted PDFs. Can be specified multiple times for multiple passwords. |
+| `--pdf-extract-images <true\|false>` | Extract images embedded in PDF pages. Requires pdfium feature. |
+| `--pdf-extract-metadata <true\|false>` | Extract PDF metadata (title, author, etc.). Requires pdfium feature. |
+
+```bash title="Terminal"
+kreuzberg extract encrypted.pdf --pdf-password "secret"
+kreuzberg extract document.pdf --pdf-extract-images true --pdf-extract-metadata true
+```
+
+### Token Reduction Flags
+
+| Flag | Description |
+|------|-------------|
+| `--token-reduction <LEVEL>` | Token reduction intensity: `off`, `light`, `moderate`, `aggressive`, or `maximum`. Reduces token count for LLM consumption. |
+
+```bash title="Terminal"
+# Aggressive token reduction for cheaper LLM processing
+kreuzberg extract document.pdf --token-reduction aggressive
+
+# Maximum compression (lossy)
+kreuzberg extract document.pdf --token-reduction maximum
+```
+
+### Quality and Detection Flags
+
+| Flag | Description |
+|------|-------------|
+| `--quality <true\|false>` | Enable quality post-processing for improved formatting. |
+| `--detect-language <true\|false>` | Enable automatic language detection on extracted text. |
+
+### Caching Flags
+
+| Flag | Description |
+|------|-------------|
+| `--no-cache <true\|false>` | Disable extraction result caching. |
+
+### Concurrency Flags
+
+| Flag | Description |
+|------|-------------|
+| `--max-concurrent <N>` | Limit parallel extractions in batch mode. |
+| `--max-threads <N>` | Cap all internal thread pools (Rayon, ONNX intra-op, batch semaphore). Useful for constrained environments. |
+
+```bash title="Terminal"
+kreuzberg batch documents/*.pdf --max-concurrent 4 --max-threads 8
+```
+
+### Email Flags
+
+| Flag | Description |
+|------|-------------|
+| `--msg-codepage <N>` | Windows codepage fallback for MSG files without codepage metadata. Common values: 1250 (Central European), 1251 (Cyrillic), 1252 (Western). |
+
+```bash title="Terminal"
+kreuzberg extract message.msg --msg-codepage 1251
+```
+
 ## Output Options
 
 ### Standard Output (Text Format)
@@ -623,6 +803,109 @@ The MCP server provides tools for AI agents:
 
 See [API Server Guide](../guides/api-server.md) for MCP integration details.
 
+## Embeddings <span class="version-badge">v4.5.2</span>
+
+Generate vector embeddings for text using pre-trained models. Reads from `--text` flags or stdin.
+
+```bash title="Terminal"
+# Generate embeddings for a single text
+kreuzberg embed --text "hello world" --preset balanced
+
+# Generate embeddings with a specific preset
+kreuzberg embed --text "document content" --preset fast
+
+# Batch embed multiple texts
+kreuzberg embed --text "first document" --text "second document" --preset quality
+
+# Read from stdin
+echo "hello world" | kreuzberg embed --preset balanced
+
+# Output as text instead of JSON
+kreuzberg embed --text "hello" --preset balanced --format text
+```
+
+Available presets: `fast`, `balanced` (default), `quality`, `multilingual`.
+
+!!! info "Feature Availability"
+    The `embed` command requires the `embeddings` feature. It is available in Docker images but not in Homebrew installations.
+
+## Chunking Command <span class="version-badge">v4.5.2</span>
+
+Split text into chunks using configurable size and overlap. Reads from `--text` flag or stdin.
+
+```bash title="Terminal"
+# Chunk text with default settings
+kreuzberg chunk --text "long text content to be split into chunks..."
+
+# Specify chunk size and overlap
+kreuzberg chunk --text "long text..." --chunk-size 512 --chunk-overlap 50
+
+# Use markdown-aware chunking
+kreuzberg chunk --text "# Heading\n\nParagraph..." --chunker-type markdown
+
+# Use a tokenizer model for token-based sizing
+kreuzberg chunk --text "long text..." --chunking-tokenizer "Xenova/gpt-4o"
+
+# Read from stdin
+cat document.txt | kreuzberg chunk --chunk-size 1000
+
+# Output as text instead of JSON
+kreuzberg chunk --text "long text..." --format text
+
+# Use a config file for chunking settings
+kreuzberg chunk --text "long text..." --config kreuzberg.toml
+```
+
+## Shell Completions <span class="version-badge">v4.5.2</span>
+
+Generate shell completion scripts for tab-completion support.
+
+```bash title="Terminal"
+# Generate bash completions
+kreuzberg completions bash
+
+# Generate zsh completions
+kreuzberg completions zsh
+
+# Generate fish completions
+kreuzberg completions fish
+
+# Install bash completions
+eval "$(kreuzberg completions bash)"
+
+# Install zsh completions (add to .zshrc)
+eval "$(kreuzberg completions zsh)"
+```
+
+## API Utilities <span class="version-badge">v4.5.2</span>
+
+### Dump OpenAPI Schema <span class="version-badge">v4.5.2</span>
+
+Output the full OpenAPI 3.1 specification for the Kreuzberg REST API. Useful for code generation, documentation, and API client tooling.
+
+```bash title="Terminal"
+# Print OpenAPI schema as JSON
+kreuzberg api schema
+
+# Save to file
+kreuzberg api schema > openapi.json
+```
+
+!!! info "Feature Availability"
+    The `api` subcommand requires the `api` feature.
+
+## List Supported Formats <span class="version-badge">v4.5.2</span>
+
+List all document formats supported by Kreuzberg, including file extensions and MIME types.
+
+```bash title="Terminal"
+# List formats as a table
+kreuzberg formats
+
+# List formats as JSON
+kreuzberg formats --format json
+```
+
 ## Cache Management
 
 ### View Cache Statistics
@@ -698,7 +981,11 @@ kreuzberg --help
 kreuzberg extract --help
 kreuzberg batch --help
 kreuzberg detect --help
+kreuzberg formats --help
 kreuzberg version --help
+kreuzberg embed --help
+kreuzberg chunk --help
+kreuzberg completions --help
 kreuzberg serve --help
 kreuzberg mcp --help
 kreuzberg cache --help
@@ -706,6 +993,7 @@ kreuzberg cache stats --help
 kreuzberg cache clear --help
 kreuzberg cache warm --help
 kreuzberg cache manifest --help
+kreuzberg api schema --help
 ```
 
 ### Version Information

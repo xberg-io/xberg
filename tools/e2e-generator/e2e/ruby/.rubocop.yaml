@@ -1,0 +1,14 @@
+inherit_from: ../../../../packages/ruby/.rubocop.yaml
+
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+  SuggestExtensions: false
+
+RSpec/PredicateMatcher:
+  Enabled: false
+
+RSpec/NoExpectationExample:
+  Enabled: false

@@ -16,6 +16,7 @@ from kreuzberg import (
     EmbeddingConfig,
     EmbeddingModelType,
     ExtractionConfig,
+    FileExtractionConfig,
     HierarchyConfig,
     ImageExtractionConfig,
     KeywordAlgorithm,
@@ -123,6 +124,29 @@ def build_config(config: dict[str, Any] | None) -> ExtractionConfig:
         kwargs["result_format"] = ResultFormat(result_format)
 
     return ExtractionConfig(**kwargs)
+
+
+def build_file_config(config: dict[str, Any] | None) -> FileExtractionConfig:
+    """Construct a FileExtractionConfig from a plain dictionary."""
+
+    if not config:
+        return FileExtractionConfig()
+
+    kwargs: dict[str, Any] = {}
+
+    for key in ("enable_quality_processing", "force_ocr", "include_document_structure"):
+        if key in config:
+            kwargs[key] = config[key]
+
+    _build_config_objects(config, kwargs)
+
+    if (output_format := config.get("output_format")) is not None:
+        kwargs["output_format"] = output_format
+
+    if (result_format := config.get("result_format")) is not None:
+        kwargs["result_format"] = result_format
+
+    return FileExtractionConfig(**kwargs)
 
 
 def assert_expected_mime(result: Any, expected: list[str]) -> None:

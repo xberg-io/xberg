@@ -4,7 +4,7 @@ Command-line interface for the Kreuzberg document intelligence library.
 
 ## Overview
 
-This crate provides a production-ready CLI tool for document extraction, MIME type detection, batch processing, and cache management. It exposes the core extraction capabilities of the Kreuzberg Rust library through an easy-to-use command-line interface.
+This crate provides a production-ready CLI tool for document extraction, MIME type detection, batch processing, embeddings, chunking, and cache management. It exposes the core extraction capabilities of the Kreuzberg Rust library through an easy-to-use command-line interface.
 
 The CLI supports 88+ file formats including PDF, DOCX, PPTX, XLSX, images, HTML, and more, with optional OCR support for scanned documents.
 
@@ -14,31 +14,37 @@ The CLI supports 88+ file formats including PDF, DOCX, PPTX, XLSX, images, HTML,
 
 ```
 Kreuzberg Core Library (crates/kreuzberg)
-    ↓
-Kreuzberg CLI (crates/kreuzberg-cli) ← This crate
-    ↓
+    |
+Kreuzberg CLI (crates/kreuzberg-cli) <- This crate
+    |
 Command-line interface with configuration and caching
 ```
 
-### Features
+### Commands
 
-- **Extract Command**: Extract text, tables, and metadata from single documents
-- **Batch Command**: Process multiple documents in parallel with optimized concurrency
-- **Detect Command**: Identify MIME type of any file with magic byte analysis
-- **Cache Commands**: Manage extraction result cache (stats, clear)
-- **Serve Command** (requires `api` feature): Start REST API server for remote document processing
-- **MCP Command** (requires `mcp` feature): Start Model Context Protocol server for AI integration
-- **Version Command**: Display version information in text or JSON format
-- **Configuration**: TOML, YAML, or JSON config files with auto-discovery
+| Command | Description |
+|---------|-------------|
+| `extract` | Extract text from a document |
+| `batch` | Batch extract from multiple documents |
+| `detect` | Detect MIME type of a file |
+| `formats` | List all supported document formats |
+| `version` | Show version information |
+| `cache` | Cache management (stats, clear, warm, manifest) |
+| `serve` | Start the API server (requires `api` feature) |
+| `mcp` | Start the MCP server (requires `mcp` feature) |
+| `api` | API utilities (schema) (requires `api` feature) |
+| `embed` | Generate embeddings for text (requires `embeddings` feature) <span class="version-badge">v4.5.2</span> |
+| `chunk` | Chunk text for processing <span class="version-badge">v4.5.2</span> |
+| `completions` | Generate shell completions <span class="version-badge">v4.5.2</span> |
 
 ### Platform Support
 
 The CLI is tested and officially supported on:
 
-- ✅ Linux x86_64 (glibc and musl static)
-- ✅ Linux aarch64 / ARM64 (glibc and musl static)
-- ✅ macOS aarch64 (Apple Silicon)
-- ✅ Windows x86_64
+- Linux x86_64 (glibc and musl static)
+- Linux aarch64 / ARM64 (glibc and musl static)
+- macOS aarch64 (Apple Silicon)
+- Windows x86_64
 
 All platforms receive precompiled binaries through GitHub releases. Linux musl binaries are fully statically linked with zero runtime dependencies.
 
@@ -153,6 +159,32 @@ kreuzberg detect unknown-file
 kreuzberg detect unknown-file --format json
 ```
 
+### Generate Embeddings (with `embeddings` feature)
+
+```bash
+# Embed a single text
+kreuzberg embed --text "hello world" --preset balanced
+
+# Embed multiple texts
+kreuzberg embed --text "first" --text "second" --format json
+
+# Read from stdin
+echo "some text" | kreuzberg embed --preset fast
+```
+
+### Chunk Text
+
+```bash
+# Chunk text from flag
+kreuzberg chunk --text "Long document content..." --chunk-size 512
+
+# Chunk from stdin with overlap
+echo "Long document content..." | kreuzberg chunk --chunk-size 512 --chunk-overlap 64
+
+# Use markdown-aware chunking
+kreuzberg chunk --text "# Heading\nContent..." --chunker-type markdown
+```
+
 ### Cache Management
 
 ```bash
@@ -162,8 +194,27 @@ kreuzberg cache stats
 # Clear the cache
 kreuzberg cache clear --cache-dir /path/to/cache
 
-# Custom cache directory
-kreuzberg cache stats --cache-dir ~/.kreuzberg-cache
+# Pre-download all models
+kreuzberg cache warm
+
+# Pre-download models including all embedding presets
+kreuzberg cache warm --all-embeddings
+
+# Show model manifest (paths, checksums, sizes)
+kreuzberg cache manifest
+```
+
+### Shell Completions
+
+```bash
+# Bash
+eval "$(kreuzberg completions bash)"
+
+# Zsh
+kreuzberg completions zsh > ~/.zfunc/_kreuzberg
+
+# Fish
+kreuzberg completions fish | source
 ```
 
 ### API Server (with `api` feature)
@@ -179,15 +230,31 @@ kreuzberg serve --host 0.0.0.0 --port 3000
 kreuzberg serve --config kreuzberg.toml --host 127.0.0.1 --port 8080
 ```
 
+### API Utilities (with `api` feature)
+
+```bash
+# Dump the OpenAPI 3.1 schema
+kreuzberg api schema
+```
+
 ### MCP Server (with `mcp` feature)
 
 ```bash
-# Start Model Context Protocol server
+# Start Model Context Protocol server (stdio transport)
 kreuzberg mcp
+
+# With HTTP transport
+kreuzberg mcp --transport http --host 127.0.0.1 --port 8001
 
 # With configuration file
 kreuzberg mcp --config kreuzberg.toml
 ```
+
+## Global Flags
+
+| Flag | Description |
+|------|-------------|
+| `--log-level <LEVEL>` | Set log level (`trace`, `debug`, `info`, `warn`, `error`). Overrides `RUST_LOG` env var. <span class="version-badge">v4.5.2</span> |
 
 ## Configuration
 
@@ -195,7 +262,15 @@ The CLI supports configuration files in TOML, YAML, or JSON formats. Configurati
 
 1. **Explicit**: Passed via `--config /path/to/config.{toml,yaml,json}`
 2. **Auto-discovered**: Searches for `kreuzberg.{toml,yaml,json}` in current and parent directories
-3. **Default**: Uses built-in defaults if no config found
+3. **Inline JSON**: Passed via `--config-json '{"ocr":{"backend":"tesseract"}}'`
+4. **Base64 JSON**: Passed via `--config-json-base64 <BASE64>` (useful when shell quoting is tricky)
+5. **Default**: Uses built-in defaults if no config found
+
+Configuration precedence (highest to lowest):
+1. Individual CLI flags (`--ocr`, `--chunk-size`, etc.)
+2. Inline JSON config (`--config-json` or `--config-json-base64`)
+3. Config file (`--config path.toml`)
+4. Default values
 
 ### Example Configuration (TOML)
 
@@ -270,16 +345,43 @@ kreuzberg extract <PATH> [OPTIONS]
 
 **Options:**
 - `--config <PATH>`: Configuration file (TOML, YAML, or JSON)
+- `--config-json <JSON>`: Inline JSON configuration
+- `--config-json-base64 <BASE64>`: Base64-encoded JSON configuration
 - `--mime-type <TYPE>`: MIME type hint (auto-detected if not provided)
 - `--format <FORMAT>`: Output format (`text` or `json`), default: `text`
-- `--ocr <true|false>`: Enable/disable OCR
-- `--force-ocr <true|false>`: Force OCR even if text extraction succeeds
-- `--no-cache <true|false>`: Disable result caching
-- `--chunk <true|false>`: Enable text chunking
-- `--chunk-size <SIZE>`: Chunk size in characters (default: 1000)
-- `--chunk-overlap <SIZE>`: Overlap between chunks (default: 200)
-- `--quality <true|false>`: Enable quality processing
-- `--detect-language <true|false>`: Enable language detection
+
+**Extraction override flags** <span class="version-badge">v4.5.2</span> (also available on `batch`):
+
+| Flag | Description |
+|------|-------------|
+| `--ocr <true\|false>` | Enable/disable OCR |
+| `--ocr-backend <BACKEND>` | OCR backend: `tesseract`, `paddle-ocr`, `easyocr` |
+| `--ocr-language <LANG>` | OCR language code (e.g. `eng`, `fra`, `ch`) |
+| `--ocr-auto-rotate <true\|false>` | Auto-rotate images before OCR |
+| `--force-ocr <true\|false>` | Force OCR even if text extraction succeeds |
+| `--no-cache <true\|false>` | Disable result caching |
+| `--chunk <true\|false>` | Enable text chunking |
+| `--chunk-size <SIZE>` | Maximum chunk size in characters (default: 1000) |
+| `--chunk-overlap <SIZE>` | Overlap between chunks in characters (default: 200) |
+| `--chunking-tokenizer <MODEL>` | Tokenizer model for token-based sizing (e.g. `Xenova/gpt-4o`) |
+| `--output-format <FORMAT>` | Content format: `plain`, `markdown`, `djot`, `html` |
+| `--include-structure <true\|false>` | Include hierarchical document structure |
+| `--quality <true\|false>` | Enable quality post-processing |
+| `--detect-language <true\|false>` | Enable language detection |
+| `--layout-preset <PRESET>` | Layout detection preset (e.g. `accurate`) |
+| `--layout-confidence <FLOAT>` | Layout confidence threshold (0.0 - 1.0) |
+| `--acceleration <PROVIDER>` | ONNX execution provider: `auto`, `cpu`, `coreml`, `cuda`, `tensorrt` |
+| `--max-concurrent <N>` | Max parallel extractions in batch mode |
+| `--max-threads <N>` | Cap all internal thread pools |
+| `--extract-pages <true\|false>` | Extract pages as separate array |
+| `--page-markers <true\|false>` | Insert page marker comments |
+| `--extract-images <true\|false>` | Enable image extraction |
+| `--target-dpi <DPI>` | Target DPI for images (36 - 2400) |
+| `--pdf-password <PASS>` | Password for encrypted PDFs (repeatable) |
+| `--pdf-extract-images <true\|false>` | Extract images from PDF pages |
+| `--pdf-extract-metadata <true\|false>` | Extract PDF metadata |
+| `--token-reduction <LEVEL>` | Token reduction: `off`, `light`, `moderate`, `aggressive`, `maximum` |
+| `--msg-codepage <CODE>` | Windows codepage fallback for MSG files |
 
 **Examples:**
 
@@ -295,6 +397,12 @@ kreuzberg extract report.pdf --chunk true --chunk-size 2000
 
 # With OCR for scanned document
 kreuzberg extract scanned.pdf --ocr true --format json
+
+# Markdown output with page markers
+kreuzberg extract report.pdf --output-format markdown --page-markers true
+
+# GPU-accelerated extraction
+kreuzberg extract scanned.pdf --ocr true --acceleration coreml
 ```
 
 ### batch
@@ -307,11 +415,11 @@ kreuzberg batch <PATHS>... [OPTIONS]
 
 **Options:**
 - `--config <PATH>`: Configuration file (TOML, YAML, or JSON)
+- `--config-json <JSON>`: Inline JSON configuration
+- `--config-json-base64 <BASE64>`: Base64-encoded JSON configuration
 - `--format <FORMAT>`: Output format (`text` or `json`), default: `json`
-- `--ocr <true|false>`: Enable/disable OCR
-- `--force-ocr <true|false>`: Force OCR even if text extraction succeeds
-- `--no-cache <true|false>`: Disable result caching
-- `--quality <true|false>`: Enable quality processing
+- `--file-configs <PATH>`: JSON file mapping per-file extraction overrides
+- All extraction override flags (see `extract` above)
 
 **Examples:**
 
@@ -325,8 +433,11 @@ kreuzberg batch *.pdf *.docx
 # With custom configuration
 kreuzberg batch documents/* --config batch-config.toml --format json
 
-# With OCR
-kreuzberg batch scanned/*.pdf --ocr true --format json
+# With OCR and concurrency limit
+kreuzberg batch scanned/*.pdf --ocr true --max-concurrent 4 --format json
+
+# Per-file overrides
+kreuzberg batch doc1.pdf doc2.pdf --file-configs overrides.json
 ```
 
 ### detect
@@ -350,9 +461,30 @@ kreuzberg detect unknown-file
 kreuzberg detect mystery.bin --format json
 ```
 
+### formats
+
+List all supported document formats.
+
+```bash
+kreuzberg formats [OPTIONS]
+```
+
+**Options:**
+- `--format <FORMAT>`: Output format (`text` or `json`), default: `text`
+
+**Examples:**
+
+```bash
+# List formats as table
+kreuzberg formats
+
+# JSON output for tooling
+kreuzberg formats --format json
+```
+
 ### cache
 
-Manage extraction result cache.
+Manage extraction result cache and model downloads.
 
 ```bash
 kreuzberg cache <COMMAND> [OPTIONS]
@@ -384,6 +516,31 @@ kreuzberg cache clear [--cache-dir <DIR>] [--format <FORMAT>]
 - `--cache-dir <DIR>`: Cache directory (default: `.kreuzberg` in current directory)
 - `--format <FORMAT>`: Output format (`text` or `json`), default: `text`
 
+#### warm
+
+Pre-download all models (OCR, layout detection, and optionally embeddings).
+
+```bash
+kreuzberg cache warm [--cache-dir <DIR>] [--format <FORMAT>] [--all-embeddings] [--embedding-model <PRESET>]
+```
+
+**Options:**
+- `--cache-dir <DIR>`: Cache directory (default: `.kreuzberg` or `KREUZBERG_CACHE_DIR`)
+- `--format <FORMAT>`: Output format (`text` or `json`), default: `text`
+- `--all-embeddings`: Download all 4 embedding model presets (fast, balanced, quality, multilingual)
+- `--embedding-model <PRESET>`: Download a specific embedding model preset
+
+#### manifest
+
+Output model manifest (expected model files, checksums, sizes).
+
+```bash
+kreuzberg cache manifest [--format <FORMAT>]
+```
+
+**Options:**
+- `--format <FORMAT>`: Output format (`text` or `json`), default: `json`
+
 **Examples:**
 
 ```bash
@@ -393,8 +550,17 @@ kreuzberg cache stats
 # Clear cache with custom directory
 kreuzberg cache clear --cache-dir ~/.kreuzberg-cache
 
-# JSON output
-kreuzberg cache stats --format json
+# Pre-download all models for offline/container use
+kreuzberg cache warm
+
+# Also download embedding models
+kreuzberg cache warm --all-embeddings
+
+# Download only the fast embedding model
+kreuzberg cache warm --embedding-model fast
+
+# Get model manifest as JSON
+kreuzberg cache manifest
 ```
 
 ### serve (requires `api` feature)
@@ -406,7 +572,7 @@ kreuzberg serve [OPTIONS]
 ```
 
 **Options:**
-- `--host <HOST>`: Host to bind to (default: `127.0.0.1`)
+- `-H, --host <HOST>`: Host to bind to (default: `127.0.0.1`)
 - `--port <PORT>`: Port to bind to (default: `8000`)
 - `--config <PATH>`: Configuration file (TOML, YAML, or JSON)
 
@@ -433,15 +599,134 @@ kreuzberg mcp [OPTIONS]
 
 **Options:**
 - `--config <PATH>`: Configuration file (TOML, YAML, or JSON)
+- `--transport <MODE>`: Transport mode: `stdio` (default) or `http`
+- `--host <HOST>`: HTTP host (only for `--transport http`, default: `127.0.0.1`)
+- `--port <PORT>`: HTTP port (only for `--transport http`, default: `8001`)
 
 **Examples:**
 
 ```bash
-# Start MCP server
+# Start MCP server (stdio, for editor integration)
 kreuzberg mcp
+
+# HTTP transport for remote access
+kreuzberg mcp --transport http --host 0.0.0.0 --port 8001
 
 # With custom configuration
 kreuzberg mcp --config mcp-config.toml
+```
+
+### api (requires `api` feature)
+
+API utility commands.
+
+#### schema <span class="version-badge">v4.5.2</span>
+
+Output the full OpenAPI 3.1 specification as JSON.
+
+```bash
+kreuzberg api schema
+```
+
+**Examples:**
+
+```bash
+# Dump OpenAPI spec to file
+kreuzberg api schema > openapi.json
+
+# Pipe to jq for inspection
+kreuzberg api schema | jq '.paths | keys'
+```
+
+### embed <span class="version-badge">v4.5.2</span> (requires `embeddings` feature)
+
+Generate vector embeddings for text.
+
+```bash
+kreuzberg embed [OPTIONS]
+```
+
+**Options:**
+- `--text <TEXT>`: Text to embed (repeatable for batch embedding; reads from stdin if omitted)
+- `--preset <PRESET>`: Embedding preset (`fast`, `balanced`, `quality`, `multilingual`), default: `balanced`
+- `--format <FORMAT>`: Output format (`text` or `json`), default: `json`
+
+**Examples:**
+
+```bash
+# Embed a single text
+kreuzberg embed --text "hello world"
+
+# Batch embed multiple texts
+kreuzberg embed --text "first" --text "second"
+
+# Use a specific preset
+kreuzberg embed --text "bonjour" --preset multilingual
+
+# Read from stdin
+cat document.txt | kreuzberg embed --preset fast
+```
+
+### chunk <span class="version-badge">v4.5.2</span>
+
+Chunk text for processing (useful for LLM context windows).
+
+```bash
+kreuzberg chunk [OPTIONS]
+```
+
+**Options:**
+- `--text <TEXT>`: Text to chunk (reads from stdin if omitted)
+- `--config <PATH>`: Configuration file (TOML, YAML, or JSON)
+- `--chunk-size <SIZE>`: Chunk size in characters
+- `--chunk-overlap <SIZE>`: Chunk overlap in characters
+- `--chunker-type <TYPE>`: Chunker type: `text` (default) or `markdown`
+- `--chunking-tokenizer <MODEL>`: Tokenizer model for token-based sizing (e.g. `Xenova/gpt-4o`)
+- `--format <FORMAT>`: Output format (`text` or `json`), default: `json`
+
+**Examples:**
+
+```bash
+# Chunk text with defaults
+kreuzberg chunk --text "Long document content here..."
+
+# Custom chunk size and overlap
+kreuzberg chunk --text "..." --chunk-size 512 --chunk-overlap 64
+
+# Markdown-aware chunking
+kreuzberg chunk --text "# Title\nContent..." --chunker-type markdown
+
+# Token-based chunking with specific tokenizer
+kreuzberg chunk --text "..." --chunking-tokenizer "Xenova/gpt-4o"
+
+# Read from stdin
+cat long-document.txt | kreuzberg chunk --chunk-size 1000
+```
+
+### completions <span class="version-badge">v4.5.2</span>
+
+Generate shell completion scripts.
+
+```bash
+kreuzberg completions <SHELL>
+```
+
+**Supported shells:** `bash`, `zsh`, `fish`, `elvish`, `powershell`
+
+**Examples:**
+
+```bash
+# Bash (add to .bashrc)
+eval "$(kreuzberg completions bash)"
+
+# Zsh (add to fpath)
+kreuzberg completions zsh > ~/.zfunc/_kreuzberg
+
+# Fish
+kreuzberg completions fish | source
+
+# PowerShell
+kreuzberg completions powershell | Out-String | Invoke-Expression
 ```
 
 ### version
@@ -511,20 +796,17 @@ kreuzberg extract document.pdf --format json
 
 ## Logging
 
-Control logging verbosity with the `RUST_LOG` environment variable:
+Control logging verbosity with the `--log-level` flag or `RUST_LOG` environment variable:
 
 ```bash
-# Show info-level logs (default)
+# Using --log-level flag (overrides RUST_LOG)
+kreuzberg --log-level debug extract document.pdf
+kreuzberg --log-level warn batch *.pdf
+
+# Using RUST_LOG environment variable
 RUST_LOG=info kreuzberg extract document.pdf
-
-# Show detailed debug logs
 RUST_LOG=debug kreuzberg extract document.pdf
-
-# Show only warnings and errors
 RUST_LOG=warn kreuzberg extract document.pdf
-
-# Suppress all logs
-RUST_LOG=error kreuzberg extract document.pdf
 
 # Show logs from specific modules
 RUST_LOG=kreuzberg=debug kreuzberg extract document.pdf
@@ -560,6 +842,17 @@ RUST_LOG=kreuzberg=debug kreuzberg extract document.pdf
    kreuzberg cache clear
    ```
 
+6. **Pre-warm models** for containerized deployments:
+   ```bash
+   kreuzberg cache warm --all-embeddings
+   ```
+
+7. **Use hardware acceleration** when available:
+   ```bash
+   kreuzberg extract scanned.pdf --ocr true --acceleration coreml  # macOS
+   kreuzberg extract scanned.pdf --ocr true --acceleration cuda    # NVIDIA GPU
+   ```
+
 ## Features
 
 ### Default Features
@@ -567,8 +860,11 @@ None by default. The binary includes core extraction.
 
 ### Optional Features
 
-- **`api`**: Enable the REST API server (`kreuzberg serve` command)
+- **`api`**: Enable the REST API server (`kreuzberg serve` command) and API utilities (`kreuzberg api schema`)
 - **`mcp`**: Enable Model Context Protocol server (`kreuzberg mcp` command)
+- **`embeddings`**: Enable embedding generation (`kreuzberg embed` command)
+- **`layout-detection`**: Enable layout detection flags (`--layout-preset`, `--layout-confidence`)
+- **`chunking-tokenizers`**: Enable token-based chunking (`--chunking-tokenizer`)
 - **`all`**: Enable all features (`api` + `mcp`)
 
 ### Building with Features
@@ -578,7 +874,7 @@ None by default. The binary includes core extraction.
 cargo build --release -p kreuzberg-cli --features all
 
 # Build with specific features
-cargo build --release -p kreuzberg-cli --features api,mcp
+cargo build --release -p kreuzberg-cli --features api,mcp,embeddings
 ```
 
 ## Troubleshooting
@@ -644,6 +940,7 @@ kreuzberg extract document.pdf --config config.toml
 ## Key Files
 
 - `src/main.rs`: CLI implementation with command definitions and argument parsing
+- `src/commands/overrides.rs`: Extraction override flags (OCR, chunking, layout, acceleration, etc.)
 - `Cargo.toml`: Package metadata and dependencies
 
 ## Building

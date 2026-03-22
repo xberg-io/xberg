@@ -18,6 +18,11 @@ describe("embeddings fixtures", () => {
 			const documentPath = resolveDocument("pdf/fake_memo.pdf");
 			if (!existsSync(documentPath)) {
 				console.warn("Skipping embedding_async: missing document at", documentPath);
+				console.warn("Notes: Embeddings not supported on Windows");
+				return;
+			}
+			if (process.arch === "x64" && process.platform === "win32") {
+				console.warn("Skipping embedding_async: not supported on this platform");
 				return;
 			}
 			const config = buildConfig({
@@ -31,7 +36,7 @@ describe("embeddings fixtures", () => {
 			try {
 				result = await extractFile(documentPath, null, config);
 			} catch (error) {
-				if (shouldSkipFixture(error, "embedding_async", ["embeddings"], undefined)) {
+				if (shouldSkipFixture(error, "embedding_async", ["embeddings"], "Embeddings not supported on Windows")) {
 					return;
 				}
 				throw error;
@@ -52,6 +57,11 @@ describe("embeddings fixtures", () => {
 			const documentPath = resolveDocument("pdf/fake_memo.pdf");
 			if (!existsSync(documentPath)) {
 				console.warn("Skipping embedding_balanced_preset: missing document at", documentPath);
+				console.warn("Notes: Embeddings not supported on Windows");
+				return;
+			}
+			if (process.arch === "x64" && process.platform === "win32") {
+				console.warn("Skipping embedding_balanced_preset: not supported on this platform");
 				return;
 			}
 			const config = buildConfig({
@@ -65,7 +75,9 @@ describe("embeddings fixtures", () => {
 			try {
 				result = extractFileSync(documentPath, null, config);
 			} catch (error) {
-				if (shouldSkipFixture(error, "embedding_balanced_preset", ["embeddings"], undefined)) {
+				if (
+					shouldSkipFixture(error, "embedding_balanced_preset", ["embeddings"], "Embeddings not supported on Windows")
+				) {
 					return;
 				}
 				throw error;
@@ -114,6 +126,11 @@ describe("embeddings fixtures", () => {
 			const documentPath = resolveDocument("pdf/fake_memo.pdf");
 			if (!existsSync(documentPath)) {
 				console.warn("Skipping embedding_fast_preset: missing document at", documentPath);
+				console.warn("Notes: Embeddings not supported on Windows");
+				return;
+			}
+			if (process.arch === "x64" && process.platform === "win32") {
+				console.warn("Skipping embedding_fast_preset: not supported on this platform");
 				return;
 			}
 			const config = buildConfig({
@@ -127,7 +144,7 @@ describe("embeddings fixtures", () => {
 			try {
 				result = extractFileSync(documentPath, null, config);
 			} catch (error) {
-				if (shouldSkipFixture(error, "embedding_fast_preset", ["embeddings"], undefined)) {
+				if (shouldSkipFixture(error, "embedding_fast_preset", ["embeddings"], "Embeddings not supported on Windows")) {
 					return;
 				}
 				throw error;

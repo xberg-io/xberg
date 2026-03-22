@@ -1151,6 +1151,10 @@ pub struct JsExtractionConfig {
     pub security_limits: Option<JsSecurityLimits>,
     /// Concurrency configuration for thread pool control
     pub concurrency: Option<JsConcurrencyConfig>,
+    /// Cache namespace for tenant isolation
+    pub cache_namespace: Option<String>,
+    /// Per-request cache TTL in seconds (0 = skip cache)
+    pub cache_ttl_secs: Option<u32>,
 }
 
 impl TryFrom<JsPageConfig> for kreuzberg::core::config::PageConfig {
@@ -1233,6 +1237,8 @@ impl TryFrom<JsExtractionConfig> for ExtractionConfig {
             acceleration: val.acceleration.map(Into::into),
             email: val.email.map(Into::into),
             concurrency: val.concurrency.map(Into::into),
+            cache_namespace: val.cache_namespace,
+            cache_ttl_secs: val.cache_ttl_secs.map(|v| v as u64),
         })
     }
 }
@@ -1403,6 +1409,8 @@ impl TryFrom<ExtractionConfig> for JsExtractionConfig {
             concurrency: val.concurrency.map(|c| JsConcurrencyConfig {
                 max_threads: c.max_threads.map(|v| v as u32),
             }),
+            cache_namespace: val.cache_namespace,
+            cache_ttl_secs: val.cache_ttl_secs.map(|v| v as u32),
         })
     }
 }

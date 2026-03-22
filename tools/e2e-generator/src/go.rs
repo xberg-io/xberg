@@ -1300,7 +1300,7 @@ fn render_plugin_test(fixture: &Fixture) -> Result<String> {
 fn to_pascal_case(s: &str) -> String {
     s.split('_')
         .map(|word| match word.to_uppercase().as_str() {
-            "OCR" => "OCR".to_string(),
+            "OCR" | "TTL" | "XML" | "HTML" | "URL" | "API" | "ID" => word.to_uppercase(),
             _ => {
                 let mut chars = word.chars();
                 match chars.next() {

@@ -54,17 +54,21 @@
 #![deny(unsafe_code)]
 
 mod commands;
+mod style;
 
 use anyhow::{Context, Result};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+#[cfg(feature = "embeddings")]
+use commands::embed_command;
 #[cfg(feature = "mcp")]
 use commands::mcp_command;
+use commands::overrides::ExtractionOverrides;
 #[cfg(feature = "api")]
 use commands::serve_command;
 use commands::{
-    apply_extraction_overrides, batch_command, clear_command, extract_command, load_config, manifest_command,
-    stats_command, warm_command,
+    batch_command, chunk_command, clear_command, extract_command, load_config, manifest_command, stats_command,
+    warm_command,
 };
 use kreuzberg::{OutputFormat as ContentOutputFormat, detect_mime_type};
 use serde_json::json;
@@ -76,6 +80,10 @@ use tracing_subscriber::EnvFilter;
 #[command(name = "kreuzberg")]
 #[command(version, about, long_about = None)]
 struct Cli {
+    /// Set log level (trace, debug, info, warn, error). Overrides RUST_LOG env var.
+    #[arg(long, global = true)]
+    log_level: Option<String>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -113,67 +121,9 @@ enum Commands {
         #[arg(short, long, default_value = "text")]
         format: OutputFormat,
 
-        /// Enable OCR (overrides config file)
-        #[arg(long)]
-        ocr: Option<bool>,
-
-        /// OCR backend to use when --ocr is enabled (tesseract, paddle-ocr, easyocr)
-        #[arg(long)]
-        ocr_backend: Option<String>,
-
-        /// OCR language code. Tesseract: ISO 639-3 (eng, fra, deu). PaddleOCR: flexible (en, ch, french, korean).
-        #[arg(long)]
-        ocr_language: Option<String>,
-
-        /// Force OCR even if text extraction succeeds (overrides config file)
-        #[arg(long)]
-        force_ocr: Option<bool>,
-
-        /// Disable caching (overrides config file)
-        #[arg(long)]
-        no_cache: Option<bool>,
-
-        /// Enable chunking (overrides config file)
-        #[arg(long)]
-        chunk: Option<bool>,
-
-        /// Chunk size in characters (overrides config file)
-        #[arg(long)]
-        chunk_size: Option<usize>,
-
-        /// Chunk overlap in characters (overrides config file)
-        #[arg(long)]
-        chunk_overlap: Option<usize>,
-
-        /// Tokenizer model for token-based chunk sizing (e.g., "Xenova/gpt-4o", "bert-base-uncased").
-        /// Implicitly enables chunking. Requires the chunking-tokenizers feature.
-        #[arg(long)]
-        chunking_tokenizer: Option<String>,
-
-        /// Enable quality processing (overrides config file)
-        #[arg(long)]
-        quality: Option<bool>,
-
-        /// Enable language detection (overrides config file)
-        #[arg(long)]
-        detect_language: Option<bool>,
-
-        /// Content output format (plain, markdown, djot, html). Canonical flag.
-        ///
-        /// Controls the format of the extracted content.
-        /// Note: This is different from --format which controls CLI output (text/json).
-        #[arg(long, value_enum)]
-        output_format: Option<ContentOutputFormatArg>,
-
-        /// Content output format (DEPRECATED: Use --output-format instead).
-        ///
-        /// This flag is maintained for backward compatibility. Use --output-format for new code.
-        #[arg(long, value_enum, hide = true)]
-        content_format: Option<ContentOutputFormatArg>,
-
-        /// Password(s) for encrypted PDFs. Can be specified multiple times.
-        #[arg(long)]
-        pdf_password: Vec<String>,
+        /// Extraction configuration overrides
+        #[command(flatten)]
+        overrides: ExtractionOverrides,
     },
 
     /// Batch extract from multiple documents
@@ -203,46 +153,9 @@ enum Commands {
         #[arg(short, long, default_value = "json")]
         format: OutputFormat,
 
-        /// Enable OCR (overrides config file)
-        #[arg(long)]
-        ocr: Option<bool>,
-
-        /// OCR backend to use when --ocr is enabled (tesseract, paddle-ocr, easyocr)
-        #[arg(long)]
-        ocr_backend: Option<String>,
-
-        /// OCR language code. Tesseract: ISO 639-3 (eng, fra, deu). PaddleOCR: flexible (en, ch, french, korean).
-        #[arg(long)]
-        ocr_language: Option<String>,
-
-        /// Force OCR even if text extraction succeeds (overrides config file)
-        #[arg(long)]
-        force_ocr: Option<bool>,
-
-        /// Disable caching (overrides config file)
-        #[arg(long)]
-        no_cache: Option<bool>,
-
-        /// Enable quality processing (overrides config file)
-        #[arg(long)]
-        quality: Option<bool>,
-
-        /// Content output format (plain, markdown, djot, html). Canonical flag.
-        ///
-        /// Controls the format of the extracted content.
-        /// Note: This is different from --format which controls CLI output (text/json).
-        #[arg(long, value_enum)]
-        output_format: Option<ContentOutputFormatArg>,
-
-        /// Content output format (DEPRECATED: Use --output-format instead).
-        ///
-        /// This flag is maintained for backward compatibility. Use --output-format for new code.
-        #[arg(long, value_enum, hide = true)]
-        content_format: Option<ContentOutputFormatArg>,
-
-        /// Password(s) for encrypted PDFs. Can be specified multiple times.
-        #[arg(long)]
-        pdf_password: Vec<String>,
+        /// Extraction configuration overrides
+        #[command(flatten)]
+        overrides: ExtractionOverrides,
 
         /// Path to a JSON file mapping file paths to per-file extraction config overrides.
         /// The JSON should be an object where keys are file paths and values are FileExtractionConfig objects.
@@ -324,6 +237,87 @@ enum Commands {
         #[arg(long, default_value = "8001")]
         port: u16,
     },
+
+    /// API utilities
+    #[cfg(feature = "api")]
+    Api {
+        #[command(subcommand)]
+        command: ApiCommands,
+    },
+
+    /// Generate embeddings for text
+    ///
+    /// Generates vector embeddings for one or more text inputs using a specified preset model.
+    /// Reads from --text flag or stdin if no text is provided.
+    #[cfg(feature = "embeddings")]
+    Embed {
+        /// Text to embed. Can be specified multiple times for batch embedding.
+        #[arg(long)]
+        text: Vec<String>,
+
+        /// Embedding preset (fast, balanced, quality, multilingual)
+        #[arg(long, default_value = "balanced")]
+        preset: String,
+
+        /// Output format (text or json)
+        #[arg(short, long, default_value = "json")]
+        format: OutputFormat,
+    },
+
+    /// Chunk text for processing
+    ///
+    /// Splits text into chunks using configurable size and overlap.
+    /// Reads from --text flag or stdin if no text is provided.
+    Chunk {
+        /// Text to chunk. If not provided, reads from stdin.
+        #[arg(long)]
+        text: Option<String>,
+
+        /// Path to config file (TOML, YAML, or JSON)
+        #[arg(short, long)]
+        config: Option<PathBuf>,
+
+        /// Chunk size in characters
+        #[arg(long)]
+        chunk_size: Option<usize>,
+
+        /// Chunk overlap in characters
+        #[arg(long)]
+        chunk_overlap: Option<usize>,
+
+        /// Chunker type: text or markdown
+        #[arg(long, default_value = "text")]
+        chunker_type: String,
+
+        /// Tokenizer model for token-based chunk sizing (e.g., "Xenova/gpt-4o").
+        /// Requires the chunking-tokenizers feature.
+        #[arg(long)]
+        chunking_tokenizer: Option<String>,
+
+        /// Output format (text or json)
+        #[arg(short, long, default_value = "json")]
+        format: OutputFormat,
+    },
+
+    /// Generate shell completions
+    ///
+    /// Outputs shell completion scripts for the specified shell.
+    /// Install with: eval "$(kreuzberg completions bash)"
+    Completions {
+        /// Shell to generate completions for
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
+}
+
+#[cfg(feature = "api")]
+#[derive(Subcommand)]
+enum ApiCommands {
+    /// Output the OpenAPI schema (JSON)
+    ///
+    /// Prints the full OpenAPI 3.1 specification for the kreuzberg REST API.
+    /// Useful for code generation, documentation, and API client tooling.
+    Schema,
 }
 
 #[derive(Subcommand)]
@@ -521,18 +515,31 @@ fn validate_batch_paths(paths: &[PathBuf]) -> Result<()> {
     Ok(())
 }
 
-/// Merges a JSON value into an existing extraction config.
-///
-/// This function performs a field-by-field merge where JSON fields override
-/// config fields when present. Unspecified fields in the JSON retain their
-/// values from the base config.
-///
-/// # Strategy
-///
-/// For each field in the JSON:
-/// - If present in JSON, override the config value
-/// - If not present in JSON, keep the config value
-/// - This enables partial config updates via CLI flags
+/// Apply inline JSON or base64 JSON overrides to an extraction config.
+fn apply_json_overrides(
+    config: &mut kreuzberg::ExtractionConfig,
+    config_json: Option<String>,
+    config_json_base64: Option<String>,
+) -> Result<()> {
+    if let Some(json_str) = config_json {
+        let json_value: serde_json::Value =
+            serde_json::from_str(&json_str).context("Failed to parse --config-json as JSON")?;
+        *config =
+            merge_json_into_config(config, json_value).context("Failed to merge --config-json with file config")?;
+    } else if let Some(base64_str) = config_json_base64 {
+        let json_bytes = STANDARD
+            .decode(&base64_str)
+            .context("Failed to decode base64 in --config-json-base64")?;
+        let json_str = String::from_utf8(json_bytes).context("Base64-decoded content is not valid UTF-8")?;
+        let json_value: serde_json::Value =
+            serde_json::from_str(&json_str).context("Failed to parse decoded --config-json-base64 as JSON")?;
+        *config = merge_json_into_config(config, json_value)
+            .context("Failed to merge --config-json-base64 with file config")?;
+    }
+    Ok(())
+}
+
+/// Merges a JSON value into an existing extraction config via field-by-field override.
 fn merge_json_into_config(
     base_config: &kreuzberg::ExtractionConfig,
     json_value: serde_json::Value,
@@ -558,12 +565,18 @@ fn merge_json_into_config(
 }
 
 fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    let env_filter = if let Some(ref level) = cli.log_level {
+        EnvFilter::new(level)
+    } else {
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"))
+    };
+
     let _ = tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
+        .with_env_filter(env_filter)
         .with_writer(std::io::stderr)
         .try_init();
-
-    let cli = Cli::parse();
 
     match cli.command {
         Commands::Extract {
@@ -573,66 +586,14 @@ fn main() -> Result<()> {
             config_json_base64,
             mime_type,
             format,
-            ocr,
-            ocr_backend,
-            ocr_language,
-            force_ocr,
-            no_cache,
-            chunk,
-            chunk_size,
-            chunk_overlap,
-            chunking_tokenizer,
-            quality,
-            detect_language,
-            output_format,
-            content_format,
-            pdf_password,
+            overrides,
         } => {
             validate_file_exists(&path)?;
-            validate_chunk_params(chunk_size, chunk_overlap)?;
+            overrides.validate()?;
 
             let mut config = load_config(config_path)?;
-
-            // Apply inline JSON config if provided (merge with file config)
-            if let Some(json_str) = config_json {
-                let json_value: serde_json::Value =
-                    serde_json::from_str(&json_str).context("Failed to parse --config-json as JSON")?;
-                // Merge inline JSON with file config
-                config = merge_json_into_config(&config, json_value)
-                    .context("Failed to merge --config-json with file config")?;
-            } else if let Some(base64_str) = config_json_base64 {
-                let json_bytes = STANDARD
-                    .decode(&base64_str)
-                    .context("Failed to decode base64 in --config-json-base64")?;
-                let json_str = String::from_utf8(json_bytes).context("Base64-decoded content is not valid UTF-8")?;
-                let json_value: serde_json::Value =
-                    serde_json::from_str(&json_str).context("Failed to parse decoded --config-json-base64 as JSON")?;
-                // Merge inline JSON with file config
-                config = merge_json_into_config(&config, json_value)
-                    .context("Failed to merge --config-json-base64 with file config")?;
-            }
-
-            apply_extraction_overrides(
-                &mut config,
-                ocr,
-                ocr_backend.as_deref(),
-                ocr_language.as_deref(),
-                force_ocr,
-                no_cache,
-                chunk,
-                chunk_size,
-                chunk_overlap,
-                chunking_tokenizer.as_deref(),
-                quality,
-                detect_language,
-                output_format,
-                content_format,
-            );
-
-            if !pdf_password.is_empty() {
-                let pdf_opts = config.pdf_options.get_or_insert_with(Default::default);
-                pdf_opts.passwords = Some(pdf_password);
-            }
+            apply_json_overrides(&mut config, config_json, config_json_base64)?;
+            overrides.apply(&mut config);
 
             extract_command(path, config, mime_type, format)?;
         }
@@ -643,61 +604,15 @@ fn main() -> Result<()> {
             config_json,
             config_json_base64,
             format,
-            ocr,
-            ocr_backend,
-            ocr_language,
-            force_ocr,
-            no_cache,
-            quality,
-            output_format,
-            content_format,
-            pdf_password,
+            overrides,
             file_configs,
         } => {
             validate_batch_paths(&paths)?;
+            overrides.validate()?;
 
             let mut config = load_config(config_path)?;
-
-            // Apply inline JSON config if provided (merge with file config)
-            if let Some(json_str) = config_json {
-                let json_value: serde_json::Value =
-                    serde_json::from_str(&json_str).context("Failed to parse --config-json as JSON")?;
-                // Merge inline JSON with file config
-                config = merge_json_into_config(&config, json_value)
-                    .context("Failed to merge --config-json with file config")?;
-            } else if let Some(base64_str) = config_json_base64 {
-                let json_bytes = STANDARD
-                    .decode(&base64_str)
-                    .context("Failed to decode base64 in --config-json-base64")?;
-                let json_str = String::from_utf8(json_bytes).context("Base64-decoded content is not valid UTF-8")?;
-                let json_value: serde_json::Value =
-                    serde_json::from_str(&json_str).context("Failed to parse decoded --config-json-base64 as JSON")?;
-                // Merge inline JSON with file config
-                config = merge_json_into_config(&config, json_value)
-                    .context("Failed to merge --config-json-base64 with file config")?;
-            }
-
-            apply_extraction_overrides(
-                &mut config,
-                ocr,
-                ocr_backend.as_deref(),
-                ocr_language.as_deref(),
-                force_ocr,
-                no_cache,
-                None,
-                None,
-                None,
-                None,
-                quality,
-                None,
-                output_format,
-                content_format,
-            );
-
-            if !pdf_password.is_empty() {
-                let pdf_opts = config.pdf_options.get_or_insert_with(Default::default);
-                pdf_opts.passwords = Some(pdf_password);
-            }
+            apply_json_overrides(&mut config, config_json, config_json_base64)?;
+            overrides.apply(&mut config);
 
             let file_configs_map = if let Some(file_configs_path) = file_configs {
                 let file_configs_json = std::fs::read_to_string(&file_configs_path)
@@ -729,7 +644,7 @@ fn main() -> Result<()> {
 
             match format {
                 OutputFormat::Text => {
-                    println!("{}", mime_type);
+                    println!("{}", style::success(&mime_type));
                 }
                 OutputFormat::Json => {
                     let output = json!({
@@ -749,10 +664,10 @@ fn main() -> Result<()> {
             let formats = kreuzberg::list_supported_formats();
             match format {
                 OutputFormat::Text => {
-                    println!("{:<15} MIME TYPE", "EXTENSION");
-                    println!("{:<15} ---------", "---------");
+                    println!("{:<15} {}", style::label("EXTENSION"), style::label("MIME TYPE"));
+                    println!("{}", style::dim(&format!("{:<15} ---------", "---------")));
                     for f in &formats {
-                        println!(".{:<14} {}", f.extension, f.mime_type);
+                        println!("{:<15} {}", style::success(&format!(".{}", f.extension)), f.mime_type);
                     }
                 }
                 OutputFormat::Json => {
@@ -770,7 +685,7 @@ fn main() -> Result<()> {
 
             match format {
                 OutputFormat::Text => {
-                    println!("{} {}", name, version);
+                    println!("{} {}", style::label(name), style::success(version));
                 }
                 OutputFormat::Json => {
                     let output = json!({
@@ -832,6 +747,71 @@ fn main() -> Result<()> {
                 warm_command(cache_dir, format, all_embeddings, embedding_model)?;
             }
         },
+
+        #[cfg(feature = "api")]
+        Commands::Api { command } => match command {
+            ApiCommands::Schema => {
+                println!("{}", kreuzberg::api::openapi::openapi_json());
+            }
+        },
+
+        #[cfg(feature = "embeddings")]
+        Commands::Embed { text, preset, format } => {
+            let texts = if text.is_empty() {
+                vec![commands::read_stdin()?]
+            } else {
+                text
+            };
+            embed_command(texts, &preset, format)?;
+        }
+
+        Commands::Chunk {
+            text,
+            config: config_path,
+            chunk_size,
+            chunk_overlap,
+            chunker_type,
+            chunking_tokenizer,
+            format,
+        } => {
+            let input = match text {
+                Some(t) => t,
+                None => commands::read_stdin().context("No --text provided and failed to read from stdin")?,
+            };
+
+            validate_chunk_params(chunk_size, chunk_overlap)?;
+
+            let base_config = load_config(config_path)?;
+            let mut chunking_config = base_config.chunking.unwrap_or_default();
+
+            if let Some(size) = chunk_size {
+                chunking_config.max_characters = size;
+                // If user set chunk_size but not overlap, clamp overlap to fit
+                if chunk_overlap.is_none() && chunking_config.overlap >= size {
+                    chunking_config.overlap = size / 4;
+                }
+            }
+            if let Some(overlap) = chunk_overlap {
+                chunking_config.overlap = overlap;
+            }
+            match chunker_type.as_str() {
+                "markdown" => chunking_config.chunker_type = kreuzberg::ChunkerType::Markdown,
+                _ => chunking_config.chunker_type = kreuzberg::ChunkerType::Text,
+            }
+            if let Some(ref tokenizer) = chunking_tokenizer {
+                chunking_config.sizing = kreuzberg::ChunkSizing::Tokenizer {
+                    model: tokenizer.clone(),
+                    cache_dir: None,
+                };
+            }
+
+            chunk_command(input, chunking_config, format)?;
+        }
+
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+            clap_complete::generate(shell, &mut cmd, "kreuzberg", &mut std::io::stdout());
+        }
     }
 
     Ok(())

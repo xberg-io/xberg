@@ -50,6 +50,8 @@ public final class ExtractionConfig {
 	private final SecurityLimitsConfig securityLimits;
 	private final boolean includeDocumentStructure;
 	private final boolean includeDocumentStructureSet;
+	private final String cacheNamespace;
+	private final Long cacheTtlSecs;
 
 	private ExtractionConfig(Builder builder) {
 		this.useCache = builder.useCache;
@@ -78,6 +80,8 @@ public final class ExtractionConfig {
 		this.securityLimits = builder.securityLimits;
 		this.includeDocumentStructure = builder.includeDocumentStructure;
 		this.includeDocumentStructureSet = builder.includeDocumentStructureSet;
+		this.cacheNamespace = builder.cacheNamespace;
+		this.cacheTtlSecs = builder.cacheTtlSecs;
 	}
 
 	public static Builder builder() {
@@ -217,6 +221,27 @@ public final class ExtractionConfig {
 	 */
 	public boolean isIncludeDocumentStructure() {
 		return includeDocumentStructure;
+	}
+
+	/**
+	 * Get the cache namespace for tenant isolation.
+	 *
+	 * @return the cache namespace, or null if not set
+	 */
+	public String getCacheNamespace() {
+		return cacheNamespace;
+	}
+
+	/**
+	 * Get the per-request cache TTL in seconds.
+	 *
+	 * <p>
+	 * A value of 0 means skip the cache entirely.
+	 *
+	 * @return the cache TTL in seconds, or null if not set
+	 */
+	public Long getCacheTtlSecs() {
+		return cacheTtlSecs;
 	}
 
 	/**
@@ -523,6 +548,12 @@ public final class ExtractionConfig {
 		if (securityLimits != null) {
 			map.put("security_limits", securityLimits.toMap());
 		}
+		if (cacheNamespace != null) {
+			map.put("cache_namespace", cacheNamespace);
+		}
+		if (cacheTtlSecs != null) {
+			map.put("cache_ttl_secs", cacheTtlSecs);
+		}
 		return map;
 	}
 
@@ -614,6 +645,15 @@ public final class ExtractionConfig {
 		if (securityMap != null) {
 			builder.securityLimits(SecurityLimitsConfig.fromMap(securityMap));
 		}
+		if (raw.containsKey("cache_namespace")) {
+			builder.cacheNamespace((String) raw.get("cache_namespace"));
+		}
+		if (raw.containsKey("cache_ttl_secs")) {
+			Object val = raw.get("cache_ttl_secs");
+			if (val instanceof Number) {
+				builder.cacheTtlSecs(((Number) val).longValue());
+			}
+		}
 	}
 
 	private static boolean asBoolean(Object value, boolean defaultValue) {
@@ -688,6 +728,8 @@ public final class ExtractionConfig {
 		private ConcurrencyConfig concurrency;
 		private Integer maxConcurrentExtractions;
 		private SecurityLimitsConfig securityLimits;
+		private String cacheNamespace;
+		private Long cacheTtlSecs;
 
 		private Builder() {
 		}
@@ -881,6 +923,33 @@ public final class ExtractionConfig {
 
 		public Builder securityLimits(SecurityLimitsConfig securityLimits) {
 			this.securityLimits = securityLimits;
+			return this;
+		}
+
+		/**
+		 * Set the cache namespace for tenant isolation.
+		 *
+		 * @param cacheNamespace
+		 *            the cache namespace string
+		 * @return this builder for chaining
+		 */
+		public Builder cacheNamespace(String cacheNamespace) {
+			this.cacheNamespace = cacheNamespace;
+			return this;
+		}
+
+		/**
+		 * Set the per-request cache TTL in seconds.
+		 *
+		 * <p>
+		 * A value of 0 means skip the cache entirely.
+		 *
+		 * @param cacheTtlSecs
+		 *            TTL in seconds
+		 * @return this builder for chaining
+		 */
+		public Builder cacheTtlSecs(Long cacheTtlSecs) {
+			this.cacheTtlSecs = cacheTtlSecs;
 			return this;
 		}
 

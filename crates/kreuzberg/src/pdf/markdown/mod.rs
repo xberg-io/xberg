@@ -19,7 +19,7 @@ mod paragraphs;
 mod pipeline;
 mod regions;
 mod render;
-mod text_repair;
+pub(in crate::pdf) mod text_repair;
 pub(crate) mod types;
 
 #[allow(unused_imports)] // Used by extractors/pdf/ocr.rs when ocr feature is enabled

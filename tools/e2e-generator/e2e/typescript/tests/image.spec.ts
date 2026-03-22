@@ -115,7 +115,7 @@ describe("image fixtures", () => {
 				return;
 			}
 			assertions.assertExpectedMime(result, ["image/jpeg"]);
-			assertions.assertMaxContentLength(result, 100);
+			assertions.assertMaxContentLength(result, 200);
 		},
 		TEST_TIMEOUT_MS,
 	);

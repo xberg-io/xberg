@@ -553,6 +553,8 @@ class ExtractionConfig:
     acceleration: AccelerationConfig | None
     email: EmailConfig | None
     concurrency: ConcurrencyConfig | None
+    cache_namespace: str | None
+    cache_ttl_secs: int | None
 
     def __init__(
         self,
@@ -579,6 +581,8 @@ class ExtractionConfig:
         acceleration: AccelerationConfig | None = None,
         email: EmailConfig | None = None,
         concurrency: ConcurrencyConfig | None = None,
+        cache_namespace: str | None = ...,
+        cache_ttl_secs: int | None = ...,
     ) -> None: ...
     @staticmethod
     def from_file(path: str | Path) -> ExtractionConfig: ...

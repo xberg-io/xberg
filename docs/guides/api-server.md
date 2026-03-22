@@ -348,6 +348,156 @@ curl -X POST http://localhost:8000/chunk \
 
     --8<-- "snippets/typescript/api/client_chunk_text.md"
 
+#### GET /version <span class="version-badge">v4.5.2</span>
+
+Get the current Kreuzberg version.
+
+**Example:**
+
+```bash title="Terminal"
+# Get the Kreuzberg library version
+curl http://localhost:8000/version
+```
+
+**Response:**
+
+```json title="Response"
+{
+  "version": "4.5.2"
+}
+```
+
+#### POST /detect <span class="version-badge">v4.5.2</span>
+
+Detect the MIME type of an uploaded file via multipart form data.
+
+**Request Format:**
+
+- **Method:** POST
+- **Content-Type:** `multipart/form-data`
+- **Fields:**
+  - `file` (required): File to detect (also accepts `files` as the field name)
+
+**Response:** JSON object with detected MIME type and filename
+
+**Example:**
+
+```bash title="Terminal"
+# Detect MIME type of a file
+curl -F "file=@document.pdf" http://localhost:8000/detect
+
+# Also works with the 'files' field name
+curl -F "files=@mystery-file.bin" http://localhost:8000/detect
+```
+
+**Response Schema:**
+
+```json title="Response"
+{
+  "mime_type": "application/pdf",
+  "filename": "document.pdf"
+}
+```
+
+**Error Responses:**
+
+| Status | Error Type        | Description             |
+| ------ | ----------------- | ----------------------- |
+| 400    | `ValidationError` | No file provided       |
+| 500    | Internal errors   | MIME detection failed   |
+
+#### GET /cache/manifest <span class="version-badge">v4.5.2</span>
+
+Get the model manifest listing all expected model files with checksums and sizes.
+
+**Example:**
+
+```bash title="Terminal"
+# Get model manifest with checksums and download URLs
+curl http://localhost:8000/cache/manifest
+```
+
+**Response Schema:**
+
+```json title="Response"
+{
+  "kreuzberg_version": "4.5.1",
+  "total_size_bytes": 123456789,
+  "model_count": 8,
+  "models": [
+    {
+      "relative_path": "paddle-ocr/det/model.onnx",
+      "sha256": "abc123...",
+      "size_bytes": 4567890,
+      "source_url": "https://huggingface.co/..."
+    }
+  ]
+}
+```
+
+**Response Fields:**
+
+| Field                       | Type    | Description                              |
+| --------------------------- | ------- | ---------------------------------------- |
+| `kreuzberg_version`         | string  | Kreuzberg version                        |
+| `total_size_bytes`          | integer | Total size of all models in bytes        |
+| `model_count`               | integer | Number of models in the manifest         |
+| `models`                    | array   | Array of model entry objects             |
+| `models[].relative_path`    | string  | Relative path within the cache directory |
+| `models[].sha256`           | string  | SHA256 checksum of the model file        |
+| `models[].size_bytes`       | integer | Expected file size in bytes              |
+| `models[].source_url`       | string  | HuggingFace source URL for downloading   |
+
+#### POST /cache/warm <span class="version-badge">v4.5.2</span>
+
+Eagerly download and cache model files for offline use. Optionally downloads embedding models.
+
+**Request Format:**
+
+- **Method:** POST
+- **Content-Type:** `application/json`
+- **Body:**
+  - `all_embeddings` (optional, boolean): Download all embedding model presets (default: false)
+  - `embedding_model` (optional, string): Specific embedding preset name to download (e.g., `"balanced"`, `"fast"`, `"quality"`)
+
+**Example:**
+
+```bash title="Terminal"
+# Download core models (OCR, layout detection)
+curl -X POST http://localhost:8000/cache/warm \
+  -H "Content-Type: application/json" \
+  -d '{}'
+
+# Download all embedding models
+curl -X POST http://localhost:8000/cache/warm \
+  -H "Content-Type: application/json" \
+  -d '{"all_embeddings": true}'
+
+# Download a specific embedding model
+curl -X POST http://localhost:8000/cache/warm \
+  -H "Content-Type: application/json" \
+  -d '{"embedding_model": "balanced"}'
+```
+
+**Response Schema:**
+
+```json title="Response"
+{
+  "cache_dir": "/path/to/.kreuzberg",
+  "downloaded": ["paddle-ocr v2 (server+mobile det, cls, doc_ori, unified+per-script rec)"],
+  "already_cached": ["layout (rtdetr, tatr)"]
+}
+```
+
+**Error Responses:**
+
+| Status | Error Type        | Description                         |
+| ------ | ----------------- | ----------------------------------- |
+| 400    | `ValidationError` | Unknown embedding preset name       |
+| 500    | Internal errors   | Model download failed               |
+
+**Note:** Embedding model warming requires the `embeddings` feature to be enabled.
+
 #### GET /health
 
 Health check endpoint for monitoring and load balancers.
@@ -364,7 +514,7 @@ curl http://localhost:8000/health
 ```json title="Response"
 {
   "status": "healthy",
-  "version": "4.5.1"
+  "version": "4.5.2"
 }
 ```
 
@@ -375,7 +525,7 @@ The response may optionally include a `plugins` object containing information ab
 ```json title="Response with Plugins"
 {
   "status": "healthy",
-  "version": "4.5.1",
+  "version": "4.5.2",
   "plugins": {
     "ocr_backends_count": 2,
     "ocr_backends": ["tesseract"],
@@ -407,7 +557,7 @@ curl http://localhost:8000/info
 
 ```json title="Response"
 {
-  "version": "4.5.1",
+  "version": "4.5.2",
   "rust_backend": true
 }
 ```
@@ -660,7 +810,7 @@ The Model Context Protocol (MCP) server exposes Kreuzberg as tools for AI agents
 
 ### MCP Tools
 
-The MCP server exposes 6 tools for AI agents:
+The MCP server exposes 12 tools for AI agents:
 
 #### extract_file
 
@@ -668,13 +818,12 @@ Extract content from a file path.
 
 **Parameters:**
 
-| Parameter    | Type    | Required | Description                                    |
-| ------------ | ------- | -------- | ---------------------------------------------- |
-| `path`       | string  | Yes      | File path to extract                           |
-| `mime_type`  | string  | No       | MIME type hint                                 |
-| `enable_ocr` | boolean | No       | Enable OCR (default: false)                    |
-| `force_ocr`  | boolean | No       | Force OCR even if text exists (default: false) |
-| `async`      | boolean | No       | Use async extraction (default: true)           |
+| Parameter      | Type   | Required | Description                                           |
+| -------------- | ------ | -------- | ----------------------------------------------------- |
+| `path`         | string | Yes      | File path to extract                                  |
+| `mime_type`    | string | No       | MIME type hint (auto-detected if not provided)        |
+| `config`       | object | No       | Extraction configuration (JSON object)                |
+| `pdf_password` | string | No       | Password for encrypted PDFs                           |
 
 **Example MCP Request:**
 
@@ -685,8 +834,10 @@ Extract content from a file path.
     "name": "extract_file",
     "arguments": {
       "path": "/path/to/document.pdf",
-      "enable_ocr": true,
-      "async": true
+      "config": {
+        "ocr": {"language": "eng"},
+        "force_ocr": true
+      }
     }
   }
 }
@@ -698,13 +849,12 @@ Extract content from base64-encoded file data.
 
 **Parameters:**
 
-| Parameter    | Type    | Required | Description                 |
-| ------------ | ------- | -------- | --------------------------- |
-| `data`       | string  | Yes      | Base64-encoded file content |
-| `mime_type`  | string  | No       | MIME type hint              |
-| `enable_ocr` | boolean | No       | Enable OCR                  |
-| `force_ocr`  | boolean | No       | Force OCR                   |
-| `async`      | boolean | No       | Use async extraction        |
+| Parameter      | Type   | Required | Description                                    |
+| -------------- | ------ | -------- | ---------------------------------------------- |
+| `data`         | string | Yes      | Base64-encoded file content                    |
+| `mime_type`    | string | No       | MIME type hint (auto-detected if not provided) |
+| `config`       | object | No       | Extraction configuration (JSON object)         |
+| `pdf_password` | string | No       | Password for encrypted PDFs                    |
 
 #### batch_extract_files
 
@@ -712,12 +862,12 @@ Extract multiple files in parallel.
 
 **Parameters:**
 
-| Parameter    | Type          | Required | Description           |
-| ------------ | ------------- | -------- | --------------------- |
-| `paths`      | array[string] | Yes      | File paths to extract |
-| `enable_ocr` | boolean       | No       | Enable OCR            |
-| `force_ocr`  | boolean       | No       | Force OCR             |
-| `async`      | boolean       | No       | Use async extraction  |
+| Parameter      | Type                 | Required | Description                                                       |
+| -------------- | -------------------- | -------- | ----------------------------------------------------------------- |
+| `paths`        | array[string]        | Yes      | File paths to extract                                             |
+| `config`       | object               | No       | Extraction configuration (JSON object)                            |
+| `pdf_password` | string               | No       | Password for encrypted PDFs                                       |
+| `file_configs` | array[object \| null] | No      | Per-file configuration overrides (parallel array to `paths`)      |
 
 #### detect_mime_type
 
@@ -729,6 +879,40 @@ Detect file format and return MIME type.
 | ------------- | ------- | -------- | --------------------------------------- |
 | `path`        | string  | Yes      | File path                               |
 | `use_content` | boolean | No       | Content-based detection (default: true) |
+
+#### list_formats <span class="version-badge">v4.5.2</span>
+
+List all supported document formats with their file extensions and MIME types.
+
+**Parameters:** None
+
+**Returns:** JSON array of supported formats with extensions and MIME types
+
+#### get_version <span class="version-badge">v4.5.2</span>
+
+Get the current Kreuzberg library version.
+
+**Parameters:** None
+
+**Example MCP Request:**
+
+```json title="MCP Request"
+{
+  "method": "tools/call",
+  "params": {
+    "name": "get_version",
+    "arguments": {}
+  }
+}
+```
+
+**Returns:** JSON object with version string
+
+```json title="Response"
+{
+  "version": "4.5.2"
+}
+```
 
 #### cache_stats
 
@@ -746,6 +930,127 @@ Clear all cached files.
 
 **Returns:** Number of files removed, space freed
 
+#### cache_manifest <span class="version-badge">v4.5.2</span>
+
+Get model manifest listing expected model files, sizes, and SHA256 checksums.
+
+**Parameters:** None
+
+**Example MCP Request:**
+
+```json title="MCP Request"
+{
+  "method": "tools/call",
+  "params": {
+    "name": "cache_manifest",
+    "arguments": {}
+  }
+}
+```
+
+**Returns:** JSON object with Kreuzberg version, total size, model count, and individual model entries (path, sha256, size, source URL)
+
+#### cache_warm <span class="version-badge">v4.5.2</span>
+
+Download and cache model files for offline use. Optionally download embedding models.
+
+**Parameters:**
+
+| Parameter         | Type    | Required | Description                                                                    |
+| ----------------- | ------- | -------- | ------------------------------------------------------------------------------ |
+| `all_embeddings`  | boolean | No       | Download all embedding model presets (default: false)                          |
+| `embedding_model` | string  | No       | Specific embedding preset name to download (e.g., `"balanced"`, `"quality"`)  |
+
+**Example MCP Request:**
+
+```json title="MCP Request"
+{
+  "method": "tools/call",
+  "params": {
+    "name": "cache_warm",
+    "arguments": {
+      "all_embeddings": true
+    }
+  }
+}
+```
+
+**Returns:** JSON object with cache directory, list of downloaded models, and list of already-cached models
+
+#### embed_text <span class="version-badge">v4.5.2</span>
+
+Generate vector embeddings for text strings.
+
+**Parameters:**
+
+| Parameter | Type          | Required | Description                                                               |
+| --------- | ------------- | -------- | ------------------------------------------------------------------------- |
+| `texts`   | array[string] | Yes      | List of text strings to generate embeddings for                          |
+| `preset`  | string        | No       | Embedding preset name (default: `"balanced"`). Available: `"speed"`, `"balanced"`, `"quality"` |
+
+**Example MCP Request:**
+
+```json title="MCP Request"
+{
+  "method": "tools/call",
+  "params": {
+    "name": "embed_text",
+    "arguments": {
+      "texts": ["Hello world", "Second text"],
+      "preset": "balanced"
+    }
+  }
+}
+```
+
+**Returns:** JSON object with embeddings array, model name, dimensions, and count
+
+```json title="Response"
+{
+  "embeddings": [
+    [0.123, -0.456, 0.789],
+    [-0.234, 0.567, -0.891]
+  ],
+  "model": "balanced",
+  "dimensions": 768,
+  "count": 2
+}
+```
+
+**Note:** Requires the `embeddings` feature to be enabled.
+
+#### chunk_text <span class="version-badge">v4.5.2</span>
+
+Split text into chunks with configurable size and overlap.
+
+**Parameters:**
+
+| Parameter        | Type    | Required | Description                                                        |
+| ---------------- | ------- | -------- | ------------------------------------------------------------------ |
+| `text`           | string  | Yes      | Text content to split into chunks                                  |
+| `max_characters` | integer | No       | Maximum characters per chunk (default: 2000)                       |
+| `overlap`        | integer | No       | Number of overlapping characters between chunks (default: 100)     |
+| `chunker_type`   | string  | No       | Chunker type: `"text"` or `"markdown"` (default: `"text"`)        |
+
+**Example MCP Request:**
+
+```json title="MCP Request"
+{
+  "method": "tools/call",
+  "params": {
+    "name": "chunk_text",
+    "arguments": {
+      "text": "Your long text content here...",
+      "max_characters": 1000,
+      "overlap": 50,
+      "chunker_type": "text"
+    }
+  }
+}
+```
+
+**Returns:** JSON object with chunks array, chunk count, input size, and configuration used
+
 ### MCP Server Information
 
 **Server Metadata:**
@@ -759,10 +1064,14 @@ Clear all cached files.
 
 **Capabilities:**
 
-- Tool calling (6 tools exposed)
-- Async and sync extraction variants
+- Tool calling (12 tools exposed)
+- Async extraction
 - Base64-encoded file handling
 - Batch processing
+- MIME type detection
+- Model cache management (stats, clear, manifest, warm)
+- Embedding generation (feature-gated)
+- Text chunking
 
 ### AI Agent Integration
 

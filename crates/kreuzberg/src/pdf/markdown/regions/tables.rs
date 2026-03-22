@@ -1,5 +1,6 @@
 //! Heuristic table extraction from layout-detected Table regions.
 
+use crate::pdf::markdown::text_repair::repair_broken_word_spacing;
 use crate::pdf::markdown::types::{LayoutHint, LayoutHintClass};
 use crate::pdf::table_reconstruct::{post_process_table, reconstruct_table, table_to_markdown};
 use crate::types::Table;
@@ -171,7 +172,16 @@ pub(in crate::pdf::markdown) fn extract_tables_from_layout_hints(
             }
         }
 
-        let markdown = table_to_markdown(&table_cells);
+        // Repair broken word spacing per-cell before rendering to markdown
+        let repaired_cells: Vec<Vec<String>> = table_cells
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|cell| repair_broken_word_spacing(cell).into_owned())
+                    .collect()
+            })
+            .collect();
+        let markdown = table_to_markdown(&repaired_cells);
 
         tracing::trace!(
             page = page_index,

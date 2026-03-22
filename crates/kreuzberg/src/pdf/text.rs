@@ -284,7 +284,7 @@ fn extract_text_lazy_fast_path(document: &PdfDocument<'_>) -> Result<PdfTextExtr
 
         if load_ms > 1000.0 || get_ms > 1000.0 {
             tracing::warn!(
-                "slow page {}/{}: FPDFText_LoadPage={:.0}ms text.all()={:.0}ms chars={}",
+                "slow page {}/{}: FPDFText_LoadPage={:.0}ms text.all_respaced()={:.0}ms chars={}",
                 page_idx + 1,
                 page_count,
                 load_ms,
@@ -374,7 +374,7 @@ fn extract_text_lazy_with_tracking(
 
         if load_ms > 1000.0 || get_ms > 1000.0 {
             tracing::warn!(
-                "slow page {}/{}: FPDFText_LoadPage={:.0}ms text.all()={:.0}ms chars={}",
+                "slow page {}/{}: FPDFText_LoadPage={:.0}ms text.all_respaced()={:.0}ms chars={}",
                 page_number,
                 document.pages().len(),
                 load_ms,

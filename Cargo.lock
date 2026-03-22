@@ -231,6 +231,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "arrayref"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76a2e8124351fda1ef8aaaa3bbd7ebbcb486bbcd4225aca0aa0d84bb2db8fecb"
+
+[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -478,7 +484,7 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "benchmark-harness"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "ahash",
  "async-trait",
@@ -602,6 +608,20 @@ dependencies = [
  "radium",
  "tap",
  "wyz",
+]
+
+[[package]]
+name = "blake3"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2468ef7d57b3fb7e16b576e8377cdbde2320c60e1491e961d11da40fc4f02a2d"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "cc",
+ "cfg-if",
+ "constant_time_eq 0.4.2",
+ "cpufeatures 0.2.17",
 ]
 
 [[package]]
@@ -1004,6 +1024,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19c9f1dde76b736e3681f28cec9d5a61299cbaae0fce80a68e43724ad56031eb"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1155,6 +1184,12 @@ name = "constant_time_eq"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
+
+[[package]]
+name = "constant_time_eq"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "convert_case"
@@ -1729,7 +1764,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "e2e-rust"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "async-trait",
  "hex",
@@ -3350,7 +3385,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3360,6 +3395,7 @@ dependencies = [
  "biblatex",
  "biblib",
  "bitvec",
+ "blake3",
  "bytes",
  "calamine",
  "cfb 0.14.0",
@@ -3446,11 +3482,13 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-cli"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
+ "anstyle",
  "anyhow",
  "base64 0.22.1",
  "clap",
+ "clap_complete",
  "kreuzberg",
  "serde_json",
  "tempfile",
@@ -3462,7 +3500,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-e2e-generator"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3477,7 +3515,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-ffi"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "ahash",
  "async-trait",
@@ -3496,7 +3534,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-node"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "ahash",
  "async-trait",
@@ -3520,7 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-paddle-ocr"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "geo-clipper",
  "geo-types",
@@ -3534,7 +3572,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-pdfium-render"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "bindgen",
  "bitflags 2.11.0",
@@ -3558,7 +3596,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-php"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "ahash",
  "ctor",
@@ -3574,7 +3612,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-py"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "ahash",
  "async-trait",
@@ -3591,7 +3629,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-tesseract"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "cc",
  "cmake",
@@ -3603,7 +3641,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg-wasm"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3629,7 +3667,7 @@ dependencies = [
 
 [[package]]
 name = "kreuzberg_rustler"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "kreuzberg",
  "rustler",
@@ -6219,7 +6257,7 @@ checksum = "1b6b67fb9a61334225b5b790716f609cd58395f895b3fe8b328786812a40bc3b"
 
 [[package]]
 name = "snippet-runner"
-version = "4.5.1"
+version = "4.5.2"
 dependencies = [
  "clap",
  "rayon",
@@ -8325,7 +8363,7 @@ dependencies = [
  "aes",
  "arbitrary",
  "bzip2 0.5.2",
- "constant_time_eq",
+ "constant_time_eq 0.3.1",
  "crc32fast",
  "crossbeam-utils",
  "deflate64",
@@ -8354,7 +8392,7 @@ checksum = "c42e33efc22a0650c311c2ef19115ce232583abbe80850bc8b66509ebef02de0"
 dependencies = [
  "aes",
  "bzip2 0.6.1",
- "constant_time_eq",
+ "constant_time_eq 0.3.1",
  "crc32fast",
  "deflate64",
  "flate2",

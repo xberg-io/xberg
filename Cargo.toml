@@ -31,7 +31,7 @@ kreuzberg-paddle-ocr = { path = "crates/kreuzberg-paddle-ocr" }
 kreuzberg-pdfium-render = { path = "crates/kreuzberg-pdfium-render" }
 
 [workspace.package]
-version = "4.5.1"
+version = "4.5.2"
 edition = "2024"
 rust-version = "1.91"
 authors = ["Na'aman Hirschfeld <naaman@kreuzberg.dev>"]
@@ -40,8 +40,8 @@ repository = "https://github.com/kreuzberg-dev/kreuzberg"
 homepage = "https://kreuzberg.dev"
 
 [workspace.dependencies]
-kreuzberg = { path = "./crates/kreuzberg", version = "4.5.1", default-features = false }
-kreuzberg-ffi = { path = "./crates/kreuzberg-ffi", version = "4.5.1" }
+kreuzberg = { path = "./crates/kreuzberg", version = "4.5.2", default-features = false }
+kreuzberg-ffi = { path = "./crates/kreuzberg-ffi", version = "4.5.2" }
 
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "api-18"] }
 tokio = { version = "1.50.0", features = [
@@ -63,6 +63,7 @@ libc = "0.2.183"
 async-trait = "0.1.89"
 tracing = "0.1"
 ahash = "0.8.12"
+blake3 = "1"
 base64 = "0.22.1"
 bytes = { version = "1", features = ["serde"] }
 hex = "0.4.3"

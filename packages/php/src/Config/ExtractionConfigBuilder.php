@@ -43,6 +43,8 @@ class ExtractionConfigBuilder
     private ?ConcurrencyConfig $concurrency = null;
     private string $resultFormat = 'unified';
     private string $outputFormat = 'plain';
+    private ?string $cacheNamespace = null;
+    private ?int $cacheTtlSecs = null;
 
     /**
      * Set whether to enable caching of extraction results.
@@ -253,6 +255,30 @@ class ExtractionConfigBuilder
     }
 
     /**
+     * Set the cache namespace for tenant isolation.
+     *
+     * @param string|null $namespace Cache namespace string
+     * @return self For method chaining
+     */
+    public function cacheNamespace(?string $namespace): self
+    {
+        $this->cacheNamespace = $namespace;
+        return $this;
+    }
+
+    /**
+     * Set the per-request cache TTL in seconds.
+     *
+     * @param int|null $secs Cache TTL in seconds
+     * @return self For method chaining
+     */
+    public function cacheTtlSecs(?int $secs): self
+    {
+        $this->cacheTtlSecs = $secs;
+        return $this;
+    }
+
+    /**
      * Build and return the configured ExtractionConfig instance.
      *
      * @return ExtractionConfig The constructed configuration object
@@ -277,6 +303,8 @@ class ExtractionConfigBuilder
             resultFormat: $this->resultFormat,
             outputFormat: $this->outputFormat,
             concurrency: $this->concurrency,
+            cacheNamespace: $this->cacheNamespace,
+            cacheTtlSecs: $this->cacheTtlSecs,
         );
     }
 }

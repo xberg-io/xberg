@@ -17,8 +17,8 @@ use crate::{ExtractionConfig, core::ServerConfig};
 
 use super::{
     handlers::{
-        cache_clear_handler, cache_stats_handler, chunk_handler, embed_handler, extract_handler, formats_handler,
-        health_handler, info_handler,
+        cache_clear_handler, cache_manifest_handler, cache_stats_handler, cache_warm_handler, chunk_handler,
+        detect_handler, embed_handler, extract_handler, formats_handler, health_handler, info_handler, version_handler,
     },
     types::{ApiSizeLimits, ApiState},
 };
@@ -155,13 +155,17 @@ pub fn create_router_with_limits_and_server_config(
 
     let mut router = Router::new()
         .route("/extract", post(extract_handler))
+        .route("/detect", post(detect_handler))
         .route("/embed", post(embed_handler))
         .route("/chunk", post(chunk_handler))
         .route("/formats", get(formats_handler))
         .route("/health", get(health_handler))
         .route("/info", get(info_handler))
+        .route("/version", get(version_handler))
         .route("/cache/stats", get(cache_stats_handler))
-        .route("/cache/clear", delete(cache_clear_handler));
+        .route("/cache/clear", delete(cache_clear_handler))
+        .route("/cache/manifest", get(cache_manifest_handler))
+        .route("/cache/warm", post(cache_warm_handler));
 
     // Add OpenAPI schema endpoint if API feature is enabled
     #[cfg(feature = "api")]

@@ -68,6 +68,19 @@ impl<'a> PdfPageTextSegment<'a> {
         self.text.inside_rect(self.bounds)
     }
 
+    /// Returns text with corrected word spacing by filtering spurious generated spaces.
+    ///
+    /// Iterates characters within the segment and only inserts a space when the
+    /// horizontal gap between adjacent characters exceeds `font_size * space_ratio`.
+    /// This filters out spaces that pdfium inserts mid-word due to aggressive
+    /// inter-glyph spacing heuristics.
+    ///
+    /// Typical `space_ratio` values: 0.25 (MinerU's threshold), 0.3 (conservative).
+    pub fn text_respaced(&self, space_ratio: f32) -> String {
+        // Delegate to inside_rect_respaced which uses direct FFI for performance
+        self.text.inside_rect_respaced(self.bounds, space_ratio)
+    }
+
     /// Returns a collection of all the [PdfPageTextChar] characters that lie within the bounds of
     /// this [PdfPageTextSegment] in the containing [PdfPage], in the order in which they are
     /// defined in the document.

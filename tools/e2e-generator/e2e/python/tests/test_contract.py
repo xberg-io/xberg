@@ -72,10 +72,12 @@ async def test_api_batch_bytes_with_configs_async() -> None:
 
     config = helpers.build_config(None)
 
+    file_configs = [helpers.build_file_config({"output_format": "markdown"})]
+
     file_bytes = document_path.read_bytes()
     mime_type = detect_mime_type_from_path(str(document_path))
 
-    results = await batch_extract_bytes([file_bytes], [mime_type], config=config)
+    results = await batch_extract_bytes([file_bytes], [mime_type], config=config, file_configs=file_configs)
     result = results[0]
 
     helpers.assert_expected_mime(result, ["application/pdf"])
@@ -92,10 +94,12 @@ def test_api_batch_bytes_with_configs_sync() -> None:
 
     config = helpers.build_config(None)
 
+    file_configs = [helpers.build_file_config({"output_format": "markdown"})]
+
     file_bytes = document_path.read_bytes()
     mime_type = detect_mime_type_from_path(str(document_path))
 
-    results = batch_extract_bytes_sync([file_bytes], [mime_type], config=config)
+    results = batch_extract_bytes_sync([file_bytes], [mime_type], config=config, file_configs=file_configs)
     result = results[0]
 
     helpers.assert_expected_mime(result, ["application/pdf"])
@@ -148,7 +152,9 @@ async def test_api_batch_file_with_configs_async() -> None:
 
     config = helpers.build_config(None)
 
-    results = await batch_extract_files([document_path], config=config)
+    file_configs = [helpers.build_file_config({"output_format": "markdown"})]
+
+    results = await batch_extract_files([document_path], config=config, file_configs=file_configs)
     result = results[0]
 
     helpers.assert_expected_mime(result, ["application/pdf"])
@@ -165,7 +171,9 @@ def test_api_batch_file_with_configs_sync() -> None:
 
     config = helpers.build_config(None)
 
-    results = batch_extract_files_sync([document_path], config=config)
+    file_configs = [helpers.build_file_config({"output_format": "markdown"})]
+
+    results = batch_extract_files_sync([document_path], config=config, file_configs=file_configs)
     result = results[0]
 
     helpers.assert_expected_mime(result, ["application/pdf"])

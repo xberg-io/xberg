@@ -7,7 +7,7 @@ use crate::ocr::error::OcrError;
 use crate::ocr::validation::TESSERACT_SUPPORTED_LANGUAGE_CODES;
 use std::borrow::Cow;
 use std::env;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Validate language configuration and check for traineddata files.
 ///
@@ -62,7 +62,30 @@ pub(super) fn validate_language_and_traineddata(language: &str, tessdata_path: &
 ///
 /// Path to tessdata directory if found, otherwise empty string
 pub(super) fn resolve_tessdata_path() -> String {
-    let tessdata_env = env::var("TESSDATA_PREFIX").ok();
+    // 1. TESSDATA_PREFIX env var (explicit override)
+    if let Ok(path) = env::var("TESSDATA_PREFIX")
+        && !path.is_empty()
+    {
+        return path;
+    }
+
+    // 2. KREUZBERG_CACHE_DIR/tessdata (downloaded by `cache warm` command)
+    if let Ok(cache_dir) = env::var("KREUZBERG_CACHE_DIR") {
+        let tessdata = PathBuf::from(cache_dir).join("tessdata");
+        if tessdata.exists() {
+            return tessdata.to_string_lossy().into_owned();
+        }
+    }
+
+    // 3. Bundled tessdata (compiled-in path from build.rs)
+    if let Some(bundled) = option_env!("TESSDATA_PREFIX_BUNDLED") {
+        let tessdata = PathBuf::from(bundled).join("tessdata");
+        if tessdata.exists() {
+            return tessdata.to_string_lossy().into_owned();
+        }
+    }
+
+    // 4. System fallback paths
     let fallback_paths = [
         "/opt/homebrew/share/tessdata",
         "/opt/homebrew/opt/tesseract/share/tessdata",
@@ -75,13 +98,10 @@ pub(super) fn resolve_tessdata_path() -> String {
         r#"C:\ProgramData\Tesseract-OCR\tessdata"#,
     ];
 
-    tessdata_env
-        .or_else(|| {
-            fallback_paths
-                .iter()
-                .find(|p| Path::new(p).exists())
-                .map(|p| (*p).to_string())
-        })
+    fallback_paths
+        .iter()
+        .find(|p| Path::new(p).exists())
+        .map(|p| (*p).to_string())
         .unwrap_or_default()
 }
 

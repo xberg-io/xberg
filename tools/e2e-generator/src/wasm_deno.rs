@@ -643,7 +643,7 @@ export const assertions = {
             const images = (result as unknown as PlainRecord).images as unknown[] | undefined;
             assertExists(images, "Expected images with bounding boxes but no images found");
             assertEquals(Array.isArray(images) && images.length > 0, true, "Expected images with bounding boxes but no images found");
-            for (const img of images!) {
+            for (const img of images) {
                 const bb = (img as PlainRecord).boundingBox ?? (img as PlainRecord).bounding_box;
                 assertExists(bb, "Expected image to have bounding_box but it was null");
             }

@@ -157,6 +157,23 @@ func WithResultFormat(format string) ExtractionOption {
 	}
 }
 
+// WithCacheNamespace sets the cache namespace for tenant isolation.
+// When set, cache keys are scoped to this namespace so that different
+// tenants' cached results do not collide.
+func WithCacheNamespace(ns string) ExtractionOption {
+	return func(c *ExtractionConfig) {
+		c.CacheNamespace = &ns
+	}
+}
+
+// WithCacheTTLSecs sets the per-request cache TTL in seconds.
+// Overrides the server default TTL for this extraction request.
+func WithCacheTTLSecs(secs uint64) ExtractionOption {
+	return func(c *ExtractionConfig) {
+		c.CacheTTLSecs = &secs
+	}
+}
+
 // ============================================================================
 // OCRConfig Options
 // ============================================================================

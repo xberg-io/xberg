@@ -3,36 +3,23 @@
 //! # Lock Poisoning Handling
 //!
 //! This module uses `Arc<Mutex<T>>` for thread-safe state management and implements
-//! explicit lock poisoning recovery throughout all public methods:
+//! explicit lock poisoning recovery throughout all public methods.
 //!
-//! **What is lock poisoning?**
-//! - When a thread panics while holding a Mutex, the lock becomes "poisoned"
-//! - Rust marks the Mutex to indicate data may be in an inconsistent state
-//! - Subsequent lock attempts return `Err(PoisonError)` instead of acquiring the lock
-//!
-//! **Recovery strategy:**
-//! - All `.lock()` calls use `.map_err()` to convert `PoisonError` into `KreuzbergError::LockPoisoned`
-//! - The error propagates to callers via `Result` returns (never `.unwrap()` on locks)
-//! - Provides clear error messages indicating which mutex is poisoned
-//! - Follows CLAUDE.md requirement: "Lock poisoning must be handled - never `.unwrap()` on Mutex/RwLock"
-//!
-//! **Affected state:**
-//! - `processing_locks`: Tracks cache keys currently being processed (6 lock sites)
-//! - `deleting_files`: Prevents read-during-delete race conditions (3 lock sites)
-//!
-//! This approach ensures that lock poisoning (rare in practice) is surfaced to users
-//! rather than causing panics, maintaining system stability during concurrent operations.
+//! All `.lock()` calls use `.map_err()` to convert `PoisonError` into `KreuzbergError::LockPoisoned`.
+//! The error propagates to callers via `Result` returns (never `.unwrap()` on locks).
 
 use crate::error::{KreuzbergError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 use super::cleanup::smart_cleanup_cache;
+
+/// Minimum seconds between automatic cleanup runs (5 minutes).
+const CLEANUP_INTERVAL_SECS: u64 = 300;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheStats {
@@ -64,8 +51,6 @@ pub struct GenericCache {
     processing_locks: Arc<Mutex<HashSet<String>>>,
     /// Tracks cache keys being deleted to prevent read-during-delete race conditions
     deleting_files: Arc<Mutex<HashSet<PathBuf>>>,
-    /// Counter for triggering periodic cleanup (every 100 writes)
-    write_counter: Arc<AtomicUsize>,
 }
 
 impl GenericCache {
@@ -95,19 +80,26 @@ impl GenericCache {
             min_free_space_mb,
             processing_locks: Arc::new(Mutex::new(HashSet::new())),
             deleting_files: Arc::new(Mutex::new(HashSet::new())),
-            write_counter: Arc::new(AtomicUsize::new(0)),
         })
     }
 
-    fn get_cache_path(&self, cache_key: &str) -> PathBuf {
-        self.cache_dir.join(format!("{}.msgpack", cache_key))
+    /// Resolve the directory for a cache key, optionally within a namespace subdirectory.
+    fn resolve_dir(&self, namespace: Option<&str>) -> PathBuf {
+        match namespace {
+            Some(ns) => self.cache_dir.join(ns),
+            None => self.cache_dir.clone(),
+        }
     }
 
-    fn get_metadata_path(&self, cache_key: &str) -> PathBuf {
-        self.cache_dir.join(format!("{}.meta", cache_key))
+    fn get_cache_path(&self, cache_key: &str, namespace: Option<&str>) -> PathBuf {
+        self.resolve_dir(namespace).join(format!("{}.msgpack", cache_key))
     }
 
-    fn is_valid(&self, cache_path: &Path, source_file: Option<&str>) -> bool {
+    fn get_metadata_path(&self, cache_key: &str, namespace: Option<&str>) -> PathBuf {
+        self.resolve_dir(namespace).join(format!("{}.meta", cache_key))
+    }
+
+    fn is_valid(&self, cache_path: &Path, source_file: Option<&str>, ttl_override_secs: Option<u64>) -> bool {
         if !cache_path.exists() {
             return false;
         }
@@ -116,8 +108,20 @@ impl GenericCache {
             && let Ok(modified) = metadata.modified()
             && let Ok(elapsed) = SystemTime::now().duration_since(modified)
         {
-            let age_days = elapsed.as_secs() as f64 / (24.0 * 3600.0);
-            if age_days > self.max_age_days {
+            // Check TTL from .meta file first, then override, then global max_age_days
+            let max_age_secs = if let Some(ttl) = ttl_override_secs {
+                ttl as f64
+            } else if let Some(meta_ttl) = self.read_meta_ttl(cache_path) {
+                if meta_ttl > 0 {
+                    meta_ttl as f64
+                } else {
+                    self.max_age_days * 86400.0
+                }
+            } else {
+                self.max_age_days * 86400.0
+            };
+
+            if elapsed.as_secs_f64() > max_age_secs {
                 return false;
             }
         }
@@ -126,40 +130,22 @@ impl GenericCache {
             let Some(file_stem) = cache_path.file_stem().and_then(|s| s.to_str()) else {
                 return false;
             };
-            let meta_path = self.get_metadata_path(file_stem);
+            let namespace = self.infer_namespace(cache_path);
+            let meta_path = self.get_metadata_path(file_stem, namespace.as_deref());
 
             if meta_path.exists() {
-                if let Ok(meta_metadata) = fs::metadata(&meta_path)
-                    && meta_metadata.len() == 16
-                    && let Ok(cached_meta_bytes) = fs::read(&meta_path)
+                if let Ok(cached_meta_bytes) = fs::read(&meta_path)
+                    && cached_meta_bytes.len() >= 16
                 {
-                    let cached_size = u64::from_le_bytes([
-                        cached_meta_bytes[0],
-                        cached_meta_bytes[1],
-                        cached_meta_bytes[2],
-                        cached_meta_bytes[3],
-                        cached_meta_bytes[4],
-                        cached_meta_bytes[5],
-                        cached_meta_bytes[6],
-                        cached_meta_bytes[7],
-                    ]);
-                    let cached_mtime = u64::from_le_bytes([
-                        cached_meta_bytes[8],
-                        cached_meta_bytes[9],
-                        cached_meta_bytes[10],
-                        cached_meta_bytes[11],
-                        cached_meta_bytes[12],
-                        cached_meta_bytes[13],
-                        cached_meta_bytes[14],
-                        cached_meta_bytes[15],
-                    ]);
+                    let cached_size = u64::from_le_bytes(cached_meta_bytes[0..8].try_into().unwrap());
+                    let cached_mtime = u64::from_le_bytes(cached_meta_bytes[8..16].try_into().unwrap());
 
                     if let Ok(source_metadata) = fs::metadata(source_path) {
                         let current_size = source_metadata.len();
                         let Some(current_mtime) = source_metadata
                             .modified()
                             .ok()
-                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                             .map(|d| d.as_secs())
                         else {
                             return false;
@@ -175,28 +161,62 @@ impl GenericCache {
         true
     }
 
-    fn save_metadata(&self, cache_key: &str, source_file: Option<&str>) {
+    /// Read TTL from .meta file (bytes 16-23). Returns None if not present.
+    fn read_meta_ttl(&self, cache_path: &Path) -> Option<u64> {
+        let file_stem = cache_path.file_stem()?.to_str()?;
+        let namespace = self.infer_namespace(cache_path);
+        let meta_path = self.get_metadata_path(file_stem, namespace.as_deref());
+        let bytes = fs::read(&meta_path).ok()?;
+        if bytes.len() >= 24 {
+            Some(u64::from_le_bytes(bytes[16..24].try_into().unwrap()))
+        } else {
+            None // Old-format 16-byte .meta, no TTL stored
+        }
+    }
+
+    /// Infer namespace from a cache path by checking if it's in a subdirectory.
+    fn infer_namespace(&self, cache_path: &Path) -> Option<String> {
+        let parent = cache_path.parent()?;
+        if parent == self.cache_dir {
+            None
+        } else {
+            parent.file_name()?.to_str().map(|s| s.to_string())
+        }
+    }
+
+    fn save_metadata(
+        &self,
+        cache_key: &str,
+        source_file: Option<&str>,
+        namespace: Option<&str>,
+        ttl_secs: Option<u64>,
+    ) {
+        let meta_path = self.get_metadata_path(cache_key, namespace);
+
+        let mut bytes = Vec::with_capacity(24);
+
         if let Some(source_path) = source_file
             && let Ok(metadata) = fs::metadata(source_path)
         {
             let size = metadata.len();
-            let Some(mtime) = metadata
+            let mtime = metadata
                 .modified()
                 .ok()
-                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
-            else {
-                return;
-            };
+                .unwrap_or(0);
 
-            let mut bytes = Vec::with_capacity(16);
             bytes.extend_from_slice(&size.to_le_bytes());
             bytes.extend_from_slice(&mtime.to_le_bytes());
-
-            let meta_path = self.get_metadata_path(cache_key);
-            // Cache metadata write failure - safe to ignore, cache is optional fallback ~keep
-            let _ = fs::write(meta_path, bytes);
+        } else {
+            bytes.extend_from_slice(&0u64.to_le_bytes());
+            bytes.extend_from_slice(&0u64.to_le_bytes());
         }
+
+        // TTL in seconds (0 = use global default)
+        bytes.extend_from_slice(&ttl_secs.unwrap_or(0).to_le_bytes());
+
+        let _ = fs::write(meta_path, bytes);
     }
 
     #[cfg_attr(feature = "otel", tracing::instrument(
@@ -206,8 +226,14 @@ impl GenericCache {
             cache.key = %cache_key,
         )
     ))]
-    pub fn get(&self, cache_key: &str, source_file: Option<&str>) -> Result<Option<Vec<u8>>> {
-        let cache_path = self.get_cache_path(cache_key);
+    pub fn get(
+        &self,
+        cache_key: &str,
+        source_file: Option<&str>,
+        namespace: Option<&str>,
+        ttl_override_secs: Option<u64>,
+    ) -> Result<Option<Vec<u8>>> {
+        let cache_path = self.get_cache_path(cache_key, namespace);
 
         {
             let deleting = self
@@ -221,7 +247,7 @@ impl GenericCache {
             }
         }
 
-        if !self.is_valid(&cache_path, source_file) {
+        if !self.is_valid(&cache_path, source_file, ttl_override_secs) {
             #[cfg(feature = "otel")]
             tracing::Span::current().record("cache.hit", false);
             return Ok(None);
@@ -234,11 +260,11 @@ impl GenericCache {
                 Ok(Some(content))
             }
             Err(_) => {
-                // Best-effort cleanup of corrupted cache files ~keep
                 if let Err(e) = fs::remove_file(&cache_path) {
                     tracing::debug!("Failed to remove corrupted cache file: {}", e);
                 }
-                if let Err(e) = fs::remove_file(self.get_metadata_path(cache_key)) {
+                let meta_path = self.get_metadata_path(cache_key, namespace);
+                if let Err(e) = fs::remove_file(meta_path) {
                     tracing::debug!("Failed to remove corrupted metadata file: {}", e);
                 }
                 #[cfg(feature = "otel")]
@@ -248,6 +274,11 @@ impl GenericCache {
         }
     }
 
+    /// Backward-compatible get without namespace/TTL.
+    pub fn get_simple(&self, cache_key: &str, source_file: Option<&str>) -> Result<Option<Vec<u8>>> {
+        self.get(cache_key, source_file, None, None)
+    }
+
     #[cfg_attr(feature = "otel", tracing::instrument(
         skip(self, data),
         fields(
@@ -255,32 +286,71 @@ impl GenericCache {
             cache.size_bytes = data.len(),
         )
     ))]
-    pub fn set(&self, cache_key: &str, data: Vec<u8>, source_file: Option<&str>) -> Result<()> {
-        let cache_path = self.get_cache_path(cache_key);
+    pub fn set(
+        &self,
+        cache_key: &str,
+        data: Vec<u8>,
+        source_file: Option<&str>,
+        namespace: Option<&str>,
+        ttl_secs: Option<u64>,
+    ) -> Result<()> {
+        // create_dir_all is idempotent — safe for concurrent multi-worker calls
+        let dir = self.resolve_dir(namespace);
+        fs::create_dir_all(&dir)
+            .map_err(|e| KreuzbergError::cache(format!("Failed to create cache namespace dir: {}", e)))?;
+
+        let cache_path = self.get_cache_path(cache_key, namespace);
 
         fs::write(&cache_path, &data)
             .map_err(|e| KreuzbergError::cache(format!("Failed to write cache file: {}", e)))?;
 
-        self.save_metadata(cache_key, source_file);
+        self.save_metadata(cache_key, source_file, namespace, ttl_secs);
 
-        let count = self.write_counter.fetch_add(1, Ordering::Relaxed);
-        if count.is_multiple_of(100)
-            && let Some(cache_path_str) = self.cache_dir.to_str()
-        {
-            // Cache cleanup failure - safe to ignore, cache is optional fallback ~keep
-            let _ = smart_cleanup_cache(
-                cache_path_str,
-                self.max_age_days,
-                self.max_cache_size_mb,
-                self.min_free_space_mb,
-            );
+        if self.should_run_cleanup() {
+            if let Some(cache_path_str) = self.cache_dir.to_str() {
+                let _ = smart_cleanup_cache(
+                    cache_path_str,
+                    self.max_age_days,
+                    self.max_cache_size_mb,
+                    self.min_free_space_mb,
+                );
+            }
+            self.touch_cleanup_marker();
         }
 
         Ok(())
     }
 
+    /// Backward-compatible set without namespace/TTL.
+    pub fn set_simple(&self, cache_key: &str, data: Vec<u8>, source_file: Option<&str>) -> Result<()> {
+        self.set(cache_key, data, source_file, None, None)
+    }
+
+    /// Check if cleanup should run based on filesystem marker timestamp.
+    ///
+    /// Multi-worker safe: uses filesystem mtime instead of in-memory counter.
+    fn should_run_cleanup(&self) -> bool {
+        let marker = self.cache_dir.join(".last_cleanup");
+        match fs::metadata(&marker) {
+            Ok(meta) => {
+                if let Ok(modified) = meta.modified() {
+                    let age = SystemTime::now().duration_since(modified).unwrap_or_default();
+                    age.as_secs() > CLEANUP_INTERVAL_SECS
+                } else {
+                    true
+                }
+            }
+            Err(_) => true,
+        }
+    }
+
+    /// Touch the cleanup marker file to record last cleanup time.
+    fn touch_cleanup_marker(&self) {
+        let marker = self.cache_dir.join(".last_cleanup");
+        let _ = fs::write(&marker, []);
+    }
+
     pub fn is_processing(&self, cache_key: &str) -> Result<bool> {
-        // OSError/RuntimeError must bubble up - system errors need user reports ~keep
         let locks = self
             .processing_locks
             .lock()
@@ -289,7 +359,6 @@ impl GenericCache {
     }
 
     pub fn mark_processing(&self, cache_key: String) -> Result<()> {
-        // OSError/RuntimeError must bubble up - system errors need user reports ~keep
         let mut locks = self
             .processing_locks
             .lock()
@@ -299,7 +368,6 @@ impl GenericCache {
     }
 
     pub fn mark_complete(&self, cache_key: &str) -> Result<()> {
-        // OSError/RuntimeError must bubble up - system errors need user reports ~keep
         let mut locks = self
             .processing_locks
             .lock()
@@ -308,28 +376,6 @@ impl GenericCache {
         Ok(())
     }
 
-    /// Mark a file path as being deleted to prevent concurrent reads.
-    ///
-    /// # TOCTOU Race Condition
-    ///
-    /// There is a Time-Of-Check-To-Time-Of-Use (TOCTOU) race condition between:
-    /// 1. Iterating directory entries in `clear()` (getting path/metadata)
-    /// 2. Marking the file for deletion here
-    /// 3. Actually deleting the file
-    ///
-    /// **Race scenario:**
-    /// - Thread A: Begins iterating in `clear()`, gets path
-    /// - Thread B: Calls `get()`, checks `deleting_files` (not marked yet), proceeds
-    /// - Thread A: Calls `mark_for_deletion()` here
-    /// - Thread A: Deletes file with `fs::remove_file()`
-    /// - Thread B: Tries to read file, but it's already deleted
-    ///
-    /// **Why this is acceptable:**
-    /// - Cache operations are best-effort optimizations, not critical
-    /// - `get()` already handles file read failures gracefully (treats as cache miss)
-    /// - The worst case is a failed read → cache miss → recomputation
-    /// - No data corruption or invariant violations occur
-    /// - Alternative (atomic operation) would require complex locking impacting performance
     fn mark_for_deletion(&self, path: &Path) -> Result<()> {
         let mut deleting = self
             .deleting_files
@@ -339,7 +385,6 @@ impl GenericCache {
         Ok(())
     }
 
-    /// Remove a file path from the deletion set
     fn unmark_deletion(&self, path: &Path) -> Result<()> {
         let mut deleting = self
             .deleting_files
@@ -371,19 +416,37 @@ impl GenericCache {
                 }
             };
 
+            let path = entry.path();
+
+            // Skip the cleanup marker file
+            if path.file_name().and_then(|n| n.to_str()) == Some(".last_cleanup") {
+                continue;
+            }
+
             let metadata = match entry.metadata() {
-                Ok(m) if m.is_file() => m,
-                _ => continue,
+                Ok(m) => m,
+                Err(_) => continue,
             };
 
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("msgpack") {
+            // Recursively clear namespace subdirectories
+            if metadata.is_dir() {
+                let (ns_removed, ns_freed) = self.delete_namespace_inner(&path)?;
+                removed_count += ns_removed;
+                removed_size += ns_freed;
+                continue;
+            }
+
+            if !metadata.is_file() {
+                continue;
+            }
+
+            let ext = path.extension().and_then(|s| s.to_str());
+            if ext != Some("msgpack") && ext != Some("meta") {
                 continue;
             }
 
             let size_mb = metadata.len() as f64 / (1024.0 * 1024.0);
 
-            // Mark file for deletion to prevent concurrent access ~keep
             if let Err(e) = self.mark_for_deletion(&path) {
                 tracing::debug!("Failed to mark file for deletion: {} (continuing anyway)", e);
             }
@@ -392,14 +455,12 @@ impl GenericCache {
                 Ok(_) => {
                     removed_count += 1;
                     removed_size += size_mb;
-                    // Unmark after successful deletion ~keep
                     if let Err(e) = self.unmark_deletion(&path) {
                         tracing::debug!("Failed to unmark deleted file: {} (non-critical)", e);
                     }
                 }
                 Err(e) => {
                     tracing::debug!("Failed to remove {:?}: {}", path, e);
-                    // Unmark after failed deletion to allow retries ~keep
                     if let Err(e) = self.unmark_deletion(&path) {
                         tracing::debug!("Failed to unmark file after deletion error: {} (non-critical)", e);
                     }
@@ -410,13 +471,53 @@ impl GenericCache {
         Ok((removed_count, removed_size))
     }
 
+    /// Delete all cache entries under a namespace.
+    ///
+    /// Removes the namespace subdirectory and all its contents.
+    /// Returns (files_removed, mb_freed).
+    pub fn delete_namespace(&self, namespace: &str) -> Result<(usize, f64)> {
+        let ns_dir = self.cache_dir.join(namespace);
+        self.delete_namespace_inner(&ns_dir)
+    }
+
+    /// Inner implementation: remove a directory and count its contents.
+    fn delete_namespace_inner(&self, dir: &Path) -> Result<(usize, f64)> {
+        if !dir.exists() {
+            return Ok((0, 0.0));
+        }
+
+        let mut removed_count = 0;
+        let mut removed_size = 0.0;
+
+        // Count files before removal
+        if let Ok(read_dir) = fs::read_dir(dir) {
+            for entry in read_dir.flatten() {
+                if let Ok(meta) = entry.metadata()
+                    && meta.is_file()
+                {
+                    removed_size += meta.len() as f64 / (1024.0 * 1024.0);
+                    removed_count += 1;
+                }
+            }
+        }
+
+        fs::remove_dir_all(dir)
+            .map_err(|e| KreuzbergError::cache(format!("Failed to remove directory {}: {}", dir.display(), e)))?;
+
+        Ok((removed_count, removed_size))
+    }
+
     pub fn get_stats(&self) -> Result<CacheStats> {
-        use super::cleanup::get_cache_metadata;
-        let cache_path_str = self
-            .cache_dir
+        self.get_stats_filtered(None)
+    }
+
+    /// Get cache stats, optionally filtered to a specific namespace.
+    pub fn get_stats_filtered(&self, namespace: Option<&str>) -> Result<CacheStats> {
+        let dir = self.resolve_dir(namespace);
+        let dir_str = dir
             .to_str()
             .ok_or_else(|| KreuzbergError::validation("Cache directory path contains invalid UTF-8".to_string()))?;
-        get_cache_metadata(cache_path_str)
+        super::cleanup::get_cache_metadata(dir_str)
     }
 
     pub fn cache_dir(&self) -> &Path {

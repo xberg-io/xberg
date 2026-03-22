@@ -542,6 +542,21 @@ mod build_tesseract {
                 tesseract_config.build();
             });
 
+        // Bundle eng.traineddata (tessdata_fast, ~4MB) so English OCR works out of the box.
+        // Tesseract looks for traineddata at {TESSDATA_PREFIX}/tessdata/{lang}.traineddata.
+        let bundled_tessdata_dir = tessdata_prefix.join("tessdata");
+        let eng_traineddata = bundled_tessdata_dir.join("eng.traineddata");
+        if !eng_traineddata.exists() {
+            fs::create_dir_all(&bundled_tessdata_dir).expect("Failed to create tessdata directory");
+            download_file(
+                "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata",
+                &eng_traineddata,
+                "eng.traineddata",
+            );
+        }
+        println!("cargo:rustc-env=TESSDATA_PREFIX_BUNDLED={}", tessdata_prefix.display());
+        println!("cargo:warning=Bundled tessdata dir: {:?}", bundled_tessdata_dir);
+
         println!("cargo:rerun-if-changed=build.rs");
         println!("cargo:rerun-if-changed={}", third_party_dir.display());
         println!("cargo:rerun-if-changed={}", leptonica_dir.display());
@@ -817,6 +832,52 @@ mod build_tesseract {
         fs::remove_file(temp_file).expect("Failed to remove temporary zip file");
 
         extract_dir
+    }
+
+    /// Download a single file to a destination path with retries.
+    fn download_file(url: &str, dest: &Path, label: &str) {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .http1_only()
+            .build()
+            .expect("Failed to create HTTP client");
+
+        println!("cargo:warning=Downloading {} from {}", label, url);
+        let max_attempts = 3;
+
+        for attempt in 1..=max_attempts {
+            let err_msg = match client.get(url).send() {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        match resp.bytes() {
+                            Ok(bytes) => {
+                                fs::write(dest, &bytes).expect("Failed to write downloaded file");
+                                println!("cargo:warning=Downloaded {} ({} bytes)", label, bytes.len());
+                                return;
+                            }
+                            Err(err) => format!("Failed to read response: {}", err),
+                        }
+                    } else {
+                        format!("HTTP {}", resp.status().as_u16())
+                    }
+                }
+                Err(err) => err.to_string(),
+            };
+
+            if attempt == max_attempts {
+                panic!(
+                    "Failed to download {} after {} attempts: {}",
+                    label, max_attempts, err_msg
+                );
+            }
+
+            let backoff = 2u64.pow((attempt - 1).min(3));
+            println!(
+                "cargo:warning=Download attempt {}/{} for {} failed ({}). Retrying in {}s...",
+                attempt, max_attempts, label, err_msg, backoff
+            );
+            std::thread::sleep(std::time::Duration::from_secs(backoff));
+        }
     }
 
     fn normalize_cmake_path(path: &Path) -> String {

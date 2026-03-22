@@ -321,6 +321,17 @@ pub fn detect_layout_for_document(
                 let page_result = detection_to_page_result(page_idx, &detection, page_w, page_h);
                 let mapping_ms = mapping_start.elapsed().as_secs_f64() * 1000.0;
 
+                tracing::trace!(
+                    page = page_idx,
+                    table_count = page_result
+                        .regions
+                        .iter()
+                        .filter(|r| matches!(r.class, LayoutClass::Table))
+                        .count(),
+                    total = page_result.regions.len(),
+                    "Page layout regions"
+                );
+
                 tracing::debug!(
                     page = page_idx,
                     detections = page_result.regions.len(),

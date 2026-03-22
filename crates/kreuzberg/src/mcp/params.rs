@@ -74,6 +74,43 @@ fn default_use_content() -> bool {
 #[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
 pub struct EmptyParams {}
 
+/// Request parameters for cache warm (model download).
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+pub struct CacheWarmParams {
+    /// Download all embedding model presets
+    #[serde(default)]
+    pub all_embeddings: bool,
+    /// Specific embedding preset name to download (e.g. "balanced", "speed", "quality")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_model: Option<String>,
+}
+
+/// Request parameters for embedding generation.
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+pub struct EmbedTextParams {
+    /// List of text strings to generate embeddings for
+    pub texts: Vec<String>,
+    /// Embedding preset name (default: "balanced"). Available: "speed", "balanced", "quality"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preset: Option<String>,
+}
+
+/// Request parameters for text chunking.
+#[derive(Debug, serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+pub struct ChunkTextParams {
+    /// Text content to split into chunks
+    pub text: String,
+    /// Maximum characters per chunk (default: 2000)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_characters: Option<usize>,
+    /// Number of overlapping characters between chunks (default: 100)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overlap: Option<usize>,
+    /// Chunker type: "text" or "markdown" (default: "text")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chunker_type: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,5 +243,55 @@ mod tests {
     fn test_empty_params_deserializes_from_empty_object() {
         let params: EmptyParams = serde_json::from_str("{}").unwrap();
         let _ = params;
+    }
+
+    #[test]
+    fn test_cache_warm_params_defaults() {
+        let json = r#"{}"#;
+        let params: CacheWarmParams = serde_json::from_str(json).unwrap();
+        assert!(!params.all_embeddings);
+        assert!(params.embedding_model.is_none());
+    }
+
+    #[test]
+    fn test_cache_warm_params_with_values() {
+        let json = r#"{"all_embeddings": true, "embedding_model": "balanced"}"#;
+        let params: CacheWarmParams = serde_json::from_str(json).unwrap();
+        assert!(params.all_embeddings);
+        assert_eq!(params.embedding_model.as_deref(), Some("balanced"));
+    }
+
+    #[test]
+    fn test_embed_text_params_defaults() {
+        let json = r#"{"texts": ["hello", "world"]}"#;
+        let params: EmbedTextParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.texts.len(), 2);
+        assert!(params.preset.is_none());
+    }
+
+    #[test]
+    fn test_embed_text_params_with_preset() {
+        let json = r#"{"texts": ["hello"], "preset": "quality"}"#;
+        let params: EmbedTextParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.preset.as_deref(), Some("quality"));
+    }
+
+    #[test]
+    fn test_chunk_text_params_defaults() {
+        let json = r#"{"text": "some long text"}"#;
+        let params: ChunkTextParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.text, "some long text");
+        assert!(params.max_characters.is_none());
+        assert!(params.overlap.is_none());
+        assert!(params.chunker_type.is_none());
+    }
+
+    #[test]
+    fn test_chunk_text_params_with_all_fields() {
+        let json = r#"{"text": "hello", "max_characters": 500, "overlap": 50, "chunker_type": "markdown"}"#;
+        let params: ChunkTextParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.max_characters, Some(500));
+        assert_eq!(params.overlap, Some(50));
+        assert_eq!(params.chunker_type.as_deref(), Some("markdown"));
     }
 }

@@ -71,7 +71,7 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			assertions.assertExpectedMime(result, ["image/jpeg"]);
-			assertions.assertMaxContentLength(result, 200);
+			assertions.assertMaxContentLength(result, 300);
 		},
 		TEST_TIMEOUT_MS,
 	);

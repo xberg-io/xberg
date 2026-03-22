@@ -21,6 +21,12 @@
 #' @param layout Layout detection configuration created by \code{layout_detection_config()}.
 #' @param email Email configuration created by \code{email_config()}.
 #' @param concurrency Concurrency configuration created by \code{concurrency_config()}.
+#' @param cache_namespace Character or NULL. Cache namespace for tenant isolation.
+#'   When set, cache keys are scoped to this namespace so that different tenants'
+#'   cached results do not collide. When NULL, the default namespace is used.
+#' @param cache_ttl_secs Integer or NULL. Per-request cache TTL in seconds.
+#'   Overrides the server default TTL for this extraction request. When NULL,
+#'   the server default is used.
 #' @param ... Additional configuration options passed as named list elements.
 #' @return A named list representing the extraction configuration.
 #' @export
@@ -35,7 +41,9 @@ extraction_config <- function(force_ocr = FALSE, ocr = NULL, chunking = NULL,
                               security_limits = NULL,
                               max_concurrent_extractions = NULL,
                               layout = NULL, email = NULL,
-                              concurrency = NULL, ...) {
+                              concurrency = NULL,
+                              cache_namespace = NULL, cache_ttl_secs = NULL,
+                              ...) {
   config <- list()
   if (isTRUE(force_ocr)) config$force_ocr <- TRUE
   if (!is.null(ocr)) config$ocr <- ocr
@@ -70,6 +78,13 @@ extraction_config <- function(force_ocr = FALSE, ocr = NULL, chunking = NULL,
   if (!is.null(layout)) config$layout <- layout
   if (!is.null(email)) config$email <- email
   if (!is.null(concurrency)) config$concurrency <- concurrency
+  if (!is.null(cache_namespace)) {
+    stopifnot(is.character(cache_namespace), length(cache_namespace) == 1L)
+    config$cache_namespace <- cache_namespace
+  }
+  if (!is.null(cache_ttl_secs)) {
+    config$cache_ttl_secs <- as.integer(cache_ttl_secs)
+  }
   extras <- list(...)
   if (length(extras) > 0) config <- c(config, extras)
   config

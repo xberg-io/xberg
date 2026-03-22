@@ -15,6 +15,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.5.2] - 2026-03-21
+
+### Fixed
+
+- **PDF word splitting in extracted text**: Pdfium's text extraction inserted spurious spaces mid-word (e.g. `"s hall a b e active"` instead of `"shall be active"`). Added selective page-level respacing: pages with detected broken word spacing are re-extracted using character-level gap analysis (`font_size × 0.33` threshold). Clean pages use the fast single-call path. Reduces garbled lines from 406 to 0 on the ISO 21111-10 test document with no performance impact.
+- **Markdown underscore escaping**: Underscores in extracted text (e.g. `CTC_ARP_01`) were incorrectly escaped as `CTC\_ARP\_01` throughout the markdown output. Underscore escaping has been removed entirely since extracted PDF text contains literal identifiers, not markdown formatting.
+- **Page header/footer leakage**: Running headers like `ISO 21111-10:2021(E)` and copyright footers leaked into the document body. Added fuzzy alphanumeric matching to detect repeated header/footer text even when spacing or character extraction varies across pages.
+- **R batch function spurious NULL argument**: R wrapper batch functions passed an extra `NULL` positional argument to native Rust functions, causing "unused argument" errors on all batch operations.
+- **Elixir Windows ORT DLL staging**: ONNX Runtime DLL was only staged in `target/release/` but not in `priv/native/` where the BEAM VM loads NIFs. OCR/layout/embedding features now work correctly on Windows CI.
+
+### Added
+
+- **General extraction result caching**: All file types (PDF, Office, HTML, archives, etc.) are now cached — not just OCR results. Repeated extractions of the same file with the same config return instantly from cache.
+- **Cache namespace isolation**: New `cache_namespace` field on `ExtractionConfig` enables multi-tenant cache isolation on shared filesystems. Available via `--cache-namespace` CLI flag and across all language bindings.
+- **Per-request cache TTL**: New `cache_ttl_secs` field on `ExtractionConfig` overrides the global TTL for individual extractions. Set to `0` to skip cache entirely. Available via `--cache-ttl-secs` CLI flag.
+- **Cache namespace deletion**: `delete_namespace()` removes all cache entries under a namespace. `get_stats_filtered()` returns per-namespace statistics.
+- **Multi-worker cleanup safety**: Cache cleanup no longer triggers excessively when multiple worker pods share the same cache directory.
+- **Bundled eng.traineddata**: English OCR works out of the box with zero runtime configuration (~4MB bundled at build time).
+- **Tessdata in `cache warm`**: `kreuzberg-cli cache warm` now downloads all tessdata_fast language files (~120 languages) to `KREUZBERG_CACHE_DIR/tessdata/`, giving full Tesseract language support without system packages.
+- **Tessdata in `cache manifest`**: `kreuzberg-cli cache manifest` now includes all tessdata files with source URLs, enabling `--sync-cache` to download tessdata alongside models.
+- **`KREUZBERG_CACHE_DIR/tessdata` resolution**: `resolve_tessdata_path()` now checks `KREUZBERG_CACHE_DIR/tessdata` and the bundled build path before falling back to system paths. Resolution order: `TESSDATA_PREFIX` env → `KREUZBERG_CACHE_DIR/tessdata` → bundled tessdata → system paths.
+- **CLI `embed` command**: Generate vector embeddings from text via `kreuzberg embed --text "..." --preset balanced`. Supports stdin, multiple texts, JSON/text output. Feature-gated on `embeddings`.
+- **CLI `chunk` command**: Split text into chunks via `kreuzberg chunk --text "..." --chunk-size 512`. Configurable size, overlap, chunker type, tokenizer model.
+- **CLI `completions` command**: Generate shell completions for bash, zsh, fish, powershell via `kreuzberg completions <shell>`.
+- **CLI `--log-level` global flag**: Override `RUST_LOG` via `kreuzberg --log-level debug extract doc.pdf`.
+- **CLI extraction overrides**: 27 flags exposed via `ExtractionOverrides` struct with `#[command(flatten)]`. New flags: `--layout-preset`, `--layout-confidence`, `--acceleration`, `--extract-pages`, `--page-markers`, `--extract-images`, `--target-dpi`, `--pdf-extract-images`, `--pdf-extract-metadata`, `--token-reduction`, `--include-structure`, `--max-concurrent`, `--max-threads`, `--msg-codepage`, `--ocr-auto-rotate`.
+- **CLI colored output**: Text output uses `anstyle` for colored headers, labels, success values, and dim separators. Respects `NO_COLOR` env var.
+- **API `POST /detect`**: MIME type detection endpoint via multipart file upload.
+- **API `GET /version`**: Version info endpoint.
+- **API `GET /cache/manifest`**: Model manifest with checksums and sizes.
+- **API `POST /cache/warm`**: Eager model download endpoint with embedding preset support.
+- **MCP `get_version` tool**: Query server version from MCP clients.
+- **MCP `cache_manifest` tool**: Get model manifest via MCP.
+- **MCP `cache_warm` tool**: Pre-download models via MCP.
+- **MCP `embed_text` tool**: Generate embeddings via MCP (feature-gated).
+- **MCP `chunk_text` tool**: Text chunking via MCP.
+- **Pipeline table extraction tracing**: Added zero-cost `tracing::trace!` and `tracing::debug!` logging throughout the layout detection and table extraction pipeline for easier debugging.
+- **TATR model availability check**: Layout detection now returns an error if table regions are detected but the TATR model is unavailable, instead of silently falling back to degraded extraction.
+- **Publish idempotency checks**: All publish jobs now have re-check steps using `check-registry@v1` before publishing. Added `check-elixir-release` job for GitHub release asset verification.
+- **ARM benchmark runners**: Benchmark workflows switched to `runner-medium-arm64` for ARM-native performance testing.
+- **Registry check tool**: `python3 scripts/publish/check_all_registries.py <version>` checks all 10+ registries and GitHub release assets locally.
+
+### Changed
+
+- **CLI batch flags**: Batch command now supports all extraction override flags (chunking, layout, acceleration, etc.) via shared `ExtractionOverrides` struct, matching extract command parity.
+- **CLI config architecture**: Replaced 13-parameter `apply_extraction_overrides` function with `ExtractionOverrides` struct using `#[command(flatten)]`. Config fields auto-scale as `ExtractionConfig` evolves.
+- **MCP tool architecture**: Removed dead `tools/` trait-based duplicates; all tools implemented directly in `server.rs`.
+
+### Improved
+
+- **CLI validation**: OCR backend values validated (tesseract, paddle-ocr, easyocr). Chunk size/overlap bounds checked. DPI range (36-2400) and layout confidence (0.0-1.0) validated. Zero-value `max_concurrent`/`max_threads` rejected. `--chunking-tokenizer` errors when feature disabled.
+- **API validation**: Embedding preset names validated in `/embed`. Chunk `max_characters` bounds checked (1-1M) in `/chunk`.
+- **MCP validation**: Empty paths rejected in `batch_extract_files`. Chunk `max_characters` bounds checked in `chunk_text`. Embedding preset validated in `embed_text`.
+- **Chunk overlap auto-clamping**: When `--chunk-size` is smaller than default overlap, overlap is automatically clamped to `size/4` instead of producing a confusing error.
+
+---
+
+## [4.5.1] - 2026-03-20
+
 ## [4.5.1] - 2026-03-20
 
 - **Java FFI `CBatchResult` struct layout mismatch**: The `count` and `results` fields were swapped in the Java Panama FFM layout, causing all batch extraction operations to fail with memory access errors.

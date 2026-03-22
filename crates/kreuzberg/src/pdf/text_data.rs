@@ -123,12 +123,24 @@ fn extract_segments_from_api(text_obj: &PdfPageText) -> Vec<ExtractedSegment> {
     let seg_count = pdfium_segments.len();
     let mut segments = Vec::with_capacity(seg_count);
 
+    // Detect at page level whether word spacing is broken.
+    // Only then apply the expensive per-char respacing to all segments.
+    let page_text = text_obj.all();
+    let page_needs_respacing = crate::pdf::markdown::text_repair::text_has_broken_word_spacing(&page_text);
+    if page_needs_respacing {
+        tracing::debug!("Page has broken word spacing, applying respacing to all segments");
+    }
+
     for i in 0..seg_count {
         let seg = match pdfium_segments.get(i) {
             Ok(s) => s,
             Err(_) => continue,
         };
-        let text = seg.text();
+        let text = if page_needs_respacing {
+            seg.text_respaced(0.33)
+        } else {
+            seg.text()
+        };
         if text.trim().is_empty() {
             continue;
         }
@@ -208,12 +220,9 @@ pub(crate) fn extract_page_text_data(page: &PdfPage) -> Option<PageTextData> {
         };
 
         // Generated chars (pdfium's synthetic word boundaries): push as space markers.
+        // Space filtering is now handled at the pdfium bindings level via _respaced APIs.
         if ch.is_generated().unwrap_or(false) {
-            let (x, y) = if let Some(last) = extracted.last() {
-                (last.x + last.font_size * 0.5, last.y)
-            } else {
-                (0.0, 0.0)
-            };
+            let (x, y) = extracted.last().map_or((0.0, 0.0), |c| (c.right_x, c.y));
             let space_fs = extracted.last().map_or(12.0, |c| c.font_size);
             extracted.push(ExtractedChar {
                 ch: ' ',

@@ -61,7 +61,9 @@ impl ExtractionConfig {
         layout=None,
         acceleration=None,
         email=None,
-        concurrency=None
+        concurrency=None,
+        cache_namespace=None,
+        cache_ttl_secs=None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -86,6 +88,8 @@ impl ExtractionConfig {
         acceleration: Option<AccelerationConfig>,
         email: Option<EmailConfig>,
         concurrency: Option<ConcurrencyConfig>,
+        cache_namespace: Option<String>,
+        cache_ttl_secs: Option<u64>,
     ) -> PyResult<Self> {
         let (html_options_inner, html_options_dict) = parse_html_options_dict(html_options)?;
         Ok(Self {
@@ -139,6 +143,8 @@ impl ExtractionConfig {
                 security_limits: None,
                 layout: layout.map(Into::into),
                 acceleration: acceleration.map(Into::into),
+                cache_namespace,
+                cache_ttl_secs,
                 email: email.map(Into::into),
                 concurrency: concurrency.map(Into::into),
             },
@@ -377,6 +383,26 @@ impl ExtractionConfig {
     #[setter]
     fn set_concurrency(&mut self, value: Option<ConcurrencyConfig>) {
         self.inner.concurrency = value.map(Into::into);
+    }
+
+    #[getter]
+    fn cache_namespace(&self) -> Option<String> {
+        self.inner.cache_namespace.clone()
+    }
+
+    #[setter]
+    fn set_cache_namespace(&mut self, value: Option<String>) {
+        self.inner.cache_namespace = value;
+    }
+
+    #[getter]
+    fn cache_ttl_secs(&self) -> Option<u64> {
+        self.inner.cache_ttl_secs
+    }
+
+    #[setter]
+    fn set_cache_ttl_secs(&mut self, value: Option<u64>) {
+        self.inner.cache_ttl_secs = value;
     }
 
     fn __repr__(&self) -> String {

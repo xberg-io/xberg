@@ -11,6 +11,11 @@
 //! - **detect_mime_type**: Detect MIME type of a file
 //! - **cache_stats**: Get cache statistics
 //! - **cache_clear**: Clear the cache
+//! - **cache_manifest**: Get model manifest with checksums
+//! - **cache_warm**: Download model files for offline use
+//! - **get_version**: Get Kreuzberg version info
+//! - **chunk_text**: Split text into chunks
+//! - **embed_text**: Generate vector embeddings (requires `embeddings` feature)
 //!
 //! # Example
 //!
@@ -35,7 +40,10 @@ pub use server::{KreuzbergMcp, start_mcp_server, start_mcp_server_with_config};
 #[cfg(feature = "mcp-http")]
 pub use server::{start_mcp_server_http, start_mcp_server_http_with_config};
 
-pub use params::{BatchExtractFilesParams, DetectMimeTypeParams, ExtractBytesParams, ExtractFileParams};
+pub use params::{
+    BatchExtractFilesParams, CacheWarmParams, ChunkTextParams, DetectMimeTypeParams, EmbedTextParams,
+    ExtractBytesParams, ExtractFileParams,
+};
 
 #[doc(hidden)]
 pub use errors::map_kreuzberg_error_to_mcp;

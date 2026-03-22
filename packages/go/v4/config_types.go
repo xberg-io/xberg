@@ -102,6 +102,8 @@ type ExtractionConfig struct {
 	IncludeDocumentStructure *bool                    `json:"include_document_structure,omitempty"`
 	OutputFormat             string                   `json:"output_format,omitempty"`
 	ResultFormat             string                   `json:"result_format,omitempty"`
+	CacheNamespace           *string                  `json:"cache_namespace,omitempty"`
+	CacheTTLSecs             *uint64                  `json:"cache_ttl_secs,omitempty"`
 }
 
 // SecurityLimitsConfig controls security thresholds for archive extraction.
