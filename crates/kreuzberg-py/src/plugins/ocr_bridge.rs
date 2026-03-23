@@ -72,8 +72,8 @@ impl PythonOcrBackend {
         }
 
         let process_image_is_async = obj
-            .getattr("process_image")?
-            .hasattr("__await__")
+            .getattr("process_image")
+            .and_then(|m| m.hasattr("__await__"))
             .unwrap_or(false);
 
         let process_document_is_async = obj
@@ -327,7 +327,8 @@ impl OcrBackend for PythonOcrBackend {
         Python::attach(|py| {
             self.python_obj
                 .bind(py)
-                .hasattr("process_document")
+                .call_method0("supports_document_processing")
+                .and_then(|result| result.extract::<bool>())
                 .unwrap_or(false)
         })
     }

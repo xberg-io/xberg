@@ -208,6 +208,10 @@ class EasyOCRBackend:
         self._reader = None
         logger.info("EasyOCR backend shutdown")
 
+    def supports_document_processing(self) -> bool:
+        """EasyOCR supports native document-level processing for PDFs and multi-page images."""
+        return True
+
     def process_image(self, image_bytes: bytes, language: str) -> dict[str, Any]:
         """Process image bytes and extract text using EasyOCR.
 
@@ -340,12 +344,9 @@ class EasyOCRBackend:
                     pages.append(self._process_pil_image(img, language))
                 doc.close()
                 return self._aggregate_pages(pages)
-            except ImportError:
-                msg = "Efficient PDF OCR requires 'pdf2image' or 'pymupdf'. Please install one of them."
-                logger.warning(msg)
-                # Fallback to single page or error if we can't even read it
-                with open(path, "rb") as f:
-                    return self.process_image(f.read(), language)
+            except ImportError as e:
+                msg = "PDF processing requires 'pdf2image' or 'pymupdf'. Install with: pip install pdf2image"
+                raise OCRError(msg) from e
 
     def _process_pil_image(self, image: Any, language: str) -> dict[str, Any]:
         """Process a PIL Image object."""

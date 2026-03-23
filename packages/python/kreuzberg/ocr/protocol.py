@@ -121,6 +121,19 @@ class OcrBackendProtocol(Protocol):
         """
         ...
 
+    def supports_document_processing(self) -> bool:
+        """Check if backend supports native document-level processing.
+
+        Returns:
+            True if the backend implements process_document(), False otherwise.
+
+        Note:
+            Backends that do not override process_document() should return False.
+            This allows the extraction pipeline to use page-by-page fallback.
+
+        """
+        ...
+
     def process_document(self, path: str, language: str) -> dict[str, Any]:
         """Process multi-page document from path (optional).
 
