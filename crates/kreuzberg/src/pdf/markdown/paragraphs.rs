@@ -42,6 +42,8 @@ pub(super) fn lines_to_paragraphs(lines: Vec<PdfLine>) -> Vec<PdfParagraph> {
     let mut current_lines: Vec<PdfLine> = vec![lines[0].clone()];
 
     for line in lines.into_iter().skip(1) {
+        // SAFETY: current_lines is initialised with lines[0] above and only ever
+        // has elements pushed onto it, so it is never empty at this point.
         let prev = current_lines.last().unwrap();
 
         let vertical_gap = (line.baseline_y - prev.baseline_y).abs();
@@ -137,6 +139,8 @@ pub(super) fn merge_continuation_paragraphs(paragraphs: &mut Vec<PdfParagraph>) 
     // the O(N²) cost of repeated Vec::remove shifts.
     let old = std::mem::take(paragraphs);
     let mut iter = old.into_iter();
+    // SAFETY: we returned early above when paragraphs.len() < 2, so `old`
+    // contains at least two elements and the first next() always succeeds.
     let mut current = iter.next().unwrap();
 
     for next in iter {

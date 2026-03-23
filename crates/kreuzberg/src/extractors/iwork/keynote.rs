@@ -8,7 +8,6 @@ use crate::types::{ExtractionResult, Metadata};
 use ahash::AHashMap;
 use async_trait::async_trait;
 use std::borrow::Cow;
-use std::io::Cursor;
 
 /// Apple Keynote presentation extractor.
 ///
@@ -63,18 +62,7 @@ impl Plugin for KeynoteExtractor {
 /// - `Index/Slide_*.iwa` — individual slide content and speaker notes
 /// - `Index/MasterSlide_*.iwa` — master slide text
 fn parse_keynote(content: &[u8]) -> Result<String> {
-    let cursor = Cursor::new(content);
-    let mut archive = zip::ZipArchive::new(cursor)
-        .map_err(|e| crate::error::KreuzbergError::parsing(format!("Failed to open Keynote ZIP: {e}")))?;
-
-    let iwa_paths: Vec<String> = (0..archive.len())
-        .filter_map(|i| {
-            archive.by_index(i).ok().and_then(|f| {
-                let name = f.name().to_string();
-                if name.ends_with(".iwa") { Some(name) } else { None }
-            })
-        })
-        .collect();
+    let iwa_paths = super::collect_iwa_paths(content)?;
 
     let mut all_texts: Vec<String> = Vec::new();
 

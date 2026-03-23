@@ -80,10 +80,16 @@ impl ParaText {
         }
 
         let mut content = String::with_capacity(chars.len());
-        for &ch in &chars {
+        let mut i = 0;
+        while i < chars.len() {
+            let ch = chars[i];
             match ch {
-                0x0000 => {}                            // null — skip
-                0x0001..=0x0008 => {}                   // other low controls — skip
+                0x0000 => {} // null — skip
+                // Extended control characters 0x0001–0x0008 occupy 8 u16 units
+                // total (the control char + 7 parameter units). Skip all 8.
+                0x0001..=0x0008 => {
+                    i += 7; // skip 7 additional parameter units (loop increments by 1)
+                }
                 0x0009 => content.push('\t'),           // horizontal tab
                 0x000A => content.push('\n'),           // line feed
                 0x000D => content.push('\r'),           // carriage return
@@ -95,6 +101,7 @@ impl ParaText {
                     }
                 }
             }
+            i += 1;
         }
 
         Ok(Self { content })

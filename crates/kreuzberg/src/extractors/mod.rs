@@ -448,7 +448,7 @@ mod tests {
 
         #[cfg(feature = "office")]
         {
-            expected_count += 13;
+            expected_count += 18;
             assert!(extractor_names.contains(&"markdown-extractor".to_string()));
             assert!(extractor_names.contains(&"bibtex-extractor".to_string()));
             assert!(extractor_names.contains(&"citation-extractor".to_string()));
@@ -462,17 +462,25 @@ mod tests {
             assert!(extractor_names.contains(&"opml-extractor".to_string()));
             assert!(extractor_names.contains(&"typst-extractor".to_string()));
             assert!(extractor_names.contains(&"dbf-extractor".to_string()));
-            assert!(extractor_names.contains(&"hwp-extractor".to_string()));
-        }
-
-        #[cfg(all(feature = "tokio-runtime", feature = "office"))]
-        {
-            expected_count += 5;
             assert!(extractor_names.contains(&"doc-extractor".to_string()));
             assert!(extractor_names.contains(&"docx-extractor".to_string()));
             assert!(extractor_names.contains(&"ppt-extractor".to_string()));
             assert!(extractor_names.contains(&"pptx-extractor".to_string()));
             assert!(extractor_names.contains(&"odt-extractor".to_string()));
+        }
+
+        #[cfg(feature = "hwp")]
+        {
+            expected_count += 1;
+            assert!(extractor_names.contains(&"hwp-extractor".to_string()));
+        }
+
+        #[cfg(feature = "iwork")]
+        {
+            expected_count += 3;
+            assert!(extractor_names.contains(&"pages-extractor".to_string()));
+            assert!(extractor_names.contains(&"numbers-extractor".to_string()));
+            assert!(extractor_names.contains(&"keynote-extractor".to_string()));
         }
 
         #[cfg(feature = "mdx")]

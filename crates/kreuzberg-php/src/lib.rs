@@ -31,7 +31,10 @@ pub mod validation;
 ///
 /// Initializes once per PHP process (persists across requests in PHP-FPM).
 /// Thread count is configurable via `KREUZBERG_PHP_WORKER_THREADS` env var.
-pub(crate) static WORKER_RUNTIME: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
+///
+/// Stored as `Result` so that construction errors can be surfaced at call time
+/// as PHP exceptions rather than causing a process-level panic.
+pub(crate) static WORKER_RUNTIME: Lazy<Result<tokio::runtime::Runtime, String>> = Lazy::new(|| {
     let worker_threads = std::env::var("KREUZBERG_PHP_WORKER_THREADS")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
@@ -42,8 +45,14 @@ pub(crate) static WORKER_RUNTIME: Lazy<tokio::runtime::Runtime> = Lazy::new(|| {
         .enable_all()
         .thread_name("kreuzberg-php-worker")
         .build()
-        .expect("Failed to create Tokio runtime for PHP async workers")
+        .map_err(|e| format!("Failed to create Tokio runtime for PHP async workers: {e}"))
 });
+
+/// Returns a reference to the global Tokio runtime, or a PHP exception if it
+/// failed to initialise.
+pub(crate) fn worker_runtime() -> PhpResult<&'static tokio::runtime::Runtime> {
+    WORKER_RUNTIME.as_ref().map_err(|e| PhpException::from(e.clone()))
+}
 
 #[ctor::ctor]
 fn setup_onnx_runtime_path() {

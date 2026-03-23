@@ -1,5 +1,6 @@
 use crate::{
     base_net::BaseNet,
+    constants::{IMAGENET_MEAN_VALUES, IMAGENET_NORM_VALUES},
     ocr_error::OcrError,
     ocr_result::{self, TextBox},
     ocr_utils::OcrUtils,
@@ -10,13 +11,6 @@ use geo_types::{Coord, LineString, Polygon};
 use ort::{inputs, session::SessionOutputs};
 use ort::{session::Session, value::Tensor};
 use std::cmp::Ordering;
-
-const MEAN_VALUES: [f32; 3] = [0.485_f32 * 255_f32, 0.456_f32 * 255_f32, 0.406_f32 * 255_f32];
-const NORM_VALUES: [f32; 3] = [
-    1.0_f32 / 0.229_f32 / 255.0_f32,
-    1.0_f32 / 0.224_f32 / 255.0_f32,
-    1.0_f32 / 0.225_f32 / 255.0_f32,
-];
 
 #[derive(Debug)]
 pub struct DbNet {
@@ -62,7 +56,8 @@ impl DbNet {
             image::imageops::FilterType::Triangle,
         );
 
-        let input_tensors = OcrUtils::substract_mean_normalize(&src_resize, &MEAN_VALUES, &NORM_VALUES);
+        let input_tensors =
+            OcrUtils::substract_mean_normalize(&src_resize, &IMAGENET_MEAN_VALUES, &IMAGENET_NORM_VALUES);
 
         let tensor = Tensor::from_array(input_tensors)?;
 

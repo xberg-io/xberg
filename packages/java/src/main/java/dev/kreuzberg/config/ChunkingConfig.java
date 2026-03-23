@@ -16,6 +16,7 @@ public final class ChunkingConfig {
 	private final Boolean enabled;
 	private final Map<String, Object> sizing;
 	private final Boolean prependHeadingContext;
+	private final String chunkerType;
 
 	private ChunkingConfig(Builder builder) {
 		this.maxChars = builder.maxChars;
@@ -25,6 +26,7 @@ public final class ChunkingConfig {
 		this.enabled = builder.enabled;
 		this.sizing = builder.sizing;
 		this.prependHeadingContext = builder.prependHeadingContext;
+		this.chunkerType = builder.chunkerType;
 	}
 
 	public static Builder builder() {
@@ -59,6 +61,16 @@ public final class ChunkingConfig {
 		return prependHeadingContext;
 	}
 
+	/**
+	 * Get the chunker type (text or markdown).
+	 *
+	 * @return the chunker type, or null if not set (defaults to "text")
+	 * @since 4.5.4
+	 */
+	public String getChunkerType() {
+		return chunkerType;
+	}
+
 	public Map<String, Object> toMap() {
 		Map<String, Object> map = new HashMap<>();
 		map.put("max_chars", maxChars);
@@ -78,6 +90,9 @@ public final class ChunkingConfig {
 		if (prependHeadingContext != null) {
 			map.put("prepend_heading_context", prependHeadingContext);
 		}
+		if (chunkerType != null) {
+			map.put("chunker_type", chunkerType);
+		}
 		return map;
 	}
 
@@ -89,6 +104,7 @@ public final class ChunkingConfig {
 		private Boolean enabled;
 		private Map<String, Object> sizing;
 		private Boolean prependHeadingContext;
+		private String chunkerType;
 
 		private Builder() {
 		}
@@ -147,6 +163,18 @@ public final class ChunkingConfig {
 			return this;
 		}
 
+		/**
+		 * Set the chunker type.
+		 *
+		 * @param chunkerType the chunker type ("text" or "markdown")
+		 * @return this builder for chaining
+		 * @since 4.5.4
+		 */
+		public Builder chunkerType(String chunkerType) {
+			this.chunkerType = chunkerType;
+			return this;
+		}
+
 		public ChunkingConfig build() {
 			return new ChunkingConfig(this);
 		}
@@ -194,6 +222,10 @@ public final class ChunkingConfig {
 			if (prependHeadingContextValue instanceof Boolean) {
 				builder.prependHeadingContext((Boolean) prependHeadingContextValue);
 			}
+		}
+		Object chunkerTypeValue = map.get("chunker_type");
+		if (chunkerTypeValue instanceof String) {
+			builder.chunkerType((String) chunkerTypeValue);
 		}
 		return builder.build();
 	}

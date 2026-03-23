@@ -4,11 +4,15 @@ use ort::value::Tensor;
 use ort::{inputs, session::builder::SessionBuilder};
 use std::collections::HashMap;
 
-use crate::{base_net::BaseNet, ocr_error::OcrError, ocr_result::TextLine, ocr_utils::OcrUtils};
+use crate::{
+    base_net::BaseNet,
+    constants::{CRNN_MEAN_VALUES, CRNN_NORM_VALUES},
+    ocr_error::OcrError,
+    ocr_result::TextLine,
+    ocr_utils::OcrUtils,
+};
 
 const CRNN_DST_HEIGHT: u32 = 48;
-const MEAN_VALUES: [f32; 3] = [127.5, 127.5, 127.5];
-const NORM_VALUES: [f32; 3] = [1.0 / 127.5, 1.0 / 127.5, 1.0 / 127.5];
 
 #[derive(Debug)]
 pub struct CrnnNet {
@@ -189,15 +193,16 @@ impl CrnnNet {
                 let raw = resized.as_raw();
                 assert_eq!(raw.len(), rows * cols * 3, "unexpected image buffer size");
                 let adjusted = [
-                    MEAN_VALUES[0] * NORM_VALUES[0],
-                    MEAN_VALUES[1] * NORM_VALUES[1],
-                    MEAN_VALUES[2] * NORM_VALUES[2],
+                    CRNN_MEAN_VALUES[0] * CRNN_NORM_VALUES[0],
+                    CRNN_MEAN_VALUES[1] * CRNN_NORM_VALUES[1],
+                    CRNN_MEAN_VALUES[2] * CRNN_NORM_VALUES[2],
                 ];
                 for r in 0..rows {
                     for c in 0..cols {
                         let base = r * cols * 3 + c * 3;
                         for ch in 0..3 {
-                            batch_data[[batch_idx, ch, r, c]] = raw[base + ch] as f32 * NORM_VALUES[ch] - adjusted[ch];
+                            batch_data[[batch_idx, ch, r, c]] =
+                                raw[base + ch] as f32 * CRNN_NORM_VALUES[ch] - adjusted[ch];
                         }
                     }
                 }
@@ -254,7 +259,7 @@ impl CrnnNet {
             image::imageops::FilterType::Triangle,
         );
 
-        let input_tensors = OcrUtils::substract_mean_normalize(&src_resize, &MEAN_VALUES, &NORM_VALUES);
+        let input_tensors = OcrUtils::substract_mean_normalize(&src_resize, &CRNN_MEAN_VALUES, &CRNN_NORM_VALUES);
 
         let input_tensors = Tensor::from_array(input_tensors)?;
 

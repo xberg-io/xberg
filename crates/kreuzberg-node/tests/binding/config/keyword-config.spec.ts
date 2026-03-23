@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExtractionConfig, KeywordConfig, RakeParams, YakeParams } from "../../src/types.js";
+import type { ExtractionConfig, KeywordConfig } from "../../src/types.js";
 
 describe("KeywordConfig", () => {
 	describe("construction", () => {
@@ -161,7 +161,7 @@ describe("KeywordConfig", () => {
 
 		it("should type-check invalid algorithm at compile time", () => {
 			// @ts-expect-error - invalid algorithm
-			const config: KeywordConfig = { algorithm: "invalid" };
+			const _config: KeywordConfig = { algorithm: "invalid" };
 		});
 
 		it("should accept valid maxKeywords values", () => {
@@ -329,12 +329,12 @@ describe("KeywordConfig", () => {
 
 		it("should reject non-string algorithm at compile time", () => {
 			// @ts-expect-error - algorithm must be string
-			const config: KeywordConfig = { algorithm: 123 };
+			const _config: KeywordConfig = { algorithm: 123 };
 		});
 
 		it("should reject non-number maxKeywords at compile time", () => {
 			// @ts-expect-error - maxKeywords must be number
-			const config: KeywordConfig = { maxKeywords: "10" };
+			const _config: KeywordConfig = { maxKeywords: "10" };
 		});
 	});
 

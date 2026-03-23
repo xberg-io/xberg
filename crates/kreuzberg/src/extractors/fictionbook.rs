@@ -140,9 +140,10 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     depth += 1;
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "emphasis" if !plain => {
                             text.push('*');
                             last_was_open_marker = true;
@@ -179,12 +180,13 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "p" && depth <= 1 {
                         break;
                     }
                     last_was_open_marker = false;
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "emphasis" if !plain => text.push('*'),
                         "strong" if !plain => text.push_str("**"),
                         "strikethrough" => text.push_str("~~"),
@@ -279,8 +281,9 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    match tag.as_str() {
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
+                    match tag.as_ref() {
                         "emphasis" | "strong" | "strikethrough" | "code" | "sub" | "sup" => {}
                         "empty-line" => {
                             text.push('\n');
@@ -290,7 +293,8 @@ impl FictionBookExtractor {
                     depth += 1;
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if depth == 0 {
                         break;
                     }
@@ -362,9 +366,10 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
 
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "description" => {
                             in_description = true;
                         }
@@ -373,7 +378,7 @@ impl FictionBookExtractor {
                         }
                         "genre" if in_title_info => {
                             if let Ok(Event::Text(t)) = reader.read_event() {
-                                let genre = String::from_utf8_lossy(t.as_ref()).to_string();
+                                let genre = String::from_utf8_lossy(t.as_ref());
                                 if !genre.trim().is_empty() && genre.trim() != "unrecognised" {
                                     metadata.subject = Some(genre.trim().to_string());
                                 }
@@ -381,7 +386,7 @@ impl FictionBookExtractor {
                         }
                         "date" if in_title_info => {
                             if let Ok(Event::Text(t)) = reader.read_event() {
-                                let date = String::from_utf8_lossy(t.as_ref()).to_string();
+                                let date = String::from_utf8_lossy(t.as_ref());
                                 if !date.trim().is_empty() {
                                     metadata.created_at = Some(date.trim().to_string());
                                 }
@@ -389,7 +394,7 @@ impl FictionBookExtractor {
                         }
                         "lang" if in_title_info => {
                             if let Ok(Event::Text(t)) = reader.read_event() {
-                                let lang = String::from_utf8_lossy(t.as_ref()).to_string();
+                                let lang = String::from_utf8_lossy(t.as_ref());
                                 if !lang.trim().is_empty() {
                                     metadata.language = Some(lang.trim().to_string());
                                 }
@@ -399,7 +404,8 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "title-info" {
                         in_title_info = false;
                     } else if tag == "description" {
@@ -426,12 +432,13 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
 
                     if tag == "body" {
                         let mut is_notes = false;
                         for a in e.attributes().flatten() {
-                            let attr_name = String::from_utf8_lossy(a.key.as_ref()).to_string();
+                            let attr_name = String::from_utf8_lossy(a.key.as_ref());
                             if attr_name == "name" {
                                 let val = String::from_utf8_lossy(a.value.as_ref());
                                 if val == "notes" {
@@ -496,14 +503,16 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::Empty(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "empty-line" && in_body {
                         content.push_str(HORIZONTAL_RULE);
                         content.push_str("\n\n");
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "body" {
                         if is_notes_body {
                             is_notes_body = false;
@@ -544,8 +553,9 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                    match tag.as_str() {
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
+                    match tag.as_ref() {
                         "section" => section_depth += 1,
                         "title" => {
                             if let Ok(title) = Self::extract_text_content(reader)
@@ -568,7 +578,8 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "section" {
                         section_depth -= 1;
                         if section_depth == 0 {
@@ -601,9 +612,10 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
 
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "poem" => {
                             poem_depth += 1;
                         }
@@ -659,7 +671,8 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "poem" {
                         poem_depth -= 1;
                         if poem_depth == 0 {
@@ -689,9 +702,10 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     depth += 1;
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "emphasis" if !plain => {
                             text.push('*');
                             last_was_open_marker = true;
@@ -728,12 +742,13 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "v" && depth == 0 {
                         break;
                     }
                     last_was_open_marker = false;
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "emphasis" if !plain => text.push('*'),
                         "strong" if !plain => text.push_str("**"),
                         "strikethrough" => text.push_str("~~"),
@@ -823,9 +838,10 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
 
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "stanza" => {
                             stanza_depth += 1;
                         }
@@ -860,7 +876,8 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "stanza" {
                         stanza_depth -= 1;
                         if stanza_depth == 0 {
@@ -885,9 +902,10 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
 
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "section" => {
                             section_depth += 1;
                         }
@@ -937,14 +955,16 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::Empty(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "empty-line" {
                         content.push_str(HORIZONTAL_RULE);
                         content.push_str("\n\n");
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "section" {
                         section_depth -= 1;
                         if section_depth == 0 {
@@ -975,12 +995,13 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
 
                     if tag == "body" {
                         let mut is_notes = false;
                         for a in e.attributes().flatten() {
-                            let attr_name = String::from_utf8_lossy(a.key.as_ref()).to_string();
+                            let attr_name = String::from_utf8_lossy(a.key.as_ref());
                             if attr_name == "name" {
                                 let val = String::from_utf8_lossy(a.value.as_ref());
                                 if val == "notes" {
@@ -1039,7 +1060,8 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "body" {
                         if is_notes_body {
                             is_notes_body = false;
@@ -1073,21 +1095,23 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     depth += 1;
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "emphasis" | "strong" | "strikethrough" | "code" => {
-                            format_stack.push((tag, text.len() as u32));
+                            format_stack.push((tag.into_owned(), text.len() as u32));
                         }
                         _ => {}
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "p" && depth <= 1 {
                         break;
                     }
-                    match tag.as_str() {
+                    match tag.as_ref() {
                         "emphasis" | "strong" | "strikethrough" | "code" => {
                             if let Some((fmt_tag, start)) = format_stack.pop() {
                                 let end = text.len() as u32;
@@ -1149,13 +1173,15 @@ impl FictionBookExtractor {
         loop {
             match reader.read_event() {
                 Ok(Event::Start(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "section" {
                         section_depth += 1;
                     }
                 }
                 Ok(Event::End(e)) => {
-                    let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                    let name = e.name();
+                    let tag = crate::utils::xml_tag_name(name.as_ref());
                     if tag == "section" {
                         section_depth -= 1;
                         if section_depth == 0 {
@@ -1164,7 +1190,7 @@ impl FictionBookExtractor {
                     }
                 }
                 Ok(Event::Text(t)) => {
-                    let decoded = String::from_utf8_lossy(t.as_ref()).to_string();
+                    let decoded = String::from_utf8_lossy(t.as_ref());
                     let trimmed = decoded.trim();
                     if !trimmed.is_empty() {
                         if !text.is_empty() {

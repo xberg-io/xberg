@@ -296,8 +296,8 @@ impl ExtractionResult {
     pub fn from_rust(
         result: kreuzberg::ExtractionResult,
         py: Python,
-        output_format: Option<String>,
-        result_format: Option<String>,
+        output_format: Option<&str>,
+        result_format: Option<&str>,
     ) -> PyResult<Self> {
         let metadata_dict = PyDict::new(py);
 
@@ -406,7 +406,7 @@ impl ExtractionResult {
                 }
 
                 if let Some(ocr) = img.ocr_result {
-                    let ocr_py = Self::from_rust(*ocr, py, output_format.clone(), result_format.clone())?;
+                    let ocr_py = Self::from_rust(*ocr, py, output_format, result_format)?;
                     img_dict.set_item("ocr_result", ocr_py)?;
                 }
 
@@ -618,15 +618,16 @@ impl ExtractionResult {
                     .and_then(|v| v.as_str().map(String::from))
                     .unwrap_or_default();
                 let positions: Option<Vec<usize>> = kw.positions;
+                let py_positions = positions
+                    .map(|p| -> PyResult<_> {
+                        Ok(PyList::new(py, p.into_iter().map(|v| v as u64).collect::<Vec<_>>())?.unbind())
+                    })
+                    .transpose()?;
                 let py_kw = PyExtractedKeyword {
                     text: kw.text,
                     score: kw.score as f64,
                     algorithm: algorithm_str,
-                    positions: positions.map(|p| {
-                        PyList::new(py, p.into_iter().map(|v| v as u64).collect::<Vec<_>>())
-                            .unwrap()
-                            .unbind()
-                    }),
+                    positions: py_positions,
                 };
                 kw_list.append(Py::new(py, py_kw)?)?;
             }
@@ -638,8 +639,8 @@ impl ExtractionResult {
         let warnings_list = PyList::empty(py);
         for warning in result.processing_warnings {
             let py_warning = PyProcessingWarning {
-                source: warning.source,
-                message: warning.message,
+                source: warning.source.into_owned(),
+                message: warning.message.into_owned(),
             };
             warnings_list.append(Py::new(py, py_warning)?)?;
         }
@@ -652,14 +653,17 @@ impl ExtractionResult {
                     .ok()
                     .and_then(|v| v.as_str().map(String::from))
                     .unwrap_or_default();
-                let bbox = annot.bounding_box.map(|bb| {
-                    let dict = PyDict::new(py);
-                    dict.set_item("x0", bb.x0).unwrap();
-                    dict.set_item("y0", bb.y0).unwrap();
-                    dict.set_item("x1", bb.x1).unwrap();
-                    dict.set_item("y1", bb.y1).unwrap();
-                    dict.unbind()
-                });
+                let bbox = annot
+                    .bounding_box
+                    .map(|bb| -> PyResult<_> {
+                        let dict = PyDict::new(py);
+                        dict.set_item("x0", bb.x0)?;
+                        dict.set_item("y0", bb.y0)?;
+                        dict.set_item("x1", bb.x1)?;
+                        dict.set_item("y1", bb.y1)?;
+                        Ok(dict.unbind())
+                    })
+                    .transpose()?;
                 let py_annot = PyPdfAnnotation {
                     annotation_type: type_str,
                     content: annot.content,
@@ -684,8 +688,8 @@ impl ExtractionResult {
             pages,
             elements,
             document,
-            output_format,
-            result_format,
+            output_format: output_format.map(str::to_string),
+            result_format: result_format.map(str::to_string),
             djot_content,
             ocr_elements,
             extracted_keywords,
@@ -734,8 +738,8 @@ mod tests {
                 extracted_keywords: None,
                 quality_score: Some(0.85),
                 processing_warnings: vec![kreuzberg::ProcessingWarning {
-                    source: "test".to_string(),
-                    message: "test warning".to_string(),
+                    source: std::borrow::Cow::Borrowed("test"),
+                    message: std::borrow::Cow::Borrowed("test warning"),
                 }],
                 annotations: None,
             };
@@ -1027,14 +1031,17 @@ impl ExtractedTable {
             cells.append(py_row)?;
         }
 
-        let bounding_box = table.bounding_box.map(|bbox| {
-            let dict = PyDict::new(py);
-            dict.set_item("x0", bbox.x0).unwrap();
-            dict.set_item("y0", bbox.y0).unwrap();
-            dict.set_item("x1", bbox.x1).unwrap();
-            dict.set_item("y1", bbox.y1).unwrap();
-            dict.unbind()
-        });
+        let bounding_box = table
+            .bounding_box
+            .map(|bbox| -> PyResult<_> {
+                let dict = PyDict::new(py);
+                dict.set_item("x0", bbox.x0)?;
+                dict.set_item("y0", bbox.y0)?;
+                dict.set_item("x1", bbox.x1)?;
+                dict.set_item("y1", bbox.y1)?;
+                Ok(dict.unbind())
+            })
+            .transpose()?;
 
         Ok(Self {
             cells: cells.unbind(),

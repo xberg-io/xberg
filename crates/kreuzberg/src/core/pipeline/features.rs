@@ -8,6 +8,28 @@ use crate::core::config::ExtractionConfig;
 use crate::types::{ExtractionResult, ProcessingWarning};
 use std::borrow::Cow;
 
+/// Push a warning and insert a matching metadata error entry in one call.
+///
+/// Avoids the repeated three-step pattern of converting the error to a `String`,
+/// pushing a `ProcessingWarning`, and inserting a `serde_json::Value::String` into
+/// `result.metadata.additional`.
+fn push_warning_and_meta(
+    result: &mut ExtractionResult,
+    source: &'static str,
+    meta_key: &'static str,
+    error: impl std::fmt::Display,
+) {
+    let error_msg = error.to_string();
+    result.processing_warnings.push(ProcessingWarning {
+        source: Cow::Borrowed(source),
+        message: Cow::Owned(error_msg.clone()),
+    });
+    result
+        .metadata
+        .additional
+        .insert(Cow::Borrowed(meta_key), serde_json::Value::String(error_msg));
+}
+
 /// Execute chunking if configured.
 pub(super) fn execute_chunking(result: &mut ExtractionResult, config: &ExtractionConfig) -> Result<()> {
     #[cfg(feature = "chunking")]
@@ -44,16 +66,8 @@ pub(super) fn execute_chunking(result: &mut ExtractionResult, config: &Extractio
                         }
                         Err(e) => {
                             tracing::warn!("Embedding generation failed: {e}. Check that ONNX Runtime is installed.");
-                            let error_msg = e.to_string();
-                            result.processing_warnings.push(ProcessingWarning {
-                                source: "embedding".to_string(),
-                                message: error_msg.clone(),
-                            });
                             // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                            result
-                                .metadata
-                                .additional
-                                .insert(Cow::Borrowed("embedding_error"), serde_json::Value::String(error_msg));
+                            push_warning_and_meta(result, "embedding", "embedding_error", e);
                         }
                     }
                 }
@@ -63,45 +77,21 @@ pub(super) fn execute_chunking(result: &mut ExtractionResult, config: &Extractio
                     tracing::warn!(
                         "Embedding config provided but embeddings feature is not enabled. Recompile with --features embeddings."
                     );
-                    let error_msg = "Embeddings feature not enabled".to_string();
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: "embedding".to_string(),
-                        message: error_msg.clone(),
-                    });
                     // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                    result
-                        .metadata
-                        .additional
-                        .insert(Cow::Borrowed("embedding_error"), serde_json::Value::String(error_msg));
+                    push_warning_and_meta(result, "embedding", "embedding_error", "Embeddings feature not enabled");
                 }
             }
             Err(e) => {
-                let error_msg = e.to_string();
-                result.processing_warnings.push(ProcessingWarning {
-                    source: "chunking".to_string(),
-                    message: error_msg.clone(),
-                });
                 // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                result
-                    .metadata
-                    .additional
-                    .insert(Cow::Borrowed("chunking_error"), serde_json::Value::String(error_msg));
+                push_warning_and_meta(result, "chunking", "chunking_error", e);
             }
         }
     }
 
     #[cfg(not(feature = "chunking"))]
     if config.chunking.is_some() {
-        let error_msg = "Chunking feature not enabled".to_string();
-        result.processing_warnings.push(ProcessingWarning {
-            source: "chunking".to_string(),
-            message: error_msg.clone(),
-        });
         // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-        result
-            .metadata
-            .additional
-            .insert(Cow::Borrowed("chunking_error"), serde_json::Value::String(error_msg));
+        push_warning_and_meta(result, "chunking", "chunking_error", "Chunking feature not enabled");
     }
 
     Ok(())
@@ -116,31 +106,20 @@ pub(super) fn execute_language_detection(result: &mut ExtractionResult, config: 
                 result.detected_languages = detected;
             }
             Err(e) => {
-                let error_msg = e.to_string();
-                result.processing_warnings.push(ProcessingWarning {
-                    source: "language_detection".to_string(),
-                    message: error_msg.clone(),
-                });
                 // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                result.metadata.additional.insert(
-                    Cow::Borrowed("language_detection_error"),
-                    serde_json::Value::String(error_msg),
-                );
+                push_warning_and_meta(result, "language_detection", "language_detection_error", e);
             }
         }
     }
 
     #[cfg(not(feature = "language-detection"))]
     if config.language_detection.is_some() {
-        let error_msg = "Language detection feature not enabled".to_string();
-        result.processing_warnings.push(ProcessingWarning {
-            source: "language_detection".to_string(),
-            message: error_msg.clone(),
-        });
         // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-        result.metadata.additional.insert(
-            Cow::Borrowed("language_detection_error"),
-            serde_json::Value::String(error_msg),
+        push_warning_and_meta(
+            result,
+            "language_detection",
+            "language_detection_error",
+            "Language detection feature not enabled",
         );
     }
 
@@ -169,15 +148,7 @@ pub(super) fn execute_token_reduction(result: &mut ExtractionResult, config: &Ex
                     result.content = reduced;
                 }
                 Err(e) => {
-                    let error_msg = e.to_string();
-                    result.processing_warnings.push(ProcessingWarning {
-                        source: "token_reduction".to_string(),
-                        message: error_msg.clone(),
-                    });
-                    result.metadata.additional.insert(
-                        Cow::Borrowed("token_reduction_error"),
-                        serde_json::Value::String(error_msg),
-                    );
+                    push_warning_and_meta(result, "token_reduction", "token_reduction_error", e);
                 }
             }
         }
@@ -185,14 +156,11 @@ pub(super) fn execute_token_reduction(result: &mut ExtractionResult, config: &Ex
 
     #[cfg(not(feature = "quality"))]
     if config.token_reduction.is_some() {
-        let error_msg = "Token reduction requires the quality feature".to_string();
-        result.processing_warnings.push(ProcessingWarning {
-            source: "token_reduction".to_string(),
-            message: error_msg.clone(),
-        });
-        result.metadata.additional.insert(
-            Cow::Borrowed("token_reduction_error"),
-            serde_json::Value::String(error_msg),
+        push_warning_and_meta(
+            result,
+            "token_reduction",
+            "token_reduction_error",
+            "Token reduction requires the quality feature",
         );
     }
 

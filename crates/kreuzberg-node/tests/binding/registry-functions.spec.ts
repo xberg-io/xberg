@@ -177,7 +177,7 @@ describe("listValidators", () => {
 				return "test_validator";
 			}
 
-			validate(result) {}
+			validate(_result) {}
 		}
 
 		registerValidator(new TestValidator());
@@ -197,7 +197,7 @@ describe("unregisterValidator", () => {
 				return "test_validator";
 			}
 
-			validate(result) {}
+			validate(_result) {}
 		}
 
 		registerValidator(new TestValidator());
@@ -217,7 +217,7 @@ describe("clearValidators", () => {
 				return "validator_1";
 			}
 
-			validate(result) {}
+			validate(_result) {}
 		}
 
 		class Validator2 implements ValidatorProtocol {
@@ -225,7 +225,7 @@ describe("clearValidators", () => {
 				return "validator_2";
 			}
 
-			validate(result) {}
+			validate(_result) {}
 		}
 
 		registerValidator(new Validator1());
@@ -259,7 +259,7 @@ describe("unregisterOcrBackend", () => {
 				return ["en"];
 			}
 
-			async processImage(imageBytes: Uint8Array, language: string) {
+			async processImage(_imageBytes: Uint8Array, _language: string) {
 				return {
 					content: "test",
 					mime_type: "text/plain",
@@ -296,7 +296,7 @@ describe("clearOcrBackends", () => {
 		const customBackend: OcrBackendProtocol = {
 			name: () => "test_clear_backend",
 			supportedLanguages: () => ["en"],
-			processImage: async (imageBytes: Uint8Array, language: string) => ({
+			processImage: async (_imageBytes: Uint8Array, _language: string) => ({
 				content: "test",
 				mime_type: "text/plain",
 				metadata: {},

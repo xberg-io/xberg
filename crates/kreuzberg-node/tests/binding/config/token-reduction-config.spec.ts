@@ -104,7 +104,7 @@ describe("TokenReductionConfig", () => {
 
 		it("should type-check invalid mode at compile time", () => {
 			// @ts-expect-error - invalid mode
-			const config: TokenReductionConfig = { mode: "invalid" };
+			const _config: TokenReductionConfig = { mode: "invalid" };
 		});
 	});
 
@@ -202,7 +202,7 @@ describe("TokenReductionConfig", () => {
 
 		it("should reject non-boolean preserveImportantWords at compile time", () => {
 			// @ts-expect-error - preserveImportantWords must be boolean
-			const config: TokenReductionConfig = { preserveImportantWords: "true" };
+			const _config: TokenReductionConfig = { preserveImportantWords: "true" };
 		});
 	});
 

@@ -222,7 +222,7 @@ describe("ExtractionConfig", () => {
 
 		it("should reject invalid values at compile time", () => {
 			// @ts-expect-error - useCache should be boolean
-			const config: ExtractionConfig = { useCache: "true" };
+			const _config: ExtractionConfig = { useCache: "true" };
 		});
 	});
 

@@ -1,4 +1,10 @@
-use crate::{base_net::BaseNet, ocr_error::OcrError, ocr_result::Angle, ocr_utils::OcrUtils};
+use crate::{
+    base_net::BaseNet,
+    constants::{IMAGENET_MEAN_VALUES, IMAGENET_NORM_VALUES},
+    ocr_error::OcrError,
+    ocr_result::Angle,
+    ocr_utils::OcrUtils,
+};
 
 use ort::{
     inputs,
@@ -10,8 +16,6 @@ use ort::{
 // Input: resize to 160×80, normalize with ImageNet mean/std.
 // Formula in substract_mean_normalize: (pixel - MEAN) * NORM
 // For ImageNet: (pixel/255 - mean) / std = (pixel - mean*255) * (1/(std*255))
-const MEAN_VALUES: [f32; 3] = [0.485 * 255.0, 0.456 * 255.0, 0.406 * 255.0];
-const NORM_VALUES: [f32; 3] = [1.0 / (0.229 * 255.0), 1.0 / (0.224 * 255.0), 1.0 / (0.225 * 255.0)];
 // PP-OCR angle classifier expects [3, 48, 192] input (cls_image_shape in PaddleOCR Python).
 const ANGLE_DST_WIDTH: u32 = 192;
 const ANGLE_DST_HEIGHT: u32 = 48;
@@ -85,7 +89,8 @@ impl AngleNet {
             image::imageops::FilterType::Triangle,
         );
 
-        let input_tensors = OcrUtils::substract_mean_normalize(&angle_img, &MEAN_VALUES, &NORM_VALUES);
+        let input_tensors =
+            OcrUtils::substract_mean_normalize(&angle_img, &IMAGENET_MEAN_VALUES, &IMAGENET_NORM_VALUES);
 
         let input_tensors = Tensor::from_array(input_tensors)?;
 

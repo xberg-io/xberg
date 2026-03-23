@@ -66,7 +66,7 @@
 //! }
 //!
 //! fn main() -> Result<(), Box<dyn Error>> {
-//!     let api = TesseractAPI::new();
+//!     let api = TesseractAPI::new()?;
 //!
 //!     // Get tessdata directory (uses default location or TESSDATA_PREFIX if set)
 //!     let tessdata_dir = get_tessdata_dir();

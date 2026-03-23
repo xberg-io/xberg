@@ -9,10 +9,10 @@ use ext_php_rs::prelude::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-use crate::WORKER_RUNTIME;
 use crate::config::{parse_config_from_json, parse_file_config_from_json};
 use crate::deferred::{DeferredInner, DeferredResult};
 use crate::extraction::should_extract_tables;
+use crate::worker_runtime;
 
 /// Extract content from a file asynchronously.
 ///
@@ -52,7 +52,7 @@ pub fn kreuzberg_extract_file_async(
     let slot = Arc::new(Mutex::new(DeferredInner::Single(None)));
     let slot_clone = Arc::clone(&slot);
 
-    WORKER_RUNTIME.spawn(async move {
+    worker_runtime()?.spawn(async move {
         let result = kreuzberg::extract_file(&path, mime_type.as_deref(), &rust_config)
             .await
             .map_err(|e| e.to_string());
@@ -102,7 +102,7 @@ pub fn kreuzberg_extract_bytes_async(
     let slot = Arc::new(Mutex::new(DeferredInner::Single(None)));
     let slot_clone = Arc::clone(&slot);
 
-    WORKER_RUNTIME.spawn(async move {
+    worker_runtime()?.spawn(async move {
         let result = kreuzberg::extract_bytes(&data_owned, &mime_type, &rust_config)
             .await
             .map_err(|e| e.to_string());
@@ -176,7 +176,7 @@ pub fn kreuzberg_batch_extract_files_async(
     let slot = Arc::new(Mutex::new(DeferredInner::Batch(None)));
     let slot_clone = Arc::clone(&slot);
 
-    WORKER_RUNTIME.spawn(async move {
+    worker_runtime()?.spawn(async move {
         let result = kreuzberg::batch_extract_file(items, &rust_config)
             .await
             .map_err(|e| e.to_string());
@@ -275,7 +275,7 @@ pub fn kreuzberg_batch_extract_bytes_async(
     let slot = Arc::new(Mutex::new(DeferredInner::Batch(None)));
     let slot_clone = Arc::clone(&slot);
 
-    WORKER_RUNTIME.spawn(async move {
+    worker_runtime()?.spawn(async move {
         let result = kreuzberg::batch_extract_bytes(items, &rust_config)
             .await
             .map_err(|e| e.to_string());

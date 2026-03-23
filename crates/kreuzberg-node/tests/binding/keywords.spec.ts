@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { extractBytes, extractBytesSync } from "../../dist/index.js";
 import type { ExtractionConfig } from "../../src/types.js";

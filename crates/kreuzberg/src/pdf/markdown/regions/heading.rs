@@ -349,7 +349,9 @@ fn split_multi_heading_paragraphs(paragraphs: &mut Vec<PdfParagraph>) {
         let layout_class = original.layout_class;
 
         for j in 0..prefix_len {
-            let line = lines_iter.next().unwrap();
+            let Some(line) = lines_iter.next() else {
+                break;
+            };
             let mut new_para = crate::pdf::markdown::paragraphs::finalize_paragraph(vec![line]);
             new_para.layout_class = layout_class;
             paragraphs.insert(i + j, new_para);

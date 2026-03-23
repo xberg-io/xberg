@@ -268,10 +268,9 @@ impl OcrLite {
 
     /// Sort text boxes in reading order: top-to-bottom, left-to-right.
     ///
-    /// Uses a Y-coordinate threshold to group boxes on the same line, then sorts
-    /// left-to-right within each line. Matches PaddleOCR Python's `sorted_boxes`.
+    /// Sorts by top-left Y coordinate first, then by top-left X coordinate within
+    /// the same Y. Matches PaddleOCR Python's `sorted_boxes` primary ordering.
     fn sort_text_boxes(text_boxes: &mut [TextBox]) {
-        // Primary sort: by top-left Y, then top-left X
         text_boxes.sort_by(|a, b| {
             let ay = a.points.first().map_or(0, |p| p.y);
             let ax = a.points.first().map_or(0, |p| p.x);
@@ -279,24 +278,6 @@ impl OcrLite {
             let bx = b.points.first().map_or(0, |p| p.x);
             (ay, ax).cmp(&(by, bx))
         });
-
-        // Bubble-sort pass: reorder boxes on the same line (within 10px Y) by X.
-        // This matches the PaddleOCR reference threshold of 10 pixels.
-        let n = text_boxes.len();
-        for i in 0..n.saturating_sub(1) {
-            for j in (0..=i).rev() {
-                let y_next = text_boxes[j + 1].points.first().map_or(0, |p| p.y) as i32;
-                let y_curr = text_boxes[j].points.first().map_or(0, |p| p.y) as i32;
-                let x_next = text_boxes[j + 1].points.first().map_or(0, |p| p.x);
-                let x_curr = text_boxes[j].points.first().map_or(0, |p| p.x);
-
-                if (y_next - y_curr).unsigned_abs() < 10 && x_next < x_curr {
-                    text_boxes.swap(j, j + 1);
-                } else {
-                    break;
-                }
-            }
-        }
     }
 
     fn detect_once(
@@ -402,8 +383,8 @@ mod tests {
 
     #[test]
     fn test_sort_text_boxes_same_line_left_to_right() {
-        // Boxes on the same line (within 10px Y threshold) sorted by X
-        let mut boxes = vec![make_box(200, 10), make_box(100, 12), make_box(50, 8)];
+        // Boxes with the same Y are sorted left-to-right by X
+        let mut boxes = vec![make_box(200, 10), make_box(100, 10), make_box(50, 10)];
         OcrLite::sort_text_boxes(&mut boxes);
         assert_eq!(boxes[0].points[0].x, 50);
         assert_eq!(boxes[1].points[0].x, 100);
@@ -412,18 +393,19 @@ mod tests {
 
     #[test]
     fn test_sort_text_boxes_multi_line() {
+        // Boxes sorted strictly by (y, x): y=50/x=50, y=50/x=300, y=100/x=100, y=100/x=200
         let mut boxes = vec![
             make_box(300, 50),  // line 1, right
             make_box(100, 100), // line 2, left
-            make_box(50, 52),   // line 1, left (within 10px of y=50)
-            make_box(200, 98),  // line 2, right (within 10px of y=100)
+            make_box(50, 50),   // line 1, left (same y=50)
+            make_box(200, 100), // line 2, right (same y=100)
         ];
         OcrLite::sort_text_boxes(&mut boxes);
 
-        // Line 1 (y~50): left first, then right
+        // Line 1 (y=50): left first, then right
         assert_eq!(boxes[0].points[0].x, 50);
         assert_eq!(boxes[1].points[0].x, 300);
-        // Line 2 (y~100): left first, then right
+        // Line 2 (y=100): left first, then right
         assert_eq!(boxes[2].points[0].x, 100);
         assert_eq!(boxes[3].points[0].x, 200);
     }

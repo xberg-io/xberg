@@ -135,7 +135,7 @@ describe("Error Integration", () => {
 
 			try {
 				await extractWithRetry("/nonexistent/file.pdf");
-			} catch (_error) {
+			} catch {
 				expect(attempts).toBeGreaterThan(0);
 			}
 		});

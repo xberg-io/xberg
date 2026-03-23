@@ -42,9 +42,11 @@ use std::borrow::Cow;
 #[inline]
 pub fn normalize_whitespace(s: &str) -> Cow<'_, str> {
     // Check if normalization is needed
-    let needs_normalization = s.as_bytes().windows(2).any(|w| {
-        w[0].is_ascii_whitespace() && w[1].is_ascii_whitespace()
-    }) || s.bytes().any(|b| b != b' ' && b.is_ascii_whitespace());
+    let needs_normalization = s
+        .as_bytes()
+        .windows(2)
+        .any(|w| w[0].is_ascii_whitespace() && w[1].is_ascii_whitespace())
+        || s.bytes().any(|b| b != b' ' && b.is_ascii_whitespace());
 
     if needs_normalization {
         Cow::Owned(s.split_whitespace().collect::<Vec<_>>().join(" "))

@@ -69,28 +69,29 @@ fn build_bytes_items(
     Ok(items)
 }
 
+/// Map an OutputFormat enum to a static string slice — no allocation needed.
+fn output_format_to_str(fmt: &kreuzberg::core::config::formats::OutputFormat) -> &'static str {
+    match fmt {
+        kreuzberg::core::config::formats::OutputFormat::Plain => "plain",
+        kreuzberg::core::config::formats::OutputFormat::Markdown => "markdown",
+        kreuzberg::core::config::formats::OutputFormat::Djot => "djot",
+        kreuzberg::core::config::formats::OutputFormat::Html => "html",
+        kreuzberg::core::config::formats::OutputFormat::Structured => "structured",
+    }
+}
+
+fn result_format_to_str(fmt: &kreuzberg::types::OutputFormat) -> &'static str {
+    match fmt {
+        kreuzberg::types::OutputFormat::Unified => "unified",
+        kreuzberg::types::OutputFormat::ElementBased => "element_based",
+    }
+}
+
 /// Extract format strings from ExtractionConfig before it's consumed.
-fn output_format_to_string(fmt: &kreuzberg::core::config::formats::OutputFormat) -> String {
-    match fmt {
-        kreuzberg::core::config::formats::OutputFormat::Plain => "plain".to_string(),
-        kreuzberg::core::config::formats::OutputFormat::Markdown => "markdown".to_string(),
-        kreuzberg::core::config::formats::OutputFormat::Djot => "djot".to_string(),
-        kreuzberg::core::config::formats::OutputFormat::Html => "html".to_string(),
-        kreuzberg::core::config::formats::OutputFormat::Structured => "structured".to_string(),
-    }
-}
-
-fn result_format_to_string(fmt: &kreuzberg::types::OutputFormat) -> String {
-    match fmt {
-        kreuzberg::types::OutputFormat::Unified => "unified".to_string(),
-        kreuzberg::types::OutputFormat::ElementBased => "element_based".to_string(),
-    }
-}
-
-fn extract_format_strings(config: &ExtractionConfig) -> (Option<String>, Option<String>) {
+fn extract_format_strings(config: &ExtractionConfig) -> (Option<&'static str>, Option<&'static str>) {
     (
-        Some(output_format_to_string(&config.inner.output_format)),
-        Some(result_format_to_string(&config.inner.result_format)),
+        Some(output_format_to_str(&config.inner.output_format)),
+        Some(result_format_to_str(&config.inner.result_format)),
     )
 }
 
@@ -100,8 +101,8 @@ fn collect_per_item_formats(
     config: &ExtractionConfig,
     file_configs: &Option<Vec<Option<FileExtractionConfig>>>,
 ) -> PerItemFormats {
-    let default_output = output_format_to_string(&config.inner.output_format);
-    let default_result = result_format_to_string(&config.inner.result_format);
+    let default_output = output_format_to_str(&config.inner.output_format);
+    let default_result = result_format_to_str(&config.inner.result_format);
 
     match file_configs {
         Some(configs) => {
@@ -111,13 +112,13 @@ fn collect_per_item_formats(
                     let output = fc
                         .as_ref()
                         .and_then(|c| c.inner.output_format.as_ref())
-                        .map(output_format_to_string)
-                        .unwrap_or_else(|| default_output.clone());
+                        .map(output_format_to_str)
+                        .unwrap_or(default_output);
                     let result = fc
                         .as_ref()
                         .and_then(|c| c.inner.result_format.as_ref())
-                        .map(result_format_to_string)
-                        .unwrap_or_else(|| default_result.clone());
+                        .map(result_format_to_str)
+                        .unwrap_or(default_result);
                     (output, result)
                 })
                 .collect();
@@ -129,18 +130,18 @@ fn collect_per_item_formats(
 
 /// Per-item format info that can be either explicit per-item or a repeated default.
 enum PerItemFormats {
-    Explicit(Vec<(String, String)>),
-    Default(String, String),
+    Explicit(Vec<(&'static str, &'static str)>),
+    Default(&'static str, &'static str),
 }
 
 impl PerItemFormats {
-    fn get(&self, index: usize) -> (String, String) {
+    fn get(&self, index: usize) -> (&'static str, &'static str) {
         match self {
             PerItemFormats::Explicit(formats) => formats
                 .get(index)
-                .cloned()
-                .unwrap_or_else(|| formats.last().cloned().unwrap_or_default()),
-            PerItemFormats::Default(output, result) => (output.clone(), result.clone()),
+                .copied()
+                .unwrap_or_else(|| formats.last().copied().unwrap_or(("plain", "unified"))),
+            PerItemFormats::Default(output, result) => (output, result),
         }
     }
 }

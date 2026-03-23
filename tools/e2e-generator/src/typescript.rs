@@ -1007,7 +1007,14 @@ fn render_category(category: &str, fixtures: &[&Fixture]) -> Result<String> {
         "// To regenerate: cargo run -p kreuzberg-e2e-generator -- generate --lang typescript\n"
     )?;
     writeln!(buffer, "// Tests for {category} fixtures.\n")?;
-    writeln!(buffer, "import {{ existsSync, readFileSync }} from \"node:fs\";")?;
+    let needs_read_file_sync = fixtures
+        .iter()
+        .any(|f| f.extractions().iter().any(|e| matches!(e.input_type, InputType::Bytes)));
+    if needs_read_file_sync {
+        writeln!(buffer, "import {{ existsSync, readFileSync }} from \"node:fs\";")?;
+    } else {
+        writeln!(buffer, "import {{ existsSync }} from \"node:fs\";")?;
+    }
     writeln!(buffer, "import {{ describe, it }} from \"vitest\";")?;
 
     let needs_chunk_assertions = fixtures.iter().any(|f| {

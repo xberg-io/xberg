@@ -50,9 +50,10 @@ fn build_jats_document_structure(content: &str) -> crate::Result<crate::types::d
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let name = e.name();
+                let tag = crate::utils::xml_tag_name(name.as_ref());
 
-                match tag.as_str() {
+                match tag.as_ref() {
                     "article-meta" => {
                         in_article_meta = true;
                     }
@@ -142,9 +143,10 @@ fn build_jats_document_structure(content: &str) -> crate::Result<crate::types::d
                 }
             }
             Ok(Event::End(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let name = e.name();
+                let tag = crate::utils::xml_tag_name(name.as_ref());
 
-                match tag.as_str() {
+                match tag.as_ref() {
                     "article-meta" => {
                         in_article_meta = false;
                     }
@@ -169,8 +171,7 @@ fn build_jats_document_structure(content: &str) -> crate::Result<crate::types::d
                     }
                     "tr" if in_row => {
                         if !current_row.is_empty() {
-                            current_table.push(current_row.clone());
-                            current_row.clear();
+                            current_table.push(std::mem::take(&mut current_row));
                         }
                         in_row = false;
                     }

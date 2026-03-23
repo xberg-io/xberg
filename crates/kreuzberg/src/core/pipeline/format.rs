@@ -99,8 +99,8 @@ pub fn apply_output_format(result: &mut ExtractionResult, output_format: OutputF
                     // Keep original content on error, record error in metadata
                     let error_msg = format!("Failed to convert to djot: {}", e);
                     result.processing_warnings.push(ProcessingWarning {
-                        source: "output_format".to_string(),
-                        message: error_msg.clone(),
+                        source: Cow::Borrowed("output_format"),
+                        message: Cow::Owned(error_msg.clone()),
                     });
                     // DEPRECATED: kept for backward compatibility; will be removed in next major version.
                     result.metadata.additional.insert(
@@ -125,8 +125,8 @@ pub fn apply_output_format(result: &mut ExtractionResult, output_format: OutputF
                         // Keep original content on error, record error in metadata
                         let error_msg = format!("Failed to convert to markdown: {}", e);
                         result.processing_warnings.push(ProcessingWarning {
-                            source: "output_format".to_string(),
-                            message: error_msg.clone(),
+                            source: Cow::Borrowed("output_format"),
+                            message: Cow::Owned(error_msg.clone()),
                         });
                         // DEPRECATED: kept for backward compatibility; will be removed in next major version.
                         result.metadata.additional.insert(
@@ -152,8 +152,8 @@ pub fn apply_output_format(result: &mut ExtractionResult, output_format: OutputF
                                 // Keep original content on error, record error in metadata
                                 let error_msg = format!("Failed to convert djot to HTML: {}", e);
                                 result.processing_warnings.push(ProcessingWarning {
-                                    source: "output_format".to_string(),
-                                    message: error_msg.clone(),
+                                    source: Cow::Borrowed("output_format"),
+                                    message: Cow::Owned(error_msg.clone()),
                                 });
                                 // DEPRECATED: kept for backward compatibility; will be removed in next major version.
                                 result.metadata.additional.insert(
@@ -167,8 +167,8 @@ pub fn apply_output_format(result: &mut ExtractionResult, output_format: OutputF
                         // Keep original content on error, record error in metadata
                         let error_msg = format!("Failed to generate djot for HTML conversion: {}", e);
                         result.processing_warnings.push(ProcessingWarning {
-                            source: "output_format".to_string(),
-                            message: error_msg.clone(),
+                            source: Cow::Borrowed("output_format"),
+                            message: Cow::Owned(error_msg.clone()),
                         });
                         // DEPRECATED: kept for backward compatibility; will be removed in next major version.
                         result.metadata.additional.insert(

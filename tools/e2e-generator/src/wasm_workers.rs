@@ -800,7 +800,7 @@ fn render_category(category: &str, fixtures: &[&Fixture]) -> Result<String> {
         "// Tests for {category} fixtures. Cloudflare Workers with Vitest + Miniflare"
     )?;
     writeln!(buffer)?;
-    writeln!(buffer, "import {{ describe, it, expect }} from \"vitest\";")?;
+    writeln!(buffer, "import {{ describe, it }} from \"vitest\";")?;
 
     // Collect required imports based on extraction methods used
     // WASM exports: extractBytes (async), extractBytesSync, batchExtractBytes, batchExtractBytesSync

@@ -317,12 +317,12 @@ describe("HierarchyConfig", () => {
 
 		it("should reject non-boolean enabled at compile time", () => {
 			// @ts-expect-error - enabled must be boolean
-			const config: HierarchyConfig = { enabled: 1 };
+			const _config: HierarchyConfig = { enabled: 1 };
 		});
 
 		it("should reject non-number kClusters at compile time", () => {
 			// @ts-expect-error - kClusters must be number
-			const config: HierarchyConfig = { kClusters: "6" };
+			const _config: HierarchyConfig = { kClusters: "6" };
 		});
 	});
 

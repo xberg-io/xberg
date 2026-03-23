@@ -252,12 +252,12 @@ fn build_heading_map(
     struct_tree_results: &[Option<Vec<PdfParagraph>>],
     heuristic_pages: &[usize],
     k_clusters: usize,
-) -> Result<(Vec<(f32, Option<u8>)>, std::collections::HashSet<usize>)> {
+) -> Result<(Vec<(f32, Option<u8>)>, ahash::AHashSet<usize>)> {
     // Identify structure tree pages that have font size variation but no
     // heading signals — these need font-size-based heading classification.
     // Pages with no font variation are left as plain paragraphs (classify
     // would incorrectly assign headings based on unrelated pages' font data).
-    let struct_tree_needs_classify: std::collections::HashSet<usize> = struct_tree_results
+    let struct_tree_needs_classify: ahash::AHashSet<usize> = struct_tree_results
         .iter()
         .enumerate()
         .filter_map(|(i, result)| {
@@ -791,12 +791,12 @@ pub fn render_document_as_markdown_with_tables(
                     let parallel_tables: Vec<Vec<crate::types::Table>> = table_pages
                         .par_iter()
                         .map(|tp| {
-                            if slanet_variant.is_some() {
+                            if let Some(variant) = slanet_variant {
                                 // SLANeXT path — ensure models are loaded in thread-local
                                 TL_SLANET.with(|cell| {
                                     let mut slanet_ref = cell.borrow_mut();
                                     if slanet_ref.is_none() {
-                                        *slanet_ref = crate::layout::take_or_create_slanet(slanet_variant.unwrap());
+                                        *slanet_ref = crate::layout::take_or_create_slanet(variant);
                                     }
                                 });
                                 if is_auto {
@@ -952,10 +952,10 @@ pub fn render_document_as_markdown_with_tables(
                     }
 
                     // Return thread-local models to global cache
-                    if slanet_variant.is_some() {
+                    if let Some(variant) = slanet_variant {
                         TL_SLANET.with(|cell| {
                             if let Some(model) = cell.borrow_mut().take() {
-                                crate::layout::return_slanet(slanet_variant.unwrap(), model);
+                                crate::layout::return_slanet(variant, model);
                             }
                         });
                         if is_auto {
@@ -1022,9 +1022,8 @@ pub fn render_document_as_markdown_with_tables(
     // output, so it only suppresses segments for those — not for failed extractions.
     // Include BOTH layout-detected tables and heuristic tables (from extraction.rs)
     // to prevent text duplication when a table is extracted by the heuristic path.
-    let extracted_table_bboxes_by_page: std::collections::HashMap<usize, Vec<crate::types::BoundingBox>> = {
-        let mut map: std::collections::HashMap<usize, Vec<crate::types::BoundingBox>> =
-            std::collections::HashMap::new();
+    let extracted_table_bboxes_by_page: ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> = {
+        let mut map: ahash::AHashMap<usize, Vec<crate::types::BoundingBox>> = ahash::AHashMap::new();
         for table in &layout_tables {
             if let Some(ref bb) = table.bounding_box {
                 // Table.page_number is 1-indexed, convert to 0-indexed
@@ -1052,11 +1051,8 @@ pub fn render_document_as_markdown_with_tables(
     // Validate layout regions via connected component analysis.
     // Regions flagged as Empty should not suppress segments.
     #[cfg(feature = "layout-detection")]
-    let validations_by_page: std::collections::HashMap<
-        usize,
-        Vec<super::regions::layout_validation::RegionValidation>,
-    > = {
-        let mut map = std::collections::HashMap::new();
+    let validations_by_page: ahash::AHashMap<usize, Vec<super::regions::layout_validation::RegionValidation>> = {
+        let mut map = ahash::AHashMap::new();
         if let (Some(images), Some(results), Some(hints_pages)) = (layout_images, layout_results, layout_hints) {
             for page_idx in 0..page_count as usize {
                 if let (Some(img), Some(res), Some(hints)) =
@@ -1080,10 +1076,8 @@ pub fn render_document_as_markdown_with_tables(
         map
     };
     #[cfg(not(feature = "layout-detection"))]
-    let validations_by_page: std::collections::HashMap<
-        usize,
-        Vec<super::regions::layout_validation::RegionValidation>,
-    > = std::collections::HashMap::new();
+    let validations_by_page: ahash::AHashMap<usize, Vec<super::regions::layout_validation::RegionValidation>> =
+        ahash::AHashMap::new();
 
     // Stage 3: Per-page structured extraction (parallelised with rayon).
     //
@@ -1255,7 +1249,7 @@ fn deduplicate_overlapping_tables(tables: &mut Vec<crate::types::Table>) {
         return;
     }
 
-    let mut to_remove = std::collections::HashSet::new();
+    let mut to_remove = ahash::AHashSet::new();
 
     for i in 0..tables.len() {
         if to_remove.contains(&i) {
@@ -1627,7 +1621,7 @@ fn deduplicate_paragraphs(all_pages: &mut [Vec<PdfParagraph>]) {
         }
 
         // Pass 2: Remove non-consecutive body-text duplicates.
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = ahash::AHashSet::new();
         let mut to_remove = Vec::new();
         for (idx, para) in page.iter().enumerate() {
             if !is_dedup_candidate(para) {

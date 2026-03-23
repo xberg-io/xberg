@@ -301,12 +301,12 @@ describe("ImageExtractionConfig", () => {
 
 		it("should reject non-number DPI at compile time", () => {
 			// @ts-expect-error - targetDpi must be number
-			const config: ImageExtractionConfig = { targetDpi: "150" };
+			const _config: ImageExtractionConfig = { targetDpi: "150" };
 		});
 
 		it("should reject non-boolean extractImages at compile time", () => {
 			// @ts-expect-error - extractImages must be boolean
-			const config: ImageExtractionConfig = { extractImages: "true" };
+			const _config: ImageExtractionConfig = { extractImages: "true" };
 		});
 	});
 

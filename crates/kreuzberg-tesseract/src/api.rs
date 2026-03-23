@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 ///
 /// ```rust,no_run
 /// # use kreuzberg_tesseract::TesseractAPI;
-/// # let api = TesseractAPI::new();
+/// # let api = TesseractAPI::new().unwrap();
 /// # api.init("/tessdata", "eng").unwrap();
 /// # api.set_image(&[], 1, 1, 1, 1).unwrap();
 /// let words = api.get_words().unwrap();
@@ -92,24 +92,30 @@ impl TesseractAPI {
     ///
     /// # Returns
     ///
-    /// Returns a new instance of the Tesseract API.
-    pub fn new() -> Self {
+    /// Returns `Ok(TesseractAPI)` on success, or `Err(TesseractError::NullPointerError)`
+    /// if the underlying C library fails to allocate the engine handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TesseractError::NullPointerError`] when `TessBaseAPICreate` returns a
+    /// null pointer, which indicates an allocation failure in the Tesseract C library.
+    pub fn new() -> Result<Self> {
         // SAFETY: TessBaseAPICreate() is a C FFI function that allocates and initializes
         // a new Tesseract engine handle. It returns a valid opaque pointer on success or
         // null on allocation failure. The returned handle is owned exclusively by this
         // Rust struct and will be freed in Drop.
         let handle = unsafe { TessBaseAPICreate() };
         if handle.is_null() {
-            panic!("TessBaseAPICreate returned null: Tesseract engine allocation failed");
+            return Err(TesseractError::NullPointerError);
         }
-        TesseractAPI {
+        Ok(TesseractAPI {
             handle: Arc::new(Mutex::new(handle)),
             config: Arc::new(Mutex::new(TesseractConfiguration {
                 datapath: String::new(),
                 language: String::new(),
                 variables: HashMap::new(),
             })),
-        }
+        })
     }
 
     /// Gets the version of the Tesseract engine.
@@ -1707,7 +1713,7 @@ impl TesseractAPI {
     ///
     /// ```rust,no_run
     /// # use kreuzberg_tesseract::TesseractAPI;
-    /// # let api = TesseractAPI::new();
+    /// # let api = TesseractAPI::new().unwrap();
     /// # api.init("/tessdata", "eng").unwrap();
     /// # api.set_image(&[], 1, 1, 1, 1).unwrap();
     /// let words = api.get_words().unwrap();
@@ -1788,7 +1794,7 @@ impl TesseractAPI {
     ///
     /// ```rust,no_run
     /// # use kreuzberg_tesseract::TesseractAPI;
-    /// # let api = TesseractAPI::new();
+    /// # let api = TesseractAPI::new().unwrap();
     /// # api.init("/tessdata", "eng").unwrap();
     /// # api.set_image(&[], 1, 1, 1, 1).unwrap();
     /// let regions = api.get_regions().unwrap();
@@ -1852,7 +1858,7 @@ impl TesseractAPI {
     ///
     /// ```rust,no_run
     /// # use kreuzberg_tesseract::TesseractAPI;
-    /// # let api = TesseractAPI::new();
+    /// # let api = TesseractAPI::new().unwrap();
     /// # api.init("/tessdata", "eng").unwrap();
     /// # api.set_image(&[], 1, 1, 1, 1).unwrap();
     /// let lines = api.get_textlines().unwrap();
@@ -1972,7 +1978,7 @@ impl TesseractAPI {
     ///
     /// ```rust,no_run
     /// # use kreuzberg_tesseract::{TesseractAPI, TessPageIteratorLevel};
-    /// # let api = TesseractAPI::new();
+    /// # let api = TesseractAPI::new().unwrap();
     /// # api.init("/tessdata", "eng").unwrap();
     /// # api.set_image(&[], 1, 1, 1, 1).unwrap();
     /// let components = api.get_component_images(TessPageIteratorLevel::RIL_WORD, true).unwrap();

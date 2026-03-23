@@ -486,17 +486,16 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
 
     // Build per-page candidate list: (exact_normalized, alphanum_key) pairs.
     // Collect all exact keys per page first (deduped), then count occurrences.
-    let mut text_page_count: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut text_page_count: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
     // Also track alphanum_key → set-of-exact-keys for the fuzzy pass.
-    let mut alphanum_to_exact: std::collections::HashMap<String, std::collections::HashSet<String>> =
-        std::collections::HashMap::new();
+    let mut alphanum_to_exact: ahash::AHashMap<String, ahash::AHashSet<String>> = ahash::AHashMap::new();
     // Count per alphanum_key across pages (deduped per page).
-    let mut alphanum_page_count: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut alphanum_page_count: ahash::AHashMap<String, usize> = ahash::AHashMap::new();
 
     for page in all_pages.iter() {
         // Use sets per page to count each key only once per page.
-        let mut seen_exact: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut seen_alphanum: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut seen_exact: ahash::AHashSet<String> = ahash::AHashSet::new();
+        let mut seen_alphanum: ahash::AHashSet<String> = ahash::AHashSet::new();
         for para in page {
             if para.is_page_furniture {
                 continue;
@@ -535,7 +534,7 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
     let threshold = all_pages.len() / 2;
 
     // Exact-match repeating set.
-    let mut repeating: std::collections::HashSet<String> = text_page_count
+    let mut repeating: ahash::AHashSet<String> = text_page_count
         .into_iter()
         .filter(|(_, count)| *count > threshold)
         .map(|(text, _)| text)

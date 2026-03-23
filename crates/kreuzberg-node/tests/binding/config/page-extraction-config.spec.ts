@@ -254,12 +254,12 @@ describe("PageExtractionConfig", () => {
 
 		it("should reject non-boolean extractPages at compile time", () => {
 			// @ts-expect-error - extractPages must be boolean
-			const config: PageExtractionConfig = { extractPages: "true" };
+			const _config: PageExtractionConfig = { extractPages: "true" };
 		});
 
 		it("should reject non-string markerFormat at compile time", () => {
 			// @ts-expect-error - markerFormat must be string
-			const config: PageExtractionConfig = { markerFormat: 123 };
+			const _config: PageExtractionConfig = { markerFormat: 123 };
 		});
 	});
 

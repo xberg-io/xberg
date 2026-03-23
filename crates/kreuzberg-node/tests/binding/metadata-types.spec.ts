@@ -22,7 +22,7 @@ import type {
 	Metadata as NapiMetadata,
 	PdfMetadata as NapiPdfMetadata,
 } from "../../../../crates/kreuzberg/metadata";
-import { extractBytesSync, extractFileSync } from "../../dist/index.js";
+import { extractBytesSync } from "../../dist/index.js";
 import type {
 	ArchiveMetadata,
 	EmailMetadata,
@@ -42,7 +42,7 @@ import type {
 	TextMetadata,
 	XmlMetadata,
 } from "../../src/types";
-import { createTempFile, getTestDocumentPath, loadTestDocument } from "../helpers/test-utils.js";
+import { getTestDocumentPath, loadTestDocument } from "../helpers/test-utils.js";
 
 type AssertMetadataCompatible = Metadata extends NapiMetadata ? true : never;
 type AssertNapiMetadataCompatible = NapiMetadata extends Metadata ? true : never;
@@ -392,7 +392,7 @@ describe("Metadata Types - Type Compatibility Tests", () => {
 		});
 
 		it("test_extract_html_file_integration", () => {
-			const htmlPath = getTestDocumentPath("html/taylor_swift.html");
+			const _htmlPath = getTestDocumentPath("html/taylor_swift.html");
 			const buffer = loadTestDocument("html/taylor_swift.html");
 
 			const result = extractBytesSync(buffer, "text/html", null);

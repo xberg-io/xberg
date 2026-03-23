@@ -254,12 +254,12 @@ describe("TesseractConfig", () => {
 
 		it("should reject non-number psm at compile time", () => {
 			// @ts-expect-error - psm must be number
-			const config: TesseractConfig = { psm: "6" };
+			const _config: TesseractConfig = { psm: "6" };
 		});
 
 		it("should reject non-boolean enableTableDetection at compile time", () => {
 			// @ts-expect-error - enableTableDetection must be boolean
-			const config: TesseractConfig = { enableTableDetection: "true" };
+			const _config: TesseractConfig = { enableTableDetection: "true" };
 		});
 	});
 

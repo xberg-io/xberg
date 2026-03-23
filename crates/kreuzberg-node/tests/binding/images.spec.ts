@@ -22,8 +22,8 @@ import { getTestDocumentPath } from "../helpers/index.js";
 
 let samplePdfPath: string;
 let samplePdfBytes: Uint8Array;
-let pptxPath: string;
-let docxPath: string;
+let _pptxPath: string;
+let _docxPath: string;
 
 beforeAll(() => {
 	samplePdfPath = getTestDocumentPath("pdf/embedded_images_tables.pdf");
@@ -31,10 +31,10 @@ beforeAll(() => {
 	samplePdfBytes = new Uint8Array(readFileSync(realpathSync(samplePdfPath)));
 
 	// Get PPTX if available
-	pptxPath = getTestDocumentPath("presentations/simple.pptx");
+	_pptxPath = getTestDocumentPath("presentations/simple.pptx");
 
 	// Get DOCX if available
-	docxPath = getTestDocumentPath("documents/sample.docx");
+	_docxPath = getTestDocumentPath("documents/sample.docx");
 });
 
 describe("Image Extraction (Node.js Bindings)", () => {

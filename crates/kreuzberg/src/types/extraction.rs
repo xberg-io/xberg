@@ -149,14 +149,16 @@ pub struct ExtractionResult {
 ///
 /// Captures errors from optional features that don't prevent extraction
 /// but may indicate degraded results.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct ProcessingWarning {
     /// The pipeline stage or feature that produced this warning
     /// (e.g., "embedding", "chunking", "language_detection", "output_format").
-    pub source: String,
+    #[cfg_attr(feature = "api", schema(value_type = String))]
+    pub source: Cow<'static, str>,
     /// Human-readable description of what went wrong.
-    pub message: String,
+    #[cfg_attr(feature = "api", schema(value_type = String))]
+    pub message: Cow<'static, str>,
 }
 
 /// A text chunk with optional embedding and metadata.

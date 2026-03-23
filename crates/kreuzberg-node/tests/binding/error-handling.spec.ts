@@ -26,7 +26,6 @@ import {
 	extractBytesSync,
 	extractFile,
 	extractFileSync,
-	KreuzbergError,
 	MissingDependencyError,
 	OcrError,
 	ParsingError,

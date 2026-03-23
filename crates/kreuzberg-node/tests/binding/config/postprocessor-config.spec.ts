@@ -268,12 +268,12 @@ describe("PostProcessorConfig", () => {
 
 		it("should reject non-boolean enabled at compile time", () => {
 			// @ts-expect-error - enabled must be boolean
-			const config: PostProcessorConfig = { enabled: 1 };
+			const _config: PostProcessorConfig = { enabled: 1 };
 		});
 
 		it("should reject non-array enabledProcessors at compile time", () => {
 			// @ts-expect-error - enabledProcessors must be array
-			const config: PostProcessorConfig = { enabledProcessors: "proc1" };
+			const _config: PostProcessorConfig = { enabledProcessors: "proc1" };
 		});
 	});
 

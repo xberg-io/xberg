@@ -83,6 +83,20 @@ impl GenericCache {
         })
     }
 
+    /// Acquire the `processing_locks` mutex, converting a poison error into [`KreuzbergError::LockPoisoned`].
+    fn acquire_processing_locks(&self) -> Result<std::sync::MutexGuard<'_, HashSet<String>>> {
+        self.processing_locks
+            .lock()
+            .map_err(|e| KreuzbergError::LockPoisoned(format!("processing locks mutex poisoned: {}", e)))
+    }
+
+    /// Acquire the `deleting_files` mutex, converting a poison error into [`KreuzbergError::LockPoisoned`].
+    fn acquire_deleting_files(&self) -> Result<std::sync::MutexGuard<'_, HashSet<PathBuf>>> {
+        self.deleting_files
+            .lock()
+            .map_err(|e| KreuzbergError::LockPoisoned(format!("deleting files mutex poisoned: {}", e)))
+    }
+
     /// Resolve the directory for a cache key, optionally within a namespace subdirectory.
     fn resolve_dir(&self, namespace: Option<&str>) -> PathBuf {
         match namespace {
@@ -137,7 +151,9 @@ impl GenericCache {
                 if let Ok(cached_meta_bytes) = fs::read(&meta_path)
                     && cached_meta_bytes.len() >= 16
                 {
+                    // SAFETY: slice is exactly 8 bytes; guaranteed by the `cached_meta_bytes.len() >= 16` check above.
                     let cached_size = u64::from_le_bytes(cached_meta_bytes[0..8].try_into().unwrap());
+                    // SAFETY: slice is exactly 8 bytes; guaranteed by the `cached_meta_bytes.len() >= 16` check above.
                     let cached_mtime = u64::from_le_bytes(cached_meta_bytes[8..16].try_into().unwrap());
 
                     if let Ok(source_metadata) = fs::metadata(source_path) {
@@ -168,6 +184,7 @@ impl GenericCache {
         let meta_path = self.get_metadata_path(file_stem, namespace.as_deref());
         let bytes = fs::read(&meta_path).ok()?;
         if bytes.len() >= 24 {
+            // SAFETY: slice is exactly 8 bytes; guaranteed by the `bytes.len() >= 24` check above.
             Some(u64::from_le_bytes(bytes[16..24].try_into().unwrap()))
         } else {
             None // Old-format 16-byte .meta, no TTL stored
@@ -236,10 +253,7 @@ impl GenericCache {
         let cache_path = self.get_cache_path(cache_key, namespace);
 
         {
-            let deleting = self
-                .deleting_files
-                .lock()
-                .map_err(|e| KreuzbergError::LockPoisoned(format!("Deleting files mutex poisoned: {}", e)))?;
+            let deleting = self.acquire_deleting_files()?;
             if deleting.contains(&cache_path) {
                 #[cfg(feature = "otel")]
                 tracing::Span::current().record("cache.hit", false);
@@ -351,45 +365,30 @@ impl GenericCache {
     }
 
     pub fn is_processing(&self, cache_key: &str) -> Result<bool> {
-        let locks = self
-            .processing_locks
-            .lock()
-            .map_err(|e| KreuzbergError::LockPoisoned(format!("Processing locks mutex poisoned: {}", e)))?;
+        let locks = self.acquire_processing_locks()?;
         Ok(locks.contains(cache_key))
     }
 
     pub fn mark_processing(&self, cache_key: String) -> Result<()> {
-        let mut locks = self
-            .processing_locks
-            .lock()
-            .map_err(|e| KreuzbergError::LockPoisoned(format!("Processing locks mutex poisoned: {}", e)))?;
+        let mut locks = self.acquire_processing_locks()?;
         locks.insert(cache_key);
         Ok(())
     }
 
     pub fn mark_complete(&self, cache_key: &str) -> Result<()> {
-        let mut locks = self
-            .processing_locks
-            .lock()
-            .map_err(|e| KreuzbergError::LockPoisoned(format!("Processing locks mutex poisoned: {}", e)))?;
+        let mut locks = self.acquire_processing_locks()?;
         locks.remove(cache_key);
         Ok(())
     }
 
     fn mark_for_deletion(&self, path: &Path) -> Result<()> {
-        let mut deleting = self
-            .deleting_files
-            .lock()
-            .map_err(|e| KreuzbergError::LockPoisoned(format!("Deleting files mutex poisoned: {}", e)))?;
+        let mut deleting = self.acquire_deleting_files()?;
         deleting.insert(path.to_path_buf());
         Ok(())
     }
 
     fn unmark_deletion(&self, path: &Path) -> Result<()> {
-        let mut deleting = self
-            .deleting_files
-            .lock()
-            .map_err(|e| KreuzbergError::LockPoisoned(format!("Deleting files mutex poisoned: {}", e)))?;
+        let mut deleting = self.acquire_deleting_files()?;
         deleting.remove(&path.to_path_buf());
         Ok(())
     }

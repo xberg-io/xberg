@@ -288,7 +288,7 @@ describe("ChunkingConfig", () => {
 
 		it("should reject non-number maxChars at compile time", () => {
 			// @ts-expect-error - maxChars must be number
-			const config: ChunkingConfig = { maxChars: "4096" };
+			const _config: ChunkingConfig = { maxChars: "4096" };
 		});
 	});
 

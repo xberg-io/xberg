@@ -440,8 +440,8 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
             .processing_warnings
             .into_iter()
             .map(|w| JsProcessingWarning {
-                source: w.source,
-                message: w.message,
+                source: w.source.into_owned(),
+                message: w.message.into_owned(),
             })
             .collect();
 
@@ -794,8 +794,8 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                 .processing_warnings
                 .into_iter()
                 .map(|w| RustProcessingWarning {
-                    source: w.source,
-                    message: w.message,
+                    source: std::borrow::Cow::Owned(w.source),
+                    message: std::borrow::Cow::Owned(w.message),
                 })
                 .collect(),
             annotations: val.annotations.map(|annots| {

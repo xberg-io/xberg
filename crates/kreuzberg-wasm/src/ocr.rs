@@ -34,7 +34,8 @@ pub fn ocr_recognize_raw(
     tessdata: &[u8],
     language: &str,
 ) -> Result<String, JsValue> {
-    let api = kreuzberg_tesseract::TesseractAPI::new();
+    let api = kreuzberg_tesseract::TesseractAPI::new()
+        .map_err(|e| JsValue::from_str(&format!("Failed to allocate Tesseract engine: {e}")))?;
 
     api.init_5(tessdata, tessdata.len() as i32, language, 3, &[])
         .map_err(|e| JsValue::from_str(&format!("Tesseract initialization failed: {e}")))?;

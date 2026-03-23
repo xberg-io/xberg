@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ExtractionConfig, HierarchyConfig, PdfConfig } from "../../src/types.js";
+import type { ExtractionConfig, PdfConfig } from "../../src/types.js";
 
 describe("PdfConfig", () => {
 	describe("construction", () => {
@@ -299,12 +299,12 @@ describe("PdfConfig", () => {
 
 		it("should reject non-boolean extractImages at compile time", () => {
 			// @ts-expect-error - extractImages must be boolean
-			const config: PdfConfig = { extractImages: "true" };
+			const _config: PdfConfig = { extractImages: "true" };
 		});
 
 		it("should reject non-array passwords at compile time", () => {
 			// @ts-expect-error - passwords must be array
-			const config: PdfConfig = { passwords: "password" };
+			const _config: PdfConfig = { passwords: "password" };
 		});
 	});
 

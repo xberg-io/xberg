@@ -73,7 +73,8 @@ fn get_or_init_api(tessdata_path: &str, language: &str) -> Result<TesseractAPI, 
     }
 
     // No valid cache entry — create and initialize a fresh API.
-    let api = TesseractAPI::new();
+    let api = TesseractAPI::new()
+        .map_err(|e| OcrError::TesseractInitializationFailed(format!("Failed to allocate Tesseract engine: {}", e)))?;
     api.init(tessdata_path, language).map_err(|e| {
         OcrError::TesseractInitializationFailed(format!("Failed to initialize language '{}': {}", language, e))
     })?;

@@ -13,9 +13,9 @@
  * NAPI-RS bindings with plain object configs (NO builder pattern).
  */
 
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { extractBytesSync } from "../../dist/index.js";
-import type { ExtractionConfig, JsEmbeddingModelType } from "../../src/types.js";
+import type { ExtractionConfig } from "../../src/types.js";
 
 /**
  * Helper function to calculate Euclidean norm (magnitude) of a vector.
@@ -856,7 +856,7 @@ describe("Embedding Vector Generation (Node.js Bindings)", () => {
 			const result = extractBytesSync(textBytes, "text/plain", config);
 
 			if (result.chunks && result.chunks.length > 0) {
-				let hasNonUnitVectors = false;
+				let _hasNonUnitVectors = false;
 
 				for (const chunk of result.chunks) {
 					if (chunk.embeddings && chunk.embeddings.length > 0) {
@@ -865,7 +865,7 @@ describe("Embedding Vector Generation (Node.js Bindings)", () => {
 
 						// Non-normalized vectors may have norm != 1
 						if (Math.abs(norm - 1.0) > 0.1) {
-							hasNonUnitVectors = true;
+							_hasNonUnitVectors = true;
 						}
 					}
 				}

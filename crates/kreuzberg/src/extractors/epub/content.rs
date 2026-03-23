@@ -56,11 +56,11 @@ pub(super) fn extract_content(
                         Err(err) => {
                             had_markup_fallback = true;
                             warnings.push(ProcessingWarning {
-                                source: "epub".to_string(),
-                                message: format!(
+                                source: std::borrow::Cow::Borrowed("epub"),
+                                message: std::borrow::Cow::Owned(format!(
                                     "XHTML conversion failed for spine item '{}'; falling back to plain text: {}",
                                     file_path, err
-                                ),
+                                )),
                             });
                             extract_text_from_xhtml(&xhtml_content)
                         }
@@ -86,8 +86,11 @@ pub(super) fn extract_content(
             }
             Err(err) => {
                 warnings.push(ProcessingWarning {
-                    source: "epub".to_string(),
-                    message: format!("Failed to read spine item '{}' from EPUB archive: {}", file_path, err),
+                    source: std::borrow::Cow::Borrowed("epub"),
+                    message: std::borrow::Cow::Owned(format!(
+                        "Failed to read spine item '{}' from EPUB archive: {}",
+                        file_path, err
+                    )),
                 });
                 continue;
             }

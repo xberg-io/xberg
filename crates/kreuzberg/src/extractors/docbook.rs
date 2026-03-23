@@ -92,8 +92,9 @@ fn build_docbook_document_structure(content: &str) -> Result<crate::types::docum
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                let tag = strip_namespace(&tag);
+                let name = e.name();
+                let tag_cow = crate::utils::xml_tag_name(name.as_ref());
+                let tag = strip_namespace(&tag_cow);
 
                 match tag {
                     "info" | "articleinfo" | "bookinfo" | "chapterinfo" => {
@@ -188,8 +189,9 @@ fn build_docbook_document_structure(content: &str) -> Result<crate::types::docum
                 }
             }
             Ok(Event::End(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                let tag = strip_namespace(&tag);
+                let name = e.name();
+                let tag_cow = crate::utils::xml_tag_name(name.as_ref());
+                let tag = strip_namespace(&tag_cow);
 
                 match tag {
                     "info" | "articleinfo" | "bookinfo" | "chapterinfo" => {
@@ -216,8 +218,7 @@ fn build_docbook_document_structure(content: &str) -> Result<crate::types::docum
                     }
                     "row" if in_row => {
                         if !current_row.is_empty() {
-                            current_table.push(current_row.clone());
-                            current_row.clear();
+                            current_table.push(std::mem::take(&mut current_row));
                         }
                         in_row = false;
                     }
@@ -268,8 +269,9 @@ fn parse_docbook_single_pass(content: &str, plain: bool) -> Result<DocBookParseR
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                let tag = strip_namespace(&tag);
+                let name = e.name();
+                let tag_cow = crate::utils::xml_tag_name(name.as_ref());
+                let tag = strip_namespace(&tag_cow);
 
                 match tag {
                     "info" | "articleinfo" | "bookinfo" | "chapterinfo" => {
@@ -406,8 +408,9 @@ fn parse_docbook_single_pass(content: &str, plain: bool) -> Result<DocBookParseR
                 }
             }
             Ok(Event::End(e)) => {
-                let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
-                let tag = strip_namespace(&tag);
+                let name = e.name();
+                let tag_cow = crate::utils::xml_tag_name(name.as_ref());
+                let tag = strip_namespace(&tag_cow);
 
                 match tag {
                     "info" | "articleinfo" | "bookinfo" | "chapterinfo" => {
@@ -427,13 +430,12 @@ fn parse_docbook_single_pass(content: &str, plain: bool) -> Result<DocBookParseR
                             }
                             output.push('\n');
                             tables.push(Table {
-                                cells: current_table.clone(),
+                                cells: std::mem::take(&mut current_table),
                                 markdown,
                                 page_number: table_index + 1,
                                 bounding_box: None,
                             });
                             table_index += 1;
-                            current_table.clear();
                         }
                         state.in_table = false;
                     }
@@ -448,8 +450,7 @@ fn parse_docbook_single_pass(content: &str, plain: bool) -> Result<DocBookParseR
                     }
                     "row" if state.in_row => {
                         if !current_row.is_empty() {
-                            current_table.push(current_row.clone());
-                            current_row.clear();
+                            current_table.push(std::mem::take(&mut current_row));
                         }
                         state.in_row = false;
                     }

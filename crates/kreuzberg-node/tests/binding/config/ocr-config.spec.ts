@@ -106,7 +106,7 @@ describe("OcrConfig", () => {
 
 		it("should type-check invalid backend at compile time", () => {
 			// @ts-expect-error - invalid backend should fail type checking
-			const config: OcrConfig = { backend: "invalid_backend" };
+			const _config: OcrConfig = { backend: "invalid_backend" };
 		});
 
 		it("should accept valid language codes", () => {
@@ -252,12 +252,12 @@ describe("OcrConfig", () => {
 
 		it("should reject non-string backend at compile time", () => {
 			// @ts-expect-error - backend must be string
-			const config: OcrConfig = { backend: 123 };
+			const _config: OcrConfig = { backend: 123 };
 		});
 
 		it("should reject non-string language at compile time", () => {
 			// @ts-expect-error - language must be string
-			const config: OcrConfig = { backend: "tesseract", language: 123 };
+			const _config: OcrConfig = { backend: "tesseract", language: 123 };
 		});
 	});
 

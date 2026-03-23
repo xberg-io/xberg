@@ -129,7 +129,10 @@ impl TesseractBackend {
     ///
     /// Returns a vector of available language codes, or an error if querying fails.
     fn query_available_languages(&self) -> Result<Vec<String>> {
-        let api = kreuzberg_tesseract::TesseractAPI::new();
+        let api = kreuzberg_tesseract::TesseractAPI::new().map_err(|e| crate::KreuzbergError::Ocr {
+            message: format!("Failed to allocate Tesseract engine: {}", e),
+            source: Some(Box::new(e)),
+        })?;
         api.init("", "eng").map_err(|e| crate::KreuzbergError::Ocr {
             message: format!("Failed to initialize Tesseract for language query: {}", e),
             source: Some(Box::new(e)),

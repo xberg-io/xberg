@@ -80,7 +80,7 @@ fn test_ocr_on_hello_world_image() {
     let tessdata_dir = get_tessdata_dir();
     ensure_eng_traineddata_exists(&tessdata_dir);
 
-    let api = TesseractAPI::new();
+    let api = TesseractAPI::new().expect("Failed to create TesseractAPI");
     api.init(tessdata_dir.to_str().unwrap(), "eng")
         .expect("Failed to initialize Tesseract");
 
@@ -102,7 +102,7 @@ fn test_ocr_on_table_image() {
     let tessdata_dir = get_tessdata_dir();
     ensure_eng_traineddata_exists(&tessdata_dir);
 
-    let api = TesseractAPI::new();
+    let api = TesseractAPI::new().expect("Failed to create TesseractAPI");
     api.init(tessdata_dir.to_str().unwrap(), "eng")
         .expect("Failed to initialize Tesseract");
     api.set_variable("tessedit_pageseg_mode", "1")
@@ -126,7 +126,7 @@ fn test_invalid_language_code() {
     let tessdata_dir = get_tessdata_dir();
     ensure_eng_traineddata_exists(&tessdata_dir);
 
-    let api = TesseractAPI::new();
+    let api = TesseractAPI::new().expect("Failed to create TesseractAPI");
 
     let result = api.init(tessdata_dir.to_str().unwrap(), "invalid_lang");
     assert!(result.is_err());
@@ -137,7 +137,7 @@ fn test_empty_image_data() {
     let tessdata_dir = get_tessdata_dir();
     ensure_eng_traineddata_exists(&tessdata_dir);
 
-    let api = TesseractAPI::new();
+    let api = TesseractAPI::new().expect("Failed to create TesseractAPI");
     api.init(tessdata_dir.to_str().unwrap(), "eng")
         .expect("Failed to initialize Tesseract");
 
@@ -151,7 +151,7 @@ fn test_invalid_image_parameters() {
     let tessdata_dir = get_tessdata_dir();
     ensure_eng_traineddata_exists(&tessdata_dir);
 
-    let api = TesseractAPI::new();
+    let api = TesseractAPI::new().expect("Failed to create TesseractAPI");
     api.init(tessdata_dir.to_str().unwrap(), "eng")
         .expect("Failed to initialize Tesseract");
 
@@ -176,7 +176,7 @@ fn test_variable_setting() {
     let tessdata_dir = get_tessdata_dir();
     ensure_eng_traineddata_exists(&tessdata_dir);
 
-    let api = TesseractAPI::new();
+    let api = TesseractAPI::new().expect("Failed to create TesseractAPI");
     api.init(tessdata_dir.to_str().unwrap(), "eng")
         .expect("Failed to initialize Tesseract");
 
@@ -195,7 +195,7 @@ fn test_multiple_operations() {
     let tessdata_dir = get_tessdata_dir();
     ensure_eng_traineddata_exists(&tessdata_dir);
 
-    let api = TesseractAPI::new();
+    let api = TesseractAPI::new().expect("Failed to create TesseractAPI");
     api.init(tessdata_dir.to_str().unwrap(), "eng")
         .expect("Failed to initialize Tesseract");
 

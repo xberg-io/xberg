@@ -232,12 +232,12 @@ describe("LanguageDetectionConfig", () => {
 
 		it("should reject non-number minConfidence at compile time", () => {
 			// @ts-expect-error - minConfidence must be number
-			const config: LanguageDetectionConfig = { minConfidence: "0.5" };
+			const _config: LanguageDetectionConfig = { minConfidence: "0.5" };
 		});
 
 		it("should reject non-boolean enabled at compile time", () => {
 			// @ts-expect-error - enabled must be boolean
-			const config: LanguageDetectionConfig = { enabled: 1 };
+			const _config: LanguageDetectionConfig = { enabled: 1 };
 		});
 	});
 

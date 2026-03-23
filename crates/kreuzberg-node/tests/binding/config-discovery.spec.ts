@@ -3,14 +3,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ExtractionConfig } from "../../dist/index.js";
-import type { ExtractionConfig as ExtractionConfigType } from "../../src/types.js";
 
 describe("ExtractionConfig.discover()", () => {
 	const originalCwd = process.cwd();
 	const originalEnv = { ...process.env };
 	const testDir = join("/tmp", "kreuzberg-discover-test");
-	const homeDir = homedir();
-	const kreuzbergHomeDir = join(homeDir, ".kreuzberg");
+	const _homeDir = homedir();
+	const _kreuzbergHomeDir = join(_homeDir, ".kreuzberg");
 
 	beforeEach(() => {
 		// Clean up environment variables
@@ -489,7 +488,7 @@ maxChars = 1000`;
 				const config = ExtractionConfig.discover();
 				// Either error or graceful handling
 				expect(config === null || config).toBeTruthy();
-			} catch (error) {
+			} catch {
 				// Error is acceptable for invalid config
 				expect(true).toBe(true);
 			}
@@ -780,7 +779,7 @@ maxConcurrentExtractions = 4`;
 			const config1 = ExtractionConfig.discover();
 
 			delete process.env.KREUZBERG_CONFIG;
-			const configNull = ExtractionConfig.discover();
+			const _configNull = ExtractionConfig.discover();
 
 			const inlineJson2 = JSON.stringify({ useCache: false });
 			process.env.KREUZBERG_CONFIG = inlineJson2;

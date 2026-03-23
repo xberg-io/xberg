@@ -438,7 +438,10 @@ fn extract_segments_merged(page: &PdfPage, page_height: f32) -> Option<Vec<Segme
             // Step 4: Re-extract text from merged bbox.
             let text = if group.cells.len() == 1 {
                 // Single cell: move text out to avoid clone.
-                group.cells.into_iter().next().unwrap().text
+                let Some(cell) = group.cells.into_iter().next() else {
+                    continue;
+                };
+                cell.text
             } else {
                 // Multi-cell group: re-extract from merged bbox using pdfium.
                 // The bbox is in PDF coordinates (bottom-left origin).
@@ -574,7 +577,9 @@ fn merge_cells_in_row(mut row: TextRow) -> Vec<MergedCellGroup> {
         };
 
         if should_merge {
-            let group = groups.last_mut().unwrap();
+            let Some(group) = groups.last_mut() else {
+                continue;
+            };
             group.pdf_left = group.pdf_left.min(cell.pdf_left);
             group.pdf_bottom = group.pdf_bottom.min(cell.pdf_bottom);
             group.pdf_right = group.pdf_right.max(cell.pdf_right);
@@ -1308,7 +1313,9 @@ fn assemble_segments_from_chars(char_infos: &[CharInfo], repair_map: Option<&[(c
 
     // Flush any remaining pending text (last line in a merge chain).
     if let Some(text) = pending_text.take() {
-        let last_range = line_ranges.last().unwrap();
+        let Some(last_range) = line_ranges.last() else {
+            return segments;
+        };
         let first = &char_infos[pending_start];
         let last_idx = (pending_start..last_range.1)
             .rev()

@@ -260,11 +260,15 @@ mod tests {
     #[test]
     fn test_manifest_returns_all_layout_models() {
         let entries = LayoutModelManager::manifest();
-        assert_eq!(entries.len(), 2);
+        assert_eq!(entries.len(), 6);
 
         let paths: Vec<&str> = entries.iter().map(|e| e.relative_path.as_str()).collect();
         assert!(paths.contains(&"layout/rtdetr/model.onnx"));
         assert!(paths.contains(&"layout/tatr/tatr.onnx"));
+        assert!(paths.contains(&"layout/slanet_wired/slanet_wired.onnx"));
+        assert!(paths.contains(&"layout/slanet_wireless/slanet_wireless.onnx"));
+        assert!(paths.contains(&"layout/slanet_plus/slanet_plus.onnx"));
+        assert!(paths.contains(&"layout/table_classifier/table_classifier.onnx"));
     }
 
     #[test]
