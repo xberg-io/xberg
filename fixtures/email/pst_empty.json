@@ -1,0 +1,15 @@
+{
+	"id": "email_pst_empty",
+	"category": "email",
+	"description": "Empty Outlook PST archive with no messages.",
+	"document": {
+		"path": "email/empty.pst",
+		"media_type": "application/vnd.ms-outlook-pst"
+	},
+	"extraction": {
+		"config": {}
+	},
+	"assertions": {
+		"expected_mime": "application/vnd.ms-outlook-pst"
+	}
+}
