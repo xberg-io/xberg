@@ -72,24 +72,10 @@ impl DocumentExtractor for CsvExtractor {
 
         let rows = parse_csv(&text, delimiter);
 
-        // Build space-separated text (each row on its own line, cells separated by spaces)
-        let content_text = rows
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|cell| cell.trim())
-                    .filter(|cell| !cell.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .filter(|line| !line.is_empty())
-            .collect::<Vec<_>>()
-            .join("\n");
-
         let row_count = rows.len();
         let col_count = rows.iter().map(|r| r.len()).max().unwrap_or(0);
-
         let has_header = detect_header(&rows);
+        let content_text = build_content_text(&rows, has_header);
         let column_types = infer_column_types(&rows, has_header);
 
         // Build markdown table before moving rows into Table::cells
@@ -433,6 +419,52 @@ fn infer_column_types(rows: &[Vec<String>], has_header: bool) -> Vec<String> {
         .collect()
 }
 
+/// Build text content with header-value pairs for embedding quality.
+///
+/// When a header row is detected, produces `Row N:\n  Header: Value` pairs
+/// that preserve the semantic association between column names and cell values.
+/// Empty cells are skipped. Falls back to space-separated values when no
+/// header is detected.
+fn build_content_text(rows: &[Vec<String>], has_header: bool) -> String {
+    if rows.is_empty() {
+        return String::new();
+    }
+
+    if !has_header || rows.len() < 2 {
+        return rows
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|cell| cell.trim())
+                    .filter(|cell| !cell.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+    }
+
+    let headers = &rows[0];
+    let mut sections = Vec::with_capacity(rows.len() - 1);
+
+    for (i, row) in rows[1..].iter().enumerate() {
+        let mut lines = vec![format!("Row {}:", i + 1)];
+        for (header, value) in headers.iter().zip(row.iter()) {
+            let h = header.trim();
+            let v = value.trim();
+            if !h.is_empty() && !v.is_empty() {
+                lines.push(format!("  {}: {}", h, v));
+            }
+        }
+        if lines.len() > 1 {
+            sections.push(lines.join("\n"));
+        }
+    }
+
+    sections.join("\n\n")
+}
+
 /// Build a Markdown table from parsed rows.
 fn build_markdown_table(rows: &[Vec<String>]) -> String {
     if rows.is_empty() {
@@ -544,11 +576,13 @@ mod tests {
             .await
             .expect("CSV extraction should succeed");
 
-        // Content should be space-separated (not comma-separated)
-        assert!(result.content.contains("Name Age City"));
-        assert!(result.content.contains("Alice 30 NYC"));
-        assert!(result.content.contains("Bob 25 LA"));
-        assert!(!result.content.contains(','));
+        // Header-value pairs preserve semantic associations
+        assert!(result.content.contains("Name: Alice"));
+        assert!(result.content.contains("Age: 30"));
+        assert!(result.content.contains("City: NYC"));
+        assert!(result.content.contains("Name: Bob"));
+        assert!(result.content.contains("Row 1:"));
+        assert!(result.content.contains("Row 2:"));
 
         // Tables should be populated
         assert_eq!(result.tables.len(), 1);
@@ -708,10 +742,8 @@ mod tests {
         let result = extractor.extract_bytes(&content, "text/csv", &config).await.unwrap();
 
         assert!(!result.content.is_empty());
-        assert!(result.content.contains("Alice Johnson"));
-        assert!(result.content.contains("Engineering"));
-        // Should not have comma delimiters in the content
-        assert!(!result.content.lines().any(|line| line.contains(',')));
+        assert!(result.content.contains("Name: Alice Johnson"));
+        assert!(result.content.contains("Department: Engineering"));
         // Tables should be populated
         assert_eq!(result.tables.len(), 1);
         assert_eq!(result.tables[0].cells.len(), 11); // header + 10 data rows
