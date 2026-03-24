@@ -48,7 +48,7 @@ impl Plugin for PstExtractor {
 
 impl SyncExtractor for PstExtractor {
     fn extract_sync(&self, content: &[u8], mime_type: &str, _config: &ExtractionConfig) -> Result<ExtractionResult> {
-        let messages = crate::extraction::pst::extract_pst_messages(content)?;
+        let (messages, processing_warnings) = crate::extraction::pst::extract_pst_messages(content)?;
 
         let mut all_text_parts = Vec::with_capacity(messages.len());
         for msg in &messages {
@@ -111,8 +111,9 @@ impl SyncExtractor for PstExtractor {
             #[cfg(any(feature = "keywords-yake", feature = "keywords-rake"))]
             extracted_keywords: None,
             quality_score: None,
-            processing_warnings: Vec::new(),
+            processing_warnings,
             annotations: None,
+            children: None,
         })
     }
 }
