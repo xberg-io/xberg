@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **PDF layout engine panic on malformed input** (#544): Replaced the panicking `.expect()` inside the thread-local `LayoutEngine` initializer in `layout_runner.rs` with proper `Result`-based error propagation. A failure to initialise the layout engine now returns a descriptive error instead of crashing the host process via FFI (Python, Node, etc.).
+
+---
+
 ## [4.6.0] - 2026-03-24
 
 ### Added
