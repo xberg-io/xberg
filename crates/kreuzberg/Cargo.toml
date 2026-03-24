@@ -53,7 +53,7 @@ office = [
 ]
 hwp = ["dep:cfb", "dep:flate2"]
 iwork = ["dep:zip", "dep:snap"]
-email = ["dep:mail-parser", "dep:cfb"]
+email = ["dep:mail-parser", "dep:cfb", "dep:outlook-pst", "dep:tempfile"]
 html = ["dep:html-to-markdown-rs"]
 xml = ["dep:quick-xml", "dep:roxmltree"]
 archives = ["dep:zip", "dep:tar", "dep:sevenz-rust2", "dep:flate2"]
@@ -273,6 +273,8 @@ kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "4.6.0", opti
 libc = { workspace = true }
 lopdf = { version = "0.40.0", optional = true }
 mail-parser = { version = "0.11.2", optional = true }
+outlook-pst = { version = "1.2.0", optional = true }
+tempfile = { workspace = true, optional = true }
 memchr = "2.8.0"
 memmap2 = { workspace = true }
 mime_guess = "2.0"
