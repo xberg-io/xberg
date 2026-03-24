@@ -35,6 +35,7 @@ pub const LEGACY_POWERPOINT_MIME_TYPE: &str = "application/vnd.ms-powerpoint";
 
 pub const EML_MIME_TYPE: &str = "message/rfc822";
 pub const MSG_MIME_TYPE: &str = "application/vnd.ms-outlook";
+pub const PST_MIME_TYPE: &str = "application/vnd.ms-outlook-pst";
 pub const JSON_MIME_TYPE: &str = "application/json";
 pub const YAML_MIME_TYPE: &str = "application/x-yaml";
 pub const TOML_MIME_TYPE: &str = "application/toml";
@@ -397,6 +398,11 @@ static FORMATS: &[FormatEntry] = &[
     FormatEntry {
         extensions: &["msg"],
         mime_type: "application/vnd.ms-outlook",
+        aliases: &[],
+    },
+    FormatEntry {
+        extensions: &["pst"],
+        mime_type: "application/vnd.ms-outlook-pst",
         aliases: &[],
     },
     // ── Archives ────────────────────────────────────────────────────────
