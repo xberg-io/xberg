@@ -499,6 +499,69 @@ pub fn kreuzberg_get_extensions_for_mime(mime_type: String) -> PhpResult<Vec<Str
     kreuzberg::get_extensions_for_mime(&mime_type).map_err(|e| format!("Failed to get extensions: {}", e).into())
 }
 
+/// Render all pages of a PDF file to PNG byte strings.
+///
+/// # Parameters
+///
+/// - `path` (string): Path to the PDF file
+/// - `dpi` (int|null): Optional DPI (default 150)
+///
+/// # Returns
+///
+/// Array of binary strings, one PNG per page
+///
+/// # Throws
+///
+/// - Exception: If rendering fails
+///
+/// # Example
+///
+/// ```php
+/// $pages = kreuzberg_render_pdf_pages("document.pdf");
+/// foreach ($pages as $i => $png) {
+///     file_put_contents("page_$i.png", $png);
+/// }
+/// ```
+#[php_function]
+pub fn kreuzberg_render_pdf_pages(path: String, dpi: Option<i64>) -> PhpResult<Vec<Vec<u8>>> {
+    let dpi_i32 = dpi.map(|d| d as i32);
+    let pdf_bytes =
+        std::fs::read(&path).map_err(|e| PhpException::default(format!("[IO] Failed to read file: {}", e)))?;
+    kreuzberg::pdf::render_pdf_to_png_pages(&pdf_bytes, dpi_i32, None)
+        .map_err(|e| PhpException::default(format!("[Rendering] {}", e)))
+}
+
+/// Render a single page of a PDF file to a PNG byte string.
+///
+/// # Parameters
+///
+/// - `path` (string): Path to the PDF file
+/// - `page_index` (int): Zero-based page index
+/// - `dpi` (int|null): Optional DPI (default 150)
+///
+/// # Returns
+///
+/// Binary string containing PNG image data
+///
+/// # Throws
+///
+/// - Exception: If rendering fails
+///
+/// # Example
+///
+/// ```php
+/// $png = kreuzberg_render_pdf_page("document.pdf", 0);
+/// file_put_contents("page_0.png", $png);
+/// ```
+#[php_function]
+pub fn kreuzberg_render_pdf_page(path: String, page_index: i64, dpi: Option<i64>) -> PhpResult<Vec<u8>> {
+    let dpi_i32 = dpi.map(|d| d as i32);
+    let pdf_bytes =
+        std::fs::read(&path).map_err(|e| PhpException::default(format!("[IO] Failed to read file: {}", e)))?;
+    kreuzberg::pdf::render_pdf_page_to_png(&pdf_bytes, page_index as usize, dpi_i32, None)
+        .map_err(|e| PhpException::default(format!("[Rendering] {}", e)))
+}
+
 /// Returns all function builders for the extraction module.
 pub fn get_function_builders() -> Vec<ext_php_rs::builders::FunctionBuilder<'static>> {
     vec![
@@ -511,5 +574,7 @@ pub fn get_function_builders() -> Vec<ext_php_rs::builders::FunctionBuilder<'sta
         wrap_function!(kreuzberg_detect_mime_type_from_path),
         wrap_function!(kreuzberg_validate_mime_type),
         wrap_function!(kreuzberg_get_extensions_for_mime),
+        wrap_function!(kreuzberg_render_pdf_pages),
+        wrap_function!(kreuzberg_render_pdf_page),
     ]
 }

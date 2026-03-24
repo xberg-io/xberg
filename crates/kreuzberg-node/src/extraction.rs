@@ -154,3 +154,66 @@ pub async fn extract_bytes(
 
     JsExtractionResult::try_from(result)
 }
+
+/// Render all pages of a PDF file to PNG buffers (synchronous).
+///
+/// # Parameters
+///
+/// * `file_path` - Path to the PDF file
+/// * `dpi` - Optional DPI (default 150)
+///
+/// # Returns
+///
+/// Array of Buffer objects, one PNG per page.
+#[napi]
+pub fn render_pdf_pages_sync(file_path: String, dpi: Option<i32>) -> Result<Vec<Buffer>> {
+    let pdf_bytes = std::fs::read(&file_path).map_err(|e| Error::from_reason(format!("Failed to read file: {}", e)))?;
+    let pages = kreuzberg::pdf::render_pdf_to_png_pages(&pdf_bytes, dpi, None)
+        .map_err(|e| Error::from_reason(e.to_string()))?;
+    Ok(pages.into_iter().map(|p| Buffer::from(p.as_slice())).collect())
+}
+
+/// Render a single page of a PDF file to a PNG buffer (synchronous).
+///
+/// # Parameters
+///
+/// * `file_path` - Path to the PDF file
+/// * `page_index` - Zero-based page index
+/// * `dpi` - Optional DPI (default 150)
+///
+/// # Returns
+///
+/// Buffer containing PNG image data.
+#[napi]
+pub fn render_pdf_page_sync(file_path: String, page_index: u32, dpi: Option<i32>) -> Result<Buffer> {
+    let pdf_bytes = std::fs::read(&file_path).map_err(|e| Error::from_reason(format!("Failed to read file: {}", e)))?;
+    let page = kreuzberg::pdf::render_pdf_page_to_png(&pdf_bytes, page_index as usize, dpi, None)
+        .map_err(|e| Error::from_reason(e.to_string()))?;
+    Ok(Buffer::from(page.as_slice()))
+}
+
+/// Render all pages of a PDF file to PNG buffers (asynchronous).
+///
+/// # Parameters
+///
+/// * `file_path` - Path to the PDF file
+/// * `dpi` - Optional DPI (default 150)
+///
+/// # Returns
+///
+/// Promise resolving to an array of Buffer objects.
+#[napi]
+pub async fn render_pdf_pages(file_path: String, dpi: Option<i32>) -> Result<Vec<Buffer>> {
+    let result = WORKER_POOL
+        .spawn_blocking(move || {
+            let pdf_bytes =
+                std::fs::read(&file_path).map_err(|e| kreuzberg::KreuzbergError::Io(std::sync::Arc::new(e)))?;
+            kreuzberg::pdf::render_pdf_to_png_pages(&pdf_bytes, dpi, None)
+                .map_err(|e| kreuzberg::KreuzbergError::Other(e.to_string()))
+        })
+        .await
+        .map_err(|e| Error::from_reason(format!("Worker thread error: {}", e)))?
+        .map_err(convert_error)?;
+
+    Ok(result.into_iter().map(|p| Buffer::from(p.as_slice())).collect())
+}

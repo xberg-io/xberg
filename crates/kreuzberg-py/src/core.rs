@@ -589,6 +589,56 @@ pub fn batch_extract_bytes<'py>(
     })
 }
 
+/// Render all pages of a PDF file to PNG byte buffers.
+///
+/// Args:
+///     file_path: Path to the PDF file
+///     dpi: Optional DPI (default 150)
+///
+/// Returns:
+///     List of bytes objects, one PNG per page
+///
+/// Raises:
+///     RuntimeError: If rendering fails
+#[pyfunction]
+#[pyo3(signature = (file_path, dpi=None))]
+pub fn render_pdf_pages_impl(py: Python<'_>, file_path: &str, dpi: Option<i32>) -> PyResult<Vec<PyObject>> {
+    let pdf_bytes = std::fs::read(file_path)
+        .map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to read file: {}", e)))?;
+    let pages = Python::detach(py, || kreuzberg::pdf::render_pdf_to_png_pages(&pdf_bytes, dpi, None))
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    Python::attach(|py| {
+        Ok(pages
+            .into_iter()
+            .map(|p| pyo3::types::PyBytes::new(py, &p).into_any().unbind())
+            .collect())
+    })
+}
+
+/// Render a single page of a PDF file to a PNG byte buffer.
+///
+/// Args:
+///     file_path: Path to the PDF file
+///     page_index: Zero-based page index
+///     dpi: Optional DPI (default 150)
+///
+/// Returns:
+///     bytes: PNG image data
+///
+/// Raises:
+///     RuntimeError: If rendering fails
+#[pyfunction]
+#[pyo3(signature = (file_path, page_index, dpi=None))]
+pub fn render_pdf_page_impl(py: Python<'_>, file_path: &str, page_index: usize, dpi: Option<i32>) -> PyResult<PyObject> {
+    let pdf_bytes = std::fs::read(file_path)
+        .map_err(|e| pyo3::exceptions::PyIOError::new_err(format!("Failed to read file: {}", e)))?;
+    let page = Python::detach(py, || {
+        kreuzberg::pdf::render_pdf_page_to_png(&pdf_bytes, page_index, dpi, None)
+    })
+    .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    Python::attach(|py| Ok(pyo3::types::PyBytes::new(py, &page).into_any().unbind()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -319,6 +319,35 @@ module Kreuzberg
       results
     end
 
+    # Render all pages of a PDF as PNG images.
+    #
+    # @param path [String, Pathname] Path to the PDF file
+    # @param dpi [Integer] Rendering resolution (default 150)
+    # @return [Array<String>] Array of PNG-encoded binary strings, one per page
+    # @raise [Errors::IOError] If the file cannot be read
+    # @raise [Errors::ParsingError] If rendering fails
+    def render_pdf_pages(path, dpi: 150)
+      path_str = path.to_s
+      raise Errors::IOError, "File not found: #{path_str}" unless File.exist?(path_str)
+
+      native_render_pdf_pages(path_str, dpi)
+    end
+
+    # Render a single PDF page as a PNG image.
+    #
+    # @param path [String, Pathname] Path to the PDF file
+    # @param page_index [Integer] Zero-based page index
+    # @param dpi [Integer] Rendering resolution (default 150)
+    # @return [String] PNG-encoded binary string
+    # @raise [Errors::IOError] If the file cannot be read
+    # @raise [Errors::ParsingError] If rendering fails
+    def render_pdf_page(path, page_index, dpi: 150)
+      path_str = path.to_s
+      raise Errors::IOError, "File not found: #{path_str}" unless File.exist?(path_str)
+
+      native_render_pdf_page(path_str, page_index, dpi)
+    end
+
     def normalize_config(config)
       return {} if config.nil?
       return config if config.is_a?(Hash)

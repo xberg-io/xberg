@@ -477,6 +477,51 @@ async fn read_file_as_array_buffer(file: &web_sys::File) -> Result<Vec<u8>, Stri
     Ok(arr.to_vec())
 }
 
+/// Render all pages of a PDF to PNG byte buffers (synchronous).
+///
+/// # JavaScript Parameters
+///
+/// * `data: Uint8Array` - The PDF document bytes
+/// * `dpi?: number` - Optional DPI (default 150)
+///
+/// # Returns
+///
+/// `Array<Uint8Array>` - Array of PNG images, one per page.
+#[wasm_bindgen(js_name = renderPdfPagesSync)]
+pub fn render_pdf_pages_sync_wasm(data: Uint8Array, dpi: Option<i32>) -> Result<JsValue, JsValue> {
+    let bytes = data.to_vec();
+    let pages = kreuzberg::pdf::render_pdf_to_png_pages(&bytes, dpi, None).map_err(convert_error)?;
+
+    let js_array = js_sys::Array::new_with_length(pages.len() as u32);
+    for (i, page) in pages.iter().enumerate() {
+        let arr = Uint8Array::new_with_length(page.len() as u32);
+        arr.copy_from(page);
+        js_array.set(i as u32, arr.into());
+    }
+    Ok(js_array.into())
+}
+
+/// Render a single page of a PDF to a PNG byte buffer (synchronous).
+///
+/// # JavaScript Parameters
+///
+/// * `data: Uint8Array` - The PDF document bytes
+/// * `pageIndex: number` - Zero-based page index
+/// * `dpi?: number` - Optional DPI (default 150)
+///
+/// # Returns
+///
+/// `Uint8Array` - PNG image data.
+#[wasm_bindgen(js_name = renderPdfPageSync)]
+pub fn render_pdf_page_sync_wasm(data: Uint8Array, page_index: u32, dpi: Option<i32>) -> Result<Uint8Array, JsValue> {
+    let bytes = data.to_vec();
+    let page = kreuzberg::pdf::render_pdf_page_to_png(&bytes, page_index as usize, dpi, None).map_err(convert_error)?;
+
+    let arr = Uint8Array::new_with_length(page.len() as u32);
+    arr.copy_from(&page);
+    Ok(arr)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

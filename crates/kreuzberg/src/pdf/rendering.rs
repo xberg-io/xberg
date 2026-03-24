@@ -162,6 +162,54 @@ pub fn render_page_to_image(pdf_bytes: &[u8], page_index: usize, options: &PageR
     renderer.render_page_to_image(pdf_bytes, page_index, options)
 }
 
+/// Render all pages of a PDF to PNG-encoded byte buffers.
+///
+/// Each element in the returned `Vec` is a complete PNG image.
+/// Default DPI is 150 if `None` is passed.
+pub fn render_pdf_to_png_pages(pdf_bytes: &[u8], dpi: Option<i32>, password: Option<&str>) -> Result<Vec<Vec<u8>>> {
+    let renderer = PdfRenderer::new()?;
+    let options = PageRenderOptions {
+        target_dpi: dpi.unwrap_or(150),
+        ..PageRenderOptions::default()
+    };
+    let images = renderer.render_all_pages_with_password(pdf_bytes, &options, password)?;
+    images.iter().map(encode_png).collect()
+}
+
+/// Render a single PDF page to a PNG-encoded byte buffer.
+pub fn render_pdf_page_to_png(
+    pdf_bytes: &[u8],
+    page_index: usize,
+    dpi: Option<i32>,
+    password: Option<&str>,
+) -> Result<Vec<u8>> {
+    let renderer = PdfRenderer::new()?;
+    let options = PageRenderOptions {
+        target_dpi: dpi.unwrap_or(150),
+        ..PageRenderOptions::default()
+    };
+    let image = renderer.render_page_to_image_with_password(pdf_bytes, page_index, &options, password)?;
+    encode_png(&image)
+}
+
+/// Convenience: render all pages from a file path.
+pub fn render_pdf_file_to_png_pages(
+    path: &std::path::Path,
+    dpi: Option<i32>,
+    password: Option<&str>,
+) -> Result<Vec<Vec<u8>>> {
+    let pdf_bytes = std::fs::read(path).map_err(|e| PdfError::InvalidPdf(format!("Failed to read file: {}", e)))?;
+    render_pdf_to_png_pages(&pdf_bytes, dpi, password)
+}
+
+fn encode_png(image: &DynamicImage) -> Result<Vec<u8>> {
+    let mut buf = std::io::Cursor::new(Vec::new());
+    image
+        .write_to(&mut buf, image::ImageFormat::Png)
+        .map_err(|e| PdfError::RenderingFailed(format!("PNG encoding failed: {}", e)))?;
+    Ok(buf.into_inner())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn calculate_optimal_dpi(
     page_width: f64,
@@ -395,5 +443,33 @@ mod tests {
     fn test_calculate_optimal_dpi_negative_target() {
         let dpi = calculate_optimal_dpi(612.0, 792.0, -100, 65536, 72, 600);
         assert_eq!(dpi, 72);
+    }
+
+    #[test]
+    #[serial]
+    fn test_render_pdf_to_png_pages_invalid() {
+        let result = render_pdf_to_png_pages(b"not a pdf", None, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn test_render_pdf_page_to_png_invalid() {
+        let result = render_pdf_page_to_png(b"not a pdf", 0, None, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_render_pdf_file_to_png_pages_nonexistent() {
+        let result = render_pdf_file_to_png_pages(std::path::Path::new("/nonexistent/file.pdf"), None, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_encode_png() {
+        let image = DynamicImage::new_rgb8(1, 1);
+        let png_bytes = encode_png(&image).expect("encoding a 1x1 image should succeed");
+        assert!(png_bytes.len() >= 8, "PNG output too short");
+        assert_eq!(&png_bytes[..4], &[0x89, 0x50, 0x4E, 0x47], "missing PNG magic bytes");
     }
 }

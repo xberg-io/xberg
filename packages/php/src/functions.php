@@ -457,3 +457,68 @@ function batch_extract_bytes_async(
         throw convertToKreuzbergException($e);
     }
 }
+
+/**
+ * Render all pages of a PDF as PNG images.
+ *
+ * @param string $filePath Path to the PDF file
+ * @param int $dpi Rendering resolution (default 150)
+ * @return array<string> List of PNG-encoded binary strings, one per page
+ * @throws KreuzbergException If rendering fails
+ *
+ * @example
+ * ```php
+ * use function Kreuzberg\render_pdf_pages;
+ *
+ * $pages = render_pdf_pages('document.pdf', 150);
+ * foreach ($pages as $i => $png) {
+ *     file_put_contents("page_{$i}.png", $png);
+ * }
+ * ```
+ */
+function render_pdf_pages(string $filePath, int $dpi = 150): array
+{
+    try {
+        /** @var array<string> $result */
+        $result = \kreuzberg_render_pdf_pages($filePath, $dpi);
+
+        return $result;
+    } catch (\Exception $e) {
+        if ($e instanceof KreuzbergException) {
+            throw $e;
+        }
+        throw convertToKreuzbergException($e);
+    }
+}
+
+/**
+ * Render a single PDF page as a PNG image.
+ *
+ * @param string $filePath Path to the PDF file
+ * @param int $pageIndex Zero-based page index
+ * @param int $dpi Rendering resolution (default 150)
+ * @return string PNG-encoded binary string
+ * @throws KreuzbergException If rendering fails
+ *
+ * @example
+ * ```php
+ * use function Kreuzberg\render_pdf_page;
+ *
+ * $png = render_pdf_page('document.pdf', 0, 150);
+ * file_put_contents('first_page.png', $png);
+ * ```
+ */
+function render_pdf_page(string $filePath, int $pageIndex, int $dpi = 150): string
+{
+    try {
+        /** @var string $result */
+        $result = \kreuzberg_render_pdf_page($filePath, $pageIndex, $dpi);
+
+        return $result;
+    } catch (\Exception $e) {
+        if ($e instanceof KreuzbergException) {
+            throw $e;
+        }
+        throw convertToKreuzbergException($e);
+    }
+}

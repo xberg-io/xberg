@@ -154,3 +154,65 @@ pub fn extract_file_with_options<'a>(
         Err(e) => Ok((atoms::error(), format!("Extraction failed: {}", e)).encode(env)),
     }
 }
+
+/// Render all pages of a PDF binary to PNG byte buffers
+///
+/// # Arguments
+/// * `input` - Binary containing the PDF data
+/// * `dpi` - Optional DPI (default 150)
+///
+/// # Returns
+/// * `{:ok, [binary]}` - List of PNG binaries, one per page
+/// * `{:error, reason}` - Error tuple with reason string
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn render_pdf_pages<'a>(env: Env<'a>, input: Binary<'a>, dpi: Option<i32>) -> NifResult<Term<'a>> {
+    if input.is_empty() {
+        return Ok((atoms::error(), "Binary input cannot be empty").encode(env));
+    }
+
+    match kreuzberg::pdf::render_pdf_to_png_pages(input.as_slice(), dpi, None) {
+        Ok(pages) => {
+            let binaries: Vec<_> = pages
+                .iter()
+                .map(|png| {
+                    let mut obin = rustler::OwnedBinary::new(png.len()).unwrap();
+                    obin.as_mut_slice().copy_from_slice(png);
+                    obin.release(env)
+                })
+                .collect();
+            Ok((atoms::ok(), binaries).encode(env))
+        }
+        Err(e) => Ok((atoms::error(), format!("Rendering failed: {}", e)).encode(env)),
+    }
+}
+
+/// Render a single page of a PDF binary to a PNG byte buffer
+///
+/// # Arguments
+/// * `input` - Binary containing the PDF data
+/// * `page_index` - Zero-based page index
+/// * `dpi` - Optional DPI (default 150)
+///
+/// # Returns
+/// * `{:ok, binary}` - PNG binary
+/// * `{:error, reason}` - Error tuple with reason string
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn render_pdf_page<'a>(
+    env: Env<'a>,
+    input: Binary<'a>,
+    page_index: usize,
+    dpi: Option<i32>,
+) -> NifResult<Term<'a>> {
+    if input.is_empty() {
+        return Ok((atoms::error(), "Binary input cannot be empty").encode(env));
+    }
+
+    match kreuzberg::pdf::render_pdf_page_to_png(input.as_slice(), page_index, dpi, None) {
+        Ok(png) => {
+            let mut obin = rustler::OwnedBinary::new(png.len()).unwrap();
+            obin.as_mut_slice().copy_from_slice(&png);
+            Ok((atoms::ok(), obin.release(env)).encode(env))
+        }
+        Err(e) => Ok((atoms::error(), format!("Rendering failed: {}", e)).encode(env)),
+    }
+}

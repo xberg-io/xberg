@@ -14,6 +14,7 @@ mod memory;
 mod mime;
 mod panic_shield;
 mod plugins;
+mod rendering;
 mod result;
 mod result_pool;
 mod result_view;
@@ -69,6 +70,10 @@ pub use panic_shield::{
     get_last_panic_context, set_structured_error,
 };
 pub use plugins::*;
+pub use rendering::{
+    CPageImage, CRenderResult, kreuzberg_free_render_page_result, kreuzberg_free_render_result,
+    kreuzberg_render_pdf_page, kreuzberg_render_pdf_pages,
+};
 pub use result::{
     CMetadataField, kreuzberg_result_get_chunk_count, kreuzberg_result_get_detected_language,
     kreuzberg_result_get_metadata_field, kreuzberg_result_get_page_count,

@@ -426,6 +426,34 @@ internal static partial class NativeMethods
     [DllImport(LibraryName, EntryPoint = "kreuzberg_get_embedding_preset", CallingConvention = CallingConvention.Cdecl)]
     internal static extern IntPtr GetEmbeddingPreset(IntPtr name);
 
+    /// <summary>
+    /// Renders all pages of a PDF as PNG images, returning a JSON array of base64 strings.
+    /// </summary>
+    /// <param name="filePath">Pointer to UTF-8 file path string.</param>
+    /// <param name="dpi">Rendering resolution in DPI.</param>
+    /// <returns>Pointer to JSON string (null on failure).</returns>
+    [DllImport(LibraryName, EntryPoint = "kreuzberg_render_pdf_pages_json", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern IntPtr RenderPdfPagesJson(IntPtr filePath, int dpi);
+
+    /// <summary>
+    /// Renders a single PDF page as a PNG image.
+    /// </summary>
+    /// <param name="filePath">Pointer to UTF-8 file path string.</param>
+    /// <param name="pageIndex">Zero-based page index.</param>
+    /// <param name="dpi">Rendering resolution in DPI.</param>
+    /// <param name="dataLen">Receives the length of the returned byte array.</param>
+    /// <returns>Pointer to PNG bytes (null on failure).</returns>
+    [DllImport(LibraryName, EntryPoint = "kreuzberg_render_pdf_page", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern IntPtr RenderPdfPage(IntPtr filePath, int pageIndex, int dpi, out UIntPtr dataLen);
+
+    /// <summary>
+    /// Frees rendered page bytes returned by RenderPdfPage.
+    /// </summary>
+    /// <param name="data">Pointer to the rendered bytes.</param>
+    /// <param name="dataLen">Length of the data.</param>
+    [DllImport(LibraryName, EntryPoint = "kreuzberg_free_rendered_page", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void FreeRenderedPage(IntPtr data, UIntPtr dataLen);
+
     private static IntPtr ResolveLibrary(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
         if (!string.Equals(libraryName, LibraryName, StringComparison.Ordinal))

@@ -418,6 +418,68 @@ defmodule Kreuzberg do
     end
   end
 
+  @doc """
+  Render all pages of a PDF as PNG images.
+
+  ## Parameters
+
+    * `path` - Path to the PDF file
+    * `opts` - Keyword list of options:
+      * `:dpi` - Rendering resolution (default 150)
+
+  ## Returns
+
+    * `{:ok, [binary()]}` - List of PNG-encoded binaries, one per page
+    * `{:error, reason}` - Rendering failed
+
+  ## Examples
+
+      {:ok, pages} = Kreuzberg.render_pdf_pages("document.pdf")
+      {:ok, pages} = Kreuzberg.render_pdf_pages("document.pdf", dpi: 300)
+  """
+  @spec render_pdf_pages(String.t(), keyword()) ::
+          {:ok, [binary()]} | {:error, String.t()}
+  def render_pdf_pages(path, opts \\ []) when is_binary(path) do
+    dpi = Keyword.get(opts, :dpi, 150)
+
+    case Native.render_pdf_pages(path, dpi) do
+      {:ok, pages} -> {:ok, pages}
+      {:error, _reason} = err -> err
+    end
+  end
+
+  @doc """
+  Render a single PDF page as a PNG image.
+
+  ## Parameters
+
+    * `path` - Path to the PDF file
+    * `page_index` - Zero-based page index
+    * `opts` - Keyword list of options:
+      * `:dpi` - Rendering resolution (default 150)
+
+  ## Returns
+
+    * `{:ok, binary()}` - PNG-encoded binary
+    * `{:error, reason}` - Rendering failed
+
+  ## Examples
+
+      {:ok, png} = Kreuzberg.render_pdf_page("document.pdf", 0)
+      {:ok, png} = Kreuzberg.render_pdf_page("document.pdf", 2, dpi: 300)
+  """
+  @spec render_pdf_page(String.t(), non_neg_integer(), keyword()) ::
+          {:ok, binary()} | {:error, String.t()}
+  def render_pdf_page(path, page_index, opts \\ [])
+      when is_binary(path) and is_integer(page_index) do
+    dpi = Keyword.get(opts, :dpi, 150)
+
+    case Native.render_pdf_page(path, page_index, dpi) do
+      {:ok, data} -> {:ok, data}
+      {:error, _reason} = err -> err
+    end
+  end
+
   defp call_native_file(path, mime_type, nil) do
     Native.extract_file(path, mime_type)
   end

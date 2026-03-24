@@ -1373,6 +1373,95 @@ public final class Kreuzberg {
 		return configArray;
 	}
 
+	/**
+	 * Render all pages of a PDF as PNG images.
+	 *
+	 * @param path
+	 *            path to the PDF file
+	 * @param dpi
+	 *            resolution for rendering (e.g., 150)
+	 * @return list of PNG-encoded byte arrays, one per page
+	 * @throws IOException
+	 *             if the file cannot be read
+	 * @throws KreuzbergException
+	 *             if rendering fails
+	 */
+	public static List<byte[]> renderPdfPages(Path path, int dpi) throws IOException, KreuzbergException {
+		validateFile(path);
+		FFI_LOCK.lock();
+		try (Arena arena = Arena.ofConfined()) {
+			MemorySegment pathSegment = KreuzbergFFI.allocateCString(arena, path.toString());
+			MemorySegment resultPtr = (MemorySegment) KreuzbergFFI.KREUZBERG_RENDER_PDF_PAGES
+					.invoke(pathSegment, dpi);
+
+			if (resultPtr == null || resultPtr.address() == 0) {
+				throw KreuzbergFFI.createTypedException("PDF rendering failed");
+			}
+
+			String json = KreuzbergFFI.readCString(resultPtr);
+			KreuzbergFFI.KREUZBERG_FREE_STRING.invoke(resultPtr);
+
+			List<String> base64Pages = new com.google.gson.Gson().fromJson(json,
+					new com.google.gson.reflect.TypeToken<List<String>>() {
+					}.getType());
+
+			List<byte[]> pages = new ArrayList<>();
+			for (String b64 : base64Pages) {
+				pages.add(java.util.Base64.getDecoder().decode(b64));
+			}
+			return pages;
+		} catch (KreuzbergException e) {
+			throw e;
+		} catch (Throwable e) {
+			throw new KreuzbergException("Unexpected error during PDF rendering", e);
+		} finally {
+			FFI_LOCK.unlock();
+		}
+	}
+
+	/**
+	 * Render a single page of a PDF as a PNG image.
+	 *
+	 * @param path
+	 *            path to the PDF file
+	 * @param pageIndex
+	 *            zero-based page index
+	 * @param dpi
+	 *            resolution for rendering (e.g., 150)
+	 * @return PNG-encoded byte array
+	 * @throws IOException
+	 *             if the file cannot be read
+	 * @throws KreuzbergException
+	 *             if rendering fails
+	 */
+	public static byte[] renderPdfPage(Path path, int pageIndex, int dpi)
+			throws IOException, KreuzbergException {
+		validateFile(path);
+		FFI_LOCK.lock();
+		try (Arena arena = Arena.ofConfined()) {
+			MemorySegment pathSegment = KreuzbergFFI.allocateCString(arena, path.toString());
+			MemorySegment dataLenSegment = arena.allocate(ValueLayout.JAVA_LONG);
+
+			MemorySegment resultPtr = (MemorySegment) KreuzbergFFI.KREUZBERG_RENDER_PDF_PAGE
+					.invoke(pathSegment, pageIndex, dpi, dataLenSegment);
+
+			if (resultPtr == null || resultPtr.address() == 0) {
+				throw KreuzbergFFI.createTypedException("PDF page rendering failed");
+			}
+
+			long dataLen = dataLenSegment.get(ValueLayout.JAVA_LONG, 0);
+			byte[] pngBytes = resultPtr.reinterpret(dataLen).toArray(ValueLayout.JAVA_BYTE);
+			KreuzbergFFI.KREUZBERG_FREE_RENDERED_PAGE.invoke(resultPtr, dataLen);
+			return pngBytes;
+		} catch (KreuzbergException e) {
+			throw e;
+		} catch (Throwable e) {
+			throw new KreuzbergException("Unexpected error during PDF page rendering", e);
+		} finally {
+			FFI_LOCK.unlock();
+		}
+	}
+
 	private static void validateFile(Path path) throws IOException {
 		if (!Files.exists(path)) {
 			throw new IOException("File not found: " + path);

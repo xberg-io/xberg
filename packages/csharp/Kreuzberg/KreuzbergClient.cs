@@ -1438,6 +1438,86 @@ public static class KreuzbergClient
         }
     }
 
+    /// <summary>
+    /// Renders all pages of a PDF as PNG images.
+    /// </summary>
+    /// <param name="path">Path to the PDF file. Must not be empty.</param>
+    /// <param name="dpi">Rendering resolution in DPI (default 150).</param>
+    /// <returns>List of PNG-encoded byte arrays, one per page.</returns>
+    /// <exception cref="ArgumentException">If path is null or empty</exception>
+    /// <exception cref="KreuzbergException">If rendering fails</exception>
+    public static List<byte[]> RenderPdfPages(string path, int dpi = 150)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException("path cannot be null or empty", nameof(path));
+        }
+
+        var pathPtr = InteropUtilities.AllocUtf8(path);
+        try
+        {
+            var resultPtr = NativeMethods.RenderPdfPagesJson(pathPtr, dpi);
+            if (resultPtr == IntPtr.Zero)
+            {
+                ThrowLastError();
+            }
+
+            var json = InteropUtilities.ReadUtf8(resultPtr);
+            NativeMethods.FreeString(resultPtr);
+
+            var base64Pages = JsonSerializer.Deserialize<List<string>>(json!, Serialization.Options)
+                ?? new List<string>();
+
+            var pages = new List<byte[]>(base64Pages.Count);
+            foreach (var b64 in base64Pages)
+            {
+                pages.Add(Convert.FromBase64String(b64));
+            }
+            return pages;
+        }
+        finally
+        {
+            InteropUtilities.FreeUtf8(pathPtr);
+        }
+    }
+
+    /// <summary>
+    /// Renders a single PDF page as a PNG image.
+    /// </summary>
+    /// <param name="path">Path to the PDF file. Must not be empty.</param>
+    /// <param name="pageIndex">Zero-based page index.</param>
+    /// <param name="dpi">Rendering resolution in DPI (default 150).</param>
+    /// <returns>PNG-encoded byte array.</returns>
+    /// <exception cref="ArgumentException">If path is null or empty</exception>
+    /// <exception cref="KreuzbergException">If rendering fails</exception>
+    public static byte[] RenderPdfPage(string path, int pageIndex, int dpi = 150)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException("path cannot be null or empty", nameof(path));
+        }
+
+        var pathPtr = InteropUtilities.AllocUtf8(path);
+        try
+        {
+            var resultPtr = NativeMethods.RenderPdfPage(pathPtr, pageIndex, dpi, out var dataLen);
+            if (resultPtr == IntPtr.Zero)
+            {
+                ThrowLastError();
+            }
+
+            var length = (int)dataLen;
+            var pngBytes = new byte[length];
+            Marshal.Copy(resultPtr, pngBytes, 0, length);
+            NativeMethods.FreeRenderedPage(resultPtr, dataLen);
+            return pngBytes;
+        }
+        finally
+        {
+            InteropUtilities.FreeUtf8(pathPtr);
+        }
+    }
+
     private static IReadOnlyList<string> ParseStringListAndFree(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero)

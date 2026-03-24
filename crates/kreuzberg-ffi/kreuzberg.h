@@ -502,6 +502,38 @@ typedef char *(*PostProcessorCallback)(const char *result_json);
 typedef char *(*ValidatorCallback)(const char *result_json);
 
 /**
+ * A single rendered page image (PNG bytes).
+ */
+typedef struct CPageImage {
+  /**
+   * Pointer to PNG data. Owned by this struct; freed via `kreuzberg_free_render_page_result`.
+   */
+  uint8_t *data;
+  /**
+   * Length of PNG data in bytes.
+   */
+  uintptr_t len;
+} CPageImage;
+
+/**
+ * Result of rendering all pages of a PDF.
+ */
+typedef struct CRenderResult {
+  /**
+   * Array of page images. Owned; freed via `kreuzberg_free_render_result`.
+   */
+  struct CPageImage *pages;
+  /**
+   * Number of pages.
+   */
+  uintptr_t page_count;
+  /**
+   * Error message if the operation failed (NULL on success).
+   */
+  char *error;
+} CRenderResult;
+
+/**
  * Metadata field accessor structure
  *
  * Returned by `kreuzberg_result_get_metadata_field()`. Contains the field value
@@ -2395,6 +2427,53 @@ KREUZBERG_EXPORT bool kreuzberg_clear_validators(void);
  * - Returns NULL on error (check `kreuzberg_last_error`).
  */
 KREUZBERG_EXPORT char *kreuzberg_list_validators(void);
+
+/**
+ * Render all pages of a PDF file to PNG byte buffers.
+ *
+ * # Safety
+ *
+ * - `file_path` must be a valid null-terminated C string
+ * - The returned pointer must be freed with `kreuzberg_free_render_result`
+ * - Returns NULL on panic (check `kreuzberg_last_error`)
+ */
+KREUZBERG_EXPORT
+struct CRenderResult *kreuzberg_render_pdf_pages(const char *file_path,
+                                                 int32_t dpi);
+
+/**
+ * Render a single page of a PDF file to a PNG byte buffer.
+ *
+ * # Safety
+ *
+ * - `file_path` must be a valid null-terminated C string
+ * - The returned pointer must be freed with `kreuzberg_free_render_page_result`
+ * - Returns NULL on panic (check `kreuzberg_last_error`)
+ */
+KREUZBERG_EXPORT
+struct CPageImage *kreuzberg_render_pdf_page(const char *file_path,
+                                             uintptr_t page_index,
+                                             int32_t dpi);
+
+/**
+ * Free a render result returned by `kreuzberg_render_pdf_pages`.
+ *
+ * # Safety
+ *
+ * - `result` must be a pointer returned by `kreuzberg_render_pdf_pages`, or NULL (no-op)
+ * - `result` must not be used after this call
+ */
+KREUZBERG_EXPORT void kreuzberg_free_render_result(struct CRenderResult *result);
+
+/**
+ * Free a single page result returned by `kreuzberg_render_pdf_page`.
+ *
+ * # Safety
+ *
+ * - `page` must be a pointer returned by `kreuzberg_render_pdf_page`, or NULL (no-op)
+ * - `page` must not be used after this call
+ */
+KREUZBERG_EXPORT void kreuzberg_free_render_page_result(struct CPageImage *page);
 
 /**
  * Get page count from extraction result.
