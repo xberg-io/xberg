@@ -599,6 +599,7 @@ pub(crate) async fn extract_with_ocr(
     };
 
     let mut page_texts = vec![String::new(); total_pages];
+    #[allow(unused_mut)]
     let mut collected_tables: Vec<crate::types::Table> = Vec::new();
     let mut all_ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
     let mut conf_sum: f64 = 0.0;
@@ -619,6 +620,7 @@ pub(crate) async fn extract_with_ocr(
         // Render and encode pages one at a time within the batch to avoid holding
         // multiple decoded RGB buffers (~26MB each at 300 DPI) simultaneously.
         // Only the compact PNG-encoded bytes are kept for the batch's OCR phase.
+        #[allow(unused_variables)]
         let (batch_slice, encoded_batch) = if let Some(imgs) = images {
             let slice: Cow<'_, [image::DynamicImage]> = Cow::Borrowed(&imgs[batch_start..batch_end]);
             // Encode pre-rendered images in parallel.
