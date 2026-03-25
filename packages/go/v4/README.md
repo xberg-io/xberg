@@ -308,7 +308,7 @@ func init() {
 
 ## Testing / Tooling
 
-- `task go:lint` – runs `gofmt` and `golangci-lint` (`golangci-lint` pinned to v2.11.3).
+- `task go:lint` – runs `gofmt` and `golangci-lint` (`golangci-lint` pinned to v2.11.4).
 - `task go:test` – executes `go test ./...` (after building the static FFI library).
 - `task e2e:go:verify` – regenerates fixtures via the e2e generator and runs `go test ./...` inside `e2e/go`.
 

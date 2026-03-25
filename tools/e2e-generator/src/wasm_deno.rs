@@ -208,6 +208,7 @@ export function buildConfig(raw: unknown): ExtractionConfig {
     assignBooleanField(target, source, "force_ocr", "forceOcr");
     assignBooleanField(target, source, "include_document_structure", "includeDocumentStructure");
     assignNumberField(target, source, "max_concurrent_extractions", "maxConcurrentExtractions");
+    assignNumberField(target, source, "extraction_timeout_secs", "extractionTimeoutSecs");
 
     if (isPlainRecord(source.ocr)) {
         const mapped = mapOcrConfig(source.ocr as PlainRecord);

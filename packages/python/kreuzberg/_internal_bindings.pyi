@@ -537,6 +537,7 @@ class ExtractionConfig:
     enable_quality_processing: bool
     ocr: OcrConfig | None
     force_ocr: bool
+    force_ocr_pages: list[int] | None
     chunking: ChunkingConfig | None
     images: ImageExtractionConfig | None
     pdf_options: PdfConfig | None
@@ -557,6 +558,7 @@ class ExtractionConfig:
     concurrency: ConcurrencyConfig | None
     cache_namespace: str | None
     cache_ttl_secs: int | None
+    extraction_timeout_secs: int | None
 
     def __init__(
         self,
@@ -565,6 +567,7 @@ class ExtractionConfig:
         enable_quality_processing: bool | None = None,
         ocr: OcrConfig | None = None,
         force_ocr: bool | None = None,
+        force_ocr_pages: list[int] | None = None,
         chunking: ChunkingConfig | None = None,
         images: ImageExtractionConfig | None = None,
         pdf_options: PdfConfig | None = None,
@@ -585,6 +588,7 @@ class ExtractionConfig:
         concurrency: ConcurrencyConfig | None = None,
         cache_namespace: str | None = ...,
         cache_ttl_secs: int | None = ...,
+        extraction_timeout_secs: int | None = ...,
     ) -> None: ...
     @staticmethod
     def from_file(path: str | Path) -> ExtractionConfig: ...
@@ -602,6 +606,7 @@ class FileExtractionConfig:
     enable_quality_processing: bool | None
     ocr: OcrConfig | None
     force_ocr: bool | None
+    force_ocr_pages: list[int] | None
     chunking: ChunkingConfig | None
     images: ImageExtractionConfig | None
     pdf_options: PdfConfig | None
@@ -615,6 +620,7 @@ class FileExtractionConfig:
     output_format: str | None
     include_document_structure: bool | None
     layout: LayoutDetectionConfig | None
+    timeout_secs: int | None
 
     def __init__(
         self,
@@ -622,6 +628,7 @@ class FileExtractionConfig:
         enable_quality_processing: bool | None = None,
         ocr: OcrConfig | None = None,
         force_ocr: bool | None = None,
+        force_ocr_pages: list[int] | None = None,
         chunking: ChunkingConfig | None = None,
         images: ImageExtractionConfig | None = None,
         pdf_options: PdfConfig | None = None,
@@ -635,6 +642,7 @@ class FileExtractionConfig:
         output_format: str | None = None,
         include_document_structure: bool | None = None,
         layout: LayoutDetectionConfig | None = None,
+        timeout_secs: int | None = None,
     ) -> None: ...
 
 class OcrConfig:

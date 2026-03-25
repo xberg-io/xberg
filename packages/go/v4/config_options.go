@@ -174,6 +174,14 @@ func WithCacheTTLSecs(secs uint64) ExtractionOption {
 	}
 }
 
+// WithExtractionTimeoutSecs sets the per-request extraction timeout in seconds.
+// When the timeout is exceeded, the extraction is canceled and an error is returned.
+func WithExtractionTimeoutSecs(secs uint64) ExtractionOption {
+	return func(c *ExtractionConfig) {
+		c.ExtractionTimeoutSecs = &secs
+	}
+}
+
 // ============================================================================
 // OCRConfig Options
 // ============================================================================

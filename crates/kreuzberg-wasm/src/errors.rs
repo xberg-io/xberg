@@ -22,6 +22,7 @@ use wasm_bindgen::prelude::*;
 /// - `Plugin` → Plugin-specific error
 /// - `LockPoisoned` → Lock poisoning (internal error)
 /// - `UnsupportedFormat` → Unsupported MIME type
+/// - `Timeout` → Operation timeout
 /// - `Other` → Generic error
 pub fn convert_error(err: KreuzbergError) -> JsValue {
     use kreuzberg::KreuzbergError;
@@ -56,6 +57,11 @@ pub fn convert_error(err: KreuzbergError) -> JsValue {
         KreuzbergError::UnsupportedFormat(format) => {
             ("UnsupportedFormatError", format!("Unsupported format: {}", format))
         }
+
+        KreuzbergError::Timeout { elapsed_ms, limit_ms } => (
+            "TimeoutError",
+            format!("Extraction timed out after {}ms (limit: {}ms)", elapsed_ms, limit_ms),
+        ),
 
         KreuzbergError::Other(msg) => ("Error", msg),
     };

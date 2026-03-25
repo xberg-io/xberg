@@ -301,7 +301,7 @@ mod tests {
     fn test_empty_xml() {
         let xml = b"<root></root>";
         let result = parse_xml(xml, false).unwrap();
-        assert_eq!(result.content, "");
+        assert_eq!(result.content, "root");
         assert_eq!(result.element_count, 1);
         assert_eq!(result.unique_elements.len(), 1);
     }

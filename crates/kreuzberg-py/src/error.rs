@@ -41,6 +41,12 @@ pyo3::create_exception!(
     PyException,
     "Raised when plugin operations fail (initialization, registration, execution)."
 );
+pyo3::create_exception!(
+    kreuzberg,
+    ExtractionTimeoutError,
+    PyException,
+    "Raised when an operation exceeds its time limit."
+);
 
 /// Format an error message with its source chain.
 ///
@@ -76,6 +82,7 @@ fn exception_from_module(name: &str, message: String) -> PyErr {
             "CacheError" => PyErr::from_type(py.get_type::<CacheError>(), (message,)),
             "ImageProcessingError" => PyErr::from_type(py.get_type::<ImageProcessingError>(), (message,)),
             "PluginError" => PyErr::from_type(py.get_type::<PluginError>(), (message,)),
+            "ExtractionTimeoutError" => PyErr::from_type(py.get_type::<ExtractionTimeoutError>(), (message,)),
             _ => PyRuntimeError::new_err(message),
         }
     })
@@ -95,6 +102,7 @@ fn exception_from_module(name: &str, message: String) -> PyErr {
 /// - `ImageProcessing` → `ImageProcessingError` (custom exception)
 /// - `Serialization` → `ParsingError` (document processing failure)
 /// - `MissingDependency` → `MissingDependencyError` (custom exception)
+/// - `Timeout` → `ExtractionTimeoutError` (custom exception)
 /// - `Other` → `RuntimeError` (runtime error - must bubble up!)
 ///
 /// All errors preserve their source chain for better debugging.
@@ -134,6 +142,10 @@ pub fn to_py_err(error: kreuzberg::KreuzbergError) -> PyErr {
             exception_from_module("ParsingError", format_error_with_source(message, source))
         }
         KreuzbergError::MissingDependency(msg) => exception_from_module("MissingDependencyError", msg),
+        KreuzbergError::Timeout { elapsed_ms, limit_ms } => exception_from_module(
+            "ExtractionTimeoutError",
+            format!("Extraction timed out after {}ms (limit: {}ms)", elapsed_ms, limit_ms),
+        ),
         // RuntimeError must bubble up - unexpected errors need user reports ~keep
         KreuzbergError::Other(msg) => PyRuntimeError::new_err(msg),
     }
@@ -370,6 +382,21 @@ mod tests {
             let err_msg = format!("{}", py_err);
             assert!(err_msg.contains("Lock poisoned: Registry lock poisoned"));
             assert!(err_msg.contains("RuntimeError"));
+        });
+    }
+
+    #[test]
+    fn test_timeout_error() {
+        with_gil(|_py| {
+            let error = KreuzbergError::Timeout {
+                elapsed_ms: 5000,
+                limit_ms: 3000,
+            };
+            let py_err = to_py_err(error);
+
+            let err_msg = format!("{}", py_err);
+            assert!(err_msg.contains("Extraction timed out after 5000ms (limit: 3000ms)"));
+            assert!(err_msg.contains("ExtractionTimeoutError"));
         });
     }
 }

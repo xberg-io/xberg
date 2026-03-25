@@ -982,19 +982,21 @@ fn render_test(fixture: &Fixture) -> Result<String> {
                 render_java_string(&fixture.document().path)
             )?;
             writeln!(body)?;
-            writeln!(body, "        if ({} && !Files.exists(documentPath)) {{", skip_flag)?;
-            writeln!(
-                body,
-                "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
-                fixture.id
-            )?;
-            writeln!(body, "            System.err.println(msg);")?;
-            writeln!(
-                body,
-                "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
-            )?;
-            writeln!(body, "            return;")?;
-            writeln!(body, "        }}")?;
+            if skip_flag == "true" {
+                writeln!(body, "        if (!Files.exists(documentPath)) {{")?;
+                writeln!(
+                    body,
+                    "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
+                    fixture.id
+                )?;
+                writeln!(body, "            System.err.println(msg);")?;
+                writeln!(
+                    body,
+                    "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
+                )?;
+                writeln!(body, "            return;")?;
+                writeln!(body, "        }}")?;
+            }
             writeln!(body)?;
             writeln!(body, "        byte[] documentBytes = Files.readAllBytes(documentPath);")?;
             writeln!(
@@ -1050,19 +1052,21 @@ fn render_test(fixture: &Fixture) -> Result<String> {
                 render_java_string(&fixture.document().path)
             )?;
             writeln!(body)?;
-            writeln!(body, "        if ({} && !Files.exists(documentPath)) {{", skip_flag)?;
-            writeln!(
-                body,
-                "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
-                fixture.id
-            )?;
-            writeln!(body, "            System.err.println(msg);")?;
-            writeln!(
-                body,
-                "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
-            )?;
-            writeln!(body, "            return;")?;
-            writeln!(body, "        }}")?;
+            if skip_flag == "true" {
+                writeln!(body, "        if (!Files.exists(documentPath)) {{")?;
+                writeln!(
+                    body,
+                    "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
+                    fixture.id
+                )?;
+                writeln!(body, "            System.err.println(msg);")?;
+                writeln!(
+                    body,
+                    "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
+                )?;
+                writeln!(body, "            return;")?;
+                writeln!(body, "        }}")?;
+            }
             writeln!(body)?;
             writeln!(
                 body,
@@ -1120,19 +1124,21 @@ fn render_test(fixture: &Fixture) -> Result<String> {
                 render_java_string(&fixture.document().path)
             )?;
             writeln!(body)?;
-            writeln!(body, "        if ({} && !Files.exists(documentPath)) {{", skip_flag)?;
-            writeln!(
-                body,
-                "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
-                fixture.id
-            )?;
-            writeln!(body, "            System.err.println(msg);")?;
-            writeln!(
-                body,
-                "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
-            )?;
-            writeln!(body, "            return;")?;
-            writeln!(body, "        }}")?;
+            if skip_flag == "true" {
+                writeln!(body, "        if (!Files.exists(documentPath)) {{")?;
+                writeln!(
+                    body,
+                    "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
+                    fixture.id
+                )?;
+                writeln!(body, "            System.err.println(msg);")?;
+                writeln!(
+                    body,
+                    "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
+                )?;
+                writeln!(body, "            return;")?;
+                writeln!(body, "        }}")?;
+            }
             writeln!(body)?;
             writeln!(body, "        byte[] documentBytes = Files.readAllBytes(documentPath);")?;
             writeln!(
@@ -1195,19 +1201,21 @@ fn render_test(fixture: &Fixture) -> Result<String> {
                 render_java_string(&fixture.document().path)
             )?;
             writeln!(body)?;
-            writeln!(body, "        if ({} && !Files.exists(documentPath)) {{", skip_flag)?;
-            writeln!(
-                body,
-                "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
-                fixture.id
-            )?;
-            writeln!(body, "            System.err.println(msg);")?;
-            writeln!(
-                body,
-                "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
-            )?;
-            writeln!(body, "            return;")?;
-            writeln!(body, "        }}")?;
+            if skip_flag == "true" {
+                writeln!(body, "        if (!Files.exists(documentPath)) {{")?;
+                writeln!(
+                    body,
+                    "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
+                    fixture.id
+                )?;
+                writeln!(body, "            System.err.println(msg);")?;
+                writeln!(
+                    body,
+                    "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
+                )?;
+                writeln!(body, "            return;")?;
+                writeln!(body, "        }}")?;
+            }
             writeln!(body)?;
             writeln!(
                 body,
@@ -1268,19 +1276,21 @@ fn render_test(fixture: &Fixture) -> Result<String> {
                 render_java_string(&fixture.document().path)
             )?;
             writeln!(body)?;
-            writeln!(body, "        if ({} && !Files.exists(documentPath)) {{", skip_flag)?;
-            writeln!(
-                body,
-                "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
-                fixture.id
-            )?;
-            writeln!(body, "            System.err.println(msg);")?;
-            writeln!(
-                body,
-                "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
-            )?;
-            writeln!(body, "            return;")?;
-            writeln!(body, "        }}")?;
+            if skip_flag == "true" {
+                writeln!(body, "        if (!Files.exists(documentPath)) {{")?;
+                writeln!(
+                    body,
+                    "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
+                    fixture.id
+                )?;
+                writeln!(body, "            System.err.println(msg);")?;
+                writeln!(
+                    body,
+                    "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
+                )?;
+                writeln!(body, "            return;")?;
+                writeln!(body, "        }}")?;
+            }
             writeln!(body)?;
             writeln!(body, "        byte[] documentBytes = Files.readAllBytes(documentPath);")?;
             writeln!(
@@ -1346,19 +1356,21 @@ fn render_test(fixture: &Fixture) -> Result<String> {
                 render_java_string(&fixture.document().path)
             )?;
             writeln!(body)?;
-            writeln!(body, "        if ({} && !Files.exists(documentPath)) {{", skip_flag)?;
-            writeln!(
-                body,
-                "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
-                fixture.id
-            )?;
-            writeln!(body, "            System.err.println(msg);")?;
-            writeln!(
-                body,
-                "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
-            )?;
-            writeln!(body, "            return;")?;
-            writeln!(body, "        }}")?;
+            if skip_flag == "true" {
+                writeln!(body, "        if (!Files.exists(documentPath)) {{")?;
+                writeln!(
+                    body,
+                    "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
+                    fixture.id
+                )?;
+                writeln!(body, "            System.err.println(msg);")?;
+                writeln!(
+                    body,
+                    "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
+                )?;
+                writeln!(body, "            return;")?;
+                writeln!(body, "        }}")?;
+            }
             writeln!(body)?;
             writeln!(
                 body,
@@ -1426,19 +1438,21 @@ fn render_test(fixture: &Fixture) -> Result<String> {
                 render_java_string(&fixture.document().path)
             )?;
             writeln!(body)?;
-            writeln!(body, "        if ({} && !Files.exists(documentPath)) {{", skip_flag)?;
-            writeln!(
-                body,
-                "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
-                fixture.id
-            )?;
-            writeln!(body, "            System.err.println(msg);")?;
-            writeln!(
-                body,
-                "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
-            )?;
-            writeln!(body, "            return;")?;
-            writeln!(body, "        }}")?;
+            if skip_flag == "true" {
+                writeln!(body, "        if (!Files.exists(documentPath)) {{")?;
+                writeln!(
+                    body,
+                    "            String msg = String.format(\"Skipping {}: missing document at %s\", documentPath);",
+                    fixture.id
+                )?;
+                writeln!(body, "            System.err.println(msg);")?;
+                writeln!(
+                    body,
+                    "            org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);"
+                )?;
+                writeln!(body, "            return;")?;
+                writeln!(body, "        }}")?;
+            }
             writeln!(body)?;
             writeln!(body, "        byte[] documentBytes = Files.readAllBytes(documentPath);")?;
             writeln!(

@@ -8,7 +8,9 @@ import dev.kreuzberg.KreuzbergFFI;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -27,6 +29,7 @@ public final class ExtractionConfig {
 	private final boolean useCache;
 	private final boolean enableQualityProcessing;
 	private final boolean forceOcr;
+	private final List<Long> forceOcrPages;
 	private final boolean useCacheSet;
 	private final boolean enableQualityProcessingSet;
 	private final boolean forceOcrSet;
@@ -52,11 +55,13 @@ public final class ExtractionConfig {
 	private final boolean includeDocumentStructureSet;
 	private final String cacheNamespace;
 	private final Long cacheTtlSecs;
+	private final Long extractionTimeoutSecs;
 
 	private ExtractionConfig(Builder builder) {
 		this.useCache = builder.useCache;
 		this.enableQualityProcessing = builder.enableQualityProcessing;
 		this.forceOcr = builder.forceOcr;
+		this.forceOcrPages = builder.forceOcrPages;
 		this.useCacheSet = builder.useCacheSet;
 		this.enableQualityProcessingSet = builder.enableQualityProcessingSet;
 		this.forceOcrSet = builder.forceOcrSet;
@@ -82,6 +87,7 @@ public final class ExtractionConfig {
 		this.includeDocumentStructureSet = builder.includeDocumentStructureSet;
 		this.cacheNamespace = builder.cacheNamespace;
 		this.cacheTtlSecs = builder.cacheTtlSecs;
+		this.extractionTimeoutSecs = builder.extractionTimeoutSecs;
 	}
 
 	public static Builder builder() {
@@ -98,6 +104,10 @@ public final class ExtractionConfig {
 
 	public boolean isForceOcr() {
 		return forceOcr;
+	}
+
+	public List<Long> getForceOcrPages() {
+		return forceOcrPages;
 	}
 
 	/**
@@ -242,6 +252,18 @@ public final class ExtractionConfig {
 	 */
 	public Long getCacheTtlSecs() {
 		return cacheTtlSecs;
+	}
+
+	/**
+	 * Get the per-request extraction timeout in seconds.
+	 *
+	 * <p>
+	 * When the timeout is exceeded, the extraction is cancelled and an error is returned.
+	 *
+	 * @return the extraction timeout in seconds, or null if not set
+	 */
+	public Long getExtractionTimeoutSecs() {
+		return extractionTimeoutSecs;
 	}
 
 	/**
@@ -491,6 +513,9 @@ public final class ExtractionConfig {
 		if (includeDefaults || forceOcrSet) {
 			map.put("force_ocr", forceOcr);
 		}
+		if (forceOcrPages != null) {
+			map.put("force_ocr_pages", forceOcrPages);
+		}
 		if (includeDefaults || includeDocumentStructureSet) {
 			map.put("include_document_structure", includeDocumentStructure);
 		}
@@ -554,6 +579,9 @@ public final class ExtractionConfig {
 		if (cacheTtlSecs != null) {
 			map.put("cache_ttl_secs", cacheTtlSecs);
 		}
+		if (extractionTimeoutSecs != null) {
+			map.put("extraction_timeout_secs", extractionTimeoutSecs);
+		}
 		return map;
 	}
 
@@ -571,6 +599,18 @@ public final class ExtractionConfig {
 		}
 		if (raw.containsKey("force_ocr")) {
 			builder.forceOcr(asBoolean(raw.get("force_ocr"), builder.forceOcr));
+		}
+		if (raw.containsKey("force_ocr_pages")) {
+			Object val = raw.get("force_ocr_pages");
+			if (val instanceof List) {
+				List<Long> pages = new ArrayList<>();
+				for (Object item : (List<?>) val) {
+					if (item instanceof Number) {
+						pages.add(((Number) item).longValue());
+					}
+				}
+				builder.forceOcrPages(pages);
+			}
 		}
 		if (raw.containsKey("include_document_structure")) {
 			builder.includeDocumentStructure(asBoolean(raw.get("include_document_structure"), false));
@@ -654,6 +694,12 @@ public final class ExtractionConfig {
 				builder.cacheTtlSecs(((Number) val).longValue());
 			}
 		}
+		if (raw.containsKey("extraction_timeout_secs")) {
+			Object val = raw.get("extraction_timeout_secs");
+			if (val instanceof Number) {
+				builder.extractionTimeoutSecs(((Number) val).longValue());
+			}
+		}
 	}
 
 	private static boolean asBoolean(Object value, boolean defaultValue) {
@@ -705,6 +751,7 @@ public final class ExtractionConfig {
 		private boolean useCache = true;
 		private boolean enableQualityProcessing = true;
 		private boolean forceOcr = false;
+		private List<Long> forceOcrPages = null;
 		private boolean includeDocumentStructure = false;
 		private boolean useCacheSet = false;
 		private boolean enableQualityProcessingSet = false;
@@ -730,6 +777,7 @@ public final class ExtractionConfig {
 		private SecurityLimitsConfig securityLimits;
 		private String cacheNamespace;
 		private Long cacheTtlSecs;
+		private Long extractionTimeoutSecs;
 
 		private Builder() {
 		}
@@ -749,6 +797,11 @@ public final class ExtractionConfig {
 		public Builder forceOcr(boolean forceOcr) {
 			this.forceOcr = forceOcr;
 			this.forceOcrSet = true;
+			return this;
+		}
+
+		public Builder forceOcrPages(List<Long> forceOcrPages) {
+			this.forceOcrPages = forceOcrPages;
 			return this;
 		}
 
@@ -950,6 +1003,21 @@ public final class ExtractionConfig {
 		 */
 		public Builder cacheTtlSecs(Long cacheTtlSecs) {
 			this.cacheTtlSecs = cacheTtlSecs;
+			return this;
+		}
+
+		/**
+		 * Set the per-request extraction timeout in seconds.
+		 *
+		 * <p>
+		 * When the timeout is exceeded, the extraction is cancelled and an error is returned.
+		 *
+		 * @param extractionTimeoutSecs
+		 *            timeout in seconds
+		 * @return this builder for chaining
+		 */
+		public Builder extractionTimeoutSecs(Long extractionTimeoutSecs) {
+			this.extractionTimeoutSecs = extractionTimeoutSecs;
 			return this;
 		}
 

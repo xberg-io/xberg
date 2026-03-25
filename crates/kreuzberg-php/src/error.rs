@@ -25,6 +25,7 @@ pub fn to_php_exception(error: kreuzberg::KreuzbergError) -> PhpException {
         KreuzbergError::ImageProcessing { .. } => PhpException::default(format!("[ImageProcessing] {}", message)),
         KreuzbergError::Serialization { .. } => PhpException::default(format!("[Serialization] {}", message)),
         KreuzbergError::MissingDependency(_) => PhpException::default(format!("[MissingDependency] {}", message)),
+        KreuzbergError::Timeout { .. } => PhpException::default(format!("[Timeout] {}", message)),
         KreuzbergError::Other(_) => PhpException::default(format!("[Other] {}", message)),
     }
 }
@@ -83,6 +84,9 @@ fn format_error_message(error: &kreuzberg::KreuzbergError) -> String {
             }
         }
         KreuzbergError::MissingDependency(msg) => msg.clone(),
+        KreuzbergError::Timeout { elapsed_ms, limit_ms } => {
+            format!("Extraction timed out after {}ms (limit: {}ms)", elapsed_ms, limit_ms)
+        }
         KreuzbergError::Other(msg) => msg.clone(),
     }
 }

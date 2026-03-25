@@ -20,8 +20,6 @@ env:
   PDFIUM_VERSION: "7678"
   PDFIUM_STATIC_VERSION: "7678"
   ORT_VERSION: "1.24.1"
-  MACOSX_DEPLOYMENT_TARGET: "14.0"
-  RUNNER_TOOL_CACHE: /tmp/runner-toolcache
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0
   CARGO_PROFILE_DEV_DEBUG: 0
@@ -43,7 +41,7 @@ defaults:
 jobs:
   validate-ground-truth:
     name: Validate Ground Truth
-    runs-on: runner-small
+    runs-on: ubuntu-24.04-arm
     permissions:
       contents: read
     steps:
@@ -62,7 +60,7 @@ jobs:
   setup:
     name: Build harness + native libs
     needs: validate-ground-truth
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -156,7 +154,7 @@ jobs:
   bench-native:
     name: kreuzberg-rust (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -221,7 +219,7 @@ jobs:
   bench-native-paddle:
     name: kreuzberg-rust-paddle (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -289,7 +287,7 @@ jobs:
   bench-python:
     name: kreuzberg-python (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -370,7 +368,7 @@ jobs:
   bench-node:
     name: kreuzberg-node (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -450,7 +448,7 @@ jobs:
   bench-wasm:
     name: kreuzberg-wasm (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -527,7 +525,7 @@ jobs:
   bench-ruby:
     name: kreuzberg-ruby (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -565,37 +563,10 @@ jobs:
       - name: Restore benchmark binary permissions
         run: scripts/benchmarks/restore-binary-permissions.sh
 
-      - name: Prepare runner tool cache
-        run: |
-          sudo mkdir -p /opt/hostedtoolcache
-          sudo chmod 777 /opt/hostedtoolcache
-
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.2"
-
-      - name: Install clang (for bindgen / rb-sys)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang libclang-dev llvm-dev
-
-      - name: Export LIBCLANG_PATH
-        run: |
-          set -euo pipefail
-          LIBCLANG_DIR=""
-          for dir in /usr/lib/llvm-*/lib /usr/lib/aarch64-linux-gnu /usr/lib/x86_64-linux-gnu /usr/lib64; do
-            if ls "$dir"/libclang*.so* &>/dev/null; then
-              LIBCLANG_DIR="$dir"
-              break
-            fi
-          done
-          if [[ -z "$LIBCLANG_DIR" ]]; then
-            echo "::error::Could not locate libclang shared library"
-            exit 1
-          fi
-          echo "LIBCLANG_PATH=$LIBCLANG_DIR" >> "$GITHUB_ENV"
-          echo "Using LIBCLANG_PATH=$LIBCLANG_DIR"
 
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
@@ -650,7 +621,7 @@ jobs:
   bench-r:
     name: kreuzberg-r (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -687,11 +658,6 @@ jobs:
 
       - name: Restore benchmark binary permissions
         run: scripts/benchmarks/restore-binary-permissions.sh
-
-      - name: Prepare runner tool cache
-        run: |
-          sudo mkdir -p /opt/hostedtoolcache
-          sudo chmod 777 /opt/hostedtoolcache
 
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
@@ -741,7 +707,7 @@ jobs:
   bench-go:
     name: kreuzberg-go (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -843,7 +809,7 @@ jobs:
   bench-java:
     name: kreuzberg-java (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -940,7 +906,7 @@ jobs:
   bench-csharp:
     name: kreuzberg-csharp (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -978,15 +944,10 @@ jobs:
       - name: Restore benchmark binary permissions
         run: scripts/benchmarks/restore-binary-permissions.sh
 
-      - name: Prepare .NET install directory
-        run: mkdir -p /tmp/dotnet
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "10.0.x"
-        env:
-          DOTNET_INSTALL_DIR: /tmp/dotnet
 
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
@@ -1037,7 +998,7 @@ jobs:
   bench-elixir:
     name: kreuzberg-elixir (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1118,7 +1079,7 @@ jobs:
   bench-php:
     name: kreuzberg-php (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1161,35 +1122,6 @@ jobs:
         with:
           php-version: "8.5"
           extensions: ffi
-
-      - name: Install clang (for bindgen / ext-php-rs)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang libclang-dev llvm-dev
-
-      - name: Export LIBCLANG_PATH
-        run: |
-          set -euo pipefail
-          # Search common llvm lib paths directly (ldconfig may not index them)
-          LIBCLANG_DIR=""
-          for dir in /usr/lib/llvm-*/lib /usr/lib/aarch64-linux-gnu /usr/lib/x86_64-linux-gnu /usr/lib64; do
-            if ls "$dir"/libclang*.so* &>/dev/null; then
-              LIBCLANG_DIR="$dir"
-              break
-            fi
-          done
-          if [[ -z "$LIBCLANG_DIR" ]]; then
-            echo "::error::Could not locate libclang shared library"
-            exit 1
-          fi
-          echo "LIBCLANG_PATH=$LIBCLANG_DIR" >> "$GITHUB_ENV"
-          echo "Using LIBCLANG_PATH=$LIBCLANG_DIR"
-
-      - name: Verify libclang present
-        run: |
-          clang --version
-          echo "LIBCLANG_PATH=${LIBCLANG_PATH}"
-          ls -la "${LIBCLANG_PATH}"/libclang*.so*
 
       - name: Setup ONNX Runtime
         uses: ./.github/actions/setup-onnx-runtime
@@ -1242,7 +1174,7 @@ jobs:
   bench-c:
     name: kreuzberg-c (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1307,7 +1239,7 @@ jobs:
   bench-docling:
     name: docling (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1345,10 +1277,10 @@ jobs:
           cache-prefix: benchmark-docling
           install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-docling"
 
-      - name: Install build tools and system dependencies
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-eng
+          sudo apt-get install -y libgl1 libglib2.0-0 tesseract-ocr tesseract-ocr-eng
 
       - name: Run benchmark
         env:
@@ -1371,7 +1303,7 @@ jobs:
   bench-markitdown:
     name: markitdown (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1409,11 +1341,6 @@ jobs:
           cache-prefix: benchmark-markitdown
           install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-markitdown"
 
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config
-
       - name: Run benchmark
         env:
           FRAMEWORK: markitdown
@@ -1436,7 +1363,7 @@ jobs:
   bench-pandoc:
     name: pandoc (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1473,10 +1400,10 @@ jobs:
           cache-prefix: benchmark-pandoc
           install-command: "uv sync --no-install-project --no-install-workspace --group dev"
 
-      - name: Install pandoc and build tools
+      - name: Install pandoc
         run: |
           sudo apt-get update
-          sudo apt-get install -y pandoc build-essential pkg-config
+          sudo apt-get install -y pandoc
           pandoc --version
 
       - name: Run benchmark
@@ -1500,7 +1427,7 @@ jobs:
   bench-unstructured:
     name: unstructured (${{ matrix.mode }}, shard ${{ matrix.shard }}/4)
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1534,7 +1461,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libmagic-dev poppler-utils libreoffice pandoc build-essential pkg-config
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libmagic-dev poppler-utils libreoffice pandoc
 
       - name: Setup Python
         uses: kreuzberg-dev/actions/setup-python-env@v1
@@ -1564,7 +1491,7 @@ jobs:
   bench-tika:
     name: tika (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1628,7 +1555,7 @@ jobs:
   bench-pymupdf4llm:
     name: pymupdf4llm (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1662,7 +1589,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libjpeg-dev libpng-dev libtiff-dev build-essential pkg-config
+          sudo apt-get install -y tesseract-ocr tesseract-ocr-eng libjpeg-dev libpng-dev libtiff-dev
 
       - name: Setup Python
         uses: kreuzberg-dev/actions/setup-python-env@v1
@@ -1693,7 +1620,7 @@ jobs:
   bench-pdfplumber:
     name: pdfplumber (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1730,11 +1657,6 @@ jobs:
           cache-prefix: benchmark-pdfplumber
           install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-pdfplumber"
 
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config
-
       - name: Run benchmark
         env:
           FRAMEWORK: pdfplumber
@@ -1756,7 +1678,7 @@ jobs:
   bench-mineru:
     name: mineru (${{ matrix.mode }}, shard ${{ matrix.shard }}/3)
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1794,10 +1716,10 @@ jobs:
           cache-prefix: benchmark-mineru
           install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-mineru"
 
-      - name: Install build tools
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libgl1 libglib2.0-0
+          sudo apt-get install -y libgl1 libglib2.0-0
 
       - name: Run benchmark
         env:
@@ -1820,7 +1742,7 @@ jobs:
   bench-pypdf:
     name: pypdf (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1857,11 +1779,6 @@ jobs:
           cache-prefix: benchmark-pypdf
           install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-pypdf"
 
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config
-
       - name: Run benchmark
         env:
           FRAMEWORK: pypdf
@@ -1883,7 +1800,7 @@ jobs:
   bench-pdfminer:
     name: pdfminer (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1920,11 +1837,6 @@ jobs:
           cache-prefix: benchmark-pdfminer
           install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-pdfminer"
 
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config
-
       - name: Run benchmark
         env:
           FRAMEWORK: pdfminer
@@ -1946,7 +1858,7 @@ jobs:
   bench-pdftotext:
     name: pdftotext (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -1976,10 +1888,10 @@ jobs:
         with:
           ort-version: ${{ env.ORT_VERSION }}
 
-      - name: Install poppler and build tools
+      - name: Install poppler
         run: |
           sudo apt-get update
-          sudo apt-get install -y libpoppler-cpp-dev build-essential pkg-config
+          sudo apt-get install -y libpoppler-cpp-dev
 
       - name: Setup Python
         uses: kreuzberg-dev/actions/setup-python-env@v1
@@ -2009,7 +1921,7 @@ jobs:
   bench-playa-pdf:
     name: playa-pdf (${{ matrix.mode }})
     needs: setup
-    runs-on: runner-medium-arm64
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
       contents: read
@@ -2046,11 +1958,6 @@ jobs:
           cache-prefix: benchmark-playa-pdf
           install-command: "uv sync --no-install-project --no-install-workspace --group dev --group bench-playa-pdf"
 
-      - name: Install build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config
-
       - name: Run benchmark
         env:
           FRAMEWORK: playa-pdf
@@ -2072,17 +1979,12 @@ jobs:
   aggregate-and-publish:
     name: Aggregate & Release Results
     needs: [setup, bench-native, bench-native-paddle, bench-python, bench-node, bench-wasm, bench-ruby, bench-r, bench-c, bench-go, bench-java, bench-csharp, bench-elixir, bench-php, bench-docling, bench-markitdown, bench-pandoc, bench-unstructured, bench-tika, bench-pymupdf4llm, bench-pdfplumber, bench-mineru, bench-pypdf, bench-pdfminer, bench-pdftotext, bench-playa-pdf]
-    runs-on: runner-small
+    runs-on: ubuntu-24.04-arm
     if: ${{ always() && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake pkg-config libssl-dev
 
       - name: Setup Rust
         uses: kreuzberg-dev/actions/setup-rust@v1
@@ -2268,19 +2170,6 @@ jobs:
           else
             echo ""
             echo "All ${#EXPECTED_FRAMEWORKS[@]} expected framework:mode combinations present"
-          fi
-
-      - name: Install GitHub CLI
-        if: steps.validate-artifacts.outputs.has-artifacts == 'true'
-        run: |
-          if ! command -v gh &> /dev/null; then
-            echo "Installing GitHub CLI..."
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update
-            sudo apt-get install -y gh
-          else
-            echo "GitHub CLI already installed: $(gh --version)"
           fi
 
       - name: Create GitHub Release with benchmark results

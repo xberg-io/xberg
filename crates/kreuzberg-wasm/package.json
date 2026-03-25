@@ -113,7 +113,7 @@
 		"@vitest/coverage-v8": "^4.1.1",
 		"@vitest/ui": "^4.1.1",
 		"jsdom": "^29.0.1",
-		"oxlint": "^1.56.0",
+		"oxlint": "^1.57.0",
 		"tsup": "^8.5.1",
 		"typescript": "^6.0.2",
 		"vitest": "^4.1.1"

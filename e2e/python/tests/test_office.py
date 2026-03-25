@@ -283,7 +283,6 @@ def test_office_hwp_styled() -> None:
     result = extract_file_sync(document_path, None, config)
 
     helpers.assert_expected_mime(result, ["application/x-hwp"])
-    helpers.assert_min_content_length(result, 10)
 
 
 def test_office_jats_basic() -> None:

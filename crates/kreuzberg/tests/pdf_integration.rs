@@ -31,7 +31,7 @@ fn test_corrupted_pdf_returns_error_not_panic() {
 
     // Binary noise with a valid-looking PDF header.
     let mut noisy = b"%PDF-1.7\n".to_vec();
-    noisy.extend(std::iter::repeat(0xEFu8).take(256));
+    noisy.extend(std::iter::repeat_n(0xEFu8, 256));
     let result = extract_bytes_sync(&noisy, "application/pdf", &config);
     assert!(result.is_err(), "Corrupt PDF body should return Err, not Ok");
 }

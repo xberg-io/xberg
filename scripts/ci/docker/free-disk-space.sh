@@ -19,7 +19,7 @@ sudo apt-get clean
 sudo rm -rf /var/lib/apt/lists/*
 
 echo "=== Cleaning Docker ==="
-docker system prune -af --volumes
+docker system prune -af --volumes 2>/dev/null || true
 
 echo "=== Available disk space after cleanup ==="
 df -h /

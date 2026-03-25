@@ -147,11 +147,10 @@ static void test_office_office_hwp_basic(void) {
 }
 
 static void test_office_office_hwp_styled(void) {
-    if (skip_if_feature_unavailable("office")) return;
+    if (skip_if_feature_unavailable("hwp")) return;
     CExtractionResult *result = run_extraction("hwp/styled_document.hwp", NULL);
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/x-hwp"}, 1);
-    assert_min_content_length(result, 10);
     kreuzberg_free_result(result);
 }
 

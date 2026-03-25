@@ -410,6 +410,7 @@ export interface ExtractionConfig {
 	enableQualityProcessing?: boolean;
 	ocr?: OcrConfig;
 	forceOcr?: boolean;
+	forceOcrPages?: number[];
 	chunking?: ChunkingConfig;
 	images?: ImageExtractionConfig;
 	pdfOptions?: PdfConfig;
@@ -457,4 +458,6 @@ export interface ExtractionConfig {
 	cacheNamespace?: string;
 	/** Per-request cache TTL in seconds. 0 = skip cache entirely. */
 	cacheTtlSecs?: number;
+	/** Default per-file extraction timeout in seconds for batch operations. None = no timeout. */
+	extractionTimeoutSecs?: number;
 }

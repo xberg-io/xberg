@@ -128,6 +128,21 @@ test_that("api_batch_file_with_configs_sync", {
   assert_min_content_length(result, 10L)
 })
 
+test_that("api_batch_file_with_timeout_sync", {
+  result <- run_fixture_with_method(
+    "api_batch_file_with_timeout_sync",
+    "pdf/fake_memo.pdf",
+    list(extraction_timeout_secs = 300L),
+    "batch_sync",
+    "file",
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+})
+
 test_that("api_extract_bytes_async", {
   result <- run_fixture_with_method(
     "api_extract_bytes_async",
@@ -426,6 +441,19 @@ test_that("config_email_msg_fallback_codepage", {
   assert_min_content_length(result, 10L)
 })
 
+test_that("config_extraction_timeout", {
+  result <- run_fixture(
+    "config_extraction_timeout",
+    "pdf/fake_memo.pdf",
+    list(extraction_timeout_secs = 300L),
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+})
+
 test_that("config_force_ocr", {
   skip_if_feature_unavailable("tesseract")
   result <- run_fixture(
@@ -438,6 +466,20 @@ test_that("config_force_ocr", {
   )
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 5L)
+})
+
+test_that("config_force_ocr_pages", {
+  skip_if_feature_unavailable("ocr")
+  result <- run_fixture(
+    "config_force_ocr_pages",
+    "pdf/fake_memo.pdf",
+    list(force_ocr_pages = c(1L), ocr = list(backend = "tesseract", language = "eng")),
+    requirements = c("ocr"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 1L)
 })
 
 test_that("config_html_options", {

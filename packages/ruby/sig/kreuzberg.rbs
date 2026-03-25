@@ -481,7 +481,9 @@ module Kreuzberg
       attr_reader enable_quality_processing: bool
       attr_reader cache_namespace: String?
       attr_reader cache_ttl_secs: Integer?
+      attr_reader extraction_timeout_secs: Integer?
       attr_reader force_ocr: bool
+      attr_reader force_ocr_pages: Array[Integer]?
       attr_reader include_document_structure: bool
       attr_reader ocr: OCR?
       attr_reader chunking: Chunking?
@@ -508,6 +510,7 @@ module Kreuzberg
         ?use_cache: bool,
         ?enable_quality_processing: bool,
         ?force_ocr: bool,
+        ?force_ocr_pages: Array[Integer]?,
         ?include_document_structure: bool,
         ?ocr: (OCR | Hash[Symbol, untyped])?,
         ?chunking: (Chunking | Hash[Symbol, untyped])?,
@@ -525,7 +528,8 @@ module Kreuzberg
         ?output_format: String?,
         ?result_format: String?,
         ?cache_namespace: String?,
-        ?cache_ttl_secs: Integer?
+        ?cache_ttl_secs: Integer?,
+        ?extraction_timeout_secs: Integer?
       ) -> void
       def to_h: () -> Hash[Symbol, untyped]
       def to_json: (*untyped) -> String

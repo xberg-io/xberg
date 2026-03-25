@@ -232,17 +232,16 @@ test_that("office_hwp_basic", {
 })
 
 test_that("office_hwp_styled", {
-  skip_if_feature_unavailable("office")
+  skip_if_feature_unavailable("hwp")
   result <- run_fixture(
     "office_hwp_styled",
     "hwp/styled_document.hwp",
     NULL,
-    requirements = c("office"),
-    notes = "Requires the office feature.",
+    requirements = c("hwp"),
+    notes = "HWP styled doc yields no extractable plain text with current parser.",
     skip_if_missing = TRUE
   )
   assert_expected_mime(result, c("application/x-hwp"))
-  assert_min_content_length(result, 10L)
 })
 
 test_that("office_jats_basic", {

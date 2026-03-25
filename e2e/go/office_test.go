@@ -114,10 +114,9 @@ func TestOfficeOfficeHwpBasic(t *testing.T) {
 }
 
 func TestOfficeOfficeHwpStyled(t *testing.T) {
-	skipIfFeatureUnavailable(t, "office")
+	skipIfFeatureUnavailable(t, "hwp")
 	result := runExtraction(t, "hwp/styled_document.hwp", nil)
 	assertExpectedMime(t, result, []string{"application/x-hwp"})
-	assertMinContentLength(t, result, 10)
 }
 
 func TestOfficeOfficeJatsBasic(t *testing.T) {

@@ -89,6 +89,18 @@ func TestContractApiBatchFileWithConfigsSync(t *testing.T) {
 	assertMinContentLength(t, result, 10)
 }
 
+func TestContractApiBatchFileWithTimeoutSync(t *testing.T) {
+	results := runBatchExtraction(t, []string{"pdf/fake_memo.pdf"}, []byte(`{
+"extraction_timeout_secs": 300
+}`))
+	if len(results) == 0 {
+		t.Fatal("expected at least one result from batch extraction")
+	}
+	result := results[0]
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 10)
+}
+
 func TestContractApiExtractBytesAsync(t *testing.T) {
 	result := runExtractionBytesAsync(t, "pdf/fake_memo.pdf", nil)
 	assertExpectedMime(t, result, []string{"application/pdf"})
@@ -305,6 +317,14 @@ func TestContractConfigEmailMsgFallbackCodepage(t *testing.T) {
 	assertMinContentLength(t, result, 10)
 }
 
+func TestContractConfigExtractionTimeout(t *testing.T) {
+	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
+"extraction_timeout_secs": 300
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 10)
+}
+
 func TestContractConfigForceOcr(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
@@ -312,6 +332,21 @@ func TestContractConfigForceOcr(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 5)
+}
+
+func TestContractConfigForceOcrPages(t *testing.T) {
+	skipIfFeatureUnavailable(t, "ocr")
+	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
+"force_ocr_pages": [
+	1
+],
+"ocr": {
+	"backend": "tesseract",
+	"language": "eng"
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 1)
 }
 
 func TestContractConfigHtmlOptions(t *testing.T) {

@@ -2083,6 +2083,12 @@ public sealed class ExtractionConfig
     public bool? ForceOcr { get; init; }
 
     /// <summary>
+    /// List of 1-indexed page numbers to force OCR on. If null, uses the ForceOcr setting.
+    /// </summary>
+    [JsonPropertyName("force_ocr_pages")]
+    public IReadOnlyList<long>? ForceOcrPages { get; init; }
+
+    /// <summary>
     /// Text chunking configuration for splitting long documents. If null, chunking is disabled.
     /// </summary>
     [JsonPropertyName("chunking")]
@@ -2205,6 +2211,10 @@ public sealed class ExtractionConfig
     /// <summary>Per-request cache TTL in seconds (0 = skip cache).</summary>
     [JsonPropertyName("cache_ttl_secs")]
     public ulong? CacheTtlSecs { get; init; }
+
+    /// <summary>Per-request extraction timeout in seconds. When exceeded, extraction is cancelled and an error is returned.</summary>
+    [JsonPropertyName("extraction_timeout_secs")]
+    public ulong? ExtractionTimeoutSecs { get; init; }
 
 }
 
@@ -3166,6 +3176,10 @@ public sealed class FileExtractionConfig
     [JsonPropertyName("force_ocr")]
     public bool? ForceOcr { get; init; }
 
+    /// <summary>List of 1-indexed page numbers to force OCR on for this file.</summary>
+    [JsonPropertyName("force_ocr_pages")]
+    public IReadOnlyList<long>? ForceOcrPages { get; init; }
+
     /// <summary>Override chunking configuration for this file.</summary>
     [JsonPropertyName("chunking")]
     public ChunkingConfig? Chunking { get; init; }
@@ -3217,6 +3231,10 @@ public sealed class FileExtractionConfig
     /// <summary>Override result format for this file.</summary>
     [JsonPropertyName("result_format")]
     public string? ResultFormat { get; init; }
+
+    /// <summary>Per-file extraction timeout in seconds. When exceeded, extraction for this file is cancelled and an error is returned.</summary>
+    [JsonPropertyName("timeout_secs")]
+    public ulong? TimeoutSecs { get; init; }
 }
 
 /// <summary>

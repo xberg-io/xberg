@@ -158,6 +158,7 @@ from kreuzberg._internal_bindings import (
 from kreuzberg.exceptions import (
     CacheError,
     ErrorCode,
+    ExtractionTimeoutError,
     ImageProcessingError,
     KreuzbergError,
     MissingDependencyError,
@@ -231,6 +232,7 @@ __all__ = [
     "ExtractedTable",
     "ExtractionConfig",
     "ExtractionResult",
+    "ExtractionTimeoutError",
     "FileExtractionConfig",
     "HierarchyConfig",
     "ImageExtractionConfig",

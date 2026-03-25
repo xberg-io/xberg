@@ -45,6 +45,7 @@ impl ExtractionConfig {
         enable_quality_processing=None,
         ocr=None,
         force_ocr=None,
+        force_ocr_pages=None,
         chunking=None,
         images=None,
         pdf_options=None,
@@ -63,7 +64,8 @@ impl ExtractionConfig {
         email=None,
         concurrency=None,
         cache_namespace=None,
-        cache_ttl_secs=None
+        cache_ttl_secs=None,
+        extraction_timeout_secs=None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -71,6 +73,7 @@ impl ExtractionConfig {
         enable_quality_processing: Option<bool>,
         ocr: Option<OcrConfig>,
         force_ocr: Option<bool>,
+        force_ocr_pages: Option<Vec<usize>>,
         chunking: Option<ChunkingConfig>,
         images: Option<ImageExtractionConfig>,
         pdf_options: Option<PdfConfig>,
@@ -90,6 +93,7 @@ impl ExtractionConfig {
         concurrency: Option<ConcurrencyConfig>,
         cache_namespace: Option<String>,
         cache_ttl_secs: Option<u64>,
+        extraction_timeout_secs: Option<u64>,
     ) -> PyResult<Self> {
         let (html_options_inner, html_options_dict) = parse_html_options_dict(html_options)?;
         Ok(Self {
@@ -98,6 +102,7 @@ impl ExtractionConfig {
                 enable_quality_processing: enable_quality_processing.unwrap_or(true),
                 ocr: ocr.map(Into::into),
                 force_ocr: force_ocr.unwrap_or(false),
+                force_ocr_pages,
                 chunking: chunking.map(Into::into),
                 images: images.map(Into::into),
                 pdf_options: pdf_options.map(Into::into),
@@ -143,6 +148,7 @@ impl ExtractionConfig {
                 security_limits: None,
                 layout: layout.map(Into::into),
                 acceleration: acceleration.map(Into::into),
+                extraction_timeout_secs,
                 cache_namespace,
                 cache_ttl_secs,
                 email: email.map(Into::into),
@@ -191,6 +197,16 @@ impl ExtractionConfig {
     #[setter]
     fn set_force_ocr(&mut self, value: bool) {
         self.inner.force_ocr = value;
+    }
+
+    #[getter]
+    fn force_ocr_pages(&self) -> Option<Vec<usize>> {
+        self.inner.force_ocr_pages.clone()
+    }
+
+    #[setter]
+    fn set_force_ocr_pages(&mut self, value: Option<Vec<usize>>) {
+        self.inner.force_ocr_pages = value;
     }
 
     #[getter]
@@ -406,13 +422,25 @@ impl ExtractionConfig {
         self.inner.cache_ttl_secs = value;
     }
 
+    #[getter]
+    fn extraction_timeout_secs(&self) -> Option<u64> {
+        self.inner.extraction_timeout_secs
+    }
+
+    #[setter]
+    fn set_extraction_timeout_secs(&mut self, value: Option<u64>) {
+        self.inner.extraction_timeout_secs = value;
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "ExtractionConfig(use_cache={}, enable_quality_processing={}, ocr={}, force_ocr={})",
+            "ExtractionConfig(use_cache={}, enable_quality_processing={}, ocr={}, force_ocr={}, extraction_timeout_secs={:?}, force_ocr_pages={:?})",
             self.inner.use_cache,
             self.inner.enable_quality_processing,
             if self.inner.ocr.is_some() { "Some(...)" } else { "None" },
-            self.inner.force_ocr
+            self.inner.force_ocr,
+            self.inner.extraction_timeout_secs,
+            self.inner.force_ocr_pages
         )
     }
 
@@ -2253,6 +2281,7 @@ impl FileExtractionConfig {
         enable_quality_processing=None,
         ocr=None,
         force_ocr=None,
+        force_ocr_pages=None,
         chunking=None,
         images=None,
         pdf_options=None,
@@ -2265,13 +2294,15 @@ impl FileExtractionConfig {
         result_format=None,
         output_format=None,
         include_document_structure=None,
-        layout=None
+        layout=None,
+        timeout_secs=None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
         enable_quality_processing: Option<bool>,
         ocr: Option<OcrConfig>,
         force_ocr: Option<bool>,
+        force_ocr_pages: Option<Vec<usize>>,
         chunking: Option<ChunkingConfig>,
         images: Option<ImageExtractionConfig>,
         pdf_options: Option<PdfConfig>,
@@ -2285,6 +2316,7 @@ impl FileExtractionConfig {
         output_format: Option<String>,
         include_document_structure: Option<bool>,
         layout: Option<LayoutDetectionConfig>,
+        timeout_secs: Option<u64>,
     ) -> PyResult<Self> {
         let (html_options_inner, html_options_dict) = parse_html_options_dict(html_options)?;
         Ok(Self {
@@ -2292,6 +2324,7 @@ impl FileExtractionConfig {
                 enable_quality_processing,
                 ocr: ocr.map(Into::into),
                 force_ocr,
+                force_ocr_pages,
                 chunking: chunking.map(Into::into),
                 images: images.map(Into::into),
                 pdf_options: pdf_options.map(Into::into),
@@ -2334,6 +2367,7 @@ impl FileExtractionConfig {
                 },
                 include_document_structure,
                 layout: layout.map(Into::into),
+                timeout_secs,
             },
             html_options_dict,
         })
@@ -2367,6 +2401,16 @@ impl FileExtractionConfig {
     #[setter]
     fn set_force_ocr(&mut self, value: Option<bool>) {
         self.inner.force_ocr = value;
+    }
+
+    #[getter]
+    fn force_ocr_pages(&self) -> Option<Vec<usize>> {
+        self.inner.force_ocr_pages.clone()
+    }
+
+    #[setter]
+    fn set_force_ocr_pages(&mut self, value: Option<Vec<usize>>) {
+        self.inner.force_ocr_pages = value;
     }
 
     #[getter]
@@ -2542,10 +2586,24 @@ impl FileExtractionConfig {
         self.inner.layout = value.map(Into::into);
     }
 
+    #[getter]
+    fn timeout_secs(&self) -> Option<u64> {
+        self.inner.timeout_secs
+    }
+
+    #[setter]
+    fn set_timeout_secs(&mut self, value: Option<u64>) {
+        self.inner.timeout_secs = value;
+    }
+
     fn __repr__(&self) -> String {
         format!(
-            "FileExtractionConfig(force_ocr={:?}, enable_quality_processing={:?}, include_document_structure={:?})",
-            self.inner.force_ocr, self.inner.enable_quality_processing, self.inner.include_document_structure
+            "FileExtractionConfig(force_ocr={:?}, enable_quality_processing={:?}, include_document_structure={:?}, timeout_secs={:?}, force_ocr_pages={:?})",
+            self.inner.force_ocr,
+            self.inner.enable_quality_processing,
+            self.inner.include_document_structure,
+            self.inner.timeout_secs,
+            self.inner.force_ocr_pages
         )
     }
 }

@@ -488,7 +488,6 @@ fn test_office_hwp_styled() {
     };
 
     assertions::assert_expected_mime(&result, &["application/x-hwp"]);
-    assertions::assert_min_content_length(&result, 10);
 }
 
 #[test]

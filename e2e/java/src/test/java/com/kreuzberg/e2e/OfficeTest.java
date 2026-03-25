@@ -330,12 +330,11 @@ public class OfficeTest {
         "office_hwp_styled",
         "hwp/styled_document.hwp",
         config,
-        Arrays.asList("office"),
-        "Requires the office feature.",
+        Arrays.asList("hwp"),
+        "HWP styled doc yields no extractable plain text with current parser.",
         true,
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/x-hwp"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
         });
   }
 

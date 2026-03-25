@@ -136,6 +136,20 @@ namespace Kreuzberg.E2E.Contract
         }
 
         [SkippableFact]
+        public void ApiBatchFileWithTimeoutSync()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
+            TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
+            var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
+            var config = TestHelpers.BuildConfig("{\"extraction_timeout_secs\":300}");
+
+            var results = KreuzbergClient.BatchExtractFilesSync(new[] { documentPath }, config);
+            var result = results[0];
+            TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
+            TestHelpers.AssertMinContentLength(result, 10);
+        }
+
+        [SkippableFact]
         public async Task ApiExtractBytesAsync()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
@@ -432,6 +446,19 @@ namespace Kreuzberg.E2E.Contract
         }
 
         [SkippableFact]
+        public void ConfigExtractionTimeout()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
+            TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
+            var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
+            var config = TestHelpers.BuildConfig("{\"extraction_timeout_secs\":300}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
+            TestHelpers.AssertMinContentLength(result, 10);
+        }
+
+        [SkippableFact]
         public void ConfigForceOcr()
         {
             TestHelpers.SkipIfFeatureUnavailable("tesseract");
@@ -443,6 +470,20 @@ namespace Kreuzberg.E2E.Contract
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 5);
+        }
+
+        [SkippableFact]
+        public void ConfigForceOcrPages()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("ocr");
+            TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
+            TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
+            var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
+            var config = TestHelpers.BuildConfig("{\"force_ocr_pages\":[1],\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
+            TestHelpers.AssertMinContentLength(result, 1);
         }
 
         [SkippableFact]

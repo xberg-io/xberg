@@ -21,6 +21,7 @@ use super::kreuzberg_error_code_name;
 /// - `Plugin` → GenericFailure (plugin-specific errors)
 /// - `LockPoisoned` → GenericFailure (lock poisoning, should not happen)
 /// - `UnsupportedFormat` → InvalidArg (unsupported MIME types)
+/// - `Timeout` → GenericFailure (extraction timeout exceeded)
 /// - `Other` → GenericFailure (catch-all)
 ///
 /// # Usage
@@ -72,6 +73,11 @@ pub(crate) fn convert_error(err: kreuzberg::KreuzbergError) -> napi::Error {
         KreuzbergError::UnsupportedFormat(format) => {
             Error::new(Status::InvalidArg, format!("Unsupported format: {}", format))
         }
+
+        KreuzbergError::Timeout { elapsed_ms, limit_ms } => Error::new(
+            Status::GenericFailure,
+            format!("Extraction timed out after {}ms (limit: {}ms)", elapsed_ms, limit_ms),
+        ),
 
         KreuzbergError::Other(msg) => Error::new(Status::GenericFailure, msg),
     }

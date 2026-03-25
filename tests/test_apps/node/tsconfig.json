@@ -1,5 +1,6 @@
 {
 	"compilerOptions": {
+		"ignoreDeprecations": "6.0",
 		"target": "ES2024",
 		"module": "ES2024",
 		"lib": ["ES2024"],

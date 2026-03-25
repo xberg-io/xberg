@@ -311,9 +311,9 @@ pub fn detect_layout_for_document(
                         .map_err(|e| format!("thread-local LayoutEngine init failed: {e}"))?;
                     *engine_ref = Some(engine);
                 }
-                let tl_engine = engine_ref.as_mut().ok_or_else(|| {
-                    "thread-local LayoutEngine missing after init".to_string()
-                })?;
+                let tl_engine = engine_ref
+                    .as_mut()
+                    .ok_or_else(|| "thread-local LayoutEngine missing after init".to_string())?;
 
                 let inference_start = Instant::now();
                 let (detection, detect_timings) = tl_engine

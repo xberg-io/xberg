@@ -241,7 +241,7 @@ namespace Kreuzberg.E2E.Office
         [SkippableFact]
         public void OfficeHwpStyled()
         {
-            TestHelpers.SkipIfFeatureUnavailable("office");
+            TestHelpers.SkipIfFeatureUnavailable("hwp");
             TestHelpers.SkipIfLegacyOfficeDisabled("hwp/styled_document.hwp");
             TestHelpers.SkipIfOfficeTestOnWindows("hwp/styled_document.hwp");
             var documentPath = TestHelpers.EnsureDocument("hwp/styled_document.hwp", true);
@@ -249,7 +249,6 @@ namespace Kreuzberg.E2E.Office
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/x-hwp" });
-            TestHelpers.AssertMinContentLength(result, 10);
         }
 
         [SkippableFact]

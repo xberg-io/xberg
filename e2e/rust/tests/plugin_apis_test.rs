@@ -155,7 +155,7 @@ fn test_post_processors_clear() {
 
     // Clear post-processors via registry (no helper function)
     let registry = kreuzberg::plugins::registry::get_post_processor_registry();
-    let mut registry = registry.write().expect("Failed to acquire write lock");
+    let mut registry = registry.write();
     registry.shutdown_all().expect("Failed to clear registry");
     drop(registry);
 

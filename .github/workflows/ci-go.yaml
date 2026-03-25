@@ -7,47 +7,47 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/actions/**'
-      - '.github/workflows/ci-go.yaml'
-      - '.cargo/config.toml'
-      - 'rust-toolchain.toml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'crates/kreuzberg/**'
-      - 'crates/kreuzberg-ffi/**'
-      - 'crates/kreuzberg-tesseract/**'
-      - 'packages/go/v4/**'
-      - 'e2e/go/**'
-      - 'test_documents/**'
-      - 'fixtures/**'
-      - 'tools/e2e-generator/**'
-      - 'packages/go/v4/go.mod'
-      - 'packages/go/v4/go.sum'
-      - 'scripts/ci/go/**'
-      - 'scripts/ci/cache/**'
-      - 'scripts/ci/actions/**'
+      - ".github/actions/**"
+      - ".github/workflows/ci-go.yaml"
+      - ".cargo/config.toml"
+      - "rust-toolchain.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/kreuzberg/**"
+      - "crates/kreuzberg-ffi/**"
+      - "crates/kreuzberg-tesseract/**"
+      - "packages/go/v4/**"
+      - "e2e/go/**"
+      - "test_documents/**"
+      - "fixtures/**"
+      - "tools/e2e-generator/**"
+      - "packages/go/v4/go.mod"
+      - "packages/go/v4/go.sum"
+      - "scripts/ci/go/**"
+      - "scripts/ci/cache/**"
+      - "scripts/ci/actions/**"
   pull_request:
     branches: [main]
     paths:
-      - '.github/actions/**'
-      - '.github/workflows/ci-go.yaml'
-      - '.cargo/config.toml'
-      - 'rust-toolchain.toml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'crates/kreuzberg/**'
-      - 'crates/kreuzberg-ffi/**'
-      - 'crates/kreuzberg-tesseract/**'
-      - 'packages/go/v4/**'
-      - 'e2e/go/**'
-      - 'test_documents/**'
-      - 'fixtures/**'
-      - 'tools/e2e-generator/**'
-      - 'packages/go/v4/go.mod'
-      - 'packages/go/v4/go.sum'
-      - 'scripts/ci/go/**'
-      - 'scripts/ci/cache/**'
-      - 'scripts/ci/actions/**'
+      - ".github/actions/**"
+      - ".github/workflows/ci-go.yaml"
+      - ".cargo/config.toml"
+      - "rust-toolchain.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/kreuzberg/**"
+      - "crates/kreuzberg-ffi/**"
+      - "crates/kreuzberg-tesseract/**"
+      - "packages/go/v4/**"
+      - "e2e/go/**"
+      - "test_documents/**"
+      - "fixtures/**"
+      - "tools/e2e-generator/**"
+      - "packages/go/v4/go.mod"
+      - "packages/go/v4/go.sum"
+      - "scripts/ci/go/**"
+      - "scripts/ci/cache/**"
+      - "scripts/ci/actions/**"
   workflow_dispatch:
 
 concurrency:
@@ -117,7 +117,7 @@ jobs:
         with:
           cache-key-prefix: ${{ matrix.os == 'windows-latest' && 'go-windows-gnu' || format('go-{0}', matrix.os) }}
           use-sccache: ${{ matrix.os != 'windows-latest' }}
-          report-stats: 'true'
+          report-stats: "true"
           target: ${{ matrix.os == 'windows-latest' && 'x86_64-pc-windows-gnu' || '' }}
           toolchain: ${{ matrix.os == 'windows-latest' && 'stable-x86_64-pc-windows-gnu' || '' }}
 
@@ -133,7 +133,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26'
+          go-version: "1.26"
           cache-dependency-path: packages/go/v4/go.sum
 
       - name: Cache PDFium
@@ -155,7 +155,7 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: ${{ env.ORT_VERSION }}
-          dest-dir: 'target/release'
+          dest-dir: "target/release"
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
@@ -250,8 +250,8 @@ jobs:
       - name: Setup Go CGO environment
         uses: kreuzberg-dev/actions/setup-go-cgo-env@v1
         with:
-          ffi-lib-dir: 'target/release'
-          enable-rpath: 'true'
+          ffi-lib-dir: "target/release"
+          enable-rpath: "true"
 
       - name: Verify FFI build artifacts
         if: always()
@@ -371,7 +371,7 @@ jobs:
         with:
           cache-key-prefix: go-tests-${{ matrix.os }}
           use-sccache: ${{ matrix.os != 'windows-latest' }}
-          report-stats: 'true'
+          report-stats: "true"
           target: ${{ matrix.os == 'windows-latest' && 'x86_64-pc-windows-gnu' || '' }}
           toolchain: ${{ matrix.os == 'windows-latest' && 'stable-x86_64-pc-windows-gnu' || '' }}
           # Disable cache on Windows due to fingerprint corruption and CGO issues
@@ -430,7 +430,7 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: ${{ env.ORT_VERSION }}
-          dest-dir: 'target/release'
+          dest-dir: "target/release"
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
@@ -461,15 +461,15 @@ jobs:
         uses: ./.github/actions/setup-tesseract-cache
         with:
           label: ${{ runner.os }}-tesseract-${{ env.PDFIUM_VERSION }}
-          enable-cache: 'true'
+          enable-cache: "true"
 
       - name: Setup Go CGO environment
         uses: kreuzberg-dev/actions/setup-go-cgo-env@v1
         env:
           KREUZBERG_GO_LINKER_VERBOSE: ${{ runner.os == 'Windows' && '1' || '' }}
         with:
-          ffi-lib-dir: 'target/release'
-          enable-rpath: 'true'
+          ffi-lib-dir: "target/release"
+          enable-rpath: "true"
 
       - name: Set library paths for test execution
         shell: bash
@@ -604,7 +604,7 @@ jobs:
       - name: Install golangci-lint
         shell: bash
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.11.3
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.11.4
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Generate Go E2E tests

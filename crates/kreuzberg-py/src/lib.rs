@@ -64,6 +64,10 @@ fn _internal_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "MissingDependencyError",
         m.py().get_type::<error::MissingDependencyError>(),
     )?;
+    m.add(
+        "ExtractionTimeoutError",
+        m.py().get_type::<error::ExtractionTimeoutError>(),
+    )?;
 
     m.add_class::<config::ExtractionConfig>()?;
     m.add_class::<config::OcrConfig>()?;

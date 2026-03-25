@@ -62,12 +62,12 @@ impl OcrBackend for RubyOcrBackend {
 
             // Convert config to Ruby hash
             let config_hash = ruby.hash_new();
-            config_hash.aset("backend", ocr_config.backend.as_ref())
+            config_hash.aset("backend", ocr_config.backend.as_str())
                 .map_err(|e| KreuzbergError::Plugin {
                     message: format!("Failed to set backend in config: {}", e),
                     plugin_name: backend_name.clone(),
                 })?;
-            config_hash.aset("language", ocr_config.language.as_ref())
+            config_hash.aset("language", ocr_config.language.as_str())
                 .map_err(|e| KreuzbergError::Plugin {
                     message: format!("Failed to set language in config: {}", e),
                     plugin_name: backend_name.clone(),

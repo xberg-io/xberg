@@ -296,3 +296,18 @@ class PluginError(KreuzbergError):
         Context: {"plugin_name": "pdf-extractor"}
 
     """
+
+
+class ExtractionTimeoutError(KreuzbergError):
+    """Raised when an extraction exceeds its configured time limit.
+
+    This occurs in batch extraction when a per-file or batch-level timeout is set
+    and the extraction does not complete within the specified duration.
+
+    Example:
+        >>> raise ExtractionTimeoutError("Extraction timed out after 5000ms (limit: 3000ms)")
+        Traceback (most recent call last):
+            ...
+        kreuzberg.exceptions.ExtractionTimeoutError: ExtractionTimeoutError: Extraction timed out after 5000ms (limit: 3000ms)
+
+    """

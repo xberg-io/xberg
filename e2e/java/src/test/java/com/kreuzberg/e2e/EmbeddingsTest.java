@@ -30,7 +30,7 @@ public class EmbeddingsTest {
             "{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"balanced\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
     Path documentPath = E2EHelpers.resolveDocument("pdf/fake_memo.pdf");
 
-    if (true && !Files.exists(documentPath)) {
+    if (!Files.exists(documentPath)) {
       String msg = String.format("Skipping embedding_async: missing document at %s", documentPath);
       System.err.println(msg);
       org.junit.jupiter.api.Assumptions.assumeTrue(false, msg);

@@ -695,10 +695,7 @@ fn generate_clear_registry_test_rust(test_spec: &PluginTestSpec, buf: &mut Strin
             buf,
             "    let registry = kreuzberg::plugins::registry::get_post_processor_registry();"
         )?;
-        writeln!(
-            buf,
-            "    let mut registry = registry.write().expect(\"Failed to acquire write lock\");"
-        )?;
+        writeln!(buf, "    let mut registry = registry.write();")?;
         writeln!(buf, "    registry.shutdown_all().expect(\"Failed to clear registry\");")?;
         writeln!(buf, "    drop(registry);")?;
         writeln!(buf)?;

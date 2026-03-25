@@ -63,11 +63,12 @@ where
     Ok(results.into_iter().map(|r| r.unwrap()).collect())
 }
 
-/// Run a single extraction task with semaphore gating, timing, and batch mode.
+/// Run a single extraction task with semaphore gating, timing, optional timeout, and batch mode.
 #[cfg(feature = "tokio-runtime")]
 async fn run_timed_extraction<F, Fut>(
     index: usize,
     semaphore: Arc<tokio::sync::Semaphore>,
+    timeout_secs: Option<u64>,
     extract_fn: F,
 ) -> (usize, Result<ExtractionResult>, u64)
 where
@@ -76,7 +77,23 @@ where
 {
     let _permit = semaphore.acquire().await.unwrap();
     let start = Instant::now();
-    let mut result = crate::core::batch_mode::with_batch_mode(extract_fn()).await;
+
+    let extraction_future = crate::core::batch_mode::with_batch_mode(extract_fn());
+
+    let mut result = match timeout_secs {
+        Some(secs) => match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
+            Ok(inner) => inner,
+            Err(_elapsed) => {
+                let elapsed_ms = start.elapsed().as_millis() as u64;
+                Err(KreuzbergError::Timeout {
+                    elapsed_ms,
+                    limit_ms: secs * 1000,
+                })
+            }
+        },
+        None => extraction_future.await,
+    };
+
     let elapsed_ms = start.elapsed().as_millis() as u64;
 
     if let Ok(ref mut r) = result {
@@ -182,7 +199,8 @@ pub async fn batch_extract_file(
         async move {
             let (ref path, ref file_config) = items[index];
             let resolved = resolve_config(&cfg, file_config);
-            run_timed_extraction(index, sem, || {
+            let timeout = resolved.extraction_timeout_secs;
+            run_timed_extraction(index, sem, timeout, || {
                 let path = path.clone();
                 async move { extract_file(&path, None, &resolved).await }
             })
@@ -282,7 +300,8 @@ pub async fn batch_extract_bytes(
         async move {
             let (bytes, mime_type, file_config) = slots[index].lock().take().expect("batch item already consumed");
             let resolved = resolve_config(&cfg, &file_config);
-            run_timed_extraction(index, sem, || async move {
+            let timeout = resolved.extraction_timeout_secs;
+            run_timed_extraction(index, sem, timeout, || async move {
                 extract_bytes(&bytes, &mime_type, &resolved).await
             })
             .await

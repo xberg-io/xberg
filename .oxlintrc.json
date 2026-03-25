@@ -1,3 +1,3 @@
 {
-  "ignorePatterns": ["docs/snippets/**/*.ts"]
+	"ignorePatterns": ["docs/snippets/**/*.ts"]
 }

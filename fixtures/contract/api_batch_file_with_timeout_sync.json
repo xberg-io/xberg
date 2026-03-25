@@ -1,0 +1,20 @@
+{
+	"id": "api_batch_file_with_timeout_sync",
+	"description": "Tests sync batch file extraction with per-file timeout config override",
+	"tags": ["contract", "api", "batch", "file_config", "timeout"],
+	"document": {
+		"path": "pdf/fake_memo.pdf"
+	},
+	"extraction": {
+		"method": "batch_sync",
+		"input_type": "file",
+		"config": {
+			"extraction_timeout_secs": 300
+		},
+		"file_configs": [{ "timeout_secs": 600 }]
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 10
+	}
+}

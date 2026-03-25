@@ -88,6 +88,11 @@ pub fn map_kreuzberg_error_to_mcp(error: KreuzbergError) -> McpError {
 
         KreuzbergError::LockPoisoned(msg) => McpError::internal_error(format!("Internal lock poisoned: {}", msg), None),
 
+        KreuzbergError::Timeout { elapsed_ms, limit_ms } => McpError::internal_error(
+            format!("Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)"),
+            None,
+        ),
+
         KreuzbergError::Other(msg) => McpError::internal_error(msg, None),
     }
 }

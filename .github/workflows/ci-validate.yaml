@@ -7,73 +7,73 @@ on:
   push:
     branches: [main]
     paths:
-      - 'crates/kreuzberg/**'
-      - 'crates/kreuzberg-cli/**'
-      - 'crates/kreuzberg-py/**'
-      - 'crates/kreuzberg-node/**'
-      - 'crates/kreuzberg-ffi/**'
-      - 'crates/kreuzberg-tesseract/**'
-      - 'crates/kreuzberg-paddle-ocr/**'
-      - 'crates/kreuzberg-wasm/**'
-      - 'packages/python/**'
-      - 'packages/typescript/**'
-      - 'packages/ruby/**'
-      - 'packages/r/**'
-      - 'e2e/r/**'
-      - 'packages/java/**'
-      - 'packages/go/v4/**'
-      - 'packages/csharp/**'
-      - 'packages/wasm/**'
-      - 'tools/benchmark-harness/**'
-      - 'tools/e2e-generator/**'
-      - 'tools/snippet-runner/**'
-      - 'scripts/**'
-      - 'docs/snippets/**'
-      - 'docs/reference/**'
-      - '.github/actions/**'
-      - '.cargo/config.toml'
-      - '.pre-commit-config.yaml'
-      - '.golangci.yml'
-      - 'pyproject.toml'
-      - 'pnpm-lock.yaml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/ci-validate.yaml'
+      - "crates/kreuzberg/**"
+      - "crates/kreuzberg-cli/**"
+      - "crates/kreuzberg-py/**"
+      - "crates/kreuzberg-node/**"
+      - "crates/kreuzberg-ffi/**"
+      - "crates/kreuzberg-tesseract/**"
+      - "crates/kreuzberg-paddle-ocr/**"
+      - "crates/kreuzberg-wasm/**"
+      - "packages/python/**"
+      - "packages/typescript/**"
+      - "packages/ruby/**"
+      - "packages/r/**"
+      - "e2e/r/**"
+      - "packages/java/**"
+      - "packages/go/v4/**"
+      - "packages/csharp/**"
+      - "packages/wasm/**"
+      - "tools/benchmark-harness/**"
+      - "tools/e2e-generator/**"
+      - "tools/snippet-runner/**"
+      - "scripts/**"
+      - "docs/snippets/**"
+      - "docs/reference/**"
+      - ".github/actions/**"
+      - ".cargo/config.toml"
+      - ".pre-commit-config.yaml"
+      - ".golangci.yml"
+      - "pyproject.toml"
+      - "pnpm-lock.yaml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/ci-validate.yaml"
   pull_request:
     branches: [main]
     paths:
-      - 'crates/kreuzberg/**'
-      - 'crates/kreuzberg-cli/**'
-      - 'crates/kreuzberg-py/**'
-      - 'crates/kreuzberg-node/**'
-      - 'crates/kreuzberg-ffi/**'
-      - 'crates/kreuzberg-tesseract/**'
-      - 'crates/kreuzberg-paddle-ocr/**'
-      - 'crates/kreuzberg-wasm/**'
-      - 'packages/python/**'
-      - 'packages/typescript/**'
-      - 'packages/ruby/**'
-      - 'packages/r/**'
-      - 'e2e/r/**'
-      - 'packages/java/**'
-      - 'packages/go/v4/**'
-      - 'packages/csharp/**'
-      - 'packages/wasm/**'
-      - 'tools/benchmark-harness/**'
-      - 'tools/e2e-generator/**'
-      - 'tools/snippet-runner/**'
-      - 'scripts/**'
-      - 'docs/snippets/**'
-      - 'docs/reference/**'
-      - '.github/actions/**'
-      - '.cargo/config.toml'
-      - '.pre-commit-config.yaml'
-      - '.golangci.yml'
-      - 'pyproject.toml'
-      - 'pnpm-lock.yaml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/ci-validate.yaml'
+      - "crates/kreuzberg/**"
+      - "crates/kreuzberg-cli/**"
+      - "crates/kreuzberg-py/**"
+      - "crates/kreuzberg-node/**"
+      - "crates/kreuzberg-ffi/**"
+      - "crates/kreuzberg-tesseract/**"
+      - "crates/kreuzberg-paddle-ocr/**"
+      - "crates/kreuzberg-wasm/**"
+      - "packages/python/**"
+      - "packages/typescript/**"
+      - "packages/ruby/**"
+      - "packages/r/**"
+      - "e2e/r/**"
+      - "packages/java/**"
+      - "packages/go/v4/**"
+      - "packages/csharp/**"
+      - "packages/wasm/**"
+      - "tools/benchmark-harness/**"
+      - "tools/e2e-generator/**"
+      - "tools/snippet-runner/**"
+      - "scripts/**"
+      - "docs/snippets/**"
+      - "docs/reference/**"
+      - ".github/actions/**"
+      - ".cargo/config.toml"
+      - ".pre-commit-config.yaml"
+      - ".golangci.yml"
+      - "pyproject.toml"
+      - "pnpm-lock.yaml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/ci-validate.yaml"
   workflow_dispatch:
 
 concurrency:
@@ -144,7 +144,7 @@ jobs:
       - name: Setup R
         uses: r-lib/actions/setup-r@v2
         with:
-          r-version: '4.3'
+          r-version: "4.3"
 
       - name: Install R dependencies
         run: |
@@ -155,24 +155,24 @@ jobs:
         uses: actions/setup-java@v5
         id: setup-java
         with:
-          distribution: 'temurin'
-          java-version: '25'
+          distribution: "temurin"
+          java-version: "25"
 
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26'
+          go-version: "1.26"
           cache-dependency-path: packages/go/v4/go.sum
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.5'
+          php-version: "8.5"
           tools: composer
 
       - name: Install PHP dependencies
@@ -184,8 +184,8 @@ jobs:
       - name: Setup Elixir
         uses: erlef/setup-elixir@v1
         with:
-          elixir-version: '1.17'
-          otp-version: '27.2'
+          elixir-version: "1.17"
+          otp-version: "27.2"
           version-type: strict
 
       - name: Install Elixir dependencies
@@ -203,7 +203,7 @@ jobs:
 
       - name: Install golangci-lint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.11.3
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.11.4
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
         shell: bash
 

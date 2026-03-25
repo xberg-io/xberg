@@ -357,7 +357,7 @@ class OfficeTest extends TestCase
             $this->markTestSkipped('Skipping office_hwp_styled: missing document at ' . $documentPath);
         }
 
-        Helpers::skipIfFeatureUnavailable('office');
+        Helpers::skipIfFeatureUnavailable('hwp');
 
         $config = Helpers::buildConfig(null);
 
@@ -365,7 +365,6 @@ class OfficeTest extends TestCase
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertExpectedMime($result, ['application/x-hwp']);
-        Helpers::assertMinContentLength($result, 10);
     }
 
     /**

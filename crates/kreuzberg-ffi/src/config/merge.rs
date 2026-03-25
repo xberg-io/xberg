@@ -17,6 +17,9 @@ pub fn merge_configs(base: &mut ExtractionConfig, override_config: &ExtractionCo
     base.use_cache = override_config.use_cache;
     base.enable_quality_processing = override_config.enable_quality_processing;
     base.force_ocr = override_config.force_ocr;
+    if override_config.force_ocr_pages.is_some() {
+        base.force_ocr_pages = override_config.force_ocr_pages.clone();
+    }
     base.max_concurrent_extractions = override_config.max_concurrent_extractions;
 
     if override_config.ocr.is_some() {
@@ -59,6 +62,10 @@ pub fn merge_configs(base: &mut ExtractionConfig, override_config: &ExtractionCo
 
     if override_config.html_options.is_some() {
         base.html_options = override_config.html_options.clone();
+    }
+
+    if override_config.extraction_timeout_secs.is_some() {
+        base.extraction_timeout_secs = override_config.extraction_timeout_secs;
     }
 }
 

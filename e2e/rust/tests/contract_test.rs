@@ -211,6 +211,34 @@ fn test_api_batch_file_with_configs_sync() {
     assertions::assert_min_content_length(&result, 10);
 }
 
+#[test]
+fn test_api_batch_file_with_timeout_sync() {
+    // Tests sync batch file extraction with per-file timeout config override
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping api_batch_file_with_timeout_sync: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "extraction_timeout_secs": 300
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::batch_extract_file_sync(vec![(document_path.clone(), None)], &config) {
+        Err(err) => panic!("Extraction failed for api_batch_file_with_timeout_sync: {err:?}"),
+        Ok(results) => results.into_iter().next().expect("Expected at least one result"),
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 10);
+}
+
 #[tokio::test]
 async fn test_api_extract_bytes_async() {
     // Tests async bytes extraction API (extract_bytes)
@@ -969,6 +997,34 @@ fn test_config_email_msg_fallback_codepage() {
 }
 
 #[test]
+fn test_config_extraction_timeout() {
+    // Tests that extraction_timeout_secs config field is accepted and does not affect fast extractions
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_extraction_timeout: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "extraction_timeout_secs": 300
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_extraction_timeout: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 10);
+}
+
+#[test]
 fn test_config_force_ocr() {
     // Tests force_ocr configuration option
 
@@ -1005,6 +1061,51 @@ fn test_config_force_ocr() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 5);
+}
+
+#[test]
+fn test_config_force_ocr_pages() {
+    // Tests that force_ocr_pages config field is accepted for selective page OCR
+
+    let document_path = resolve_document("pdf/fake_memo.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_force_ocr_pages: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "force_ocr_pages": [
+    1
+  ],
+  "ocr": {
+    "backend": "tesseract",
+    "language": "eng"
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping config_force_ocr_pages: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_force_ocr_pages: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_force_ocr_pages: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 1);
 }
 
 #[test]

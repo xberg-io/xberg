@@ -181,6 +181,24 @@ def test_api_batch_file_with_configs_sync() -> None:
     helpers.assert_output_format(result, "markdown")
 
 
+def test_api_batch_file_with_timeout_sync() -> None:
+    """Tests sync batch file extraction with per-file timeout config override"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping api_batch_file_with_timeout_sync: missing document at {document_path}")
+
+    config = helpers.build_config({"extraction_timeout_secs": 300})
+
+    file_configs = [helpers.build_file_config({"timeout_secs": 600})]
+
+    results = batch_extract_files_sync([document_path], config=config, file_configs=file_configs)
+    result = results[0]
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+
+
 @pytest.mark.asyncio
 async def test_api_extract_bytes_async() -> None:
     """Tests async bytes extraction API (extract_bytes)"""
@@ -521,6 +539,21 @@ def test_config_email_msg_fallback_codepage() -> None:
     helpers.assert_min_content_length(result, 10)
 
 
+def test_config_extraction_timeout() -> None:
+    """Tests that extraction_timeout_secs config field is accepted and does not affect fast extractions"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_extraction_timeout: missing document at {document_path}")
+
+    config = helpers.build_config({"extraction_timeout_secs": 300})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 10)
+
+
 def test_config_force_ocr() -> None:
     """Tests force_ocr configuration option"""
 
@@ -534,6 +567,21 @@ def test_config_force_ocr() -> None:
 
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 5)
+
+
+def test_config_force_ocr_pages() -> None:
+    """Tests that force_ocr_pages config field is accepted for selective page OCR"""
+
+    document_path = helpers.resolve_document("pdf/fake_memo.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_force_ocr_pages: missing document at {document_path}")
+
+    config = helpers.build_config({"force_ocr_pages": [1], "ocr": {"backend": "tesseract", "language": "eng"}})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["application/pdf"])
+    helpers.assert_min_content_length(result, 1)
 
 
 def test_config_html_options() -> None:

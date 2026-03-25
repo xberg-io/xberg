@@ -206,6 +206,8 @@ export interface ExtractionConfig {
 	enableQualityProcessing?: boolean;
 	/** Force OCR even if text is available */
 	forceOcr?: boolean;
+	/** List of 1-indexed page numbers to force OCR on */
+	forceOcrPages?: number[];
 	/** Security limits for archive extraction */
 	securityLimits?: Record<string, number>;
 	/** Maximum concurrent extractions */
@@ -234,6 +236,8 @@ export interface ExtractionConfig {
 	 * of nodes representing the document tree structure with semantic content types.
 	 */
 	includeDocumentStructure?: boolean;
+	/** Default per-file extraction timeout in seconds for batch operations. undefined = no timeout. */
+	extractionTimeoutSecs?: number;
 }
 
 /**

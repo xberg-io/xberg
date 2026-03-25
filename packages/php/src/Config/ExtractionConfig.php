@@ -71,6 +71,17 @@ readonly class ExtractionConfig
         public bool $forceOcr = false,
 
         /**
+         * List of 1-indexed page numbers to force OCR on.
+         *
+         * When set, OCR is forced only for the specified pages. If null, the
+         * forceOcr setting applies to all pages.
+         *
+         * @var int[]|null
+         * @default null
+         */
+        public ?array $forceOcrPages = null,
+
+        /**
          * Text chunking configuration.
          *
          * Configures how extracted text is split into chunks for processing,
@@ -282,6 +293,18 @@ readonly class ExtractionConfig
          * @default null
          */
         public ?int $cacheTtlSecs = null,
+
+        /**
+         * Default per-file extraction timeout in seconds for batch operations.
+         *
+         * When set, each file in a batch will be canceled after this duration
+         * unless overridden by a per-file FileExtractionConfig timeout_secs.
+         * When null, no timeout is applied (unbounded extraction time).
+         *
+         * @var int|null
+         * @default null
+         */
+        public ?int $extractionTimeoutSecs = null,
     ) {
     }
 
@@ -311,6 +334,18 @@ readonly class ExtractionConfig
         if (!is_bool($forceOcr)) {
             /** @var bool $forceOcr */
             $forceOcr = (bool) $forceOcr;
+        }
+
+        /** @var int[]|null $forceOcrPages */
+        $forceOcrPages = null;
+        if (isset($data['force_ocr_pages']) && is_array($data['force_ocr_pages'])) {
+            $pages = [];
+            foreach ($data['force_ocr_pages'] as $page) {
+                if (is_int($page)) {
+                    $pages[] = $page;
+                }
+            }
+            $forceOcrPages = $pages !== [] ? $pages : null;
         }
 
         /** @var int|null $maxConcurrentExtractions */
@@ -458,6 +493,13 @@ readonly class ExtractionConfig
             $cacheTtlSecs = (int) $cacheTtlSecs;
         }
 
+        /** @var int|null $extractionTimeoutSecs */
+        $extractionTimeoutSecs = $data['extraction_timeout_secs'] ?? null;
+        if ($extractionTimeoutSecs !== null && !is_int($extractionTimeoutSecs)) {
+            /** @var int $extractionTimeoutSecs */
+            $extractionTimeoutSecs = (int) $extractionTimeoutSecs;
+        }
+
         $securityLimits = null;
         if (isset($data['security_limits']) && is_array($data['security_limits'])) {
             /** @var array<string, mixed> $securityLimitsData */
@@ -470,6 +512,7 @@ readonly class ExtractionConfig
             enableQualityProcessing: $enableQualityProcessing,
             ocr: $ocr,
             forceOcr: $forceOcr,
+            forceOcrPages: $forceOcrPages,
             chunking: $chunking,
             images: $imageExtraction,
             pdfOptions: $pdf,
@@ -489,6 +532,7 @@ readonly class ExtractionConfig
             concurrency: $concurrency,
             cacheNamespace: $cacheNamespace,
             cacheTtlSecs: $cacheTtlSecs,
+            extractionTimeoutSecs: $extractionTimeoutSecs,
         );
     }
 
@@ -674,6 +718,10 @@ readonly class ExtractionConfig
         if ($this->forceOcr) {
             $result['force_ocr'] = true;
         }
+        // forceOcrPages defaults to null, so only add if set
+        if ($this->forceOcrPages !== null) {
+            $result['force_ocr_pages'] = $this->forceOcrPages;
+        }
         // maxConcurrentExtractions defaults to null, so only add if set
         if ($this->maxConcurrentExtractions !== null) {
             $result['max_concurrent_extractions'] = $this->maxConcurrentExtractions;
@@ -697,6 +745,10 @@ readonly class ExtractionConfig
         // cacheTtlSecs defaults to null, so only add if set
         if ($this->cacheTtlSecs !== null) {
             $result['cache_ttl_secs'] = $this->cacheTtlSecs;
+        }
+        // extractionTimeoutSecs defaults to null, so only add if set
+        if ($this->extractionTimeoutSecs !== null) {
+            $result['extraction_timeout_secs'] = $this->extractionTimeoutSecs;
         }
 
         return array_filter($result, static fn ($value): bool => $value !== null);

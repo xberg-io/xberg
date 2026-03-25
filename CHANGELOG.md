@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Per-file batch extraction timeouts** (#546): New `extraction_timeout_secs` on `ExtractionConfig` (batch-level default) and `timeout_secs` on `FileExtractionConfig` (per-file override). Timeouts apply after semaphore acquisition. New `KreuzbergError::Timeout` variant with `elapsed_ms` and `limit_ms` fields. All binding layers updated.
+- **Page-level OCR overrides** (#432): New `force_ocr_pages` option (1-indexed) on both `ExtractionConfig` and `FileExtractionConfig`. Enables selective OCR on specific pages of mixed-quality PDFs while preserving native text on others.
+
 ### Fixed
 
 - **PDF layout engine panic on malformed input** (#544): Replaced the panicking `.expect()` inside the thread-local `LayoutEngine` initializer in `layout_runner.rs` with proper `Result`-based error propagation. A failure to initialise the layout engine now returns a descriptive error instead of crashing the host process via FFI (Python, Node, etc.).

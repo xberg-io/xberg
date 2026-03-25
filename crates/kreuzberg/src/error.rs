@@ -124,6 +124,9 @@ pub enum KreuzbergError {
     #[error("Unsupported format: {0}")]
     UnsupportedFormat(String),
 
+    #[error("Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)")]
+    Timeout { elapsed_ms: u64, limit_ms: u64 },
+
     #[error("{0}")]
     Other(String),
 }

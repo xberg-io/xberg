@@ -216,6 +216,32 @@ static void test_contract_api_batch_file_with_configs_sync(void) {
     kreuzberg_free_batch_result(batch);
 }
 
+static void test_contract_api_batch_file_with_timeout_sync(void) {
+    char *doc_path = ensure_document("pdf/fake_memo.pdf", 1);
+    if (!doc_path) return; /* document missing */
+    const char *batch_paths[] = { doc_path };
+    CBatchResult *batch = kreuzberg_batch_extract_files_sync(batch_paths, NULL, 1, "{\"extraction_timeout_secs\":300}");
+    free(doc_path);
+    if (!batch) {
+        printf("SKIP: batch extraction returned NULL for %s\n", "pdf/fake_memo.pdf");
+        return;
+    }
+    if (!batch->success || batch->count == 0) {
+        printf("SKIP: batch extraction unsuccessful for %s\n", "pdf/fake_memo.pdf");
+        kreuzberg_free_batch_result(batch);
+        return;
+    }
+    CExtractionResult *result = batch->results[0];
+    if (!result || !result->success) {
+        printf("SKIP: batch result[0] unsuccessful for %s\n", "pdf/fake_memo.pdf");
+        kreuzberg_free_batch_result(batch);
+        return;
+    }
+    assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
+    assert_min_content_length(result, 10);
+    kreuzberg_free_batch_result(batch);
+}
+
 static void test_contract_api_extract_bytes_async(void) {
     CExtractionResult *result = run_extraction_bytes("pdf/fake_memo.pdf", NULL);
     if (!result) return; /* skipped */
@@ -403,12 +429,29 @@ static void test_contract_config_email_msg_fallback_codepage(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_contract_config_extraction_timeout(void) {
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"extraction_timeout_secs\":300}");
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
+    assert_min_content_length(result, 10);
+    kreuzberg_free_result(result);
+}
+
 static void test_contract_config_force_ocr(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
     CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 5);
+    kreuzberg_free_result(result);
+}
+
+static void test_contract_config_force_ocr_pages(void) {
+    if (skip_if_feature_unavailable("ocr")) return;
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"force_ocr_pages\":[1],\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
+    assert_min_content_length(result, 1);
     kreuzberg_free_result(result);
 }
 
@@ -686,6 +729,7 @@ int main(void) {
     test_contract_api_batch_file_sync();
     test_contract_api_batch_file_with_configs_async();
     test_contract_api_batch_file_with_configs_sync();
+    test_contract_api_batch_file_with_timeout_sync();
     test_contract_api_extract_bytes_async();
     test_contract_api_extract_bytes_sync();
     test_contract_api_extract_file_async();
@@ -707,7 +751,9 @@ int main(void) {
     test_contract_config_document_structure_with_headings();
     test_contract_config_element_types();
     test_contract_config_email_msg_fallback_codepage();
+    test_contract_config_extraction_timeout();
     test_contract_config_force_ocr();
+    test_contract_config_force_ocr_pages();
     test_contract_config_html_options();
     test_contract_config_images();
     test_contract_config_images_with_formats();

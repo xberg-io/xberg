@@ -1,0 +1,19 @@
+{
+	"id": "config_extraction_timeout",
+	"description": "Tests that extraction_timeout_secs config field is accepted and does not affect fast extractions",
+	"tags": ["contract", "config", "timeout"],
+	"document": {
+		"path": "pdf/fake_memo.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"extraction_timeout_secs": 300
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 10
+	}
+}

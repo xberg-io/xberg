@@ -53,6 +53,10 @@ impl ConfigBuilder {
         self.config.cache_ttl_secs = Some(ttl_secs);
     }
 
+    fn set_extraction_timeout_secs(&mut self, timeout_secs: u64) {
+        self.config.extraction_timeout_secs = Some(timeout_secs);
+    }
+
     fn set_ocr_from_json(&mut self, ocr_json: &str) -> Result<(), String> {
         let ocr_config: OcrConfig =
             serde_json::from_str(ocr_json).map_err(|e| format!("Failed to parse OCR config JSON: {}", e))?;
@@ -270,6 +274,39 @@ pub unsafe extern "C" fn kreuzberg_config_set_cache_ttl_secs(builder: *mut Confi
 
         clear_last_error();
         unsafe { (*builder).set_cache_ttl_secs(ttl_secs) };
+        0
+    })
+}
+
+/// Set the extraction_timeout_secs field for per-file timeout in batch extraction.
+///
+/// # Arguments
+///
+/// * `builder` - Non-null pointer to ConfigBuilder
+/// * `timeout_secs` - Default per-file timeout in seconds; 0 clears the timeout
+///
+/// # Returns
+///
+/// 0 on success, -1 on error (NULL builder)
+///
+/// # Safety
+///
+/// This function is meant to be called from C/FFI code. The caller must ensure:
+/// - `builder` must be a valid, non-null pointer previously returned by `kreuzberg_config_builder_new`
+/// - The pointer must be properly aligned and point to a valid ConfigBuilder instance
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn kreuzberg_config_set_extraction_timeout_secs(
+    builder: *mut ConfigBuilder,
+    timeout_secs: u64,
+) -> i32 {
+    ffi_panic_guard_i32!("kreuzberg_config_set_extraction_timeout_secs", {
+        if builder.is_null() {
+            set_last_error("ConfigBuilder pointer cannot be NULL".to_string());
+            return -1;
+        }
+
+        clear_last_error();
+        unsafe { (*builder).set_extraction_timeout_secs(timeout_secs) };
         0
     })
 }

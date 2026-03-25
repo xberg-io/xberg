@@ -1132,6 +1132,8 @@ pub struct JsExtractionConfig {
     pub enable_quality_processing: Option<bool>,
     pub ocr: Option<JsOcrConfig>,
     pub force_ocr: Option<bool>,
+    /// List of 1-indexed page numbers to force OCR on (None = use force_ocr setting)
+    pub force_ocr_pages: Option<Vec<u32>>,
     pub chunking: Option<JsChunkingConfig>,
     pub images: Option<JsImageExtractionConfig>,
     pub pdf_options: Option<JsPdfConfig>,
@@ -1164,6 +1166,8 @@ pub struct JsExtractionConfig {
     pub cache_ttl_secs: Option<u32>,
     /// Maximum recursion depth for archive extraction (default: 3)
     pub max_archive_depth: Option<u32>,
+    /// Default per-file extraction timeout in seconds
+    pub extraction_timeout_secs: Option<u32>,
 }
 
 impl TryFrom<JsPageConfig> for kreuzberg::core::config::PageConfig {
@@ -1209,6 +1213,7 @@ impl TryFrom<JsExtractionConfig> for ExtractionConfig {
             enable_quality_processing: val.enable_quality_processing.unwrap_or(true),
             ocr: val.ocr.map(Into::into),
             force_ocr: val.force_ocr.unwrap_or(false),
+            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().map(|p| p as usize).collect()),
             chunking: val.chunking.map(Into::into),
             images: val.images.map(Into::into),
             pdf_options: val.pdf_options.map(Into::into),
@@ -1246,6 +1251,7 @@ impl TryFrom<JsExtractionConfig> for ExtractionConfig {
             acceleration: val.acceleration.map(Into::into),
             email: val.email.map(Into::into),
             concurrency: val.concurrency.map(Into::into),
+            extraction_timeout_secs: val.extraction_timeout_secs.map(|v| v as u64),
             cache_namespace: val.cache_namespace,
             cache_ttl_secs: val.cache_ttl_secs.map(|v| v as u64),
             max_archive_depth: val.max_archive_depth.map(|v| v as usize).unwrap_or(3),
@@ -1300,6 +1306,7 @@ impl TryFrom<ExtractionConfig> for JsExtractionConfig {
                 }),
             }),
             force_ocr: Some(val.force_ocr),
+            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().map(|p| p as u32).collect()),
             chunking: val.chunking.map(|chunk| JsChunkingConfig {
                 max_chars: Some(chunk.max_characters as u32),
                 max_overlap: Some(chunk.overlap as u32),
@@ -1424,6 +1431,7 @@ impl TryFrom<ExtractionConfig> for JsExtractionConfig {
             cache_namespace: val.cache_namespace,
             cache_ttl_secs: val.cache_ttl_secs.map(|v| v as u32),
             max_archive_depth: Some(val.max_archive_depth as u32),
+            extraction_timeout_secs: val.extraction_timeout_secs.map(|v| v as u32),
         })
     }
 }
@@ -1536,6 +1544,8 @@ pub struct JsFileExtractionConfig {
     pub enable_quality_processing: Option<bool>,
     pub ocr: Option<JsOcrConfig>,
     pub force_ocr: Option<bool>,
+    /// List of 1-indexed page numbers to force OCR on (None = use force_ocr setting)
+    pub force_ocr_pages: Option<Vec<u32>>,
     pub chunking: Option<JsChunkingConfig>,
     pub images: Option<JsImageExtractionConfig>,
     pub pdf_options: Option<JsPdfConfig>,
@@ -1553,6 +1563,8 @@ pub struct JsFileExtractionConfig {
     pub include_document_structure: Option<bool>,
     /// Layout detection configuration (None = layout detection disabled)
     pub layout: Option<JsLayoutDetectionConfig>,
+    /// Per-file extraction timeout in seconds
+    pub timeout_secs: Option<u32>,
 }
 
 impl TryFrom<JsFileExtractionConfig> for FileExtractionConfig {
@@ -1573,6 +1585,7 @@ impl TryFrom<JsFileExtractionConfig> for FileExtractionConfig {
             enable_quality_processing: val.enable_quality_processing,
             ocr: val.ocr.map(Into::into),
             force_ocr: val.force_ocr,
+            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().map(|p| p as usize).collect()),
             chunking: val.chunking.map(Into::into),
             images: val.images.map(Into::into),
             pdf_options: val.pdf_options.map(Into::into),
@@ -1603,6 +1616,7 @@ impl TryFrom<JsFileExtractionConfig> for FileExtractionConfig {
                 .transpose()?,
             include_document_structure: val.include_document_structure,
             layout: val.layout.map(Into::into),
+            timeout_secs: val.timeout_secs.map(|v| v as u64),
         })
     }
 }
@@ -1653,6 +1667,7 @@ impl TryFrom<FileExtractionConfig> for JsFileExtractionConfig {
                 }),
             }),
             force_ocr: val.force_ocr,
+            force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().map(|p| p as u32).collect()),
             chunking: val.chunking.map(|chunk| JsChunkingConfig {
                 max_chars: Some(chunk.max_characters as u32),
                 max_overlap: Some(chunk.overlap as u32),
@@ -1746,6 +1761,7 @@ impl TryFrom<FileExtractionConfig> for JsFileExtractionConfig {
             }),
             include_document_structure: val.include_document_structure,
             layout: val.layout.map(JsLayoutDetectionConfig::from),
+            timeout_secs: val.timeout_secs.map(|v| v as u32),
         })
     }
 }

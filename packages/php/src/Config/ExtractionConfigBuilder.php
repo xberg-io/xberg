@@ -30,6 +30,8 @@ class ExtractionConfigBuilder
     private bool $enableQualityProcessing = true;
     private ?OcrConfig $ocr = null;
     private bool $forceOcr = false;
+    /** @var int[]|null */
+    private ?array $forceOcrPages = null;
     private ?ChunkingConfig $chunking = null;
     private ?ImageExtractionConfig $images = null;
     private ?PdfConfig $pdfOptions = null;
@@ -45,6 +47,7 @@ class ExtractionConfigBuilder
     private string $outputFormat = 'plain';
     private ?string $cacheNamespace = null;
     private ?int $cacheTtlSecs = null;
+    private ?int $extractionTimeoutSecs = null;
 
     /**
      * Set whether to enable caching of extraction results.
@@ -91,6 +94,18 @@ class ExtractionConfigBuilder
     public function withForceOcr(bool $forceOcr): self
     {
         $this->forceOcr = $forceOcr;
+        return $this;
+    }
+
+    /**
+     * Set the list of page numbers to force OCR on.
+     *
+     * @param int[]|null $forceOcrPages 1-indexed page numbers to force OCR on
+     * @return self For method chaining
+     */
+    public function withForceOcrPages(?array $forceOcrPages): self
+    {
+        $this->forceOcrPages = $forceOcrPages;
         return $this;
     }
 
@@ -279,6 +294,21 @@ class ExtractionConfigBuilder
     }
 
     /**
+     * Set the default per-file extraction timeout in seconds for batch operations.
+     *
+     * When set, each file in a batch will be canceled after this duration
+     * unless overridden by a per-file timeout. Null means no timeout.
+     *
+     * @param int|null $secs Extraction timeout in seconds
+     * @return self For method chaining
+     */
+    public function withExtractionTimeoutSecs(?int $secs): self
+    {
+        $this->extractionTimeoutSecs = $secs;
+        return $this;
+    }
+
+    /**
      * Build and return the configured ExtractionConfig instance.
      *
      * @return ExtractionConfig The constructed configuration object
@@ -290,6 +320,7 @@ class ExtractionConfigBuilder
             enableQualityProcessing: $this->enableQualityProcessing,
             ocr: $this->ocr,
             forceOcr: $this->forceOcr,
+            forceOcrPages: $this->forceOcrPages,
             chunking: $this->chunking,
             images: $this->images,
             pdfOptions: $this->pdfOptions,
@@ -305,6 +336,7 @@ class ExtractionConfigBuilder
             concurrency: $this->concurrency,
             cacheNamespace: $this->cacheNamespace,
             cacheTtlSecs: $this->cacheTtlSecs,
+            extractionTimeoutSecs: $this->extractionTimeoutSecs,
         );
     }
 }

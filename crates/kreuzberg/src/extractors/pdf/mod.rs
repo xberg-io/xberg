@@ -444,6 +444,25 @@ impl PdfExtractor {
         #[cfg(feature = "ocr")]
         let (text, used_ocr) = if config.force_ocr {
             (run_ocr_with_layout(content, config, path).await?, true)
+        } else if let Some(ref ocr_pages) = config.force_ocr_pages {
+            if !ocr_pages.is_empty() {
+                if let Some(ref bounds) = boundaries {
+                    if !bounds.is_empty() {
+                        let mixed =
+                            ocr::extract_mixed_ocr_native(&native_text, bounds, ocr_pages, content, config, path)
+                                .await?;
+                        (mixed, true)
+                    } else {
+                        tracing::warn!("force_ocr_pages set but no page boundaries available; using native text");
+                        (native_text, false)
+                    }
+                } else {
+                    tracing::warn!("force_ocr_pages set but no page boundaries available; using native text");
+                    (native_text, false)
+                }
+            } else {
+                (native_text, false)
+            }
         } else if let Some(ocr_config) = config.ocr.as_ref() {
             let thresholds = ocr_config.effective_thresholds();
             let decision = ocr::evaluate_per_page_ocr(

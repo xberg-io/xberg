@@ -3,6 +3,7 @@ package dev.kreuzberg.config;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -29,6 +30,7 @@ public final class FileExtractionConfig {
 	private final Boolean enableQualityProcessing;
 	private final OcrConfig ocr;
 	private final Boolean forceOcr;
+	private final List<Long> forceOcrPages;
 	private final ChunkingConfig chunking;
 	private final ImageExtractionConfig images;
 	private final PdfConfig pdfOptions;
@@ -42,11 +44,13 @@ public final class FileExtractionConfig {
 	private final Boolean includeDocumentStructure;
 	private final String outputFormat;
 	private final String resultFormat;
+	private final Long timeoutSecs;
 
 	private FileExtractionConfig(Builder builder) {
 		this.enableQualityProcessing = builder.enableQualityProcessing;
 		this.ocr = builder.ocr;
 		this.forceOcr = builder.forceOcr;
+		this.forceOcrPages = builder.forceOcrPages;
 		this.chunking = builder.chunking;
 		this.images = builder.images;
 		this.pdfOptions = builder.pdfOptions;
@@ -60,6 +64,7 @@ public final class FileExtractionConfig {
 		this.includeDocumentStructure = builder.includeDocumentStructure;
 		this.outputFormat = builder.outputFormat;
 		this.resultFormat = builder.resultFormat;
+		this.timeoutSecs = builder.timeoutSecs;
 	}
 
 	public static Builder builder() {
@@ -76,6 +81,10 @@ public final class FileExtractionConfig {
 
 	public Boolean getForceOcr() {
 		return forceOcr;
+	}
+
+	public List<Long> getForceOcrPages() {
+		return forceOcrPages;
 	}
 
 	public ChunkingConfig getChunking() {
@@ -131,6 +140,18 @@ public final class FileExtractionConfig {
 	}
 
 	/**
+	 * Get the per-file extraction timeout in seconds.
+	 *
+	 * <p>
+	 * When the timeout is exceeded, the extraction for this file is cancelled and an error is returned.
+	 *
+	 * @return the extraction timeout in seconds, or null if not set
+	 */
+	public Long getTimeoutSecs() {
+		return timeoutSecs;
+	}
+
+	/**
 	 * Serialize to a JSON-compatible map, omitting null values.
 	 *
 	 * @return map of non-null configuration fields
@@ -145,6 +166,9 @@ public final class FileExtractionConfig {
 		}
 		if (forceOcr != null) {
 			map.put("force_ocr", forceOcr);
+		}
+		if (forceOcrPages != null) {
+			map.put("force_ocr_pages", forceOcrPages);
 		}
 		if (chunking != null) {
 			map.put("chunking", chunking.toMap());
@@ -185,6 +209,9 @@ public final class FileExtractionConfig {
 		if (resultFormat != null) {
 			map.put("result_format", resultFormat);
 		}
+		if (timeoutSecs != null) {
+			map.put("timeout_secs", timeoutSecs);
+		}
 		return map;
 	}
 
@@ -205,6 +232,7 @@ public final class FileExtractionConfig {
 		private Boolean enableQualityProcessing;
 		private OcrConfig ocr;
 		private Boolean forceOcr;
+		private List<Long> forceOcrPages;
 		private ChunkingConfig chunking;
 		private ImageExtractionConfig images;
 		private PdfConfig pdfOptions;
@@ -218,6 +246,7 @@ public final class FileExtractionConfig {
 		private Boolean includeDocumentStructure;
 		private String outputFormat;
 		private String resultFormat;
+		private Long timeoutSecs;
 
 		public Builder enableQualityProcessing(Boolean enableQualityProcessing) {
 			this.enableQualityProcessing = enableQualityProcessing;
@@ -226,6 +255,11 @@ public final class FileExtractionConfig {
 
 		public Builder ocr(OcrConfig ocr) {
 			this.ocr = ocr;
+			return this;
+		}
+
+		public Builder forceOcrPages(List<Long> forceOcrPages) {
+			this.forceOcrPages = forceOcrPages;
 			return this;
 		}
 
@@ -296,6 +330,21 @@ public final class FileExtractionConfig {
 
 		public Builder resultFormat(String resultFormat) {
 			this.resultFormat = resultFormat;
+			return this;
+		}
+
+		/**
+		 * Set the per-file extraction timeout in seconds.
+		 *
+		 * <p>
+		 * When the timeout is exceeded, the extraction for this file is cancelled and an error is returned.
+		 *
+		 * @param timeoutSecs
+		 *            timeout in seconds
+		 * @return this builder for chaining
+		 */
+		public Builder timeoutSecs(Long timeoutSecs) {
+			this.timeoutSecs = timeoutSecs;
 			return this;
 		}
 

@@ -192,6 +192,26 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests sync batch file extraction with per-file timeout config override
+     */
+    public function test_api_batch_file_with_timeout_sync(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping api_batch_file_with_timeout_sync: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['extraction_timeout_secs' => 300]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $results = $kreuzberg->batchExtractFiles([$documentPath]);
+        $result = $results[0];
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 10);
+    }
+
+    /**
      * Tests async bytes extraction API (extract_bytes)
      */
     public function test_api_extract_bytes_async(): void
@@ -626,6 +646,25 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests that extraction_timeout_secs config field is accepted and does not affect fast extractions
+     */
+    public function test_config_extraction_timeout(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_extraction_timeout: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['extraction_timeout_secs' => 300]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 10);
+    }
+
+    /**
      * Tests force_ocr configuration option
      */
     public function test_config_force_ocr(): void
@@ -644,6 +683,27 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 5);
+    }
+
+    /**
+     * Tests that force_ocr_pages config field is accepted for selective page OCR
+     */
+    public function test_config_force_ocr_pages(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/fake_memo.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_force_ocr_pages: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('ocr');
+
+        $config = Helpers::buildConfig(['force_ocr_pages' => [1], 'ocr' => ['backend' => 'tesseract', 'language' => 'eng']]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 1);
     }
 
     /**
