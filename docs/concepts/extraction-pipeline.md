@@ -1,248 +1,231 @@
 # Extraction Pipeline
 
-The extraction pipeline is the core workflow that transforms raw files into structured, processed content. Understanding this pipeline is essential for effectively using Kreuzberg and building custom extractors or processors.
+Every file Kreuzberg processes follows the same multi-stage pipeline. A PDF, a scanned image, a spreadsheet, an email attachment: they all enter at the top and come out as a structured `ExtractionResult` at the bottom. The stages run in a fixed order, but several of them are conditional. Caching can short-circuit the entire flow. OCR only runs when images are present. Post-processing steps only fire if you've configured them.
 
-## Pipeline Overview
+This page walks through each stage in detail so you understand what happens to your file, when, and why.
 
-Every extraction request flows through the same multi-stage pipeline, regardless of file format or configuration:
+---
+
+## How the Pipeline Works
 
 ```mermaid
 flowchart TD
-    Start([File Path or Bytes]) --> Cache{Cache<br/>Enabled?}
-    Cache -->|Yes| CheckCache{Result<br/>in Cache?}
-    Cache -->|No| MIME[MIME Type Detection]
-    CheckCache -->|Found| Return([Return Cached Result])
-    CheckCache -->|Not Found| MIME
+    Input(["Input: file path or raw bytes"]):::input
 
-    MIME --> Registry[Registry Lookup]
-    Registry --> Extractor[Format Extractor]
-    Extractor --> OCR{OCR<br/>Needed?}
+    Input --> S1["<b>1. Cache Lookup</b>\nHash file + config, check for stored result"]
+    S1 -->|Cache hit| FastReturn(["Return cached ExtractionResult"]):::cached
 
-    OCR -->|Yes| RunOCR[OCR Processing]
-    OCR -->|No| Pipeline[Post-Processing Pipeline]
-    RunOCR --> Pipeline
+    S1 -->|Cache miss| S2["<b>2. MIME Detection</b>\nResolve file type from extension or explicit param"]
+    S2 --> S3["<b>3. Registry Lookup</b>\nFind the right DocumentExtractor for this MIME type"]
+    S3 --> S4["<b>4. Format Extraction</b>\nRun the extractor: PDF, Excel, image, email, etc."]
 
-    Pipeline --> Validate[1. Validators]
-    Validate --> Quality[2. Quality Processing]
-    Quality --> Chunk[3. Chunking]
-    Chunk --> PostProc[4. Post-Processors]
-    PostProc --> StoreCache{Cache<br/>Enabled?}
+    S4 --> S5{"<b>5. OCR</b>\nImages present\nand OCR enabled?"}
+    S5 -->|Yes| OCR["Run OCR backend\n(Tesseract / PaddleOCR / EasyOCR)"]
+    S5 -->|No| S6
 
-    StoreCache -->|Yes| Store[Store in Cache]
-    StoreCache -->|No| Final([Return ExtractionResult])
-    Store --> Final
+    OCR --> S6["<b>6. Validators</b>\nCheck result meets requirements"]
+    S6 --> S7["<b>7. Quality + Chunking</b>\nScore quality, split into chunks"]
+    S7 --> S8["<b>8. Post-Processors</b>\nTransform result (Early → Middle → Late)"]
 
-    style Start fill:#e1f5ff
-    style Final fill:#e1f5ff
-    style Return fill:#c8e6c9
-    style Extractor fill:#fff9c4
-    style RunOCR fill:#ffccbc
-    style Pipeline fill:#f3e5f5
+    S8 --> S9["<b>9. Cache Store</b>\nSave result for future lookups"]
+    S9 --> Output(["Return ExtractionResult"]):::output
+
+    classDef input fill:#e3f2fd,stroke:#1565c0,color:#0d47a1
+    classDef output fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20
+    classDef cached fill:#fff8e1,stroke:#f9a825,color:#e65100
 ```
 
-## Stage Details
+The diagram above shows every stage in sequence. Let's break each one down.
 
-### 1. Cache Check
+---
 
-If caching is enabled (`cache=True` in `ExtractionConfig`), Kreuzberg first checks for a cached result:
+## 1. Cache Lookup
 
-- **Cache Key**: Generated from file path/bytes + configuration hash
-- **Cache Hit**: Returns cached `ExtractionResult` immediately (bypasses all processing)
-- **Cache Miss**: Proceeds to MIME detection
+When caching is enabled (`cache=True` in your `ExtractionConfig`), the pipeline starts by computing a hash from the file's content and your configuration. If a result with that exact hash already exists in the cache, it's returned immediately. No extraction, no OCR, no post-processing. The entire pipeline is skipped.
 
-Caching significantly improves performance for repeated extractions of the same file.
+This is significant for workloads that reprocess the same files. Repeated extractions of the same document go from hundreds of milliseconds to single-digit milliseconds.
 
-### 2. MIME Type Detection
+Cache keys are content-based, not path-based. If you rename a file but the bytes are identical, the cache still hits. If you change your config (switch OCR backends, adjust chunking), a new cache key is generated so stale results are never returned.
 
-MIME types determine which extractor handles the file. Detection happens in two ways:
+---
 
-- **Explicit**: If `mime_type` parameter is provided, validates it's supported
-- **Automatic**: Detects MIME type from file extension using internal mapping
+## 2. MIME Detection
 
-```mermaid
-flowchart LR
-    Input[File Input] --> HasMIME{MIME Type<br/>Provided?}
-    HasMIME -->|Yes| Validate[Validate MIME Type]
-    HasMIME -->|No| Detect[Detect from Extension]
-    Detect --> Validate
-    Validate --> Supported{Supported?}
-    Supported -->|Yes| Continue[Continue Pipeline]
-    Supported -->|No| Error([UnsupportedFormat Error])
+Before Kreuzberg can extract anything, it needs to know what format the file is. It resolves the MIME type through one of two paths:
 
-    style Input fill:#e1f5ff
-    style Continue fill:#c8e6c9
-    style Error fill:#ffcdd2
-```
+- **Explicit:** You pass `mime_type="application/pdf"` and Kreuzberg validates it against the list of supported types.
+- **Auto-detection:** Kreuzberg reads the file extension (e.g., `.pdf` → `application/pdf`) from an internal mapping table.
 
-Common MIME types include:
+If the resolved MIME type isn't in the supported list, the pipeline stops immediately with an `UnsupportedFormat` error. No compute is wasted on files Kreuzberg can't handle.
 
-- PDFs: `application/pdf`
-- Images: `image/jpeg`, `image/png`, etc.
-- Office: `application/vnd.openxmlformats-officedocument.wordprocessingml.document` (DOCX)
-- Text: `text/plain`, `text/markdown`, `application/xml`
+For the full details on how extension mapping, normalization, and validation work, see [MIME Detection](mime-detection.md).
 
-See the [Configuration Guide](../guides/configuration.md) for MIME type configuration details.
+---
 
-### 3. Registry Lookup
+## 3. Registry Lookup
 
-The extractor registry maps MIME types to `DocumentExtractor` implementations:
+With the MIME type resolved, Kreuzberg queries the extractor registry to find the `DocumentExtractor` that handles this format. The registry is a map from MIME types to extractor implementations, managed by the [plugin system](plugin-system.md).
+
+If multiple extractors are registered for the same MIME type (e.g., you registered a custom PDF extractor alongside the built-in one), the one with the higher `priority()` value is selected. All built-in extractors have a priority of 0, so any custom extractor with a priority above 0 takes precedence.
 
 ```rust title="registry_lookup.rs"
-// Retrieve the global extractor registry and look up handler for PDF files
 let registry = get_document_extractor_registry();
 let extractor = registry.get("application/pdf")?;
 ```
 
-If multiple extractors support the same MIME type, priority determines selection (higher priority wins).
+---
 
-### 4. Format Extraction
+## 4. Format Extraction
 
-The selected extractor processes the file using format-specific logic:
+This is the core of the pipeline. The selected extractor reads the file and produces an `ExtractionResult` containing the extracted text, metadata (author, title, creation date), page count, and detected language.
 
-- **PDF**: Extracts text using pdfium-render, optionally extracts images for OCR
-- **Excel**: Parses sheets with calamine, converts to structured tables
-- **Images**: Loads image data, routes to OCR backend
-- **XML/Text**: Streaming parser for memory efficiency
-- **Email**: Parses MIME structure, extracts body and attachments
-- **Office**: Extracts from DOCX/PPTX using format libraries
+Each file format has a tailored extraction strategy:
 
-Each extractor returns an `ExtractionResult` containing:
+| Format | What happens |
+|--------|-------------|
+| **PDF** | Text is extracted directly from the PDF text layer using pdfium-render. If the PDF contains embedded images (scanned pages, diagrams), those images are collected and passed to the OCR stage. |
+| **Excel / Spreadsheets** | Each sheet is parsed individually using calamine. Cell values are assembled into structured Markdown tables, preserving column alignment. |
+| **Images** (JPEG, PNG, TIFF, etc.) | The image bytes are loaded into memory and forwarded directly to the OCR backend. There is no text layer to extract from an image. |
+| **XML / Plain text** | A streaming parser processes the file incrementally. This keeps memory usage constant even for multi-gigabyte files because the entire file is never loaded at once. |
+| **Email** (`.eml`, `.msg`) | The MIME structure is parsed. The email body (plain text or HTML) is extracted as the main content. Attachments are extracted recursively using the same pipeline. |
+| **Office** (DOCX, PPTX) | The file is a ZIP archive containing XML. Kreuzberg opens the archive, locates the content XML parts, and parses the document structure into text. |
 
-- `content`: Extracted text
-- `metadata`: File metadata (format-specific)
-- `page_count`, `language`, etc.
+The extraction result at this point contains raw extracted text. It hasn't been validated, scored, or chunked yet.
 
-### 5. OCR Processing (Optional)
+---
 
-If the file contains images and OCR is enabled, Kreuzberg processes images through the configured OCR backend:
+## 5. OCR (Conditional)
+
+OCR runs only when two conditions are true: the file contains images (or is an image itself), and OCR is enabled in the configuration. Even when both conditions are met, Kreuzberg applies a third check: if the format extractor already produced text, OCR is skipped. This avoids redundant processing on PDFs that have a searchable text layer.
+
+You can override this behavior with `force_ocr=True`, which tells Kreuzberg to always run OCR regardless of whether text was already extracted. This is useful for PDFs where the text layer is unreliable or incomplete.
 
 ```mermaid
-flowchart TD
-    Check{Has Images<br/>+ OCR Config?} -->|No| Skip[Skip OCR]
-    Check -->|Yes| ForceOCR{force_ocr<br/>= True?}
+flowchart LR
+    A{"Images present?"} -->|No| Skip(["Skip OCR"])
 
-    ForceOCR -->|Yes| RunOCR[Run OCR on All Pages]
-    ForceOCR -->|No| HasText{Extracted<br/>Text?}
+    A -->|Yes| B{"force_ocr?"}
+    B -->|Yes| Run["Run OCR backend"]
+    B -->|No| C{"Text already\nextracted?"}
+    C -->|Yes| Skip
+    C -->|No| Run
 
-    HasText -->|Yes| Skip
-    HasText -->|No| RunOCR
+    Run --> Merge["Merge OCR output\nwith extracted text"]
 
-    RunOCR --> Backend[OCR Backend]
-    Backend --> Tesseract[Tesseract]
-    Backend --> EasyOCR[EasyOCR]
-    Backend --> PaddleOCR[PaddleOCR]
-
-    Tesseract --> Combine[Combine with Extracted Text]
-    EasyOCR --> Combine
-    PaddleOCR --> Combine
-    Skip --> Continue([Continue Pipeline])
-    Combine --> Continue
-
-    style Continue fill:#c8e6c9
+    style Skip fill:#f5f5f5,stroke:#bdbdbd
+    style Run fill:#e8f5e9,stroke:#2e7d32
 ```
 
-OCR configuration controls:
+Kreuzberg ships three OCR backends:
 
-- **Backend selection**: Tesseract (default), EasyOCR, PaddleOCR
-- **Language**: OCR language models to use
-- **force_ocr**: Always run OCR even if text exists
-- **Caching**: OCR results cached separately for performance
+| Backend | Engine | When to use it |
+|---------|--------|----------------|
+| **Tesseract** | Native Rust bindings | Default. Fast, solid accuracy for Latin scripts. Good general-purpose choice. |
+| **PaddleOCR** | ONNX Runtime | Best accuracy for Chinese, Japanese, Korean (CJK) scripts. Runs natively without Python. |
+| **EasyOCR** | Python + PyTorch | Supports 80+ languages including Arabic, Hindi, Thai, and other complex scripts. Only available through the Python bindings. |
 
-### 6. Post-Processing Pipeline
+When OCR completes, the OCR output is merged with any text the format extractor already produced. The merged result moves to post-processing.
 
-After extraction, results pass through a configurable post-processing pipeline:
+---
 
-#### 6.1 Validators
+## 6. Validators
 
-Validators run first and can fail-fast if results don't meet requirements:
+Validators are the first post-processing step. They inspect the `ExtractionResult` and decide whether it meets your requirements. If a validator rejects the result, the pipeline stops immediately and the error is returned to the caller. No further processing happens.
 
-```python title="min_length_validator.py"
-# Validator that enforces minimum content length requirement
+This is intentionally strict. Validators exist to catch results that are fundamentally wrong (empty text, garbled output, suspiciously short content) before downstream systems consume them.
+
+```python title="example_validator.py"
 class MinLengthValidator:
-    def validate(self, result: ExtractionResult, config: ExtractionConfig) -> None:
+    def validate(self, result, config):
         if len(result.content) < 100:
             raise ValidationError("Extracted text too short")
 ```
 
-Validator errors bubble up immediately and stop processing.
+You register validators through the plugin system. See [Plugin System](plugin-system.md) for details.
 
-#### 6.2 Quality Processing
+---
 
-If `enable_quality_processing=True`, Kreuzberg calculates a quality score based on:
+## 7. Quality Scoring + Chunking
 
-- Text/non-text character ratio
-- Word frequency distribution
-- Formatting artifacts (repeated characters, etc.)
-- Metadata consistency
+These two steps run after validation.
 
-Quality score added to `result.quality_score`.
+**Quality scoring** is optional. When `enable_quality_processing=True`, Kreuzberg analyzes the extracted text and assigns a numeric score between 0.0 and 1.0. The score factors in the ratio of alphabetic characters to non-text characters, word frequency distribution (gibberish scores low), and the presence of formatting artifacts like repeated whitespace or encoding errors. The result is stored in `result.quality_score`.
 
-#### 6.3 Chunking
+**Chunking** is also optional. When you provide a `ChunkingConfig`, the extracted text is split into overlapping fragments with configurable maximum size and overlap. Each chunk records its start and end offset relative to the original text.
 
-If `chunking` config is provided, text is split into overlapping chunks:
-
-```python title="chunking_config_example.py"
+```python title="chunking_config.py"
 config = ExtractionConfig(
-    chunking=ChunkingConfig(
-        max_chars=1000,
-        max_overlap=100
-    )
+    chunking=ChunkingConfig(max_chars=1000, max_overlap=100)
 )
+# result.chunks → list of Chunk objects with .text, .start_offset, .end_offset
 ```
 
-Chunks added to `result.chunks` with start/end offsets.
+Chunking is designed for RAG (Retrieval-Augmented Generation) pipelines. The overlap ensures that context at chunk boundaries isn't lost when chunks are embedded and retrieved independently.
 
-#### 6.4 Post-Processors
+---
 
-Post-processors run in order by stage (Early → Middle → Late):
+## 8. Post-Processors
 
-```python title="redaction_processor.py"
-# Post-processor that masks redacted content with asterisks
-class RedactionProcessor:
-    def process(self, result: ExtractionResult, config: ExtractionConfig) -> ExtractionResult:
-        result.content = result.content.replace("[REDACTED]", "***")
-        return result
-```
+Post-processors are the final transformation step. They receive the `ExtractionResult` and can modify it in any way: clean up text, extract entities, redact sensitive content, reformat output, or add custom metadata.
 
-Post-processor errors are logged but don't stop the pipeline.
+Post-processors run in three ordered stages so you can control what happens first:
 
-### 7. Cache Storage
+| Stage | Purpose | Examples |
+|-------|---------|---------|
+| **Early** | Raw text cleanup | Strip control characters, fix encoding issues, normalize whitespace |
+| **Middle** | Content analysis | Extract named entities, detect language, classify document type |
+| **Late** | Final transformations | Apply output formatting, generate summaries, redact PII |
 
-If caching is enabled and extraction succeeded, the result is stored in cache for future requests.
+An important design choice: **post-processor errors do not fail the extraction.** If a post-processor throws an exception, the error is logged and the pipeline continues with the result as-is. This means a buggy post-processor can't take down your extraction pipeline.
 
-### 8. Result Return
+---
 
-The final `ExtractionResult` is returned to the caller with:
+## 9. Cache Store + Return
 
-- Extracted and processed content
-- Complete metadata
-- Optional chunks and embeddings
-- Processing history
+If caching is enabled and the extraction completed without errors, the result is written to the cache for future lookups.
 
-## Performance Optimizations
+The final `ExtractionResult` returned to you contains:
 
-The pipeline includes several optimizations:
+- **`content`** - the fully processed text
+- **`metadata`** — format-specific metadata (author, title, creation date, page count, etc.)
+- **`chunks`** — optional list of text chunks with offsets (if chunking was configured)
+- **`quality_score`** — optional quality assessment (if quality processing was enabled)
+- **Processing history** — a trace of which stages ran, useful for debugging
 
-1. **Early cache returns**: Cached results skip all processing
-2. **Lazy OCR**: Only runs when necessary (no text or `force_ocr`)
-3. **Streaming parsers**: XML and text files stream instead of loading into memory
-4. **Concurrent batch extraction**: Multiple files processed in parallel
-5. **Global Tokio runtime**: Shared async runtime eliminates initialization overhead
+---
 
-## Error Handling
+## Error Handling Strategy
 
-Errors at different stages are handled differently:
+The pipeline follows a deliberate error strategy: fail early for things the developer can fix, be resilient for things that are beyond their control.
 
-- **Validation errors**: Fail immediately (invalid file path, unsupported format)
-- **Extraction errors**: Bubble up as `ParsingError` (corrupted file, format-specific issues)
-- **System errors**: Always bubble up (OSError, RuntimeError, MemoryError)
-- **Post-processor errors**: Logged but don't fail extraction
+| Stage | Error type | What happens |
+|-------|-----------|-------------|
+| MIME detection | `UnsupportedFormat` | Pipeline stops. The file type isn't supported. |
+| Format extraction | `ParsingError` | Pipeline stops. The file is corrupt or the format couldn't be parsed. |
+| Validators | `ValidationError` | Pipeline stops. The result didn't meet your defined requirements. |
+| Post-processors | Any exception | Error is logged. Pipeline continues. Result is returned without that transformation. |
+| System | `OSError`, `MemoryError` | Always propagated. These indicate infrastructure problems. |
 
-See [Error Handling](../reference/errors.md) for complete error documentation.
+For the complete error taxonomy, see [Error Handling](../reference/errors.md).
 
-## Related Documentation
+---
 
-- [Architecture](architecture.md) - Overall system design
-- [Configuration Guide](../guides/configuration.md) - How to configure the pipeline
-- [OCR Guide](../guides/ocr.md) - Detailed OCR configuration
-- [Creating Plugins](../guides/plugins.md) - How to build custom extractors and processors
+## Built-in Optimizations
+
+The pipeline includes several optimizations that run automatically without configuration:
+
+- **Cache short-circuits** bypass every processing stage when a cached result exists
+- **Lazy OCR** avoids redundant OCR when the format extractor already produced usable text
+- **Streaming parsers** process XML, text, and archive files incrementally with constant memory
+- **Parallel batching** with `batch_extract_file` distributes files across all CPU cores via Tokio
+- **Shared async runtime** reuses a single Tokio runtime across calls, avoiding repeated initialization
+
+---
+
+## What to Read Next
+
+- [Architecture](architecture.md) — how the system is designed
+- [Plugin System](plugin-system.md) — building custom extractors, OCR backends, and processors
+- [MIME Detection](mime-detection.md) — how file types are identified
+- [Configuration Guide](../guides/configuration.md) — tuning the pipeline
+- [OCR Guide](../guides/ocr.md) — configuring OCR backends

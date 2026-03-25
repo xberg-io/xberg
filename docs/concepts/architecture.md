@@ -1,77 +1,86 @@
 # Architecture
 
-Kreuzberg is built with a Rust-first, multi-language architecture designed for maximum performance while maintaining accessibility across different programming ecosystems. The core extraction logic is implemented in Rust, with thin bindings for Python, TypeScript, and Ruby.
+Kreuzberg is a document extraction library with a Rust core and native bindings for Python, TypeScript, Ruby, and more. The core handles all the expensive work (PDF parsing, OCR, text processing) and exposes it through thin language-specific wrappers. Your code calls directly into compiled Rust. No subprocesses, no serialization, no IPC overhead.
 
-## Design Philosophy
+---
 
-The architecture follows three key principles:
+## Design Principles
 
-1. **Rust Core**: All performance-critical operations (PDF parsing, OCR, text processing) are implemented in Rust for speed, safety, and memory efficiency
-2. **Language-Agnostic Plugins**: The plugin system works across language boundaries, allowing Python OCR backends to integrate directly with the Rust core
-3. **Zero-Copy Boundaries**: Data passes across FFI boundaries efficiently using zero-copy techniques where possible
+Three ideas shape how Kreuzberg is built:
 
-## Multi-Language Architecture
+1. **Rust does the heavy lifting.** Every performance-critical operation runs as native Rust code - compiled, optimized, and fast.
+2. **Plugins cross language boundaries.** A Python OCR backend can register itself with the Rust core and participate in the extraction pipeline as a first-class citizen.
+3. **Minimize data copying.** Data passes across FFI boundaries using zero-copy techniques wherever possible. When a Python plugin receives file bytes, it gets a buffer protocol view into Rust-owned memory, not a copy.
+
+---
+
+## System Layers
 
 ```mermaid
-graph TB
-    subgraph "Language Bindings"
-        Python["Python Package<br/>(packages/python)"]
-        TypeScriptNode["TypeScript/Node.js Package<br/>(packages/typescript)"]
-        TypeScriptWasm["TypeScript/WASM Package<br/>(packages/wasm)"]
-        Ruby["Ruby Gem<br/>(packages/ruby)"]
+flowchart TB
+    subgraph your_code ["Your Code"]
+        Python["Python"]
+        Node["TypeScript\nNode.js"]
+        Wasm["TypeScript\nWASM"]
+        Ruby["Ruby"]
     end
 
-    subgraph "FFI Bridges"
-        PyO3["PyO3 Bridge<br/>(crates/kreuzberg-py)"]
-        NAPIRS["NAPI-RS Bridge<br/>(crates/kreuzberg-node)"]
-        WasmBindgen["wasm-bindgen<br/>(crates/kreuzberg-wasm)"]
-        Magnus["Magnus Bridge<br/>(crates/kreuzberg-ruby)"]
+    subgraph bridges ["FFI Bridges"]
+        PyO3["PyO3"]
+        NAPI["NAPI-RS"]
+        WB["wasm-bindgen"]
+        Magnus["Magnus"]
     end
 
-    subgraph "Rust Core"
-        Core["Kreuzberg Core<br/>(crates/kreuzberg)"]
+    subgraph engine ["Rust Core"]
+        Core["kreuzberg\ncrate"]
     end
 
     Python --> PyO3
-    TypeScriptNode --> NAPIRS
-    TypeScriptWasm --> WasmBindgen
+    Node --> NAPI
+    Wasm --> WB
     Ruby --> Magnus
+
     PyO3 --> Core
-    NAPIRS --> Core
-    WasmBindgen --> Core
+    NAPI --> Core
+    WB --> Core
     Magnus --> Core
 
-    style Core fill:#e1f5ff
-    style PyO3 fill:#ffe1e1
-    style NAPIRS fill:#ffe1e1
-    style WasmBindgen fill:#fff3e0
-    style Magnus fill:#ffe1e1
+    style Core fill:#e1f5ff,stroke:#0288d1
+    style PyO3 fill:#ffe1e1,stroke:#c62828
+    style NAPI fill:#ffe1e1,stroke:#c62828
+    style WB fill:#fff3e0,stroke:#ef6c00
+    style Magnus fill:#ffe1e1,stroke:#c62828
 ```
 
-### TypeScript Bindings: Native vs WASM
+Your code sits at the top. It calls into a bridge layer that translates types between your language and Rust. The bridge forwards the call to the Rust core, which does the actual extraction, OCR, and text processing. Results come back through the same bridge.
 
-Kreuzberg provides two TypeScript implementations optimized for different environments:
+### TypeScript: Native vs WASM
 
-- **Native (`@kreuzberg/node`)**: Uses NAPI-RS to compile native C++ bindings. Provides maximum performance on Node.js, Bun, and Deno. Requires compilation but delivers native speeds.
-- **WASM (`@kreuzberg/wasm`)**: Uses wasm-bindgen to compile pure WebAssembly. Works in browsers, Cloudflare Workers, and any JavaScript runtime. 60-80% of native speed with zero native dependencies.
+There are two TypeScript packages because server and browser environments have fundamentally different constraints:
 
-See [Installation Guide](../getting-started/installation.md#typescript) for which to use in your environment.
+- **`@kreuzberg/node`** (native) - compiled via NAPI-RS. Maximum performance on Node.js, Bun, and Deno. Requires a platform-specific native binary.
+- **`@kreuzberg/wasm`** (WebAssembly) - compiled via wasm-bindgen. Runs in browsers, Cloudflare Workers, Vercel Edge, and any JavaScript runtime. About 60-80% of native speed, but zero native dependencies.
+
+Rule of thumb: use native on servers, WASM in browsers and edge runtimes. See the [Installation Guide](../getting-started/installation.md#typescript) for setup.
+
+---
 
 ## Rust Core Structure
 
-The Rust core (`crates/kreuzberg`) is organized into distinct modules, each responsible for a specific aspect of document processing:
+The core crate (`crates/kreuzberg`) is organized into modules with clear responsibilities:
 
 ```mermaid
-graph LR
-    subgraph "Kreuzberg Core Crate"
-        Core["core/<br/>Extraction orchestration<br/>MIME detection<br/>Configuration"]
-        Plugins["plugins/<br/>Plugin system<br/>Registry pattern<br/>Trait definitions"]
-        Extraction["extraction/<br/>Format implementations<br/>PDF, Excel, Email<br/>XML, Text, HTML"]
-        Extractors["extractors/<br/>Plugin wrappers<br/>MIME type mapping<br/>Registry registration"]
-        OCR["ocr/<br/>OCR processing<br/>Tesseract backend<br/>Table extraction"]
-        Text["text/<br/>Token reduction<br/>Quality scoring<br/>String utilities"]
-        Types["types/<br/>Core data structures<br/>ExtractionResult<br/>Metadata"]
-        Error["error/<br/>Error types<br/>Result aliases"]
+flowchart LR
+    subgraph crate ["kreuzberg crate"]
+        Core["core/\nOrchestration\nPipeline entry points"]
+        Plugins["plugins/\nTrait definitions\nRegistries"]
+        Extractors["extractors/\nMIME → handler\nmapping"]
+        Extraction["extraction/\nPDF · Excel · Email\nHTML · XML · Text"]
+        OCR["ocr/\nTesseract\nTable detection"]
+        Text["text/\nToken reduction\nQuality scoring"]
+        Types["types/\nExtractionResult\nMetadata · Chunk"]
+        Error["error/\nKreuzbergError"]
     end
 
     Core --> Plugins
@@ -83,57 +92,40 @@ graph LR
     Core --> Types
     Core --> Error
 
-    style Core fill:#bbdefb
-    style Plugins fill:#c8e6c9
-    style Extraction fill:#fff9c4
-    style Extractors fill:#ffccbc
+    style Core fill:#bbdefb,stroke:#1565c0
+    style Plugins fill:#c8e6c9,stroke:#2e7d32
+    style Extraction fill:#fff9c4,stroke:#f9a825
+    style Extractors fill:#ffccbc,stroke:#d84315
 ```
 
-### Module Responsibilities
+| Module | Responsibility |
+|--------|---------------|
+| **core/** | Main entry points (`extract_file`, `extract_bytes`), MIME detection, config loading, pipeline orchestration |
+| **plugins/** | Plugin trait definitions (`DocumentExtractor`, `OcrBackend`, `PostProcessor`, `Validator`) and the registry system |
+| **extractors/** | Maps MIME types to the correct extractor implementation and registers them with the plugin system |
+| **extraction/** | Format-specific extraction logic - PDF via pdfium, Excel via calamine, email parsing, etc. |
+| **ocr/** | OCR orchestration - Tesseract bindings, HOCR parsing, table detection |
+| **text/** | Text processing utilities - token reduction, quality scoring, string manipulation |
+| **types/** | Shared data structures: `ExtractionResult`, `Metadata`, `Chunk`, and friends |
+| **error/** | Centralized error handling with the `KreuzbergError` enum |
 
-- **core/**: Main extraction entry points (`extract_file`, `extract_bytes`), MIME detection, configuration loading, pipeline orchestration
-- **plugins/**: Plugin trait definitions (`DocumentExtractor`, `OcrBackend`, `PostProcessor`, `Validator`), registry implementation
-- **extraction/**: Core extraction implementations for different formats (PDF via pdfium, Excel via calamine, etc.)
-- **extractors/**: `DocumentExtractor` trait wrappers that register format handlers with the plugin system
-- **ocr/**: OCR processing orchestration, Tesseract integration, HOCR parsing, table detection
-- **text/**: Text processing utilities including token reduction, quality scoring, string manipulation
-- **types/**: Shared type definitions (`ExtractionResult`, `Metadata`, `Chunk`, etc.)
-- **error/**: Centralized error handling with `KreuzbergError` enum
+---
 
 ## Why Rust?
 
-Rust was chosen for the core implementation due to several compelling advantages:
+**Speed.** Rust compiles to native machine code with LLVM optimizations. PDF parsing uses native pdfium bindings with no interpreter overhead. Text processing uses SIMD instructions to handle multiple characters per CPU cycle. Batch extraction runs on all CPU cores through Tokio's async runtime.
 
-### Performance
+**Safety.** Rust's type system and ownership model catch entire categories of bugs at compile time. No null pointer exceptions, no data races, no buffer overflows, no use-after-free. If it compiles, those runtime errors can't happen.
 
-Rust provides significant performance improvements over pure Python implementations:
+**Real concurrency.** Unlike Python (limited by the GIL), Rust executes on all available cores simultaneously. Tokio's work-stealing scheduler distributes async tasks efficiently. File I/O is non-blocking, so threads never stall waiting on disk.
 
-- **PDF parsing**: Native pdfium bindings eliminate Python overhead
-- **Text processing**: SIMD-accelerated string operations for token reduction
-- **Concurrent extraction**: True parallelism with Tokio's async runtime
-- **Memory efficiency**: Zero-copy operations and streaming parsers for large files
+For detailed performance analysis, see [Performance](performance.md).
 
-### Safety
+---
 
-Rust's type system and ownership model prevent entire classes of bugs:
+## Using Kreuzberg from Rust
 
-- **No null pointer exceptions**: Option types enforce explicit handling
-- **No data races**: Compiler-enforced thread safety with Send/Sync
-- **No buffer overflows**: Bounds checking at compile time
-- **No use-after-free**: Ownership rules prevent memory errors
-
-### Concurrency
-
-Built-in async/await with Tokio enables efficient parallel processing:
-
-- **Batch extraction**: Process multiple files concurrently
-- **Non-blocking I/O**: Async file operations never block threads
-- **Work-stealing**: Tokio scheduler maximizes CPU utilization
-- **Backpressure**: Async streams handle large datasets gracefully
-
-## Standalone Rust Library
-
-The Rust core (`crates/kreuzberg`) is a fully functional standalone library that can be used directly in Rust projects without any language bindings:
+The Rust core is a standalone library. You don't need Python or Node.js to use it:
 
 ```rust title="main.rs"
 use kreuzberg::{extract_file_sync, ExtractionConfig};
@@ -146,14 +138,13 @@ fn main() -> kreuzberg::Result<()> {
 }
 ```
 
-This makes Kreuzberg suitable for:
+This makes Kreuzberg a fit for Rust-native applications, CLI tools, high-performance API servers, and embedded systems where Python or Node.js aren't practical.
 
-- Rust-native applications
-- High-performance servers and APIs
-- Command-line tools
-- Embedded systems (where Python/Node.js are impractical)
+---
 
-## Related Documentation
+## What to Read Next
 
-- [Creating Plugins](../guides/plugins.md) - Guide to building custom plugins
-- [API Reference](../reference/api-python.md) - Python API documentation
+- [Extraction Pipeline](extraction-pipeline.md) - how files flow through the system stage by stage
+- [Plugin System](plugin-system.md) - extending Kreuzberg with custom extractors, OCR backends, and processors
+- [Performance](performance.md) - why Rust matters for extraction performance
+- [Creating Plugins](../guides/plugins.md) - step-by-step plugin development guide

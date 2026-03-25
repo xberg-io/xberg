@@ -1,350 +1,247 @@
 # Performance
 
-Kreuzberg's Rust-first architecture delivers significant performance improvements over pure Python implementations. This page explains the performance benefits, benchmarking methodology, and optimization techniques.
+Kreuzberg's core is written in Rust. That single decision is the source of most of the performance advantages described on this page: native compilation, real multi-core parallelism, zero-copy memory handling, and no garbage collector pauses. If you're coming from a Python-based extraction library, the difference is significant.
 
-## Performance Benefits
+---
 
-The Rust core provides significant performance improvements over pure Python implementations through native compilation, zero-copy operations, and efficient async concurrency. For detailed performance comparisons, run the benchmarking suite included in the project.
+## Rust vs Python: Where the Speed Comes From
 
-## Why Rust is Faster
+### Native Machine Code
 
-### 1. Native Compilation
-
-Rust compiles to native machine code with aggressive optimizations:
+Python runs through an interpreter (CPython) that evaluates code line by line at runtime. Rust compiles to native machine code ahead of time, with the full weight of LLVM optimizations applied before your program starts.
 
 ```mermaid
 flowchart LR
-    subgraph "Python"
-        PySource[Python Code] --> Interpret[Interpreter<br/>CPython]
-        Interpret --> Execute[Execution]
+    subgraph python ["Python runtime"]
+        direction LR
+        P1["Source\n.py"] --> P2["Bytecode\n.pyc"] --> P3["CPython\ninterpreter"]
     end
 
-    subgraph "Rust"
-        RustSource[Rust Code] --> Compile[Compiler<br/>LLVM]
-        Compile --> Optimize[Optimizations<br/>Inlining, SIMD, etc.]
-        Optimize --> Native[Native Machine Code]
-        Native --> Execute2[Execution]
+    subgraph rust ["Rust compilation"]
+        direction LR
+        R1["Source\n.rs"] --> R2["LLVM\noptimizer"] --> R3["Native\nbinary"]
     end
 
-    Execute -.->|significantly slower| Execute2
+    P3 -.- note1["Interpreted at runtime\n⚡ slower"]
+    R3 -.- note2["Runs directly on CPU\n⚡ faster"]
 
-    style Execute2 fill:#c8e6c9
-    style Execute fill:#ffcdd2
+    style P3 fill:#ffcdd2
+    style R3 fill:#c8e6c9
+    style note1 fill:none,stroke:none,color:#b71c1c
+    style note2 fill:none,stroke:none,color:#2e7d32
 ```
 
-**Compiler Optimizations:**
+What the LLVM optimizer does before your code ever runs:
 
-- **Inlining**: Small functions eliminated, reducing call overhead
-- **Dead code elimination**: Unused code removed
-- **Loop unrolling**: Loops optimized for CPU pipelines
-- **SIMD**: Single Instruction Multiple Data for parallel operations
+- **Inlining:** small function calls are replaced with their body, removing call overhead entirely
+- **Dead code elimination:** unused branches are stripped out
+- **Loop unrolling:** hot loops are flattened for CPU pipelines
+- **SIMD vectorization:** character-by-character operations become parallel vector operations
 
-### 2. Zero-Copy Operations
+### Zero-Copy Memory
 
-Rust's ownership model enables zero-copy string slicing and byte buffer handling:
+In document extraction, you spend a lot of time slicing strings: pulling paragraphs out of pages, splitting tokens, building chunks. How a language handles string slicing matters.
 
-```python title="performance_example.py"
-# Python string slicing always allocates a new object due to immutability
-text = content[100:500]  # New string object created (immutable)
+Python creates a new string object for every slice. Rust borrows a reference into the original memory with no allocation and no copy.
+
+```python title="python_slicing.py"
+text = content[100:500]  # allocates a brand-new string object
 ```
 
-```rust title="performance_example.rs"
-// Rust borrows a string slice without allocating new memory
-let text: &str = &content[100..500];  // Borrows slice, no allocation
+```rust title="rust_slicing.rs"
+let text: &str = &content[100..500];  // pointer + length, zero allocation
 ```
 
-**Impact:**
+The practical impact: less memory pressure, fewer allocations for the allocator to track, and better CPU cache hit rates because the working set stays small.
 
-- **Python**: String slicing always allocates a new object due to immutability, incurring memory and CPU overhead
-- **Rust**: Borrowing a slice costs zero memory allocations—the borrow is a pointer + length
-- **Performance gain**: Rust's zero-copy approach eliminates redundant allocations for parsing and text processing
-- **Better cache locality**: Fewer allocations mean smaller memory footprint and improved CPU cache hits
+### SIMD Acceleration
 
-### 3. SIMD Acceleration
+Some of Kreuzberg's text processing hot paths use SIMD (Single Instruction, Multiple Data) to process 16 or 32 characters in a single CPU instruction instead of one at a time:
 
-Text processing hot paths use SIMD for parallel operations:
+| Operation | SIMD speedup |
+|-----------|-------------|
+| Whitespace detection (token reduction) | ~37x |
+| Character classification (quality scoring) | ~27x |
+| Character counting (string utilities) | ~15-20x |
 
-```rust title="performance_example.rs"
-// SIMD instruction processes 16 characters simultaneously
-let chunk = unsafe { _mm_loadu_si128(ptr as *const __m128i) };
-let spaces = _mm_cmpeq_epi8(chunk, space_vec);
-```
+### True Multi-Core Parallelism
 
-**SIMD Benefits:**
+Python's Global Interpreter Lock (GIL) allows only one thread to execute Python bytecode at a time, even on machines with many cores. Rust has no such restriction. Kreuzberg uses Tokio's async runtime with a work-stealing scheduler to spread extraction work across all available cores.
 
-- **Token reduction**: 37x faster with SIMD whitespace detection
-- **Quality scoring**: 27x faster with SIMD character classification
-- **String utilities**: 15-20x faster character counting
-
-### 4. Async Concurrency
-
-Tokio's work-stealing scheduler enables true parallelism:
-
-```python title="performance_example.py"
-# Python GIL limits concurrency to single-threaded execution
+```python title="python_parallel.py"
 with ThreadPoolExecutor() as executor:
-    results = executor.map(extract_file, files)  # Only one thread executes Python at a time
-
-# Rust async runtime enables true multi-core parallelism
-let results = batch_extract_file(&files, None, &config).await?;  // All cores utilized
+    results = executor.map(extract_file, files)  # GIL: one thread at a time
 ```
 
-**Concurrency Benefits:**
+```rust title="rust_parallel.rs"
+let results = batch_extract_file(&files, None, &config).await?;  # all cores
+```
 
-- **Batch extraction**: Near-linear scaling with CPU cores
-- **No GIL**: All cores execute simultaneously
-- **Async I/O**: Thousands of concurrent file operations
+Batch extraction scales near-linearly with core count.
 
-### 5. Memory Efficiency
+### No Garbage Collector
 
-Rust's ownership model eliminates garbage collection overhead:
+Python's garbage collector periodically pauses execution to scan for unreachable objects. Rust uses deterministic drop semantics: memory is freed the instant a value goes out of scope. No scans, no pauses, predictable latency.
 
 ```mermaid
-graph TB
-    subgraph "Python Memory"
-        Alloc1[Allocate Object]
-        Use1[Use Object]
-        GC1[Garbage Collector<br/>Scans + Pauses]
-        Free1[Free Memory]
-        Alloc1 --> Use1 --> GC1 --> Free1
+flowchart LR
+    subgraph python ["Python"]
+        direction LR
+        PA[Allocate] --> PU[Use] --> PG["GC pause\n🔴 scans heap"]:::bad --> PF[Free]
     end
 
-    subgraph "Rust Memory"
-        Alloc2[Allocate Object]
-        Use2[Use Object]
-        Drop2[Drop Out of Scope<br/>Immediate Free]
-        Alloc2 --> Use2 --> Drop2
+    subgraph rust ["Rust"]
+        direction LR
+        RA[Allocate] --> RU[Use] --> RD["Drop\n🟢 instant free"]:::good
     end
 
-    GC1 -.->|Pauses execution| Alloc1
-
-    style Drop2 fill:#c8e6c9
-    style GC1 fill:#ffcdd2
+    classDef bad fill:#ffcdd2,stroke:#b71c1c
+    classDef good fill:#c8e6c9,stroke:#2e7d32
 ```
 
-**Memory Benefits:**
-
-- **No GC pauses**: Deterministic performance
-- **Lower peak memory**: RAII frees resources immediately
-- **Better cache utilization**: Smaller memory footprint
+---
 
 ## Streaming Parsers
 
-For large files (multi-GB XML, text, archives), Kreuzberg uses streaming parsers that process data incrementally:
+When you're extracting a 5 GB XML file or a large archive, loading everything into memory doesn't work. Kreuzberg's streaming parsers read and process data in small chunks, keeping memory usage constant regardless of file size.
 
 ```mermaid
-flowchart LR
-    subgraph "Loading Parser"
-        File1[Large File<br/>5 GB] --> Load[Load Entire File<br/>into Memory]
-        Load --> Parse1[Parse]
-        Parse1 --> Result1[Result]
+flowchart TB
+    subgraph load ["Traditional: load-then-parse"]
+        direction TB
+        L1["📄 5 GB file"] --> L2["Load entire file\ninto memory\n💾 5 GB RAM"]:::bad --> L3["Parse"]
     end
 
-    subgraph "Streaming Parser"
-        File2[Large File<br/>5 GB] --> Stream[Read Chunks<br/>4 KB at a time]
-        Stream --> Parse2[Parse Incrementally]
-        Parse2 --> Result2[Result]
+    subgraph stream ["Kreuzberg: stream-and-parse"]
+        direction TB
+        S1["📄 5 GB file"] --> S2["Read 4 KB chunks\n💾 4 KB RAM"]:::good --> S3["Parse incrementally"]
+        S3 -->|next chunk| S2
     end
 
-    Load -.->|5 GB memory| Result1
-    Stream -.->|4 KB memory| Result2
-
-    style Result2 fill:#c8e6c9
-    style Result1 fill:#ffcdd2
+    classDef bad fill:#ffcdd2,stroke:#b71c1c
+    classDef good fill:#c8e6c9,stroke:#2e7d32
 ```
 
-**Streaming Benefits:**
+Streaming extractors:
 
-- **Constant memory**: Process 100GB file with 4KB memory
-- **Faster startup**: Begin processing immediately
-- **Better cache performance**: Small working set
+- **XML:** `quick-xml` event-based streaming
+- **Plain text:** line-by-line reading
+- **Archives:** on-the-fly decompression (no temp files)
 
-**Streaming Extractors:**
+---
 
-- **XMLExtractor**: Streams with `quick-xml`
-- **TextExtractor**: Line-by-line streaming
-- **ArchiveExtractor**: Decompresses on-the-fly
+## Native vs WASM: TypeScript Performance
 
-## Native vs WASM Performance
+Kreuzberg's TypeScript bindings come in two flavors. The performance difference comes down to native OS access vs sandboxed execution.
 
-Kreuzberg offers two TypeScript implementations with different performance characteristics:
+| Metric | Native (`@kreuzberg/node`) | WASM (`@kreuzberg/wasm`) | Gap |
+|--------|---------------------------|--------------------------|-----|
+| PDF extraction | ~100ms | ~125-165ms | 1.25-1.65x slower |
+| OCR processing | ~500ms | ~625-825ms | 1.25-1.65x slower |
+| Batch (100 files) | ~80ms/file | ~100-130ms/file | 1.25-1.65x slower |
+| Memory overhead | 20-50MB | 50-150MB | 2-5x more |
 
-### Speed Comparison
+**Why WASM is slower:** WASM runs inside a sandbox. JIT warm-up adds startup cost, a linear memory model replaces native pointers, every call across the WASM-JS boundary involves marshalling, parallelism requires Web Workers (with message-passing overhead), and the sandbox can't directly access file system or OS APIs.
 
-| Metric | Native (`@kreuzberg/node`) | WASM (`@kreuzberg/wasm`) | Ratio |
-|--------|---------------------------|------------------------|-------|
-| PDF extraction | ~100ms (baseline) | ~125-165ms | 1.25-1.65x slower |
-| OCR extraction | ~500ms (baseline) | ~625-825ms | 1.25-1.65x slower |
-| Batch processing (100 files) | ~80ms/file | ~100-130ms/file | 1.25-1.65x slower |
-| Memory overhead | Minimal (20-50MB) | Higher (50-150MB) | 2-5x more |
+**Which to choose:**
 
-**Speed baseline**: All percentages assume Kreuzberg native bindings as 100%. Native compilation and direct OS-level APIs enable maximum throughput.
+- **Server-side** (Node.js, Bun, Deno): use native. You want maximum throughput.
+- **Browser / edge** (Cloudflare Workers, Vercel Edge): use WASM. It's the only option, and the 25-65% overhead is fine for interactive use.
 
-### Why WASM is Slower
+---
 
-WASM runs in a sandboxed execution environment with several inherent overheads:
+## How Kreuzberg Stays Fast
 
-1. **Interpretation overhead** – JavaScript runtimes interpret WASM bytecode (JIT compilation helps but adds startup cost)
-2. **Virtual memory layer** – WASM uses a linear memory model instead of native pointers
-3. **Function call marshalling** – Crossing WASM-JS boundaries adds latency for each operation
-4. **Single-threaded execution** – WASM Web Workers add communication overhead for parallel operations
-5. **Limited system access** – WASM cannot directly access native APIs (file I/O, OS resources)
+Beyond the language-level advantages, Kreuzberg applies several optimization strategies at the application level.
 
-### When to Use Each
+### Caching
 
-**Use Native (`@kreuzberg/node`)** when:
+Extraction and OCR results are cached by a hash of file content + configuration. Typical hit rates are 85%+ for repeated files. The cache uses SQLite (~100MB for 10,000 files) and invalidates automatically when file content changes.
 
-- Server-side performance is critical (batch processing, high-throughput APIs)
-- Processing large document volumes
-- Real-time extraction requirements
-- Running on Node.js, Bun, or Deno
+### Batch Processing
 
-**Use WASM (`@kreuzberg/wasm`)** when:
+`batch_extract_file` distributes files across cores using Tokio's work-stealing scheduler. For 10 files, batch processing is typically ~6x faster than sequential extraction.
 
-- Running in browsers or web environments
-- Deploying to Cloudflare Workers or edge platforms
-- Maximum platform compatibility is more important than speed
-- In-browser processing is a requirement
-- Performance overhead (25-65%) is acceptable for your use case
+```python title="batch_vs_sequential.py"
+# Sequential: one at a time (~5s for 10 files)
+for file in files:
+    result = extract_file(file, config=config)
 
-### Browser-Specific Considerations
+# Batch: all cores working (~0.8s for 10 files)
+results = batch_extract_file(files, config=config)
+```
 
-In-browser WASM performance depends on:
+### Lazy Initialization
 
-- **Browser JavaScript engine** (V8 in Chrome/Edge is fastest, then SpiderMonkey in Firefox)
-- **Hardware** (mobile devices will be slower than desktops)
-- **Worker thread usage** – Offloading OCR to Web Workers prevents UI blocking
-- **Memory constraints** – Browsers limit WebAssembly memory (typically 1-2GB per tab)
+Expensive resources like the Tokio runtime and plugin registries are initialized on first use, not at import time. If you only extract one file, you don't pay the cost of initializing subsystems you never touch.
 
-For large-scale document processing, always use native Node.js bindings. For interactive in-browser processing, WASM is the only option.
+### Fast Hash Maps
+
+Internal data structures use `ahash` instead of Rust's default `SipHash`. AHash is 3-5x faster, uses SIMD acceleration on supported CPUs, and still provides DoS resistance via per-process randomization.
+
+### Borrowed Strings
+
+Where possible, Kreuzberg passes `&str` (borrowed string slices) instead of `String` (heap-allocated owned strings). This avoids allocations in read-only code paths like MIME type lookups and registry queries.
+
+---
 
 ## Benchmarking
 
-To measure Kreuzberg's performance for your specific use case, we recommend:
-
-1. **Create representative test documents** – Use actual files from your production workload
-2. **Profile extraction operations** – Measure time and memory for different document types
-3. **Compare batch vs. sequential** – Test `batch_extract_files()` vs. sequential `extract_file()` calls
-4. **Monitor resource usage** – Track CPU, memory, and I/O during extraction
-
-**Language-Specific Profiling:**
+The best way to evaluate performance for your workload is to measure it with your actual files.
 
 === "Python"
     ```python
     import time
     from kreuzberg import extract_file, batch_extract_files
 
-    # Single file timing
     start = time.time()
     result = extract_file("large_document.pdf")
-    print(f"Time: {time.time() - start:.2f}s")
+    print(f"Single file: {time.time() - start:.2f}s")
 
-    # Batch processing
     files = [f"doc{i}.pdf" for i in range(100)]
     start = time.time()
     results = batch_extract_files(files)
-    print(f"Batch (100): {time.time() - start:.2f}s")
+    print(f"Batch (100 files): {time.time() - start:.2f}s")
     ```
 
 === "TypeScript"
-    ```typescript title="performance_example.ts"
+    ```typescript title="benchmark.ts"
     import { extractFile, batchExtractFiles } from '@kreuzberg/node';
 
-    // Single file timing
     const start = Date.now();
     const result = await extractFile('large_document.pdf');
-    console.log(`Time: ${(Date.now() - start) / 1000}s`);
+    console.log(`Single file: ${(Date.now() - start) / 1000}s`);
 
-    // Batch processing
     const files = Array.from({ length: 100 }, (_, i) => `doc${i}.pdf`);
     const batchStart = Date.now();
     const results = await batchExtractFiles(files);
-    console.log(`Batch (100): ${(Date.now() - batchStart) / 1000}s`);
+    console.log(`Batch (100 files): ${(Date.now() - batchStart) / 1000}s`);
     ```
 
 === "Rust"
-    ```rust title="performance_example.rs"
+    ```rust title="benchmark.rs"
     use kreuzberg::{extract_file_sync, batch_extract_file_sync, ExtractionConfig};
     use std::time::Instant;
 
     let config = ExtractionConfig::default();
 
-    // Single file timing
     let start = Instant::now();
     let result = extract_file_sync("large_document.pdf", None, &config)?;
-    println!("Time: {:?}", start.elapsed());
+    println!("Single file: {:?}", start.elapsed());
 
-    // Batch processing
     let files: Vec<_> = (0..100).map(|i| format!("doc{}.pdf", i)).collect();
     let batch_start = Instant::now();
     let results = batch_extract_file_sync(files, &config)?;
-    println!("Batch (100): {:?}", batch_start.elapsed());
+    println!("Batch (100 files): {:?}", batch_start.elapsed());
     ```
 
-## Optimization Techniques
+The full benchmark suite lives in `tools/benchmark-harness/`. Run it with `task bench` or `cargo bench`.
 
-Kreuzberg employs several optimization strategies:
+---
 
-### 1. Lazy Initialization
+## What to Read Next
 
-Expensive resources initialized only when needed:
-
-```rust title="performance_example.rs"
-static GLOBAL_RUNTIME: Lazy<Runtime> = Lazy::new(|| {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("Failed to create runtime")
-});
-```
-
-### 2. Caching
-
-OCR results and extraction results cached by content hash:
-
-- **Hit rate**: 85%+ for repeated files
-- **Storage**: SQLite database (~100MB for 10k files)
-- **Invalidation**: Content-based (file changes invalidate cache)
-
-### 3. Batch Processing
-
-Process multiple files concurrently with `batch_extract_*`:
-
-```python title="performance_example.py"
-# Sequential processing extracts one file at a time (~5 seconds for 10 files)
-for file in files:
-    result = extract_file(file, config=config)
-
-# Batch processing uses parallel extraction (~0.8 seconds for 10 files, 6.25x faster)
-results = batch_extract_file(files, config=config)
-```
-
-### 4. Fast Hash Maps
-
-Uses `ahash` instead of `std::collections::HashMap`:
-
-- **Faster hashing**: SipHash → AHash (3-5x faster)
-- **SIMD-accelerated**: Uses CPU vector instructions
-- **DoS resistant**: Randomized per-process
-
-### 5. Smart String Handling
-
-Uses `&str` (string slices) over `String` where possible:
-
-```rust title="performance_example.rs"
-// Returns string slices to avoid allocating owned strings
-pub fn supported_mime_types(&self) -> Vec<&str> {
-    vec!["application/pdf", "application/xml"]
-}
-```
-
-## Benchmarks
-
-Detailed performance benchmarks are available via `task bench` or `cargo bench` in the repository. See the `tools/benchmark-harness/` directory for the benchmark implementation. The benchmark suite measures duration, throughput, memory usage, and success rates across different file types.
-
-## Related Documentation
-
-- [Architecture](architecture.md) - System design enabling performance
-- [Extraction Pipeline](extraction-pipeline.md) - Pipeline stages and optimizations
-- [Configuration Guide](../guides/configuration.md) - Performance tuning options
-- [Advanced Features](../guides/advanced.md) - Benchmarking and profiling tools
+- [Architecture](architecture.md) — the system design that enables these performance characteristics
+- [Extraction Pipeline](extraction-pipeline.md) — how the pipeline is optimized at each stage
+- [Configuration Guide](../guides/configuration.md) — performance tuning options
+- [Advanced Features](../guides/advanced.md) — profiling and benchmarking tools
