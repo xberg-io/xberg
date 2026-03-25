@@ -197,199 +197,252 @@ thread_local! {
     static TL_ENGINE: RefCell<Option<LayoutEngine>> = const { RefCell::new(None) };
 }
 
-/// Run layout detection on all pages of a PDF document.
+/// Run layout detection on all pages of a PDF document, yielding results in batches.
 ///
-/// Renders each page to an image at 72 DPI and runs the layout engine.
-/// Returns per-page layout results and a timing breakdown.
-///
-/// Uses a single pdfium session for both rendering and dimension extraction
-/// to avoid deadlocking on the global `PDFIUM_OPERATION_LOCK` mutex.
-/// Layout inference is parallelised across rayon worker threads using
-/// per-thread [`LayoutEngine`] instances.
-#[tracing::instrument(skip_all, fields(page_count))]
-pub fn detect_layout_for_document(
+/// This avoids rendering all pages into memory at once. It yields `PageLayoutResult`,
+/// the pre-rendered image, and the timings for that batch via a callback.
+#[tracing::instrument(skip_all)]
+pub fn detect_layout_for_document_batched<F>(
     pdf_bytes: &[u8],
     engine: &mut LayoutEngine,
-) -> Result<(Vec<PageLayoutResult>, LayoutTimingReport, Vec<image::DynamicImage>)> {
+    batch_size: usize,
+    mut callback: F,
+) -> Result<LayoutTimingReport>
+where
+    F: FnMut(Vec<PageLayoutResult>, Vec<PageTiming>, Vec<image::DynamicImage>) -> Result<()>,
+{
     let total_start = Instant::now();
 
-    // Render pages and extract dimensions in a single pdfium session.
-    // This avoids deadlocking on the global PDFIUM_OPERATION_LOCK mutex,
-    // since pdfium is not reentrant.
-    let render_start = Instant::now();
-    let (images, page_dimensions) = render_and_get_dimensions(pdf_bytes)?;
-    let total_render_ms = render_start.elapsed().as_secs_f64() * 1000.0;
-    let page_count = images.len();
-    tracing::Span::current().record("page_count", page_count);
+    #[allow(clippy::type_complexity)]
+    use super::bindings::bind_pdfium;
+    use pdfium_render::prelude::*;
 
-    // Amortize render time evenly across pages for per-page reporting.
-    let render_ms_per_page = if page_count > 0 {
-        total_render_ms / page_count as f64
-    } else {
-        0.0
-    };
+    let pdfium = bind_pdfium(
+        crate::pdf::error::PdfError::RenderingFailed,
+        "layout detection render + dimensions",
+    )?;
+    let document = pdfium.load_pdf_from_byte_slice(pdf_bytes, None).map_err(|e| {
+        crate::pdf::error::PdfError::InvalidPdf(format!("Failed to load PDF for layout detection: {:?}", e))
+    })?;
 
-    tracing::info!(
-        total_render_ms,
-        page_count,
-        render_ms_per_page,
-        "PDF rendering complete"
-    );
+    let pages = document.pages();
+    let page_count = pages.len() as usize;
 
     // Capture the engine config so each rayon worker can create its own
     // LayoutEngine on first use (thread-local, ~250 MB per worker).
-    // We clone from the caller-supplied engine rather than re-deriving from
-    // config so that confidence_threshold / heuristics overrides are preserved.
     let engine_config = engine.config().clone();
 
-    // Time budget: 30 s wall-clock.  Because pages run in parallel we check
-    // it once before dispatching rather than mid-loop.
+    // Time budget: 30 s wall-clock overall.
     const MAX_LAYOUT_MS: f64 = 30_000.0;
 
-    let elapsed_before = total_start.elapsed().as_secs_f64() * 1000.0;
-    if elapsed_before > MAX_LAYOUT_MS {
-        tracing::warn!(
-            elapsed_ms = elapsed_before,
-            total_pages = page_count,
-            "Layout detection time budget already exceeded before inference"
-        );
-        let results: Vec<PageLayoutResult> = (0..page_count)
-            .map(|i| {
-                let (page_w, page_h) = page_dimensions.get(i).copied().unwrap_or((612.0, 792.0));
-                PageLayoutResult {
+    let mut all_timings = Vec::with_capacity(page_count);
+    
+    // We'll process in chunks of `batch_size`
+    for batch_start in (0..page_count).step_by(batch_size) {
+        let batch_end = (batch_start + batch_size).min(page_count);
+
+        let elapsed_before = total_start.elapsed().as_secs_f64() * 1000.0;
+        if elapsed_before > MAX_LAYOUT_MS {
+            tracing::warn!(
+                elapsed_ms = elapsed_before,
+                total_pages = page_count,
+                "Layout detection time budget already exceeded before inference"
+            );
+            
+            // Just return empty results for the remaining pages
+            let mut empty_results = Vec::with_capacity(page_count - batch_start);
+            let mut empty_timings = Vec::with_capacity(page_count - batch_start);
+            let mut empty_images = Vec::with_capacity(page_count - batch_start);
+            
+            for i in batch_start..page_count {
+                // To avoid getting dimensions for dummy return, we just guess or try to get it if cheap
+                let (page_w, page_h) = if let Ok(page) = pages.get(i as i32) {
+                    (page.width().value, page.height().value)
+                } else {
+                    (612.0, 792.0)
+                };
+
+                empty_results.push(PageLayoutResult {
                     page_index: i,
                     regions: Vec::new(),
                     page_width_pts: page_w,
                     page_height_pts: page_h,
                     render_width_px: 0,
                     render_height_px: 0,
-                }
-            })
-            .collect();
-        let timings_vec: Vec<PageTiming> = (0..page_count)
-            .map(|_| PageTiming {
-                render_ms: render_ms_per_page,
-                preprocess_ms: 0.0,
-                onnx_ms: 0.0,
-                inference_ms: 0.0,
-                postprocess_ms: 0.0,
-                mapping_ms: 0.0,
-            })
-            .collect();
-        let total_ms = total_start.elapsed().as_secs_f64() * 1000.0;
-        return Ok((
-            results,
-            LayoutTimingReport {
-                total_ms,
-                per_page: timings_vec,
-            },
-            images,
-        ));
-    }
+                });
+                
+                empty_timings.push(PageTiming {
+                    render_ms: 0.0,
+                    preprocess_ms: 0.0,
+                    onnx_ms: 0.0,
+                    inference_ms: 0.0,
+                    postprocess_ms: 0.0,
+                    mapping_ms: 0.0,
+                });
+                
+                // We use a dummy 1x1 image for skipped pages to satisfy the signature if needed, 
+                // though in practice we might not want to return anything
+                empty_images.push(image::DynamicImage::ImageRgb8(image::RgbImage::new(1, 1)));
+            }
+            
+            callback(empty_results, empty_timings.clone(), empty_images)?;
+            all_timings.extend(empty_timings);
+            break;
+        }
 
-    // Run inference in parallel: each rayon worker owns a thread-local engine.
-    //
-    // Result type per page: Ok((PageLayoutResult, PageTiming)) or Err(String).
-    // We collect into a Vec indexed by page so the final sort is trivial.
-    let mut parallel_results: Vec<std::result::Result<(PageLayoutResult, PageTiming), String>> = images
-        .par_iter()
-        .enumerate()
-        .map(|(page_idx, img)| {
-            // Convert to RGB8 inline per-page instead of cloning all pages
-            // upfront. This avoids holding a full Vec<RgbImage> alongside the
-            // original DynamicImages — each page's RGB copy lives only for
-            // the duration of its inference call.
-            let rgb = match img {
-                image::DynamicImage::ImageRgb8(r) => std::borrow::Cow::Borrowed(r),
-                other => std::borrow::Cow::Owned(other.to_rgb8()),
-            };
+        let render_start = Instant::now();
+        let mut batch_images = Vec::with_capacity(batch_end - batch_start);
+        let mut batch_dimensions = Vec::with_capacity(batch_end - batch_start);
 
-            TL_ENGINE.with(|cell| {
-                let mut engine_ref = cell.borrow_mut();
-                if engine_ref.is_none() {
-                    let engine = LayoutEngine::from_config(engine_config.clone())
-                        .map_err(|e| format!("thread-local LayoutEngine init failed: {e}"))?;
-                    *engine_ref = Some(engine);
-                }
-                let tl_engine = engine_ref
-                    .as_mut()
-                    .ok_or_else(|| "thread-local LayoutEngine missing after init".to_string())?;
+        for i in batch_start..batch_end {
+            let page = pages.get(i as i32).map_err(|e| {
+                crate::pdf::error::PdfError::RenderingFailed(format!("Failed to get page {}: {:?}", i, e))
+            })?;
 
-                let inference_start = Instant::now();
-                let (detection, detect_timings) = tl_engine
-                    .detect_timed(&rgb)
-                    .map_err(|e| format!("Layout detection failed on page {page_idx}: {e}"))?;
-                let inference_ms = inference_start.elapsed().as_secs_f64() * 1000.0;
+            let width_pts = page.width().value;
+            let height_pts = page.height().value;
+            batch_dimensions.push((width_pts, height_pts));
 
-                let mapping_start = Instant::now();
-                let (page_w, page_h) = page_dimensions.get(page_idx).copied().unwrap_or((612.0, 792.0));
-                let page_result = detection_to_page_result(page_idx, &detection, page_w, page_h);
-                let mapping_ms = mapping_start.elapsed().as_secs_f64() * 1000.0;
+            const MODEL_SIZE: f32 = 640.0;
+            let scale = (MODEL_SIZE / width_pts).min(MODEL_SIZE / height_pts);
+            let render_w = (width_pts * scale).round() as i32;
+            let render_h = (height_pts * scale).round() as i32;
 
-                tracing::trace!(
-                    page = page_idx,
-                    table_count = page_result
-                        .regions
-                        .iter()
-                        .filter(|r| matches!(r.class, LayoutClass::Table))
-                        .count(),
-                    total = page_result.regions.len(),
-                    "Page layout regions"
-                );
+            let config = PdfRenderConfig::new()
+                .set_target_width(render_w.max(1))
+                .set_target_height(render_h.max(1))
+                .rotate_if_landscape(PdfPageRenderRotation::None, false);
 
-                tracing::debug!(
-                    page = page_idx,
-                    detections = page_result.regions.len(),
-                    render_ms = render_ms_per_page,
-                    preprocess_ms = detect_timings.preprocess_ms,
-                    onnx_ms = detect_timings.onnx_ms,
-                    inference_ms,
-                    postprocess_ms = detect_timings.postprocess_ms,
-                    "Layout detection complete for page"
-                );
+            let bitmap = page.render_with_config(&config).map_err(|e| {
+                crate::pdf::error::PdfError::RenderingFailed(format!("Failed to render page {}: {}", i, e))
+            })?;
 
-                let timing = PageTiming {
-                    render_ms: render_ms_per_page,
-                    preprocess_ms: detect_timings.preprocess_ms,
-                    onnx_ms: detect_timings.onnx_ms,
-                    inference_ms,
-                    postprocess_ms: detect_timings.postprocess_ms,
-                    mapping_ms,
+            let image = bitmap
+                .as_image()
+                .map_err(|e| {
+                    crate::pdf::error::PdfError::RenderingFailed(format!(
+                        "Failed to convert bitmap to image for page {}: {}",
+                        i, e
+                    ))
+                })?
+                .into_rgb8();
+
+            batch_images.push(image::DynamicImage::ImageRgb8(image));
+        }
+        
+        let batch_render_ms = render_start.elapsed().as_secs_f64() * 1000.0;
+        let render_ms_per_page = if !batch_images.is_empty() {
+             batch_render_ms / batch_images.len() as f64
+        } else {
+             0.0
+        };
+
+        // Run inference in parallel for this batch
+        let mut parallel_results: Vec<std::result::Result<(PageLayoutResult, PageTiming), String>> = batch_images
+            .par_iter()
+            .enumerate()
+            .map(|(offset, img)| {
+                let page_idx = batch_start + offset;
+                let rgb = match img {
+                    image::DynamicImage::ImageRgb8(r) => std::borrow::Cow::Borrowed(r),
+                    other => std::borrow::Cow::Owned(other.to_rgb8()),
                 };
 
-                Ok((page_result, timing))
+                TL_ENGINE.with(|cell| {
+                    let mut engine_ref = cell.borrow_mut();
+                    if engine_ref.is_none() {
+                        let engine = LayoutEngine::from_config(engine_config.clone())
+                            .map_err(|e| format!("thread-local LayoutEngine init failed: {e}"))?;
+                        *engine_ref = Some(engine);
+                    }
+                    let tl_engine = engine_ref.as_mut().ok_or_else(|| {
+                        "thread-local LayoutEngine missing after init".to_string()
+                    })?;
+
+                    let inference_start = Instant::now();
+                    let (detection, detect_timings) = tl_engine
+                        .detect_timed(&rgb)
+                        .map_err(|e| format!("Layout detection failed on page {page_idx}: {e}"))?;
+                    let inference_ms = inference_start.elapsed().as_secs_f64() * 1000.0;
+
+                    let mapping_start = Instant::now();
+                    let (page_w, page_h) = batch_dimensions[offset];
+                    let page_result = detection_to_page_result(page_idx, &detection, page_w, page_h);
+                    let mapping_ms = mapping_start.elapsed().as_secs_f64() * 1000.0;
+
+                    let timing = PageTiming {
+                        render_ms: render_ms_per_page,
+                        preprocess_ms: detect_timings.preprocess_ms,
+                        onnx_ms: detect_timings.onnx_ms,
+                        inference_ms,
+                        postprocess_ms: detect_timings.postprocess_ms,
+                        mapping_ms,
+                    };
+
+                    Ok((page_result, timing))
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    // rayon preserves input order for par_iter(), but make that explicit by
-    // sorting on page_index so the contract is independent of scheduling.
-    parallel_results.sort_by_key(|r| match r {
-        Ok((pr, _)) => pr.page_index,
-        Err(_) => usize::MAX,
-    });
+        parallel_results.sort_by_key(|r| match r {
+            Ok((pr, _)) => pr.page_index,
+            Err(_) => usize::MAX,
+        });
 
-    // Propagate the first error, if any.
-    let mut results = Vec::with_capacity(page_count);
-    let mut timings = Vec::with_capacity(page_count);
-    for r in parallel_results {
-        let (pr, pt) = r.map_err(crate::pdf::error::PdfError::RenderingFailed)?;
-        results.push(pr);
-        timings.push(pt);
+        let mut batch_res = Vec::with_capacity(parallel_results.len());
+        let mut batch_timings = Vec::with_capacity(parallel_results.len());
+        
+        for r in parallel_results {
+            let (pr, pt) = r.map_err(crate::pdf::error::PdfError::RenderingFailed)?;
+            batch_res.push(pr);
+            batch_timings.push(pt);
+        }
+
+        all_timings.extend(batch_timings.clone());
+        callback(batch_res, batch_timings, batch_images)?;
     }
 
     let total_ms = total_start.elapsed().as_secs_f64() * 1000.0;
-
-    // Build the report early so we can log its aggregate stats.
+    
     let report = LayoutTimingReport {
         total_ms,
-        per_page: timings,
+        per_page: all_timings,
     };
+    
+    Ok(report)
+}
+
+/// Run layout detection on all pages of a PDF document.
+///
+/// Under the hood, this uses batched layout detection to prevent holding too many 
+/// full-resolution page images in memory simultaneously before detection.
+#[tracing::instrument(skip_all)]
+pub fn detect_layout_for_document(
+    pdf_bytes: &[u8],
+    engine: &mut LayoutEngine,
+) -> Result<(Vec<PageLayoutResult>, LayoutTimingReport, Vec<image::DynamicImage>)> {
+    let mut all_results = Vec::new();
+    let mut all_images = Vec::new();
+    
+    // Default to batch size of 10 pages at a time to keep memory down
+    // (a 640x640 RGB image is ~1.2MB, so 10 is ~12MB of raw pixel data, plus whatever the document holds)
+    let batch_size = 10;
+    
+    let report = detect_layout_for_document_batched(
+        pdf_bytes, 
+        engine, 
+        batch_size, 
+        |batch_res, _batch_timings, batch_imgs| {
+            all_results.extend(batch_res);
+            all_images.extend(batch_imgs);
+            Ok(())
+        }
+    )?;
 
     tracing::info!(
-        page_count,
-        total_ms,
-        total_render_ms,
+        page_count = all_results.len(),
+        total_ms = report.total_ms,
+        total_render_ms = report.total_render_ms(),
         total_inference_ms = report.total_inference_ms(),
         total_preprocess_ms = report.total_preprocess_ms(),
         total_onnx_ms = report.total_onnx_ms(),
@@ -397,13 +450,10 @@ pub fn detect_layout_for_document(
         avg_render_ms = report.avg_render_ms(),
         avg_preprocess_ms = report.avg_preprocess_ms(),
         avg_onnx_ms = report.avg_onnx_ms(),
-        avg_inference_ms = report.avg_inference_ms(),
-        avg_postprocess_ms = report.avg_postprocess_ms(),
-        total_detections = results.iter().map(|r| r.regions.len()).sum::<usize>(),
         "Layout detection complete for document"
     );
 
-    Ok((results, report, images))
+    Ok((all_results, report, all_images))
 }
 
 /// Run layout detection on pre-rendered images.
@@ -463,69 +513,7 @@ pub fn detect_layout_for_images(
     Ok(results)
 }
 
-/// Render all pages and extract their dimensions in a single pdfium session.
-///
-/// This avoids acquiring `PDFIUM_OPERATION_LOCK` twice (which would deadlock).
-fn render_and_get_dimensions(pdf_bytes: &[u8]) -> Result<(Vec<image::DynamicImage>, Vec<(f32, f32)>)> {
-    #![allow(clippy::type_complexity)]
-    use super::bindings::bind_pdfium;
-    use pdfium_render::prelude::*;
 
-    let pdfium = bind_pdfium(
-        crate::pdf::error::PdfError::RenderingFailed,
-        "layout detection render + dimensions",
-    )?;
-    let document = pdfium.load_pdf_from_byte_slice(pdf_bytes, None).map_err(|e| {
-        crate::pdf::error::PdfError::InvalidPdf(format!("Failed to load PDF for layout detection: {:?}", e))
-    })?;
-
-    let pages = document.pages();
-    let page_count = pages.len() as usize;
-    let mut images = Vec::with_capacity(page_count);
-    let mut dimensions = Vec::with_capacity(page_count);
-
-    for i in 0..page_count {
-        let page = pages
-            .get(i as i32)
-            .map_err(|e| crate::pdf::error::PdfError::RenderingFailed(format!("Failed to get page {}: {:?}", i, e)))?;
-
-        let width_pts = page.width().value;
-        let height_pts = page.height().value;
-        dimensions.push((width_pts, height_pts));
-
-        // Render at the resolution the layout model needs.
-        // The model uses 640×640 input with aspect-preserving letterbox.
-        // Rendering directly at the model's target size avoids a redundant
-        // resize in preprocessing and produces sharper text edges.
-        const MODEL_SIZE: f32 = 640.0;
-        let scale = (MODEL_SIZE / width_pts).min(MODEL_SIZE / height_pts);
-        let render_w = (width_pts * scale).round() as i32;
-        let render_h = (height_pts * scale).round() as i32;
-
-        let config = PdfRenderConfig::new()
-            .set_target_width(render_w.max(1))
-            .set_target_height(render_h.max(1))
-            .rotate_if_landscape(PdfPageRenderRotation::None, false);
-
-        let bitmap = page
-            .render_with_config(&config)
-            .map_err(|e| crate::pdf::error::PdfError::RenderingFailed(format!("Failed to render page {}: {}", i, e)))?;
-
-        let image = bitmap
-            .as_image()
-            .map_err(|e| {
-                crate::pdf::error::PdfError::RenderingFailed(format!(
-                    "Failed to convert bitmap to image for page {}: {}",
-                    i, e
-                ))
-            })?
-            .into_rgb8();
-
-        images.push(image::DynamicImage::ImageRgb8(image));
-    }
-
-    Ok((images, dimensions))
-}
 
 #[cfg(test)]
 mod tests {
