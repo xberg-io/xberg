@@ -1261,6 +1261,7 @@ jobs:
         with:
           ort-version: ${{ env.ORT_VERSION }}
           dest-dir: target/release
+          strategy: bundled
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
@@ -1457,6 +1458,7 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: ${{ env.ORT_VERSION }}
+          strategy: bundled
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
@@ -1601,6 +1603,7 @@ jobs:
         with:
           ort-version: ${{ env.ORT_VERSION }}
           dest-dir: target/release
+          strategy: bundled
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
@@ -1751,6 +1754,7 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: ${{ env.ORT_VERSION }}
+          strategy: bundled
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
@@ -1881,6 +1885,7 @@ jobs:
         with:
           ort-version: ${{ env.ORT_VERSION }}
           dest-dir: target/release
+          strategy: bundled
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
@@ -2324,6 +2329,7 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: ${{ env.ORT_VERSION }}
+          strategy: bundled
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models
@@ -2589,6 +2595,7 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: ${{ env.ORT_VERSION }}
+          strategy: bundled
 
       - name: Setup OpenSSL
         uses: kreuzberg-dev/actions/setup-openssl@v1
@@ -3396,6 +3403,7 @@ jobs:
         uses: ./.github/actions/setup-onnx-runtime
         with:
           ort-version: ${{ env.ORT_VERSION }}
+          strategy: bundled
 
       - name: Setup Layout Models
         uses: ./.github/actions/setup-layout-models

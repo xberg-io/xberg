@@ -3,7 +3,7 @@
 		"test": "deno test --allow-read --allow-net --allow-env --allow-ffi tests/"
 	},
 	"imports": {
-		"@kreuzberg/wasm": "npm:@kreuzberg/wasm@4.6.1"
+		"@kreuzberg/wasm": "npm:@kreuzberg/wasm@4.6.2"
 	},
 	"compilerOptions": {
 		"strict": true

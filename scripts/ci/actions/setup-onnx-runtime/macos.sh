@@ -4,6 +4,7 @@ set -euo pipefail
 ort_version="${1:?ort-version required}"
 dest_dir="${2:-crates/kreuzberg-node}"
 arch_id="${3:-}"
+strategy="${4:-system}"
 
 extract_dir="$RUNNER_TEMP/onnxruntime"
 
@@ -62,15 +63,26 @@ else
   rustflags="-L $ort_root/lib"
 fi
 
-{
-  ort_lib=$(find "$ort_root/lib" -name "libonnxruntime*.dylib" -print -quit)
-  echo "ORT_LIB_LOCATION=$ort_root/lib"
-  echo "ORT_PREFER_DYNAMIC_LINK=1"
-  echo "ORT_SKIP_DOWNLOAD=1"
-  echo "ORT_STRATEGY=system"
-  echo "ORT_DYLIB_PATH=$ort_root/lib/${ort_lib##*/}"
-  echo "DYLD_LIBRARY_PATH=$ort_root/lib:$dest:${DYLD_LIBRARY_PATH:-}"
-  echo "DYLD_FALLBACK_LIBRARY_PATH=$ort_root/lib:$dest:${DYLD_FALLBACK_LIBRARY_PATH:-}"
-  echo "LIBRARY_PATH=$ort_root/lib:$dest:${LIBRARY_PATH:-}"
-  echo "RUSTFLAGS=$rustflags"
-} >>"$GITHUB_ENV"
+if [ "$strategy" = "bundled" ]; then
+  echo "Using bundled ORT strategy — skipping system env vars so ort-bundled cargo feature takes effect"
+  {
+    echo "ORT_LIB_LOCATION=$ort_root/lib"
+    echo "DYLD_LIBRARY_PATH=$ort_root/lib:$dest:${DYLD_LIBRARY_PATH:-}"
+    echo "DYLD_FALLBACK_LIBRARY_PATH=$ort_root/lib:$dest:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+    echo "LIBRARY_PATH=$ort_root/lib:$dest:${LIBRARY_PATH:-}"
+    echo "RUSTFLAGS=$rustflags"
+  } >>"$GITHUB_ENV"
+else
+  {
+    ort_lib=$(find "$ort_root/lib" -name "libonnxruntime*.dylib" -print -quit)
+    echo "ORT_LIB_LOCATION=$ort_root/lib"
+    echo "ORT_PREFER_DYNAMIC_LINK=1"
+    echo "ORT_SKIP_DOWNLOAD=1"
+    echo "ORT_STRATEGY=system"
+    echo "ORT_DYLIB_PATH=$ort_root/lib/${ort_lib##*/}"
+    echo "DYLD_LIBRARY_PATH=$ort_root/lib:$dest:${DYLD_LIBRARY_PATH:-}"
+    echo "DYLD_FALLBACK_LIBRARY_PATH=$ort_root/lib:$dest:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+    echo "LIBRARY_PATH=$ort_root/lib:$dest:${LIBRARY_PATH:-}"
+    echo "RUSTFLAGS=$rustflags"
+  } >>"$GITHUB_ENV"
+fi

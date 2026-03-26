@@ -194,6 +194,19 @@ jobs:
           mix deps.get
         shell: bash
 
+      - name: Cache TypeScript build artifacts
+        uses: actions/cache@v5
+        with:
+          path: |
+            crates/kreuzberg-wasm/pkg/
+            crates/kreuzberg-node/*.node
+            crates/kreuzberg-node/dist/
+            packages/typescript/core/dist/
+            packages/wasm/dist/
+          key: ts-build-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'crates/kreuzberg-wasm/src/**', 'crates/kreuzberg-node/src/**', 'crates/kreuzberg-node/typescript/**', 'packages/typescript/core/typescript/**') }}
+          restore-keys: |
+            ts-build-v1-${{ runner.os }}-
+
       - name: Check disk space before tool installations
         run: scripts/ci/validate/show-disk-space.sh "Disk space before tool installations"
         shell: bash

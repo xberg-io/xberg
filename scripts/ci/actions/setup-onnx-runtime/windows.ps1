@@ -1,8 +1,9 @@
 $OrtVersion = $args[0]
-if ([string]::IsNullOrWhiteSpace($OrtVersion)) { throw "Usage: windows.ps1 <ortVersion> [destDir] [archId]" }
+if ([string]::IsNullOrWhiteSpace($OrtVersion)) { throw "Usage: windows.ps1 <ortVersion> [destDir] [archId] [strategy]" }
 
 $DestDir = if ($args.Count -ge 2 -and -not [string]::IsNullOrWhiteSpace($args[1])) { $args[1] } else { "crates/kreuzberg-node" }
 $ArchId = if ($args.Count -ge 3) { $args[2] } else { "" }
+$Strategy = if ($args.Count -ge 4 -and -not [string]::IsNullOrWhiteSpace($args[3])) { $args[3] } else { "system" }
 
 $ExtractRoot = Join-Path $env:TEMP "onnxruntime"
 if ([string]::IsNullOrWhiteSpace($ArchId)) {
@@ -72,14 +73,25 @@ foreach ($Dir in $DllDirs) {
 
 $RustFlags = if ($env:RUSTFLAGS) { "$env:RUSTFLAGS -L $OrtLib" } else { "-L $OrtLib" }
 
-@(
-  "ORT_LIB_LOCATION=$OrtLib"
-  "ORT_PREFER_DYNAMIC_LINK=1"
-  "ORT_SKIP_DOWNLOAD=1"
-  "ORT_STRATEGY=system"
-  "ORT_DYLIB_PATH=$OrtLib\onnxruntime.dll"
-  "RUSTFLAGS=$RustFlags"
-  "LIB=$OrtLib;$env:LIB"
-  "LIBRARY_PATH=$OrtLib;$env:LIBRARY_PATH"
-  "PATH=$Dest;$env:PATH"
-) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+if ($Strategy -eq "bundled") {
+  Write-Host "Using bundled ORT strategy - skipping system env vars so ort-bundled cargo feature takes effect"
+  @(
+    "ORT_LIB_LOCATION=$OrtLib"
+    "RUSTFLAGS=$RustFlags"
+    "LIB=$OrtLib;$env:LIB"
+    "LIBRARY_PATH=$OrtLib;$env:LIBRARY_PATH"
+    "PATH=$Dest;$env:PATH"
+  ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+} else {
+  @(
+    "ORT_LIB_LOCATION=$OrtLib"
+    "ORT_PREFER_DYNAMIC_LINK=1"
+    "ORT_SKIP_DOWNLOAD=1"
+    "ORT_STRATEGY=system"
+    "ORT_DYLIB_PATH=$OrtLib\onnxruntime.dll"
+    "RUSTFLAGS=$RustFlags"
+    "LIB=$OrtLib;$env:LIB"
+    "LIBRARY_PATH=$OrtLib;$env:LIBRARY_PATH"
+    "PATH=$Dest;$env:PATH"
+  ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+}
