@@ -138,6 +138,14 @@ pub fn parse_drawing(reader: &mut Reader<&[u8]>) -> Drawing {
                         }
                         // parse_position consumes through the end tag, so no depth change
                     }
+                    b"blip" => {
+                        // <a:blip> can appear as Start (when it has children like <a:extLst>)
+                        // Extract r:embed or r:link from the opening tag attributes.
+                        if drawing.image_ref.is_none() {
+                            drawing.image_ref = get_attr(e, b"embed").or_else(|| get_attr(e, b"link"));
+                        }
+                        depth += 1;
+                    }
                     b"wrapSquare" | b"wrapTight" | b"wrapTopAndBottom" | b"wrapThrough" => {
                         if let DrawingType::Anchored(ref mut anchor) = drawing.drawing_type {
                             match local_name {
@@ -543,6 +551,44 @@ mod tests {
         assert_eq!(drawing.drawing_type, DrawingType::Inline);
         assert_eq!(drawing.extent, None);
         assert_eq!(drawing.image_ref, Some("rId9".to_string()));
+    }
+
+    /// Regression test for issue #590: <a:blip> with children (e.g. <a:extLst>) is parsed
+    /// as Event::Start, not Event::Empty — the image reference must still be extracted.
+    #[test]
+    fn test_parse_blip_with_extlst_children() {
+        let xml = br#"<w:drawing xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                        xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+                        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                        xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main"
+                        xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+                        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+          <wp:inline distT="0" distB="0" distL="0" distR="0">
+            <wp:extent cx="6480175" cy="9064625"/>
+            <wp:docPr id="1" name="Picture 1"/>
+            <a:graphic>
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:pic>
+                  <pic:blipFill>
+                    <a:blip r:embed="rId4" cstate="print">
+                      <a:extLst>
+                        <a:ext uri="{28A0092B-C50C-407E-A947-70E740481C1C}">
+                          <a14:useLocalDpi val="0"/>
+                        </a:ext>
+                      </a:extLst>
+                    </a:blip>
+                  </pic:blipFill>
+                </pic:pic>
+              </a:graphicData>
+            </a:graphic>
+          </wp:inline>
+        </w:drawing>"#;
+
+        let drawing = parse_drawing_from_xml(xml);
+
+        assert_eq!(drawing.drawing_type, DrawingType::Inline);
+        assert_eq!(drawing.image_ref, Some("rId4".to_string()),
+            "image_ref must be extracted even when <a:blip> has child elements");
     }
 
     #[test]
