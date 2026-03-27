@@ -888,6 +888,8 @@ readonly class ChunkingConfig
         public ?string $sizingType = null,
         public ?string $sizingModel = null,
         public ?string $sizingCacheDir = null,
+        public string $chunkerType = 'text',
+        public bool $prependHeadingContext = false,
     );
 }
 ```
@@ -901,6 +903,8 @@ readonly class ChunkingConfig
 - `$sizingType` (string|null): How chunk size is measured. Options: `"characters"` (default) or `"tokenizer"` (use a HuggingFace tokenizer). Default: null (characters)
 - `$sizingModel` (string|null): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `$sizingType` is `"tokenizer"`. Default: null
 - `$sizingCacheDir` (string|null): Optional directory to cache downloaded tokenizer files. Default: null
+- `$chunkerType` (string): Type of chunker to use. Options: `"text"` (default), `"markdown"`, `"yaml"`. Default: `"text"`
+- `$prependHeadingContext` (bool): When true, prepends heading hierarchy path to each chunk's content. Most useful with `chunkerType: "markdown"`. Default: false
 
 **Examples:**
 

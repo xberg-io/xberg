@@ -1443,6 +1443,8 @@ Configuration for text chunking.
 - `sizingType` ("characters" | "tokenizer" | undefined): How chunk size is measured. Use `"tokenizer"` to measure by token count using a HuggingFace tokenizer. Default: undefined (characters)
 - `sizingModel` (string | undefined): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `sizingType` is `"tokenizer"`. Default: undefined
 - `sizingCacheDir` (string | undefined): Optional directory to cache downloaded tokenizer files. Default: undefined
+- `chunkerType` (string | undefined): Type of chunker to use. Options: `"text"` (default), `"markdown"`, `"yaml"`. Default: undefined (text)
+- `prependHeadingContext` (boolean | undefined): When true, prepends heading hierarchy path to each chunk's content. Most useful with `chunkerType: "markdown"`. Default: undefined (false)
 
 ---
 

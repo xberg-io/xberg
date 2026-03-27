@@ -671,7 +671,9 @@ type ChunkingConfig struct {
 	MaxChars     *int             // Maximum characters per chunk
 	MaxOverlap   *int             // Overlap between chunks in characters
 	Preset       *string          // Chunking preset name
+	ChunkerType  *string          // "text" (default), "markdown", or "yaml"
 	Sizing       *ChunkSizingConfig // Chunk size measurement configuration
+	PrependHeadingContext *bool   // Prepend heading hierarchy to chunks
 }
 
 type ChunkSizingConfig struct {

@@ -219,4 +219,36 @@ public class ChunkingConfigTests
         Assert.Equal(100, config1.MaxOverlap);
         Assert.Equal(100, config2.ChunkOverlap);
     }
+
+    [Theory]
+    [InlineData("text")]
+    [InlineData("markdown")]
+    [InlineData("yaml")]
+    public void ChunkerType_ShouldAcceptValidValues(string chunkerType)
+    {
+        var config = new ChunkingConfig { ChunkerType = chunkerType };
+
+        Assert.Equal(chunkerType, config.ChunkerType);
+    }
+
+    [Fact]
+    public void ChunkerType_ShouldBeNullByDefault()
+    {
+        var config = new ChunkingConfig();
+
+        Assert.Null(config.ChunkerType);
+    }
+
+    [Fact]
+    public void ChunkerType_ShouldRoundTripThroughJson()
+    {
+        var original = new ChunkingConfig { ChunkerType = "markdown" };
+
+        var json = JsonSerializer.Serialize(original);
+        var restored = JsonSerializer.Deserialize<ChunkingConfig>(json);
+
+        Assert.NotNull(restored);
+        Assert.Equal("markdown", restored.ChunkerType);
+        Assert.Contains("chunker_type", json);
+    }
 }

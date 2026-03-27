@@ -73,4 +73,38 @@ final class ChunkingConfigTest extends TestCase
         $this->assertIsBool($config->respectParagraphs);
         $this->assertTrue($config->respectParagraphs);
     }
+
+    #[Test]
+    public function it_defaults_chunker_type_to_text(): void
+    {
+        $config = new ChunkingConfig();
+
+        $this->assertSame('text', $config->chunkerType);
+    }
+
+    #[Test]
+    public function it_accepts_markdown_chunker_type(): void
+    {
+        $config = new ChunkingConfig(chunkerType: 'markdown');
+
+        $this->assertSame('markdown', $config->chunkerType);
+    }
+
+    #[Test]
+    public function it_round_trips_chunker_type_through_array(): void
+    {
+        $config = ChunkingConfig::fromArray(['chunker_type' => 'markdown']);
+
+        $this->assertSame('markdown', $config->chunkerType);
+        $this->assertArrayHasKey('chunker_type', $config->toArray());
+        $this->assertSame('markdown', $config->toArray()['chunker_type']);
+    }
+
+    #[Test]
+    public function it_omits_default_chunker_type_from_array(): void
+    {
+        $config = new ChunkingConfig();
+
+        $this->assertArrayNotHasKey('chunker_type', $config->toArray());
+    }
 }

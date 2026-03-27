@@ -2510,6 +2510,13 @@ public sealed class ChunkingConfig
     public string? Preset { get; init; }
 
     /// <summary>
+    /// Type of chunker to use: "text" (default), "markdown", or "yaml".
+    /// The markdown chunker preserves document structure during splitting.
+    /// </summary>
+    [JsonPropertyName("chunker_type")]
+    public string? ChunkerType { get; init; }
+
+    /// <summary>
     /// Embedding configuration for vector generation.
     /// </summary>
     [JsonPropertyName("embedding")]

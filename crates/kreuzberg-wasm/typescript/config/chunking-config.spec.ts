@@ -137,6 +137,57 @@ describe("WASM: ChunkingConfig", () => {
 		});
 	});
 
+	describe("chunker type and heading context", () => {
+		it("should support chunkerType field", () => {
+			const config: ChunkingConfig = {
+				chunkerType: "markdown",
+				maxChars: 512,
+			};
+
+			expect(config.chunkerType).toBe("markdown");
+		});
+
+		it("should support prependHeadingContext field", () => {
+			const config: ChunkingConfig = {
+				chunkerType: "markdown",
+				prependHeadingContext: true,
+			};
+
+			expect(config.prependHeadingContext).toBe(true);
+		});
+
+		it("should support preset field", () => {
+			const config: ChunkingConfig = {
+				preset: "semantic",
+			};
+
+			expect(config.preset).toBe("semantic");
+		});
+
+		it("should serialize new fields for WASM boundary", () => {
+			const config: ChunkingConfig = {
+				chunkerType: "markdown",
+				prependHeadingContext: true,
+				preset: "semantic",
+			};
+
+			const json = JSON.stringify(config);
+			const parsed: ChunkingConfig = JSON.parse(json);
+
+			expect(parsed.chunkerType).toBe("markdown");
+			expect(parsed.prependHeadingContext).toBe(true);
+			expect(parsed.preset).toBe("semantic");
+		});
+
+		it("should leave new fields undefined by default", () => {
+			const config: ChunkingConfig = {};
+
+			expect(config.chunkerType).toBeUndefined();
+			expect(config.prependHeadingContext).toBeUndefined();
+			expect(config.preset).toBeUndefined();
+		});
+	});
+
 	describe("nesting in ExtractionConfig", () => {
 		it("should nest properly in ExtractionConfig", () => {
 			const config: ExtractionConfig = {

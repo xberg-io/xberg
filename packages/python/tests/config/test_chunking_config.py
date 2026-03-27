@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import tempfile
+
 from kreuzberg import ChunkingConfig, EmbeddingConfig, EmbeddingModelType, ExtractionConfig
 
 
@@ -149,6 +151,72 @@ def test_chunking_config_edge_case_single_char_chunk() -> None:
     """ChunkingConfig should accept single character chunks."""
     config = ChunkingConfig(max_chars=1)
     assert config.max_chars == 1
+
+
+def test_chunking_config_chunker_type_default() -> None:
+    """ChunkingConfig should default to text chunker type."""
+    config = ChunkingConfig()
+    assert config.chunker_type == "text"
+
+
+def test_chunking_config_chunker_type_markdown() -> None:
+    """ChunkingConfig should accept markdown chunker type."""
+    config = ChunkingConfig(chunker_type="markdown")
+    assert config.chunker_type == "markdown"
+
+
+def test_chunking_config_prepend_heading_context_default() -> None:
+    """ChunkingConfig should default prepend_heading_context to False."""
+    config = ChunkingConfig()
+    assert config.prepend_heading_context is False
+
+
+def test_chunking_config_prepend_heading_context_enabled() -> None:
+    """ChunkingConfig should accept prepend_heading_context=True."""
+    config = ChunkingConfig(prepend_heading_context=True)
+    assert config.prepend_heading_context is True
+
+
+def test_chunking_config_sizing_type_default() -> None:
+    """ChunkingConfig should default to characters sizing."""
+    config = ChunkingConfig()
+    assert config.sizing_type == "characters"
+
+
+def test_chunking_config_sizing_type_tokenizer() -> None:
+    """ChunkingConfig should accept tokenizer sizing with model."""
+    config = ChunkingConfig(sizing_type="tokenizer", sizing_model="Xenova/gpt-4o")
+    assert config.sizing_type == "tokenizer"
+    assert config.sizing_model == "Xenova/gpt-4o"
+
+
+def test_chunking_config_sizing_cache_dir() -> None:
+    """ChunkingConfig should accept and return sizing_cache_dir."""
+    cache_dir = tempfile.gettempdir()
+    config = ChunkingConfig(
+        sizing_type="tokenizer",
+        sizing_model="Xenova/gpt-4o",
+        sizing_cache_dir=cache_dir,
+    )
+    assert config.sizing_cache_dir == cache_dir
+
+
+def test_chunking_config_sizing_cache_dir_default() -> None:
+    """ChunkingConfig should default sizing_cache_dir to None."""
+    config = ChunkingConfig()
+    assert config.sizing_cache_dir is None
+
+
+def test_chunking_config_markdown_with_heading_context() -> None:
+    """ChunkingConfig should support markdown chunker with heading context."""
+    config = ChunkingConfig(
+        chunker_type="markdown",
+        prepend_heading_context=True,
+        max_chars=512,
+    )
+    assert config.chunker_type == "markdown"
+    assert config.prepend_heading_context is True
+    assert config.max_chars == 512
 
 
 def test_chunking_config_realistic_nlp_scenario() -> None:

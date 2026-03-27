@@ -206,6 +206,7 @@ type ChunkingConfig struct {
 	ChunkSize             *int               `json:"chunk_size,omitempty"`
 	ChunkOverlap          *int               `json:"chunk_overlap,omitempty"`
 	Preset                *string            `json:"preset,omitempty"`
+	ChunkerType           *string            `json:"chunker_type,omitempty"`
 	Enabled               *bool              `json:"enabled,omitempty"`
 	Embedding             *EmbeddingConfig   `json:"embedding,omitempty"`
 	Sizing                *ChunkSizingConfig `json:"sizing,omitempty"`

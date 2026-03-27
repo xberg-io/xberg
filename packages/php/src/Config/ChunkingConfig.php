@@ -112,6 +112,18 @@ readonly class ChunkingConfig
         public ?string $sizingCacheDir = null,
 
         /**
+         * Type of chunker to use.
+         *
+         * Supported values: "text" (default), "markdown", "yaml".
+         * The markdown chunker preserves document structure during splitting.
+         * The yaml chunker creates one chunk per top-level key.
+         *
+         * @var string
+         * @default "text"
+         */
+        public string $chunkerType = 'text',
+
+        /**
          * Prepend heading context to each chunk for improved retrieval.
          *
          * When enabled, each chunk will be prefixed with the heading hierarchy
@@ -187,6 +199,13 @@ readonly class ChunkingConfig
             }
         }
 
+        /** @var string $chunkerType */
+        $chunkerType = $data['chunker_type'] ?? 'text';
+        if (!is_string($chunkerType)) {
+            /** @var string $chunkerType */
+            $chunkerType = (string) $chunkerType;
+        }
+
         /** @var bool $prependHeadingContext */
         $prependHeadingContext = $data['prepend_heading_context'] ?? false;
         if (!is_bool($prependHeadingContext)) {
@@ -203,6 +222,7 @@ readonly class ChunkingConfig
             sizingType: $sizingType,
             sizingModel: $sizingModel,
             sizingCacheDir: $sizingCacheDir,
+            chunkerType: $chunkerType,
             prependHeadingContext: $prependHeadingContext,
         );
     }
@@ -261,6 +281,7 @@ readonly class ChunkingConfig
             'respect_sentences' => $this->respectSentences,
             'respect_paragraphs' => $this->respectParagraphs,
             'embedding' => $embedding,
+            'chunker_type' => $this->chunkerType !== 'text' ? $this->chunkerType : null,
             'sizing' => $sizing,
             'prepend_heading_context' => $this->prependHeadingContext,
         ], static fn ($value): bool => $value !== null);

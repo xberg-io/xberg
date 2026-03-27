@@ -3,6 +3,7 @@ package kreuzberg_test
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	kreuzberg "github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
@@ -500,6 +501,50 @@ func TestChunkingConfig_WithEmbedding(t *testing.T) {
 func TestChunkingConfig_NilPointerHandling(t *testing.T) {
 	var config *kreuzberg.ChunkingConfig
 	_ = config
+}
+
+func TestChunkingConfig_WithChunkerType(t *testing.T) {
+	config := kreuzberg.NewChunkingConfig(
+		kreuzberg.WithChunkerType("markdown"),
+	)
+
+	if config.ChunkerType == nil || *config.ChunkerType != "markdown" {
+		t.Error("expected ChunkerType to be markdown")
+	}
+}
+
+func TestChunkingConfig_ChunkerType_JSON_Roundtrip(t *testing.T) {
+	ct := "markdown"
+	original := &kreuzberg.ChunkingConfig{
+		ChunkerType: &ct,
+	}
+
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("failed to marshal ChunkingConfig: %v", err)
+	}
+
+	if !strings.Contains(string(data), `"chunker_type":"markdown"`) {
+		t.Errorf("expected JSON to contain chunker_type, got: %s", string(data))
+	}
+
+	var restored kreuzberg.ChunkingConfig
+	err = json.Unmarshal(data, &restored)
+	if err != nil {
+		t.Fatalf("failed to unmarshal ChunkingConfig: %v", err)
+	}
+
+	if restored.ChunkerType == nil || *restored.ChunkerType != "markdown" {
+		t.Error("ChunkerType not preserved after roundtrip")
+	}
+}
+
+func TestChunkingConfig_ChunkerType_DefaultNil(t *testing.T) {
+	config := &kreuzberg.ChunkingConfig{}
+
+	if config.ChunkerType != nil {
+		t.Errorf("expected ChunkerType to be nil by default")
+	}
 }
 
 // ============================================================================

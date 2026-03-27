@@ -486,6 +486,13 @@ func WithChunkingPreset(preset string) ChunkingOption {
 	}
 }
 
+// WithChunkerType sets the chunker type: "text" (default), "markdown", or "yaml".
+func WithChunkerType(t string) ChunkingOption {
+	return func(c *ChunkingConfig) {
+		c.ChunkerType = &t
+	}
+}
+
 // WithChunkingEnabled sets whether chunking is enabled.
 func WithChunkingEnabled(enabled bool) ChunkingOption {
 	return func(c *ChunkingConfig) {

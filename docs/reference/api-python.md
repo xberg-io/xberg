@@ -619,6 +619,8 @@ Text chunking configuration for splitting long documents.
 - `sizing_type` (str | None): How chunk size is measured. Options: `"characters"` (default) or `"tokenizer"` (use a HuggingFace tokenizer). Default: None (characters)
 - `sizing_model` (str | None): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `sizing_type="tokenizer"`. Default: None
 - `sizing_cache_dir` (str | None): Optional directory to cache downloaded tokenizer files. Default: None
+- `chunker_type` (str | None): Type of chunker to use. Options: `"text"` (default), `"markdown"`, `"yaml"`. Default: None (text)
+- `prepend_heading_context` (bool | None): When True, prepends heading hierarchy path to each chunk's content. Most useful with `chunker_type="markdown"`. Default: None (False)
 
 **Example:**
 

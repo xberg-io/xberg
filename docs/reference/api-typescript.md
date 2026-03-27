@@ -779,9 +779,11 @@ interface ChunkingConfig {
   maxOverlap?: number;
   embedding?: EmbeddingConfig | null;
   preset?: string | null;
+  chunkerType?: string | null;
   sizingType?: "characters" | "tokenizer" | null;
   sizingModel?: string | null;
   sizingCacheDir?: string | null;
+  prependHeadingContext?: boolean | null;
 }
 ```
 
@@ -794,6 +796,8 @@ interface ChunkingConfig {
 - `sizingType` ("characters" | "tokenizer" | null): How chunk size is measured. Use `"tokenizer"` to measure by token count using a HuggingFace tokenizer. Default: null (characters)
 - `sizingModel` (string | null): HuggingFace model ID for tokenizer-based sizing (e.g. `"bert-base-uncased"`). Required when `sizingType` is `"tokenizer"`. Default: null
 - `sizingCacheDir` (string | null): Optional directory to cache downloaded tokenizer files. Default: null
+- `chunkerType` (string | null): Type of chunker to use. Options: `"text"` (default), `"markdown"`, `"yaml"`. Default: null (text)
+- `prependHeadingContext` (boolean | null): When true, prepends heading hierarchy path to each chunk's content. Most useful with `chunkerType: "markdown"`. Default: null (false)
 
 ---
 

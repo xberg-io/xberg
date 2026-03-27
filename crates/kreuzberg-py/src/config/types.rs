@@ -865,6 +865,25 @@ impl ChunkingConfig {
         self.inner.prepend_heading_context
     }
 
+    #[getter]
+    fn chunker_type(&self) -> String {
+        match self.inner.chunker_type {
+            kreuzberg::ChunkerType::Text => "text".to_string(),
+            kreuzberg::ChunkerType::Markdown => "markdown".to_string(),
+            kreuzberg::ChunkerType::Yaml => "yaml".to_string(),
+        }
+    }
+
+    #[getter]
+    fn sizing_cache_dir(&self) -> Option<String> {
+        match &self.inner.sizing {
+            kreuzberg::ChunkSizing::Tokenizer { cache_dir, .. } => {
+                cache_dir.as_ref().map(|p| p.to_string_lossy().to_string())
+            }
+            _ => None,
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "ChunkingConfig(max_chars={}, max_overlap={}, embedding={}, preset={}, prepend_heading_context={})",

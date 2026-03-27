@@ -276,12 +276,18 @@ export interface ChunkingConfig {
 	maxChars?: number;
 	/** Overlap between chunks */
 	maxOverlap?: number;
+	/** Named preset for chunking strategy (e.g., "balanced", "fast", "semantic") */
+	preset?: string;
+	/** Chunker type: "text" (default), "markdown", or "yaml" */
+	chunkerType?: string;
 	/** Sizing type: "characters" (default) or "tokenizer" */
 	sizingType?: "characters" | "tokenizer";
 	/** HuggingFace model ID for tokenizer sizing (e.g., "Xenova/gpt-4o") */
 	sizingModel?: string;
 	/** Optional cache directory for tokenizer files */
 	sizingCacheDir?: string;
+	/** Prepend heading context to each chunk when using markdown chunker. Default: false */
+	prependHeadingContext?: boolean;
 }
 
 /**
