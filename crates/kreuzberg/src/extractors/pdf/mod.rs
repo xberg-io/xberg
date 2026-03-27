@@ -179,23 +179,28 @@ async fn run_ocr_with_layout(
     let default_ocr_config = crate::core::config::OcrConfig::default();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
 
+    // Run layout detection up front so it is available to both the pipeline
+    // path and the direct extract_with_ocr path below.  Without this, the
+    // pipeline branch (active whenever `paddle-ocr` is compiled in via the
+    // `full` feature) would silently skip layout detection entirely and always
+    // return empty tables.
+    #[cfg(feature = "layout-detection")]
+    let layout_detections = run_layout_detection_ocr_pass(content, config);
+
     // Check for pipeline configuration
     if let Some(pipeline) = ocr_config.effective_pipeline() {
-        let (text, ocr_elements) = ocr::run_ocr_pipeline(
+        let (text, ocr_tables, ocr_elements) = ocr::run_ocr_pipeline(
             Some(content),
             None,
             #[cfg(feature = "layout-detection")]
-            None,
+            layout_detections.as_deref(),
             config,
             &pipeline,
             path,
         )
         .await?;
-        return Ok((text, Vec::new(), ocr_elements));
+        return Ok((text, ocr_tables, ocr_elements));
     }
-
-    #[cfg(feature = "layout-detection")]
-    let layout_detections = run_layout_detection_ocr_pass(content, config);
 
     let (text, _mean_conf, ocr_tables, ocr_elements) = extract_with_ocr(
         Some(content),
