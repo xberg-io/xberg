@@ -4,7 +4,7 @@ Kreuzberg is a document intelligence library built on a Rust core with bindings 
 
 This page is a map of what Kreuzberg can do. Each section links to the guide or reference page where you will find configuration details and code examples.
 
-![Kreuzberg features overview -- 91+ input formats flow through extraction, OCR, and processing to produce text, tables, chunks, and metadata](assets/features-overview.png)
+![Kreuzberg features overview -- 91+ input formats flow through extraction, OCR, and processing to produce text, tables, chunks, and metadata](assets/feature-overview.png)
 
 ---
 
