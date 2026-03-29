@@ -59,7 +59,9 @@ kreuzberg extract document.pdf
 
 ## Configuration Schema
 
-The complete TOML schema with all available sections and options:
+The complete TOML schema with all available sections and options.
+
+**Strict validation:** All configuration sections reject unknown keys at load time. Typos and invalid field names produce clear error messages listing valid options.
 
 ### Top-Level Options
 
@@ -67,9 +69,15 @@ The complete TOML schema with all available sections and options:
 use_cache = true
 enable_quality_processing = true
 force_ocr = false
-output_format = "markdown"
-result_format = "text"
+force_ocr_pages = [1, 3, 5]
+output_format = "plain"
+result_format = "unified"
+include_document_structure = false
 max_concurrent_extractions = 4
+extraction_timeout_secs = 300
+max_archive_depth = 3
+cache_namespace = "tenant-a"
+cache_ttl_secs = 3600
 ```
 
 | Option | Type | Default | Description |
@@ -77,9 +85,15 @@ max_concurrent_extractions = 4
 | `use_cache` | boolean | `true` | Enable caching of extraction results |
 | `enable_quality_processing` | boolean | `true` | Enable post-processing for output quality |
 | `force_ocr` | boolean | `false` | Force OCR processing even for searchable PDFs |
-| `output_format` | string | `"markdown"` | Output format (markdown, html, text) |
-| `result_format` | string | `"text"` | Result format for structured output |
-| `max_concurrent_extractions` | integer | `4` | Maximum concurrent document extractions |
+| `force_ocr_pages` | array of int | none | 1-indexed page numbers to force OCR on (ignored if `force_ocr` is true, PDF only) |
+| `output_format` | string | `"plain"` | Content format: `plain`, `markdown`, `djot`, `html` |
+| `result_format` | string | `"unified"` | Result structure: `unified` or `element_based` |
+| `include_document_structure` | boolean | `false` | Populate hierarchical document tree on result |
+| `max_concurrent_extractions` | integer | auto | Maximum concurrent extractions in batch (default: num_cpus x 1.5) |
+| `extraction_timeout_secs` | integer | none | Per-file timeout in seconds for batch extraction |
+| `max_archive_depth` | integer | `3` | Maximum recursion depth for archive extraction (0 = disable) |
+| `cache_namespace` | string | none | Cache namespace for tenant isolation (alphanumeric/hyphens, max 64 chars) |
+| `cache_ttl_secs` | integer | none | Per-request cache TTL in seconds (0 = skip cache entirely) |
 
 ### OCR Configuration
 
@@ -278,11 +292,46 @@ enabled = true
 |--------|------|---------|-------------|
 | `enabled` | boolean | `true` | Enable post-processing of extracted content |
 
+### Email Configuration
+
+```toml
+[email]
+msg_fallback_codepage = 1252
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `msg_fallback_codepage` | integer | none | Windows codepage for MSG files without codepage property (e.g., 1250=Central European, 1251=Cyrillic, 1252=Western, 932=Japanese) |
+
+### Concurrency Configuration
+
+```toml
+[concurrency]
+max_threads = 4
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `max_threads` | integer | auto | Cap all internal thread pools (Rayon, ONNX intra-op) and batch concurrency. Default: min(num_cpus, 8) |
+
+### Acceleration Configuration
+
+```toml
+[acceleration]
+provider = "auto"
+device_id = 0
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `provider` | string | `"auto"` | ONNX execution provider: `auto`, `cpu`, `coreml`, `cuda`, `tensorrt` |
+| `device_id` | integer | `0` | GPU device ID (for CUDA/TensorRT, ignored for CPU/CoreML/Auto) |
+
 ## FileExtractionConfig (Per-File Overrides)
 
 Passed as an optional parameter to `batch_extract_file` / `batch_extract_bytes` (and their sync variants) to override settings per file in a batch. All fields optional — `None` = use batch default. The separate `_with_configs` functions were removed in v4.5.0.
 
-**Overridable fields:** `enable_quality_processing`, `ocr`, `force_ocr`, `chunking`, `images`, `pdf_options`, `token_reduction`, `language_detection`, `pages`, `keywords`, `postprocessor`, `html_options`, `result_format`, `output_format`, `include_document_structure`, `layout`.
+**Overridable fields:** `enable_quality_processing`, `ocr`, `force_ocr`, `force_ocr_pages`, `chunking`, `images`, `pdf_options`, `token_reduction`, `language_detection`, `pages`, `keywords`, `postprocessor`, `html_options`, `result_format`, `output_format`, `include_document_structure`, `layout`, `timeout_secs`.
 
 **Batch-level only (not overridable):** `max_concurrent_extractions`, `use_cache`, `acceleration`, `security_limits`.
 
@@ -306,6 +355,7 @@ Kreuzberg uses consistent naming conventions across different contexts:
 | CLI flags | kebab-case | `--max-chars`, `--pdf-options`, `--use-cache` |
 
 When switching between languages, apply the appropriate conversion:
+
 - Python → Node.js: `snake_case` to `camelCase`
 - CLI → Python: `kebab-case` to `snake_case`
 - TOML → Python: No conversion needed (both use `snake_case`)

@@ -5,11 +5,13 @@ Kreuzberg provides native bindings for multiple programming languages, each with
 ## Go
 
 **Installation:**
+
 ```bash
 go get github.com/kreuzberg-dev/kreuzberg/packages/go/v4
 ```
 
 **Basic Extraction:**
+
 ```go
 package main
 
@@ -34,16 +36,19 @@ See the [Go binding documentation](https://github.com/kreuzberg-dev/kreuzberg/tr
 ## Ruby
 
 **Installation:**
+
 ```bash
 gem install kreuzberg
 ```
 
 Or in your Gemfile:
+
 ```ruby
 gem 'kreuzberg'
 ```
 
 **Basic Extraction:**
+
 ```ruby
 require 'kreuzberg'
 
@@ -57,6 +62,7 @@ See the [Ruby binding documentation](https://github.com/kreuzberg-dev/kreuzberg/
 
 **Installation:**
 Add to your Maven `pom.xml`:
+
 ```xml
 <dependency>
     <groupId>dev.kreuzberg</groupId>
@@ -66,6 +72,7 @@ Add to your Maven `pom.xml`:
 ```
 
 **Basic Extraction:**
+
 ```java
 import dev.kreuzberg.Kreuzberg;
 import dev.kreuzberg.ExtractionResult;
@@ -80,14 +87,16 @@ public class Example {
 
 See the [Java binding documentation](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/java) for complete API reference.
 
-## C#
+## C
 
 **Installation:**
+
 ```bash
 dotnet add package Kreuzberg
 ```
 
 **Basic Extraction:**
+
 ```csharp
 using Kreuzberg;
 
@@ -100,11 +109,13 @@ See the [C# binding documentation](https://github.com/kreuzberg-dev/kreuzberg/tr
 ## PHP
 
 **Installation:**
+
 ```bash
 composer require kreuzberg/kreuzberg
 ```
 
 **Basic Extraction:**
+
 ```php
 <?php
 require 'vendor/autoload.php';
@@ -122,6 +133,7 @@ See the [PHP binding documentation](https://github.com/kreuzberg-dev/kreuzberg/t
 
 **Installation:**
 Add to your `mix.exs` dependencies:
+
 ```elixir
 def deps do
   [
@@ -131,6 +143,7 @@ end
 ```
 
 **Basic Extraction:**
+
 ```elixir
 {:ok, result} = Kreuzberg.extract_file("document.pdf")
 IO.puts(result.content)
@@ -138,14 +151,45 @@ IO.puts(result.content)
 
 See the [Elixir binding documentation](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/elixir) for complete API reference.
 
+## R
+
+**Installation:**
+
+```r
+install.packages("kreuzberg", repos = "https://kreuzberg-dev.r-universe.dev")
+```
+
+**Basic Extraction:**
+
+```r
+library(kreuzberg)
+
+result <- extract_file_sync("document.pdf")
+cat(result$content)
+```
+
+**With Configuration:**
+
+```r
+config <- extraction_config(
+  force_ocr = TRUE,
+  output_format = "markdown"
+)
+result <- extract_file_sync("scanned.pdf", config = config)
+```
+
+See the [R binding documentation](https://github.com/kreuzberg-dev/kreuzberg/tree/main/packages/r) for complete API reference.
+
 ## WebAssembly (WASM)
 
 **Installation:**
+
 ```bash
 npm install @kreuzberg/wasm
 ```
 
 **Basic Extraction:**
+
 ```typescript
 import { extractBytes } from '@kreuzberg/wasm';
 
@@ -162,26 +206,31 @@ See the [WASM binding documentation](https://github.com/kreuzberg-dev/kreuzberg/
 
 **Installation:**
 Pull the official image from GitHub Container Registry:
+
 ```bash
 docker pull ghcr.io/kreuzberg-dev/kreuzberg
 ```
 
 **API Server Mode:**
+
 ```bash
 docker run -p 8000:8000 ghcr.io/kreuzberg-dev/kreuzberg serve --host 0.0.0.0
 ```
 
 **CLI Mode:**
+
 ```bash
 docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg extract /data/document.pdf
 ```
 
 **MCP Server Mode:**
+
 ```bash
 docker run -i ghcr.io/kreuzberg-dev/kreuzberg mcp
 ```
 
 Image sizes:
+
 - Core image: 1.0-1.3GB
 - Full image: ~1.0-1.3GB
 

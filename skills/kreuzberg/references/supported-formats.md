@@ -1,6 +1,6 @@
 # Supported Formats Reference
 
-Kreuzberg supports 91+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction. All formats support text and metadata extraction. Additional capabilities like OCR and table detection are noted per format.
+Kreuzberg supports 97+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction. All formats support text and metadata extraction. Additional capabilities like OCR and table detection are noted per format.
 
 ## Office Documents
 
@@ -62,6 +62,14 @@ Kreuzberg supports 91+ file formats across 8 major categories with intelligent f
 |--------|-----------|-----------|--------------|
 | Hangul Word Processor | `.hwp`, `.hwpx` | `application/x-hwp`, `application/haansofthwpx` | Korean document format, text extraction |
 
+### Apple iWork
+
+| Format | Extensions | MIME Type | Capabilities |
+|--------|-----------|-----------|--------------|
+| Apple Pages | `.pages` | `application/x-iwork-pages-sffpages` | Text extraction from IWA containers, metadata |
+| Apple Numbers | `.numbers` | `application/x-iwork-numbers-sffnumbers` | Spreadsheet data extraction from IWA containers |
+| Apple Keynote | `.key` | `application/x-iwork-keynote-sffkey` | Presentation text extraction from IWA containers |
+
 ## Images (OCR-Enabled)
 
 ### Raster Images
@@ -122,6 +130,7 @@ Kreuzberg supports 91+ file formats across 8 major categories with intelligent f
 | reStructuredText | `.rst` | `text/x-rst` | RST parsing, directive handling, role extraction |
 | Org Mode | `.org` | `text/org` | Org mode structure, outline parsing, metadata |
 | Rich Text Format | `.rtf` | `application/rtf` | Text with formatting extraction, font information |
+| MDX | `.mdx` | `text/mdx` | MDX parsing, JSX component extraction, frontmatter support |
 
 ## Email & Archives
 
@@ -131,6 +140,7 @@ Kreuzberg supports 91+ file formats across 8 major categories with intelligent f
 |--------|-----------|-----------|--------------|
 | Email Message | `.eml` | `message/rfc822` | Headers (from, to, subject, date), body (HTML/plain text), attachments, threading info |
 | Microsoft Outlook | `.msg` | `application/vnd.ms-outlook` | Outlook headers, body content, attachments, recipient metadata |
+| Outlook Personal Storage | `.pst` | `application/vnd.ms-outlook-pst` | Multi-mailbox archive, message extraction, attachment support |
 
 ### Archive Formats
 
@@ -177,30 +187,39 @@ Kreuzberg supports 91+ file formats across 8 major categories with intelligent f
 ## Format Capabilities Summary
 
 ### Text Extraction
-All 85+ formats support full or partial text extraction. Document structure and encoding are automatically detected.
+
+All 97+ formats support full or partial text extraction. Document structure and encoding are automatically detected.
 
 ### Metadata Support
+
 Comprehensive metadata extraction includes:
+
 - Document properties (title, author, subject, creation date, modification date)
 - Format-specific metadata (page count, dimensions, encoding, language)
 - EXIF data (for images)
 - Document statistics (word count, character count)
 
 ### OCR (Optical Character Recognition)
+
 OCR is available for image formats:
+
 - **Raster Images**: PNG, JPEG, GIF, WebP, BMP, TIFF
 - **Advanced Formats**: JPEG 2000, JBIG2, PNM/PBM/PGM/PPM
 - **Configurable Backends**: Tesseract (all languages), EasyOCR, PaddleOCR (Python), Guten (Node.js)
 
 ### Table Detection
+
 Smart table detection and reconstruction available for:
+
 - PDF documents (native tables and scanned content with OCR)
 - Office documents (Excel, Word)
 - Images (via OCR backends)
 - HTML/XML (from markup structure)
 
 ### Archive & Nested Document Support
+
 Archives and nested formats support file listing and sequential extraction:
+
 - ZIP, TAR, TGZ, 7Z archives
 - Email attachments
 - Nested archives within archives

@@ -1,7 +1,7 @@
 ---
 name: kreuzberg
 description: >-
-  Extract text, tables, metadata, and images from 91+ document formats
+  Extract text, tables, metadata, and images from 97+ document formats
   (PDF, Office, images, HTML, email, archives, academic) using Kreuzberg.
   Use when writing code that calls Kreuzberg APIs in Python, Node.js/TypeScript,
   Rust, or CLI. Covers installation, extraction (sync/async), configuration
@@ -15,9 +15,10 @@ metadata:
 
 # Kreuzberg Document Extraction
 
-Kreuzberg is a high-performance document intelligence library with a Rust core and native bindings for Python, Node.js/TypeScript, Ruby, Go, Java, C#, PHP, and Elixir. It extracts text, tables, metadata, and images from 91+ file formats including PDF, Office documents, images (with OCR), HTML, email, archives, and academic formats.
+Kreuzberg is a high-performance document intelligence library with a Rust core and native bindings for Python, Node.js/TypeScript, Ruby, Go, Java, C#, PHP, and Elixir. It extracts text, tables, metadata, and images from 97+ file formats including PDF, Office documents, images (with OCR), HTML, email, archives, and academic formats.
 
 Use this skill when writing code that:
+
 - Extracts text or metadata from documents
 - Performs OCR on scanned documents or images
 - Batch-processes multiple files
@@ -27,6 +28,7 @@ Use this skill when writing code that:
 ## Installation
 
 ### Python
+
 ```bash
 pip install kreuzberg
 # Optional OCR backends:
@@ -35,11 +37,13 @@ pip install kreuzberg[paddleocr]  # PaddleOCR
 ```
 
 ### Node.js
+
 ```bash
 npm install @kreuzberg/node
 ```
 
 ### Rust
+
 ```toml
 # Cargo.toml
 [dependencies]
@@ -49,6 +53,7 @@ kreuzberg = { version = "4", features = ["tokio-runtime"] }
 ```
 
 ### CLI
+
 ```bash
 # Download from GitHub releases, or:
 cargo install kreuzberg-cli
@@ -57,6 +62,7 @@ cargo install kreuzberg-cli
 ## Quick Start
 
 ### Python (Async)
+
 ```python
 from kreuzberg import extract_file
 
@@ -67,6 +73,7 @@ print(result.tables)        # extracted tables
 ```
 
 ### Python (Sync)
+
 ```python
 from kreuzberg import extract_file_sync
 
@@ -75,6 +82,7 @@ print(result.content)
 ```
 
 ### Node.js
+
 ```typescript
 import { extractFile } from '@kreuzberg/node';
 
@@ -85,6 +93,7 @@ console.log(result.tables);
 ```
 
 ### Node.js (Sync)
+
 ```typescript
 import { extractFileSync } from '@kreuzberg/node';
 
@@ -92,6 +101,7 @@ const result = extractFileSync('document.pdf');
 ```
 
 ### Rust (Async)
+
 ```rust
 use kreuzberg::{extract_file, ExtractionConfig};
 
@@ -105,6 +115,7 @@ async fn main() -> kreuzberg::Result<()> {
 ```
 
 ### Rust (Sync) — requires `tokio-runtime` feature
+
 ```rust
 use kreuzberg::{extract_file_sync, ExtractionConfig};
 
@@ -117,6 +128,7 @@ fn main() -> kreuzberg::Result<()> {
 ```
 
 ### CLI
+
 ```bash
 kreuzberg extract document.pdf
 kreuzberg extract document.pdf --format json
@@ -128,6 +140,7 @@ kreuzberg extract document.pdf --output-format markdown
 All languages use the same configuration structure with language-appropriate naming conventions.
 
 ### Python (snake_case)
+
 ```python
 from kreuzberg import (
     ExtractionConfig, OcrConfig, TesseractConfig,
@@ -149,6 +162,7 @@ result = await extract_file("document.pdf", config=config)
 ```
 
 ### Node.js (camelCase)
+
 ```typescript
 import { extractFile, type ExtractionConfig } from '@kreuzberg/node';
 
@@ -163,6 +177,7 @@ const result = await extractFile('document.pdf', null, config);
 ```
 
 ### Rust (snake_case)
+
 ```rust
 use kreuzberg::{ExtractionConfig, OcrConfig, ChunkingConfig, OutputFormat};
 
@@ -185,6 +200,7 @@ let result = extract_file("document.pdf", None, &config).await?;
 ```
 
 ### Config File (TOML)
+
 ```toml
 output_format = "markdown"
 
@@ -211,6 +227,7 @@ kreuzberg extract doc.pdf --config-json '{"ocr":{"backend":"tesseract","language
 ## Batch Processing
 
 ### Python
+
 ```python
 from kreuzberg import batch_extract_files, batch_extract_files_sync
 
@@ -225,6 +242,7 @@ for result in results:
 ```
 
 ### Node.js
+
 ```typescript
 import { batchExtractFiles } from '@kreuzberg/node';
 
@@ -232,6 +250,7 @@ const results = await batchExtractFiles(['doc1.pdf', 'doc2.docx']);
 ```
 
 ### Rust — requires `tokio-runtime` feature
+
 ```rust
 use kreuzberg::{batch_extract_file, ExtractionConfig};
 
@@ -241,6 +260,7 @@ let results = batch_extract_file(paths, &config).await?;
 ```
 
 ### CLI
+
 ```bash
 kreuzberg batch *.pdf --format json
 kreuzberg batch docs/*.docx --output-format markdown
@@ -251,12 +271,14 @@ kreuzberg batch docs/*.docx --output-format markdown
 OCR runs automatically for images and scanned PDFs. Tesseract is the default backend (native binding, no external install required).
 
 ### Backends
+
 - **Tesseract** (default): Built-in native binding. All Tesseract languages supported.
 - **EasyOCR** (Python only): `pip install kreuzberg[easyocr]`. Pass `easyocr_kwargs={"gpu": True}`.
 - **PaddleOCR** (Python only): `pip install kreuzberg[paddleocr]`. Pass `paddleocr_kwargs={"use_angle_cls": True}`.
 - **Guten** (Node.js only): Built-in OCR backend via `GutenOcrBackend`.
 
 ### Language Codes
+
 ```python
 config = ExtractionConfig(ocr=OcrConfig(language="eng"))       # English
 config = ExtractionConfig(ocr=OcrConfig(language="eng+deu"))   # Multiple
@@ -264,6 +286,7 @@ config = ExtractionConfig(ocr=OcrConfig(language="all"))       # All installed
 ```
 
 ### Force OCR
+
 ```python
 config = ExtractionConfig(force_ocr=True)  # OCR even if text is extractable
 ```
@@ -282,10 +305,18 @@ config = ExtractionConfig(force_ocr=True)  # OCR even if text is extractable
 | Elements | `result.elements` | `result.elements` | `result.elements` | Semantic elements (if element_based format) |
 | Pages | `result.pages` | `result.pages` | `result.pages` | Per-page content (if page extraction enabled) |
 | Keywords | `result.keywords` | `result.keywords` | `result.keywords` | Extracted keywords (if enabled) |
+| Quality score | `result.quality_score` | `result.qualityScore` | `result.quality_score` | Text quality score 0.0-1.0 |
+| Warnings | `result.processing_warnings` | `result.processingWarnings` | `result.processing_warnings` | Non-fatal pipeline warnings |
+| Djot content | `result.djot_content` | `result.djotContent` | `result.djot_content` | Structured Djot content (if Djot output) |
+| OCR elements | `result.ocr_elements` | `result.ocrElements` | `result.ocr_elements` | OCR elements with spatial/confidence data |
+| Document tree | `result.document` | `result.document` | `result.document` | Hierarchical document structure (if enabled) |
+| Annotations | `result.annotations` | `result.annotations` | `result.annotations` | PDF annotations (if enabled) |
+| Children | `result.children` | `result.children` | `result.children` | Nested results from archive contents |
 
 ## Error Handling
 
 ### Python
+
 ```python
 from kreuzberg import (
     extract_file_sync, KreuzbergError, ParsingError,
@@ -307,6 +338,7 @@ except KreuzbergError as e:
 ```
 
 ### Node.js
+
 ```typescript
 import {
     extractFile, KreuzbergError, ParsingError,
@@ -324,6 +356,7 @@ try {
 ```
 
 ### Rust
+
 ```rust
 use kreuzberg::{extract_file, ExtractionConfig, KreuzbergError};
 
@@ -379,5 +412,5 @@ Detailed reference files for specific topics:
 - **[Advanced Features](references/advanced-features.md)** — Plugins, embeddings, MCP server, API server, security limits
 - **[Other Language Bindings](references/other-bindings.md)** — Go, Ruby, Java, C#, PHP, Elixir, WASM, Docker
 
-Full documentation: https://docs.kreuzberg.dev
-GitHub: https://github.com/kreuzberg-dev/kreuzberg
+Full documentation: <https://docs.kreuzberg.dev>
+GitHub: <https://github.com/kreuzberg-dev/kreuzberg>

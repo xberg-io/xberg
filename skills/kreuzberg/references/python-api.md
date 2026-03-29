@@ -20,6 +20,7 @@ def extract_file_sync(
 Extract content from a file (synchronous).
 
 **Parameters:**
+
 - `file_path` (str | Path): Path to the file
 - `mime_type` (str | None): Optional MIME type hint (auto-detected if None)
 - `config` (ExtractionConfig | None): Extraction configuration (uses defaults if None)
@@ -82,6 +83,7 @@ def extract_bytes_sync(
 Extract content from bytes (synchronous).
 
 **Parameters:**
+
 - `data` (bytes | bytearray): File content as bytes or bytearray
 - `mime_type` (str): MIME type of the data (required for format detection)
 - `config` (ExtractionConfig | None): Extraction configuration
@@ -120,6 +122,7 @@ async def batch_extract_files(
 Extract content from multiple files in parallel (asynchronous).
 
 **Parameters:**
+
 - `paths` (list[str | Path]): List of file paths
 - `config` (ExtractionConfig | None): Extraction configuration
 - `easyocr_kwargs` (dict | None): EasyOCR initialization options
@@ -157,6 +160,7 @@ async def batch_extract_bytes(
 Extract content from multiple byte arrays in parallel (asynchronous).
 
 **Parameters:**
+
 - `data_list` (list[bytes | bytearray]): List of file contents as bytes/bytearray
 - `mime_types` (list[str]): List of MIME types (one per data item)
 - `config` (ExtractionConfig | None): Extraction configuration
@@ -494,18 +498,21 @@ Embedding model type selector with multiple configurations.
 @staticmethod
 def preset(name: str) -> EmbeddingModelType
 ```
+
 Use a preset configuration (recommended for most use cases). Available presets: balanced, compact, large.
 
 ```python
 @staticmethod
 def fastembed(model: str, dimensions: int) -> EmbeddingModelType
 ```
+
 Use a specific fastembed model by name.
 
 ```python
 @staticmethod
 def custom(model_id: str, dimensions: int) -> EmbeddingModelType
 ```
+
 Use a custom ONNX model from HuggingFace (e.g., sentence-transformers/*).
 
 **Example:**
@@ -732,21 +739,25 @@ Result object returned by extraction functions.
 ```python
 def get_page_count(self) -> int
 ```
+
 Get the total number of pages in the document.
 
 ```python
 def get_chunk_count(self) -> int
 ```
+
 Get the total number of chunks if chunking is enabled.
 
 ```python
 def get_detected_language(self) -> str | None
 ```
+
 Get the most confident detected language code.
 
 ```python
 def get_metadata_field(self, field_name: str) -> Any | None
 ```
+
 Get a specific metadata field by name.
 
 **Example:**
@@ -854,6 +865,7 @@ def detect_mime_type(data: bytes | bytearray) -> str
 Detect MIME type from file bytes using magic number detection.
 
 **Parameters:**
+
 - `data` (bytes | bytearray): File content as bytes or bytearray
 
 **Returns:** Detected MIME type (e.g., "application/pdf", "image/png")
@@ -865,11 +877,13 @@ def detect_mime_type_from_path(path: str | Path) -> str
 Detect MIME type from file path by reading the file and detecting its MIME type.
 
 **Parameters:**
+
 - `path` (str | Path): Path to the file
 
 **Returns:** Detected MIME type
 
 **Raises:**
+
 - `OSError`: If file cannot be read (file not found, permission denied, etc.)
 - `RuntimeError`: If MIME type detection fails
 
@@ -918,11 +932,13 @@ def load_extraction_config_from_file(path: str | Path) -> ExtractionConfig
 Load extraction configuration from a specific file.
 
 **Parameters:**
+
 - `path` (str | Path): Path to the configuration file (.toml, .yaml, or .json)
 
 **Returns:** ExtractionConfig parsed from the file
 
 **Raises:**
+
 - `FileNotFoundError`: If the configuration file does not exist
 - `RuntimeError`: If the file cannot be read or parsed
 - `ValueError`: If the file format is invalid or unsupported
@@ -934,6 +950,7 @@ def discover_extraction_config() -> ExtractionConfig | None
 Discover extraction configuration from the environment (deprecated).
 
 Attempts to locate a Kreuzberg configuration file using:
+
 1. KREUZBERG_CONFIG_PATH environment variable
 2. Search for kreuzberg.toml, kreuzberg.yaml, or kreuzberg.json in current and parent directories
 
@@ -967,11 +984,13 @@ def register_post_processor(processor: Any) -> None
 Register a Python PostProcessor with the Rust core. Once registered, the processor will be called automatically after extraction to enrich results.
 
 **Required Methods:**
+
 - `name() -> str`: Return processor name (must be non-empty)
 - `process(result: ExtractionResult) -> ExtractionResult`: Process and enrich the extraction result
 - `processing_stage() -> str`: Return "early", "middle", or "late"
 
 **Optional Methods:**
+
 - `initialize() -> None`: Called when processor is registered
 - `shutdown() -> None`: Called when processor is unregistered
 
@@ -1004,6 +1023,7 @@ def register_ocr_backend(backend: Any) -> None
 Register a Python OCR backend with the Rust core.
 
 **Required Methods:**
+
 - `name() -> str`: Return backend name (must be non-empty)
 - `supported_languages() -> list[str]`: Return list of supported language codes
 - `process_image(image_bytes: bytes, language: str) -> OcrResult`: Process image and return OCR result
@@ -1043,10 +1063,12 @@ def register_validator(validator: Any) -> None
 Register a Python Validator with the Rust core. Validators are called automatically after extraction to validate results.
 
 **Required Methods:**
+
 - `name() -> str`: Return validator name (must be non-empty)
 - `validate(result: ExtractionResult) -> None`: Validate the extraction result (raise error to fail)
 
 **Optional Methods:**
+
 - `should_validate(result: ExtractionResult) -> bool`: Check if validator should run (defaults to True)
 - `priority() -> int`: Return priority (defaults to 50, higher runs first)
 
@@ -1074,46 +1096,55 @@ register_validator(MinLengthValidator())
 ```python
 def list_post_processors() -> list[str]
 ```
+
 List names of all registered post-processors.
 
 ```python
 def list_validators() -> list[str]
 ```
+
 List names of all registered validators.
 
 ```python
 def list_ocr_backends() -> list[str]
 ```
+
 List names of all available OCR backends.
 
 ```python
 def unregister_post_processor(name: str) -> None
 ```
+
 Unregister a post-processor by name.
 
 ```python
 def unregister_validator(name: str) -> None
 ```
+
 Unregister a validator by name.
 
 ```python
 def unregister_ocr_backend(name: str) -> None
 ```
+
 Unregister an OCR backend by name.
 
 ```python
 def clear_post_processors() -> None
 ```
+
 Clear all registered post-processors.
 
 ```python
 def clear_validators() -> None
 ```
+
 Clear all registered validators.
 
 ```python
 def clear_ocr_backends() -> None
 ```
+
 Clear all registered OCR backends.
 
 ## Format Enums
@@ -1151,6 +1182,7 @@ def get_last_error_code() -> int
 Get the last error code from the FFI layer.
 
 **Returns:**
+
 - 0 (SUCCESS): No error occurred
 - 1 (GENERIC_ERROR): Generic unspecified error
 - 2 (PANIC): A panic occurred in the Rust core
@@ -1167,6 +1199,7 @@ def get_error_details() -> dict[str, Any]
 Get detailed error information from the FFI layer.
 
 **Returns:** dict with keys:
+
 - `message` (str): Human-readable error message
 - `error_code` (int): Numeric error code (0-7)
 - `error_type` (str): Error type name (e.g., "validation", "ocr")
@@ -1183,6 +1216,7 @@ def classify_error(message: str) -> int
 Classify an error message into a Kreuzberg error code.
 
 **Parameters:**
+
 - `message` (str): The error message to classify
 
 **Returns:** int error code (0-7) representing the classification
@@ -1194,6 +1228,7 @@ def error_code_name(code: int) -> str
 Get the human-readable name of an error code.
 
 **Parameters:**
+
 - `code` (int): Numeric error code (0-7)
 
 **Returns:** Human-readable error code name (e.g., "validation", "ocr")
@@ -1225,51 +1260,61 @@ except Exception as e:
 ```python
 def validate_chunking_params(max_chars: int, max_overlap: int) -> bool
 ```
+
 Validate chunking parameters.
 
 ```python
 def validate_confidence(confidence: float) -> bool
 ```
+
 Validate confidence value (0.0-1.0).
 
 ```python
 def validate_dpi(dpi: int) -> bool
 ```
+
 Validate DPI value.
 
 ```python
 def validate_tesseract_psm(psm: int) -> bool
 ```
+
 Validate Tesseract Page Segmentation Mode.
 
 ```python
 def validate_tesseract_oem(oem: int) -> bool
 ```
+
 Validate Tesseract OCR Engine Mode.
 
 ```python
 def validate_ocr_backend(backend: str) -> bool
 ```
+
 Validate OCR backend name.
 
 ```python
 def validate_language_code(code: str) -> bool
 ```
+
 Validate language code format.
 
 ```python
 def validate_token_reduction_level(level: str) -> bool
 ```
+
 Validate token reduction level.
 
 ```python
 def validate_output_format(output_format: str) -> bool
 ```
+
 Validate output format string.
 
 ```python
 def validate_binarization_method(method: str) -> bool
 ```
+
 Validate binarization method for image preprocessing.
 
 ### Getting Valid Values
@@ -1277,31 +1322,37 @@ Validate binarization method for image preprocessing.
 ```python
 def get_valid_binarization_methods() -> list[str]
 ```
+
 Get list of valid binarization methods.
 
 ```python
 def get_valid_language_codes() -> list[str]
 ```
+
 Get list of valid language codes.
 
 ```python
 def get_valid_ocr_backends() -> list[str]
 ```
+
 Get list of valid OCR backend names.
 
 ```python
 def get_valid_token_reduction_levels() -> list[str]
 ```
+
 Get list of valid token reduction levels.
 
 ```python
 def list_embedding_presets() -> list[str]
 ```
+
 List available embedding presets.
 
 ```python
 def get_embedding_preset(name: str) -> EmbeddingPreset | None
 ```
+
 Get details about a specific embedding preset.
 
 **Example:**
@@ -1337,16 +1388,19 @@ if preset:
 ```python
 def config_to_json(config: ExtractionConfig) -> str
 ```
+
 Convert ExtractionConfig to JSON string.
 
 ```python
 def config_get_field(config: ExtractionConfig, field_name: str) -> Any | None
 ```
+
 Get a specific field value from ExtractionConfig.
 
 ```python
 def config_merge(base: ExtractionConfig, override: ExtractionConfig) -> None
 ```
+
 Merge override config into base config (mutates base).
 
 **Example:**

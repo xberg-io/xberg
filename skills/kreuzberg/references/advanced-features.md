@@ -666,6 +666,7 @@ Reduce the number of tokens in extracted content for cost optimization when work
     ```
 
 **Token Reduction Modes:**
+
 - `off`: No reduction (default)
 - `light`: Remove extra whitespace and redundant punctuation
 - `moderate`: Also remove common filler words and some formatting
@@ -780,6 +781,7 @@ Extract semantic elements instead of unified content. This format is compatible 
     ```
 
 **Element Types:**
+
 - `title`: Document or section title
 - `heading`: Section headings
 - `narrative_text`: Regular paragraph text
@@ -882,7 +884,7 @@ The MCP server exposes extraction functions to AI models, allowing them to proce
 
 ## Security Limits
 
-Set resource limits to prevent abuse and control memory/file size consumption.
+Set resource limits to prevent decompression bomb attacks and control resource consumption during archive extraction.
 
 === "Python"
 
@@ -891,15 +893,19 @@ Set resource limits to prevent abuse and control memory/file size consumption.
 
     config = ExtractionConfig(
         security_limits={
-            "max_file_size": 100_000_000,      # 100 MB
-            "max_archive_files": 1000,
-            "max_text_length": 10_000_000,     # 10 MB of text
-            "max_pages": 10000,
-            "max_concurrent_extractions": 4
+            "max_archive_size": 500 * 1024 * 1024,  # 500 MB uncompressed
+            "max_compression_ratio": 100,             # 100:1 max ratio
+            "max_files_in_archive": 10_000,
+            "max_nesting_depth": 100,
+            "max_content_size": 100 * 1024 * 1024,   # 100 MB text growth
+            "max_iterations": 10_000_000,
+            "max_xml_depth": 100,
+            "max_table_cells": 100_000,
+            "max_entity_length": 32,
         }
     )
 
-    result = extract_file_sync("document.pdf", config=config)
+    result = extract_file_sync("archive.zip", config=config)
     ```
 
 === "TypeScript"
@@ -909,23 +915,32 @@ Set resource limits to prevent abuse and control memory/file size consumption.
 
     const config: ExtractionConfig = {
         securityLimits: {
-            max_file_size: 100_000_000,        // 100 MB
-            max_archive_files: 1000,
-            max_text_length: 10_000_000,       // 10 MB of text
-            max_pages: 10000,
-            max_concurrent_extractions: 4
+            maxArchiveSize: 500 * 1024 * 1024,    // 500 MB uncompressed
+            maxCompressionRatio: 100,               // 100:1 max ratio
+            maxFilesInArchive: 10_000,
+            maxNestingDepth: 100,
+            maxContentSize: 100 * 1024 * 1024,     // 100 MB text growth
+            maxIterations: 10_000_000,
+            maxXmlDepth: 100,
+            maxTableCells: 100_000,
+            maxEntityLength: 32,
         }
     };
 
-    const result = await extractFile("document.pdf", null, config);
+    const result = await extractFile("archive.zip", undefined, config);
     ```
 
-**Common Limits:**
-- `max_file_size`: Maximum input file size in bytes
-- `max_archive_files`: Maximum files in archives (zip, tar, etc.)
-- `max_text_length`: Maximum extracted text length
-- `max_pages`: Maximum number of pages to process
-- `max_concurrent_extractions`: Maximum concurrent extraction operations
+**SecurityLimits Fields:**
+
+- `max_archive_size`: Maximum uncompressed archive size in bytes (default: 500 MB)
+- `max_compression_ratio`: Maximum compression ratio before flagging as bomb (default: 100:1)
+- `max_files_in_archive`: Maximum number of files in an archive (default: 10,000)
+- `max_nesting_depth`: Maximum nesting depth for structures (default: 100)
+- `max_entity_length`: Maximum entity/string length (default: 32)
+- `max_content_size`: Maximum string growth per document (default: 100 MB)
+- `max_iterations`: Maximum iterations per operation (default: 10,000,000)
+- `max_xml_depth`: Maximum XML parsing depth (default: 100)
+- `max_table_cells`: Maximum cells per table (default: 100,000)
 
 ## Caching
 
