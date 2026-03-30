@@ -131,5 +131,10 @@ void assert_annotations(const CExtractionResult *result,
                         int has_annotations,
                         int has_min, size_t min_count);
 
+void assert_embed_result(const CEmbedResult *result,
+                         int has_count, size_t count,
+                         int has_dimensions, size_t dimensions,
+                         int no_nan, int no_inf, int non_zero);
+
 void assert_is_png(const uint8_t *data, size_t len);
 void assert_min_byte_length(const uint8_t *data, size_t len, size_t min_length);

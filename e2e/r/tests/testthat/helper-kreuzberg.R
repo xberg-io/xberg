@@ -489,4 +489,31 @@ assert_is_png <- function(data) {
 assert_min_byte_length <- function(data, min_length) {
   testthat::expect_gte(length(data), min_length)
 }
+
+assert_embed_result <- function(results, count, dimensions, no_nan, no_inf, non_zero) {
+  testthat::expect_true(is.list(results), label = "Expected results to be a list")
+  if (count >= 0) {
+    testthat::expect_equal(length(results), count, label = sprintf("Expected %d vectors, got %d", count, length(results)))
+  }
+
+  if (length(results) > 0) {
+    for (i in seq_along(results)) {
+      vector <- results[[i]]
+      testthat::expect_true(is.numeric(vector), label = sprintf("Vector %d is not numeric", i))
+      if (dimensions > 0) {
+        testthat::expect_equal(length(vector), dimensions, label = sprintf("Vector %d expected length %d, got %d", i, dimensions, length(vector)))
+      }
+
+      if (isTRUE(no_nan)) {
+        testthat::expect_true(all(!is.nan(vector)), label = sprintf("Vector %d contains NaN", i))
+      }
+      if (isTRUE(no_inf)) {
+        testthat::expect_true(all(is.finite(vector)), label = sprintf("Vector %d contains infinite value", i))
+      }
+      if (isTRUE(non_zero)) {
+        testthat::expect_true(any(vector != 0, na.rm = TRUE), label = sprintf("Vector %d is all zeros", i))
+      }
+    }
+  }
+}
 # nolint end

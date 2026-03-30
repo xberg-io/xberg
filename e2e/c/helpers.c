@@ -650,6 +650,64 @@ void assert_annotations(const CExtractionResult *result,
     }
 }
 
+void assert_embed_result(const CEmbedResult *result,
+                         int has_count, size_t count,
+                         int has_dimensions, size_t dimensions,
+                         int no_nan, int no_inf, int non_zero) {
+    if (!result) {
+        fputs("FAIL: embed result is NULL\n", stderr);
+        exit(1);
+    }
+    if (!result->success) {
+        fprintf(stderr, "FAIL: embedding failed: %s\n",
+                result->error ? result->error : "(unknown error)");
+        exit(1);
+    }
+
+    size_t actual_count = result->vector_count;
+    if (has_count && actual_count != count) {
+        fprintf(stderr, "FAIL: expected %zu vectors, got %zu\n", count, actual_count);
+        exit(1);
+    }
+
+    if (actual_count > 0 && result->vectors) {
+        for (size_t i = 0; i < actual_count; i++) {
+            const CEmbeddingVector *vec = &result->vectors[i];
+            if (has_dimensions && vec->size != dimensions) {
+                fprintf(stderr, "FAIL: vector %zu expected size %zu, got %zu\n",
+                        i, dimensions, vec->size);
+                exit(1);
+            }
+
+            int found_non_zero = 0;
+            for (size_t j = 0; j < vec->size; j++) {
+                float v = vec->data[j];
+#ifdef _MSC_VER
+                if (no_nan && _isnan(v)) {
+#else
+                if (no_nan && isnan(v)) {
+#endif
+                    fprintf(stderr, "FAIL: vector %zu element %zu is NaN\n", i, j);
+                    exit(1);
+                }
+#ifdef _MSC_VER
+                if (no_inf && !_finite(v)) {
+#else
+                if (no_inf && isinf(v)) {
+#endif
+                    fprintf(stderr, "FAIL: vector %zu element %zu is Inf\n", i, j);
+                    exit(1);
+                }
+                if (v != 0.0f) found_non_zero = 1;
+            }
+            if (non_zero && !found_non_zero) {
+                fprintf(stderr, "FAIL: vector %zu is all zeros\n", i);
+                exit(1);
+            }
+        }
+    }
+}
+
 void assert_is_png(const uint8_t *data, size_t len) {
     if (len < 4) {
         fprintf(stderr, "FAIL: data too short for PNG: %zu bytes\n", len);
