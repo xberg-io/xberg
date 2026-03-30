@@ -6,8 +6,6 @@ use crate::{WireFormat, style};
 
 /// Execute the embed command: generate embeddings for input texts.
 pub fn embed_command(texts: Vec<String>, preset: &str, format: WireFormat) -> Result<()> {
-    use kreuzberg::types::{Chunk, ChunkMetadata};
-
     // Validate preset
     let _preset_info = kreuzberg::get_preset(preset).with_context(|| {
         format!(
@@ -37,36 +35,9 @@ pub fn embed_command(texts: Vec<String>, preset: &str, format: WireFormat) -> Re
         ..Default::default()
     };
 
-    // Create chunks from input texts
-    let mut chunks: Vec<Chunk> = texts
-        .iter()
-        .enumerate()
-        .map(|(idx, text)| Chunk {
-            content: text.clone(),
-            chunk_type: Default::default(),
-            embedding: None,
-            metadata: ChunkMetadata {
-                byte_start: 0,
-                byte_end: text.len(),
-                token_count: None,
-                chunk_index: idx,
-                total_chunks: texts.len(),
-                first_page: None,
-                last_page: None,
-                heading_context: None,
-            },
-        })
-        .collect();
-
-    // Generate embeddings
-    kreuzberg::embeddings::generate_embeddings_for_chunks(&mut chunks, &config)
+    // Generate embeddings directly — no dummy Chunks needed
+    let embeddings = kreuzberg::embed_texts(&texts, &config)
         .context("Failed to generate embeddings")?;
-
-    // Extract embeddings
-    let embeddings: Vec<Vec<f32>> = chunks
-        .into_iter()
-        .map(|chunk| chunk.embedding.unwrap_or_default())
-        .collect();
 
     let dimensions = embeddings.first().map(|e| e.len()).unwrap_or(0);
 
@@ -108,3 +79,4 @@ pub fn embed_command(texts: Vec<String>, preset: &str, format: WireFormat) -> Re
 
     Ok(())
 }
+
