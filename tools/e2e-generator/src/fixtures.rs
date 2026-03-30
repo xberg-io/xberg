@@ -29,8 +29,46 @@ pub enum WasmTarget {
     Workers,
 }
 
+/// Specification for a standalone embed fixture.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct EmbedSpec {
+    /// Input texts to embed.
+    pub texts: Vec<String>,
+    /// Optional embedding configuration (JSON map matching EmbeddingConfig).
+    #[serde(default)]
+    pub config: Map<String, Value>,
+    /// Whether to test async variant (default: false = sync only).
+    #[serde(default)]
+    pub async_variant: bool,
+}
+
+/// Assertions for standalone embed fixtures.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct EmbedAssertions {
+    /// Expected number of embedding vectors returned.
+    #[serde(default)]
+    pub count: Option<usize>,
+    /// Expected dimensionality of each vector.
+    #[serde(default)]
+    pub dimensions: Option<usize>,
+    /// Assert no NaN values in any vector.
+    #[serde(default)]
+    pub no_nan: bool,
+    /// Assert no Inf values in any vector.
+    #[serde(default)]
+    pub no_inf: bool,
+    /// Assert each vector has at least one non-zero element.
+    #[serde(default)]
+    pub non_zero: bool,
+    /// Assert all vectors are approximately unit-length (L2 ≈ 1.0). Requires normalize=true.
+    #[serde(default)]
+    pub normalized: bool,
+}
+
 /// Parsed fixture definition shared across generators.
-/// Supports both document extraction and plugin API fixtures.
+/// Supports document extraction, plugin API, PDF render, and standalone embed fixtures.
 #[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 pub struct Fixture {
@@ -51,6 +89,10 @@ pub struct Fixture {
     pub assertions: Option<Assertions>,
     #[serde(default)]
     pub skip: Option<SkipDirective>,
+
+    /// Standalone embed fixture spec.
+    #[serde(default)]
+    pub embed: Option<EmbedSpec>,
 
     #[serde(default)]
     pub api_category: Option<String>,
@@ -87,6 +129,11 @@ impl Fixture {
         self.render.is_some()
     }
 
+    /// Returns true if this is a standalone embed fixture
+    pub fn is_embed(&self) -> bool {
+        self.embed.is_some()
+    }
+
     /// Get document spec for document extraction fixtures.
     /// Panics if called on a plugin API fixture.
     pub fn document(&self) -> &DocumentSpec {
@@ -111,6 +158,21 @@ impl Fixture {
     /// Returns a default if not specified. Panics if called on a plugin API fixture.
     pub fn skip(&self) -> SkipDirective {
         self.skip.clone().unwrap_or_default()
+    }
+
+    /// Get embed spec. Panics if not an embed fixture.
+    pub fn embed_spec(&self) -> &EmbedSpec {
+        self.embed
+            .as_ref()
+            .expect("embed field required for embed fixtures")
+    }
+
+    /// Get embed assertions from the assertions field.
+    pub fn embed_assertions(&self) -> EmbedAssertions {
+        self.assertions
+            .as_ref()
+            .and_then(|a| a.embed.clone())
+            .unwrap_or_default()
     }
 }
 
@@ -251,6 +313,9 @@ pub struct Assertions {
     /// PDF rendering assertions
     #[serde(default)]
     pub render: Option<RenderAssertions>,
+    /// Standalone embed assertions
+    #[serde(default)]
+    pub embed: Option<EmbedAssertions>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -655,15 +720,19 @@ pub fn load_fixtures(fixtures_dir: &Utf8Path) -> Result<Vec<Fixture>> {
         let contents = std::fs::read_to_string(&path).with_context(|| format!("Failed to read fixture {}", path))?;
         let mut fixture: Fixture = serde_json::from_str(&contents).with_context(|| format!("Parsing {path}"))?;
 
-        if !fixture.is_document_extraction() && !fixture.is_plugin_api() && !fixture.is_render() {
+        if !fixture.is_document_extraction() && !fixture.is_plugin_api() && !fixture.is_render() && !fixture.is_embed() {
             bail!(
-                "Fixture {} must have either 'document' (document extraction), 'api_category' (plugin API), or 'document'+'render' (PDF rendering) field",
+                "Fixture {} must have either 'document' (document extraction), 'api_category' (plugin API), 'document'+'render' (PDF rendering), or 'embed' (standalone embed) field",
                 path
             );
         }
 
         if fixture.is_document_extraction() && fixture.is_plugin_api() {
             bail!("Fixture {} cannot have both 'document' and 'api_category' fields", path);
+        }
+
+        if fixture.is_embed() && (fixture.is_document_extraction() || fixture.is_plugin_api() || fixture.is_render()) {
+            bail!("Fixture {} cannot combine 'embed' with other fixture types", path);
         }
 
         if fixture.category.is_none() {
