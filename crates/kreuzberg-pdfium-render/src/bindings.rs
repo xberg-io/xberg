@@ -604,7 +604,7 @@ pub trait PdfiumLibraryBindings: Send + Sync + Drop {
     /// [PdfiumLibraryBindings::FPDFAvail_IsLinearized] will return `PDF_LINEARIZED` or
     /// `PDF_NOT_LINEARIZED` once we have received 1kb of data. If the file's size is less
     /// than 1kb, it returns `PDF_LINEARIZATION_UNKNOWN` as there is insufficient information
-    // to determine if the PDF is linearlized.
+    /// to determine if the PDF is linearized.
     #[allow(non_snake_case)]
     fn FPDFAvail_IsLinearized(&self, avail: FPDF_AVAIL) -> c_int;
 
