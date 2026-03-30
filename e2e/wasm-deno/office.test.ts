@@ -405,7 +405,7 @@ Deno.test("office_hwp_styled", { permissions: { read: true, net: true } }, async
 				error,
 				"office_hwp_styled",
 				["hwp"],
-				"HWP styled doc yields no extractable plain text with current parser.",
+				"HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux.",
 			)
 		) {
 			return;

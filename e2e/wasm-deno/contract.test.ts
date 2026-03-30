@@ -683,7 +683,7 @@ Deno.test("config_force_ocr_pages", { permissions: { read: true, net: true } }, 
 });
 
 Deno.test("config_html_options", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig({ html_options: { include_links: true } });
+	const config = buildConfig({ html_options: { extract_metadata: true } });
 	let result: ExtractionResult | null = null;
 	try {
 		const documentBytes = await resolveDocument("html/complex_table.html");

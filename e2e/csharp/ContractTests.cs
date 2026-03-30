@@ -492,7 +492,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("html/complex_table.html");
             TestHelpers.SkipIfOfficeTestOnWindows("html/complex_table.html");
             var documentPath = TestHelpers.EnsureDocument("html/complex_table.html", true);
-            var config = TestHelpers.BuildConfig("{\"html_options\":{\"include_links\":true}}");
+            var config = TestHelpers.BuildConfig("{\"html_options\":{\"extract_metadata\":true}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "text/html" });

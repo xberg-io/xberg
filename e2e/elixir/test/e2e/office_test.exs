@@ -411,7 +411,8 @@ defmodule E2E.OfficeTest do
              "hwp/styled_document.hwp",
              nil,
              requirements: ["hwp"],
-             notes: "HWP styled doc yields no extractable plain text with current parser.",
+             notes:
+               "HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux.",
              skip_if_missing: true
            ) do
         {:ok, result} ->

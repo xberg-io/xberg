@@ -238,7 +238,7 @@ test_that("office_hwp_styled", {
     "hwp/styled_document.hwp",
     NULL,
     requirements = c("hwp"),
-    notes = "HWP styled doc yields no extractable plain text with current parser.",
+    notes = "HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux.",
     skip_if_missing = TRUE
   )
   assert_expected_mime(result, c("application/x-hwp"))

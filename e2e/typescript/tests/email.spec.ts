@@ -122,6 +122,32 @@ describe("email fixtures", () => {
 	);
 
 	it(
+		"email_pst_empty",
+		() => {
+			const documentPath = resolveDocument("email/empty.pst");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping email_pst_empty: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "email_pst_empty", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.ms-outlook-pst"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"email_sample_eml",
 		() => {
 			const documentPath = resolveDocument("email/sample_email.eml");

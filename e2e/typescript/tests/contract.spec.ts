@@ -975,7 +975,7 @@ describe("contract fixtures", () => {
 				console.warn("Skipping config_html_options: missing document at", documentPath);
 				return;
 			}
-			const config = buildConfig({ html_options: { include_links: true } });
+			const config = buildConfig({ html_options: { extract_metadata: true } });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);

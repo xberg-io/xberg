@@ -661,7 +661,10 @@ pub fn derive_extraction_result(
     // 4. Build pages and OCR elements BEFORE document structure derivation,
     //    so that derive_document_structure_inner can move (take) elem.text
     //    and elem.annotations instead of cloning them.
-    let pages = build_pages(&doc);
+    //
+    //    Prefer pre-built pages from the extractor (e.g. PDF native page tracking)
+    //    over reconstructing from element-level page numbers.
+    let pages = doc.prebuilt_pages.take().or_else(|| build_pages(&doc));
     let ocr_elements = build_ocr_elements(&doc);
 
     // 5. Optionally derive DocumentStructure (relationships already resolved above).

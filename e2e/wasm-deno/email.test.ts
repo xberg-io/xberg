@@ -99,6 +99,25 @@ Deno.test("email_msg_basic", { permissions: { read: true, net: true } }, async (
 	assertions.assertMinContentLength(result, 10);
 });
 
+Deno.test("email_pst_empty", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig(undefined);
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("email/empty.pst");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/vnd.ms-outlook-pst", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "email_pst_empty", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/vnd.ms-outlook-pst"]);
+});
+
 Deno.test("email_sample_eml", { permissions: { read: true, net: true } }, async () => {
 	const config = buildConfig(undefined);
 	let result: ExtractionResult | null = null;

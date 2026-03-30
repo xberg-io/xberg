@@ -57,6 +57,18 @@ test_that("email_msg_basic", {
   assert_min_content_length(result, 10L)
 })
 
+test_that("email_pst_empty", {
+  result <- run_fixture(
+    "email_pst_empty",
+    "email/empty.pst",
+    NULL,
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/vnd.ms-outlook-pst"))
+})
+
 test_that("email_sample_eml", {
   result <- run_fixture(
     "email_sample_eml",

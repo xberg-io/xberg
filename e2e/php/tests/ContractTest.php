@@ -716,7 +716,7 @@ class ContractTest extends TestCase
             $this->markTestSkipped('Skipping config_html_options: missing document at ' . $documentPath);
         }
 
-        $config = Helpers::buildConfig(['html_options' => ['include_links' => true]]);
+        $config = Helpers::buildConfig(['html_options' => ['extract_metadata' => true]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);

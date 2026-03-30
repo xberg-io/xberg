@@ -137,6 +137,12 @@ pub struct InternalDocument {
 
     /// PDF annotations (links, highlights, notes).
     pub annotations: Option<Vec<crate::types::annotations::PdfAnnotation>>,
+
+    /// Pre-built per-page content (set by extractors that track page boundaries natively).
+    ///
+    /// When populated, `derive_extraction_result` uses this directly instead of
+    /// attempting to reconstruct pages from element-level page numbers.
+    pub prebuilt_pages: Option<Vec<crate::types::PageContent>>,
 }
 
 impl InternalDocument {
@@ -153,6 +159,7 @@ impl InternalDocument {
             mime_type: Cow::Borrowed("application/octet-stream"),
             processing_warnings: Vec::new(),
             annotations: None,
+            prebuilt_pages: None,
         }
     }
 

@@ -50,6 +50,20 @@ pub fn chunk_text(
     config: &ChunkingConfig,
     page_boundaries: Option<&[PageBoundary]>,
 ) -> Result<ChunkingResult> {
+    chunk_text_with_heading_source(text, config, page_boundaries, None)
+}
+
+/// Chunk text with an optional separate markdown source for heading context resolution.
+///
+/// When `heading_source` is provided, it is used instead of `text` for building the
+/// heading map. This is needed when `text` is plain text (no markdown headings) but
+/// the original document had headings that were stripped during rendering.
+pub fn chunk_text_with_heading_source(
+    text: &str,
+    config: &ChunkingConfig,
+    page_boundaries: Option<&[PageBoundary]>,
+    heading_source: Option<&str>,
+) -> Result<ChunkingResult> {
     if text.is_empty() {
         return Ok(ChunkingResult {
             chunks: vec![],
@@ -88,8 +102,9 @@ pub fn chunk_text(
     let mut chunks = build_chunks(text, text_chunks, page_boundaries)?;
 
     // For Markdown chunker, resolve heading context for each chunk.
+    // Use the heading_source (markdown-formatted content) if provided, otherwise fall back to text.
     if config.chunker_type == ChunkerType::Markdown {
-        let heading_map = build_heading_map(text);
+        let heading_map = build_heading_map(heading_source.unwrap_or(text));
         if !heading_map.is_empty() {
             for chunk in &mut chunks {
                 chunk.metadata.heading_context = resolve_heading_context(chunk.metadata.byte_start, &heading_map);

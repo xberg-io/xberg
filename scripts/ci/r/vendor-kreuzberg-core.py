@@ -64,11 +64,27 @@ def format_dependency(name: str, dep_spec: object) -> str:
         optional: bool | None = dep_spec.get("optional")
 
         path: str | None = dep_spec.get("path")
+        git: str | None = dep_spec.get("git")
+        branch: str | None = dep_spec.get("branch")
+        tag: str | None = dep_spec.get("tag")
+        rev: str | None = dep_spec.get("rev")
 
         parts: list[str] = []
 
         if package:
             parts.append(f'package = "{package}"')
+
+        if git:
+            parts.append(f'git = "{git}"')
+
+        if branch:
+            parts.append(f'branch = "{branch}"')
+
+        if tag:
+            parts.append(f'tag = "{tag}"')
+
+        if rev:
+            parts.append(f'rev = "{rev}"')
 
         if path:
             parts.append(f'path = "{path}"')

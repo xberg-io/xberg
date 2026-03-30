@@ -93,6 +93,24 @@ class EmailTest extends TestCase
     }
 
     /**
+     * Empty Outlook PST archive with no messages.
+     */
+    public function test_email_pst_empty(): void
+    {
+        $documentPath = Helpers::resolveDocument('email/empty.pst');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping email_pst_empty: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(null);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/vnd.ms-outlook-pst']);
+    }
+
+    /**
      * Sample EML email file to verify email parsing.
      */
     public function test_email_sample_eml(): void

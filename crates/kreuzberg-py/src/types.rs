@@ -70,6 +70,9 @@ pub struct ExtractionResult {
     #[pyo3(get)]
     pub quality_score: Option<f64>,
 
+    #[pyo3(get)]
+    pub formatted_content: Option<String>,
+
     processing_warnings: Py<PyList>,
 
     annotations: Option<Py<PyList>>,
@@ -694,6 +697,7 @@ impl ExtractionResult {
             ocr_elements,
             extracted_keywords,
             quality_score: result.quality_score,
+            formatted_content: result.formatted_content,
             processing_warnings,
             annotations,
         })
@@ -743,6 +747,7 @@ mod tests {
                 }],
                 annotations: None,
                 children: None,
+                formatted_content: None,
             };
 
             let py_result =

@@ -878,7 +878,7 @@ public class ContractTest {
 
   @Test
   public void configHtmlOptions() throws Exception {
-    JsonNode config = MAPPER.readTree("{\"html_options\":{\"include_links\":true}}");
+    JsonNode config = MAPPER.readTree("{\"html_options\":{\"extract_metadata\":true}}");
     E2EHelpers.runFixture(
         "config_html_options",
         "html/complex_table.html",

@@ -37,6 +37,13 @@ static void test_email_email_msg_basic(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_email_email_pst_empty(void) {
+    CExtractionResult *result = run_extraction("email/empty.pst", NULL);
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/vnd.ms-outlook-pst"}, 1);
+    kreuzberg_free_result(result);
+}
+
 static void test_email_email_sample_eml(void) {
     CExtractionResult *result = run_extraction("email/sample_email.eml", NULL);
     if (!result) return; /* skipped */
@@ -50,6 +57,7 @@ int main(void) {
     test_email_email_eml_multipart();
     test_email_email_eml_utf16();
     test_email_email_msg_basic();
+    test_email_email_pst_empty();
     test_email_email_sample_eml();
     printf("test_email: all tests passed\n");
     return 0;

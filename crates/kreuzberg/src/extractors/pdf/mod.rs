@@ -735,10 +735,10 @@ impl PdfExtractor {
         #[cfg(not(feature = "pdf"))]
         let used_structured_doc = false;
 
-        let _final_pages = assign_tables_and_images_to_pages(page_contents, &tables, images.as_deref().unwrap_or(&[]));
+        let final_pages = assign_tables_and_images_to_pages(page_contents, &tables, images.as_deref().unwrap_or(&[]));
 
         // Refine PageInfo.is_blank in page_structure to match PageContent refinement
-        if let (Some(final_pgs), Some(page_structure)) = (&_final_pages, &mut pdf_metadata.page_structure)
+        if let (Some(final_pgs), Some(page_structure)) = (&final_pages, &mut pdf_metadata.page_structure)
             && let Some(ref mut page_infos) = page_structure.pages
         {
             for page_info in page_infos.iter_mut() {
@@ -781,7 +781,7 @@ impl PdfExtractor {
         // When a pre-rendered InternalDocument is available, use it directly.
         // Otherwise, fall back to splitting text on double newlines.
         #[cfg(feature = "pdf")]
-        let doc = if used_structured_doc {
+        let mut doc = if used_structured_doc {
             if let Some(mut pre_doc) = pre_rendered_doc {
                 pre_doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
                 pre_doc.metadata = Metadata {
@@ -883,7 +883,7 @@ impl PdfExtractor {
         };
 
         #[cfg(not(feature = "pdf"))]
-        let doc = {
+        let mut doc = {
             let mut doc = InternalDocument::new("pdf");
             doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
             for paragraph in text.split("\n\n") {
@@ -895,10 +895,14 @@ impl PdfExtractor {
             doc
         };
 
+        // Attach pre-built per-page content so derive_extraction_result can use it.
+        doc.prebuilt_pages = final_pages;
+
         #[cfg(feature = "pdf")]
         tracing::debug!(
             elements = doc.elements.len(),
             tables = doc.tables.len(),
+            has_pages = doc.prebuilt_pages.is_some(),
             "InternalDocument finalized"
         );
 

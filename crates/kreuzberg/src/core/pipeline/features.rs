@@ -38,7 +38,16 @@ pub(super) fn execute_chunking(result: &mut ExtractionResult, config: &Extractio
         let chunking_config = &resolved_config;
         let page_boundaries = result.metadata.pages.as_ref().and_then(|ps| ps.boundaries.as_deref());
 
-        match crate::chunking::chunk_text(&result.content, chunking_config, page_boundaries) {
+        // Pass formatted_content (markdown) for heading context resolution when available.
+        // Plain-text rendering strips heading markers, but the markdown chunker needs them
+        // to build the heading hierarchy for chunk metadata.
+        let heading_source = result.formatted_content.as_deref();
+        match crate::chunking::chunk_text_with_heading_source(
+            &result.content,
+            chunking_config,
+            page_boundaries,
+            heading_source,
+        ) {
             Ok(chunking_result) => {
                 result.chunks = Some(chunking_result.chunks);
 

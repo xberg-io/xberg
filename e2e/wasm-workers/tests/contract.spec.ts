@@ -823,7 +823,7 @@ describe("contract", () => {
 			return;
 		}
 
-		const config = buildConfig({ html_options: { include_links: true } });
+		const config = buildConfig({ html_options: { extract_metadata: true } });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/octet-stream", config);

@@ -613,7 +613,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_html_options',
       'html/complex_table.html',
-      { html_options: { include_links: true } },
+      { html_options: { extract_metadata: true } },
       requirements: [],
       notes: nil,
       skip_if_missing: true

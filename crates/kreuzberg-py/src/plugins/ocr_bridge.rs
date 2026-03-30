@@ -490,6 +490,7 @@ fn dict_to_extraction_result(_py: Python<'_>, dict: &Bound<'_, PyAny>) -> Result
         processing_warnings: vec![],
         annotations: None,
         children: None,
+        formatted_content: None,
     })
 }
 

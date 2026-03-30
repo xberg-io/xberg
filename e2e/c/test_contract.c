@@ -456,7 +456,7 @@ static void test_contract_config_force_ocr_pages(void) {
 }
 
 static void test_contract_config_html_options(void) {
-    CExtractionResult *result = run_extraction("html/complex_table.html", "{\"html_options\":{\"include_links\":true}}");
+    CExtractionResult *result = run_extraction("html/complex_table.html", "{\"html_options\":{\"extract_metadata\":true}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"text/html"}, 1);
     assert_min_content_length(result, 10);

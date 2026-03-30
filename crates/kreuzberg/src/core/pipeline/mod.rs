@@ -55,9 +55,37 @@ use initialization::{get_processors_from_cache, initialize_features, initialize_
     )
 ))]
 pub async fn run_pipeline(doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractionResult> {
+    // Pre-render markdown for the chunker's heading context resolution when:
+    // - Markdown chunking is configured
+    // - Output format is not already Markdown (which would produce formatted_content anyway)
+    // Plain-text rendering strips heading markers, so the markdown chunker needs
+    // a separate markdown rendering to build the heading hierarchy for chunk metadata.
+    #[cfg(feature = "chunking")]
+    let chunker_heading_source = {
+        let needs_markdown = config.chunking.as_ref().is_some_and(|c| {
+            c.chunker_type == crate::core::config::ChunkerType::Markdown
+                || c.resolve_preset().chunker_type == crate::core::config::ChunkerType::Markdown
+        }) && config.output_format == crate::core::config::OutputFormat::Plain;
+        if needs_markdown {
+            Some(crate::rendering::render_markdown(&doc))
+        } else {
+            None
+        }
+    };
+
     // 1. Derive ExtractionResult from InternalDocument
     let include_structure = config.include_document_structure;
     let mut result = crate::extraction::derive::derive_extraction_result(doc, include_structure, config.output_format);
+
+    // Temporarily store pre-rendered markdown for chunker heading context.
+    // Tracked separately so we can remove it after chunking — apply_output_format
+    // must not swap this into result.content when output_format is Plain.
+    #[cfg(feature = "chunking")]
+    let chunker_only_markdown = result.formatted_content.is_none();
+    #[cfg(feature = "chunking")]
+    if chunker_only_markdown && let Some(md) = chunker_heading_source {
+        result.formatted_content = Some(md);
+    }
 
     // 2. Run post-processing pipeline
     let pp_config = config.postprocessor.as_ref();
@@ -81,6 +109,14 @@ pub async fn run_pipeline(doc: InternalDocument, config: &ExtractionConfig) -> R
     }
 
     execute_chunking(&mut result, config)?;
+
+    // Clear temporary markdown if it was only stored for chunker heading context.
+    // This prevents apply_output_format from swapping it into result.content.
+    #[cfg(feature = "chunking")]
+    if chunker_only_markdown {
+        result.formatted_content = None;
+    }
+
     execute_language_detection(&mut result, config)?;
     execute_token_reduction(&mut result, config)?;
     execute_validators(&result, config).await?;
@@ -122,12 +158,41 @@ pub async fn run_pipeline(doc: InternalDocument, config: &ExtractionConfig) -> R
 /// - Async validators
 #[cfg(not(feature = "tokio-runtime"))]
 pub fn run_pipeline_sync(doc: InternalDocument, config: &ExtractionConfig) -> Result<ExtractionResult> {
+    // Pre-render markdown for chunker heading context (same logic as async path).
+    #[cfg(feature = "chunking")]
+    let chunker_heading_source = {
+        let needs_markdown = config.chunking.as_ref().is_some_and(|c| {
+            c.chunker_type == crate::core::config::ChunkerType::Markdown
+                || c.resolve_preset().chunker_type == crate::core::config::ChunkerType::Markdown
+        }) && config.output_format == crate::core::config::OutputFormat::Plain;
+        if needs_markdown {
+            Some(crate::rendering::render_markdown(&doc))
+        } else {
+            None
+        }
+    };
+
     // 1. Derive ExtractionResult from InternalDocument
     let include_structure = config.include_document_structure;
     let mut result = crate::extraction::derive::derive_extraction_result(doc, include_structure, config.output_format);
 
+    #[cfg(feature = "chunking")]
+    let chunker_only_markdown = result.formatted_content.is_none();
+    #[cfg(feature = "chunking")]
+    if chunker_only_markdown {
+        if let Some(md) = chunker_heading_source {
+            result.formatted_content = Some(md);
+        }
+    }
+
     // 2. Run synchronous post-processing
     execute_chunking(&mut result, config)?;
+
+    #[cfg(feature = "chunking")]
+    if chunker_only_markdown {
+        result.formatted_content = None;
+    }
+
     execute_language_detection(&mut result, config)?;
     execute_token_reduction(&mut result, config)?;
 

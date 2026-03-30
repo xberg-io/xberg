@@ -98,6 +98,27 @@ defmodule E2E.EmailTest do
       end
     end
 
+    test "email_pst_empty" do
+      case E2E.Helpers.run_fixture(
+             "email_pst_empty",
+             "email/empty.pst",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.ms-outlook-pst"])
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "email_sample_eml" do
       case E2E.Helpers.run_fixture(
              "email_sample_eml",

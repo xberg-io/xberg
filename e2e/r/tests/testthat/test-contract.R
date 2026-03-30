@@ -486,7 +486,7 @@ test_that("config_html_options", {
   result <- run_fixture(
     "config_html_options",
     "html/complex_table.html",
-    list(html_options = list(include_links = TRUE)),
+    list(html_options = list(extract_metadata = TRUE)),
     requirements = character(0),
     notes = NULL,
     skip_if_missing = TRUE

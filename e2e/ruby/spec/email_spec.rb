@@ -77,6 +77,22 @@ RSpec.describe 'email fixtures' do
     end
   end
 
+  it 'email_pst_empty' do
+    E2ERuby.run_fixture(
+      'email_pst_empty',
+      'email/empty.pst',
+      nil,
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['application/vnd.ms-outlook-pst']
+      )
+    end
+  end
+
   it 'email_sample_eml' do
     E2ERuby.run_fixture(
       'email_sample_eml',

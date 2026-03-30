@@ -19,7 +19,7 @@ anyhow = "1.0"
 
 [package]
 name = "kreuzberg-r"
-version = "4.3.8"
+version = "4.6.3"
 edition = "2024"
 rust-version = "1.91"
 authors = ["Na'aman Hirschfeld <naaman@kreuzberg.dev>"]

@@ -260,7 +260,6 @@ function mapHtmlOptions(raw: PlainRecord): PlainRecord {
 		config.encoding = raw.encoding;
 	}
 	assignBooleanField(config, raw, "debug", "debug");
-	assignBooleanField(config, raw, "include_links", "includeLinks");
 	return config;
 }
 

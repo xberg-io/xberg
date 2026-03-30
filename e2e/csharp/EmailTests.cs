@@ -65,6 +65,18 @@ namespace Kreuzberg.E2E.Email
         }
 
         [SkippableFact]
+        public void EmailPstEmpty()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("email/empty.pst");
+            TestHelpers.SkipIfOfficeTestOnWindows("email/empty.pst");
+            var documentPath = TestHelpers.EnsureDocument("email/empty.pst", true);
+            var config = TestHelpers.BuildConfig(null);
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/vnd.ms-outlook-pst" });
+        }
+
+        [SkippableFact]
         public void EmailSampleEml()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("email/sample_email.eml");

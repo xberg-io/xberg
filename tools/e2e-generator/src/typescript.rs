@@ -235,7 +235,6 @@ function mapHtmlOptions(raw: PlainRecord): PlainRecord {
     if (typeof raw.code_block_style === "string") { config.codeBlockStyle = raw.code_block_style; }
     if (typeof raw.encoding === "string") { config.encoding = raw.encoding; }
     assignBooleanField(config, raw, "debug", "debug");
-    assignBooleanField(config, raw, "include_links", "includeLinks");
     return config;
 }
 

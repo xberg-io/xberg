@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
+	kreuzberg "github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
 )
 
 func TestRenderRenderCustomDpi(t *testing.T) {

@@ -106,6 +106,29 @@ describe("email", () => {
 		assertions.assertMinContentLength(result, 10);
 	});
 
+	it("email_pst_empty", async () => {
+		const documentBytes = getFixture("email/empty.pst");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/vnd.ms-outlook-pst", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "email_pst_empty", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/vnd.ms-outlook-pst"]);
+	});
+
 	it("email_sample_eml", async () => {
 		const documentBytes = getFixture("email/sample_email.eml");
 		if (documentBytes === null) {

@@ -30,6 +30,11 @@ func TestEmailEmailMsgBasic(t *testing.T) {
 	assertMinContentLength(t, result, 10)
 }
 
+func TestEmailEmailPstEmpty(t *testing.T) {
+	result := runExtraction(t, "email/empty.pst", nil)
+	assertExpectedMime(t, result, []string{"application/vnd.ms-outlook-pst"})
+}
+
 func TestEmailEmailSampleEml(t *testing.T) {
 	result := runExtraction(t, "email/sample_email.eml", nil)
 	assertExpectedMime(t, result, []string{"message/rfc822"})

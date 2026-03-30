@@ -312,7 +312,8 @@ RSpec.describe 'office fixtures' do
       'hwp/styled_document.hwp',
       nil,
       requirements: %w[hwp],
-      notes: 'HWP styled doc yields no extractable plain text with current parser.',
+      notes: 'HWP styled doc yields no extractable plain text with current parser. ' \
+             'Extraction returns empty content on ARM Linux.',
       skip_if_missing: true
     ) do |result|
       E2ERuby::Assertions.assert_expected_mime(

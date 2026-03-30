@@ -591,7 +591,7 @@ def test_config_html_options() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping config_html_options: missing document at {document_path}")
 
-    config = helpers.build_config({"html_options": {"include_links": True}})
+    config = helpers.build_config({"html_options": {"extract_metadata": True}})
 
     result = extract_file_sync(document_path, None, config)
 
