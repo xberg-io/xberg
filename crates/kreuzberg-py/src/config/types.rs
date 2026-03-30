@@ -836,6 +836,22 @@ impl EmbeddingConfig {
     }
 }
 
+impl Default for EmbeddingConfig {
+    fn default() -> Self {
+        Self {
+            inner: kreuzberg::EmbeddingConfig {
+                model: kreuzberg::EmbeddingModelType::Preset {
+                    name: "balanced".to_string(),
+                },
+                normalize: true,
+                batch_size: 32,
+                show_download_progress: false,
+                cache_dir: None,
+            },
+        }
+    }
+}
+
 /// Chunking configuration.
 ///
 /// Controls how text is split into chunks with optional embedding generation.

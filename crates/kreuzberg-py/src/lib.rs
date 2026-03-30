@@ -112,6 +112,9 @@ fn _internal_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(core::batch_extract_files, m)?)?;
     m.add_function(wrap_pyfunction!(core::batch_extract_bytes, m)?)?;
 
+    m.add_function(wrap_pyfunction!(core::embed_sync, m)?)?;
+    m.add_function(wrap_pyfunction!(core::embed, m)?)?;
+
     m.add_function(wrap_pyfunction!(core::render_pdf_page_impl, m)?)?;
 
     m.add_class::<core::PyPdfPageIterator>()?;

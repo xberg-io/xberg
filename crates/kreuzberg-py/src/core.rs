@@ -596,6 +596,74 @@ pub fn batch_extract_bytes<'py>(
     })
 }
 
+/// Generate embeddings from a list of text strings (synchronous).
+///
+/// Args:
+///     texts: List of strings to embed
+///     config: Embedding configuration (model, batch size, normalization)
+///
+/// Returns:
+///     list[list[float]]: One embedding vector per input text
+///
+/// Raises:
+///     MissingDependencyError: ONNX Runtime not installed
+///     ParsingError: Unknown preset or model download failure
+///
+/// Example:
+///     >>> from kreuzberg import embed_sync, EmbeddingConfig, EmbeddingModelType
+///     >>> config = EmbeddingConfig(model=EmbeddingModelType.preset("balanced"))
+///     >>> result = embed_sync(["Hello, world!"], config=config)
+///     >>> len(result)
+///     1
+#[pyfunction]
+#[pyo3(signature = (texts, config=crate::config::EmbeddingConfig::default()))]
+pub fn embed_sync(
+    py: Python,
+    texts: Vec<String>,
+    config: crate::config::EmbeddingConfig,
+) -> PyResult<Vec<Vec<f32>>> {
+    let rust_config = config.inner;
+    Python::detach(py, || {
+        kreuzberg::embed_texts(&texts, &rust_config).map_err(crate::error::to_py_err)
+    })
+}
+
+/// Generate embeddings from a list of text strings (asynchronous).
+///
+/// Args:
+///     texts: List of strings to embed
+///     config: Embedding configuration (model, batch size, normalization)
+///
+/// Returns:
+///     Awaitable[list[list[float]]]: One embedding vector per input text
+///
+/// Raises:
+///     MissingDependencyError: ONNX Runtime not installed
+///     ParsingError: Unknown preset or model download failure
+///
+/// Example:
+///     >>> import asyncio
+///     >>> from kreuzberg import embed, EmbeddingConfig, EmbeddingModelType
+///     >>> async def main():
+///     ...     config = EmbeddingConfig(model=EmbeddingModelType.preset("balanced"))
+///     ...     result = await embed(["Hello, world!"], config=config)
+///     ...     print(len(result))  # 1
+///     >>> asyncio.run(main())
+#[pyfunction]
+#[pyo3(signature = (texts, config=crate::config::EmbeddingConfig::default()))]
+pub fn embed<'py>(
+    py: Python<'py>,
+    texts: Vec<String>,
+    config: crate::config::EmbeddingConfig,
+) -> PyResult<Bound<'py, PyAny>> {
+    let rust_config = config.inner;
+    pyo3_async_runtimes::tokio::future_into_py(py, async move {
+        kreuzberg::embed_texts_async(texts, &rust_config)
+            .await
+            .map_err(crate::error::to_py_err)
+    })
+}
+
 /// Render a single page of a PDF file to a PNG byte buffer.
 ///
 /// Args:
