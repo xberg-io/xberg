@@ -1,12 +1,23 @@
 # kreuzberg-surrealdb
 
+<div align="center" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 20px 0;">
+  <a href="https://pypi.org/project/kreuzberg-surrealdb/"><img src="https://img.shields.io/pypi/v/kreuzberg-surrealdb?label=kreuzberg-surrealdb&color=007ec6" alt="PyPI version"></a>
+  <a href="https://pypi.org/project/kreuzberg-surrealdb/"><img src="https://img.shields.io/pypi/pyversions/kreuzberg-surrealdb?color=007ec6" alt="Python versions"></a>
+  <a href="https://github.com/kreuzberg-dev/kreuzberg-surrealdb/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"></a>
+  <a href="https://docs.kreuzberg.dev"><img src="https://img.shields.io/badge/docs-kreuzberg.dev-blue" alt="Docs"></a>
+</div>
+
+<img width="3384" height="573" alt="Kreuzberg Banner" src="https://github.com/user-attachments/assets/1b6c6ad7-3b6d-4171-b1c9-f2026cc9deb8" />
+
+<div align="center" style="margin-top: 20px;">
+  <a href="https://discord.gg/xt9WY3GnKR">
+    <img height="22" src="https://img.shields.io/badge/Discord-Join%20our%20community-7289da?logo=discord&logoColor=white" alt="Discord">
+  </a>
+</div>
+
 Kreuzberg-to-SurrealDB connector for document ingestion pipelines.
 
 Bridges [Kreuzberg](https://github.com/kreuzberg-dev/kreuzberg) extraction into [SurrealDB](https://surrealdb.com/) — handles schema generation, content deduplication, chunk storage, and index configuration.
-
-[![PyPI](https://img.shields.io/pypi/v/kreuzberg-surrealdb)](https://pypi.org/project/kreuzberg-surrealdb/)
-[![Python](https://img.shields.io/pypi/pyversions/kreuzberg-surrealdb)](https://pypi.org/project/kreuzberg-surrealdb/)
-[![License](https://img.shields.io/pypi/l/kreuzberg-surrealdb)](https://github.com/kreuzberg-dev/kreuzberg-surrealdb/blob/main/LICENSE)
 
 ## Features
 
