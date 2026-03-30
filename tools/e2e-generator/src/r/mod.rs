@@ -1,4 +1,5 @@
 mod assertions;
+mod embed;
 mod helpers;
 mod plugins;
 mod render;
@@ -58,6 +59,7 @@ pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path, _mode: &Generation
     write_description(&r_root)?;
     write_lintr(&r_root)?;
     clean_test_files(&test_dir)?;
+    embed::generate_embed_tests(fixtures, &test_dir)?;
 
     // Generate document extraction tests grouped by category
     let doc_fixtures: Vec<_> = fixtures.iter().filter(|f| f.is_document_extraction()).collect();
