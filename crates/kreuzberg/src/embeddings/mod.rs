@@ -541,6 +541,26 @@ pub fn download_model(
     Ok(())
 }
 
+/// Normalize an embedding vector in-place (L2 normalization).
+fn normalize_in_place(embedding: &mut [f32]) {
+    let magnitude: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if magnitude > f32::EPSILON {
+        let inv_mag = 1.0 / magnitude;
+        embedding.iter_mut().for_each(|x| *x *= inv_mag);
+    }
+}
+
+/// Apply normalization to a batch of embeddings (parallel for large batches).
+fn normalize_embeddings(embeddings: &mut Vec<Vec<f32>>) {
+    const PARALLEL_THRESHOLD: usize = 64;
+    if embeddings.len() >= PARALLEL_THRESHOLD {
+        use rayon::prelude::*;
+        embeddings.par_iter_mut().for_each(|v| normalize_in_place(v));
+    } else {
+        embeddings.iter_mut().for_each(|v| normalize_in_place(v));
+    }
+}
+
 /// Generate embeddings for text chunks using the specified configuration.
 ///
 /// This function modifies chunks in-place, populating their `embedding` field
@@ -563,53 +583,11 @@ pub fn generate_embeddings_for_chunks(
         return Ok(());
     }
 
-    let chunk_count = chunks.len();
-
-    let (repo, model_file, pooling) = resolve_model_info(&config.model)?;
-    let engine = get_or_init_engine(repo, model_file, pooling, config.cache_dir.clone())?;
-
     let texts: Vec<&str> = chunks.iter().map(|c| c.content.as_str()).collect();
-    let mut embeddings_result = engine.embed(&texts, config.batch_size).map_err(|e| {
-        embedding_error(format!(
-            "Failed to generate embeddings for {chunk_count} chunks (model={:?}, batch_size={}): {e}",
-            config.model, config.batch_size
-        ))
-    })?;
+    let mut embeddings_result = embed_texts(&texts, config)?;
 
-    // For large batches, normalize in parallel via rayon.
     if config.normalize {
-        const PARALLEL_THRESHOLD: usize = 64;
-        if embeddings_result.len() >= PARALLEL_THRESHOLD {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                use rayon::prelude::*;
-                embeddings_result.par_iter_mut().for_each(|embedding| {
-                    let magnitude: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-                    if magnitude > f32::EPSILON {
-                        let inv_mag = 1.0 / magnitude;
-                        embedding.iter_mut().for_each(|x| *x *= inv_mag);
-                    }
-                });
-            }
-            #[cfg(target_arch = "wasm32")]
-            {
-                for embedding in &mut embeddings_result {
-                    let magnitude: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-                    if magnitude > f32::EPSILON {
-                        let inv_mag = 1.0 / magnitude;
-                        embedding.iter_mut().for_each(|x| *x *= inv_mag);
-                    }
-                }
-            }
-        } else {
-            for embedding in &mut embeddings_result {
-                let magnitude: f32 = embedding.iter().map(|x| x * x).sum::<f32>().sqrt();
-                if magnitude > f32::EPSILON {
-                    let inv_mag = 1.0 / magnitude;
-                    embedding.iter_mut().for_each(|x| *x *= inv_mag);
-                }
-            }
-        }
+        normalize_embeddings(&mut embeddings_result);
     }
 
     // Assign embeddings to chunks.
@@ -618,6 +596,106 @@ pub fn generate_embeddings_for_chunks(
     }
 
     Ok(())
+}
+
+/// Generate embeddings for a list of raw text strings (standalone, no chunking pipeline).
+///
+/// Returns one embedding vector per input text, in the same order as the input.
+/// Uses the same model resolution, engine caching, and batch processing as the
+/// chunking pipeline. Normalization is applied if `config.normalize` is true.
+///
+/// # Arguments
+///
+/// * `texts` - Slice of strings to embed
+/// * `config` - Embedding configuration specifying model, batch size, and normalization
+///
+/// # Returns
+///
+/// Returns `Vec<Vec<f32>>` — one `Vec<f32>` per input text. Returns an empty
+/// `Vec` if `texts` is empty (no error).
+///
+/// # Errors
+///
+/// - `KreuzbergError::MissingDependency` if ONNX Runtime is not installed
+/// - `KreuzbergError::Plugin` if the preset name is unknown or model download fails
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use kreuzberg::{embed_texts, EmbeddingConfig, EmbeddingModelType};
+///
+/// let config = EmbeddingConfig {
+///     model: EmbeddingModelType::Preset { name: "balanced".to_string() },
+///     normalize: true,
+///     ..Default::default()
+/// };
+/// let embeddings = embed_texts(&["Hello, world!", "Second text"], &config)?;
+/// assert_eq!(embeddings.len(), 2);
+/// assert_eq!(embeddings[0].len(), 768); // balanced preset = 768 dims
+/// ```
+pub fn embed_texts<T: AsRef<str>>(
+    texts: &[T],
+    config: &crate::core::config::EmbeddingConfig,
+) -> crate::Result<Vec<Vec<f32>>> {
+    if texts.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let chunk_count = texts.len();
+    let (repo, model_file, pooling) = resolve_model_info(&config.model)?;
+    let engine = get_or_init_engine(repo, model_file, pooling, config.cache_dir.clone())?;
+
+    let text_refs: Vec<&str> = texts.iter().map(|t| t.as_ref()).collect();
+    let mut embeddings = engine.embed(&text_refs, config.batch_size).map_err(|e| {
+        embedding_error(format!(
+            "Failed to generate embeddings for {chunk_count} texts (model={:?}, batch_size={}): {e}",
+            config.model, config.batch_size
+        ))
+    })?;
+
+    if config.normalize {
+        normalize_embeddings(&mut embeddings);
+    }
+
+    Ok(embeddings)
+}
+
+/// Generate embeddings asynchronously for a list of text strings.
+///
+/// This is the async counterpart to [`embed_texts`]. It offloads the blocking
+/// ONNX inference work to a dedicated blocking thread pool via Tokio's
+/// `spawn_blocking`, keeping the async executor free.
+///
+/// Returns one embedding vector per input text in the same order.
+///
+/// # Arguments
+///
+/// * `texts` - Vec of strings to embed (owned, sent to blocking thread)
+/// * `config` - Embedding configuration specifying model, batch size, and normalization
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use kreuzberg::{embed_texts_async, EmbeddingConfig};
+///
+/// let embeddings = embed_texts_async(
+///     vec!["Hello!".to_string()],
+///     &EmbeddingConfig::default(),
+/// ).await?;
+/// ```
+#[cfg(feature = "tokio-runtime")]
+pub async fn embed_texts_async<T: AsRef<str> + Send + 'static>(
+    texts: Vec<T>,
+    config: &crate::core::config::EmbeddingConfig,
+) -> crate::Result<Vec<Vec<f32>>> {
+    if texts.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let config = config.clone();
+    tokio::task::spawn_blocking(move || embed_texts(&texts, &config))
+        .await
+        .map_err(|e| embedding_error(format!("Embedding task panicked: {e}")))?
 }
 
 #[cfg(test)]

@@ -162,7 +162,12 @@ pub use plugins::registry::{
 };
 
 #[cfg(feature = "embeddings")]
-pub use embeddings::{EMBEDDING_PRESETS, EmbeddingPreset, download_model, get_preset, list_presets, warm_model};
+pub use embeddings::{
+    EMBEDDING_PRESETS, EmbeddingPreset, download_model, embed_texts, get_preset, list_presets, warm_model,
+};
+
+#[cfg(all(feature = "embeddings", feature = "tokio-runtime"))]
+pub use embeddings::embed_texts_async;
 
 /// Serialize an [`ExtractionResult`] to TOON (Token-Oriented Object Notation).
 ///
