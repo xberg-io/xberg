@@ -1,8 +1,10 @@
 # Quick Start
 
-Get up and running with Kreuzberg in minutes.
+This guide walks you through Kreuzberg's core API — extracting text, handling errors,
+running OCR, and working with metadata. Install your binding first if you haven't:
+[Installation](installation.md).
 
-!!! info "Choosing Your TypeScript Package"
+!!! info "Node.js or Browser?"
 
     Kreuzberg provides **two TypeScript packages** for different runtimes:
 
@@ -11,9 +13,9 @@ Get up and running with Kreuzberg in minutes.
 
     The examples below show both. Pick the one matching your runtime. See [Platform Overview](../index.md#language-support) for detailed guidance.
 
-## Basic Extraction
+## Your First Extraction
 
-Extract text from any supported document format:
+Pass a file path to get its text content. Kreuzberg detects the format automatically:
 
 === "C"
 
@@ -63,63 +65,59 @@ Extract text from any supported document format:
 
     --8<-- "snippets/cli/extract_basic.md"
 
-## Async Extraction
+## Handle Errors
 
-For better performance with I/O-bound operations:
+Wrap extractions in error handling before going further. Kreuzberg raises specific
+exceptions for missing files, parse failures, and OCR problems:
 
 === "C"
 
-    --8<-- "snippets/c/api/extract_file_async.md"
+    --8<-- "snippets/c/api/error_handling.md"
 
 === "C#"
 
-    --8<-- "snippets/csharp/extract_file_async.md"
+    --8<-- "snippets/csharp/error_handling.md"
 
 === "Go"
 
-    --8<-- "snippets/go/api/extract_file_async.md"
+    --8<-- "snippets/go/api/error_handling.md"
 
 === "Java"
 
-    --8<-- "snippets/java/api/extract_file_async.md"
+    --8<-- "snippets/java/api/error_handling.md"
 
 === "Python"
 
-    --8<-- "snippets/python/api/extract_file_async.md"
+    --8<-- "snippets/python/utils/error_handling.md"
 
 === "Ruby"
 
-    --8<-- "snippets/ruby/api/extract_file_async.md"
+    --8<-- "snippets/ruby/api/error_handling.md"
 
 === "R"
 
-    --8<-- "snippets/r/api/extract_file_async.md"
+    --8<-- "snippets/r/api/error_handling.md"
 
 === "Rust"
 
-    --8<-- "snippets/rust/api/extract_file_async.md"
+    --8<-- "snippets/rust/api/error_handling.md"
 
 === "Elixir"
 
-    --8<-- "snippets/elixir/core/extract_file_async.exs"
+    --8<-- "snippets/elixir/core/error_handling.exs"
 
 === "TypeScript"
 
-    --8<-- "snippets/typescript/getting-started/extract_file_async.md"
+    --8<-- "snippets/typescript/api/error_handling.md"
 
 === "WASM"
 
-    --8<-- "snippets/wasm/getting-started/extract_file_async.md"
+    --8<-- "snippets/wasm/api/error_handling.md"
 
-=== "CLI"
+## OCR for Scanned Documents
 
-    !!! note "Not Applicable"
-        Async extraction is an API-level feature. The CLI operates synchronously.
-        Use language-specific bindings (Python, TypeScript, Rust, WASM) for async operations.
-
-## OCR Extraction
-
-Extract text from images and scanned documents:
+Kreuzberg runs OCR automatically when it detects an image or scanned PDF.
+You can also force OCR on any document:
 
 === "C"
 
@@ -169,9 +167,9 @@ Extract text from images and scanned documents:
 
     --8<-- "snippets/cli/ocr_basic.md"
 
-## Batch Processing
+## Process Multiple Files
 
-Process multiple files concurrently:
+Pass a list of paths to extract them in parallel:
 
 === "C"
 
@@ -221,175 +219,10 @@ Process multiple files concurrently:
 
     --8<-- "snippets/cli/batch_basic.md"
 
-## Extract from Bytes
+## Read Document Metadata
 
-When you already have file content in memory:
-
-=== "C"
-
-    --8<-- "snippets/c/api/extract_bytes_sync.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/extract_bytes_sync.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/extract_bytes_sync.md"
-
-=== "Java"
-
-    --8<-- "snippets/java/api/extract_bytes_sync.md"
-
-=== "Python"
-
-    --8<-- "snippets/python/api/extract_bytes_sync.md"
-
-=== "Ruby"
-
-    --8<-- "snippets/ruby/api/extract_bytes_sync.md"
-
-=== "R"
-
-    --8<-- "snippets/r/api/extract_bytes_sync.md"
-
-=== "Rust"
-
-    --8<-- "snippets/rust/api/extract_bytes_sync.md"
-
-=== "Elixir"
-
-    --8<-- "snippets/elixir/core/extract_bytes_sync.exs"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/getting-started/extract_bytes_sync.md"
-
-=== "WASM"
-
-    --8<-- "snippets/wasm/getting-started/extract_bytes_sync.md"
-
-=== "CLI"
-
-    !!! note "Not Applicable"
-        The CLI operates on files from disk. For in-memory data processing, use language-specific bindings.
-
-        However, you can use CLI with pipes and temporary files:
-
-        ```bash title="Terminal"
-        # Create temporary file from stdin and extract
-        cat data.pdf | kreuzberg extract /dev/stdin
-
-        # Or process piped content
-        curl https://example.com/document.pdf | \
-          kreuzberg extract /dev/stdin
-        ```
-
-## Advanced Configuration
-
-Customize extraction behavior:
-
-=== "C"
-
-    --8<-- "snippets/c/config/advanced_config.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/advanced_config.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/config/advanced_config.md"
-
-=== "Java"
-
-    --8<-- "snippets/java/config/advanced_config.md"
-
-=== "Python"
-
-    --8<-- "snippets/python/advanced/advanced_config.md"
-
-=== "Ruby"
-
-    --8<-- "snippets/ruby/config/advanced_config.md"
-
-=== "R"
-
-    --8<-- "snippets/r/config/advanced_config.md"
-
-=== "Rust"
-
-    --8<-- "snippets/rust/advanced/advanced_config.md"
-
-=== "Elixir"
-
-    --8<-- "snippets/elixir/configuration/config_basic.exs"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/config/advanced_config.md"
-
-=== "WASM"
-
-    --8<-- "snippets/wasm/config/advanced_config.md"
-
-=== "CLI"
-
-    Configure extraction behavior via command-line flags or config files:
-
-    ```bash title="Terminal"
-    # Using command-line flags
-    kreuzberg extract document.pdf \
-      --ocr \
-      --chunk --chunk-size 1000 --chunk-overlap 100 \
-      --detect-language \
-      --quality
-
-    # Using config file
-    kreuzberg extract document.pdf --config kreuzberg.toml
-    ```
-
-    **kreuzberg.toml:**
-
-    ```toml title="kreuzberg.toml"
-    [ocr]
-    backend = "tesseract"
-    language = "eng"
-
-    [chunking]
-    max_characters = 1000
-    overlap = 100
-
-    [language_detection]
-    enabled = true
-    detect_multiple = true
-
-    enable_quality_processing = true
-    use_cache = true
-    ```
-
-    **kreuzberg.yaml:**
-
-    ```yaml title="kreuzberg.yaml"
-    ocr:
-      backend: tesseract
-      language: eng
-
-    chunking:
-      max_characters: 1000
-      overlap: 100
-
-    language_detection:
-      enabled: true
-      detect_multiple: true
-
-    enable_quality_processing: true
-    use_cache: true
-    ```
-
-## Working with Metadata
-
-Access format-specific metadata from extracted documents:
+Every extraction result includes format-specific metadata — page count for PDFs,
+sheet names for Excel, dimensions for images:
 
 === "C"
 
@@ -480,7 +313,7 @@ Access format-specific metadata from extracted documents:
 Kreuzberg extracts format-specific metadata for:
 
 - **PDF**: page count, title, authors (list), creation date, modification date
-- **HTML**: Rich metadata including SEO tags, Open Graph, Twitter Card, structured data, headers, links, images
+- **HTML**: SEO tags, Open Graph, Twitter Card, structured data, headers, links, images
 - **Excel**: sheet count, sheet names
 - **Email**: from, to, CC, BCC, message ID, attachments
 - **PowerPoint**: title, author, description, fonts
@@ -489,20 +322,12 @@ Kreuzberg extracts format-specific metadata for:
 - **XML**: element count, unique elements
 - **Text/Markdown**: word count, line count, headers, links
 
-!!! info "HTML Metadata Structure (v4.0+)"
-
-    HTML metadata changed in v4.0. If upgrading from v3.x:
-    - **`keywords`**: now a string array (was a single optional string)
-    - **`canonical`** → **`canonical_url`**: renamed
-    - **`og_*` fields** → **`open_graph`**: Open Graph data is now a single map
-    - **`twitter_*` fields** → **`twitter_card`**: Twitter Card data is now a single map
-    - **New fields**: `headers`, `links`, `images`, `structured_data`, `language`, `text_direction`, `meta_tags`
-
 See [Types Reference](../reference/types.md) for complete metadata reference.
 
-## Working with Tables
+## Extract Tables
 
-Extract and process tables from documents:
+Tables come back as both structured cells and Markdown. Kreuzberg extracts them
+from PDFs, spreadsheets, and HTML:
 
 === "C"
 
@@ -589,59 +414,68 @@ Extract and process tables from documents:
     }
     ```
 
-## Error Handling
+## Going Async
 
-Handle extraction errors gracefully:
+Use async extraction in web servers, background workers, or anywhere you need
+non-blocking I/O:
 
 === "C"
 
-    --8<-- "snippets/c/api/error_handling.md"
+    --8<-- "snippets/c/api/extract_file_async.md"
 
 === "C#"
 
-    --8<-- "snippets/csharp/error_handling.md"
+    --8<-- "snippets/csharp/extract_file_async.md"
 
 === "Go"
 
-    --8<-- "snippets/go/api/error_handling.md"
+    --8<-- "snippets/go/api/extract_file_async.md"
 
 === "Java"
 
-    --8<-- "snippets/java/api/error_handling.md"
+    --8<-- "snippets/java/api/extract_file_async.md"
 
 === "Python"
 
-    --8<-- "snippets/python/utils/error_handling.md"
+    --8<-- "snippets/python/api/extract_file_async.md"
 
 === "Ruby"
 
-    --8<-- "snippets/ruby/api/error_handling.md"
+    --8<-- "snippets/ruby/api/extract_file_async.md"
 
 === "R"
 
-    --8<-- "snippets/r/api/error_handling.md"
+    --8<-- "snippets/r/api/extract_file_async.md"
 
 === "Rust"
 
-    --8<-- "snippets/rust/api/error_handling.md"
+    --8<-- "snippets/rust/api/extract_file_async.md"
 
 === "Elixir"
 
-    --8<-- "snippets/elixir/core/error_handling.exs"
+    --8<-- "snippets/elixir/core/extract_file_async.exs"
 
 === "TypeScript"
 
-    --8<-- "snippets/typescript/api/error_handling.md"
+    --8<-- "snippets/typescript/getting-started/extract_file_async.md"
 
 === "WASM"
 
-    --8<-- "snippets/wasm/api/error_handling.md"
+    --8<-- "snippets/wasm/getting-started/extract_file_async.md"
+
+=== "CLI"
+
+    !!! note "Not Applicable"
+        Async extraction is an API-level feature. The CLI operates synchronously.
+        Use language-specific bindings (Python, TypeScript, Rust, WASM) for async operations.
 
 ## Next Steps
 
-- **[Features Overview](../features.md)** — Explore all capabilities (OCR, chunking, embeddings)
-- **[Configuration Guide](../guides/configuration.md)** — Customize extraction behavior
-- **[OCR Setup](../guides/ocr.md)** — Set up Tesseract, PaddleOCR, or EasyOCR
-- **[Docker Deployment](../guides/docker.md)** — Run Kreuzberg as a container
+You've covered the core API. Go deeper:
+
+- **[Configuration Guide](../guides/configuration.md)** — OCR backends, chunking, language detection, config files
+- **[Extract from Bytes](../reference/api-python.md#extract_bytes_sync)** — Process in-memory data without writing to disk
+- **[OCR Setup](../guides/ocr.md)** — Tesseract, PaddleOCR, EasyOCR backends
+- **[Types Reference](../reference/types.md)** — Full metadata fields for every format
+- **[Docker Deployment](../guides/docker.md)** — Run Kreuzberg in containers
 - **[API Reference](../reference/api-python.md)** — Complete API documentation
-- **[Contributing](../contributing.md)** — Help improve Kreuzberg
