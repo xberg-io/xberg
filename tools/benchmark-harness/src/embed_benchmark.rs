@@ -158,6 +158,7 @@ fn generate_test_chunks(count: usize, words_per_chunk: usize) -> Vec<Chunk> {
             Chunk {
                 content: text,
                 embedding: None,
+                chunk_type: Default::default(),
                 metadata: ChunkMetadata {
                     byte_start: 0,
                     byte_end,
