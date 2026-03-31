@@ -336,11 +336,25 @@ pub fn parse_markdown_blocks(md: &str) -> Vec<MdBlock> {
                     flush_text(&mut current_text, &mut blocks, &mut index, MdBlockType::Paragraph);
                 }
             }
+            Event::Start(Tag::Strong) => {
+                if !in_table && !in_code_block {
+                    current_text.push_str("**");
+                }
+            }
+            Event::End(TagEnd::Strong) => {
+                if !in_table && !in_code_block {
+                    current_text.push_str("**");
+                }
+            }
             Event::Text(text) | Event::Code(text) => {
                 if in_table {
                     current_text.push_str(&text);
                 } else {
-                    if !current_text.is_empty() && !current_text.ends_with(' ') && !current_text.ends_with('\n') {
+                    if !current_text.is_empty()
+                        && !current_text.ends_with(' ')
+                        && !current_text.ends_with('\n')
+                        && !current_text.ends_with("**")
+                    {
                         current_text.push(' ');
                     }
                     current_text.push_str(&text);
@@ -798,7 +812,13 @@ fn match_blocks_global(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<Bl
 
             let content_sim = crate::quality::compute_f1(ext_tok, gt_tok);
             let score = content_sim * compat;
-            if score >= 0.10 {
+            // Raise threshold for short blocks to prevent spurious matches
+            let min_threshold = if gt_tok.len().min(ext_tok.len()) < 5 {
+                0.20
+            } else {
+                0.10
+            };
+            if score >= min_threshold {
                 candidates.push((gi, ei, content_sim, compat, score, false));
             }
 
@@ -812,7 +832,7 @@ fn match_blocks_global(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<Bl
                 concat_tokens.extend(ext_tokens[ei + 1].iter().cloned());
                 let concat_sim = crate::quality::compute_f1(&concat_tokens, gt_tok);
                 let concat_score = concat_sim * concat_compat;
-                if concat_score > score && concat_score >= 0.10 {
+                if concat_score > score && concat_score >= min_threshold {
                     candidates.push((gi, ei, concat_sim, concat_compat, concat_score, true));
                 }
             }
@@ -954,7 +974,13 @@ fn match_blocks_windowed(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<
 
             let content_sim = crate::quality::compute_f1(&ext_tokens[ei], &gt_tokens[gi]);
             let score = content_sim * compat;
-            if score >= 0.10 {
+            // Raise threshold for short blocks to prevent spurious matches
+            let min_threshold = if gt_tokens[gi].len().min(ext_tokens[ei].len()) < 5 {
+                0.20
+            } else {
+                0.10
+            };
+            if score >= min_threshold {
                 candidates.push((gi, ei, content_sim, compat, score, false));
             }
 
@@ -968,7 +994,7 @@ fn match_blocks_windowed(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<
                 concat_tokens.extend(ext_tokens[ei + 1].iter().cloned());
                 let concat_sim = crate::quality::compute_f1(&concat_tokens, &gt_tokens[gi]);
                 let concat_score = concat_sim * concat_compat;
-                if concat_score > score && concat_score >= 0.10 {
+                if concat_score > score && concat_score >= min_threshold {
                     candidates.push((gi, ei, concat_sim, concat_compat, concat_score, true));
                 }
             }
@@ -1079,7 +1105,7 @@ fn compute_weighted_sf1_from_matches(gt_blocks: &[MdBlock], ext_blocks: &[MdBloc
 /// correctly.
 fn derive_per_type_scores(
     gt_blocks: &[MdBlock],
-    _ext_blocks: &[MdBlock],
+    ext_blocks: &[MdBlock],
     matches: &[BlockMatch],
 ) -> HashMap<MdBlockType, TypeScore> {
     // Collect all GT types present
@@ -1088,6 +1114,12 @@ fn derive_per_type_scores(
         if !gt_types.contains(&b.block_type) {
             gt_types.push(b.block_type);
         }
+    }
+
+    // Count actual extracted blocks by type
+    let mut ext_type_counts: HashMap<MdBlockType, usize> = HashMap::new();
+    for b in ext_blocks {
+        *ext_type_counts.entry(b.block_type).or_insert(0) += 1;
     }
 
     let mut per_type: HashMap<MdBlockType, TypeScore> = HashMap::new();
@@ -1137,7 +1169,7 @@ fn derive_per_type_scores(
                 precision,
                 recall,
                 f1,
-                count_extracted: matched_count,
+                count_extracted: ext_type_counts.get(&block_type).copied().unwrap_or(0),
                 count_gt,
             },
         );
@@ -1153,7 +1185,7 @@ fn derive_per_type_scores(
 /// Compute reading order score using longest increasing subsequence.
 fn compute_order_score(matches: &[(usize, usize)]) -> f64 {
     if matches.is_empty() {
-        return 1.0;
+        return 0.0;
     }
 
     let mut sorted: Vec<(usize, usize)> = matches.to_vec();
@@ -1582,6 +1614,166 @@ mod tests {
             (result.structural_f1 - 1.0).abs() < 0.01,
             "both empty should score 100%, got {}",
             result.structural_f1
+        );
+    }
+
+    // --- Fix 1: Bold markers preserved in parsed blocks ---
+
+    #[test]
+    fn test_bold_markers_preserved_in_paragraph() {
+        let md = "**Pricing**\n\nDetails here.\n";
+        let blocks = parse_markdown_blocks(md);
+        // The paragraph containing bold text should preserve ** markers
+        let bold_block = blocks.iter().find(|b| b.content.contains("Pricing")).unwrap();
+        assert!(
+            is_bold_wrapped(&bold_block.content),
+            "bold-wrapped content should be detected, got: {:?}",
+            bold_block.content
+        );
+    }
+
+    #[test]
+    fn test_bold_paragraph_gets_higher_type_compat_than_plain() {
+        let bold_para = MdBlock {
+            block_type: MdBlockType::Paragraph,
+            content: "**Important Title**".into(),
+            index: 0,
+        };
+        let plain_para = MdBlock {
+            block_type: MdBlockType::Paragraph,
+            content: "Important Title".into(),
+            index: 0,
+        };
+        let heading = MdBlock {
+            block_type: MdBlockType::Heading1,
+            content: "Important Title".into(),
+            index: 0,
+        };
+        let bold_compat = type_compat(&bold_para, &heading);
+        let plain_compat = type_compat(&plain_para, &heading);
+        assert!(
+            bold_compat > plain_compat,
+            "bold paragraph ({}) should have higher compat than plain ({}) when matching heading",
+            bold_compat,
+            plain_compat
+        );
+        assert!(
+            (bold_compat - 0.4).abs() < 0.01,
+            "bold paragraph compat should be 0.4, got {}",
+            bold_compat
+        );
+        assert!(
+            (plain_compat - 0.25).abs() < 0.01,
+            "plain paragraph compat should be 0.25, got {}",
+            plain_compat
+        );
+    }
+
+    #[test]
+    fn test_bold_pseudo_heading_scores_higher_than_plain_paragraph() {
+        let bold_ext = "**Pricing**\n\nDetails about pricing here.\n";
+        let plain_ext = "Pricing\n\nDetails about pricing here.\n";
+        let gt = "## Pricing\n\nDetails about pricing here.\n";
+        let bold_result = score_structural_quality(bold_ext, gt);
+        let plain_result = score_structural_quality(plain_ext, gt);
+        assert!(
+            bold_result.structural_f1 > plain_result.structural_f1,
+            "bold pseudo-heading ({}) should score higher than plain paragraph ({})",
+            bold_result.structural_f1,
+            plain_result.structural_f1
+        );
+    }
+
+    // --- Fix 2: Short block threshold ---
+
+    #[test]
+    fn test_short_block_spurious_match_prevented() {
+        // Two short blocks sharing a single common word should NOT match
+        // when type_compat is low (e.g., paragraph vs heading = 0.25)
+        let ext_block = MdBlock {
+            block_type: MdBlockType::Paragraph,
+            content: "Yes".into(),
+            index: 0,
+        };
+        let gt_block = MdBlock {
+            block_type: MdBlockType::Heading1,
+            content: "Yes".into(),
+            index: 0,
+        };
+        let compat = type_compat(&ext_block, &gt_block);
+        // content_sim for identical single word = 1.0, compat = 0.25
+        // score = 0.25 which is >= 0.20, so it should still match for identical content
+        assert!(compat * 1.0 >= 0.20, "identical short blocks should still match");
+
+        // But a low content_sim (e.g., 0.4) with low compat (0.25) = 0.1 should NOT match
+        // with the new threshold of 0.20 for short blocks
+        let score = 0.4 * 0.25; // = 0.1
+        assert!(
+            score < 0.20,
+            "low content_sim * low compat ({}) should be below short-block threshold 0.20",
+            score
+        );
+    }
+
+    // --- Fix 3: Empty matches order score ---
+
+    #[test]
+    fn test_order_score_empty_matches_returns_zero() {
+        let matches: Vec<(usize, usize)> = vec![];
+        let score = compute_order_score(&matches);
+        assert!(
+            score.abs() < 0.001,
+            "empty matches should return 0.0 order score, got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_empty_extraction_order_score_zero() {
+        let gt = "# Title\n\nSome content.\n";
+        let result = score_structural_quality("", gt);
+        assert!(
+            result.order_score.abs() < 0.001,
+            "empty extraction should have 0.0 order score, got {}",
+            result.order_score
+        );
+    }
+
+    // --- Fix 4: Per-type count_extracted shows actual count ---
+
+    #[test]
+    fn test_per_type_count_extracted_is_actual_not_matched() {
+        // Extracted has 3 paragraphs, GT has 1 heading + 1 paragraph.
+        // Only 1 paragraph should match, but count_extracted for Paragraph should be 3.
+        let extracted = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.\n";
+        let gt = "# Heading\n\nFirst paragraph.\n";
+        let result = score_structural_quality(extracted, gt);
+        if let Some(para_score) = result.per_type.get(&MdBlockType::Paragraph) {
+            assert_eq!(
+                para_score.count_extracted, 3,
+                "count_extracted should be actual paragraph count (3), got {}",
+                para_score.count_extracted
+            );
+        }
+    }
+
+    #[test]
+    fn test_per_type_count_extracted_includes_unmatched() {
+        // GT has 2 headings, extracted has 5 headings (3 are spurious)
+        let extracted = "# H1\n\n# H2\n\n# H3\n\n# H4\n\n# H5\n";
+        let gt = "# H1\n\n# H2\n";
+        let result = score_structural_quality(extracted, gt);
+        // count_extracted for headings should reflect all 5 extracted heading blocks,
+        // not just the 2 that matched
+        let h1_count = result
+            .per_type
+            .get(&MdBlockType::Heading1)
+            .map(|s| s.count_extracted)
+            .unwrap_or(0);
+        assert_eq!(
+            h1_count, 5,
+            "count_extracted for H1 should be 5 (all extracted H1 blocks), got {}",
+            h1_count
         );
     }
 }

@@ -1,69 +1,4 @@
-
-
- Toggle the table of contents
-
 # International emergency medicine
-
- 1 language
-
-- [العربية](https://ar.wikipedia.org/wiki/%D8%B7%D8%A8_%D8%A7%D9%84%D8%B7%D9%88%D8%A7%D8%B1%D8%A6_%D8%A7%D9%84%D8%AF%D9%88%D9%84%D9%8A)
-
-[Edit links](https://www.wikidata.org/wiki/Special:EntityPage/Q6054649#sitelinks-wikipedia)
-
-- [Article](/wiki/International_emergency_medicine)
-- [Talk](/wiki/Talk:International_emergency_medicine)
-
-English
-
-- [Read](/wiki/International_emergency_medicine)
-- [Edit](/w/index.php?title=International_emergency_medicine&action=edit)
-- [View history](/w/index.php?title=International_emergency_medicine&action=history)
-
-Tools
-
-Tools
-
-move to sidebar
-
-hide
-
-Actions
-
-- [Read](/wiki/International_emergency_medicine)
-- [Edit](/w/index.php?title=International_emergency_medicine&action=edit)
-- [View history](/w/index.php?title=International_emergency_medicine&action=history)
-
-General
-
-- [What links here](/wiki/Special:WhatLinksHere/International_emergency_medicine)
-- [Related changes](/wiki/Special:RecentChangesLinked/International_emergency_medicine)
-- [Upload file](//en.wikipedia.org/wiki/Wikipedia:File_Upload_Wizard)
-- [Permanent link](/w/index.php?title=International_emergency_medicine&oldid=1297441569 "Permanent link to this revision of this page")
-- [Page information](/w/index.php?title=International_emergency_medicine&action=info "More information about this page")
-- [Cite this page](/w/index.php?title=Special:CiteThisPage&page=International_emergency_medicine&id=1297441569&wpFormIdentifier=titleform "Information on how to cite this page")
-- [Get shortened URL](/w/index.php?title=Special:UrlShortener&url=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FInternational_emergency_medicine)
-- [Download QR code](/w/index.php?title=Special:QrCode&url=https%3A%2F%2Fen.wikipedia.org%2Fwiki%2FInternational_emergency_medicine)
-
-Print/export
-
-- [Download as PDF](/w/index.php?title=Special:DownloadAsPdf&page=International_emergency_medicine&action=show-download-screen "Download this page as a PDF file")
-- [Printable version](/w/index.php?title=International_emergency_medicine&printable=yes)
-
-In other projects
-
-- [Wikidata item](https://www.wikidata.org/wiki/Special:EntityPage/Q6054649)
-
-Appearance
-
-move to sidebar
-
-hide
-
-[![This is a good article. Click here for more information.](//upload.wikimedia.org/wikipedia/en/thumb/9/94/Symbol_support_vote.svg/20px-Symbol_support_vote.svg.png)](/wiki/Wikipedia:Good_articles* "This is a good article. Click here for more information.")
-
-From Wikipedia, the free encyclopedia
-
-Subspecialty of emergency medicine
 
 **International emergency medicine** is a subspecialty of [emergency medicine](/wiki/Emergency_medicine "Emergency medicine") that focuses not only on the global practice of emergency medicine but also on efforts to promote the growth of emergency care as a branch of medicine throughout the world. The term *international emergency medicine* generally refers to the transfer of skills and knowledge—including knowledge of ambulance operations and other aspects of [prehospital care](/wiki/Prehospital_care)—from developed emergency medical systems (EMSs) to those systems which are less developed. However, this definition has been criticized as oxymoronic, given the international nature of medicine and the number of physicians working internationally. From this point of view, international emergency medicine is better described as the training required for and the reality of practicing the specialty outside of one's native country.
 
@@ -75,11 +10,7 @@ Some challenges faced in international emergency medicine include immature or no
 
 ## Background
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=1 "Edit section: Background")\]
-
 ### Definition
-
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=2 "Edit section: Definition")\]
 
 The most commonly accepted definition of international emergency medicine is that it is "the area of emergency medicine concerned with the development of emergency medicine in other countries."[\[1\]](#cite_note-Arnold-1) In that definition, "other countries" refers to nations that do not have a mature emergency care system (exemplified by [board-certified](/wiki/Board-certified) emergency physicians and academic emergency medicine, among other things). Included in those nations are some that are otherwise quite developed but lack a complete emergency medical system, such as Armenia, China, Israel, Nicaragua, and the Philippines.[\[1\]](#cite_note-Arnold-1) Work in international emergency medicine can be broken down into two main categories: 1) the promotion of emergency medicine as a recognized and established specialty in other countries, and 2) the provision of [humanitarian assistance](/wiki/Humanitarian_assistance "Humanitarian assistance").[\[2\]](#cite_note-Sistenich-2)
 
@@ -87,11 +18,7 @@ William Burdick, Mark Hauswald, and Kenneth Iserson have criticized the above de
 
 ### History
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=3 "Edit section: History")\]
-
 #### Emergency medicine
-
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=4 "Edit section: Emergency medicine")\]
 
 Further information: [Emergency_medicine § History](/wiki/Emergency_medicine#History "Emergency medicine")
 
@@ -99,7 +26,6 @@ Emergency medicine is a specialty that was first developed in the United States 
 
 #### Beginning of the subspecialty
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=5 "Edit section: Beginning of the subspecialty")\]
 
 [![](//upload.wikimedia.org/wikipedia/commons/thumb/2/2b/Loma_Linda_University_Dennis_and_Carol_Troesh_Medical_Campus.jpg/250px-Loma_Linda_University_Dennis_and_Carol_Troesh_Medical_Campus.jpg)](/wiki/File:Loma_Linda_University_Dennis_and_Carol_Troesh_Medical_Campus.jpg)
 In 1994, [Loma Linda University Medical Center](/wiki/Loma_Linda_University_Medical_Center) established the first international emergency medicine fellowship in the world.[[4]](#cite_note-alagappan2005-4)
@@ -114,7 +40,6 @@ International emergency medicine organizations, whether focused on relief or dev
 
 ### Emergency medicine in the developing world
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=6 "Edit section: Emergency medicine in the developing world")\]
 
 Motor vehicle crashes were a major factor that led to the development of emergency medicine in the United States, the United Kingdom, Australia, Canada, Hong Kong, and Singapore, and they are a major factor leading countries to develop their own emergency medical systems today. Such crashes represent a leading cause of death for adolescents and young adults, with the majority of deaths occurring in the [developing world](/wiki/Developing_world).[\[6\]](#cite_note-Odero-6) In recent decades, while traffic fatalities have declined in industrialized nations, they have been on the rise in developing ones. Furthermore, developing nations tend to have a higher proportion of fatalities per number of vehicles for various reasons, including lower safety standards for vehicles.[\[6\]](#cite_note-Odero-6) The lack of available emergency care in many developing countries only serves to exacerbate this problem. This higher rate of accident mortality per vehicle exists despite the fact that there are fewer cars in Asia and Africa than in the West. Odero et al. argue that this shows a need to improve emergency medical care.[\[6\]](#cite_note-Odero-6)
 
@@ -129,7 +54,6 @@ Anderson et al. argue that, aside from acute care, emergency medicine can also p
 
 ### Models of emergency care
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=7 "Edit section: Models of emergency care")\]
 
 There are two primary models of emergency medicine: the Anglo-American model, which relies on "bringing the patient to the hospital", and the Franco-German model, which operates through "bringing the hospital to the patient".[\[1\]](#cite_note-Arnold-1) Thus, in the Anglo-American model, the patient is rapidly transported by non-physician providers to definitive care such as an emergency department in a hospital. Conversely, the Franco-German approach has a physician, often an [anesthesiologist](/wiki/Anesthesiologist), come to the patient and provide stabilizing care in the field. The patient is then [triaged](/wiki/Triage "Triage") directly to the appropriate department of a hospital. The Anglo-American model is seen in nations such as Australia, Canada, Ireland, New Zealand, the United Kingdom, and the United States, while the Franco-German model is found in European countries such as Austria, France, Germany, Poland, Portugal, and Russia. Most developing emergency medical systems, including those of China, Japan, the Philippines, South Korea, and Taiwan, have been established along Anglo-American lines, but little work exists to establish the advantage of either system.[\[1\]](#cite_note-Arnold-1)
 
@@ -142,11 +66,9 @@ An example of a developing nation establishing its own model of emergency medici
 
 ## Role in overall health system
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=8 "Edit section: Role in overall health system")\]
 
 ### Developed countries
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=9 "Edit section: Developed countries")\]
 
 In developed counties, training programs specifically relating to the international practice of emergency medicine are now available within many emergency medicine residencies. The curriculum that should be covered by such programs has been the subject of much discussion. Patient care, medical knowledge, practice-based learning, communication skills, professionalism, and system-based practice are the basic six competencies required of programs approved by the [Accreditation Council for Graduate Medical Education](/wiki/Accreditation_Council_for_Graduate_Medical_Education "Accreditation Council for Graduate Medical Education"), but the application of these goals can take many forms.[\[3\]](#cite_note-Burdick-3) The breadth of skills needed in international emergency medicine make it unlikely that one standardized program could fulfill the training needs for every scenario. One Australian study found that the primary topics covered by U.S. fellowship programs were emergency medicine systems development, humanitarian relief, [disaster management](/wiki/Disaster_management), public health, [travel](/wiki/Travel_medicine "Travel medicine") and [field medicine](/wiki/Field_medicine), program administration, and academic skills.[\[2\]](#cite_note-Sistenich-2) Its authors argue that attempting to cover all of those areas may be unrealistic and that a more targeted focus on acquiring necessary skills might be more productive.[\[2\]](#cite_note-Sistenich-2)
 
@@ -154,7 +76,6 @@ After such training is completed, or even without any EMS training, working in o
 
 ### Developing countries
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=10 "Edit section: Developing countries")\]
 
 [![](//upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Africa_satellite_plane.jpg/250px-Africa_satellite_plane.jpg)](/wiki/File:Africa_satellite_plane.jpg)
 According to Alagappan et al., Africa is the continent most in need of developing emergency medical systems.[[4]](#cite_note-alagappan2005-4)
@@ -165,17 +86,14 @@ Given the limited resources of many developing nations, funding vitally effects 
 
 ## Initiatives to expand emergency medicine
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=11 "Edit section: Initiatives to expand emergency medicine")\]
 
 ### Curriculum development
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=12 "Edit section: Curriculum development")\]
 
 Hobgood et al. argue that one key component in equipping nations to develop emergency medical systems is to identify the aspects of training that are essential for health care providers. In their view, a standard curriculum is useful for identifying core issues, even if countries have very different needs and resources. To address this goal, the [International Federation for Emergency Medicine](/wiki/International_Federation_for_Emergency_Medicine "International Federation for Emergency Medicine") developed a model curriculum in 2009.[\[17\]](#cite_note-Slinger-17) This initiative seeks to provide a minimum basic standard that can be tailored to the specific needs of the various nations implementing training in emergency medicine. It is targeted towards all medical students in order to produce a minimum competency in emergency care for all physicians, regardless of their specialty.[\[17\]](#cite_note-Slinger-17)
 
 ### Transferring knowledge
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=13 "Edit section: Transferring knowledge")\]
 
 Countries with decades of experience in comprehensive emergency medical systems have expertise that nations that are just beginning emergency medical programs lack. Thus, there exists considerable opportunity for the transfer of knowledge to assist newly founded programs. Such transfers may be made either from a distance or in person. For instance, the International Emergency Medicine Fellowship at the [University of Toronto](/wiki/University_of_Toronto "University of Toronto") sent a three-person team to [Cluj-Napoca](/wiki/Cluj-Napoca "Cluj-Napoca"), [Romania](/wiki/Romania "Romania"), to promote the local development of emergency medicine. An assessment of the present status was performed that identified targets for improvement in physical plant organization and patient flow; staffing, staff education, equipment, medication and supplies; and [infection control](/wiki/Infection_control) practices. Following these designations, plans regarding these areas were collaboratively drawn up and then implemented, partially through international exchange trips.[\[18\]](#cite_note-18)
 
@@ -185,7 +103,6 @@ There are other conferences on international emergency medicine as well, includi
 
 ### Developing emergency medicine as a specialty
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=14 "Edit section: Developing emergency medicine as a specialty")\]
 
 One way to advance emergency medical care is to obtain the recognition of emergency medicine as a specialty in countries that currently lack it. Without such recognition, it is difficult to set up training programs or recruit potential students, as they face the uncertainty of training to obtain a credential that may end up being useless to them. Recognition increases the visibility and prestige of the profession and promotes other efforts to advance its development. [Botswana](/wiki/Botswana "Botswana") may serve as a case study. Its recent recognition of emergency medicine as a specialty has been closely accompanied by the creation of the [Botswana Society for Emergency Care](/w/index.php?title=Botswana_Society_for_Emergency_Care&action=edit&redlink=1), the establishment of a Resuscitation Training Centre and a Trauma Research Centre at the [University of Botswana](/wiki/University_of_Botswana "University of Botswana"), and the formation of a committee to design a national policy for pre-hospital care.[\[23\]](#cite_note-Caruso-23)
 
@@ -193,11 +110,9 @@ An alternate route for developing emergency medicine is to provide additional tr
 
 ## Challenges
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=15 "Edit section: Challenges")\]
 
 ### Training
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=16 "Edit section: Training")\]
 
 Educational opportunities in emergency medicine are not available in many countries, and even when present, they are often in their infancy. Botswana opened its first medical school in 2009, with a program in emergency medicine following in 2011.[\[23\]](#cite_note-Caruso-23) The program aims to train four to six physicians in emergency medicine each year. Limitations on in-country training mean that the program includes six months of training at an international site. The organization of the program is modeled on South Africa's program due to the similarities in resource constraints and [disease burdens](/wiki/Disease_burden "Disease burden") and the eagerness of [College of Emergency Medicine of South Africa](/w/index.php?title=College_of_Emergency_Medicine_of_South_Africa&action=edit&redlink=1) and [Emergency Medicine Society of South Africa](/wiki/Emergency_Medicine_Society_of_South_Africa "Emergency Medicine Society of South Africa") to support the expansion of emergency medicine. Two years of clinical practice are required before entering the residency program, as in the South African and Australian approaches.[\[23\]](#cite_note-Caruso-23)
 
@@ -205,7 +120,6 @@ To deal with this shortage of educational opportunities, Scott Weiner et al. sug
 
 ### Emergency transport
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=17 "Edit section: Emergency transport")\]
 
 The limitations on resources available in developing countries are particularly evident in the area of emergency transport. [Ambulances](/wiki/Ambulance "Ambulance"), the developed country standard, are costly and not practical for the road conditions present in many countries. Indeed, there may be no roads at all. One study found that modes of transport as diverse as motorboats, canoes, bicycles with trailers, tricycles with platforms, tractors with trailers, reconditioned vehicles, and ox carts were used for emergency transport.[\[7\]](#cite_note-Razzak-7)
 
@@ -213,7 +127,6 @@ In more advanced developing countries, establishing ambulance transport systems 
 
 ### Resources
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=18 "Edit section: Resources")\]
 
 [![Broselow tape](//upload.wikimedia.org/wikipedia/commons/thumb/9/94/BTape1.jpg/250px-BTape1.jpg)](/wiki/File:BTape1.jpg)
 
@@ -233,7 +146,6 @@ The vital nature of coping with the lack of resources available in international
 
 ### Lack of research
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=19 "Edit section: Lack of research")\]
 
 Despite the thought that increasing availability to emergency medicine will improve patient outcomes, little empirical evidence exists to directly support that claim, even in developed countries. Between 1985 and 1998 only 54 [randomized controlled trials](/wiki/Randomized_controlled_trial "Randomized controlled trial") related to emergency medical services were published, implying that much of the current standard of care rests upon meager support.[\[10\]](#cite_note-Holliman-10) A similar lack of direct proof exists for the effectiveness of international assistance in promoting emergency medicine in other countries. Although it may seem that such efforts must improve health, the failure to quantify international emergency medicine's impact renders it more difficult to identify the best practices and target areas in which the most benefit may be achieved.[\[1\]](#cite_note-Arnold-1)
 
@@ -241,7 +153,6 @@ A development in recent years that seeks to address these issues has been termed
 
 ## References
 
-\[[edit](/w/index.php?title=International_emergency_medicine&action=edit&section=20 "Edit section: References")\]
 
 1.  ^ [***a***](#cite_ref-Arnold_1-0) [***b***](#cite_ref-Arnold_1-1) [***c***](#cite_ref-Arnold_1-2) [***d***](#cite_ref-Arnold_1-3) [***e***](#cite_ref-Arnold_1-4) [***f***](#cite_ref-Arnold_1-5) [***g***](#cite_ref-Arnold_1-6) [***h***](#cite_ref-Arnold_1-7) [***i***](#cite_ref-Arnold_1-8) [***j***](#cite_ref-Arnold_1-9) [***k***](#cite_ref-Arnold_1-10) Arnold, Jeffrey L. (January 1999). "International Emergency Medicine and the Recent Development of Emergency Medicine Worldwide". *Annals of Emergency Medicine*. **33** (1): 97–103. [doi](/wiki/Doi_(identifier)):[10.1016/s0196-0644(99)70424-5](https://doi.org/10.1016%2Fs0196-0644%2899%2970424-5). [PMID](/wiki/PMID_(identifier)) [9867895](https://pubmed.ncbi.nlm.nih.gov/9867895).
 2.  ^ [***a***](#cite_ref-Sistenich_2-0) [***b***](#cite_ref-Sistenich_2-1) [***c***](#cite_ref-Sistenich_2-2) Sistenich, Vera (August 2012). ["International Emergency Medicine: How to Train for It"](https://zenodo.org/record/1038653). *Emergency Medicine Australasia*. **24** (4): 435–41. [doi](/wiki/Doi_(identifier)):[10.1111/j.1742-6723.2012.01563.x](https://doi.org/10.1111%2Fj.1742-6723.2012.01563.x). [PMID](/wiki/PMID_(identifier)) [22862762](https://pubmed.ncbi.nlm.nih.gov/22862762). [S2CID](/wiki/S2CID_(identifier)) [205888668](https://api.semanticscholar.org/CorpusID:205888668).
@@ -271,81 +182,4 @@ A development in recent years that seeks to address these issues has been termed
 26. ^ [***a***](#cite_ref-Aschekenasy_26-0) [***b***](#cite_ref-Aschekenasy_26-1) Aschkenasy, Miriam; Arnold, Kris; Foran, Mark; Lippert, Suzanne; Schroeder, Erika D.; Bertsch, Karina; Levine, Adam C.; on behalf of the International Emergency Medicine Literature Review Group (2011). ["International Emergency Medicine: A Review of the Literature From 2010"](https://doi.org/10.1111%2Fj.1553-2712.2011.01129.x). *Academic Emergency Medicine*. **18** (8): 872–9. [doi](/wiki/Doi_(identifier)):[10.1111/j.1553-2712.2011.01129.x](https://doi.org/10.1111%2Fj.1553-2712.2011.01129.x). [PMID](/wiki/PMID_(identifier)) [21790839](https://pubmed.ncbi.nlm.nih.gov/21790839).
 27. **[^](#cite_ref-27)** Shah M. T.; Joshipura M.; Singleton J.; LaBarre P.; Desai H.; Sharma E.; Mock C. (2014). ["Assessment of the Availability of Technology for Trauma Care in India"](https://doi.org/10.1007%2Fs00268-014-2805-7). *World J Surg*. **39** (2): 363–372. [doi](/wiki/Doi_(identifier)):[10.1007/s00268-014-2805-7](https://doi.org/10.1007%2Fs00268-014-2805-7). [PMID](/wiki/PMID_(identifier)) [25277980](https://pubmed.ncbi.nlm.nih.gov/25277980). [S2CID](/wiki/S2CID_(identifier)) [36792149](https://api.semanticscholar.org/CorpusID:36792149).
 
-| [v](/wiki/Template:Emergency_medicine)
-[t](/wiki/Template_talk:Emergency_medicine)
-[e](/wiki/Special:EditPage/Template:Emergency_medicine)
-
-[Emergency medicine](/wiki/Emergency_medicine) |  |
-|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---|
-| Emergency medicine | [Emergency department](/wiki/Emergency_department)
-[Emergency medical services](/wiki/Emergency_medical_services)
-[Emergency nursing](/wiki/Emergency_nursing)
-[Emergency psychiatry](/wiki/Emergency_psychiatry)
-[Golden hour](/wiki/Golden_hour_(medicine))
-[Medical emergency](/wiki/Medical_emergency)
-International emergency medicine
-[Pediatric emergency medicine](/wiki/Pediatric_emergency_medicine)
-[Pre-hospital emergency medicine](/wiki/Pre-hospital_emergency_medicine)
-[Major trauma](/wiki/Major_trauma)
-[Trauma center](/wiki/Trauma_center)
-[Triage](/wiki/Triage) |
-| [Equipment](/wiki/Category:Emergency_medical_equipment) | [Bag valve mask](/wiki/Bag_valve_mask) (BVM)
-[Chest tube](/wiki/Chest_tube)
-[Defibrillation](/wiki/Defibrillation) ([AED](/wiki/Automated_external_defibrillator)
-[ICD](/wiki/Implantable_cardioverter-defibrillator))
-[Electrocardiogram](/wiki/Electrocardiography) (ECG/EKG)
-[Intraosseous infusion](/wiki/Intraosseous_infusion) (IO)
-[Intravenous therapy](/wiki/Intravenous_therapy) (IV)
-[Tracheal intubation](/wiki/Tracheal_intubation)
-[Laryngeal tube](/wiki/Laryngeal_tube)
-[Combitube](/wiki/Combitube)
-[Nasopharyngeal airway](/wiki/Nasopharyngeal_airway) (NPA)
-[Oropharyngeal airway](/wiki/Oropharyngeal_airway) (OPA)
-[Pocket mask](/wiki/Pocket_mask) |
-| Drugs | [Adenosine](/wiki/Adenosine)
-[Amiodarone](/wiki/Amiodarone)
-[Atropine](/wiki/Atropine)
-[Dopamine](/wiki/Dopamine)
-[Epinephrine / Adrenaline](/wiki/Epinephrine)
-[Naloxone](/wiki/Naloxone)
-[Magnesium sulfate](/wiki/Magnesium_sulfate)
-[Sodium bicarbonate](/wiki/Sodium_bicarbonate) |
-| [Organisations](/wiki/Category:Emergency_medicine_organisations) | [International Federation for Emergency Medicine](/wiki/International_Federation_for_Emergency_Medicine) ([International Conference on Emergency Medicine](/wiki/International_Conference_on_Emergency_Medicine))
-[American College of Emergency Physicians](/wiki/American_College_of_Emergency_Physicians)
-[Australasian College for Emergency Medicine](/wiki/Australasian_College_for_Emergency_Medicine)
-[Canadian Association of Emergency Physicians](/wiki/Canadian_Association_of_Emergency_Physicians)
-[Royal College of Emergency Medicine](/wiki/Royal_College_of_Emergency_Medicine)
-[European Society for Emergency Medicine](/wiki/European_Society_for_Emergency_Medicine)
-[Asian Society for Emergency Medicine](/wiki/Asian_Society_for_Emergency_Medicine)
-[American Academy of Emergency Medicine](/wiki/American_Academy_of_Emergency_Medicine) |
-| [Courses](/wiki/Category:Emergency_medicine_courses) / [Life support](/wiki/Category:Emergency_life_support) | [First aid](/wiki/First_aid)
-[Cardiopulmonary resuscitation](/wiki/Cardiopulmonary_resuscitation) (CPR)
-[Mouth-to-mouth resuscitation](/wiki/Mouth-to-mouth_resuscitation)
-[Basic life support](/wiki/Basic_life_support) (BLS)
-[Advanced cardiac life support](/wiki/Advanced_cardiac_life_support) (ACLS)
-[Advanced trauma life support](/wiki/Advanced_trauma_life_support) (ATLS)
-[Neonatal Resuscitation Program](/wiki/Neonatal_Resuscitation_Program) (NRP)
-[Acute Care of at-Risk Newborns](/wiki/Acute_Care_of_at-Risk_Newborns) (ACoRN)
-[Pediatric basic life support](/wiki/Pediatric_basic_life_support) (PBLS)
-[Pediatric Advanced Life Support](/wiki/Pediatric_Advanced_Life_Support) (PALS)
-[Advanced Life Support in Obstetrics](/wiki/Advanced_Life_Support_in_Obstetrics) (ALSO)
-[Care of the Critically Ill Surgical Patient](/wiki/Care_of_the_Critically_Ill_Surgical_Patient) (CCrISP) |
-| Scoring systems | [NACA score](/wiki/NACA_score)
-[Injury Severity Score](/wiki/Injury_Severity_Score) |
-| **![](//upload.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png) [Category](/wiki/Category:Emergency_medicine)**
-**![](//upload.wikimedia.org/wikipedia/commons/thumb/4/41/Global_thinking.svg/20px-Global_thinking.svg.png) [Outline](/wiki/Outline_of_emergency_medicine)** |  |
-
-![](https://en.wikipedia.org/wiki/Special:CentralAutoLogin/start?type=1x1&usesul3=1)
-
-Retrieved from "[https://en.wikipedia.org/w/index.php?title=International_emergency_medicine&oldid=1297441569](https://en.wikipedia.org/w/index.php?title=International_emergency_medicine&oldid=1297441569)"
-
-[Category](/wiki/Help:Category "Help:Category"):
-
-- [Emergency medicine](/wiki/Category:Emergency_medicine "Category:Emergency medicine")
-
-Hidden categories:
-
-- [Articles with short description](/wiki/Category:Articles_with_short_description "Category:Articles with short description")
-- [Short description matches Wikidata](/wiki/Category:Short_description_matches_Wikidata "Category:Short description matches Wikidata")
-- [Good articles](/wiki/Category:Good_articles "Category:Good articles")
 

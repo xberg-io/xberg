@@ -38,12 +38,14 @@ pub enum NoiseKind {
     OrphanedListMarker,
     /// Standalone small numbers that look like page numbers.
     PageNumberArtifact,
-    /// Lines repeated 5+ times in the document.
+    /// Lines repeated 10+ times at regular intervals in the document.
     HeaderFooterRepetition,
     /// Footnote references without matching definitions.
     DanglingReference,
     /// More headings than paragraphs (heading-heavy document).
     ExcessiveHeadingDensity,
+    /// Unresolved HTML entities like `&#10;` or `&amp;` outside code blocks.
+    UnresolvedHtmlEntity,
 }
 
 impl NoiseKind {
@@ -59,6 +61,7 @@ impl NoiseKind {
             Self::HeaderFooterRepetition => "HeaderFooterRepetition",
             Self::DanglingReference => "DanglingReference",
             Self::ExcessiveHeadingDensity => "ExcessiveHeadingDensity",
+            Self::UnresolvedHtmlEntity => "UnresolvedHtmlEntity",
         }
     }
 }
@@ -246,7 +249,13 @@ fn is_horizontal_rule(trimmed: &str) -> bool {
 
 /// Characters that commonly appear in markdown structural punctuation and should
 /// NOT trigger the consecutive-punctuation garbled-text heuristic.
-const MARKDOWN_STRUCTURAL_PUNCT: &[char] = &['-', '|', '*', '_', '=', '~', ':', '#', '>'];
+/// Covers both block-level (`-`, `|`, `*`, etc.) and inline syntax (`!`, `[`, `]`,
+/// `(`, `)`, `\`, `.`, `/`) plus HTML entity delimiters (`&`, `;`).
+const MARKDOWN_STRUCTURAL_PUNCT: &[char] = &[
+    '-', '|', '*', '_', '=', '~', ':', '#', '>', // block-level
+    '.', '/', '!', '[', ']', '(', ')', '\\', // inline syntax
+    '&', ';', // HTML entities
+];
 
 /// Detects garbled text: lines with >70% non-ASCII or 4+ consecutive non-structural punctuation.
 fn detect_garbled_text(lines: &[&str], code_ranges: &[CodeRange]) -> Vec<NoiseIssue> {
@@ -261,8 +270,9 @@ fn detect_garbled_text(lines: &[&str], code_ranges: &[CodeRange]) -> Vec<NoiseIs
             continue;
         }
 
-        // Skip table separator rows and horizontal rules — they are legitimate markdown
-        if is_table_separator_row(trimmed) || is_horizontal_rule(trimmed) {
+        // Skip table separator rows, horizontal rules, and markdown image references —
+        // they are legitimate markdown, not garbled text.
+        if is_table_separator_row(trimmed) || is_horizontal_rule(trimmed) || is_markdown_image(trimmed) {
             continue;
         }
 
@@ -479,17 +489,53 @@ fn is_pipe_table_row(trimmed: &str) -> bool {
     trimmed.starts_with('|')
 }
 
-/// Returns true if the line is only an image placeholder like `![]()`.
+/// Returns true if the line is a markdown image reference like `![alt](url)` or `![]()`.
+/// Matches lines that consist entirely of a markdown image pattern (possibly with
+/// surrounding whitespace already trimmed).
 fn is_image_placeholder(trimmed: &str) -> bool {
     trimmed.starts_with("![")
 }
 
-/// Detects lines that repeat 5+ times in the document (header/footer repetition).
+/// Returns true if the line is a markdown image reference `![...](...)`
+/// or an escaped variant `\[...\](...)`. Used to skip garbled-text detection
+/// on lines that are purely image/link markup.
+fn is_markdown_image(trimmed: &str) -> bool {
+    // Standard markdown image: ![...](...) possibly with trailing text
+    if trimmed.starts_with("![") {
+        return true;
+    }
+    // Escaped markdown link/image: \[...\](...) or \[\![...\](...) from Wikipedia extraction
+    if trimmed.starts_with("\\[") || trimmed.starts_with("\\!") {
+        return true;
+    }
+    false
+}
+
+/// Detects lines that repeat 10+ times in the document (header/footer repetition).
 ///
 /// Skips pipe table rows, image placeholders, table separator rows, and lines
-/// with fewer than 15 non-whitespace characters (too short to be a meaningful
+/// with fewer than 20 non-whitespace characters (too short to be a meaningful
 /// header/footer candidate).
+///
+/// To reduce false positives from legitimate repetitive content (e.g., ISO
+/// standard column headers, Wikipedia navbox rows), candidates must also pass
+/// a **periodicity check**: their occurrences must be roughly evenly spaced
+/// (std_dev / mean_gap <= 0.5). Real page headers/footers appear at regular
+/// intervals corresponding to page breaks, while content repetition is
+/// irregular.
+///
+/// Lines that look like table column headers (all words Title Case or
+/// UPPERCASE, under 40 chars) are also excluded.
+///
+/// Results are capped at 30 issues per document to avoid inflating noise
+/// counts.
 fn detect_header_footer_repetition(lines: &[&str], code_ranges: &[CodeRange]) -> Vec<NoiseIssue> {
+    const MIN_OCCURRENCES: usize = 10;
+    const MIN_NON_WS_CHARS: usize = 20;
+    const MAX_ISSUES: usize = 30;
+    const MAX_PERIODICITY_RATIO: f64 = 0.5;
+    const TABLE_HEADER_MAX_LEN: usize = 40;
+
     let mut line_counts: HashMap<&str, Vec<usize>> = HashMap::new();
 
     for (i, line) in lines.iter().enumerate() {
@@ -511,9 +557,15 @@ fn detect_header_footer_repetition(lines: &[&str], code_ranges: &[CodeRange]) ->
             continue;
         }
 
-        // Require minimum 15 non-whitespace characters to be a header/footer candidate
+        // Require minimum non-whitespace characters to be a header/footer candidate
         let non_ws_count = trimmed.chars().filter(|c| !c.is_whitespace()).count();
-        if non_ws_count < 15 {
+        if non_ws_count < MIN_NON_WS_CHARS {
+            continue;
+        }
+
+        // Skip lines that look like table column headers: all words are Title Case
+        // or UPPERCASE and the line is short.
+        if trimmed.len() <= TABLE_HEADER_MAX_LEN && looks_like_table_header(trimmed) {
             continue;
         }
 
@@ -522,7 +574,7 @@ fn detect_header_footer_repetition(lines: &[&str], code_ranges: &[CodeRange]) ->
 
     let mut issues = Vec::new();
     for (content, positions) in &line_counts {
-        if positions.len() >= 5 {
+        if positions.len() >= MIN_OCCURRENCES && is_periodic(positions, MAX_PERIODICITY_RATIO) {
             for &pos in positions {
                 issues.push(NoiseIssue {
                     kind: NoiseKind::HeaderFooterRepetition,
@@ -536,7 +588,69 @@ fn detect_header_footer_repetition(lines: &[&str], code_ranges: &[CodeRange]) ->
 
     // Sort by line number for deterministic output
     issues.sort_by_key(|issue| issue.line);
+
+    // Cap total issues to avoid inflating noise counts
+    issues.truncate(MAX_ISSUES);
     issues
+}
+
+/// Returns true if `positions` (sorted line indices) are roughly evenly spaced.
+///
+/// Computes the coefficient of variation (std_dev / mean) of the gaps between
+/// consecutive positions. A ratio <= `max_ratio` indicates periodic repetition
+/// (like page headers). A higher ratio means the repetition is irregular (like
+/// repeated table content).
+///
+/// Returns `true` (periodic) when there are fewer than 3 positions, since we
+/// cannot meaningfully assess periodicity.
+fn is_periodic(positions: &[usize], max_ratio: f64) -> bool {
+    if positions.len() < 3 {
+        return true;
+    }
+
+    let gaps: Vec<f64> = positions.windows(2).map(|w| (w[1] - w[0]) as f64).collect();
+    let n = gaps.len() as f64;
+    let mean = gaps.iter().sum::<f64>() / n;
+
+    if mean < 1.0 {
+        // All occurrences are adjacent — not a header/footer pattern
+        return false;
+    }
+
+    let variance = gaps.iter().map(|g| (g - mean).powi(2)).sum::<f64>() / n;
+    let std_dev = variance.sqrt();
+    let cv = std_dev / mean;
+
+    cv <= max_ratio
+}
+
+/// Returns true if the line looks like a table column header.
+///
+/// A table header line has ALL words either Title Case (first char uppercase,
+/// rest lowercase) or fully UPPERCASE. This catches patterns like
+/// "Item Content", "Remark", "Prerequisite", "TEST CASE ID".
+fn looks_like_table_header(line: &str) -> bool {
+    let words: Vec<&str> = line.split_whitespace().collect();
+    if words.is_empty() {
+        return false;
+    }
+
+    words.iter().all(|word| {
+        let mut chars = word.chars();
+        match chars.next() {
+            Some(first) => {
+                if !first.is_alphabetic() {
+                    return false;
+                }
+                let rest: String = chars.collect();
+                let is_title_case =
+                    first.is_uppercase() && rest.chars().all(|c| !c.is_alphabetic() || c.is_lowercase());
+                let is_upper = first.is_uppercase() && rest.chars().all(|c| !c.is_alphabetic() || c.is_uppercase());
+                is_title_case || is_upper
+            }
+            None => true,
+        }
+    })
 }
 
 /// Detects footnote references `[^N]` without corresponding `[^N]:` definitions.
@@ -627,6 +741,58 @@ fn detect_excessive_heading_density(lines: &[&str], code_ranges: &[CodeRange]) -
     }
 }
 
+/// Detects unresolved HTML entities like `&#10;`, `&#x0A;`, `&amp;`, `&nbsp;` outside code blocks.
+///
+/// These are extraction artifacts where the HTML-to-markdown conversion failed to
+/// decode character references.
+fn detect_unresolved_html_entities(lines: &[&str], code_ranges: &[CodeRange]) -> Vec<NoiseIssue> {
+    // Match numeric (&#123;) and named (&amp;) HTML entities.
+    // We use a simple scan rather than pulling in the regex crate.
+    let mut issues = Vec::new();
+
+    for (i, line) in lines.iter().enumerate() {
+        if in_code_block(i, code_ranges) {
+            continue;
+        }
+
+        let bytes = line.as_bytes();
+        let mut pos = 0;
+        while pos < bytes.len() {
+            if bytes[pos] == b'&' {
+                let rest = &line[pos..];
+                if let Some(semi) = rest.find(';') {
+                    // Limit entity length to avoid matching across large spans
+                    if semi <= 10 {
+                        let entity = &rest[1..semi];
+                        let is_numeric = entity.starts_with('#')
+                            && entity.len() > 1
+                            && entity[1..].chars().all(|c| c.is_ascii_digit() || c == 'x' || c == 'X');
+                        let is_named = !entity.is_empty() && entity.chars().all(|c| c.is_ascii_alphanumeric());
+
+                        if is_numeric || is_named {
+                            issues.push(NoiseIssue {
+                                kind: NoiseKind::UnresolvedHtmlEntity,
+                                line: i + 1,
+                                context: truncate_context(line, 80),
+                                severity: Severity::Warning,
+                            });
+                            // One issue per line is enough
+                            break;
+                        }
+                    }
+                    pos += semi + 1;
+                } else {
+                    pos += 1;
+                }
+            } else {
+                pos += 1;
+            }
+        }
+    }
+
+    issues
+}
+
 /// Runs all noise detection heuristics and produces a diagnostic report.
 pub fn detect_noise(markdown: &str) -> DiagnosticReport {
     let lines: Vec<&str> = markdown.lines().collect();
@@ -643,6 +809,7 @@ pub fn detect_noise(markdown: &str) -> DiagnosticReport {
     issues.extend(detect_header_footer_repetition(&lines, &code_ranges));
     issues.extend(detect_dangling_references(&lines, &code_ranges));
     issues.extend(detect_excessive_heading_density(&lines, &code_ranges));
+    issues.extend(detect_unresolved_html_entities(&lines, &code_ranges));
 
     let total_lines = lines.len();
     let summary = build_summary(&issues, total_lines);
@@ -1067,14 +1234,20 @@ Text with **bold** and ~~strike~~ formatting.
 
     #[test]
     fn test_short_repeated_lines_not_flagged_as_header_footer() {
-        // Short lines (< 15 non-ws chars) repeated many times should not be flagged
+        // Short lines (< 20 non-ws chars) repeated many times should not be flagged
         let md = "\
-Hello world
-Hello world
-Hello world
-Hello world
-Hello world
-Hello world
+Hello world text
+Hello world text
+Hello world text
+Hello world text
+Hello world text
+Hello world text
+Hello world text
+Hello world text
+Hello world text
+Hello world text
+Hello world text
+Hello world text
 
 Some other text here.
 ";
@@ -1086,14 +1259,14 @@ Some other text here.
             .collect();
         assert!(
             rep_issues.is_empty(),
-            "Short repeated lines (< 15 non-ws chars) should not be flagged, got: {:?}",
+            "Short repeated lines (< 20 non-ws chars) should not be flagged, got: {:?}",
             rep_issues
         );
     }
 
     #[test]
     fn test_genuine_header_footer_repetition_still_flagged() {
-        // Genuine header/footer text repeated 5+ times should still be flagged
+        // Genuine header/footer text repeated 10+ times at regular intervals should be flagged
         let md = "\
 Copyright 2024 Acme Corporation All Rights Reserved
 # Chapter 1
@@ -1108,6 +1281,21 @@ Copyright 2024 Acme Corporation All Rights Reserved
 # Chapter 4
 Still more content.
 Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 5
+Additional content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 6
+Further content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 7
+Yet more content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 8
+Content eight.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 9
+Content nine.
+Copyright 2024 Acme Corporation All Rights Reserved
 ";
         let report = detect_noise(md);
         let rep_issues: Vec<_> = report
@@ -1117,8 +1305,354 @@ Copyright 2024 Acme Corporation All Rights Reserved
             .collect();
         assert!(
             !rep_issues.is_empty(),
-            "Genuine header/footer repetition (5+ times, 15+ chars) should be flagged"
+            "Genuine header/footer repetition (10+ times, periodic) should be flagged"
         );
-        assert_eq!(rep_issues.len(), 5);
+        assert_eq!(rep_issues.len(), 10);
+    }
+
+    #[test]
+    fn test_nine_repetitions_no_longer_flagged() {
+        // 9 repetitions should NOT be flagged (threshold is now 10)
+        let md = "\
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 1
+Some content here.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 2
+More content here.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 3
+Even more content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 4
+Still more content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 5
+Additional content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 6
+Further content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 7
+Yet more content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 8
+Content eight.
+Copyright 2024 Acme Corporation All Rights Reserved
+";
+        let report = detect_noise(md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            rep_issues.is_empty(),
+            "9 repetitions should not be flagged (threshold is 10), got: {:?}",
+            rep_issues
+        );
+    }
+
+    // ---- GarbledText false-positive regression tests ----
+
+    #[test]
+    fn test_empty_image_link_not_flagged_as_garbled() {
+        // `![]()` contains `!`, `[`, `]`, `(`, `)` — should NOT be flagged
+        let md = "\
+# Gallery
+
+![](image1.png)
+![]()
+![alt text](http://example.com/img.jpg)
+
+Normal text.
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            garbled.is_empty(),
+            "Empty image links ![]() should not be flagged as garbled text, got: {:?}",
+            garbled
+        );
+    }
+
+    #[test]
+    fn test_escaped_markdown_links_not_flagged_as_garbled() {
+        // Wikipedia extraction: `\[Big Machine Records\](/wiki/Big_Machine_Records)`
+        let md = "\
+# Wikipedia Article
+
+\\[Big Machine Records\\](/wiki/Big_Machine_Records)
+\\[Taylor Swift\\](/wiki/Taylor_Swift)
+
+Normal text here.
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            garbled.is_empty(),
+            "Escaped markdown links should not be flagged as garbled text, got: {:?}",
+            garbled
+        );
+    }
+
+    #[test]
+    fn test_toc_dot_leaders_not_flagged_as_garbled() {
+        // Table of contents with dot leaders
+        let md = "\
+# Table of Contents
+
+Foreword .............. v
+Chapter 1 ............ 1
+Chapter 2 ............ 15
+Appendix ............. 200
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            garbled.is_empty(),
+            "TOC dot leaders should not be flagged as garbled text, got: {:?}",
+            garbled
+        );
+    }
+
+    #[test]
+    fn test_truly_garbled_punct_still_flagged() {
+        // Truly garbled punctuation that is NOT markdown structural
+        let md = "\
+# Title
+
+Some text with @@@@garbled content here.
+
+Normal text.
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            !garbled.is_empty(),
+            "Non-structural consecutive punctuation (@@@@) should still be flagged as garbled text"
+        );
+    }
+
+    // ---- UnresolvedHtmlEntity tests ----
+
+    #[test]
+    fn test_numeric_html_entity_detected() {
+        let md = "\
+# Document
+
+This has an unresolved entity&#10;in the middle.
+
+Normal text.
+";
+        let report = detect_noise(md);
+        let entity_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::UnresolvedHtmlEntity)
+            .collect();
+        assert!(
+            !entity_issues.is_empty(),
+            "Numeric HTML entity &#10; should be detected as UnresolvedHtmlEntity"
+        );
+    }
+
+    #[test]
+    fn test_named_html_entity_detected() {
+        let md = "\
+# Document
+
+This has &amp; and &nbsp; entities.
+
+Normal text.
+";
+        let report = detect_noise(md);
+        let entity_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::UnresolvedHtmlEntity)
+            .collect();
+        assert!(
+            !entity_issues.is_empty(),
+            "Named HTML entities &amp; and &nbsp; should be detected"
+        );
+    }
+
+    #[test]
+    fn test_html_entity_in_code_block_not_detected() {
+        let md = "\
+# Document
+
+```html
+This has &amp; entities in code.
+```
+
+Normal text.
+";
+        let report = detect_noise(md);
+        let entity_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::UnresolvedHtmlEntity)
+            .collect();
+        assert!(
+            entity_issues.is_empty(),
+            "HTML entities inside code blocks should not be flagged, got: {:?}",
+            entity_issues
+        );
+    }
+
+    // ---- HeaderFooterRepetition heuristic regression tests ----
+
+    #[test]
+    fn test_iso_column_headers_not_flagged_as_header_footer() {
+        // ISO-style column headers like "Item Content Description" appearing 200x
+        // at irregular intervals should NOT be flagged — they are legitimate table
+        // content, not page headers/footers. The table header filter catches Title
+        // Case lines under 40 chars, and the min-char filter catches shorter ones.
+        let mut lines = Vec::new();
+        for i in 0..200 {
+            lines.push(format!("## Test Case {i}"));
+            lines.push("Item Content Description".to_string());
+            lines.push("Prerequisite Condition".to_string());
+            lines.push("Expected Test Result".to_string());
+            // Irregular spacing: add extra lines for some entries
+            if i % 3 == 0 {
+                lines.push("Additional Notes Section".to_string());
+                lines.push(String::new());
+            }
+            lines.push(format!("Test step {i}: verify the output is correct."));
+            lines.push(String::new());
+        }
+        let md = lines.join("\n");
+        let report = detect_noise(&md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            rep_issues.is_empty(),
+            "ISO-style column headers at irregular intervals should not be flagged, got {} issues",
+            rep_issues.len()
+        );
+    }
+
+    #[test]
+    fn test_periodic_real_headers_are_flagged() {
+        // Real page headers appearing every ~50 lines (periodic) should be flagged.
+        let mut lines = Vec::new();
+        for page in 0..12 {
+            lines.push("ACME Corporation - Internal Document - Confidential Draft".to_string());
+            for j in 0..49 {
+                lines.push(format!("Content line {j} of page {page} with enough text."));
+            }
+        }
+        let md = lines.join("\n");
+        let report = detect_noise(&md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            !rep_issues.is_empty(),
+            "Periodic real headers (every ~50 lines, 12 occurrences) should be flagged"
+        );
+        assert_eq!(rep_issues.len(), 12);
+    }
+
+    #[test]
+    fn test_header_footer_cap_at_30_issues() {
+        // Even with many periodic occurrences, results are capped at 30 issues.
+        let mut lines = Vec::new();
+        for page in 0..50 {
+            lines.push("ACME Corporation - Internal Document - Confidential Draft".to_string());
+            for j in 0..49 {
+                lines.push(format!("Content line {j} of page {page} with enough text."));
+            }
+        }
+        let md = lines.join("\n");
+        let report = detect_noise(&md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            rep_issues.len() <= 30,
+            "Header/footer issues should be capped at 30, got {}",
+            rep_issues.len()
+        );
+    }
+
+    #[test]
+    fn test_irregular_repetition_not_flagged() {
+        // Content repeated many times but at completely irregular intervals should
+        // NOT be flagged (fails periodicity check).
+        let mut lines = Vec::new();
+        let repeated = "This particular content line appears many times in the document";
+        // Insert at irregular positions: clustered at the start and then sparse
+        let positions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 50, 200];
+        let total_lines = 300;
+        for i in 0..total_lines {
+            if positions.contains(&i) {
+                lines.push(repeated.to_string());
+            } else {
+                lines.push(format!("Regular content line number {i} in the document."));
+            }
+        }
+        let md = lines.join("\n");
+        let report = detect_noise(&md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            rep_issues.is_empty(),
+            "Irregular (non-periodic) repetition should not be flagged, got {} issues",
+            rep_issues.len()
+        );
+    }
+
+    #[test]
+    fn test_table_header_words_excluded() {
+        // Lines where all words are Title Case and under 40 chars should not be flagged
+        let mut lines = Vec::new();
+        for i in 0..15 {
+            lines.push("Test Case Identifier".to_string());
+            for j in 0..4 {
+                lines.push(format!("Content line {j} of section {i} with text."));
+            }
+        }
+        let md = lines.join("\n");
+        let report = detect_noise(&md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            rep_issues.is_empty(),
+            "Title Case table headers under 40 chars should not be flagged, got {} issues",
+            rep_issues.len()
+        );
     }
 }

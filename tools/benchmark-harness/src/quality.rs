@@ -34,7 +34,22 @@
 //! while ignoring decorative punctuation.
 
 use crate::types::QualityMetrics;
+use regex::Regex;
 use std::collections::HashMap;
+use std::sync::LazyLock;
+
+/// Regex to strip markdown image syntax `![alt](url)` → `alt`
+static MD_IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[([^\]]*)\]\([^)]*\)").expect("invalid regex"));
+
+/// Regex to strip markdown link syntax `[text](url)` → `text`
+static MD_LINK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\([^)]*\)").expect("invalid regex"));
+
+/// Strip markdown link and image syntax so URL components don't become tokens.
+/// `![alt](url)` → `alt`, `[text](url)` → `text`.
+fn strip_markdown_links(text: &str) -> String {
+    let text = MD_IMAGE_RE.replace_all(text, "$1");
+    MD_LINK_RE.replace_all(&text, "$1").into_owned()
+}
 
 /// Compute quality metrics comparing extracted text against ground truth,
 /// optionally including structural quality scoring when markdown GT is available.
@@ -55,9 +70,14 @@ pub fn compute_quality_with_structure(
     if let Some(md_gt) = ground_truth_markdown {
         let structural = crate::markdown_quality::score_structural_quality(extracted, md_gt);
         metrics.f1_score_layout = structural.structural_f1;
-        // Adjust quality_score to include structural component
-        metrics.quality_score =
-            0.5 * metrics.f1_score_text + 0.2 * metrics.f1_score_numeric + 0.3 * metrics.f1_score_layout;
+        // Adjust quality_score to include structural component.
+        // When neither side has numeric tokens, drop the numeric weight and redistribute.
+        metrics.quality_score = if has_any_numeric_tokens(extracted, ground_truth) {
+            0.5 * metrics.f1_score_text + 0.2 * metrics.f1_score_numeric + 0.3 * metrics.f1_score_layout
+        } else {
+            // No numeric tokens: use 0.625 text + 0.375 layout (same 5:3 ratio, no numeric)
+            0.625 * metrics.f1_score_text + 0.375 * metrics.f1_score_layout
+        };
     }
 
     metrics.correct = metrics.quality_score >= 0.95;
@@ -90,7 +110,13 @@ pub fn compute_quality(extracted: &str, ground_truth: &str) -> QualityMetrics {
     // f1_score_layout is not implemented (skip per plan)
     let f1_score_layout = 0.0;
 
-    let quality_score = 0.6 * f1_score_text + 0.4 * f1_score_numeric;
+    // When neither side has numeric tokens, both-empty compute_f1 returns 1.0
+    // which would give a free 0.4 boost. Use text-only scoring in that case.
+    let quality_score = if extracted_numeric.is_empty() && truth_numeric.is_empty() {
+        f1_score_text
+    } else {
+        0.6 * f1_score_text + 0.4 * f1_score_numeric
+    };
 
     let (missing_tokens, extra_tokens) = compute_token_diff(&extracted_tokens, &truth_tokens);
 
@@ -110,6 +136,7 @@ pub fn compute_quality(extracted: &str, ground_truth: &str) -> QualityMetrics {
 /// Tokenize text: lowercase, split on whitespace, strip non-alphanumeric characters
 /// (preserving `.` and `,` only when embedded between alphanumeric chars, e.g. "3.14", "3,14")
 pub fn tokenize(text: &str) -> Vec<String> {
+    let text = strip_markdown_links(text);
     text.to_lowercase()
         .split_whitespace()
         .map(|w| {
@@ -124,14 +151,28 @@ pub fn tokenize(text: &str) -> Vec<String> {
         .filter(|w| !w.is_empty())
         .map(|token| {
             // Normalize numeric tokens: "15.0" -> "15", "100.00" -> "100"
-            if let Ok(num) = token.parse::<f64>() {
-                let normalized = format!("{num}");
-                if normalized != token { normalized } else { token }
+            // Only apply f64 normalization for numbers with 15 or fewer digits
+            // to avoid precision loss (f64 has ~15.9 significant digits).
+            let digit_count = token.chars().filter(|c| c.is_ascii_digit()).count();
+            if digit_count <= 15 {
+                if let Ok(num) = token.parse::<f64>() {
+                    let normalized = format!("{num}");
+                    if normalized != token { normalized } else { token }
+                } else {
+                    token
+                }
             } else {
                 token
             }
         })
         .collect()
+}
+
+/// Check whether either text has any numeric tokens (used to decide scoring formula).
+fn has_any_numeric_tokens(text_a: &str, text_b: &str) -> bool {
+    let a_tokens = tokenize(text_a);
+    let b_tokens = tokenize(text_b);
+    !filter_numeric(&a_tokens).is_empty() || !filter_numeric(&b_tokens).is_empty()
 }
 
 /// Filter tokens to only those containing numeric characters (Unicode-aware)
@@ -237,7 +278,7 @@ mod tests {
         let text = "Hello world this is a test";
         let result = compute_quality(text, text);
         assert!((result.f1_score_text - 1.0).abs() < 0.001);
-        assert!((result.quality_score - 1.0).abs() < 0.01); // 0.6*1.0 + 0.4*1.0 (no numerics = both empty = perfect)
+        assert!((result.quality_score - 1.0).abs() < 0.01); // text-only scoring (no numerics on either side)
     }
 
     #[test]
@@ -314,5 +355,59 @@ mod tests {
         assert_eq!(tokenize("3.14"), vec!["3.14"]);
         assert_eq!(tokenize("0.5"), vec!["0.5"]);
         assert_eq!(tokenize("12.345"), vec!["12.345"]);
+    }
+
+    #[test]
+    fn test_no_numbers_no_boost() {
+        // Two texts with no numeric tokens should score based on text_f1 only,
+        // not get a free 0.4 boost from both-empty numeric F1.
+        let result = compute_quality("hello world foo", "hello world bar");
+        // text F1: intersection {hello, world} = 2, precision=2/3, recall=2/3, F1=2/3
+        let expected_text_f1 = 2.0 / 3.0;
+        assert!(
+            (result.f1_score_text - expected_text_f1).abs() < 0.001,
+            "text F1 should be 2/3, got {}",
+            result.f1_score_text
+        );
+        // quality_score should equal text_f1 (no numeric component)
+        assert!(
+            (result.quality_score - expected_text_f1).abs() < 0.001,
+            "quality_score should equal text F1 ({expected_text_f1}) when no numbers, got {}",
+            result.quality_score
+        );
+    }
+
+    #[test]
+    fn test_url_stripped_from_tokens() {
+        // Markdown links should not produce URL component tokens
+        let tokens = tokenize("[link text](https://example.com)");
+        assert_eq!(tokens, vec!["link", "text"]);
+
+        // Markdown images should not produce URL component tokens
+        let tokens = tokenize("![alt text](https://example.com/image.png)");
+        assert_eq!(tokens, vec!["alt", "text"]);
+
+        // Mixed content
+        let tokens = tokenize("See [docs](https://example.com/docs) for details");
+        assert_eq!(tokens, vec!["see", "docs", "for", "details"]);
+    }
+
+    #[test]
+    fn test_large_number_preserved() {
+        // 17-digit number should not be mangled by f64 precision loss
+        let tokens = tokenize("10000000000000001");
+        assert_eq!(
+            tokens,
+            vec!["10000000000000001"],
+            "17-digit number should be preserved as-is, not rounded by f64"
+        );
+
+        // 15-digit number (including the trailing zero) should still be normalized
+        let tokens = tokenize("12345678901234.0");
+        assert_eq!(
+            tokens,
+            vec!["12345678901234"],
+            "15-digit number with trailing .0 should still normalize"
+        );
     }
 }

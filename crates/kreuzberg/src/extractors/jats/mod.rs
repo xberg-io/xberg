@@ -33,6 +33,7 @@ use quick_xml::events::Event;
 use std::path::Path;
 
 use elements::extract_jats_all_in_one;
+use parser::extract_citation_text as jats_extract_citation;
 use parser::extract_text_content as jats_extract_text;
 
 /// Extract text and inline annotations from a JATS `<p>` element.
@@ -170,7 +171,9 @@ fn build_jats_internal_document(content: &str) -> crate::Result<InternalDocument
     let mut builder = InternalDocumentBuilder::new("jats");
 
     let mut in_article_meta = false;
+    let mut in_abstract = false;
     let mut in_body = false;
+    let mut in_back = false;
     let mut in_ref_list = false;
     let mut in_table = false;
     let mut in_thead = false;
@@ -178,6 +181,11 @@ fn build_jats_internal_document(content: &str) -> crate::Result<InternalDocument
     let mut in_row = false;
     let mut current_table: Vec<Vec<String>> = Vec::new();
     let mut current_row: Vec<String> = Vec::new();
+    // Track section nesting depth for heading levels.
+    // Top-level <sec> in body -> level 2, nested <sec> -> level 3, etc.
+    let mut sec_depth: u32 = 0;
+    // Track whether the ordered list container for references has been opened.
+    let mut ref_list_opened = false;
 
     loop {
         match reader.read_event() {
@@ -189,23 +197,50 @@ fn build_jats_internal_document(content: &str) -> crate::Result<InternalDocument
                     "article-meta" => {
                         in_article_meta = true;
                     }
-                    "article-title" if in_article_meta => {
+                    "article-title" if in_article_meta && !in_abstract => {
                         let text = jats_extract_text(&mut reader)?;
                         if !text.is_empty() {
                             builder.push_heading(1, &text, None, None);
                         }
                         continue;
                     }
-                    "body" => {
-                        in_body = true;
+                    // --- Abstract handling ---
+                    "abstract" if in_article_meta => {
+                        in_abstract = true;
+                        builder.push_heading(2, "Abstract", None, None);
                     }
-                    "sec" if in_body => {
-                        // sections are handled via their title children
+                    "sec" if in_abstract => {
+                        // Nested sections inside abstract
                     }
-                    "title" if in_body && !in_article_meta => {
+                    "title" if in_abstract => {
                         let text = jats_extract_text(&mut reader)?;
                         if !text.is_empty() {
-                            builder.push_heading(2, &text, None, None);
+                            // Abstract sub-sections are rendered at level 3
+                            builder.push_heading(3, &text, None, None);
+                        }
+                        continue;
+                    }
+                    "p" if in_abstract => {
+                        let (text, annotations) = extract_para_with_annotations_jats(&mut reader)?;
+                        if !text.is_empty() {
+                            builder.push_paragraph(&text, annotations, None, None);
+                        }
+                        continue;
+                    }
+                    // --- Body handling ---
+                    "body" => {
+                        in_body = true;
+                        sec_depth = 0;
+                    }
+                    "sec" if in_body => {
+                        sec_depth += 1;
+                    }
+                    "title" if in_body && !in_article_meta && !in_ref_list => {
+                        let text = jats_extract_text(&mut reader)?;
+                        if !text.is_empty() {
+                            // Heading level: top-level sections = 2, nested = 3, etc.
+                            let level = (sec_depth + 1).min(6) as u8;
+                            builder.push_heading(level, &text, None, None);
                         }
                         continue;
                     }
@@ -237,6 +272,33 @@ fn build_jats_internal_document(content: &str) -> crate::Result<InternalDocument
                         }
                         continue;
                     }
+                    // --- Back matter handling ---
+                    "back" => {
+                        in_back = true;
+                    }
+                    "ack" if in_back => {
+                        // Acknowledgments section -- treat like a body section
+                    }
+                    "supplementary-material" if in_back => {
+                        // Skip supplementary material content
+                        let _text = jats_extract_text(&mut reader)?;
+                        continue;
+                    }
+                    "title" if in_back && !in_ref_list => {
+                        let text = jats_extract_text(&mut reader)?;
+                        if !text.is_empty() {
+                            builder.push_heading(2, &text, None, None);
+                        }
+                        continue;
+                    }
+                    "p" if in_back && !in_ref_list => {
+                        let (text, annotations) = extract_para_with_annotations_jats(&mut reader)?;
+                        if !text.is_empty() {
+                            builder.push_paragraph(&text, annotations, None, None);
+                        }
+                        continue;
+                    }
+                    // --- Table handling ---
                     "table" => {
                         in_table = true;
                         current_table.clear();
@@ -256,22 +318,25 @@ fn build_jats_internal_document(content: &str) -> crate::Result<InternalDocument
                         current_row.push(text);
                         continue;
                     }
+                    // --- Reference list handling ---
                     "ref-list" => {
                         in_ref_list = true;
                     }
-                    "ref" if in_ref_list => {
-                        let mut ref_id = String::new();
-                        for attr in e.attributes() {
-                            if let Ok(attr) = attr
-                                && String::from_utf8_lossy(attr.key.as_ref()) == "id"
-                            {
-                                ref_id = String::from_utf8_lossy(attr.value.as_ref()).to_string();
-                            }
-                        }
+                    "title" if in_ref_list => {
                         let text = jats_extract_text(&mut reader)?;
                         if !text.is_empty() {
-                            let key = if ref_id.is_empty() { "ref" } else { &ref_id };
-                            builder.push_citation(&text, key, None);
+                            builder.push_heading(2, &text, None, None);
+                        }
+                        continue;
+                    }
+                    "ref" if in_ref_list => {
+                        let text = jats_extract_citation(&mut reader)?;
+                        if !text.is_empty() {
+                            if !ref_list_opened {
+                                builder.push_list(true);
+                                ref_list_opened = true;
+                            }
+                            builder.push_list_item(&text, true, Vec::new(), None, None);
                         }
                         continue;
                     }
@@ -286,10 +351,23 @@ fn build_jats_internal_document(content: &str) -> crate::Result<InternalDocument
                     "article-meta" => {
                         in_article_meta = false;
                     }
+                    "abstract" if in_abstract => {
+                        in_abstract = false;
+                    }
                     "body" => {
                         in_body = false;
                     }
+                    "sec" if in_body && sec_depth > 0 => {
+                        sec_depth -= 1;
+                    }
+                    "back" => {
+                        in_back = false;
+                    }
                     "ref-list" => {
+                        if ref_list_opened {
+                            builder.end_list();
+                            ref_list_opened = false;
+                        }
                         in_ref_list = false;
                     }
                     "table" if in_table => {
