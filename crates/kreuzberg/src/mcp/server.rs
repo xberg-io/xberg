@@ -794,7 +794,7 @@ impl ServerHandler for KreuzbergMcp {
                 "Extract content from documents in various formats. Supports PDFs, Word documents, \
                  Excel spreadsheets, images (with OCR), HTML, emails, and more. Use enable_ocr=true \
                  for scanned documents, force_ocr=true to always use OCR even if text extraction \
-                 succeeds.",
+                 succeeds. Use disable_ocr=true to skip OCR entirely (images return metadata only).",
             )
     }
 }

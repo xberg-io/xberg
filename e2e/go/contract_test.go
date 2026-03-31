@@ -249,6 +249,14 @@ func TestContractConfigChunkingTokenizer(t *testing.T) {
 	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, nil, nil)
 }
 
+func TestContractConfigDisableOcr(t *testing.T) {
+	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
+"disable_ocr": true
+}`))
+	assertExpectedMime(t, result, []string{"image/png"})
+	assertMaxContentLength(t, result, 5)
+}
+
 func TestContractConfigDjotContent(t *testing.T) {
 	skipIfFeatureUnavailable(t, "pdf")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{

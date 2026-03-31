@@ -61,6 +61,10 @@ pub struct FileExtractionConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub force_ocr_pages: Option<Vec<usize>>,
 
+    /// Override disable OCR for this file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_ocr: Option<bool>,
+
     /// Override chunking configuration for this file.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chunking: Option<ChunkingConfig>,

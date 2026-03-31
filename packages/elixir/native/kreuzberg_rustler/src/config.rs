@@ -66,6 +66,7 @@ pub fn parse_extraction_config(_env: Env, options: Term) -> Result<kreuzberg::co
         "use_cache",
         "enable_quality_processing",
         "force_ocr",
+        "disable_ocr",
         "include_document_structure",
     ];
     let nested_fields = [
@@ -98,6 +99,7 @@ pub fn parse_extraction_config(_env: Env, options: Term) -> Result<kreuzberg::co
                         "use_cache" => config.use_cache = bool_val,
                         "enable_quality_processing" => config.enable_quality_processing = bool_val,
                         "force_ocr" => config.force_ocr = bool_val,
+                        "disable_ocr" => config.disable_ocr = bool_val,
                         "include_document_structure" => config.include_document_structure = bool_val,
                         _ => {} // Already checked above
                     }

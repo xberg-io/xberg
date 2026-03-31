@@ -945,7 +945,7 @@ module Kreuzberg
     #   )
     #
     class Extraction
-      attr_reader :use_cache, :enable_quality_processing, :force_ocr, :force_ocr_pages,
+      attr_reader :use_cache, :enable_quality_processing, :force_ocr, :disable_ocr, :force_ocr_pages,
                   :include_document_structure,
                   :ocr, :chunking, :language_detection, :pdf_options,
                   :images, :postprocessor,
@@ -974,7 +974,7 @@ module Kreuzberg
       #
       # Keys that are allowed in the Extraction config
       ALLOWED_KEYS = %i[
-        use_cache enable_quality_processing force_ocr force_ocr_pages include_document_structure ocr chunking
+        use_cache enable_quality_processing force_ocr disable_ocr force_ocr_pages include_document_structure ocr chunking
         language_detection pdf_options image_extraction
         postprocessor token_reduction keywords html_options pages
         max_concurrent_extractions output_format result_format
@@ -1040,6 +1040,7 @@ module Kreuzberg
                      use_cache: true,
                      enable_quality_processing: true,
                      force_ocr: false,
+                     disable_ocr: false,
                      force_ocr_pages: nil,
                      include_document_structure: false,
                      ocr: nil,
@@ -1066,7 +1067,7 @@ module Kreuzberg
                      email: nil)
         kwargs = {
           use_cache: use_cache, enable_quality_processing: enable_quality_processing,
-          force_ocr: force_ocr, force_ocr_pages: force_ocr_pages,
+          force_ocr: force_ocr, disable_ocr: disable_ocr, force_ocr_pages: force_ocr_pages,
           include_document_structure: include_document_structure,
           ocr: ocr, chunking: chunking, language_detection: language_detection,
           pdf_options: pdf_options, image_extraction: image_extraction,
@@ -1099,6 +1100,7 @@ module Kreuzberg
         @use_cache = params[:use_cache] ? true : false
         @enable_quality_processing = params[:enable_quality_processing] ? true : false
         @force_ocr = params[:force_ocr] ? true : false
+        @disable_ocr = params[:disable_ocr] ? true : false
         @force_ocr_pages = params[:force_ocr_pages]
         @include_document_structure = params[:include_document_structure] ? true : false
         @ocr = normalize_config(params[:ocr], OCR)
@@ -1154,6 +1156,7 @@ module Kreuzberg
           use_cache: @use_cache,
           enable_quality_processing: @enable_quality_processing,
           force_ocr: @force_ocr,
+          disable_ocr: @disable_ocr,
           force_ocr_pages: @force_ocr_pages,
           include_document_structure: @include_document_structure,
           max_concurrent_extractions: @max_concurrent_extractions,
@@ -1290,6 +1293,8 @@ module Kreuzberg
           @enable_quality_processing = value ? true : false
         when :force_ocr
           @force_ocr = value ? true : false
+        when :disable_ocr
+          @disable_ocr = value ? true : false
         when :force_ocr_pages
           @force_ocr_pages = value
         when :include_document_structure
@@ -1395,6 +1400,7 @@ module Kreuzberg
         @use_cache = merged.use_cache
         @enable_quality_processing = merged.enable_quality_processing
         @force_ocr = merged.force_ocr
+        @disable_ocr = merged.disable_ocr
         @force_ocr_pages = merged.force_ocr_pages
         @include_document_structure = merged.include_document_structure
         @ocr = merged.ocr

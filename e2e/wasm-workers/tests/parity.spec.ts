@@ -40,6 +40,7 @@ describe("parity", () => {
 			"cacheTtlSecs",
 			"chunking",
 			"concurrency",
+			"disableOcr",
 			"email",
 			"enableQualityProcessing",
 			"extractionTimeoutSecs",

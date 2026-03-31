@@ -144,6 +144,9 @@ func ConfigMerge(base, override *ExtractionConfig) error {
 	if override.ForceOcr != nil {
 		base.ForceOcr = override.ForceOcr
 	}
+	if override.DisableOcr != nil {
+		base.DisableOcr = override.DisableOcr
+	}
 	if override.Chunking != nil {
 		base.Chunking = override.Chunking
 	}

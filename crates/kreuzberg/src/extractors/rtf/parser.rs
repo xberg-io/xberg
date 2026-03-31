@@ -586,6 +586,9 @@ pub fn spans_to_annotations(para_start: usize, para_end: usize, formatting: &Rtf
 ///
 /// These are groups that start with a control word and contain metadata,
 /// font tables, style sheets, or binary data — not document body text.
+///
+/// Note: `field` and `fldinst` are NOT in this list — they are handled
+/// specially so that hyperlink text (`\fldrslt`) is extracted.
 const SKIP_DESTINATIONS: &[&str] = &[
     "fonttbl",
     "colortbl",
@@ -604,13 +607,11 @@ const SKIP_DESTINATIONS: &[&str] = &[
     "datastore",
     "latentstyles",
     "datafield",
-    "fldinst",
     "objdata",
     "objclass",
     "panose",
     "bkmkstart",
     "bkmkend",
-    "field",
     "wgrffmtfilter",
     "fcharset",
     "pgdsctbl",
@@ -645,6 +646,25 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
     // Flag to prevent double-emitting metadata when \par and \pard both occur
     let mut para_meta_emitted = false;
 
+    // Unicode skip count (\ucN): how many replacement bytes follow \uN.
+    // Scoped per group — push on '{', pop on '}'.
+    let mut uc_stack: Vec<u8> = vec![1]; // default \uc1
+
+    // Hyperlink field tracking for \field{\*\fldinst HYPERLINK "url"}{\fldrslt text}
+    let mut in_fldinst = false;
+    let mut fldinst_depth: i32 = 0;
+    let mut fldinst_content = String::new();
+    let mut in_fldrslt = false;
+    let mut fldrslt_depth: i32 = 0;
+    let mut pending_hyperlink_url: Option<String> = None;
+
+    // Footnote tracking
+    let mut in_footnote = false;
+    let mut footnote_depth: i32 = 0;
+    let mut footnote_buf = String::new();
+    let mut footnote_count: usize = 0;
+    let mut footnotes: Vec<String> = Vec::new();
+
     // Group state stack: each entry tracks whether the group should be skipped.
     // When skip_depth > 0, all content is suppressed until we return to the
     // enclosing depth.
@@ -660,6 +680,10 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
     // spurious spaces at `}` when the group only contained font directives
     // (e.g. `\loch`, `\hich`, `\dbch`).
     let mut group_has_text: Vec<bool> = Vec::new();
+
+    // Deferred boundary space: set to true when a text-producing group closes.
+    // The space is only emitted when actual text follows (not another `{`).
+    let mut pending_boundary_space = false;
 
     let ensure_table = |table_state: &mut Option<TableState>| {
         if table_state.is_none() {
@@ -681,12 +705,21 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 group_depth += 1;
                 expect_destination = true;
                 group_has_text.push(false);
-                // If we're already skipping, just track depth
+                // Inherit current uc value into new group scope
+                let current_uc = uc_stack.last().copied().unwrap_or(1);
+                uc_stack.push(current_uc);
+                // Adjacent group open `}{`: clear pending boundary space so that
+                // `x}{\super superscript}` produces `xsuperscript` not `x superscript`.
+                pending_boundary_space = false;
             }
             '}' => {
                 group_depth -= 1;
                 expect_destination = false;
                 ignorable_pending = false;
+                // Pop uc_stack for this group
+                if uc_stack.len() > 1 {
+                    uc_stack.pop();
+                }
                 // If we were skipping and just exited the skipped group, stop skipping
                 if skip_depth > 0 && group_depth < skip_depth {
                     skip_depth = 0;
@@ -695,18 +728,48 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 if in_listtext && group_depth < listtext_depth {
                     in_listtext = false;
                 }
-                // Add space at group boundary, but only if this group actually
-                // produced text output. Font-encoding groups (containing only
-                // \loch, \hich, \dbch, \af, \f etc.) should not cause a space
-                // to be inserted mid-word.
+                // Handle \fldinst group closing — parse HYPERLINK URL
+                if in_fldinst && group_depth < fldinst_depth {
+                    in_fldinst = false;
+                    let trimmed = fldinst_content.trim();
+                    if let Some(rest) = trimmed.strip_prefix("HYPERLINK") {
+                        let url = rest.trim().trim_matches('"').trim().to_string();
+                        // Handle bookmark-style links: HYPERLINK \l "bookmark_name"
+                        let url = if let Some(bookmark) = url.strip_prefix("\\l ") {
+                            format!("#{}", bookmark.trim().trim_matches('"'))
+                        } else if let Some(bookmark) = url.strip_prefix("\\l\"") {
+                            format!("#{}", bookmark.trim_matches('"'))
+                        } else {
+                            url
+                        };
+                        if !url.is_empty() {
+                            pending_hyperlink_url = Some(url);
+                        }
+                    }
+                    fldinst_content.clear();
+                }
+                // Handle \fldrslt group closing
+                if in_fldrslt && group_depth < fldrslt_depth {
+                    in_fldrslt = false;
+                    pending_hyperlink_url = None;
+                }
+                // Handle \footnote group closing — store footnote text
+                if in_footnote && group_depth < footnote_depth {
+                    in_footnote = false;
+                    let note = footnote_buf.trim().to_string();
+                    if !note.is_empty() {
+                        footnotes.push(note);
+                    }
+                    footnote_buf.clear();
+                }
+                // Defer space insertion at group boundary. If the group produced
+                // text and the next token is also text (not an adjacent group open),
+                // a space is needed. But if `}{` appears with no intervening text,
+                // the groups are adjacent and no space should be inserted (e.g.
+                // `x}{\super superscript}` means `xsuperscript`).
                 let produced_text = group_has_text.pop().unwrap_or(false);
-                if produced_text
-                    && skip_depth == 0
-                    && !result.is_empty()
-                    && !result.ends_with(' ')
-                    && !result.ends_with('\n')
-                {
-                    result.push(' ');
+                if produced_text && skip_depth == 0 {
+                    pending_boundary_space = true;
                 }
             }
             '\\' => {
@@ -743,14 +806,35 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 &mut cur_list_id,
                                 &mut para_metas,
                                 &mut para_meta_emitted,
+                                &mut uc_stack,
+                                &mut footnote_count,
+                                in_footnote,
+                                &mut footnote_buf,
+                                &mut pending_boundary_space,
                             );
                         }
                         '\\' | '{' | '}' => {
                             chars.next();
                             expect_destination = false;
+                            // Capture literal chars in fldinst/footnote buffers
+                            if in_fldinst {
+                                fldinst_content.push(next_ch);
+                            }
+                            if in_footnote {
+                                footnote_buf.push(next_ch);
+                            }
                             if skip_depth > 0 {
                                 continue;
                             }
+                            // Flush deferred boundary space
+                            if pending_boundary_space
+                                && !result.is_empty()
+                                && !result.ends_with(' ')
+                                && !result.ends_with('\n')
+                            {
+                                result.push(' ');
+                            }
+                            pending_boundary_space = false;
                             para_meta_emitted = false;
                             result.push(next_ch);
                             if let Some(flag) = group_has_text.last_mut() {
@@ -762,6 +846,13 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                             expect_destination = false;
                             let hex1 = chars.next();
                             let hex2 = chars.next();
+                            // Capture hex-encoded chars in footnote buffer even when skipping
+                            if in_footnote
+                                && let (Some(h1), Some(h2)) = (hex1, hex2)
+                                    && let Some(byte) = parse_hex_byte(h1, h2)
+                                {
+                                    footnote_buf.push(decode_windows_1252(byte));
+                                }
                             if skip_depth > 0 {
                                 continue;
                             }
@@ -774,6 +865,15 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 {
                                     state.current_cell.push(decoded);
                                 } else {
+                                    // Flush deferred boundary space
+                                    if pending_boundary_space
+                                        && !result.is_empty()
+                                        && !result.ends_with(' ')
+                                        && !result.ends_with('\n')
+                                    {
+                                        result.push(' ');
+                                    }
+                                    pending_boundary_space = false;
                                     para_meta_emitted = false;
                                     result.push(decoded);
                                     if let Some(flag) = group_has_text.last_mut() {
@@ -799,6 +899,15 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                     // \* destination: skip entire group unless we specifically handle it
                                     ignorable_pending = false;
                                     // Allow \shppict through — it contains \pict groups with image data
+                                    // Allow \fldinst through — it contains HYPERLINK field instructions
+                                    if control_word == "fldinst" {
+                                        in_fldinst = true;
+                                        fldinst_depth = group_depth;
+                                        if skip_depth == 0 {
+                                            skip_depth = group_depth;
+                                        }
+                                        continue;
+                                    }
                                     if control_word != "shppict" {
                                         if skip_depth == 0 {
                                             skip_depth = group_depth;
@@ -817,6 +926,35 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                     continue;
                                 }
 
+                                // Handle \fldinst destination (non-ignorable case)
+                                if control_word == "fldinst" {
+                                    in_fldinst = true;
+                                    fldinst_depth = group_depth;
+                                    if skip_depth == 0 {
+                                        skip_depth = group_depth;
+                                    }
+                                    continue;
+                                }
+
+                                // Handle \fldrslt destination — link display text
+                                if control_word == "fldrslt" {
+                                    in_fldrslt = true;
+                                    fldrslt_depth = group_depth;
+                                    // Don't skip — we want the text extracted
+                                    continue;
+                                }
+
+                                // Handle \footnote destination
+                                if control_word == "footnote" {
+                                    in_footnote = true;
+                                    footnote_depth = group_depth;
+                                    footnote_buf.clear();
+                                    if skip_depth == 0 {
+                                        skip_depth = group_depth;
+                                    }
+                                    continue;
+                                }
+
                                 if SKIP_DESTINATIONS.contains(&control_word.as_str()) {
                                     if skip_depth == 0 {
                                         skip_depth = group_depth;
@@ -826,6 +964,39 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                             }
 
                             if skip_depth > 0 {
+                                // Even when skipping, handle \uc inside footnotes
+                                if control_word == "uc"
+                                    && let Some(val) = _param
+                                        && let Some(uc) = uc_stack.last_mut() {
+                                            *uc = val.max(0) as u8;
+                                        }
+                                // Capture unicode chars inside footnote buffers
+                                if in_footnote && control_word == "u"
+                                    && let Some(code_num) = _param {
+                                        let code_u = if code_num < 0 {
+                                            (code_num + 65536) as u32
+                                        } else {
+                                            code_num as u32
+                                        };
+                                        if let Some(c) = char::from_u32(code_u) {
+                                            footnote_buf.push(c);
+                                        }
+                                        // Skip replacement chars per uc count
+                                        let uc_count = uc_stack.last().copied().unwrap_or(1);
+                                        for _ in 0..uc_count {
+                                            if let Some(&next) = chars.peek()
+                                                && next != '\\'
+                                                && next != '{'
+                                                && next != '}'
+                                            {
+                                                chars.next();
+                                            }
+                                        }
+                                    }
+                                // Handle \par inside footnotes
+                                if in_footnote && (control_word == "par" || control_word == "line") {
+                                    footnote_buf.push(' ');
+                                }
                                 continue;
                             }
 
@@ -846,6 +1017,10 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 &mut cur_list_id,
                                 &mut para_metas,
                                 &mut para_meta_emitted,
+                                &mut uc_stack,
+                                &mut footnote_count,
+                                in_footnote,
+                                &mut footnote_buf,
                             );
                         }
                     }
@@ -855,8 +1030,18 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 // RTF line breaks in the source are not significant
             }
             ' ' | '\t' => {
-                if skip_depth > 0 {
+                // Capture spaces in fldinst/footnote buffers even when skipping
+                if in_fldinst {
+                    fldinst_content.push(' ');
+                }
+                if in_footnote {
+                    footnote_buf.push(' ');
+                }
+                if skip_depth > 0 && !in_footnote {
                     continue;
+                }
+                if in_footnote {
+                    continue; // Already captured to footnote_buf
                 }
                 if let Some(state) = table_state.as_mut()
                     && state.in_row
@@ -873,6 +1058,13 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
             }
             _ => {
                 expect_destination = false;
+                // Capture content in fldinst/footnote buffers even when skipping
+                if in_fldinst {
+                    fldinst_content.push(ch);
+                }
+                if in_footnote {
+                    footnote_buf.push(ch);
+                }
                 if skip_depth > 0 {
                     continue;
                 }
@@ -887,6 +1079,15 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 {
                     state.current_cell.push(ch);
                 } else {
+                    // Flush deferred boundary space before pushing text
+                    if pending_boundary_space
+                        && !result.is_empty()
+                        && !result.ends_with(' ')
+                        && !result.ends_with('\n')
+                    {
+                        result.push(' ');
+                    }
+                    pending_boundary_space = false;
                     para_meta_emitted = false;
                     result.push(ch);
                     if let Some(flag) = group_has_text.last_mut() {
@@ -919,6 +1120,19 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
         }
     }
 
+    // Append footnote definitions at the end
+    if !footnotes.is_empty() {
+        if !result.ends_with('\n') {
+            result.push('\n');
+            result.push('\n');
+        }
+        for (i, note) in footnotes.iter().enumerate() {
+            result.push_str(&format!("[^{}]: {}", i + 1, note.trim()));
+            result.push('\n');
+            result.push('\n');
+        }
+    }
+
     (normalize_whitespace(&result), tables, images, para_metas)
 }
 
@@ -941,6 +1155,11 @@ fn handle_control_word(
     cur_list_id: &mut Option<u16>,
     para_metas: &mut Vec<ParagraphMeta>,
     para_meta_emitted: &mut bool,
+    uc_stack: &mut Vec<u8>,
+    footnote_count: &mut usize,
+    _in_footnote: bool,
+    _footnote_buf: &mut String,
+    pending_boundary_space: &mut bool,
 ) {
     match control_word {
         // Paragraph reset — start tracking new paragraph properties.
@@ -986,6 +1205,13 @@ fn handle_control_word(
         "ls" => {
             *cur_list_id = Some(param.unwrap_or(0) as u16);
         }
+        // Unicode skip count: \ucN sets how many replacement bytes follow \uN
+        "uc" => {
+            if let Some(val) = param
+                && let Some(uc) = uc_stack.last_mut() {
+                    *uc = val.max(0) as u8;
+                }
+        }
         // Unicode escape: \u1234 (signed integer)
         "u" => {
             if let Some(code_num) = param {
@@ -1006,13 +1232,52 @@ fn handle_control_word(
                         }
                     }
                 }
-                // Skip the replacement character (usually `?` or next byte)
-                if let Some(&next) = chars.peek()
-                    && next != '\\'
-                    && next != '{'
-                    && next != '}'
-                {
-                    chars.next();
+                // Skip replacement characters per \uc count
+                let uc_count = uc_stack.last().copied().unwrap_or(1);
+                let mut skipped = 0u8;
+                while skipped < uc_count {
+                    if let Some(&next) = chars.peek() {
+                        if next == '\\' {
+                            // A \' hex escape counts as one replacement character
+                            chars.next(); // consume '\'
+                            if let Some(&apos) = chars.peek() {
+                                if apos == '\'' {
+                                    chars.next(); // consume '\''
+                                    chars.next(); // consume hex digit 1
+                                    chars.next(); // consume hex digit 2
+                                    skipped += 1;
+                                    continue;
+                                }
+                                // Other control word — don't consume it, break
+                                // Put the backslash "back" conceptually — we can't un-consume,
+                                // so we just break and let the main loop handle it
+                                break;
+                            }
+                            break;
+                        } else if next == '{' || next == '}' {
+                            break;
+                        } else {
+                            chars.next();
+                            skipped += 1;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        // Footnote reference marker
+        "chftn" => {
+            *footnote_count += 1;
+            let marker = format!("[^{}]", *footnote_count);
+            if let Some(state) = table_state.as_mut()
+                && state.in_row
+            {
+                state.current_cell.push_str(&marker);
+            } else {
+                result.push_str(&marker);
+                if let Some(flag) = group_has_text.last_mut() {
+                    *flag = true;
                 }
             }
         }

@@ -39,6 +39,7 @@ test_that("ExtractionConfig has all expected fields", {
     "cache_ttl_secs",
     "chunking",
     "concurrency",
+    "disable_ocr",
     "email",
     "enable_quality_processing",
     "extraction_timeout_secs",

@@ -30,6 +30,7 @@ public final class FileExtractionConfig {
 	private final Boolean enableQualityProcessing;
 	private final OcrConfig ocr;
 	private final Boolean forceOcr;
+	private final Boolean disableOcr;
 	private final List<Long> forceOcrPages;
 	private final ChunkingConfig chunking;
 	private final ImageExtractionConfig images;
@@ -50,6 +51,7 @@ public final class FileExtractionConfig {
 		this.enableQualityProcessing = builder.enableQualityProcessing;
 		this.ocr = builder.ocr;
 		this.forceOcr = builder.forceOcr;
+		this.disableOcr = builder.disableOcr;
 		this.forceOcrPages = builder.forceOcrPages;
 		this.chunking = builder.chunking;
 		this.images = builder.images;
@@ -81,6 +83,10 @@ public final class FileExtractionConfig {
 
 	public Boolean getForceOcr() {
 		return forceOcr;
+	}
+
+	public Boolean getDisableOcr() {
+		return disableOcr;
 	}
 
 	public List<Long> getForceOcrPages() {
@@ -167,6 +173,9 @@ public final class FileExtractionConfig {
 		if (forceOcr != null) {
 			map.put("force_ocr", forceOcr);
 		}
+		if (disableOcr != null) {
+			map.put("disable_ocr", disableOcr);
+		}
 		if (forceOcrPages != null) {
 			map.put("force_ocr_pages", forceOcrPages);
 		}
@@ -232,6 +241,7 @@ public final class FileExtractionConfig {
 		private Boolean enableQualityProcessing;
 		private OcrConfig ocr;
 		private Boolean forceOcr;
+		private Boolean disableOcr;
 		private List<Long> forceOcrPages;
 		private ChunkingConfig chunking;
 		private ImageExtractionConfig images;
@@ -265,6 +275,11 @@ public final class FileExtractionConfig {
 
 		public Builder forceOcr(Boolean forceOcr) {
 			this.forceOcr = forceOcr;
+			return this;
+		}
+
+		public Builder disableOcr(Boolean disableOcr) {
+			this.disableOcr = disableOcr;
 			return this;
 		}
 

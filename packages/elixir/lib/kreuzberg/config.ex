@@ -16,6 +16,7 @@ defmodule Kreuzberg.ExtractionConfig do
     * `:use_cache` - Enable result caching (default: true)
     * `:enable_quality_processing` - Enable quality post-processing (default: true)
     * `:force_ocr` - Force OCR even for searchable PDFs (default: false)
+    * `:disable_ocr` - Disable OCR entirely — image files return empty content (default: false)
 
   ### Output Format Flags
 
@@ -51,6 +52,7 @@ defmodule Kreuzberg.ExtractionConfig do
   - `use_cache`: true - Caching is enabled by default for better performance
   - `enable_quality_processing`: true - Quality processing is enabled by default for better extraction results
   - `force_ocr`: false - OCR is only used when necessary (searchable PDFs bypass OCR)
+  - `disable_ocr`: false - OCR is available when needed
 
   Format defaults:
   - `output_format`: "plain" - Raw extracted text (no formatting)
@@ -114,6 +116,7 @@ defmodule Kreuzberg.ExtractionConfig do
         "chunking" => %{"size" => 512},
         "concurrency" => nil,
         "email" => nil,
+        "disable_ocr" => false,
         "enable_quality_processing" => true,
         "extraction_timeout_secs" => nil,
         "force_ocr" => false,
@@ -177,6 +180,7 @@ defmodule Kreuzberg.ExtractionConfig do
           use_cache: boolean(),
           enable_quality_processing: boolean(),
           force_ocr: boolean(),
+          disable_ocr: boolean(),
           force_ocr_pages: [non_neg_integer()] | nil,
           output_format: output_format,
           result_format: result_format,
@@ -212,6 +216,7 @@ defmodule Kreuzberg.ExtractionConfig do
     use_cache: true,
     enable_quality_processing: true,
     force_ocr: false,
+    disable_ocr: false,
     force_ocr_pages: nil,
     output_format: "plain",
     result_format: "unified",
@@ -324,6 +329,7 @@ defmodule Kreuzberg.ExtractionConfig do
         "chunking" => %{"size" => 512},
         "concurrency" => nil,
         "email" => nil,
+        "disable_ocr" => false,
         "enable_quality_processing" => true,
         "extraction_timeout_secs" => nil,
         "force_ocr" => false,
@@ -357,6 +363,7 @@ defmodule Kreuzberg.ExtractionConfig do
         "chunking" => nil,
         "concurrency" => nil,
         "email" => nil,
+        "disable_ocr" => false,
         "enable_quality_processing" => true,
         "extraction_timeout_secs" => nil,
         "force_ocr" => false,
@@ -421,6 +428,7 @@ defmodule Kreuzberg.ExtractionConfig do
       "use_cache" => config.use_cache,
       "enable_quality_processing" => config.enable_quality_processing,
       "force_ocr" => config.force_ocr,
+      "disable_ocr" => config.disable_ocr,
       "force_ocr_pages" => config.force_ocr_pages,
       "output_format" => normalize_format_value(config.output_format),
       "result_format" => normalize_format_value(config.result_format),
@@ -676,6 +684,7 @@ defmodule Kreuzberg.ExtractionConfig do
          :ok <-
            validate_boolean_field(config.enable_quality_processing, "enable_quality_processing"),
          :ok <- validate_boolean_field(config.force_ocr, "force_ocr"),
+         :ok <- validate_boolean_field(config.disable_ocr, "disable_ocr"),
          :ok <- validate_output_format(config.output_format),
          :ok <- validate_result_format(config.result_format),
          :ok <- validate_nested_field(config.chunking, "chunking"),
@@ -834,6 +843,7 @@ defmodule Kreuzberg.ExtractionConfig do
       use_cache: Map.get(map, "use_cache", true),
       enable_quality_processing: Map.get(map, "enable_quality_processing", true),
       force_ocr: Map.get(map, "force_ocr", false),
+      disable_ocr: Map.get(map, "disable_ocr", false),
       force_ocr_pages: Map.get(map, "force_ocr_pages"),
       output_format: Map.get(map, "output_format", "plain"),
       result_format: Map.get(map, "result_format", "unified"),

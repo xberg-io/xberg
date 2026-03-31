@@ -42,6 +42,7 @@ Deno.test("ExtractionConfig field parity", { permissions: { read: true, net: tru
 		"cacheTtlSecs",
 		"chunking",
 		"concurrency",
+		"disableOcr",
 		"email",
 		"enableQualityProcessing",
 		"extractionTimeoutSecs",

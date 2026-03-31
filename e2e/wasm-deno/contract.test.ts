@@ -462,6 +462,26 @@ Deno.test("config_chunking_text", { permissions: { read: true, net: true } }, as
 	assertions.assertChunks(result, 1, null, true, null, null, null);
 });
 
+Deno.test("config_disable_ocr", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig({ disable_ocr: true });
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("images/test_hello_world.png");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "image/png", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "config_disable_ocr", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["image/png"]);
+	assertions.assertMaxContentLength(result, 5);
+});
+
 Deno.test("config_djot_content", { permissions: { read: true, net: true } }, async () => {
 	const config = buildConfig({ output_format: "djot" });
 	let result: ExtractionResult | null = null;

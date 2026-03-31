@@ -492,6 +492,8 @@ export interface ExtractionConfig {
 	enableQualityProcessing?: boolean;
 	/** Force OCR even if text is available */
 	forceOcr?: boolean;
+	/** Disable OCR entirely — image files return empty content instead of errors */
+	disableOcr?: boolean;
 	/** List of 1-indexed page numbers to force OCR on */
 	forceOcrPages?: number[];
 	/** Security limits for archive extraction */

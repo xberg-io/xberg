@@ -58,6 +58,18 @@ pub struct ExtractionConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub force_ocr_pages: Option<Vec<usize>>,
 
+    /// Disable OCR entirely, even for images.
+    ///
+    /// When `true`, OCR is skipped for all document types. Images return metadata
+    /// only (dimensions, format, EXIF) without text extraction. PDFs use only
+    /// native text extraction without OCR fallback.
+    ///
+    /// Cannot be `true` simultaneously with `force_ocr`.
+    ///
+    /// *Added in v4.7.0.*
+    #[serde(default)]
+    pub disable_ocr: bool,
+
     /// Text chunking configuration (None = chunking disabled)
     #[serde(default)]
     pub chunking: Option<ChunkingConfig>,
@@ -229,6 +241,7 @@ impl Default for ExtractionConfig {
             ocr: None,
             force_ocr: false,
             force_ocr_pages: None,
+            disable_ocr: false,
             chunking: None,
             images: None,
             #[cfg(feature = "pdf")]
@@ -291,6 +304,7 @@ impl ExtractionConfig {
             ref ocr,
             ref force_ocr,
             ref force_ocr_pages,
+            ref disable_ocr,
             ref chunking,
             ref images,
             #[cfg(feature = "pdf")]
@@ -326,6 +340,9 @@ impl ExtractionConfig {
         }
         if let Some(v) = force_ocr_pages {
             config.force_ocr_pages = Some(v.clone());
+        }
+        if let Some(v) = disable_ocr {
+            config.disable_ocr = *v;
         }
         if let Some(v) = chunking {
             config.chunking = Some(v.clone());
@@ -415,7 +432,7 @@ impl ExtractionConfig {
     /// decompression can improve CPU utilization by 5-10% by avoiding wasteful
     /// image I/O and processing when results won't be used.
     pub fn needs_image_processing(&self) -> bool {
-        let ocr_enabled = self.ocr.is_some() || self.force_ocr;
+        let ocr_enabled = !self.disable_ocr && (self.ocr.is_some() || self.force_ocr);
 
         let image_extraction_enabled = self.images.as_ref().map(|i| i.extract_images).unwrap_or(false);
 

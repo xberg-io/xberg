@@ -361,6 +361,14 @@ static void test_contract_config_chunking_tokenizer(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_contract_config_disable_ocr(void) {
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"disable_ocr\":true}");
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"image/png"}, 1);
+    assert_max_content_length(result, 5);
+    kreuzberg_free_result(result);
+}
+
 static void test_contract_config_djot_content(void) {
     if (skip_if_feature_unavailable("pdf")) return;
     CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"output_format\":\"djot\"}");
@@ -761,6 +769,7 @@ int main(void) {
     test_contract_config_chunking_small();
     test_contract_config_chunking_text();
     test_contract_config_chunking_tokenizer();
+    test_contract_config_disable_ocr();
     test_contract_config_djot_content();
     test_contract_config_document_structure();
     test_contract_config_document_structure_disabled();

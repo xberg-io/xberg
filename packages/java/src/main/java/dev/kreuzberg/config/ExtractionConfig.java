@@ -29,10 +29,12 @@ public final class ExtractionConfig {
 	private final boolean useCache;
 	private final boolean enableQualityProcessing;
 	private final boolean forceOcr;
+	private final boolean disableOcr;
 	private final List<Long> forceOcrPages;
 	private final boolean useCacheSet;
 	private final boolean enableQualityProcessingSet;
 	private final boolean forceOcrSet;
+	private final boolean disableOcrSet;
 	private final String outputFormat;
 	private final String resultFormat;
 	private final OcrConfig ocr;
@@ -64,10 +66,12 @@ public final class ExtractionConfig {
 		this.useCache = builder.useCache;
 		this.enableQualityProcessing = builder.enableQualityProcessing;
 		this.forceOcr = builder.forceOcr;
+		this.disableOcr = builder.disableOcr;
 		this.forceOcrPages = builder.forceOcrPages;
 		this.useCacheSet = builder.useCacheSet;
 		this.enableQualityProcessingSet = builder.enableQualityProcessingSet;
 		this.forceOcrSet = builder.forceOcrSet;
+		this.disableOcrSet = builder.disableOcrSet;
 		this.outputFormat = builder.outputFormat;
 		this.resultFormat = builder.resultFormat;
 		this.ocr = builder.ocr;
@@ -110,6 +114,10 @@ public final class ExtractionConfig {
 
 	public boolean isForceOcr() {
 		return forceOcr;
+	}
+
+	public boolean isDisableOcr() {
+		return disableOcr;
 	}
 
 	public List<Long> getForceOcrPages() {
@@ -537,6 +545,9 @@ public final class ExtractionConfig {
 		if (includeDefaults || forceOcrSet) {
 			map.put("force_ocr", forceOcr);
 		}
+		if (includeDefaults || disableOcrSet) {
+			map.put("disable_ocr", disableOcr);
+		}
 		if (forceOcrPages != null) {
 			map.put("force_ocr_pages", forceOcrPages);
 		}
@@ -629,6 +640,9 @@ public final class ExtractionConfig {
 		}
 		if (raw.containsKey("force_ocr")) {
 			builder.forceOcr(asBoolean(raw.get("force_ocr"), builder.forceOcr));
+		}
+		if (raw.containsKey("disable_ocr")) {
+			builder.disableOcr(asBoolean(raw.get("disable_ocr"), builder.disableOcr));
 		}
 		if (raw.containsKey("force_ocr_pages")) {
 			Object val = raw.get("force_ocr_pages");
@@ -788,11 +802,13 @@ public final class ExtractionConfig {
 		private boolean useCache = true;
 		private boolean enableQualityProcessing = true;
 		private boolean forceOcr = false;
+		private boolean disableOcr = false;
 		private List<Long> forceOcrPages = null;
 		private boolean includeDocumentStructure = false;
 		private boolean useCacheSet = false;
 		private boolean enableQualityProcessingSet = false;
 		private boolean forceOcrSet = false;
+		private boolean disableOcrSet = false;
 		private boolean includeDocumentStructureSet = false;
 		private String outputFormat;
 		private String resultFormat;
@@ -837,6 +853,12 @@ public final class ExtractionConfig {
 		public Builder forceOcr(boolean forceOcr) {
 			this.forceOcr = forceOcr;
 			this.forceOcrSet = true;
+			return this;
+		}
+
+		public Builder disableOcr(boolean disableOcr) {
+			this.disableOcr = disableOcr;
+			this.disableOcrSet = true;
 			return this;
 		}
 

@@ -375,7 +375,10 @@ impl DocumentExtractor for ImageExtractor {
                 ..Default::default()
             };
             doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
-            tracing::debug!(format = "image", "OCR disabled via disable_ocr, returning metadata only");
+            tracing::debug!(
+                format = "image",
+                "OCR disabled via disable_ocr, returning metadata only"
+            );
             return Ok(doc);
         }
 
@@ -409,19 +412,22 @@ impl DocumentExtractor for ImageExtractor {
             }
         }
 
-        let mut doc = build_image_internal_document(None, Some(extracted_image));
-        doc.metadata = Metadata {
-            format: Some(crate::types::FormatMetadata::Image(image_metadata)),
-            ..Default::default()
-        };
-        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
+        #[cfg(not(any(feature = "ocr", feature = "ocr-wasm")))]
+        {
+            let mut doc = build_image_internal_document(None, Some(extracted_image));
+            doc.metadata = Metadata {
+                format: Some(crate::types::FormatMetadata::Image(image_metadata)),
+                ..Default::default()
+            };
+            doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
 
-        tracing::debug!(
-            element_count = doc.elements.len(),
-            format = "image",
-            "extraction complete"
-        );
-        Ok(doc)
+            tracing::debug!(
+                element_count = doc.elements.len(),
+                format = "image",
+                "extraction complete"
+            );
+            Ok(doc)
+        }
     }
 
     fn supported_mime_types(&self) -> &[&str] {

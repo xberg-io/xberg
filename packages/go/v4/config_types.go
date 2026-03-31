@@ -453,6 +453,7 @@ type FileExtractionConfig struct {
 	EnableQualityProcessing  *bool                    `json:"enable_quality_processing,omitempty"`
 	Ocr                      *OCRConfig               `json:"ocr,omitempty"`
 	ForceOcr                 *bool                    `json:"force_ocr,omitempty"`
+	DisableOcr               *bool                    `json:"disable_ocr,omitempty"`
 	ForceOcrPages            []uint64                 `json:"force_ocr_pages,omitempty"`
 	Chunking                 *ChunkingConfig          `json:"chunking,omitempty"`
 	Images                   *ImageExtractionConfig   `json:"images,omitempty"`

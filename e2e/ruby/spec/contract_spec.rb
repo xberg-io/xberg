@@ -414,6 +414,23 @@ RSpec.describe 'contract fixtures' do
     end
   end
 
+  it 'config_disable_ocr' do
+    E2ERuby.run_fixture(
+      'config_disable_ocr',
+      'images/test_hello_world.png',
+      { disable_ocr: true },
+      requirements: [],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['image/png']
+      )
+      E2ERuby::Assertions.assert_max_content_length(result, 5)
+    end
+  end
+
   it 'config_djot_content' do
     E2ERuby.skip_if_feature_unavailable('pdf')
     E2ERuby.run_fixture(

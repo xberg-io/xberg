@@ -186,15 +186,58 @@ impl EpubExtractor {
     /// Walks each chapter's XHTML content using the HTML structure walker,
     /// emitting elements via `InternalDocumentBuilder`. Captures TOC-to-chapter
     /// relationships where possible by linking chapter headings.
+    ///
+    /// If `cover_image_path` is provided, the cover image is extracted from the
+    /// archive and emitted as the first Image element.
     fn build_internal_document(
         archive: &mut ZipArchive<Cursor<Vec<u8>>>,
         spine_hrefs: &[String],
         manifest_dir: &str,
         nav_hrefs: &AHashSet<String>,
+        cover_image_path: Option<&str>,
     ) -> Option<InternalDocument> {
         use crate::types::internal::{ElementKind, InternalElement};
 
         let mut builder = InternalDocumentBuilder::new("epub");
+
+        // Emit cover image as the first element if present
+        if let Some(cover_path) = cover_image_path {
+            let mut buf = Vec::new();
+            if let Ok(mut entry) = archive.by_name(cover_path) {
+                let _ = entry.read_to_end(&mut buf);
+            }
+            if !buf.is_empty() {
+                let fmt = cover_path
+                    .rsplit('.')
+                    .next()
+                    .map(|ext| match ext.to_lowercase().as_str() {
+                        "jpg" | "jpeg" => "jpeg",
+                        "png" => "png",
+                        "gif" => "gif",
+                        "webp" => "webp",
+                        "svg" => "svg",
+                        "bmp" => "bmp",
+                        _ => "png",
+                    })
+                    .unwrap_or("png");
+                let image = crate::types::ExtractedImage {
+                    data: bytes::Bytes::from(buf),
+                    format: Cow::Owned(fmt.to_string()),
+                    image_index: 0,
+                    page_number: Some(0),
+                    width: None,
+                    height: None,
+                    colorspace: None,
+                    bits_per_component: None,
+                    is_mask: false,
+                    description: Some("Cover".to_string()),
+                    ocr_result: None,
+                    bounding_box: None,
+                    source_path: None,
+                };
+                builder.push_image(Some("Cover"), image, None, None);
+            }
+        }
 
         for (index, href) in spine_hrefs.iter().enumerate() {
             let file_path = match resolve_path(manifest_dir, href) {
@@ -544,8 +587,10 @@ impl DocumentExtractor for EpubExtractor {
             .collect();
 
         // Build InternalDocument from spine chapters
-        let mut doc = Self::build_internal_document(&mut archive, &spine_hrefs, &manifest_dir, &nav_hrefs)
-            .unwrap_or_else(|| InternalDocumentBuilder::new("epub").build());
+        let cover_image_path = package.metadata.cover_image_href.as_deref();
+        let mut doc =
+            Self::build_internal_document(&mut archive, &spine_hrefs, &manifest_dir, &nav_hrefs, cover_image_path)
+                .unwrap_or_else(|| InternalDocumentBuilder::new("epub").build());
         doc.mime_type = Cow::Owned(mime_type.to_string());
 
         doc.metadata = Metadata {

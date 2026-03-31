@@ -42,6 +42,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :cache_ttl_secs,
       :chunking,
       :concurrency,
+      :disable_ocr,
       :email,
       :enable_quality_processing,
       :extraction_timeout_secs,

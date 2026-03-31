@@ -45,6 +45,7 @@ impl ExtractionConfig {
         enable_quality_processing=None,
         ocr=None,
         force_ocr=None,
+        disable_ocr=None,
         force_ocr_pages=None,
         chunking=None,
         images=None,
@@ -74,6 +75,7 @@ impl ExtractionConfig {
         enable_quality_processing: Option<bool>,
         ocr: Option<OcrConfig>,
         force_ocr: Option<bool>,
+        disable_ocr: Option<bool>,
         force_ocr_pages: Option<Vec<usize>>,
         chunking: Option<ChunkingConfig>,
         images: Option<ImageExtractionConfig>,
@@ -104,6 +106,7 @@ impl ExtractionConfig {
                 enable_quality_processing: enable_quality_processing.unwrap_or(true),
                 ocr: ocr.map(Into::into),
                 force_ocr: force_ocr.unwrap_or(false),
+                disable_ocr: disable_ocr.unwrap_or(false),
                 force_ocr_pages,
                 chunking: chunking.map(Into::into),
                 images: images.map(Into::into),
@@ -200,6 +203,16 @@ impl ExtractionConfig {
     #[setter]
     fn set_force_ocr(&mut self, value: bool) {
         self.inner.force_ocr = value;
+    }
+
+    #[getter]
+    fn disable_ocr(&self) -> bool {
+        self.inner.disable_ocr
+    }
+
+    #[setter]
+    fn set_disable_ocr(&mut self, value: bool) {
+        self.inner.disable_ocr = value;
     }
 
     #[getter]
@@ -2547,6 +2560,7 @@ impl FileExtractionConfig {
         enable_quality_processing=None,
         ocr=None,
         force_ocr=None,
+        disable_ocr=None,
         force_ocr_pages=None,
         chunking=None,
         images=None,
@@ -2569,6 +2583,7 @@ impl FileExtractionConfig {
         enable_quality_processing: Option<bool>,
         ocr: Option<OcrConfig>,
         force_ocr: Option<bool>,
+        disable_ocr: Option<bool>,
         force_ocr_pages: Option<Vec<usize>>,
         chunking: Option<ChunkingConfig>,
         images: Option<ImageExtractionConfig>,
@@ -2592,6 +2607,7 @@ impl FileExtractionConfig {
                 enable_quality_processing,
                 ocr: ocr.map(Into::into),
                 force_ocr,
+                disable_ocr,
                 force_ocr_pages,
                 chunking: chunking.map(Into::into),
                 images: images.map(Into::into),
@@ -2670,6 +2686,16 @@ impl FileExtractionConfig {
     #[setter]
     fn set_force_ocr(&mut self, value: Option<bool>) {
         self.inner.force_ocr = value;
+    }
+
+    #[getter]
+    fn disable_ocr(&self) -> Option<bool> {
+        self.inner.disable_ocr
+    }
+
+    #[setter]
+    fn set_disable_ocr(&mut self, value: Option<bool>) {
+        self.inner.disable_ocr = value;
     }
 
     #[getter]

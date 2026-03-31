@@ -1230,6 +1230,8 @@ pub struct JsExtractionConfig {
     pub enable_quality_processing: Option<bool>,
     pub ocr: Option<JsOcrConfig>,
     pub force_ocr: Option<bool>,
+    /// Disable OCR entirely — image files return empty content instead of errors
+    pub disable_ocr: Option<bool>,
     /// List of 1-indexed page numbers to force OCR on (None = use force_ocr setting)
     pub force_ocr_pages: Option<Vec<u32>>,
     pub chunking: Option<JsChunkingConfig>,
@@ -1313,6 +1315,7 @@ impl TryFrom<JsExtractionConfig> for ExtractionConfig {
             enable_quality_processing: val.enable_quality_processing.unwrap_or(true),
             ocr: val.ocr.map(Into::into),
             force_ocr: val.force_ocr.unwrap_or(false),
+            disable_ocr: val.disable_ocr.unwrap_or(false),
             force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().map(|p| p as usize).collect()),
             chunking: val.chunking.map(Into::into),
             images: val.images.map(Into::into),
@@ -1407,6 +1410,7 @@ impl TryFrom<ExtractionConfig> for JsExtractionConfig {
                 }),
             }),
             force_ocr: Some(val.force_ocr),
+            disable_ocr: Some(val.disable_ocr),
             force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().map(|p| p as u32).collect()),
             chunking: val.chunking.map(|chunk| JsChunkingConfig {
                 max_chars: Some(chunk.max_characters as u32),
@@ -1646,6 +1650,8 @@ pub struct JsFileExtractionConfig {
     pub enable_quality_processing: Option<bool>,
     pub ocr: Option<JsOcrConfig>,
     pub force_ocr: Option<bool>,
+    /// Disable OCR entirely — image files return empty content instead of errors
+    pub disable_ocr: Option<bool>,
     /// List of 1-indexed page numbers to force OCR on (None = use force_ocr setting)
     pub force_ocr_pages: Option<Vec<u32>>,
     pub chunking: Option<JsChunkingConfig>,
@@ -1689,6 +1695,7 @@ impl TryFrom<JsFileExtractionConfig> for FileExtractionConfig {
             enable_quality_processing: val.enable_quality_processing,
             ocr: val.ocr.map(Into::into),
             force_ocr: val.force_ocr,
+            disable_ocr: val.disable_ocr,
             force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().map(|p| p as usize).collect()),
             chunking: val.chunking.map(Into::into),
             images: val.images.map(Into::into),
@@ -1772,6 +1779,7 @@ impl TryFrom<FileExtractionConfig> for JsFileExtractionConfig {
                 }),
             }),
             force_ocr: val.force_ocr,
+            disable_ocr: val.disable_ocr,
             force_ocr_pages: val.force_ocr_pages.map(|v| v.into_iter().map(|p| p as u32).collect()),
             chunking: val.chunking.map(|chunk| JsChunkingConfig {
                 max_chars: Some(chunk.max_characters as u32),

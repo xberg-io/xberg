@@ -333,6 +333,19 @@ test_that("config_chunking_tokenizer", {
   assert_chunks(result, min_count = 2L, each_has_content = TRUE)
 })
 
+test_that("config_disable_ocr", {
+  result <- run_fixture(
+    "config_disable_ocr",
+    "images/test_hello_world.png",
+    list(disable_ocr = TRUE),
+    requirements = character(0),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("image/png"))
+  assert_max_content_length(result, 5L)
+})
+
 test_that("config_djot_content", {
   skip_if_feature_unavailable("pdf")
   result <- run_fixture(

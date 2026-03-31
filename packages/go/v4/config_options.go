@@ -57,6 +57,15 @@ func WithForceOCR(enabled bool) ExtractionOption {
 	}
 }
 
+// WithDisableOCR sets whether OCR should be disabled entirely.
+// When enabled, image files that would normally require OCR return empty content
+// instead of errors.
+func WithDisableOCR(disabled bool) ExtractionOption {
+	return func(c *ExtractionConfig) {
+		c.DisableOcr = &disabled
+	}
+}
+
 // WithChunking sets the chunking configuration with functional options.
 func WithChunking(opts ...ChunkingOption) ExtractionOption {
 	return func(c *ExtractionConfig) {

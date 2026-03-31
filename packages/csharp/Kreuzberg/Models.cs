@@ -2310,6 +2310,13 @@ public sealed class ExtractionConfig
     public bool? ForceOcr { get; init; }
 
     /// <summary>
+    /// Whether to disable OCR entirely. When enabled, image files that would normally
+    /// require OCR return empty content instead of raising errors. Default is false.
+    /// </summary>
+    [JsonPropertyName("disable_ocr")]
+    public bool? DisableOcr { get; init; }
+
+    /// <summary>
     /// List of 1-indexed page numbers to force OCR on. If null, uses the ForceOcr setting.
     /// </summary>
     [JsonPropertyName("force_ocr_pages")]
@@ -3415,6 +3422,10 @@ public sealed class FileExtractionConfig
     /// <summary>Override force OCR for this file.</summary>
     [JsonPropertyName("force_ocr")]
     public bool? ForceOcr { get; init; }
+
+    /// <summary>Override disable OCR for this file.</summary>
+    [JsonPropertyName("disable_ocr")]
+    public bool? DisableOcr { get; init; }
 
     /// <summary>List of 1-indexed page numbers to force OCR on for this file.</summary>
     [JsonPropertyName("force_ocr_pages")]

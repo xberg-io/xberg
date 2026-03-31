@@ -334,6 +334,46 @@ Process PDFs with OCR even when they have a text layer:
     }
     ```
 
+### Disable OCR
+
+!!! info "Added in v4.7.0"
+
+Skip OCR entirely, even for image files that would normally require it. When `disable_ocr` is set, image files return empty content instead of raising a `MissingDependencyError`:
+
+=== "Python"
+
+    ```python title="disable_ocr.py"
+    from kreuzberg import ExtractionConfig, extract_file_sync
+
+    config = ExtractionConfig(disable_ocr=True)
+    result = extract_file_sync("scanned.png", config=config)
+    # result.content will be empty — OCR was skipped
+    ```
+
+=== "TypeScript"
+
+    ```typescript title="disable_ocr.ts"
+    import { extractFileSync } from '@kreuzberg/node';
+
+    const result = extractFileSync('scanned.png', {
+      disableOcr: true,
+    });
+    // result.content will be empty — OCR was skipped
+    ```
+
+=== "Rust"
+
+    ```rust title="disable_ocr.rs"
+    use kreuzberg::{ExtractionConfig, extract_file};
+
+    let config = ExtractionConfig {
+        disable_ocr: true,
+        ..Default::default()
+    };
+    let result = extract_file("scanned.png", &config).await?;
+    // result.content will be empty — OCR was skipped
+    ```
+
 ### Using EasyOCR (Python Only)
 
 === "Go"

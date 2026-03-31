@@ -66,6 +66,7 @@ class ParityTest {
       "getCacheTtlSecs",
       "getChunking",
       "getConcurrency",
+      "getDisableOcr",
       "getEmail",
       "isEnableQualityProcessing",
       "getExtractionTimeoutSecs",

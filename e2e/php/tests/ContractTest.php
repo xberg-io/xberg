@@ -486,6 +486,25 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests disable_ocr configuration option - OCR is skipped for images
+     */
+    public function test_config_disable_ocr(): void
+    {
+        $documentPath = Helpers::resolveDocument('images/test_hello_world.png');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_disable_ocr: missing document at ' . $documentPath);
+        }
+
+        $config = Helpers::buildConfig(['disable_ocr' => true]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['image/png']);
+        Helpers::assertMaxContentLength($result, 5);
+    }
+
+    /**
      * Tests djot output format converts content to djot markup
      */
     public function test_config_djot_content(): void

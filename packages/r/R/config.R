@@ -1,6 +1,7 @@
 #' Create an extraction configuration
 #'
 #' @param force_ocr Logical. Force OCR processing. Default FALSE.
+#' @param disable_ocr Logical. Disable OCR entirely. Image files return empty content. Default FALSE.
 #' @param force_ocr_pages Integer vector or NULL. 1-indexed page numbers to force OCR on. Default NULL.
 #' @param ocr OCR configuration created by \code{ocr_config()}.
 #' @param chunking Chunking configuration created by \code{chunking_config()}.
@@ -37,7 +38,7 @@
 #' @param ... Additional configuration options passed as named list elements.
 #' @return A named list representing the extraction configuration.
 #' @export
-extraction_config <- function(force_ocr = FALSE, force_ocr_pages = NULL, ocr = NULL, chunking = NULL,
+extraction_config <- function(force_ocr = FALSE, disable_ocr = FALSE, force_ocr_pages = NULL, ocr = NULL, chunking = NULL,
                               output_format = NULL, result_format = NULL,
                               use_cache = NULL, include_document_structure = NULL,
                               enable_quality_processing = NULL,
@@ -56,6 +57,7 @@ extraction_config <- function(force_ocr = FALSE, force_ocr_pages = NULL, ocr = N
                               ...) {
   config <- list()
   if (isTRUE(force_ocr)) config$force_ocr <- TRUE
+  if (isTRUE(disable_ocr)) config$disable_ocr <- TRUE
   if (!is.null(force_ocr_pages)) config$force_ocr_pages <- as.integer(force_ocr_pages)
   if (!is.null(ocr)) config$ocr <- ocr
   if (!is.null(chunking)) config$chunking <- chunking

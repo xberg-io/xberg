@@ -338,6 +338,19 @@ namespace Kreuzberg.E2E.Contract
         }
 
         [SkippableFact]
+        public void ConfigDisableOcr()
+        {
+            TestHelpers.SkipIfLegacyOfficeDisabled("images/test_hello_world.png");
+            TestHelpers.SkipIfOfficeTestOnWindows("images/test_hello_world.png");
+            var documentPath = TestHelpers.EnsureDocument("images/test_hello_world.png", true);
+            var config = TestHelpers.BuildConfig("{\"disable_ocr\":true}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "image/png" });
+            TestHelpers.AssertMaxContentLength(result, 5);
+        }
+
+        [SkippableFact]
         public void ConfigDjotContent()
         {
             TestHelpers.SkipIfFeatureUnavailable("pdf");

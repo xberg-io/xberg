@@ -103,6 +103,12 @@ impl HtmlExtractor {
                     let annotations = map_annotations(&node.annotations);
                     push_link_uris_from_annotations(&annotations, text, b);
                     b.push_list_item(text, ordered, annotations, None, None);
+
+                    // Recurse into children (e.g. nested lists inside this item)
+                    if !node.children.is_empty() {
+                        let child_indices: Vec<usize> = node.children.iter().map(|&i| i as usize).collect();
+                        Self::walk_nodes(doc, &child_indices, b);
+                    }
                 }
                 HC::Table { grid } => {
                     // Convert grid to 2D cells for the builder

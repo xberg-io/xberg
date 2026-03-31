@@ -738,6 +738,34 @@ fn test_config_chunking_tokenizer() {
 }
 
 #[test]
+fn test_config_disable_ocr() {
+    // Tests disable_ocr configuration option - OCR is skipped for images
+
+    let document_path = resolve_document("images/test_hello_world.png");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_disable_ocr: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "disable_ocr": true
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(err) => panic!("Extraction failed for config_disable_ocr: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["image/png"]);
+    assertions::assert_max_content_length(&result, 5);
+}
+
+#[test]
 fn test_config_djot_content() {
     // Tests djot output format converts content to djot markup
 

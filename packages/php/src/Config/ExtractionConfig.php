@@ -71,6 +71,18 @@ readonly class ExtractionConfig
         public bool $forceOcr = false,
 
         /**
+         * Disable OCR entirely.
+         *
+         * When enabled, image files that would normally require OCR return empty
+         * content instead of raising errors. Useful when you want to extract text
+         * from non-image formats only and avoid OCR overhead or dependency requirements.
+         *
+         * @var bool
+         * @default false
+         */
+        public bool $disableOcr = false,
+
+        /**
          * List of 1-indexed page numbers to force OCR on.
          *
          * When set, OCR is forced only for the specified pages. If null, the
@@ -370,6 +382,13 @@ readonly class ExtractionConfig
             $forceOcr = (bool) $forceOcr;
         }
 
+        /** @var bool $disableOcr */
+        $disableOcr = $data['disable_ocr'] ?? false;
+        if (!is_bool($disableOcr)) {
+            /** @var bool $disableOcr */
+            $disableOcr = (bool) $disableOcr;
+        }
+
         /** @var int[]|null $forceOcrPages */
         $forceOcrPages = null;
         if (isset($data['force_ocr_pages']) && is_array($data['force_ocr_pages'])) {
@@ -567,6 +586,7 @@ readonly class ExtractionConfig
             enableQualityProcessing: $enableQualityProcessing,
             ocr: $ocr,
             forceOcr: $forceOcr,
+            disableOcr: $disableOcr,
             forceOcrPages: $forceOcrPages,
             chunking: $chunking,
             images: $imageExtraction,
@@ -777,6 +797,10 @@ readonly class ExtractionConfig
         // forceOcr defaults to false, so only add if true
         if ($this->forceOcr) {
             $result['force_ocr'] = true;
+        }
+        // disableOcr defaults to false, so only add if true
+        if ($this->disableOcr) {
+            $result['disable_ocr'] = true;
         }
         // forceOcrPages defaults to null, so only add if set
         if ($this->forceOcrPages !== null) {

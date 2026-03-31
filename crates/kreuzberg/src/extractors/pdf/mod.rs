@@ -488,7 +488,9 @@ impl PdfExtractor {
         #[cfg(feature = "ocr")]
         let mut ocr_internal_doc: Option<crate::types::internal::InternalDocument> = None;
         #[cfg(feature = "ocr")]
-        let (text, used_ocr) = if config.force_ocr {
+        let (text, used_ocr) = if config.disable_ocr {
+            (native_text, false)
+        } else if config.force_ocr {
             let (ocr_text, ocr_tbls, ocr_elems, ocr_doc) = run_ocr_with_layout(content, config, path).await?;
             ocr_tables = ocr_tbls;
             _ocr_elements_from_ocr = ocr_elems;

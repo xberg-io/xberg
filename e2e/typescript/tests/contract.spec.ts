@@ -663,6 +663,33 @@ describe("contract fixtures", () => {
 	);
 
 	it(
+		"config_disable_ocr",
+		() => {
+			const documentPath = resolveDocument("images/test_hello_world.png");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_disable_ocr: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ disable_ocr: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_disable_ocr", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/png"]);
+			assertions.assertMaxContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"config_djot_content",
 		() => {
 			const documentPath = resolveDocument("pdf/fake_memo.pdf");

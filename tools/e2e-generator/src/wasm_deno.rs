@@ -237,6 +237,7 @@ export function buildConfig(raw: unknown): ExtractionConfig {
     assignBooleanField(target, source, "use_cache", "useCache");
     assignBooleanField(target, source, "enable_quality_processing", "enableQualityProcessing");
     assignBooleanField(target, source, "force_ocr", "forceOcr");
+    assignBooleanField(target, source, "disable_ocr", "disableOcr");
     assignBooleanField(target, source, "include_document_structure", "includeDocumentStructure");
     assignNumberField(target, source, "max_concurrent_extractions", "maxConcurrentExtractions");
     assignNumberField(target, source, "extraction_timeout_secs", "extractionTimeoutSecs");

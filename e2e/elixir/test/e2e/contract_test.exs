@@ -535,6 +535,28 @@ defmodule E2E.ContractTest do
       end
     end
 
+    test "config_disable_ocr" do
+      case E2E.Helpers.run_fixture(
+             "config_disable_ocr",
+             "images/test_hello_world.png",
+             %{disable_ocr: true},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["image/png"])
+          |> E2E.Helpers.assert_max_content_length(5)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "config_djot_content" do
       case E2E.Helpers.run_fixture(
              "config_djot_content",

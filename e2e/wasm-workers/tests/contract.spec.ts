@@ -552,6 +552,30 @@ describe("contract", () => {
 		assertions.assertChunks(result, 1, null, true, null, null, null);
 	});
 
+	it("config_disable_ocr", async () => {
+		const documentBytes = getFixture("images/test_hello_world.png");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig({ disable_ocr: true });
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/png", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "config_disable_ocr", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/png"]);
+		assertions.assertMaxContentLength(result, 5);
+	});
+
 	it("config_djot_content", async () => {
 		const documentBytes = getFixture("pdf/fake_memo.pdf");
 		if (documentBytes === null) {

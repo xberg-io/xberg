@@ -341,7 +341,10 @@ impl<'a, 'b> HtmlWalker<'a, 'b> {
                 } else if self.in_list_item {
                     self.list_item_text.push('\n');
                 } else {
-                    self.text_buf.push('\n');
+                    // Use sentinel \x01 to mark intentional line breaks from <br> tags.
+                    // normalize_whitespace will convert these to real newlines while
+                    // collapsing all other whitespace (including source HTML newlines).
+                    self.text_buf.push('\x01');
                 }
             }
             "strong" | "b" => self.push_inline(InlineKind::Bold),
@@ -523,6 +526,15 @@ impl<'a, 'b> HtmlWalker<'a, 'b> {
                     if !block_content.trim().is_empty() {
                         self.builder.push_raw_block(tag, block_content.trim(), None);
                     }
+                }
+            }
+            "video" | "audio" => {
+                // Skip entire element including fallback text children.
+                // EPUB files embed fallback text like "Your Reading System does
+                // not support..." which should never appear in extracted content.
+                let close_tag = format!("</{tag}>");
+                if let Some(close_pos) = self.src[self.pos..].find(&close_tag) {
+                    self.pos += close_pos + close_tag.len();
                 }
             }
             "hr" => {
@@ -1016,11 +1028,24 @@ fn decode_entities(s: &str) -> String {
 }
 
 /// Collapse runs of whitespace into single spaces and trim.
+///
+/// The sentinel character `\x01` marks intentional line breaks inserted by
+/// `<br>` tag handling. These are converted to real newlines in the output
+/// while all other whitespace (including source HTML newlines) is collapsed.
 fn normalize_whitespace(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut last_was_space = true; // trim leading
+
     for c in s.chars() {
-        if c.is_ascii_whitespace() {
+        if c == '\x01' {
+            // Sentinel from <br> — convert to real newline.
+            // Trim trailing horizontal whitespace before the newline.
+            while out.ends_with(' ') {
+                out.pop();
+            }
+            out.push('\n');
+            last_was_space = true; // trim leading whitespace on next line
+        } else if c.is_ascii_whitespace() {
             if !last_was_space {
                 out.push(' ');
                 last_was_space = true;

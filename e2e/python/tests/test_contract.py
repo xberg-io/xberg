@@ -417,6 +417,21 @@ def test_config_chunking_tokenizer() -> None:
     helpers.assert_chunks(result, min_count=2, each_has_content=True)
 
 
+def test_config_disable_ocr() -> None:
+    """Tests disable_ocr configuration option - OCR is skipped for images"""
+
+    document_path = helpers.resolve_document("images/test_hello_world.png")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_disable_ocr: missing document at {document_path}")
+
+    config = helpers.build_config({"disable_ocr": True})
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["image/png"])
+    helpers.assert_max_content_length(result, 5)
+
+
 def test_config_djot_content() -> None:
     """Tests djot output format converts content to djot markup"""
 

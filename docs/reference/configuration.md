@@ -236,6 +236,7 @@ Main extraction configuration controlling all aspects of document processing.
 | `use_cache`                  | `bool`                     | `true`                 | Enable caching of extraction results for faster re-processing                                                                                                                                    |
 | `enable_quality_processing`  | `bool`                     | `true`                 | Enable quality post-processing (deduplication, mojibake fixing, etc.)                                                                                                                            |
 | `force_ocr`                  | `bool`                     | `false`                | Force OCR even for searchable PDFs with text layers                                                                                                                                              |
+| `disable_ocr`                | `bool`                     | `false`                | Disable OCR entirely — image files return empty content instead of raising errors (v4.7.0+)                                                                                                      |
 | `ocr`                        | `OcrConfig?`               | `None`                 | OCR configuration (if None, OCR disabled)                                                                                                                                                        |
 | `pdf_options`                | `PdfConfig?`               | `None`                 | PDF-specific configuration options                                                                                                                                                               |
 | `images`                     | `ImageExtractionConfig?`   | `None`                 | Image extraction configuration                                                                                                                                                                   |
@@ -353,6 +354,7 @@ When passed as an optional parameter to `batch_extract_file` / `batch_extract_by
 | `enable_quality_processing`  | `bool?`                    | Override quality post-processing for this file    |
 | `ocr`                        | `OcrConfig?`               | Override OCR configuration                        |
 | `force_ocr`                  | `bool?`                    | Override force OCR                                |
+| `disable_ocr`                | `bool?`                    | Override disable OCR (v4.7.0+)                    |
 | `chunking`                   | `ChunkingConfig?`          | Override text chunking                            |
 | `images`                     | `ImageExtractionConfig?`   | Override image extraction                         |
 | `pdf_options`                | `PdfConfig?`               | Override PDF-specific options                     |

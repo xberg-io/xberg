@@ -77,6 +77,7 @@ max_concurrent_extractions = 4
 | `use_cache` | boolean | `true` | Enable caching of extraction results |
 | `enable_quality_processing` | boolean | `true` | Enable post-processing for output quality |
 | `force_ocr` | boolean | `false` | Force OCR processing even for searchable PDFs |
+| `disable_ocr` | boolean | `false` | Disable OCR entirely — image files return empty content instead of errors (v4.7.0+) |
 | `output_format` | string | `"markdown"` | Output format (markdown, html, text) |
 | `result_format` | string | `"text"` | Result format for structured output |
 | `max_concurrent_extractions` | integer | `4` | Maximum concurrent document extractions |

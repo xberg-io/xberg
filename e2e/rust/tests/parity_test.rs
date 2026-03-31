@@ -34,6 +34,7 @@ fn test_bounding_box_field_parity() {
 fn test_extraction_config_field_parity() {
     // Verify ExtractionConfig has the expected fields via serde serialization
     let required_fields: &[&str] = &[
+        "disable_ocr",
         "enable_quality_processing",
         "force_ocr",
         "include_document_structure",
@@ -48,6 +49,7 @@ fn test_extraction_config_field_parity() {
         "cache_ttl_secs",
         "chunking",
         "concurrency",
+        "disable_ocr",
         "email",
         "enable_quality_processing",
         "extraction_timeout_secs",

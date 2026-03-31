@@ -100,6 +100,8 @@ OCR runs only when two conditions are true: the file contains images (or is an i
 
 You can override this behavior with `force_ocr=True`, which tells Kreuzberg to always run OCR regardless of whether text was already extracted. This is useful for PDFs where the text layer is unreliable or incomplete.
 
+Conversely, `disable_ocr=True` skips OCR entirely. Image files that would normally require OCR return empty content instead of raising a `MissingDependencyError`. This is useful when you want to extract text from non-image formats only and avoid OCR overhead or dependency requirements.
+
 ```mermaid
 flowchart LR
     A{"Images present?"} -->|No| Skip(["Skip OCR"])

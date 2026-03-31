@@ -55,6 +55,7 @@ class ParityTest extends TestCase
             'cacheTtlSecs',
             'chunking',
             'concurrency',
+            'disableOcr',
             'email',
             'enableQualityProcessing',
             'extractionTimeoutSecs',

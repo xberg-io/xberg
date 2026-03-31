@@ -92,6 +92,10 @@ pub struct ExtractionOverrides {
     #[arg(long)]
     pub force_ocr: Option<bool>,
 
+    /// Disable OCR entirely (even for images)
+    #[arg(long)]
+    pub disable_ocr: Option<bool>,
+
     /// Disable extraction result caching.
     #[arg(long)]
     pub no_cache: Option<bool>,
@@ -276,6 +280,11 @@ impl ExtractionOverrides {
             );
         }
 
+        // force_ocr + disable_ocr conflict
+        if self.force_ocr == Some(true) && self.disable_ocr == Some(true) {
+            bail!("--force-ocr and --disable-ocr cannot both be true");
+        }
+
         // OCR backend validation
         if let Some(ref backend) = self.ocr_backend
             && !["tesseract", "paddle-ocr", "easyocr"].contains(&backend.as_str())
@@ -373,6 +382,9 @@ impl ExtractionOverrides {
 
         if let Some(force_ocr_flag) = self.force_ocr {
             config.force_ocr = force_ocr_flag;
+        }
+        if let Some(disable_ocr_flag) = self.disable_ocr {
+            config.disable_ocr = disable_ocr_flag;
         }
         if let Some(no_cache_flag) = self.no_cache {
             config.use_cache = !no_cache_flag;

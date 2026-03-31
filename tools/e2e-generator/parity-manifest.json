@@ -164,6 +164,10 @@
 					"json_type": "number",
 					"required": false
 				},
+				"disable_ocr": {
+					"json_type": "boolean",
+					"required": true
+				},
 				"force_ocr": {
 					"json_type": "boolean",
 					"required": true

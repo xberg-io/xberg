@@ -308,6 +308,10 @@ impl RstExtractor {
         if trimmed.starts_with("* ") || trimmed.starts_with("+ ") || trimmed.starts_with("- ") {
             return true;
         }
+        // Auto-numbered list: #. item
+        if trimmed.starts_with("#. ") {
+            return true;
+        }
         if let Some(space_pos) = trimmed.find(' ')
             && space_pos > 0
             && space_pos < 4
@@ -341,14 +345,45 @@ impl RstExtractor {
 
         while i < lines.len() {
             let line = lines[i];
+            let trimmed = line.trim();
 
-            if line.contains("|")
-                && (line.contains("=") || line.contains("-"))
-                && let Some(table) = Self::parse_grid_table(&lines, &mut i)
-            {
-                tables.push(table);
+            // Simple table (=====  ===== separator)
+            if Self::is_simple_table_separator(trimmed) {
+                let start = i;
+                let mut table_lines = Vec::new();
+                table_lines.push(lines[i]);
+                i += 1;
+                while i < lines.len() {
+                    let tl = lines[i].trim();
+                    if tl.is_empty() {
+                        break;
+                    }
+                    table_lines.push(lines[i]);
+                    i += 1;
+                    if Self::is_simple_table_separator(tl) {
+                        break;
+                    }
+                }
+                let cells = Self::parse_simple_table_cells(&table_lines);
+                if !cells.is_empty() {
+                    let markdown = Self::cells_to_markdown(&cells);
+                    tables.push(Table {
+                        cells,
+                        markdown,
+                        page_number: 1,
+                        bounding_box: None,
+                    });
+                }
+                let _ = start;
                 continue;
             }
+
+            // Grid table (+-----+-----+)
+            if trimmed.starts_with('+') && trimmed.ends_with('+') && trimmed.contains('-')
+                && let Some(table) = Self::parse_grid_table(&lines, &mut i) {
+                    tables.push(table);
+                    continue;
+                }
 
             i += 1;
         }
@@ -361,8 +396,8 @@ impl RstExtractor {
         let mut cells = Vec::new();
         let mut row = Vec::new();
 
-        while *i < lines.len() && lines[*i].contains("|") {
-            let line = lines[*i].trim_matches(|c| c == '|');
+        while *i < lines.len() && (lines[*i].contains('|') || lines[*i].trim().starts_with('+')) {
+            let line = lines[*i].trim_matches(|c: char| c == '|' || c == '+');
             if !line.is_empty() {
                 let cell_content = line.split('|').map(|s| s.trim().to_string()).collect::<Vec<_>>();
                 row.extend(cell_content);
@@ -637,6 +672,8 @@ impl RstExtractor {
             }
 
             // Heading: text line followed by underline
+            // RST headings start at level 2 in the output because level 1 is
+            // reserved for the document title (which lives in metadata).
             if i + 1 < lines.len() && !trimmed.is_empty() && Self::is_section_underline(lines[i + 1]) {
                 let underline_char = lines[i + 1].trim().chars().next().unwrap_or('=');
                 if !heading_char_order.contains(&underline_char) {
@@ -645,8 +682,8 @@ impl RstExtractor {
                 let level = heading_char_order
                     .iter()
                     .position(|&c| c == underline_char)
-                    .map(|p| (p + 1) as u8)
-                    .unwrap_or(1);
+                    .map(|p| (p + 2) as u8) // +2: first char is H2, second is H3, etc.
+                    .unwrap_or(2);
                 b.push_heading(level, trimmed, None, None);
                 i += 2;
                 continue;
@@ -814,10 +851,34 @@ impl RstExtractor {
                 continue;
             }
 
-            // Grid table
-            if trimmed.contains('|') && (trimmed.contains('=') || trimmed.contains('-')) {
+            // Simple RST table (=====  =====  ====== separator lines)
+            if Self::is_simple_table_separator(trimmed) {
                 let mut table_lines = Vec::new();
-                while i < lines.len() && lines[i].contains('|') {
+                table_lines.push(lines[i]);
+                i += 1;
+                while i < lines.len() {
+                    let tl = lines[i].trim();
+                    if tl.is_empty() {
+                        break;
+                    }
+                    table_lines.push(lines[i]);
+                    i += 1;
+                    // Stop after closing separator
+                    if Self::is_simple_table_separator(tl) {
+                        break;
+                    }
+                }
+                let cells = Self::parse_simple_table_cells(&table_lines);
+                if !cells.is_empty() {
+                    b.push_table_from_cells(&cells, None, None);
+                }
+                continue;
+            }
+
+            // Grid table (+-----+-----+ border lines)
+            if trimmed.starts_with('+') && trimmed.ends_with('+') && trimmed.contains('-') {
+                let mut table_lines = Vec::new();
+                while i < lines.len() && (lines[i].trim().starts_with('+') || lines[i].trim().starts_with('|')) {
                     table_lines.push(lines[i]);
                     i += 1;
                 }
@@ -832,7 +893,10 @@ impl RstExtractor {
             if Self::is_list_item(line) {
                 let is_ordered = {
                     let t = trimmed.trim_start();
-                    if let Some(space_pos) = t.find(' ') {
+                    // Auto-numbered lists (#.) are ordered
+                    if t.starts_with("#. ") {
+                        true
+                    } else if let Some(space_pos) = t.find(' ') {
                         let prefix = &t[..space_pos];
                         prefix.ends_with('.') || prefix.ends_with(')')
                     } else {
@@ -846,6 +910,7 @@ impl RstExtractor {
                         .strip_prefix("* ")
                         .or_else(|| item_trimmed.strip_prefix("+ "))
                         .or_else(|| item_trimmed.strip_prefix("- "))
+                        .or_else(|| item_trimmed.strip_prefix("#. "))
                     {
                         rest
                     } else if let Some(space_pos) = item_trimmed.find(' ') {
@@ -941,6 +1006,81 @@ impl RstExtractor {
             }
         }
         cells
+    }
+
+    /// Check if a line is a simple RST table separator (e.g. `=====  =====  =====`).
+    fn is_simple_table_separator(line: &str) -> bool {
+        let trimmed = line.trim();
+        if trimmed.len() < 3 {
+            return false;
+        }
+        // Must consist only of '=' and spaces, with at least one '=' run
+        if !trimmed.chars().all(|c| c == '=' || c == ' ') {
+            return false;
+        }
+        // Must contain at least one run of '='
+        trimmed.contains('=')
+    }
+
+    /// Parse a simple RST table into cell rows.
+    ///
+    /// Simple tables use `=====  =====` separator lines. Column boundaries
+    /// are determined by the positions of whitespace gaps in the first separator.
+    fn parse_simple_table_cells(lines: &[&str]) -> Vec<Vec<String>> {
+        if lines.is_empty() {
+            return Vec::new();
+        }
+
+        // Determine column boundaries from the first separator line
+        let separator = lines[0];
+        let col_ranges = Self::simple_table_column_ranges(separator);
+        if col_ranges.is_empty() {
+            return Vec::new();
+        }
+
+        let mut cells = Vec::new();
+        for line in lines {
+            let trimmed = line.trim();
+            // Skip separator lines
+            if Self::is_simple_table_separator(trimmed) {
+                continue;
+            }
+            let row: Vec<String> = col_ranges
+                .iter()
+                .map(|&(start, end)| {
+                    let end = end.min(line.len());
+                    let start = start.min(line.len());
+                    if start >= line.len() {
+                        String::new()
+                    } else {
+                        line[start..end].trim().to_string()
+                    }
+                })
+                .collect();
+            if row.iter().any(|c| !c.is_empty()) {
+                cells.push(row);
+            }
+        }
+        cells
+    }
+
+    /// Determine column start/end byte positions from a simple table separator line.
+    fn simple_table_column_ranges(separator: &str) -> Vec<(usize, usize)> {
+        let mut ranges = Vec::new();
+        let bytes = separator.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'=' {
+                let start = i;
+                while i < bytes.len() && bytes[i] == b'=' {
+                    i += 1;
+                }
+                ranges.push((start, i));
+            } else {
+                i += 1;
+            }
+        }
+        ranges
     }
 
     /// Convert table cells to markdown format.

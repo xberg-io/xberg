@@ -691,6 +691,22 @@ public class ContractTest {
   }
 
   @Test
+  public void configDisableOcr() throws Exception {
+    JsonNode config = MAPPER.readTree("{\"disable_ocr\":true}");
+    E2EHelpers.runFixture(
+        "config_disable_ocr",
+        "images/test_hello_world.png",
+        config,
+        Collections.emptyList(),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("image/png"));
+          E2EHelpers.Assertions.assertMaxContentLength(result, 5);
+        });
+  }
+
+  @Test
   public void configDjotContent() throws Exception {
     JsonNode config = MAPPER.readTree("{\"output_format\":\"djot\"}");
     E2EHelpers.skipIfFeatureUnavailable("pdf");

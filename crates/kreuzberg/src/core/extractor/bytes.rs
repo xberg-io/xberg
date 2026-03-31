@@ -67,6 +67,13 @@ pub async fn extract_bytes(content: &[u8], mime_type: &str, config: &ExtractionC
     use crate::core::mime;
 
     let result = async {
+        if config.force_ocr && config.disable_ocr {
+            return Err(crate::KreuzbergError::Validation {
+                message: "force_ocr and disable_ocr cannot both be true".to_string(),
+                source: None,
+            });
+        }
+
         let validated_mime = if mime_type == "application/octet-stream" {
             mime::detect_mime_type_from_bytes(content)?
         } else {

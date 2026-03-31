@@ -53,6 +53,7 @@ func TestExtractionConfigFieldParity(t *testing.T) {
 		"CacheTTLSecs":             "cache_ttl_secs",
 		"Chunking":                 "chunking",
 		"Concurrency":              "concurrency",
+		"DisableOcr":               "disable_ocr",
 		"Email":                    "email",
 		"EnableQualityProcessing":  "enable_quality_processing",
 		"ExtractionTimeoutSecs":    "extraction_timeout_secs",

@@ -52,6 +52,7 @@ public class ParityTest
             "CacheTtlSecs",
             "Chunking",
             "Concurrency",
+            "DisableOcr",
             "Email",
             "EnableQualityProcessing",
             "ExtractionTimeoutSecs",

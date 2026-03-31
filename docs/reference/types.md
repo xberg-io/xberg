@@ -2370,6 +2370,7 @@ pub struct ExtractionConfig {
     pub enable_quality_processing: bool,
     pub ocr: Option<OcrConfig>,
     pub force_ocr: bool,
+    pub disable_ocr: bool,
     pub chunking: Option<ChunkingConfig>,
     pub images: Option<ImageExtractionConfig>,
     pub pdf_options: Option<PdfConfig>,
@@ -2392,6 +2393,7 @@ class ExtractionConfig:
     enable_quality_processing: bool = True
     ocr: OcrConfig | None = None
     force_ocr: bool = False
+    disable_ocr: bool = False
     chunking: ChunkingConfig | None = None
     images: ImageExtractionConfig | None = None
     pdf_options: PdfConfig | None = None
@@ -2480,6 +2482,7 @@ pub struct FileExtractionConfig {
     pub enable_quality_processing: Option<bool>,
     pub ocr: Option<OcrConfig>,
     pub force_ocr: Option<bool>,
+    pub disable_ocr: Option<bool>,
     pub chunking: Option<ChunkingConfig>,
     pub images: Option<ImageExtractionConfig>,
     pub pdf_options: Option<PdfConfig>,
@@ -2504,6 +2507,7 @@ class FileExtractionConfig:
     enable_quality_processing: bool | None = None
     ocr: OcrConfig | None = None
     force_ocr: bool | None = None
+    disable_ocr: bool | None = None
     chunking: ChunkingConfig | None = None
     images: ImageExtractionConfig | None = None
     pdf_options: PdfConfig | None = None

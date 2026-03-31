@@ -649,6 +649,8 @@ export interface ExtractionConfig {
 	enableQualityProcessing?: boolean;
 	ocr?: OcrConfig;
 	forceOcr?: boolean;
+	/** Disable OCR entirely — image files return empty content instead of errors */
+	disableOcr?: boolean;
 	forceOcrPages?: number[];
 	chunking?: ChunkingConfig;
 	images?: ImageExtractionConfig;

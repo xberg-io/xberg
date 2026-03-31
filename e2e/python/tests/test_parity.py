@@ -56,6 +56,7 @@ def test_extraction_config_field_parity():
         "cache_ttl_secs",
         "chunking",
         "concurrency",
+        "disable_ocr",
         "email",
         "enable_quality_processing",
         "extraction_timeout_secs",
