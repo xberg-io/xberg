@@ -563,7 +563,31 @@ pub fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Arena<'a>
                 let item_para = mk(arena, NodeValue::Paragraph);
                 build_inlines(arena, item_para, elem_text, elem_annotations);
                 item.append(item_para);
-                parent.append(item);
+
+                // Item nodes can only be children of List nodes. If parent is not
+                // a List (orphaned ListItem without ListStart/ListEnd wrappers),
+                // create an implicit List wrapper to maintain a valid AST.
+                let list_parent = if matches!(parent.data.borrow().value, NodeValue::List(..)) {
+                    parent
+                } else {
+                    let implicit_list = mk(
+                        arena,
+                        NodeValue::List(comrak::nodes::NodeList {
+                            list_type: if ordered {
+                                comrak::nodes::ListType::Ordered
+                            } else {
+                                comrak::nodes::ListType::Bullet
+                            },
+                            bullet_char: b'-',
+                            start: 1,
+                            tight: true,
+                            ..Default::default()
+                        }),
+                    );
+                    parent.append(implicit_list);
+                    implicit_list
+                };
+                list_parent.append(item);
             }
 
             ElementKind::Code => {
@@ -586,6 +610,8 @@ pub fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Arena<'a>
             }
 
             ElementKind::Formula => {
+                // Math is an inline node in comrak — it cannot be a direct child
+                // of block containers like Document. Wrap in a Paragraph.
                 let math = mk(
                     arena,
                     NodeValue::Math(NodeMath {
@@ -594,7 +620,9 @@ pub fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Arena<'a>
                         literal: elem_text.to_string(),
                     }),
                 );
-                parent.append(math);
+                let para = mk(arena, NodeValue::Paragraph);
+                para.append(math);
+                parent.append(para);
             }
 
             ElementKind::Table { table_index } => {
@@ -892,6 +920,11 @@ pub fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Arena<'a>
             fndef.append(para);
             root.append(fndef);
         }
+    }
+
+    #[cfg(debug_assertions)]
+    if let Err(e) = root.validate() {
+        tracing::warn!(?e, "comrak AST validation failed — output may be malformed");
     }
 
     root

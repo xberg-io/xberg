@@ -12,6 +12,12 @@ pub fn render_markdown(doc: &InternalDocument) -> String {
     let arena = Arena::new();
     let root = build_comrak_ast(doc, &arena);
 
+    // Guard: empty AST causes index-out-of-bounds in comrak's formatter.
+    if root.first_child().is_none() {
+        tracing::debug!("markdown rendering: empty AST, returning empty string");
+        return String::new();
+    }
+
     let mut options = comrak_options();
     options.render.width = 0; // no line wrapping
 
