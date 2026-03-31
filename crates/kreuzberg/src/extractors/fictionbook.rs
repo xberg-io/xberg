@@ -109,7 +109,7 @@ impl FictionBookExtractor {
                     let decoded = String::from_utf8_lossy(t.as_ref()).to_string();
                     let had_trailing_space = decoded.ends_with(char::is_whitespace);
                     let normalized = crate::utils::normalize_whitespace(&decoded);
-                    let trimmed = normalized.as_ref();
+                    let trimmed: &str = normalized.as_ref();
                     if !trimmed.is_empty() {
                         let starts_with_punct = trimmed.starts_with(['.', ',', ';', ':', '!', '?', ')', ']', '[']);
                         if !text.is_empty() && !text.ends_with(' ') && !text.ends_with('\n') && !starts_with_punct {
@@ -828,7 +828,7 @@ impl FictionBookExtractor {
                 Ok(Event::Text(t)) => {
                     let decoded = String::from_utf8_lossy(t.as_ref()).to_string();
                     let normalized = crate::utils::normalize_whitespace(&decoded);
-                    let trimmed = normalized.as_ref();
+                    let trimmed: &str = normalized.as_ref();
                     if !trimmed.is_empty() {
                         if !text.is_empty() && !text.ends_with(' ') {
                             text.push(' ');

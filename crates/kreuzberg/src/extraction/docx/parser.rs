@@ -1279,7 +1279,7 @@ impl<R: Read + Seek> DocxParser<R> {
                     b"w:fldChar" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:fldCharType" {
-                                match attr.value.as_ref() {
+                                match attr.value.as_ref() as &[u8] {
                                     b"begin" => in_field_instruction = true,
                                     b"separate" | b"end" => in_field_instruction = false,
                                     _ => {}
@@ -1413,7 +1413,7 @@ impl<R: Read + Seek> DocxParser<R> {
                     b"w:fldChar" => {
                         for attr in e.attributes().flatten() {
                             if attr.key.as_ref() == b"w:fldCharType" {
-                                match attr.value.as_ref() {
+                                match attr.value.as_ref() as &[u8] {
                                     b"begin" => in_field_instruction = true,
                                     b"separate" | b"end" => in_field_instruction = false,
                                     _ => {}
