@@ -84,7 +84,8 @@ void assert_detected_languages(const CExtractionResult *result,
 
 void assert_chunks(const CExtractionResult *result,
                    int has_min, size_t min_count,
-                   int has_max, size_t max_count);
+                   int has_max, size_t max_count,
+                   int each_has_chunk_type);
 
 void assert_images(const CExtractionResult *result,
                    int has_min, size_t min_count,

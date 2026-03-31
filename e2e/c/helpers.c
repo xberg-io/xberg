@@ -389,7 +389,8 @@ void assert_detected_languages(const CExtractionResult *result,
 
 void assert_chunks(const CExtractionResult *result,
                    int has_min, size_t min_count,
-                   int has_max, size_t max_count) {
+                   int has_max, size_t max_count,
+                   int each_has_chunk_type) {
     size_t count = json_array_count(result->chunks_json);
     if (has_min && count < min_count) {
         fprintf(stderr,
@@ -402,6 +403,14 @@ void assert_chunks(const CExtractionResult *result,
                 "FAIL: expected at most %zu chunks, found %zu\n",
                 max_count, count);
         exit(1);
+    }
+    if (each_has_chunk_type && result->chunks_json) {
+        /* Very simple check: ensure no "unknown" chunk_type in the JSON */
+        if (strstr(result->chunks_json, "\"unknown\"") != NULL ||
+            strstr(result->chunks_json, "\"chunk_type\":null") != NULL) {
+            fprintf(stderr, "FAIL: expected specific chunk_type, but found unknown/null in chunks_json\n");
+            exit(1);
+        }
     }
 }
 

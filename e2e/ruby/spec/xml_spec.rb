@@ -5,6 +5,7 @@
 #
 # Tests for xml fixtures.
 
+# rubocop:disable Metrics/BlockLength
 require_relative 'spec_helper'
 
 RSpec.describe 'xml fixtures' do
@@ -25,3 +26,4 @@ RSpec.describe 'xml fixtures' do
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

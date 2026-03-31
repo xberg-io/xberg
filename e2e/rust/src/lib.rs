@@ -233,6 +233,7 @@ pub mod assertions {
         each_has_content: Option<bool>,
         each_has_embedding: Option<bool>,
         each_has_heading_context: Option<bool>,
+        each_has_chunk_type: Option<bool>,
         content_starts_with_heading: Option<bool>,
     ) {
         let chunks = result.chunks.as_ref().expect("Expected chunks in result");
@@ -275,6 +276,15 @@ pub mod assertions {
                 assert!(
                     chunk.metadata.heading_context.is_none(),
                     "Expected chunk {i} to have no heading_context"
+                );
+            }
+        }
+
+        if each_has_chunk_type == Some(true) {
+            for (i, chunk) in chunks.iter().enumerate() {
+                assert!(
+                    chunk.chunk_type != kreuzberg::types::ChunkType::Unknown,
+                    "Expected chunk {i} to have a specific chunk_type, got Unknown"
                 );
             }
         }

@@ -14,9 +14,9 @@ test_that("ocr_image_hello_world", {
     notes = "Requires Tesseract OCR for image text extraction.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 5L)
-  assert_content_contains_any(result, c("hello", "world"))
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 5L)
+      assert_content_contains_any(result, c("hello", "world"))
 })
 
 test_that("ocr_image_no_text", {
@@ -29,8 +29,8 @@ test_that("ocr_image_no_text", {
     notes = "Skip when Tesseract is unavailable.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/jpeg"))
-  assert_max_content_length(result, 300L)
+      assert_expected_mime(result, c("image/jpeg"))
+      assert_max_content_length(result, 300L)
 })
 
 test_that("ocr_paddle_confidence_filter", {
@@ -44,8 +44,8 @@ test_that("ocr_paddle_confidence_filter", {
     notes = "Tests confidence threshold filtering with PaddleOCR",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/jpeg"))
-  assert_min_content_length(result, 1L)
+      assert_expected_mime(result, c("image/jpeg"))
+      assert_min_content_length(result, 1L)
 })
 
 test_that("ocr_paddle_element_hierarchy", {
@@ -59,9 +59,9 @@ test_that("ocr_paddle_element_hierarchy", {
     notes = "Requires PaddleOCR with ONNX Runtime",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 5L)
-  assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, elements_have_confidence = TRUE)
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 5L)
+      assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, elements_have_confidence = TRUE)
 })
 
 test_that("ocr_paddle_element_levels", {
@@ -75,9 +75,9 @@ test_that("ocr_paddle_element_levels", {
     notes = "Requires PaddleOCR with ONNX Runtime",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 5L)
-  assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, min_count = 1L)
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 5L)
+      assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, min_count = 1L)
 })
 
 test_that("ocr_paddle_image_chinese", {
@@ -91,8 +91,8 @@ test_that("ocr_paddle_image_chinese", {
     notes = "Requires PaddleOCR with Chinese models",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/jpeg"))
-  assert_min_content_length(result, 1L)
+      assert_expected_mime(result, c("image/jpeg"))
+      assert_min_content_length(result, 1L)
 })
 
 test_that("ocr_paddle_image_english", {
@@ -106,9 +106,9 @@ test_that("ocr_paddle_image_english", {
     notes = "Requires PaddleOCR with ONNX Runtime",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 5L)
-  assert_content_contains_any(result, c("hello", "Hello", "world", "World"))
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 5L)
+      assert_content_contains_any(result, c("hello", "Hello", "world", "World"))
 })
 
 test_that("ocr_paddle_markdown", {
@@ -122,9 +122,9 @@ test_that("ocr_paddle_markdown", {
     notes = "Tests markdown output format parity with Tesseract",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 5L)
-  assert_content_contains_any(result, c("hello", "Hello", "world", "World"))
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 5L)
+      assert_content_contains_any(result, c("hello", "Hello", "world", "World"))
 })
 
 test_that("ocr_paddle_pdf_scanned", {
@@ -138,9 +138,9 @@ test_that("ocr_paddle_pdf_scanned", {
     notes = "Requires PaddleOCR with ONNX Runtime",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 20L)
-  assert_content_contains_any(result, c("Docling", "Markdown", "JSON"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 20L)
+      assert_content_contains_any(result, c("Docling", "Markdown", "JSON"))
 })
 
 test_that("ocr_paddle_structured", {
@@ -154,9 +154,9 @@ test_that("ocr_paddle_structured", {
     notes = "Tests structured output with bbox/confidence preservation",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 5L)
-  assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, elements_have_confidence = TRUE)
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 5L)
+      assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, elements_have_confidence = TRUE)
 })
 
 test_that("ocr_paddle_table_detection", {
@@ -170,9 +170,9 @@ test_that("ocr_paddle_table_detection", {
     notes = "Tests table detection capability with PaddleOCR. ONNX Runtime model loading unstable on ARM Linux.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 10L)
-  assert_table_count(result, minimum = 1L, maximum = NULL)
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 10L)
+      assert_table_count(result, minimum = 1L, maximum = NULL)
 })
 
 test_that("ocr_pdf_image_only_german", {
@@ -185,9 +185,9 @@ test_that("ocr_pdf_image_only_german", {
     notes = "Requires Tesseract OCR with German language data.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 20L)
-  assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 20L)
+      assert_metadata_expectation(result, "format_type", list(eq = "pdf"))
 })
 
 test_that("ocr_pdf_rotated_90", {
@@ -200,8 +200,8 @@ test_that("ocr_pdf_rotated_90", {
     notes = "Skip automatically when OCR backend is missing.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 10L)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 10L)
 })
 
 test_that("ocr_pdf_tesseract", {
@@ -214,9 +214,9 @@ test_that("ocr_pdf_tesseract", {
     notes = "Skip automatically if OCR backend is unavailable.",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 20L)
-  assert_content_contains_any(result, c("Docling", "Markdown", "JSON"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 20L)
+      assert_content_contains_any(result, c("Docling", "Markdown", "JSON"))
 })
 
 test_that("ocr_tesseract_elements", {
@@ -229,9 +229,9 @@ test_that("ocr_tesseract_elements", {
     notes = "Requires Tesseract OCR backend",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 5L)
-  assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, elements_have_confidence = TRUE)
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 5L)
+      assert_ocr_elements(result, has_elements = TRUE, elements_have_geometry = TRUE, elements_have_confidence = TRUE)
 })
 
 test_that("ocr_tesseract_elements_min_count", {
@@ -244,9 +244,9 @@ test_that("ocr_tesseract_elements_min_count", {
     notes = "Requires Tesseract OCR backend",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_min_content_length(result, 5L)
-  assert_ocr_elements(result, has_elements = TRUE, min_count = 1L)
+      assert_expected_mime(result, c("image/png"))
+      assert_min_content_length(result, 5L)
+      assert_ocr_elements(result, has_elements = TRUE, min_count = 1L)
 })
 
 test_that("ocr_tesseract_language_german", {
@@ -259,7 +259,7 @@ test_that("ocr_tesseract_language_german", {
     notes = "Requires Tesseract OCR with German language data (deu)",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 20L)
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 20L)
 })
 # nolint end

@@ -3,38 +3,31 @@
 
 // Tests for embeddings fixtures. Run with: deno test --allow-read
 
+import { assertions, buildConfig, enableOcr, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
-import {
-	assertions,
-	buildConfig,
-	enableOcr,
-	extractBytes,
-	initWasm,
-	resolveDocument,
-	shouldSkipFixture,
-} from "./helpers.ts";
 
 // Initialize WASM module and enable OCR once at module load time
 await initWasm();
 await enableOcr();
 
 Deno.test("embedding_disabled", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig({ chunking: { max_chars: 500, max_overlap: 50 } });
-	let result: ExtractionResult | null = null;
-	try {
-		const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
-		// Sync file extraction - WASM uses extractBytes with pre-read bytes
-		result = await extractBytes(documentBytes, "application/octet-stream", config);
-	} catch (error) {
-		if (shouldSkipFixture(error, "embedding_disabled", [], undefined)) {
-			return;
-		}
-		throw error;
-	}
-	if (result === null) {
-		return;
-	}
-	assertions.assertExpectedMime(result, ["application/pdf"]);
-	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 1, null, true, false, null, null);
+    const config = buildConfig({"chunking":{"max_chars":500,"max_overlap":50}});
+    let result: ExtractionResult | null = null;
+    try {
+      const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
+      // Sync file extraction - WASM uses extractBytes with pre-read bytes
+      result = await extractBytes(documentBytes, "application/octet-stream", config);
+    } catch (error) {
+      if (shouldSkipFixture(error, "embedding_disabled", [], undefined)) {
+        return;
+      }
+      throw error;
+    }
+    if (result === null) {
+      return;
+    }
+    assertions.assertExpectedMime(result, ["application/pdf"]);
+    assertions.assertMinContentLength(result, 10);
+    assertions.assertChunks(result, 1, null, true, false, null, null);
 });
+

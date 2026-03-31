@@ -3,46 +3,31 @@
 
 // Tests for html fixtures. Run with: deno test --allow-read
 
+import { assertions, buildConfig, enableOcr, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
-import {
-	assertions,
-	buildConfig,
-	enableOcr,
-	extractBytes,
-	initWasm,
-	resolveDocument,
-	shouldSkipFixture,
-} from "./helpers.ts";
 
 // Initialize WASM module and enable OCR once at module load time
 await initWasm();
 await enableOcr();
 
 Deno.test("html_simple_table", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig(undefined);
-	let result: ExtractionResult | null = null;
-	try {
-		const documentBytes = await resolveDocument("html/simple_table.html");
-		// Sync file extraction - WASM uses extractBytes with pre-read bytes
-		result = await extractBytes(documentBytes, "text/html", config);
-	} catch (error) {
-		if (shouldSkipFixture(error, "html_simple_table", [], undefined)) {
-			return;
-		}
-		throw error;
-	}
-	if (result === null) {
-		return;
-	}
-	assertions.assertExpectedMime(result, ["text/html"]);
-	assertions.assertMinContentLength(result, 100);
-	assertions.assertContentContainsAll(result, [
-		"Product",
-		"Category",
-		"Price",
-		"Stock",
-		"Laptop",
-		"Electronics",
-		"Sample Data Table",
-	]);
+    const config = buildConfig(undefined);
+    let result: ExtractionResult | null = null;
+    try {
+      const documentBytes = await resolveDocument("html/simple_table.html");
+      // Sync file extraction - WASM uses extractBytes with pre-read bytes
+      result = await extractBytes(documentBytes, "text/html", config);
+    } catch (error) {
+      if (shouldSkipFixture(error, "html_simple_table", [], undefined)) {
+        return;
+      }
+      throw error;
+    }
+    if (result === null) {
+      return;
+    }
+    assertions.assertExpectedMime(result, ["text/html"]);
+    assertions.assertMinContentLength(result, 100);
+    assertions.assertContentContainsAll(result, ["Product", "Category", "Price", "Stock", "Laptop", "Electronics", "Sample Data Table"]);
 });
+

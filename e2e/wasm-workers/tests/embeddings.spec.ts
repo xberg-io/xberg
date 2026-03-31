@@ -3,34 +3,35 @@
 
 // Tests for embeddings fixtures. Cloudflare Workers with Vitest + Miniflare
 
-import type { ExtractionResult } from "@kreuzberg/wasm";
-import { extractBytes } from "@kreuzberg/wasm";
 import { describe, it } from "vitest";
+import { extractBytes } from "@kreuzberg/wasm";
 import { assertions, buildConfig, getFixture, shouldSkipFixture } from "./helpers.js";
+import type { ExtractionResult } from "@kreuzberg/wasm";
 
 describe("embeddings", () => {
-	it("embedding_disabled", async () => {
-		const documentBytes = getFixture("pdf/fake_memo.pdf");
-		if (documentBytes === null) {
-			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-			return;
-		}
+    it("embedding_disabled", async () => {
+        const documentBytes = getFixture("pdf/fake_memo.pdf");
+        if (documentBytes === null) {
+            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+            return;
+        }
 
-		const config = buildConfig({ chunking: { max_chars: 500, max_overlap: 50 } });
-		let result: ExtractionResult | null = null;
-		try {
-			result = await extractBytes(documentBytes, "application/octet-stream", config);
-		} catch (error) {
-			if (shouldSkipFixture(error, "embedding_disabled", [], undefined)) {
-				return;
-			}
-			throw error;
-		}
-		if (result === null) {
-			return;
-		}
-		assertions.assertExpectedMime(result, ["application/pdf"]);
-		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 1, null, true, false, null, null);
-	});
+        const config = buildConfig({"chunking":{"max_chars":500,"max_overlap":50}});
+        let result: ExtractionResult | null = null;
+        try {
+            result = await extractBytes(documentBytes, "application/octet-stream", config);
+        } catch (error) {
+            if (shouldSkipFixture(error, "embedding_disabled", [], undefined)) {
+                return;
+            }
+            throw error;
+        }
+        if (result === null) {
+            return;
+        }
+        assertions.assertExpectedMime(result, ["application/pdf"]);
+        assertions.assertMinContentLength(result, 10);
+        assertions.assertChunks(result, 1, null, true, false, null, null);
+    });
+
 });

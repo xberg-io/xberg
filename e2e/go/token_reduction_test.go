@@ -53,6 +53,6 @@ func TestTokenReductionTokenReductionWithChunking(t *testing.T) {
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 5)
 	assertMaxContentLength(t, result, 200)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil, nil)
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil, nil, nil)
 	assertContentNotEmpty(t, result)
 }

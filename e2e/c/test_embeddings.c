@@ -10,7 +10,7 @@ static void test_embeddings_embedding_async(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 1, 0, 0);
+    assert_chunks(result, 1, 1, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -20,7 +20,7 @@ static void test_embeddings_embedding_balanced_preset(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 1, 0, 0);
+    assert_chunks(result, 1, 1, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -29,7 +29,7 @@ static void test_embeddings_embedding_disabled(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 1, 0, 0);
+    assert_chunks(result, 1, 1, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -39,7 +39,7 @@ static void test_embeddings_embedding_fast_preset(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 1, 0, 0);
+    assert_chunks(result, 1, 1, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 

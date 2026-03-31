@@ -4,10 +4,20 @@ package com.kreuzberg.e2e;
 // CHECKSTYLE.OFF: LineLength - generated code
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Arrays;
-import java.util.Collections;
+import dev.kreuzberg.BytesWithMime;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.config.ExtractionConfig;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 // CHECKSTYLE.ON: UnusedImports
 // CHECKSTYLE.ON: LineLength
 
@@ -16,176 +26,177 @@ import org.junit.jupiter.api.Test;
 
 /** Tests for structured fixtures. */
 public class StructuredTest {
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Test
-  public void structuredCsvBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_csv_basic",
-        "csv/stanley_cups.csv",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/csv"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 20);
-        });
-  }
+    @Test
+    public void structuredCsvBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_csv_basic",
+            "csv/stanley_cups.csv",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/csv"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 20);
+            }
+        );
+    }
 
-  @Test
-  public void structuredEnwBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_enw_basic",
-        "data_formats/sample.enw",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(
-              result,
-              Arrays.asList(
-                  "application/x-endnote-refer", "application/x-endnote+xml", "text/plain"));
-        });
-  }
+    @Test
+    public void structuredEnwBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_enw_basic",
+            "data_formats/sample.enw",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/x-endnote-refer", "application/x-endnote+xml", "text/plain"));
+            }
+        );
+    }
 
-  @Test
-  public void structuredJsonBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_json_basic",
-        "json/sample_document.json",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/json"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 20);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("Sample Document", "Test Author"));
-        });
-  }
+    @Test
+    public void structuredJsonBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_json_basic",
+            "json/sample_document.json",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/json"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 20);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("Sample Document", "Test Author"));
+            }
+        );
+    }
 
-  @Test
-  public void structuredJsonSimple() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_json_simple",
-        "json/simple.json",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/json"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("{", "name"));
-        });
-  }
+    @Test
+    public void structuredJsonSimple() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_json_simple",
+            "json/simple.json",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/json"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("{", "name"));
+            }
+        );
+    }
 
-  @Test
-  public void structuredNbibBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_nbib_basic",
-        "data_formats/sample.nbib",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(
-              result, Arrays.asList("application/nbib", "application/x-pubmed", "text/plain"));
-          E2EHelpers.Assertions.assertContentNotEmpty(result);
-        });
-  }
+    @Test
+    public void structuredNbibBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_nbib_basic",
+            "data_formats/sample.nbib",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/nbib", "application/x-pubmed", "text/plain"));
+                E2EHelpers.Assertions.assertContentNotEmpty(result);
+            }
+        );
+    }
 
-  @Test
-  public void structuredRisBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_ris_basic",
-        "data_formats/sample.ris",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(
-              result, Arrays.asList("application/x-research-info-systems", "text/plain"));
-          E2EHelpers.Assertions.assertContentNotEmpty(result);
-        });
-  }
+    @Test
+    public void structuredRisBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_ris_basic",
+            "data_formats/sample.ris",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/x-research-info-systems", "text/plain"));
+                E2EHelpers.Assertions.assertContentNotEmpty(result);
+            }
+        );
+    }
 
-  @Test
-  public void structuredTomlBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_toml_basic",
-        "data_formats/cargo.toml",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(
-              result, Arrays.asList("application/toml", "text/toml"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-        });
-  }
+    @Test
+    public void structuredTomlBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_toml_basic",
+            "data_formats/cargo.toml",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/toml", "text/toml"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+            }
+        );
+    }
 
-  @Test
-  public void structuredTsvBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_tsv_basic",
-        "data_formats/employees.tsv",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(
-              result, Arrays.asList("text/tab-separated-values", "text/plain"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-        });
-  }
+    @Test
+    public void structuredTsvBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_tsv_basic",
+            "data_formats/employees.tsv",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/tab-separated-values", "text/plain"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+            }
+        );
+    }
 
-  @Test
-  public void structuredYamlBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_yaml_basic",
-        "yaml/simple.yaml",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(
-              result,
-              Arrays.asList("application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-        });
-  }
+    @Test
+    public void structuredYamlBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_yaml_basic",
+            "yaml/simple.yaml",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+            }
+        );
+    }
 
-  @Test
-  public void structuredYamlSimple() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "structured_yaml_simple",
-        "yaml/simple.yaml",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/x-yaml"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-        });
-  }
+    @Test
+    public void structuredYamlSimple() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "structured_yaml_simple",
+            "yaml/simple.yaml",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/x-yaml"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+            }
+        );
+    }
+
 }
