@@ -1,7 +1,5 @@
 # Taylor Swift
 
-American singer-songwriter (born 1989)
-
 For other uses, see [Taylor Swift (disambiguation)](/wiki/Taylor_Swift_(disambiguation)).
 
 | Taylor Swift |  |
