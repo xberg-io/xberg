@@ -38,7 +38,7 @@ pub enum NoiseKind {
     OrphanedListMarker,
     /// Standalone small numbers that look like page numbers.
     PageNumberArtifact,
-    /// Lines repeated 3+ times in the document.
+    /// Lines repeated 5+ times in the document.
     HeaderFooterRepetition,
     /// Footnote references without matching definitions.
     DanglingReference,
@@ -144,11 +144,14 @@ fn find_code_ranges(lines: &[&str]) -> Vec<CodeRange> {
 }
 
 /// Truncates a string to approximately `max_len` characters for context previews.
+/// Uses char boundaries to avoid panicking on multi-byte UTF-8 sequences.
 fn truncate_context(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len.min(s.len())])
+        // Find a valid char boundary at or before max_len
+        let end = s.floor_char_boundary(max_len);
+        format!("{}...", &s[..end])
     }
 }
 
@@ -227,7 +230,25 @@ fn detect_excessive_whitespace(lines: &[&str], code_ranges: &[CodeRange]) -> Vec
     issues
 }
 
-/// Detects garbled text: lines with >40% non-ASCII or 4+ consecutive punctuation.
+/// Returns true if the line is a markdown table separator row (e.g., `|---|---|`).
+fn is_table_separator_row(trimmed: &str) -> bool {
+    trimmed.starts_with('|') && trimmed.chars().all(|c| c == '|' || c == '-' || c == ':' || c == ' ')
+}
+
+/// Returns true if the line is a markdown horizontal rule (`---`, `***`, `===`, `___`).
+fn is_horizontal_rule(trimmed: &str) -> bool {
+    if trimmed.len() < 3 {
+        return false;
+    }
+    let first = trimmed.chars().next().unwrap_or(' ');
+    matches!(first, '-' | '*' | '=' | '_') && trimmed.chars().all(|c| c == first || c == ' ')
+}
+
+/// Characters that commonly appear in markdown structural punctuation and should
+/// NOT trigger the consecutive-punctuation garbled-text heuristic.
+const MARKDOWN_STRUCTURAL_PUNCT: &[char] = &['-', '|', '*', '_', '=', '~', ':', '#', '>'];
+
+/// Detects garbled text: lines with >70% non-ASCII or 4+ consecutive non-structural punctuation.
 fn detect_garbled_text(lines: &[&str], code_ranges: &[CodeRange]) -> Vec<NoiseIssue> {
     let mut issues = Vec::new();
 
@@ -240,15 +261,20 @@ fn detect_garbled_text(lines: &[&str], code_ranges: &[CodeRange]) -> Vec<NoiseIs
             continue;
         }
 
+        // Skip table separator rows and horizontal rules — they are legitimate markdown
+        if is_table_separator_row(trimmed) || is_horizontal_rule(trimmed) {
+            continue;
+        }
+
         let non_ws_chars: Vec<char> = trimmed.chars().filter(|c| !c.is_whitespace()).collect();
         if non_ws_chars.is_empty() {
             continue;
         }
 
-        // Check non-ASCII ratio
+        // Check non-ASCII ratio (raised from 40% to 70% to avoid flagging multilingual text)
         let non_ascii_count = non_ws_chars.iter().filter(|c| !c.is_ascii()).count();
         let ratio = non_ascii_count as f64 / non_ws_chars.len() as f64;
-        if ratio > 0.4 {
+        if ratio > 0.7 {
             issues.push(NoiseIssue {
                 kind: NoiseKind::GarbledText,
                 line: i + 1,
@@ -258,11 +284,13 @@ fn detect_garbled_text(lines: &[&str], code_ranges: &[CodeRange]) -> Vec<NoiseIs
             continue;
         }
 
-        // Check for 4+ consecutive punctuation
+        // Check for 4+ consecutive punctuation, excluding markdown structural characters.
+        // Common markdown patterns like `---`, `***`, `|||`, `[^`, `$$` use structural
+        // punctuation and should not be flagged.
         let mut consecutive_punct = 0;
         let mut has_punct_run = false;
         for ch in trimmed.chars() {
-            if ch.is_ascii_punctuation() {
+            if ch.is_ascii_punctuation() && !MARKDOWN_STRUCTURAL_PUNCT.contains(&ch) {
                 consecutive_punct += 1;
                 if consecutive_punct >= 4 {
                     has_punct_run = true;
@@ -446,7 +474,21 @@ fn detect_page_number_artifacts(lines: &[&str], code_ranges: &[CodeRange]) -> Ve
         .collect()
 }
 
-/// Detects lines that repeat 3+ times in the document (header/footer repetition).
+/// Returns true if the line is a pipe table row (starts with `|`).
+fn is_pipe_table_row(trimmed: &str) -> bool {
+    trimmed.starts_with('|')
+}
+
+/// Returns true if the line is only an image placeholder like `![]()`.
+fn is_image_placeholder(trimmed: &str) -> bool {
+    trimmed.starts_with("![")
+}
+
+/// Detects lines that repeat 5+ times in the document (header/footer repetition).
+///
+/// Skips pipe table rows, image placeholders, table separator rows, and lines
+/// with fewer than 15 non-whitespace characters (too short to be a meaningful
+/// header/footer candidate).
 fn detect_header_footer_repetition(lines: &[&str], code_ranges: &[CodeRange]) -> Vec<NoiseIssue> {
     let mut line_counts: HashMap<&str, Vec<usize>> = HashMap::new();
 
@@ -458,12 +500,29 @@ fn detect_header_footer_repetition(lines: &[&str], code_ranges: &[CodeRange]) ->
         if trimmed.is_empty() {
             continue;
         }
+
+        // Skip pipe table rows (including separator rows like |---|---|)
+        if is_pipe_table_row(trimmed) {
+            continue;
+        }
+
+        // Skip image placeholders
+        if is_image_placeholder(trimmed) {
+            continue;
+        }
+
+        // Require minimum 15 non-whitespace characters to be a header/footer candidate
+        let non_ws_count = trimmed.chars().filter(|c| !c.is_whitespace()).count();
+        if non_ws_count < 15 {
+            continue;
+        }
+
         line_counts.entry(trimmed).or_default().push(i);
     }
 
     let mut issues = Vec::new();
     for (content, positions) in &line_counts {
-        if positions.len() >= 3 {
+        if positions.len() >= 5 {
             for &pos in positions {
                 issues.push(NoiseIssue {
                     kind: NoiseKind::HeaderFooterRepetition,
@@ -816,5 +875,250 @@ This has a reference[^1] and another[^2].
         assert!(report.issues.is_empty());
         assert_eq!(report.summary.total_issues, 0);
         assert_eq!(report.summary.noise_score, 0.0);
+    }
+
+    // ---- False-positive regression tests ----
+
+    #[test]
+    fn test_pipe_table_rows_not_flagged_as_header_footer() {
+        // Pipe table rows like `|  |  |  |` should NOT be flagged as repetition
+        let md = "\
+| Col1 | Col2 | Col3 |
+|------|------|------|
+|  |  |  |
+|  |  |  |
+|  |  |  |
+|  |  |  |
+|  |  |  |
+|  |  |  |
+";
+        let report = detect_noise(md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            rep_issues.is_empty(),
+            "Pipe table rows should not be flagged as header/footer repetition, got: {:?}",
+            rep_issues
+        );
+    }
+
+    #[test]
+    fn test_image_placeholders_not_flagged_as_header_footer() {
+        let md = "\
+# Gallery
+
+![](image1.png)
+![](image2.png)
+![](image3.png)
+![](image4.png)
+![](image5.png)
+![](image6.png)
+";
+        let report = detect_noise(md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            rep_issues.is_empty(),
+            "Image placeholders should not be flagged as header/footer repetition, got: {:?}",
+            rep_issues
+        );
+    }
+
+    #[test]
+    fn test_table_separator_not_flagged_as_garbled() {
+        let md = "\
+| Col1 | Col2 |
+|------|------|
+| a    | b    |
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            garbled.is_empty(),
+            "Table separator rows should not be flagged as garbled text, got: {:?}",
+            garbled
+        );
+    }
+
+    #[test]
+    fn test_horizontal_rule_not_flagged_as_garbled() {
+        let md = "\
+# Section
+
+---
+
+More text.
+
+***
+
+Even more text.
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            garbled.is_empty(),
+            "Horizontal rules should not be flagged as garbled text, got: {:?}",
+            garbled
+        );
+    }
+
+    #[test]
+    fn test_arabic_text_not_flagged_as_garbled() {
+        // Arabic text is 100% non-ASCII but is legitimate multilingual content.
+        // At 70% threshold it would be flagged, but we want to verify that
+        // mixed content below 70% is NOT flagged.
+        let md = "\
+# Document
+
+Some English text mixed with \u{0645}\u{0631}\u{062d}\u{0628}\u{0627} Arabic words in a sentence.
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            garbled.is_empty(),
+            "Mixed Arabic/English text below 70% non-ASCII should not be flagged, got: {:?}",
+            garbled
+        );
+    }
+
+    #[test]
+    fn test_cjk_text_below_threshold_not_flagged() {
+        // CJK text mixed with enough ASCII to stay below 70%
+        let md = "\
+# Document
+
+This line has some CJK chars \u{4f60}\u{597d} mixed with English text here.
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            garbled.is_empty(),
+            "Mixed CJK/English text below 70% non-ASCII should not be flagged, got: {:?}",
+            garbled
+        );
+    }
+
+    #[test]
+    fn test_truly_garbled_text_still_flagged() {
+        // Mojibake / truly garbled text with high non-ASCII ratio (>70%)
+        let md = "\
+# Title
+
+\u{00c3}\u{00a9}\u{00c3}\u{00a8}\u{00c3}\u{00aa}\u{00c3}\u{00ab}\u{00c3}\u{00a0}\u{00c3}\u{00a2}\u{00c3}\u{00a4}\u{00c3}\u{00a6}\u{00c3}\u{00b9}\u{00c3}\u{00bb}\u{00c3}\u{00bc}\u{00c3}\u{00b1}\u{00c3}\u{00a7}\u{00c3}\u{00b0}\u{00c3}\u{00be}
+
+Normal text here.
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            !garbled.is_empty(),
+            "Truly garbled text (high non-ASCII ratio) should still be flagged"
+        );
+    }
+
+    #[test]
+    fn test_markdown_structural_punct_not_flagged_as_garbled() {
+        // Lines with markdown structural punctuation like `---`, `***`, `|||`, `$$`
+        let md = "\
+# Title
+
+Some text with --- dashes in it.
+
+Text with **bold** and ~~strike~~ formatting.
+";
+        let report = detect_noise(md);
+        let garbled: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::GarbledText)
+            .collect();
+        assert!(
+            garbled.is_empty(),
+            "Markdown structural punctuation should not be flagged as garbled text, got: {:?}",
+            garbled
+        );
+    }
+
+    #[test]
+    fn test_short_repeated_lines_not_flagged_as_header_footer() {
+        // Short lines (< 15 non-ws chars) repeated many times should not be flagged
+        let md = "\
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+Hello world
+
+Some other text here.
+";
+        let report = detect_noise(md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            rep_issues.is_empty(),
+            "Short repeated lines (< 15 non-ws chars) should not be flagged, got: {:?}",
+            rep_issues
+        );
+    }
+
+    #[test]
+    fn test_genuine_header_footer_repetition_still_flagged() {
+        // Genuine header/footer text repeated 5+ times should still be flagged
+        let md = "\
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 1
+Some content here.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 2
+More content here.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 3
+Even more content.
+Copyright 2024 Acme Corporation All Rights Reserved
+# Chapter 4
+Still more content.
+Copyright 2024 Acme Corporation All Rights Reserved
+";
+        let report = detect_noise(md);
+        let rep_issues: Vec<_> = report
+            .issues
+            .iter()
+            .filter(|i| i.kind == NoiseKind::HeaderFooterRepetition)
+            .collect();
+        assert!(
+            !rep_issues.is_empty(),
+            "Genuine header/footer repetition (5+ times, 15+ chars) should be flagged"
+        );
+        assert_eq!(rep_issues.len(), 5);
     }
 }

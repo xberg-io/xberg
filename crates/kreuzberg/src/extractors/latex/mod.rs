@@ -114,12 +114,75 @@ impl LatexExtractor {
                     pos += new_pos;
                     continue;
                 }
-                // Not a recognized command, copy the backslash
+
+                // Try to match special character / replacement commands
+                if let Some((replacement, consumed)) = Self::try_parse_special_command(&input[pos..]) {
+                    output.push_str(&replacement);
+                    pos += consumed;
+                    continue;
+                }
+
+                // Not a recognized command — try to skip the command name and
+                // output its braced argument (if any) as plain text.
+                if let Some((plain, consumed)) = Self::try_skip_unknown_command(&input[pos..]) {
+                    if !plain.is_empty() {
+                        let (inner_text, inner_anns) = Self::strip_inline_commands(&plain);
+                        let start = output.len() as u32;
+                        output.push_str(&inner_text);
+                        for mut ann in inner_anns {
+                            ann.start += start;
+                            ann.end += start;
+                            annotations.push(ann);
+                        }
+                    }
+                    pos += consumed;
+                    continue;
+                }
+
+                // Bare backslash followed by non-alpha — copy as-is
                 output.push('\\');
                 pos += 1;
+            } else if bytes[pos] == b'$' {
+                // Preserve inline math $...$ as-is
+                output.push('$');
+                pos += 1;
+                while pos < len && bytes[pos] != b'$' {
+                    let ch = input[pos..].chars().next().unwrap();
+                    output.push(ch);
+                    pos += ch.len_utf8();
+                }
+                if pos < len {
+                    output.push('$');
+                    pos += 1;
+                }
+            } else if bytes[pos] == b'-' && pos + 2 < len && bytes[pos + 1] == b'-' && bytes[pos + 2] == b'-' {
+                // --- → em dash
+                output.push('\u{2014}');
+                pos += 3;
+            } else if bytes[pos] == b'-' && pos + 1 < len && bytes[pos + 1] == b'-' {
+                // -- → en dash
+                output.push('\u{2013}');
+                pos += 2;
+            } else if bytes[pos] == b'`' && pos + 1 < len && bytes[pos + 1] == b'`' {
+                // `` → left double quote
+                output.push('\u{201C}');
+                pos += 2;
+            } else if bytes[pos] == b'\'' && pos + 1 < len && bytes[pos + 1] == b'\'' {
+                // '' → right double quote
+                output.push('\u{201D}');
+                pos += 2;
+            } else if bytes[pos] == b'`' {
+                // ` → left single quote
+                output.push('\u{2018}');
+                pos += 1;
+            } else if bytes[pos] == b'\'' {
+                // ' → right single quote
+                output.push('\u{2019}');
+                pos += 1;
             } else {
-                output.push(input[pos..].chars().next().unwrap());
-                pos += input[pos..].chars().next().unwrap().len_utf8();
+                let ch = input[pos..].chars().next().unwrap();
+                output.push(ch);
+                pos += ch.len_utf8();
             }
         }
 
@@ -175,7 +238,128 @@ impl LatexExtractor {
             ));
         }
 
+        // Handle \verb!...! (or \verb|...|, \verb+...+, etc.)
+        if let Some(after_verb) = text.strip_prefix("\\verb")
+            && let Some(delim) = after_verb.chars().next()
+            && !delim.is_alphabetic()
+            && delim != '{'
+        {
+            let after_delim = &after_verb[delim.len_utf8()..];
+            if let Some(end_pos) = after_delim.find(delim) {
+                let content = after_delim[..end_pos].to_string();
+                let total = "\\verb".len() + delim.len_utf8() + end_pos + delim.len_utf8();
+                return Some((AnnotationKind::Code, content, total));
+            }
+        }
+
         None
+    }
+
+    /// Try to parse a special character command at the start of `text`.
+    ///
+    /// Returns `Some((replacement_string, bytes_consumed))` on success.
+    fn try_parse_special_command(text: &str) -> Option<(String, usize)> {
+        // Commands with braces: \textgreater{}, \textless{}, \textbackslash{}, \ldots{}, etc.
+        let braced_replacements: &[(&str, &str)] = &[
+            ("\\textgreater{}", ">"),
+            ("\\textless{}", "<"),
+            ("\\textbackslash{}", "\\"),
+            ("\\ldots{}", "\u{2026}"),
+            ("\\textendash{}", "\u{2013}"),
+            ("\\textemdash{}", "\u{2014}"),
+            ("\\textasciitilde{}", "~"),
+            ("\\textasciicircum{}", "^"),
+            ("\\textbar{}", "|"),
+        ];
+
+        for (prefix, replacement) in braced_replacements {
+            if text.starts_with(prefix) {
+                return Some((replacement.to_string(), prefix.len()));
+            }
+        }
+
+        // Commands without braces (but may have {})
+        let simple_replacements: &[(&str, &str)] = &[
+            ("\\ldots", "\u{2026}"),
+            ("\\dots", "\u{2026}"),
+            ("\\&", "&"),
+            ("\\#", "#"),
+            ("\\_", "_"),
+            ("\\{", "{"),
+            ("\\}", "}"),
+            ("\\%", "%"),
+            ("\\$", "$"),
+            ("\\\\", "\n"),
+            ("\\,", "\u{2009}"),
+            ("\\;", " "),
+            ("\\!", ""),
+            ("\\~", "~"),
+            ("\\^{}", "^"),
+        ];
+
+        for (prefix, replacement) in simple_replacements {
+            if text.starts_with(prefix) {
+                return Some((replacement.to_string(), prefix.len()));
+            }
+        }
+
+        // \ensuremath{content} — pass through content as-is (inline math)
+        if let Some(after) = text.strip_prefix("\\ensuremath{")
+            && let Some((content, consumed)) = Self::read_braced_content(after)
+        {
+            return Some((content, "\\ensuremath{".len() + consumed));
+        }
+
+        None
+    }
+
+    /// Try to skip an unknown command at the start of `text`.
+    ///
+    /// If the command has a braced argument, return its content as plain text.
+    /// Otherwise, skip just the command name.
+    ///
+    /// Returns `Some((extracted_text, bytes_consumed))`.
+    fn try_skip_unknown_command(text: &str) -> Option<(String, usize)> {
+        if !text.starts_with('\\') {
+            return None;
+        }
+
+        let after_backslash = &text[1..];
+        // Collect alphabetic command name
+        let cmd_end = after_backslash
+            .find(|c: char| !c.is_alphabetic())
+            .unwrap_or(after_backslash.len());
+
+        if cmd_end == 0 {
+            return None; // Not an alpha command
+        }
+
+        let total_cmd = 1 + cmd_end; // backslash + command name
+
+        // Check for optional argument [...]
+        let rest = &text[total_cmd..];
+        let mut consumed = total_cmd;
+        let rest = if rest.starts_with('[') {
+            if let Some(bracket_end) = rest.find(']') {
+                consumed += bracket_end + 1;
+                &text[consumed..]
+            } else {
+                rest
+            }
+        } else {
+            rest
+        };
+
+        // If followed by braced content, extract it
+        if let Some(inner) = rest.strip_prefix('{')
+            && let Some((content, brace_consumed)) = Self::read_braced_content(inner)
+        {
+            consumed += 1 + brace_consumed;
+            return Some((content, consumed));
+        }
+
+        // No braced arg — just skip the command name
+        Some((String::new(), consumed))
     }
 
     /// Read braced content starting after an opening `{` has already been consumed
@@ -377,7 +561,7 @@ impl LatexExtractor {
                         i = new_i;
                         continue;
                     }
-                    "lstlisting" | "verbatim" | "minted" => {
+                    "lstlisting" | "verbatim" | "minted" | "Verbatim" => {
                         let (env_content, new_i) = collect_environment(&lines, i, &env_name);
                         let language = if env_name == "lstlisting" || env_name == "minted" {
                             Self::extract_code_language(trimmed)
@@ -388,122 +572,324 @@ impl LatexExtractor {
                         i = new_i;
                         continue;
                     }
+                    "quote" | "quotation" => {
+                        let (env_content, new_i) = collect_environment(&lines, i, &env_name);
+                        b.push_quote_start();
+                        // Recursively process the quote content
+                        let inner_lines: Vec<&str> = env_content.lines().collect();
+                        Self::build_internal_body(&mut b, &inner_lines, heading_map);
+                        b.push_quote_end();
+                        i = new_i;
+                        continue;
+                    }
+                    "obeylines" => {
+                        let (env_content, new_i) = collect_environment(&lines, i, &env_name);
+                        // Process content line by line preserving line breaks
+                        for line in env_content.lines() {
+                            let line_trimmed = line.trim();
+                            if !line_trimmed.is_empty() {
+                                let (text, annotations) = Self::strip_inline_commands(line_trimmed);
+                                if !text.is_empty() {
+                                    b.push_paragraph(&text, annotations, None, None);
+                                }
+                            }
+                        }
+                        i = new_i;
+                        continue;
+                    }
+                    "center" => {
+                        // \begin{center}\rule{...}{...}\end{center} is a horizontal rule
+                        let (env_content, new_i) = collect_environment(&lines, i, "center");
+                        let content_trimmed = env_content.trim();
+                        if content_trimmed.starts_with("\\rule{") || content_trimmed.starts_with("\\rule ") {
+                            b.push_paragraph("---", vec![], None, None);
+                        } else {
+                            // Process center content normally
+                            let inner_lines: Vec<&str> = env_content.lines().collect();
+                            Self::build_internal_body(&mut b, &inner_lines, heading_map);
+                        }
+                        i = new_i;
+                        continue;
+                    }
                     _ => {
-                        let (_, new_i) = collect_environment(&lines, i, &env_name);
+                        // For unknown environments, try to extract text content
+                        let (env_content, new_i) = collect_environment(&lines, i, &env_name);
+                        let inner_lines: Vec<&str> = env_content.lines().collect();
+                        Self::build_internal_body(&mut b, &inner_lines, heading_map);
                         i = new_i;
                         continue;
                     }
                 }
             }
 
-            // Handle heading commands
-            let mut handled = false;
-            if let Some(after_backslash) = trimmed.strip_prefix('\\') {
-                let cmd_end = after_backslash
-                    .find(|c: char| c == '{' || c == '[' || c.is_whitespace())
-                    .unwrap_or(after_backslash.len());
-                let cmd_name = &after_backslash[..cmd_end];
-                if let Some(&level) = heading_map.get(cmd_name) {
-                    let rest = &after_backslash[cmd_end..].trim_start();
-                    if rest.starts_with('{') || rest.starts_with('[') {
-                        if let Some(title) = extract_heading_title(trimmed, cmd_name) {
-                            let idx = b.push_heading(level, &title, None, None);
-                            // Check for \label on the same or next line
-                            if let Some(lbl) = Self::extract_label(trimmed) {
-                                b.set_anchor(idx, &lbl);
-                            }
-                        }
-                        handled = true;
-                    }
-                }
-            }
-
-            if !handled && !trimmed.is_empty() && !trimmed.starts_with('%') {
-                // \includegraphics outside figure
-                if trimmed.contains("\\includegraphics")
-                    && let Some(path) = Self::extract_includegraphics_path(trimmed)
-                {
-                    b.push_uri(Uri::image(&path, None));
-                    b.push_paragraph(&format!("[image: {}]", path), vec![], None, None);
-                    i += 1;
-                    continue;
-                }
-
-                // \ref{} → CrossReference
-                Self::extract_refs(trimmed, &mut b, "\\ref{", RelationshipKind::CrossReference);
-                // \cite{} → CitationReference
-                Self::extract_refs(trimmed, &mut b, "\\cite{", RelationshipKind::CitationReference);
-
-                // Display math
-                if trimmed.starts_with("\\[") {
-                    let mut math_content = trimmed.to_string();
-                    if !trimmed.contains("\\]") {
-                        i += 1;
-                        while i < lines.len() {
-                            math_content.push('\n');
-                            math_content.push_str(lines[i]);
-                            if lines[i].trim().contains("\\]") {
-                                break;
-                            }
-                            i += 1;
-                        }
-                    }
-                    let formula = math_content.trim_start_matches("\\[").trim_end_matches("\\]").trim();
-                    if !formula.is_empty() {
-                        b.push_formula(formula, None, None);
-                    }
-                } else if !trimmed.starts_with('\\')
-                    || trimmed.starts_with("\\textbf")
-                    || trimmed.starts_with("\\emph")
-                    || trimmed.starts_with("\\textit")
-                    || trimmed.starts_with("\\underline")
-                    || trimmed.starts_with("\\texttt")
-                    || trimmed.starts_with("\\href")
-                    || trimmed.starts_with("\\url")
-                {
-                    // Extract footnotes
-                    let mut line_text = trimmed.to_string();
-                    while let Some(fn_start) = line_text.find("\\footnote{") {
-                        let after = &line_text[fn_start + "\\footnote{".len()..];
-                        if let Some((fn_text, consumed)) = Self::read_braced_content(after) {
-                            let fn_stripped = utilities::clean_text(&fn_text);
-                            if !fn_stripped.is_empty() {
-                                let fn_key = format!("fn:{}", fn_stripped.chars().take(20).collect::<String>());
-                                b.push_footnote_ref(&fn_stripped, &fn_key, None);
-                                b.push_footnote_definition(&fn_stripped, &fn_key, None);
-                            }
-                            let end = fn_start + "\\footnote{".len() + consumed;
-                            line_text = format!("{}{}", &line_text[..fn_start], &line_text[end..]);
-                        } else {
-                            break;
-                        }
-                    }
-
-                    let line_text = line_text.trim();
-                    if !line_text.is_empty() {
-                        let (text, annotations) = Self::strip_inline_commands(line_text);
-                        // Extract URIs from link annotations
-                        for ann in &annotations {
-                            if let AnnotationKind::Link { url, .. } = &ann.kind
-                                && !url.is_empty()
-                            {
-                                let label = text.get(ann.start as usize..ann.end as usize).map(|s| s.to_string());
-                                b.push_uri(Uri::hyperlink(url, label));
-                            }
-                        }
-                        let idx = b.push_paragraph(&text, annotations, None, None);
-                        // Check for \label in this line
-                        if let Some(lbl) = Self::extract_label(line_text) {
-                            b.set_anchor(idx, &lbl);
-                        }
-                    }
-                }
-            }
+            Self::process_content_line(trimmed, &lines, &mut i, &mut b, heading_map);
 
             i += 1;
         }
 
         b.build()
+    }
+
+    /// Process body lines (shared between top-level and recursive calls for environments like quote).
+    fn build_internal_body(
+        b: &mut InternalDocumentBuilder,
+        lines: &[&str],
+        heading_map: &ahash::AHashMap<&'static str, u8>,
+    ) {
+        let mut i = 0;
+        while i < lines.len() {
+            let trimmed = lines[i].trim();
+
+            // Handle environments
+            if (trimmed.contains("\\begin{") || trimmed.contains("\\begin {"))
+                && let Some(env_name) = extract_env_name(trimmed)
+            {
+                match env_name.as_str() {
+                    "itemize" | "enumerate" | "description" => {
+                        let ordered = env_name == "enumerate";
+                        let (env_content, new_i) = collect_environment(lines, i, &env_name);
+                        b.push_list(ordered);
+                        Self::build_internal_list_items(b, &env_content, ordered);
+                        b.end_list();
+                        i = new_i;
+                        continue;
+                    }
+                    "tabular" => {
+                        let (env_content, new_i) = collect_environment(lines, i, "tabular");
+                        let cells = Self::parse_tabular_cells(&env_content);
+                        if !cells.is_empty() {
+                            b.push_table_from_cells(&cells, None, None);
+                        }
+                        i = new_i;
+                        continue;
+                    }
+                    "equation" | "equation*" | "align" | "align*" | "gather" | "gather*" | "multline" | "multline*"
+                    | "eqnarray" | "eqnarray*" | "math" | "displaymath" | "flalign" | "flalign*" | "cases" => {
+                        let (env_content, new_i) = collect_environment(lines, i, &env_name);
+                        let formula_text = format!("\\begin{{{}}}\n{}\\end{{{}}}", env_name, env_content, env_name);
+                        b.push_formula(&formula_text, None, None);
+                        i = new_i;
+                        continue;
+                    }
+                    "lstlisting" | "verbatim" | "minted" | "Verbatim" => {
+                        let (env_content, new_i) = collect_environment(lines, i, &env_name);
+                        let language = if env_name == "lstlisting" || env_name == "minted" {
+                            Self::extract_code_language(trimmed)
+                        } else {
+                            None
+                        };
+                        b.push_code(env_content.trim(), language, None, None);
+                        i = new_i;
+                        continue;
+                    }
+                    "quote" | "quotation" => {
+                        let (env_content, new_i) = collect_environment(lines, i, &env_name);
+                        b.push_quote_start();
+                        let inner_lines: Vec<&str> = env_content.lines().collect();
+                        Self::build_internal_body(b, &inner_lines, heading_map);
+                        b.push_quote_end();
+                        i = new_i;
+                        continue;
+                    }
+                    "center" => {
+                        let (env_content, new_i) = collect_environment(lines, i, "center");
+                        let content_trimmed = env_content.trim();
+                        if content_trimmed.starts_with("\\rule{") || content_trimmed.starts_with("\\rule ") {
+                            b.push_paragraph("---", vec![], None, None);
+                        } else {
+                            let inner_lines: Vec<&str> = env_content.lines().collect();
+                            Self::build_internal_body(b, &inner_lines, heading_map);
+                        }
+                        i = new_i;
+                        continue;
+                    }
+                    _ => {
+                        let (env_content, new_i) = collect_environment(lines, i, &env_name);
+                        let inner_lines: Vec<&str> = env_content.lines().collect();
+                        Self::build_internal_body(b, &inner_lines, heading_map);
+                        i = new_i;
+                        continue;
+                    }
+                }
+            }
+
+            Self::process_content_line(trimmed, lines, &mut i, b, heading_map);
+
+            i += 1;
+        }
+    }
+
+    /// Commands that should be silently skipped (no text output).
+    const SKIP_COMMANDS: &[&str] = &[
+        "maketitle",
+        "tableofcontents",
+        "listoffigures",
+        "listoftables",
+        "setcounter",
+        "addtocounter",
+        "newpage",
+        "clearpage",
+        "cleardoublepage",
+        "pagestyle",
+        "thispagestyle",
+        "pagenumbering",
+        "setlength",
+        "addtolength",
+        "newcommand",
+        "renewcommand",
+        "def",
+        "let",
+        "input",
+        "include",
+        "bibliography",
+        "bibliographystyle",
+        "graphicspath",
+        "geometry",
+        "hypersetup",
+        "usepackage",
+        "documentclass",
+        "doublespacing",
+        "singlespacing",
+        "onehalfspacing",
+        "VerbatimFootnotes",
+    ];
+
+    /// Check if a line starts with a command that should be silently skipped.
+    fn is_skip_command(trimmed: &str) -> bool {
+        if !trimmed.starts_with('\\') {
+            return false;
+        }
+        let after = &trimmed[1..];
+        let cmd_end = after.find(|c: char| !c.is_alphabetic()).unwrap_or(after.len());
+        let cmd = &after[..cmd_end];
+        Self::SKIP_COMMANDS.contains(&cmd)
+    }
+
+    /// Process a single content line (heading, image, math, or paragraph).
+    fn process_content_line(
+        trimmed: &str,
+        lines: &[&str],
+        i: &mut usize,
+        b: &mut InternalDocumentBuilder,
+        heading_map: &ahash::AHashMap<&'static str, u8>,
+    ) {
+        if trimmed.is_empty() || trimmed.starts_with('%') {
+            return;
+        }
+
+        // Skip known non-content commands
+        if Self::is_skip_command(trimmed) {
+            return;
+        }
+
+        // Handle heading commands
+        if let Some(after_backslash) = trimmed.strip_prefix('\\') {
+            let cmd_end = after_backslash
+                .find(|c: char| c == '{' || c == '[' || c.is_whitespace())
+                .unwrap_or(after_backslash.len());
+            let cmd_name = &after_backslash[..cmd_end];
+            if let Some(&level) = heading_map.get(cmd_name) {
+                let rest = &after_backslash[cmd_end..].trim_start();
+                if rest.starts_with('{') || rest.starts_with('[') {
+                    if let Some(title) = extract_heading_title(trimmed, cmd_name) {
+                        let (title_text, title_anns) = Self::strip_inline_commands(&title);
+                        let idx = b.push_heading(level, &title_text, None, None);
+                        // Store heading annotations
+                        if !title_anns.is_empty() {
+                            // Push annotations via a helper if available, or store on heading
+                            for ann in &title_anns {
+                                if let AnnotationKind::Link { url, .. } = &ann.kind
+                                    && !url.is_empty()
+                                {
+                                    let label = title_text
+                                        .get(ann.start as usize..ann.end as usize)
+                                        .map(|s| s.to_string());
+                                    b.push_uri(Uri::hyperlink(url, label));
+                                }
+                            }
+                        }
+                        if let Some(lbl) = Self::extract_label(trimmed) {
+                            b.set_anchor(idx, &lbl);
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+
+        // \includegraphics outside figure
+        if trimmed.contains("\\includegraphics")
+            && let Some(path) = Self::extract_includegraphics_path(trimmed)
+        {
+            b.push_uri(Uri::image(&path, None));
+            b.push_paragraph(&format!("[image: {}]", path), vec![], None, None);
+            return;
+        }
+
+        // \ref{} → CrossReference
+        Self::extract_refs(trimmed, b, "\\ref{", RelationshipKind::CrossReference);
+        // \cite{} → CitationReference
+        Self::extract_refs(trimmed, b, "\\cite{", RelationshipKind::CitationReference);
+
+        // Display math \[...\]
+        if trimmed.starts_with("\\[") {
+            let mut math_content = trimmed.to_string();
+            if !trimmed.contains("\\]") {
+                *i += 1;
+                while *i < lines.len() {
+                    math_content.push('\n');
+                    math_content.push_str(lines[*i]);
+                    if lines[*i].trim().contains("\\]") {
+                        break;
+                    }
+                    *i += 1;
+                }
+            }
+            let formula = math_content.trim_start_matches("\\[").trim_end_matches("\\]").trim();
+            if !formula.is_empty() {
+                b.push_formula(formula, None, None);
+            }
+            return;
+        }
+
+        // All other content: extract footnotes, then strip inline commands
+        let mut line_text = trimmed.to_string();
+        while let Some(fn_start) = line_text.find("\\footnote{") {
+            let after = &line_text[fn_start + "\\footnote{".len()..];
+            if let Some((fn_text, consumed)) = Self::read_braced_content(after) {
+                let fn_stripped = utilities::clean_text(&fn_text);
+                if !fn_stripped.is_empty() {
+                    let fn_key = format!("fn:{}", fn_stripped.chars().take(20).collect::<String>());
+                    b.push_footnote_ref(&fn_stripped, &fn_key, None);
+                    b.push_footnote_definition(&fn_stripped, &fn_key, None);
+                }
+                let end = fn_start + "\\footnote{".len() + consumed;
+                line_text = format!("{}{}", &line_text[..fn_start], &line_text[end..]);
+            } else {
+                break;
+            }
+        }
+
+        let line_text = line_text.trim();
+        if !line_text.is_empty() {
+            let (text, annotations) = Self::strip_inline_commands(line_text);
+            let text = text.trim();
+            if !text.is_empty() {
+                // Extract URIs from link annotations
+                for ann in &annotations {
+                    if let AnnotationKind::Link { url, .. } = &ann.kind
+                        && !url.is_empty()
+                    {
+                        let label = text.get(ann.start as usize..ann.end as usize).map(|s| s.to_string());
+                        b.push_uri(Uri::hyperlink(url, label));
+                    }
+                }
+                let idx = b.push_paragraph(text, annotations, None, None);
+                if let Some(lbl) = Self::extract_label(line_text) {
+                    b.set_anchor(idx, &lbl);
+                }
+            }
+        }
     }
 
     /// Extract `\label{key}` from text.
@@ -540,25 +926,81 @@ impl LatexExtractor {
 
     /// Build list items for InternalDocument.
     fn build_internal_list_items(b: &mut InternalDocumentBuilder, content: &str, ordered: bool) {
-        for line in content.lines() {
-            let trimmed = line.trim();
+        let all_lines: Vec<&str> = content.lines().collect();
+        let mut i = 0;
+
+        while i < all_lines.len() {
+            let trimmed = all_lines[i].trim();
+
+            // Handle nested list environments
+            if (trimmed.contains("\\begin{itemize}")
+                || trimmed.contains("\\begin{enumerate}")
+                || trimmed.contains("\\begin{description}"))
+                && let Some(env_name) = extract_env_name(trimmed)
+            {
+                let nested_ordered = env_name == "enumerate";
+                let (env_content, new_i) = collect_environment(&all_lines, i, &env_name);
+                b.push_list(nested_ordered);
+                Self::build_internal_list_items(b, &env_content, nested_ordered);
+                b.end_list();
+                i = new_i;
+                continue;
+            }
+
             if trimmed.starts_with("\\item") {
                 let after = trimmed.strip_prefix("\\item").unwrap_or("").trim();
-                let text = if after.starts_with('[') {
+
+                // Collect continuation lines (lines until next \item, \begin, or \end)
+                let mut item_parts = Vec::new();
+                let first_part = if after.starts_with('[') {
                     if let Some(bracket_end) = after.find(']') {
                         let label = &after[1..bracket_end];
                         let rest = after[bracket_end + 1..].trim();
-                        format!("{}: {}", label, rest)
+                        if rest.is_empty() {
+                            format!("{}:", label)
+                        } else {
+                            format!("{}: {}", label, rest)
+                        }
                     } else {
                         after.to_string()
                     }
                 } else {
                     after.to_string()
                 };
-                if !text.is_empty() {
-                    b.push_list_item(&text, ordered, vec![], None, None);
+
+                if !first_part.is_empty() {
+                    item_parts.push(first_part);
                 }
+
+                // Collect continuation lines
+                i += 1;
+                while i < all_lines.len() {
+                    let next = all_lines[i].trim();
+                    if next.is_empty()
+                        || next.starts_with("\\item")
+                        || next.starts_with("\\begin{")
+                        || next.starts_with("\\end{")
+                        || next.starts_with("\\setcounter")
+                    {
+                        break;
+                    }
+                    item_parts.push(next.to_string());
+                    i += 1;
+                }
+
+                let text = item_parts.join(" ");
+                if !text.is_empty() {
+                    let (stripped, annotations) = Self::strip_inline_commands(&text);
+                    let stripped = stripped.trim();
+                    if !stripped.is_empty() {
+                        b.push_list_item(stripped, ordered, annotations, None, None);
+                    }
+                }
+                continue;
             }
+
+            // Skip non-item lines (empty, comments, setcounter, etc.)
+            i += 1;
         }
     }
 
@@ -574,7 +1016,7 @@ impl LatexExtractor {
             {
                 continue;
             }
-            let row_str = trimmed.replace("\\\\", "");
+            let row_str = trimmed.replace("\\\\", "").replace("\\hline", "");
             let cells: Vec<String> = row_str
                 .split('&')
                 .map(|s| s.trim().to_string())

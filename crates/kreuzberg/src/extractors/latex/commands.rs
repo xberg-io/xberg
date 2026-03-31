@@ -177,16 +177,71 @@ fn process_command(cmd: &str, chars: &mut std::iter::Peekable<std::str::Chars>, 
                 result.push_str(&processed);
             }
         }
+        "sout" => {
+            if let Some(content) = read_braced_from_chars(chars) {
+                let processed = process_line(&content);
+                result.push_str(&processed);
+            }
+        }
+        "ensuremath" => {
+            if let Some(content) = read_braced_from_chars(chars) {
+                result.push_str(&content);
+            }
+        }
+        "textgreater" => {
+            // Consume optional {}
+            if chars.peek() == Some(&'{') {
+                read_braced_from_chars(chars);
+            }
+            result.push('>');
+        }
+        "textless" => {
+            if chars.peek() == Some(&'{') {
+                read_braced_from_chars(chars);
+            }
+            result.push('<');
+        }
+        "textbackslash" => {
+            if chars.peek() == Some(&'{') {
+                read_braced_from_chars(chars);
+            }
+            result.push('\\');
+        }
+        "ldots" | "dots" => {
+            if chars.peek() == Some(&'{') {
+                read_braced_from_chars(chars);
+            }
+            result.push('\u{2026}');
+        }
+        "textendash" => {
+            if chars.peek() == Some(&'{') {
+                read_braced_from_chars(chars);
+            }
+            result.push('\u{2013}');
+        }
+        "textemdash" => {
+            if chars.peek() == Some(&'{') {
+                read_braced_from_chars(chars);
+            }
+            result.push('\u{2014}');
+        }
         "par" | "noindent" | "newline" | "linebreak" | "pagebreak" | "newpage" | "clearpage" | "cleardoublepage"
         | "bigskip" | "medskip" | "smallskip" | "vfill" | "hfill" | "centering" | "raggedright" | "raggedleft"
         | "maketitle" | "tableofcontents" | "listoffigures" | "listoftables" | "appendix" | "indent" | "relax"
         | "protect" | "nobreak" | "allowbreak" | "sloppy" | "fussy" | "normalsize" | "small" | "footnotesize"
-        | "large" | "Large" | "LARGE" | "huge" | "Huge" | "tiny" | "scriptsize" => {
+        | "large" | "Large" | "LARGE" | "huge" | "Huge" | "tiny" | "scriptsize" | "doublespacing" | "singlespacing"
+        | "onehalfspacing" => {
             // Zero-argument commands - skip silently
         }
         _ => {
-            // Unknown command: skip command name entirely.
-            // Do not consume braced args since we don't know the command's arity.
+            // Unknown command: try to extract braced argument as plain text
+            if chars.peek() == Some(&'{')
+                && let Some(content) = read_braced_from_chars(chars)
+            {
+                let processed = process_line(&content);
+                result.push_str(&processed);
+            }
+            // Otherwise skip the command name
         }
     }
 }

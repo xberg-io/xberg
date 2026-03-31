@@ -288,6 +288,35 @@ fn post_process_table_inner(
         }
     }
 
+    // Prose detection: reject tables where most non-empty cells contain only single words.
+    // When justified prose text is falsely detected as a table, the reconstruction
+    // splits sentences across many columns, producing cells with single words.
+    // Real tables typically have meaningful multi-word content in their cells.
+    // Only check tables with 5+ columns, since 2-4 column tables with short cells
+    // are common and legitimate (e.g., Name | Department | Salary).
+    // Skip when layout-guided (model already confirmed table).
+    if !layout_guided && processed[0].len() >= 5 {
+        let mut single_word_cells = 0usize;
+        let mut non_empty_cells = 0usize;
+        for row in processed.iter().skip(1) {
+            for cell in row {
+                let trimmed = cell.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                non_empty_cells += 1;
+                let word_count = trimmed.split_whitespace().count();
+                if word_count <= 2 {
+                    single_word_cells += 1;
+                }
+            }
+        }
+        // If >70% of non-empty data cells are single/double-word, this is prose, not a table.
+        if non_empty_cells >= 6 && single_word_cells * 10 > non_empty_cells * 7 {
+            return None;
+        }
+    }
+
     // Content asymmetry check — skip when layout-guided (model already confirmed table).
     if !layout_guided {
         let num_cols = processed[0].len();
@@ -492,5 +521,72 @@ mod tests {
         assert_eq!(words.len(), 2);
         assert_eq!(words[0].text, "Hello");
         assert_eq!(words[1].text, "World");
+    }
+
+    #[test]
+    fn test_post_process_rejects_prose_as_table() {
+        // Simulates what happens when justified prose text is incorrectly
+        // split into a multi-column table: most cells contain single words.
+        let table = vec![
+            // header
+            vec![
+                "Foreword".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+                "".into(),
+                "ISO 21111-10:2021(E)".into(),
+                "".into(),
+                "".into(),
+            ],
+            // data rows: single words per cell (prose split across columns)
+            vec![
+                "ISO".into(),
+                "(the".into(),
+                "International".into(),
+                "Organization".into(),
+                "for".into(),
+                "Standardization)is".into(),
+                "a".into(),
+                "worldwide".into(),
+            ],
+            vec![
+                "bodies".into(),
+                "(ISO".into(),
+                "member".into(),
+                "bodies).The".into(),
+                "work".into(),
+                "of".into(),
+                "preparing".into(),
+                "International".into(),
+            ],
+            vec![
+                "through".into(),
+                "ISO".into(),
+                "technical".into(),
+                "committees.Each".into(),
+                "member".into(),
+                "body".into(),
+                "interested".into(),
+                "in".into(),
+            ],
+        ];
+        // This should be rejected because most cells are single words (prose).
+        let result = post_process_table(table, false, false);
+        assert!(result.is_none(), "Prose-like table should be rejected");
+    }
+
+    #[test]
+    fn test_post_process_accepts_real_table() {
+        // A real table with meaningful multi-word content in cells.
+        let table = vec![
+            vec!["Name".into(), "Department".into(), "Annual Salary".into()],
+            vec!["John Smith".into(), "Engineering Dept".into(), "$95,000".into()],
+            vec!["Jane Doe".into(), "Marketing Team".into(), "$88,500".into()],
+            vec!["Bob Johnson".into(), "Sales Division".into(), "$92,000".into()],
+            vec!["Alice Williams".into(), "Human Resources".into(), "$85,000".into()],
+        ];
+        let result = post_process_table(table, false, false);
+        assert!(result.is_some(), "Real table should be accepted");
     }
 }

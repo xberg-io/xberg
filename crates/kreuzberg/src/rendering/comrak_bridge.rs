@@ -328,14 +328,18 @@ fn append_annotated_span<'a>(arena: &'a comrak::Arena<'a>, parent: &'a AstNode<'
             parent.append(emph);
         }
         AnnotationKind::Code => {
-            let code = mk(
-                arena,
-                NodeValue::Code(NodeCode {
-                    num_backticks: 1,
-                    literal: normalize_text(trimmed),
-                }),
-            );
-            parent.append(code);
+            // comrak panics on Code nodes with empty literal (index out of bounds
+            // in cm.rs when checking literal_bytes[0]). Skip empty code spans.
+            if !trimmed.is_empty() {
+                let code = mk(
+                    arena,
+                    NodeValue::Code(NodeCode {
+                        num_backticks: 1,
+                        literal: normalize_text(trimmed),
+                    }),
+                );
+                parent.append(code);
+            }
         }
         AnnotationKind::Strikethrough => {
             let strike = mk(arena, NodeValue::Strikethrough);

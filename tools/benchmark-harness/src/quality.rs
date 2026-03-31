@@ -122,6 +122,15 @@ pub fn tokenize(text: &str) -> Vec<String> {
             kept.trim_matches(|c: char| c == '.' || c == ',').to_string()
         })
         .filter(|w| !w.is_empty())
+        .map(|token| {
+            // Normalize numeric tokens: "15.0" -> "15", "100.00" -> "100"
+            if let Ok(num) = token.parse::<f64>() {
+                let normalized = format!("{num}");
+                if normalized != token { normalized } else { token }
+            } else {
+                token
+            }
+        })
         .collect()
 }
 
@@ -274,5 +283,36 @@ mod tests {
     fn test_case_insensitive() {
         let result = compute_quality("Hello World", "hello world");
         assert!((result.f1_score_text - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_tokenize_number_normalization() {
+        // "15.0" and "15" should produce the same token
+        let tokens_a = tokenize("15.0");
+        let tokens_b = tokenize("15");
+        assert_eq!(tokens_a, tokens_b, "15.0 and 15 should normalize to the same token");
+        assert_eq!(tokens_a, vec!["15"]);
+
+        // "100.00" should normalize to "100"
+        assert_eq!(tokenize("100.00"), vec!["100"]);
+    }
+
+    #[test]
+    fn test_compute_f1_number_equivalence() {
+        let extracted = tokenize("price 15.0 dollars");
+        let truth = tokenize("price 15 dollars");
+        let f1 = compute_f1(&extracted, &truth);
+        assert!(
+            (f1 - 1.0).abs() < 0.001,
+            "F1 should be 1.0 for semantically equivalent numeric tokens, got {f1}"
+        );
+    }
+
+    #[test]
+    fn test_tokenize_preserves_decimals() {
+        // Non-trailing-zero decimals must be preserved
+        assert_eq!(tokenize("3.14"), vec!["3.14"]);
+        assert_eq!(tokenize("0.5"), vec!["0.5"]);
+        assert_eq!(tokenize("12.345"), vec!["12.345"]);
     }
 }

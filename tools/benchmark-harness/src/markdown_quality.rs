@@ -768,14 +768,18 @@ fn match_blocks_global(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<Bl
         return (Vec::new(), Vec::new());
     }
 
-    // Complexity safeguard: fall back to count-ratio for very large documents
+    // Complexity safeguard: use windowed matching for very large documents.
+    // Instead of comparing all O(n*m) pairs, we use a diagonal band approach:
+    // each GT block is only compared against nearby extracted blocks within a
+    // proportional window. This preserves reasonable matching quality while
+    // keeping computation bounded.
     if count_gt * count_ext > MAX_PAIRS_FOR_MATCHING {
         tracing::debug!(
             gt = count_gt,
             ext = count_ext,
-            "block count too large, using count-ratio fallback"
+            "block count too large, using windowed matching fallback"
         );
-        return (Vec::new(), Vec::new());
+        return match_blocks_windowed(gt_blocks, ext_blocks);
     }
 
     // Pre-tokenize all blocks
@@ -894,6 +898,122 @@ fn match_blocks_global(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<Bl
             );
         }
     }
+
+    (results, order_pairs)
+}
+
+/// Windowed matching fallback for large documents that exceed [`MAX_PAIRS_FOR_MATCHING`].
+///
+/// Instead of comparing every GT block against every extracted block (O(n*m)),
+/// each GT block is compared only against extracted blocks within a proportional
+/// window around its expected position. The window size is chosen so the total
+/// number of comparisons stays under `MAX_PAIRS_FOR_MATCHING`.
+///
+/// This preserves reasonable matching quality because document order is roughly
+/// preserved between extraction and ground truth, so the best match for GT block
+/// `i` is almost always near position `i * (ext_len / gt_len)`.
+fn match_blocks_windowed(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<BlockMatch>, Vec<(usize, usize)>) {
+    let count_gt = gt_blocks.len();
+    let count_ext = ext_blocks.len();
+
+    // Window half-size: ensure total pairs <= MAX_PAIRS_FOR_MATCHING
+    // Total pairs = count_gt * (2 * half_window + 1), solve for half_window:
+    let half_window = if count_gt > 0 {
+        ((MAX_PAIRS_FOR_MATCHING / count_gt).max(1) - 1) / 2
+    } else {
+        0
+    };
+    // Ensure minimum window of 10 blocks on each side for quality
+    let half_window = half_window.max(10);
+
+    tracing::debug!(
+        half_window = half_window,
+        estimated_pairs = count_gt * (2 * half_window + 1).min(count_ext),
+        "windowed matching parameters"
+    );
+
+    // Pre-tokenize all blocks
+    let gt_tokens: Vec<Vec<String>> = gt_blocks.iter().map(|b| tokenize(&b.content)).collect();
+    let ext_tokens: Vec<Vec<String>> = ext_blocks.iter().map(|b| tokenize(&b.content)).collect();
+
+    let ratio = count_ext as f64 / count_gt as f64;
+
+    let mut candidates: Vec<(usize, usize, f64, f64, f64, bool)> = Vec::new();
+
+    for gi in 0..count_gt {
+        // Expected position of this GT block in extracted output
+        let center = (gi as f64 * ratio) as usize;
+        let start = center.saturating_sub(half_window);
+        let end = (center + half_window + 1).min(count_ext);
+
+        for ei in start..end {
+            let compat = type_compat(&ext_blocks[ei], &gt_blocks[gi]);
+            if compat <= 0.0 {
+                continue;
+            }
+
+            let content_sim = crate::quality::compute_f1(&ext_tokens[ei], &gt_tokens[gi]);
+            let score = content_sim * compat;
+            if score >= 0.10 {
+                candidates.push((gi, ei, content_sim, compat, score, false));
+            }
+
+            // Adjacent concatenation
+            if ei + 1 < count_ext && ei + 1 < end + 1 {
+                let concat_compat = type_compat(&ext_blocks[ei], &gt_blocks[gi]);
+                if concat_compat <= 0.0 {
+                    continue;
+                }
+                let mut concat_tokens = ext_tokens[ei].clone();
+                concat_tokens.extend(ext_tokens[ei + 1].iter().cloned());
+                let concat_sim = crate::quality::compute_f1(&concat_tokens, &gt_tokens[gi]);
+                let concat_score = concat_sim * concat_compat;
+                if concat_score > score && concat_score >= 0.10 {
+                    candidates.push((gi, ei, concat_sim, concat_compat, concat_score, true));
+                }
+            }
+        }
+    }
+
+    // Greedy matching: sort by score descending
+    candidates.sort_by(|a, b| b.4.partial_cmp(&a.4).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut matched_gt: Vec<bool> = vec![false; count_gt];
+    let mut matched_ext: Vec<bool> = vec![false; count_ext];
+    let mut results: Vec<BlockMatch> = Vec::new();
+    let mut order_pairs: Vec<(usize, usize)> = Vec::new();
+
+    for &(gi, ei, content_sim, compat, score, is_concat) in &candidates {
+        if matched_gt[gi] || matched_ext[ei] {
+            continue;
+        }
+        if is_concat && ei + 1 < count_ext && matched_ext[ei + 1] {
+            continue;
+        }
+
+        matched_gt[gi] = true;
+        matched_ext[ei] = true;
+        if is_concat && ei + 1 < count_ext {
+            matched_ext[ei + 1] = true;
+        }
+
+        results.push(BlockMatch {
+            gt_idx: gi,
+            ext_idx: ei,
+            content_sim,
+            type_compat: compat,
+            match_score: score,
+            is_concat,
+        });
+        order_pairs.push((gt_blocks[gi].index, ext_blocks[ei].index));
+    }
+
+    tracing::debug!(
+        matched = results.len(),
+        total_gt = count_gt,
+        total_ext = count_ext,
+        "windowed matching complete"
+    );
 
     (results, order_pairs)
 }
@@ -1363,5 +1483,105 @@ mod tests {
             index: 0,
         };
         assert!((type_compat(&a, &b)).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_flat_paragraphs_vs_headings_gives_partial_credit() {
+        // Simulates baseline pipeline: extracted has flat paragraphs,
+        // GT has headings + paragraphs. SF1 should be >0 because
+        // paragraph content matching heading content gets 0.25 type compat.
+        let extracted = "Introduction\n\nThis is the first section content.\n\nMethods\n\nThis describes the methods used.\n\nResults\n\nHere are the results.\n";
+        let gt = "# Introduction\n\nThis is the first section content.\n\n## Methods\n\nThis describes the methods used.\n\n## Results\n\nHere are the results.\n";
+        let result = score_structural_quality(extracted, gt);
+        // Paragraphs matching headings (0.25 compat) + exact paragraph matches (1.0 compat)
+        // should give meaningful partial credit, not 0%
+        assert!(
+            result.structural_f1 > 0.15,
+            "expected >0.15 for flat paragraphs vs headings, got {}",
+            result.structural_f1
+        );
+        // But should be less than perfect since heading structure is missing
+        assert!(
+            result.structural_f1 < 0.85,
+            "expected <0.85 for flat paragraphs vs headings, got {}",
+            result.structural_f1
+        );
+    }
+
+    #[test]
+    fn test_zero_headings_extracted_many_headings_gt() {
+        // All content as paragraphs, GT has many headings but same text
+        let extracted = "Title\n\nSection One\n\nContent of section one.\n\nSection Two\n\nContent of section two.\n";
+        let gt = "# Title\n\n## Section One\n\nContent of section one.\n\n## Section Two\n\nContent of section two.\n";
+        let result = score_structural_quality(extracted, gt);
+        // Should NOT be 0% — paragraphs match headings with 0.25 compat
+        assert!(
+            result.structural_f1 > 0.0,
+            "SF1 should not be 0% when all text content matches but headings are missing"
+        );
+    }
+
+    #[test]
+    fn test_large_document_windowed_fallback() {
+        // Generate a document large enough to trigger the windowed fallback
+        // MAX_PAIRS_FOR_MATCHING = 40,000, so 201 * 201 = 40,401 > 40,000
+        let mut gt_md = String::new();
+        let mut ext_md = String::new();
+        for i in 0..201 {
+            gt_md.push_str(&format!(
+                "## Section {i}\n\nContent for section number {i} with some words.\n\n"
+            ));
+            ext_md.push_str(&format!(
+                "## Section {i}\n\nContent for section number {i} with some words.\n\n"
+            ));
+        }
+        let result = score_structural_quality(&ext_md, &gt_md);
+        // Identical documents should score high even with windowed fallback
+        assert!(
+            result.structural_f1 > 0.8,
+            "windowed fallback should score >0.8 for identical large documents, got {}",
+            result.structural_f1
+        );
+    }
+
+    #[test]
+    fn test_large_document_windowed_fallback_not_zero() {
+        // Large document with similar but not identical content
+        // Should NOT return 0% like the old fallback did
+        let mut gt_md = String::new();
+        let mut ext_md = String::new();
+        for i in 0..201 {
+            gt_md.push_str(&format!("# Heading {i}\n\nParagraph content {i}.\n\n"));
+            // Extracted has paragraphs instead of headings (flat extraction)
+            ext_md.push_str(&format!("Heading {i}\n\nParagraph content {i}.\n\n"));
+        }
+        let result = score_structural_quality(&ext_md, &gt_md);
+        // Must be greater than 0 — the old code returned 0% for large docs
+        assert!(
+            result.structural_f1 > 0.0,
+            "windowed fallback must not return SF1=0% for large documents with matching content, got {}",
+            result.structural_f1
+        );
+    }
+
+    #[test]
+    fn test_empty_extracted_vs_nonempty_gt() {
+        let gt = "# Title\n\nSome content.\n";
+        let result = score_structural_quality("", gt);
+        assert!(
+            result.structural_f1 < 0.01,
+            "empty extraction should score ~0%, got {}",
+            result.structural_f1
+        );
+    }
+
+    #[test]
+    fn test_both_empty() {
+        let result = score_structural_quality("", "");
+        assert!(
+            (result.structural_f1 - 1.0).abs() < 0.01,
+            "both empty should score 100%, got {}",
+            result.structural_f1
+        );
     }
 }
