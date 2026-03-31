@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [4.7.0] - 2026-03-30
 
+
 ### Added
 
+- **Semantic chunk labeling** (#600): Chunks now include a `chunk_type` field identifying the semantic nature of the content (e.g., `paragraph`, `heading`, `list_item`, `table_cell`, `code_block`). Supported across all 11 language bindings with updated E2E test parity.
 - **Unified InternalDocument architecture**: All extractors now return a canonical `InternalDocument` with typed elements, relationships, images, and tables. Replaces format-specific intermediate representations.
 - **Unified rendering layer**: New `new_markdown.rs` renderer produces CommonMark from `InternalDocument`, supporting headings, lists, tables, code blocks, formulas, footnotes, images, and inline annotations (bold, italic, links).
 - **PDF structure pipeline**: Full rewrite of PDF extraction using `page.text().all()` for clean text, char-indexed font metadata for heading/bold detection, segment-based paragraph gap detection, and pdfium segment bounding boxes for precise paragraph regions.
