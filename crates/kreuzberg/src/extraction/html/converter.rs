@@ -37,7 +37,7 @@ pub fn resolve_conversion_options(
     let mut opts = options.unwrap_or_else(|| ConversionOptions {
         extract_metadata: true,
         preprocessing: super::types::PreprocessingOptions {
-            enabled: false,
+            enabled: true,
             ..Default::default()
         },
         ..Default::default()
