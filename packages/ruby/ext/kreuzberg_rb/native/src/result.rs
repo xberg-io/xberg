@@ -745,6 +745,34 @@ pub fn extraction_result_to_ruby(ruby: &Ruby, result: RustExtractionResult) -> R
         set_hash_entry(ruby, &hash, "annotations", ruby.qnil().as_value())?;
     }
 
+    // Convert uris
+    if let Some(uris) = result.uris {
+        let uris_array = ruby.ary_new();
+        for uri in uris {
+            let uri_hash = ruby.hash_new();
+            uri_hash.aset("url", uri.url.as_str())?;
+            if let Some(label) = &uri.label {
+                uri_hash.aset("label", label.as_str())?;
+            } else {
+                uri_hash.aset("label", ruby.qnil().as_value())?;
+            }
+            if let Some(page) = uri.page {
+                uri_hash.aset("page", page as i64)?;
+            } else {
+                uri_hash.aset("page", ruby.qnil().as_value())?;
+            }
+            let kind_str = serde_json::to_value(&uri.kind)
+                .ok()
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_default();
+            uri_hash.aset("kind", kind_str.as_str())?;
+            uris_array.push(uri_hash)?;
+        }
+        set_hash_entry(ruby, &hash, "uris", uris_array.into_value_with(ruby))?;
+    } else {
+        set_hash_entry(ruby, &hash, "uris", ruby.qnil().as_value())?;
+    }
+
     // Convert children (archive entries)
     if let Some(children) = result.children {
         let children_array = ruby.ary_new();

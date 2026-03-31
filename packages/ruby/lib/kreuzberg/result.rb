@@ -14,7 +14,8 @@ module Kreuzberg
   class Result
     attr_reader :content, :mime_type, :metadata, :metadata_json, :tables,
                 :detected_languages, :chunks, :images, :pages, :elements, :ocr_elements, :djot_content,
-                :document, :extracted_keywords, :quality_score, :processing_warnings, :annotations
+                :document, :extracted_keywords, :quality_score, :processing_warnings, :annotations,
+                :uris, :children
 
     # @!attribute [r] cells
     #   @return [Array<Array<String>>] Table cells (2D array)
@@ -337,6 +338,8 @@ module Kreuzberg
       @quality_score = get_value(hash, 'quality_score')
       @processing_warnings = parse_processing_warnings(get_value(hash, 'processing_warnings'))
       @annotations = parse_annotations(get_value(hash, 'annotations'))
+      @uris = parse_uris(get_value(hash, 'uris'))
+      @children = parse_children(get_value(hash, 'children'))
     end
     # rubocop:enable Metrics/AbcSize
 
@@ -362,7 +365,9 @@ module Kreuzberg
         extracted_keywords: @extracted_keywords&.map(&:to_h),
         quality_score: @quality_score,
         processing_warnings: @processing_warnings.map(&:to_h),
-        annotations: @annotations&.map(&:to_h)
+        annotations: @annotations&.map(&:to_h),
+        uris: @uris&.map(&:to_h),
+        children: @children&.map(&:to_h)
       }
     end
     # rubocop:enable Metrics/CyclomaticComplexity
@@ -737,6 +742,35 @@ module Kreuzberg
 
     def bbox_field(bbox_data, primary_key, fallback_key)
       (bbox_data[primary_key] || bbox_data[fallback_key])&.to_f
+    end
+
+    def parse_uris(uris_data)
+      return nil if uris_data.nil?
+
+      uris_data.map { |u| build_uri(u) }
+    end
+
+    def build_uri(u_hash)
+      OpenStruct.new(
+        url: u_hash['url'] || '',
+        label: u_hash['label'],
+        page: u_hash['page']&.to_i,
+        kind: u_hash['kind'] || 'hyperlink'
+      )
+    end
+
+    def parse_children(children_data)
+      return nil if children_data.nil?
+
+      children_data.map { |c| build_archive_entry(c) }
+    end
+
+    def build_archive_entry(c_hash)
+      OpenStruct.new(
+        path: c_hash['path'] || '',
+        mime_type: c_hash['mime_type'] || '',
+        result: c_hash['result'] ? self.class.new(c_hash['result']) : nil
+      )
     end
   end
   # rubocop:enable Metrics/ClassLength

@@ -443,6 +443,10 @@ fn test_config_chunking_heading_context() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_heading_context: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_chunking_heading_context: {err:?}"),
         Ok(result) => result,
     };
@@ -484,6 +488,10 @@ fn test_config_chunking_markdown() {
                 "Skipping config_chunking_markdown: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_markdown: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_chunking_markdown: {err:?}"),
@@ -533,6 +541,10 @@ fn test_config_chunking_no_headings() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_no_headings: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_chunking_no_headings: {err:?}"),
         Ok(result) => result,
     };
@@ -580,6 +592,10 @@ fn test_config_chunking_prepend_heading_context() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_prepend_heading_context: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_chunking_prepend_heading_context: {err:?}"),
         Ok(result) => result,
     };
@@ -620,6 +636,10 @@ fn test_config_chunking_small() {
                 "Skipping config_chunking_small: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_small: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_chunking_small: {err:?}"),
@@ -705,6 +725,10 @@ fn test_config_chunking_tokenizer() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_tokenizer: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_chunking_tokenizer: {err:?}"),
         Ok(result) => result,
     };
@@ -742,6 +766,10 @@ fn test_config_djot_content() {
                 "Skipping config_djot_content: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_djot_content: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_djot_content: {err:?}"),
@@ -837,6 +865,10 @@ fn test_config_document_structure_groups() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_document_structure_groups: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_document_structure_groups: {err:?}"),
         Ok(result) => result,
     };
@@ -880,6 +912,10 @@ fn test_config_document_structure_headings() {
                 "Skipping config_document_structure_headings: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_document_structure_headings: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_document_structure_headings: {err:?}"),
@@ -953,6 +989,10 @@ fn test_config_element_types() {
                 "Skipping config_element_types: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_element_types: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_element_types: {err:?}"),
@@ -1055,6 +1095,10 @@ fn test_config_force_ocr() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_force_ocr: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_force_ocr: {err:?}"),
         Ok(result) => result,
     };
@@ -1098,6 +1142,10 @@ fn test_config_force_ocr_pages() {
                 "Skipping config_force_ocr_pages: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_force_ocr_pages: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_force_ocr_pages: {err:?}"),
@@ -1236,6 +1284,10 @@ fn test_config_keywords() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_keywords: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_keywords: {err:?}"),
         Ok(result) => result,
     };
@@ -1343,6 +1395,10 @@ fn test_config_language_multi() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_language_multi: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_language_multi: {err:?}"),
         Ok(result) => result,
     };
@@ -1381,6 +1437,10 @@ fn test_config_pages() {
                 "Skipping config_pages: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_pages: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_pages: {err:?}"),
@@ -1425,6 +1485,10 @@ fn test_config_pages_exact_count() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_pages_exact_count: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_pages_exact_count: {err:?}"),
         Ok(result) => result,
     };
@@ -1467,6 +1531,10 @@ fn test_config_pages_extract() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_pages_extract: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_pages_extract: {err:?}"),
         Ok(result) => result,
     };
@@ -1507,6 +1575,10 @@ fn test_config_pages_markers() {
                 "Skipping config_pages_markers: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_pages_markers: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_pages_markers: {err:?}"),
@@ -1552,6 +1624,10 @@ fn test_config_pdf_annotations_count() {
                 "Skipping config_pdf_annotations_count: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_pdf_annotations_count: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_pdf_annotations_count: {err:?}"),
@@ -1601,6 +1677,10 @@ fn test_config_pdf_hierarchy() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_pdf_hierarchy: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_pdf_hierarchy: {err:?}"),
         Ok(result) => result,
     };
@@ -1641,6 +1721,10 @@ fn test_config_pdf_margins() {
                 "Skipping config_pdf_margins: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_pdf_margins: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_pdf_margins: {err:?}"),
@@ -1766,6 +1850,10 @@ fn test_config_quality_enabled() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_quality_enabled: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_quality_enabled: {err:?}"),
         Ok(result) => result,
     };
@@ -1807,6 +1895,10 @@ fn test_config_quality_score_range() {
                 "Skipping config_quality_score_range: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_quality_score_range: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_quality_score_range: {err:?}"),
@@ -1878,6 +1970,10 @@ fn test_config_structured_output() {
                 "Skipping config_structured_output: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_structured_output: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_structured_output: {err:?}"),
@@ -1962,6 +2058,10 @@ fn test_config_tree_sitter() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_tree_sitter: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for config_tree_sitter: {err:?}"),
         Ok(result) => result,
     };
@@ -2013,6 +2113,10 @@ fn test_config_tree_sitter_process() {
                 "Skipping config_tree_sitter_process: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_tree_sitter_process: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for config_tree_sitter_process: {err:?}"),

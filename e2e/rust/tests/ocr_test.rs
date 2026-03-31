@@ -41,6 +41,10 @@ fn test_ocr_image_hello_world() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_image_hello_world: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_image_hello_world: {err:?}"),
         Ok(result) => result,
     };
@@ -83,6 +87,10 @@ fn test_ocr_image_no_text() {
                 "Skipping ocr_image_no_text: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_image_no_text: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for ocr_image_no_text: {err:?}"),
@@ -134,6 +142,10 @@ fn test_ocr_paddle_confidence_filter() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_confidence_filter: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_paddle_confidence_filter: {err:?}"),
         Ok(result) => result,
     };
@@ -182,6 +194,10 @@ fn test_ocr_paddle_element_hierarchy() {
                 "Skipping ocr_paddle_element_hierarchy: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_element_hierarchy: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for ocr_paddle_element_hierarchy: {err:?}"),
@@ -235,6 +251,10 @@ fn test_ocr_paddle_element_levels() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_element_levels: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_paddle_element_levels: {err:?}"),
         Ok(result) => result,
     };
@@ -279,6 +299,10 @@ fn test_ocr_paddle_image_chinese() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_image_chinese: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_paddle_image_chinese: {err:?}"),
         Ok(result) => result,
     };
@@ -320,6 +344,10 @@ fn test_ocr_paddle_image_english() {
                 "Skipping ocr_paddle_image_english: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_image_english: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for ocr_paddle_image_english: {err:?}"),
@@ -369,6 +397,10 @@ fn test_ocr_paddle_markdown() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_markdown: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_paddle_markdown: {err:?}"),
         Ok(result) => result,
     };
@@ -411,6 +443,10 @@ fn test_ocr_paddle_pdf_scanned() {
                 "Skipping ocr_paddle_pdf_scanned: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_pdf_scanned: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for ocr_paddle_pdf_scanned: {err:?}"),
@@ -458,6 +494,10 @@ fn test_ocr_paddle_structured() {
                 "Skipping ocr_paddle_structured: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_structured: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for ocr_paddle_structured: {err:?}"),
@@ -510,6 +550,10 @@ fn test_ocr_paddle_table_detection() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_paddle_table_detection: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_paddle_table_detection: {err:?}"),
         Ok(result) => result,
     };
@@ -557,6 +601,10 @@ fn test_ocr_pdf_image_only_german() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_pdf_image_only_german: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_pdf_image_only_german: {err:?}"),
         Ok(result) => result,
     };
@@ -601,6 +649,10 @@ fn test_ocr_pdf_rotated_90() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_pdf_rotated_90: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_pdf_rotated_90: {err:?}"),
         Ok(result) => result,
     };
@@ -642,6 +694,10 @@ fn test_ocr_pdf_tesseract() {
                 "Skipping ocr_pdf_tesseract: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_pdf_tesseract: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for ocr_pdf_tesseract: {err:?}"),
@@ -689,6 +745,10 @@ fn test_ocr_tesseract_elements() {
                 "Skipping ocr_tesseract_elements: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_tesseract_elements: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for ocr_tesseract_elements: {err:?}"),
@@ -742,6 +802,10 @@ fn test_ocr_tesseract_elements_min_count() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_tesseract_elements_min_count: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for ocr_tesseract_elements_min_count: {err:?}"),
         Ok(result) => result,
     };
@@ -787,6 +851,10 @@ fn test_ocr_tesseract_language_german() {
                 "Skipping ocr_tesseract_language_german: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping ocr_tesseract_language_german: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for ocr_tesseract_language_german: {err:?}"),

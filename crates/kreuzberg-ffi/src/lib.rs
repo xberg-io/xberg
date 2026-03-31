@@ -150,8 +150,8 @@ mod tests {
         // Test size
         assert_eq!(
             std::mem::size_of::<CExtractionResult>(),
-            176,
-            "CExtractionResult must be exactly 176 bytes"
+            184,
+            "CExtractionResult must be exactly 184 bytes"
         );
 
         // Test alignment
@@ -210,6 +210,7 @@ mod tests {
             detected_languages_json: ptr::null_mut(),
             metadata_json: ptr::null_mut(),
             chunks_json: ptr::null_mut(),
+            children_json: ptr::null_mut(),
             images_json: ptr::null_mut(),
             page_structure_json: ptr::null_mut(),
             pages_json: ptr::null_mut(),
@@ -536,6 +537,7 @@ mod tests {
                 djot_content_json: ptr::null_mut(),
                 metadata_json: ptr::null_mut(),
                 chunks_json: ptr::null_mut(),
+                children_json: ptr::null_mut(),
                 images_json: ptr::null_mut(),
                 page_structure_json: ptr::null_mut(),
                 pages_json: ptr::null_mut(),
@@ -572,6 +574,7 @@ mod tests {
                 djot_content_json: ptr::null_mut(),
                 metadata_json: CString::new("{}").unwrap().into_raw(),
                 chunks_json: CString::new("[{\"text\":\"chunk1\"}]").unwrap().into_raw(),
+                children_json: ptr::null_mut(),
                 images_json: CString::new("[{\"data\":\"base64\"}]").unwrap().into_raw(),
                 page_structure_json: CString::new("{\"pages\":1}").unwrap().into_raw(),
                 pages_json: CString::new("[{\"page\":1,\"content\":\"test\"}]").unwrap().into_raw(),
@@ -669,7 +672,7 @@ mod tests {
     /// Test CExtractionResult size exactly matches FFI contract
     #[test]
     fn test_c_extraction_result_size() {
-        assert_eq!(std::mem::size_of::<CExtractionResult>(), 176);
+        assert_eq!(std::mem::size_of::<CExtractionResult>(), 184);
         assert_eq!(std::mem::align_of::<CExtractionResult>(), 8);
     }
 

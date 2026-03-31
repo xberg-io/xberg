@@ -51,7 +51,7 @@ impl Drop for CStringGuard {
 /// # Memory Layout
 ///
 /// Must be kept in sync with the Java side's MemoryLayout definition in KreuzbergFFI.java
-/// Field order: 21 pointers (8 bytes each) + 1 bool + 7 bytes padding = 176 bytes total
+/// Field order: 22 pointers (8 bytes each) + 1 bool + 7 bytes padding = 184 bytes total
 ///
 /// The `#[repr(C)]` attribute ensures the struct follows C's memory layout rules:
 /// - Fields are laid out in order
@@ -68,6 +68,8 @@ pub struct CExtractionResult {
     pub annotations_json: *mut c_char,
     /// Text chunks as JSON array (null-terminated, or null pointer if not available, must be freed with kreuzberg_free_string)
     pub chunks_json: *mut c_char,
+    /// JSON-serialized children extraction results array (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
+    pub children_json: *mut c_char,
     /// Extracted text content (null-terminated UTF-8 string, must be freed with kreuzberg_free_string)
     pub content: *mut c_char,
     /// Document date (null-terminated string, or NULL if not available, must be freed with kreuzberg_free_string)
@@ -168,7 +170,7 @@ pub struct CBatchResult {
 const _: () = {
     const fn assert_c_extraction_result_size() {
         const SIZE: usize = std::mem::size_of::<CExtractionResult>();
-        const _: () = assert!(SIZE == 176, "CExtractionResult size must be 176 bytes");
+        const _: () = assert!(SIZE == 184, "CExtractionResult size must be 184 bytes");
     }
 
     const fn assert_c_extraction_result_alignment() {
@@ -213,8 +215,8 @@ mod tests {
     fn test_c_extraction_result_size() {
         assert_eq!(
             std::mem::size_of::<CExtractionResult>(),
-            176,
-            "CExtractionResult must be exactly 176 bytes"
+            184,
+            "CExtractionResult must be exactly 184 bytes"
         );
     }
 
@@ -335,26 +337,27 @@ mod tests {
         // All pointer fields should be 8 bytes each
         assert_eq!(offset_of!(CExtractionResult, annotations_json), 0);
         assert_eq!(offset_of!(CExtractionResult, chunks_json), 8);
-        assert_eq!(offset_of!(CExtractionResult, content), 16);
-        assert_eq!(offset_of!(CExtractionResult, date), 24);
-        assert_eq!(offset_of!(CExtractionResult, detected_languages_json), 32);
-        assert_eq!(offset_of!(CExtractionResult, djot_content_json), 40);
-        assert_eq!(offset_of!(CExtractionResult, document_json), 48);
-        assert_eq!(offset_of!(CExtractionResult, elements_json), 56);
-        assert_eq!(offset_of!(CExtractionResult, extracted_keywords_json), 64);
-        assert_eq!(offset_of!(CExtractionResult, images_json), 72);
-        assert_eq!(offset_of!(CExtractionResult, language), 80);
-        assert_eq!(offset_of!(CExtractionResult, metadata_json), 88);
-        assert_eq!(offset_of!(CExtractionResult, mime_type), 96);
-        assert_eq!(offset_of!(CExtractionResult, ocr_elements_json), 104);
-        assert_eq!(offset_of!(CExtractionResult, page_structure_json), 112);
-        assert_eq!(offset_of!(CExtractionResult, pages_json), 120);
-        assert_eq!(offset_of!(CExtractionResult, processing_warnings_json), 128);
-        assert_eq!(offset_of!(CExtractionResult, quality_score_json), 136);
-        assert_eq!(offset_of!(CExtractionResult, subject), 144);
-        assert_eq!(offset_of!(CExtractionResult, tables_json), 152);
-        assert_eq!(offset_of!(CExtractionResult, uris_json), 160);
-        assert_eq!(offset_of!(CExtractionResult, success), 168);
+        assert_eq!(offset_of!(CExtractionResult, children_json), 16);
+        assert_eq!(offset_of!(CExtractionResult, content), 24);
+        assert_eq!(offset_of!(CExtractionResult, date), 32);
+        assert_eq!(offset_of!(CExtractionResult, detected_languages_json), 40);
+        assert_eq!(offset_of!(CExtractionResult, djot_content_json), 48);
+        assert_eq!(offset_of!(CExtractionResult, document_json), 56);
+        assert_eq!(offset_of!(CExtractionResult, elements_json), 64);
+        assert_eq!(offset_of!(CExtractionResult, extracted_keywords_json), 72);
+        assert_eq!(offset_of!(CExtractionResult, images_json), 80);
+        assert_eq!(offset_of!(CExtractionResult, language), 88);
+        assert_eq!(offset_of!(CExtractionResult, metadata_json), 96);
+        assert_eq!(offset_of!(CExtractionResult, mime_type), 104);
+        assert_eq!(offset_of!(CExtractionResult, ocr_elements_json), 112);
+        assert_eq!(offset_of!(CExtractionResult, page_structure_json), 120);
+        assert_eq!(offset_of!(CExtractionResult, pages_json), 128);
+        assert_eq!(offset_of!(CExtractionResult, processing_warnings_json), 136);
+        assert_eq!(offset_of!(CExtractionResult, quality_score_json), 144);
+        assert_eq!(offset_of!(CExtractionResult, subject), 152);
+        assert_eq!(offset_of!(CExtractionResult, tables_json), 160);
+        assert_eq!(offset_of!(CExtractionResult, uris_json), 168);
+        assert_eq!(offset_of!(CExtractionResult, success), 176);
     }
 
     /// Verify field offsets in CBatchResult match expectations

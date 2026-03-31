@@ -101,7 +101,7 @@ pub fn to_c_extraction_result(result: ExtractionResult) -> std::result::Result<*
         processing_warnings,
         annotations,
         formatted_content: _,
-        children: _,
+        children,
         uris,
     } = result;
 
@@ -177,6 +177,17 @@ pub fn to_c_extraction_result(result: ExtractionResult) -> std::result::Result<*
                 serde_json::to_string(&chunks).map_err(|e| format!("Failed to serialize chunks to JSON: {}", e))?;
             Some(CStringGuard::new(CString::new(json).map_err(|e| {
                 format!("Failed to convert chunks JSON to C string: {}", e)
+            })?))
+        }
+        _ => None,
+    };
+
+    let children_json_guard = match children {
+        Some(ref children) if !children.is_empty() => {
+            let json =
+                serde_json::to_string(&children).map_err(|e| format!("Failed to serialize children to JSON: {}", e))?;
+            Some(CStringGuard::new(CString::new(json).map_err(|e| {
+                format!("Failed to convert children JSON to C string: {}", e)
             })?))
         }
         _ => None,
@@ -315,6 +326,7 @@ pub fn to_c_extraction_result(result: ExtractionResult) -> std::result::Result<*
     Ok(Box::into_raw(Box::new(CExtractionResult {
         annotations_json: annotations_json_guard.map_or(ptr::null_mut(), |g| g.into_raw()),
         chunks_json: chunks_json_guard.map_or(ptr::null_mut(), |g| g.into_raw()),
+        children_json: children_json_guard.map_or(ptr::null_mut(), |g| g.into_raw()),
         content: content_guard.into_raw(),
         date: date_guard.map_or(ptr::null_mut(), |g| g.into_raw()),
         detected_languages_json: detected_languages_json_guard.map_or(ptr::null_mut(), |g| g.into_raw()),

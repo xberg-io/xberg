@@ -309,7 +309,7 @@ module E2ERuby
 
       ocr_elements.each do |el|
         expect(el.confidence).not_to be_nil
-        expect(el.confidence&.recognition).to be > 0
+        expect(el.confidence&.recognition).to be_positive
       end
     end
 

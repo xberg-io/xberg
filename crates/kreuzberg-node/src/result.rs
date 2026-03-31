@@ -204,13 +204,13 @@ pub struct JsExtractionResult {
     #[napi(ts_type = "Metadata")]
     pub metadata: serde_json::Value,
     pub tables: Vec<JsTable>,
-    pub detected_languages: Option<Vec<String>>,
-    pub chunks: Option<Vec<JsChunk>>,
+    pub detected_languages: Vec<String>,
+    pub chunks: Vec<JsChunk>,
     #[serde(skip)]
-    pub images: Option<Vec<JsExtractedImage>>,
+    pub images: Vec<JsExtractedImage>,
     #[serde(skip)]
-    pub pages: Option<Vec<JsPageContent>>,
-    pub elements: Option<Vec<JsElement>>,
+    pub pages: Vec<JsPageContent>,
+    pub elements: Vec<JsElement>,
     #[napi(ts_type = "DocumentStructure | null")]
     pub document: Option<serde_json::Value>,
     #[napi(ts_type = "DjotContent | null", js_name = "djotContent")]
@@ -218,15 +218,15 @@ pub struct JsExtractionResult {
     #[napi(ts_type = "OcrElement[] | null")]
     pub ocr_elements: Option<serde_json::Value>,
     #[napi(js_name = "extractedKeywords")]
-    pub extracted_keywords: Option<Vec<JsExtractedKeyword>>,
+    pub extracted_keywords: Vec<JsExtractedKeyword>,
     #[napi(js_name = "qualityScore")]
     pub quality_score: Option<f64>,
     #[napi(js_name = "processingWarnings")]
     pub processing_warnings: Vec<JsProcessingWarning>,
-    pub annotations: Option<Vec<JsPdfAnnotation>>,
+    pub annotations: Vec<JsPdfAnnotation>,
     #[serde(skip)]
-    pub children: Option<Vec<JsArchiveEntry>>,
-    pub uris: Option<Vec<JsUri>>,
+    pub children: Vec<JsArchiveEntry>,
+    pub uris: Vec<JsUri>,
 }
 
 impl TryFrom<RustExtractionResult> for JsExtractionResult {
@@ -276,9 +276,9 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                     source_path: img.source_path,
                 });
             }
-            Some(js_images)
+            js_images
         } else {
-            None
+            Vec::new()
         };
 
         let pages = if let Some(pages_vec) = val.pages {
@@ -371,43 +371,46 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                     is_blank: page.is_blank,
                 });
             }
-            Some(js_pages)
+            js_pages
         } else {
-            None
+            Vec::new()
         };
 
-        let elements = val.elements.map(|elems| {
-            elems
-                .into_iter()
-                .map(|e| {
-                    let additional = if e.metadata.additional.is_empty() {
-                        None
-                    } else {
-                        serde_json::to_value(&e.metadata.additional).ok()
-                    };
-                    JsElement {
-                        element_id: e.element_id.to_string(),
-                        element_type: serde_json::to_value(e.element_type)
-                            .ok()
-                            .and_then(|v| v.as_str().map(String::from))
-                            .unwrap_or_default(),
-                        text: e.text,
-                        metadata: JsElementMetadata {
-                            page_number: e.metadata.page_number.map(|p| p as u32),
-                            filename: e.metadata.filename,
-                            coordinates: e.metadata.coordinates.map(|c| JsBoundingBox {
-                                x0: c.x0,
-                                y0: c.y0,
-                                x1: c.x1,
-                                y1: c.y1,
-                            }),
-                            element_index: e.metadata.element_index.map(|i| i as u32),
-                            additional,
-                        },
-                    }
-                })
-                .collect()
-        });
+        let elements = val
+            .elements
+            .map(|elems| {
+                elems
+                    .into_iter()
+                    .map(|e| {
+                        let additional = if e.metadata.additional.is_empty() {
+                            None
+                        } else {
+                            serde_json::to_value(&e.metadata.additional).ok()
+                        };
+                        JsElement {
+                            element_id: e.element_id.to_string(),
+                            element_type: serde_json::to_value(e.element_type)
+                                .ok()
+                                .and_then(|v| v.as_str().map(String::from))
+                                .unwrap_or_default(),
+                            text: e.text,
+                            metadata: JsElementMetadata {
+                                page_number: e.metadata.page_number.map(|p| p as u32),
+                                filename: e.metadata.filename,
+                                coordinates: e.metadata.coordinates.map(|c| JsBoundingBox {
+                                    x0: c.x0,
+                                    y0: c.y0,
+                                    x1: c.x1,
+                                    y1: c.y1,
+                                }),
+                                element_index: e.metadata.element_index.map(|i| i as u32),
+                                additional,
+                            },
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let document = val
             .document
@@ -444,20 +447,23 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                 )
             })?;
 
-        let extracted_keywords = val.extracted_keywords.map(|keywords| {
-            keywords
-                .into_iter()
-                .map(|kw| JsExtractedKeyword {
-                    text: kw.text,
-                    score: kw.score as f64,
-                    algorithm: serde_json::to_value(kw.algorithm)
-                        .ok()
-                        .and_then(|v| v.as_str().map(String::from))
-                        .unwrap_or_default(),
-                    positions: kw.positions.map(|p| p.into_iter().map(|v| v as u32).collect()),
-                })
-                .collect()
-        });
+        let extracted_keywords = val
+            .extracted_keywords
+            .map(|keywords| {
+                keywords
+                    .into_iter()
+                    .map(|kw| JsExtractedKeyword {
+                        text: kw.text,
+                        score: kw.score as f64,
+                        algorithm: serde_json::to_value(kw.algorithm)
+                            .ok()
+                            .and_then(|v| v.as_str().map(String::from))
+                            .unwrap_or_default(),
+                        positions: kw.positions.map(|p| p.into_iter().map(|v| v as u32).collect()),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let processing_warnings = val
             .processing_warnings
@@ -468,60 +474,69 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
             })
             .collect();
 
-        let annotations = val.annotations.map(|annots| {
-            annots
-                .into_iter()
-                .map(|a| {
-                    let type_str = serde_json::to_value(a.annotation_type)
-                        .ok()
-                        .and_then(|v| v.as_str().map(String::from))
-                        .unwrap_or_default();
-                    JsPdfAnnotation {
-                        annotation_type: type_str,
-                        content: a.content,
-                        page_number: a.page_number as u32,
-                        bounding_box: a.bounding_box.map(|bb| JsBoundingBox {
-                            x0: bb.x0,
-                            y0: bb.y0,
-                            x1: bb.x1,
-                            y1: bb.y1,
-                        }),
-                    }
-                })
-                .collect()
-        });
-
-        let children = val.children.map(|entries| {
-            entries
-                .into_iter()
-                .filter_map(|entry| {
-                    let result = JsExtractionResult::try_from(*entry.result).ok()?;
-                    Some(JsArchiveEntry {
-                        path: entry.path,
-                        mime_type: entry.mime_type,
-                        result,
+        let annotations = val
+            .annotations
+            .map(|annots| {
+                annots
+                    .into_iter()
+                    .map(|a| {
+                        let type_str = serde_json::to_value(a.annotation_type)
+                            .ok()
+                            .and_then(|v| v.as_str().map(String::from))
+                            .unwrap_or_default();
+                        JsPdfAnnotation {
+                            annotation_type: type_str,
+                            content: a.content,
+                            page_number: a.page_number as u32,
+                            bounding_box: a.bounding_box.map(|bb| JsBoundingBox {
+                                x0: bb.x0,
+                                y0: bb.y0,
+                                x1: bb.x1,
+                                y1: bb.y1,
+                            }),
+                        }
                     })
-                })
-                .collect()
-        });
+                    .collect()
+            })
+            .unwrap_or_default();
 
-        let uris = val.uris.map(|uri_vec| {
-            uri_vec
-                .into_iter()
-                .map(|u| {
-                    let kind_str = serde_json::to_value(u.kind)
-                        .ok()
-                        .and_then(|v| v.as_str().map(String::from))
-                        .unwrap_or_default();
-                    JsUri {
-                        url: u.url,
-                        label: u.label,
-                        page: u.page,
-                        kind: kind_str,
-                    }
-                })
-                .collect()
-        });
+        let children = val
+            .children
+            .map(|entries| {
+                entries
+                    .into_iter()
+                    .filter_map(|entry| {
+                        let result = JsExtractionResult::try_from(*entry.result).ok()?;
+                        Some(JsArchiveEntry {
+                            path: entry.path,
+                            mime_type: entry.mime_type,
+                            result,
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let uris = val
+            .uris
+            .map(|uri_vec| {
+                uri_vec
+                    .into_iter()
+                    .map(|u| {
+                        let kind_str = serde_json::to_value(u.kind)
+                            .ok()
+                            .and_then(|v| v.as_str().map(String::from))
+                            .unwrap_or_default();
+                        JsUri {
+                            url: u.url,
+                            label: u.label,
+                            page: u.page,
+                            kind: kind_str,
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
         Ok(JsExtractionResult {
             content: val.content,
@@ -542,7 +557,7 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                     }),
                 })
                 .collect(),
-            detected_languages: val.detected_languages,
+            detected_languages: val.detected_languages.unwrap_or_default(),
             chunks: if let Some(chunks) = val.chunks {
                 let mut js_chunks = Vec::with_capacity(chunks.len());
                 for chunk in chunks {
@@ -579,9 +594,9 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                         metadata,
                     });
                 }
-                Some(js_chunks)
+                js_chunks
             } else {
-                None
+                Vec::new()
             },
             images,
             pages,
@@ -674,9 +689,11 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
             }
         };
 
-        let images = if let Some(imgs) = val.images {
-            let mut rust_images = Vec::with_capacity(imgs.len());
-            for img in imgs {
+        let images = if val.images.is_empty() {
+            None
+        } else {
+            let mut rust_images = Vec::with_capacity(val.images.len());
+            for img in val.images {
                 let ocr_result = if let Some(json) = img.ocr_result {
                     Some(Box::new(
                         serde_json::from_value::<JsExtractionResult>(json)
@@ -714,13 +731,13 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                 });
             }
             Some(rust_images)
-        } else {
-            None
         };
 
-        let chunks = if let Some(chunks) = val.chunks {
-            let mut rust_chunks = Vec::with_capacity(chunks.len());
-            for chunk in chunks {
+        let chunks = if val.chunks.is_empty() {
+            None
+        } else {
+            let mut rust_chunks = Vec::with_capacity(val.chunks.len());
+            for chunk in val.chunks {
                 let embedding = if let Some(values) = chunk.embedding {
                     let mut normalized = Vec::with_capacity(values.len());
                     for (idx, value) in values.into_iter().enumerate() {
@@ -768,8 +785,6 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                 });
             }
             Some(rust_chunks)
-        } else {
-            None
         };
 
         let document = val.document.and_then(|v| serde_json::from_value(v).ok());
@@ -793,60 +808,72 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                     }),
                 })
                 .collect(),
-            detected_languages: val.detected_languages,
+            detected_languages: if val.detected_languages.is_empty() {
+                None
+            } else {
+                Some(val.detected_languages)
+            },
             chunks,
             images,
             pages: None,
-            elements: val.elements.map(|elems| {
-                elems
-                    .into_iter()
-                    .filter_map(|e| {
-                        let element_id = kreuzberg::types::ElementId::new(e.element_id).ok()?;
-                        let element_type: kreuzberg::types::ElementType =
-                            serde_json::from_value(serde_json::Value::String(e.element_type)).ok()?;
-                        let additional = e
-                            .metadata
-                            .additional
-                            .and_then(|v| serde_json::from_value(v).ok())
-                            .unwrap_or_default();
-                        Some(kreuzberg::types::Element {
-                            element_id,
-                            element_type,
-                            text: e.text,
-                            metadata: kreuzberg::types::ElementMetadata {
-                                page_number: e.metadata.page_number.map(|p| p as usize),
-                                filename: e.metadata.filename,
-                                coordinates: e.metadata.coordinates.map(|c| kreuzberg::types::BoundingBox {
-                                    x0: c.x0,
-                                    y0: c.y0,
-                                    x1: c.x1,
-                                    y1: c.y1,
-                                }),
-                                element_index: e.metadata.element_index.map(|i| i as usize),
-                                additional,
-                            },
+            elements: if val.elements.is_empty() {
+                None
+            } else {
+                Some(
+                    val.elements
+                        .into_iter()
+                        .filter_map(|e| {
+                            let element_id = kreuzberg::types::ElementId::new(e.element_id).ok()?;
+                            let element_type: kreuzberg::types::ElementType =
+                                serde_json::from_value(serde_json::Value::String(e.element_type)).ok()?;
+                            let additional = e
+                                .metadata
+                                .additional
+                                .and_then(|v| serde_json::from_value(v).ok())
+                                .unwrap_or_default();
+                            Some(kreuzberg::types::Element {
+                                element_id,
+                                element_type,
+                                text: e.text,
+                                metadata: kreuzberg::types::ElementMetadata {
+                                    page_number: e.metadata.page_number.map(|p| p as usize),
+                                    filename: e.metadata.filename,
+                                    coordinates: e.metadata.coordinates.map(|c| kreuzberg::types::BoundingBox {
+                                        x0: c.x0,
+                                        y0: c.y0,
+                                        x1: c.x1,
+                                        y1: c.y1,
+                                    }),
+                                    element_index: e.metadata.element_index.map(|i| i as usize),
+                                    additional,
+                                },
+                            })
                         })
-                    })
-                    .collect()
-            }),
+                        .collect(),
+                )
+            },
             document,
             djot_content: val.djot_content.and_then(|v| serde_json::from_value(v).ok()),
             ocr_elements: val.ocr_elements.and_then(|v| serde_json::from_value(v).ok()),
-            extracted_keywords: val.extracted_keywords.map(|keywords| {
-                keywords
-                    .into_iter()
-                    .filter_map(|kw| {
-                        let algorithm: kreuzberg::keywords::KeywordAlgorithm =
-                            serde_json::from_value(serde_json::Value::String(kw.algorithm)).ok()?;
-                        Some(kreuzberg::keywords::Keyword {
-                            text: kw.text,
-                            score: kw.score as f32,
-                            algorithm,
-                            positions: kw.positions.map(|p| p.into_iter().map(|v| v as usize).collect()),
+            extracted_keywords: if val.extracted_keywords.is_empty() {
+                None
+            } else {
+                Some(
+                    val.extracted_keywords
+                        .into_iter()
+                        .filter_map(|kw| {
+                            let algorithm: kreuzberg::keywords::KeywordAlgorithm =
+                                serde_json::from_value(serde_json::Value::String(kw.algorithm)).ok()?;
+                            Some(kreuzberg::keywords::Keyword {
+                                text: kw.text,
+                                score: kw.score as f32,
+                                algorithm,
+                                positions: kw.positions.map(|p| p.into_iter().map(|v| v as usize).collect()),
+                            })
                         })
-                    })
-                    .collect()
-            }),
+                        .collect(),
+                )
+            },
             quality_score: val.quality_score,
             processing_warnings: val
                 .processing_warnings
@@ -856,54 +883,66 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                     message: std::borrow::Cow::Owned(w.message),
                 })
                 .collect(),
-            annotations: val.annotations.map(|annots| {
-                annots
-                    .into_iter()
-                    .filter_map(|a| {
-                        let annotation_type: kreuzberg::types::PdfAnnotationType =
-                            serde_json::from_value(serde_json::Value::String(a.annotation_type)).ok()?;
-                        Some(kreuzberg::types::PdfAnnotation {
-                            annotation_type,
-                            content: a.content,
-                            page_number: a.page_number as usize,
-                            bounding_box: a.bounding_box.map(|bb| kreuzberg::types::BoundingBox {
-                                x0: bb.x0,
-                                y0: bb.y0,
-                                x1: bb.x1,
-                                y1: bb.y1,
-                            }),
+            annotations: if val.annotations.is_empty() {
+                None
+            } else {
+                Some(
+                    val.annotations
+                        .into_iter()
+                        .filter_map(|a| {
+                            let annotation_type: kreuzberg::types::PdfAnnotationType =
+                                serde_json::from_value(serde_json::Value::String(a.annotation_type)).ok()?;
+                            Some(kreuzberg::types::PdfAnnotation {
+                                annotation_type,
+                                content: a.content,
+                                page_number: a.page_number as usize,
+                                bounding_box: a.bounding_box.map(|bb| kreuzberg::types::BoundingBox {
+                                    x0: bb.x0,
+                                    y0: bb.y0,
+                                    x1: bb.x1,
+                                    y1: bb.y1,
+                                }),
+                            })
                         })
-                    })
-                    .collect()
-            }),
-            children: val.children.map(|entries| {
-                entries
-                    .into_iter()
-                    .filter_map(|entry| {
-                        let result = RustExtractionResult::try_from(entry.result).ok()?;
-                        Some(kreuzberg::ArchiveEntry {
-                            path: entry.path,
-                            mime_type: entry.mime_type,
-                            result: Box::new(result),
+                        .collect(),
+                )
+            },
+            children: if val.children.is_empty() {
+                None
+            } else {
+                Some(
+                    val.children
+                        .into_iter()
+                        .filter_map(|entry| {
+                            let result = RustExtractionResult::try_from(entry.result).ok()?;
+                            Some(kreuzberg::ArchiveEntry {
+                                path: entry.path,
+                                mime_type: entry.mime_type,
+                                result: Box::new(result),
+                            })
                         })
-                    })
-                    .collect()
-            }),
-            uris: val.uris.map(|uri_vec| {
-                uri_vec
-                    .into_iter()
-                    .filter_map(|u| {
-                        let kind: kreuzberg::UriKind =
-                            serde_json::from_value(serde_json::Value::String(u.kind)).ok()?;
-                        Some(kreuzberg::Uri {
-                            url: u.url,
-                            label: u.label,
-                            page: u.page,
-                            kind,
+                        .collect(),
+                )
+            },
+            uris: if val.uris.is_empty() {
+                None
+            } else {
+                Some(
+                    val.uris
+                        .into_iter()
+                        .filter_map(|u| {
+                            let kind: kreuzberg::UriKind =
+                                serde_json::from_value(serde_json::Value::String(u.kind)).ok()?;
+                            Some(kreuzberg::Uri {
+                                url: u.url,
+                                label: u.label,
+                                page: u.page,
+                                kind,
+                            })
                         })
-                    })
-                    .collect()
-            }),
+                        .collect(),
+                )
+            },
             formatted_content: None,
         })
     }

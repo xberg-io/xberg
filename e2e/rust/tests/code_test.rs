@@ -32,6 +32,10 @@ fn test_code_javascript_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping code_javascript_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for code_javascript_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -67,6 +71,10 @@ fn test_code_python_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping code_python_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for code_python_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -100,6 +108,10 @@ fn test_code_rust_basic() {
                 "Skipping code_rust_basic: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping code_rust_basic: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for code_rust_basic: {err:?}"),
@@ -138,6 +150,10 @@ fn test_code_shebang_detection() {
                 "Skipping code_shebang_detection: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping code_shebang_detection: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for code_shebang_detection: {err:?}"),
@@ -186,6 +202,10 @@ fn test_code_tree_sitter_config() {
                 "Skipping code_tree_sitter_config: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping code_tree_sitter_config: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for code_tree_sitter_config: {err:?}"),

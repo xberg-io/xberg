@@ -30,6 +30,14 @@ pub fn render_markdown(doc: &InternalDocument) -> String {
         output = output.replace("&#10;", " ").replace("&#2;", "");
     }
 
+    // Un-escape underscores: comrak's format_commonmark escapes underscores as `\_`
+    // to prevent emphasis interpretation, but our rendered content uses underscores
+    // literally (e.g. sheet names like `first_sheet`). Since we never emit intentional
+    // `\_` sequences, globally replacing is safe.
+    if output.contains("\\_") {
+        output = output.replace("\\_", "_");
+    }
+
     // Trim trailing whitespace but keep single trailing newline
     let trimmed_len = output.trim_end().len();
     if trimmed_len == 0 {

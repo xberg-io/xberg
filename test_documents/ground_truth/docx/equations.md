@@ -1,13 +1,59 @@
-For $`m = 1`$,
+$$A=\pi r^{2} $$
 
-``` math
-sin\theta = \frac{m\lambda}{a} = \frac{(1)\left( 550 \times 10^{- 6}\text{ }mm \right)}{2.5\text{ }mm} = 2.2 \times 10^{- 4}
-```
+This is a word document and this is an inline equation: . If instead, I want an equation by line, I can do this:
 
-The angle is $`\theta = \sin^{- 1}\left( 2.2 \times 10^{- 4} \right) = 2.2 \times 10^{- 4}rad`$.
+$$\begin{aligned}a^{2}+b^{2}=c^{2} \times  23\end{aligned}$$
 
-From Eq. 36.1.3,
+And that is an equation by itself. Cheers\!
 
-``` math
-\frac{a}{\lambda} = \frac{m}{sin\theta} = \frac{1}{sin{45.0}^{\circ}} = 1.41.
-```
+This is another equation:
+
+$$\begin{aligned}f\left(x\right)=a_{0}+\sum_{n=1}^{\infty }{\left(a_{n}\cos{\frac{n\pi x}{L}}+b_{n}\sin{\frac{n\pi x}{L}}\right)}\end{aligned}$$
+
+This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text.
+
+$$A=\pi r^{2} $$
+
+This is a word document and this is an inline equation: . If instead, I want an equation by line, I can do this:
+
+$$\left(x+a\right)^{n}=\sum_{k=0}^{n}{\left(\binom{n}{k}\right)x^{k}a^{n-k}}$$
+
+And that is an equation by itself. Cheers\!
+
+This is another equation:
+
+$$\left(1+x\right)^{n}=1+\frac{nx}{1!}+\frac{n\left(n-1\right)x^{2}}{2!}+\ldots $$
+
+This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text. This is text.
+
+$$A=\pi r^{2} $$
+
+This is a word document and this is an inline equation: . If instead, I want an equation by line, I can do this:
+
+$$e^{x}=1+\frac{x}{1!}+\frac{x^{2}}{2!}+\frac{x^{3}}{3!}+\ldots ,  -\infty x\infty $$
+
+And that is an equation by itself. Cheers\!
+
+
+
+Large operators and integrals are represented with n-ary objects in OMML XML:
+
+$$\sum_{0}^{2}{x}$$
+
+$$\bigcup_{n=1}^{m}{\left(X_{n}\cap Y_{n}\right)}$$
+
+$$\prod_{k=1}^{n}{A_{k}}$$
+
+$$\bigwedge{x}$$
+
+$$\int{(2x+1)dx}$$
+
+$$\iint_{0}^{1}{xdx}$$
+
+$$\iiint{ydy}$$
+
+$$\oint{\frac{dy}{dx}}$$
+
+$$∯_{0}^{2\pi }{idt}$$
+
+$$∰_{C}{\frac{1}{z}dz}$$

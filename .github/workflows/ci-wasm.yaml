@@ -332,6 +332,15 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
+      - name: Install WASI SDK
+        uses: kreuzberg-dev/actions/install-wasi-sdk@v1
+
+      - name: Configure WASM C compiler
+        shell: bash
+        run: |
+          echo "CC_wasm32_unknown_unknown=${WASI_SDK_PATH}/bin/clang" >> "$GITHUB_ENV"
+          echo "AR_wasm32_unknown_unknown=${WASI_SDK_PATH}/bin/ar" >> "$GITHUB_ENV"
+
       - name: Setup Node
         uses: kreuzberg-dev/actions/setup-node-workspace@v1
 

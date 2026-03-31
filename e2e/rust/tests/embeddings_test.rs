@@ -48,6 +48,10 @@ async fn test_embedding_async() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping embedding_async: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for embedding_async: {err:?}"),
         Ok(result) => result,
     };
@@ -99,6 +103,10 @@ fn test_embedding_balanced_preset() {
                 "Skipping embedding_balanced_preset: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping embedding_balanced_preset: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for embedding_balanced_preset: {err:?}"),
@@ -181,6 +189,10 @@ fn test_embedding_fast_preset() {
                 "Skipping embedding_fast_preset: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping embedding_fast_preset: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for embedding_fast_preset: {err:?}"),

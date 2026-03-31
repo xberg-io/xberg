@@ -551,6 +551,14 @@ public sealed class ExtractionResult
     /// </summary>
     [JsonPropertyName("uris")]
     public List<ExtractedUri>? Uris { get; set; }
+
+    /// <summary>
+    /// Nested extraction results from archive contents.
+    /// When extracting archives (ZIP, TAR, 7Z, GZIP), each processable file inside
+    /// produces its own full extraction result.
+    /// </summary>
+    [JsonPropertyName("children")]
+    public List<ArchiveEntry>? Children { get; set; }
 }
 
 /// <summary>

@@ -2545,9 +2545,39 @@ fn render_render_assertions_java(
     Ok(())
 }
 
-/// Convert a `snake_case` field name to a Java getter name: `get` + PascalCase.
-fn to_java_getter(field_name: &str) -> String {
-    format!("get{}", parity::to_pascal_case(field_name))
+/// Java types implemented as records (use field-name accessors, not getters).
+///
+/// Records use `fieldName()` style accessors instead of `getFieldName()`.
+const JAVA_RECORD_TYPES: &[&str] = &[
+    "PdfAnnotation",
+    "Table",
+    "BoundingBox",
+    "Keyword",
+    "Uri",
+    "ArchiveEntry",
+    "ProcessingWarning",
+];
+
+/// Special field name mappings for Java (manifest field name -> Java accessor name).
+fn java_field_override(type_name: &str, field_name: &str) -> Option<String> {
+    match (type_name, field_name) {
+        ("ExtractionResult", "document") => Some("getDocumentStructure".to_string()),
+        ("ExtractionConfig", "enable_quality_processing") => Some("isEnableQualityProcessing".to_string()),
+        _ => None,
+    }
+}
+
+/// Return the correct Java accessor for a field, respecting records vs classes
+/// and any per-field overrides.
+fn to_java_accessor(type_name: &str, field_name: &str) -> String {
+    if let Some(override_name) = java_field_override(type_name, field_name) {
+        return override_name;
+    }
+    if JAVA_RECORD_TYPES.contains(&type_name) {
+        parity::to_camel_case(field_name)
+    } else {
+        format!("get{}", parity::to_pascal_case(field_name))
+    }
 }
 
 /// Generate parity tests for the Java binding.
@@ -2606,9 +2636,12 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
         let required_fields: Vec<(&String, String)> = fields
             .iter()
             .filter(|(_, f)| f.required)
-            .map(|(name, _)| (name, to_java_getter(name)))
+            .map(|(name, _)| (name, to_java_accessor("ExtractionResult", name)))
             .collect();
-        let all_fields: Vec<(&String, String)> = fields.keys().map(|name| (name, to_java_getter(name))).collect();
+        let all_fields: Vec<(&String, String)> = fields
+            .keys()
+            .map(|name| (name, to_java_accessor("ExtractionResult", name)))
+            .collect();
 
         writeln!(buffer)?;
         writeln!(buffer, "    @Test")?;
@@ -2660,7 +2693,10 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
 
     // ExtractionConfig parity
     if let Some(fields) = parity::fields_for_type_and_lang(manifest, "ExtractionConfig", lang) {
-        let all_fields: Vec<(&String, String)> = fields.keys().map(|name| (name, to_java_getter(name))).collect();
+        let all_fields: Vec<(&String, String)> = fields
+            .keys()
+            .map(|name| (name, to_java_accessor("ExtractionConfig", name)))
+            .collect();
 
         writeln!(buffer)?;
         writeln!(buffer, "    @Test")?;
@@ -2695,7 +2731,10 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
             continue;
         }
 
-        let all_fields: Vec<(&String, String)> = fields.keys().map(|name| (name, to_java_getter(name))).collect();
+        let all_fields: Vec<(&String, String)> = fields
+            .keys()
+            .map(|name| (name, to_java_accessor(type_name, name)))
+            .collect();
 
         let method_name = format!("test{}AllGetters", type_name);
 

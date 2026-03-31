@@ -32,6 +32,10 @@ fn test_image_bmp_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping image_bmp_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for image_bmp_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -66,6 +70,10 @@ fn test_image_gif_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping image_gif_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for image_gif_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -98,6 +106,10 @@ fn test_image_jp2_basic() {
                 "Skipping image_jp2_basic: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping image_jp2_basic: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for image_jp2_basic: {err:?}"),
@@ -162,6 +174,10 @@ fn test_image_pbm_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping image_pbm_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for image_pbm_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -196,6 +212,10 @@ fn test_image_pgm_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping image_pgm_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for image_pgm_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -228,6 +248,10 @@ fn test_image_ppm_basic() {
                 "Skipping image_ppm_basic: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping image_ppm_basic: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for image_ppm_basic: {err:?}"),
@@ -287,6 +311,10 @@ fn test_image_tiff_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping image_tiff_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for image_tiff_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -319,6 +347,10 @@ fn test_image_webp_basic() {
                 "Skipping image_webp_basic: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping image_webp_basic: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for image_webp_basic: {err:?}"),

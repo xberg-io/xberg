@@ -587,10 +587,12 @@ pub fn detect_mime_type(path: impl AsRef<Path>, check_exists: bool) -> Result<St
     }
 
     let extension = path.extension().and_then(|ext| ext.to_str()).map(|s| s.to_lowercase());
+    tracing::debug!(path = %path.display(), extension = ?extension, "detecting MIME type from path");
 
     if let Some(ext) = &extension
         && let Some(mime_type) = EXT_TO_MIME.get(ext.as_str())
     {
+        tracing::debug!(ext = %ext, mime_type = %mime_type, "matched via EXT_TO_MIME");
         return Ok(mime_type.to_string());
     }
 
@@ -599,13 +601,18 @@ pub fn detect_mime_type(path: impl AsRef<Path>, check_exists: bool) -> Result<St
     // language-specific MIME types (e.g. "text/x-python") that are not in our
     // supported set.
     #[cfg(feature = "tree-sitter")]
-    if let Some(ext) = &extension
-        && tree_sitter_language_pack::detect_language_from_extension(ext).is_some()
     {
-        return Ok(SOURCE_CODE_MIME_TYPE.to_string());
+        if let Some(ext) = &extension {
+            let lang = tree_sitter_language_pack::detect_language_from_extension(ext);
+            tracing::debug!(ext = %ext, detected_language = ?lang, "tree-sitter extension detection");
+            if lang.is_some() {
+                return Ok(SOURCE_CODE_MIME_TYPE.to_string());
+            }
+        }
     }
 
     let guess = mime_guess::from_path(path).first();
+    tracing::debug!(guess = ?guess, "mime_guess fallback");
     if let Some(mime) = guess {
         return Ok(mime.to_string());
     }
@@ -638,10 +645,12 @@ pub fn detect_mime_type(path: impl AsRef<Path>, check_exists: bool) -> Result<St
 /// Returns `KreuzbergError::UnsupportedFormat` if not supported.
 pub fn validate_mime_type(mime_type: &str) -> Result<String> {
     if SUPPORTED_MIME_TYPES.contains(mime_type) {
+        tracing::trace!(mime_type = %mime_type, "MIME type validated (exact match)");
         return Ok(mime_type.to_string());
     }
 
     if mime_type.starts_with("image/") {
+        tracing::trace!(mime_type = %mime_type, "MIME type validated (image prefix)");
         return Ok(mime_type.to_string());
     }
 
@@ -650,10 +659,12 @@ pub fn validate_mime_type(mime_type: &str) -> Result<String> {
     let lower = mime_type.to_ascii_lowercase();
     for supported in SUPPORTED_MIME_TYPES.iter() {
         if supported.to_ascii_lowercase() == lower {
+            tracing::trace!(mime_type = %mime_type, matched = %supported, "MIME type validated (case-insensitive)");
             return Ok(supported.to_string());
         }
     }
 
+    tracing::debug!(mime_type = %mime_type, "MIME type not in supported set");
     Err(KreuzbergError::UnsupportedFormat(mime_type.to_string()))
 }
 
@@ -671,9 +682,11 @@ pub fn validate_mime_type(mime_type: &str) -> Result<String> {
 /// The validated MIME type string.
 pub fn detect_or_validate(path: Option<&Path>, mime_type: Option<&str>) -> Result<String> {
     if let Some(mime) = mime_type {
+        tracing::debug!(mime_type = %mime, "validating caller-provided MIME type");
         validate_mime_type(mime)
     } else if let Some(p) = path {
         let detected = detect_mime_type(p, true)?;
+        tracing::debug!(path = %p.display(), detected = %detected, "detected MIME, now validating");
         validate_mime_type(&detected)
     } else {
         Err(KreuzbergError::validation(

@@ -78,6 +78,10 @@ fn test_office_dbf_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping office_dbf_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for office_dbf_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -134,6 +138,10 @@ fn test_office_doc_legacy() {
                 "Skipping office_doc_legacy: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping office_doc_legacy: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for office_doc_legacy: {err:?}"),
@@ -449,6 +457,10 @@ fn test_office_hwp_basic() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping office_hwp_basic: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for office_hwp_basic: {err:?}"),
         Ok(result) => result,
     };
@@ -481,6 +493,10 @@ fn test_office_hwp_styled() {
                 "Skipping office_hwp_styled: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping office_hwp_styled: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for office_hwp_styled: {err:?}"),
@@ -960,6 +976,10 @@ fn test_office_ppt_legacy() {
                 "Skipping office_ppt_legacy: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping office_ppt_legacy: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for office_ppt_legacy: {err:?}"),

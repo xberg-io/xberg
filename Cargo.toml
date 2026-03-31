@@ -90,7 +90,7 @@ tokio = { version = "1.50.0", features = [
 ] }
 toml = "1.1.0"
 tracing = "0.1"
-tree-sitter-language-pack = { version = "1.4", default-features = false, features = ["serde"] }
+tree-sitter-language-pack = { version = "1.4.1", default-features = false, features = ["serde"] }
 wasm-bindgen = { version = "0.2", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = [

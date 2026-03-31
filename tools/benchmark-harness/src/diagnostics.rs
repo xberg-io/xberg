@@ -157,7 +157,7 @@ pub fn write_diagnostic_files(
     gt_markdown: Option<&str>,
     extracted_content: &str,
 ) -> std::io::Result<()> {
-    let dir = std::path::PathBuf::from("/tmp/kreuzberg_diagnose").join(&diag.doc_name);
+    let dir = std::path::PathBuf::from("/tmp/kreuzberg_diagnose").join(format!("{}_{}", diag.doc_name, diag.file_type));
     std::fs::create_dir_all(&dir)?;
 
     if let Some(md) = gt_markdown {
@@ -217,7 +217,7 @@ mod tests {
         let result = write_diagnostic_files(&diag, Some("# GT"), "extracted text");
         assert!(result.is_ok());
 
-        let dir = std::path::PathBuf::from("/tmp/kreuzberg_diagnose/write_test");
+        let dir = std::path::PathBuf::from("/tmp/kreuzberg_diagnose/write_test_pdf");
         assert!(dir.join("gt.md").exists());
         assert!(dir.join("extracted.md").exists());
         assert!(dir.join("diagnostic.json").exists());

@@ -34,10 +34,14 @@ impl ImageExtractor {
     ) -> Result<InternalDocument> {
         use crate::plugins::registry::get_ocr_backend_registry;
 
-        let ocr_config = config.ocr.as_ref().ok_or_else(|| crate::KreuzbergError::Parsing {
-            message: "OCR config required for image OCR".to_string(),
-            source: None,
-        })?;
+        let default_ocr_config;
+        let ocr_config = match config.ocr.as_ref() {
+            Some(c) => c,
+            None => {
+                default_ocr_config = crate::core::config::OcrConfig::default();
+                &default_ocr_config
+            }
+        };
 
         let backend = {
             let registry = get_ocr_backend_registry();
@@ -347,7 +351,7 @@ impl DocumentExtractor for ImageExtractor {
         };
 
         // Build an ExtractedImage from the raw content so it is stored in doc.images
-        let extracted_image = crate::types::ExtractedImage {
+        let _extracted_image = crate::types::ExtractedImage {
             data: bytes::Bytes::copy_from_slice(content),
             format: std::borrow::Cow::Owned(format_str),
             image_index: 0,
@@ -363,7 +367,9 @@ impl DocumentExtractor for ImageExtractor {
             source_path: None,
         };
 
-        if config.ocr.is_some() {
+        // Images are OCR'd by default when an OCR backend is available.
+        // OCR is skipped only when the feature is not compiled in.
+        {
             // Layout-enhanced OCR: when both OCR and layout detection are configured,
             // run layout detection first, then OCR each detected region individually
             // and assemble into structured markdown.
@@ -386,16 +392,6 @@ impl DocumentExtractor for ImageExtractor {
             {
                 let mut doc = self.extract_with_ocr(content, mime_type, config).await?;
                 doc.metadata.format = Some(crate::types::FormatMetadata::Image(image_metadata));
-                doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
-                return Ok(doc);
-            }
-            #[cfg(not(any(feature = "ocr", feature = "ocr-wasm")))]
-            {
-                let mut doc = build_image_internal_document(None, Some(extracted_image));
-                doc.metadata = Metadata {
-                    format: Some(crate::types::FormatMetadata::Image(image_metadata)),
-                    ..Default::default()
-                };
                 doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
                 return Ok(doc);
             }

@@ -129,6 +129,12 @@ pub struct ExtractionResult {
     /// PDF annotations
     pub annotations: Option<Vec<PdfAnnotation>>,
 
+    /// Nested extraction results from archive contents
+    children_json: Option<String>,
+
+    /// URIs/links discovered during extraction
+    uris_json: Option<String>,
+
     /// Full serialized JSON of the original ExtractionResult (for serialize_to_toon/json)
     pub(crate) result_json: String,
 }
@@ -287,6 +293,24 @@ impl ExtractionResult {
             "annotations" => {
                 if let Some(annotations) = &self.annotations {
                     Ok(Some(annotations.clone().into_zval(false)?))
+                } else {
+                    Ok(None)
+                }
+            }
+            "children" => {
+                if let Some(json) = &self.children_json {
+                    let value: serde_json::Value =
+                        serde_json::from_str(json).map_err(|e| format!("Failed to parse children: {}", e))?;
+                    Ok(Some(json_value_to_php(&value)?))
+                } else {
+                    Ok(None)
+                }
+            }
+            "uris" => {
+                if let Some(json) = &self.uris_json {
+                    let value: serde_json::Value =
+                        serde_json::from_str(json).map_err(|e| format!("Failed to parse uris: {}", e))?;
+                    Ok(Some(json_value_to_php(&value)?))
                 } else {
                     Ok(None)
                 }
@@ -559,6 +583,18 @@ impl ExtractionResult {
             .transpose()
             .map_err(|e| format!("Failed to serialize ocr_elements: {}", e))?;
 
+        let children_json = result
+            .children
+            .map(|c| serde_json::to_string(&c))
+            .transpose()
+            .map_err(|e| format!("Failed to serialize children: {}", e))?;
+
+        let uris_json = result
+            .uris
+            .map(|u| serde_json::to_string(&u))
+            .transpose()
+            .map_err(|e| format!("Failed to serialize uris: {}", e))?;
+
         // Convert annotations if present
         let annotations = result
             .annotations
@@ -586,6 +622,8 @@ impl ExtractionResult {
             document_json,
             ocr_elements_json,
             annotations,
+            children_json,
+            uris_json,
             result_json,
         })
     }

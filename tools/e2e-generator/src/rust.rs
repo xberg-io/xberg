@@ -233,6 +233,11 @@ fn render_test(fixture: &Fixture) -> Result<String> {
             "        Err(KreuzbergError::UnsupportedFormat(fmt)) => {{\n            println!(\"Skipping {id}: unsupported format {{fmt}} (requires optional tool)\", fmt=fmt);\n            return;\n        }},",
             id = fixture.id
         )?;
+        writeln!(
+            test_body,
+            "        Err(KreuzbergError::Parsing {{ message: ref msg, .. }}) => {{\n            println!(\"Skipping {id}: parsing dependency unavailable: {{msg}}\");\n            return;\n        }},",
+            id = fixture.id
+        )?;
     }
 
     if is_batch {

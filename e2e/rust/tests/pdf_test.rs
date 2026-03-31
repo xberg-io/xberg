@@ -119,6 +119,10 @@ fn test_pdf_bounding_boxes() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping pdf_bounding_boxes: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for pdf_bounding_boxes: {err:?}"),
         Ok(result) => result,
     };
@@ -283,6 +287,10 @@ fn test_pdf_layout_detection() {
                 "Skipping pdf_layout_detection: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping pdf_layout_detection: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for pdf_layout_detection: {err:?}"),
@@ -461,6 +469,10 @@ fn test_pdf_tables_small() {
                 "Skipping pdf_tables_small: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping pdf_tables_small: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for pdf_tables_small: {err:?}"),

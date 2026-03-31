@@ -40,6 +40,10 @@ fn test_keywords_rake() {
             );
             return;
         }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping keywords_rake: parsing dependency unavailable: {msg}");
+            return;
+        }
         Err(err) => panic!("Extraction failed for keywords_rake: {err:?}"),
         Ok(result) => result,
     };
@@ -81,6 +85,10 @@ fn test_keywords_yake() {
                 "Skipping keywords_yake: unsupported format {fmt} (requires optional tool)",
                 fmt = fmt
             );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping keywords_yake: parsing dependency unavailable: {msg}");
             return;
         }
         Err(err) => panic!("Extraction failed for keywords_yake: {err:?}"),

@@ -38,7 +38,7 @@ class ParityTest {
       "getContent",
       "getDetectedLanguages",
       "getDjotContent",
-      "getDocument",
+      "getDocumentStructure",
       "getElements",
       "getExtractedKeywords",
       "getImages",
@@ -67,7 +67,7 @@ class ParityTest {
       "getChunking",
       "getConcurrency",
       "getEmail",
-      "getEnableQualityProcessing",
+      "isEnableQualityProcessing",
       "getExtractionTimeoutSecs",
       "getForceOcr",
       "getForceOcrPages",
@@ -99,7 +99,7 @@ class ParityTest {
 
   @Test
   void testArchiveEntryAllGetters() throws Exception {
-    String[] allGetters = {"getMimeType", "getPath", "getResult"};
+    String[] allGetters = {"mimeType", "path", "result"};
     for (String getter : allGetters) {
       assertDoesNotThrow(
           () -> ArchiveEntry.class.getMethod(getter), "ArchiveEntry missing getter: " + getter);
@@ -108,7 +108,7 @@ class ParityTest {
 
   @Test
   void testBoundingBoxAllGetters() throws Exception {
-    String[] allGetters = {"getX0", "getX1", "getY0", "getY1"};
+    String[] allGetters = {"x0", "x1", "y0", "y1"};
     for (String getter : allGetters) {
       assertDoesNotThrow(
           () -> BoundingBox.class.getMethod(getter), "BoundingBox missing getter: " + getter);
@@ -117,7 +117,7 @@ class ParityTest {
 
   @Test
   void testKeywordAllGetters() throws Exception {
-    String[] allGetters = {"getAlgorithm", "getPositions", "getScore", "getText"};
+    String[] allGetters = {"algorithm", "positions", "score", "text"};
     for (String getter : allGetters) {
       assertDoesNotThrow(
           () -> Keyword.class.getMethod(getter), "Keyword missing getter: " + getter);
@@ -126,7 +126,7 @@ class ParityTest {
 
   @Test
   void testPdfAnnotationAllGetters() throws Exception {
-    String[] allGetters = {"getAnnotationType", "getBoundingBox", "getContent", "getPageNumber"};
+    String[] allGetters = {"annotationType", "boundingBox", "content", "pageNumber"};
     for (String getter : allGetters) {
       assertDoesNotThrow(
           () -> PdfAnnotation.class.getMethod(getter), "PdfAnnotation missing getter: " + getter);
@@ -135,7 +135,7 @@ class ParityTest {
 
   @Test
   void testProcessingWarningAllGetters() throws Exception {
-    String[] allGetters = {"getMessage", "getSource"};
+    String[] allGetters = {"message", "source"};
     for (String getter : allGetters) {
       assertDoesNotThrow(
           () -> ProcessingWarning.class.getMethod(getter),
@@ -145,7 +145,7 @@ class ParityTest {
 
   @Test
   void testTableAllGetters() throws Exception {
-    String[] allGetters = {"getBoundingBox", "getCells", "getMarkdown", "getPageNumber"};
+    String[] allGetters = {"boundingBox", "cells", "markdown", "pageNumber"};
     for (String getter : allGetters) {
       assertDoesNotThrow(() -> Table.class.getMethod(getter), "Table missing getter: " + getter);
     }
@@ -153,7 +153,7 @@ class ParityTest {
 
   @Test
   void testUriAllGetters() throws Exception {
-    String[] allGetters = {"getKind", "getLabel", "getPage", "getUrl"};
+    String[] allGetters = {"kind", "label", "page", "url"};
     for (String getter : allGetters) {
       assertDoesNotThrow(() -> Uri.class.getMethod(getter), "Uri missing getter: " + getter);
     }

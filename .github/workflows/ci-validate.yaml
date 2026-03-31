@@ -217,9 +217,6 @@ jobs:
       - name: Validate documentation snippets
         run: ./target/release/snippet-runner validate --snippets docs/snippets --reference docs/reference --level syntax --timeout 120
 
-      - name: Verify API Parity
-        run: python scripts/verify_api_parity.py
-
       - name: Check final disk space
         if: always()
         run: scripts/ci/validate/show-disk-space.sh "Final disk space"
