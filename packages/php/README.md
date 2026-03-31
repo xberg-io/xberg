@@ -22,7 +22,7 @@
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
   <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
-    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v4.7.0" alt="Go">
+    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v4.0.0" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
     <img src="https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6" alt="C#">
@@ -42,13 +42,16 @@
 
   <!-- Project Info -->
   <a href="https://github.com/kreuzberg-dev/kreuzberg/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
+    <img src="https://img.shields.io/badge/License-MIT-007ec6" alt="License">
   </a>
   <a href="https://docs.kreuzberg.dev">
-    <img src="https://img.shields.io/badge/docs-kreuzberg.dev-blue" alt="Documentation">
+    <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Live_Demo-007ec6" alt="Live Demo">
   </a>
   <a href="https://huggingface.co/Kreuzberg">
-    <img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-yellow" alt="Hugging Face">
+    <img src="https://img.shields.io/badge/%F0%9F%A4%97_Hugging_Face-007ec6" alt="Hugging Face">
   </a>
 </div>
 
@@ -60,11 +63,16 @@
   </a>
 </div>
 
-Extract text, tables, images, and metadata from 91+ file formats including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API.
+
+Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API.
+
 
 ## Installation
 
 ### Package Installation
+
+
+
 
 Install via Composer:
 
@@ -72,17 +80,16 @@ Install via Composer:
 composer require kreuzberg/kreuzberg
 ```
 
+
+
+
 ### System Requirements
 
 - **PHP 8.0+** required
 - Optional: [ONNX Runtime](https://github.com/microsoft/onnxruntime/releases) version 1.22.x for embeddings support
 - Optional: [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) for OCR functionality
 
-### Platform Support
 
-- **Linux (x86_64, aarch64)**: Fully supported
-- **macOS (Intel, Apple Silicon)**: Fully supported
-- **Windows**: Temporarily unavailable. The Windows build is disabled due to a transitive dependency conflict (`ort-sys` → `lzma-rust2` → `crc` version collision). This will be resolved when upstream `ort` updates its `lzma-rust2` dependency. Please use Linux or macOS for now, or use the Docker image for Windows environments.
 
 ## Quick Start
 
@@ -130,11 +137,13 @@ if (count($result->tables) > 0) {
 }
 ```
 
+
 ### Common Use Cases
 
 #### Extract with Custom Configuration
 
 Most use cases benefit from configuration to control extraction behavior:
+
 
 **With OCR (for scanned documents):**
 
@@ -266,11 +275,18 @@ if ($avgCharsPerPage < 100) {
 }
 ```
 
+
+
+
 #### Table Extraction
+
 
 See [Table Extraction Guide](https://kreuzberg.dev/features/table-extraction/) for detailed examples.
 
+
+
 #### Processing Multiple Files
+
 
 ```php title="batch_processing.php"
 <?php
@@ -427,12 +443,21 @@ foreach ($batches as $index => $batch) {
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
 ```
 
+
+
+
+
+
+
+
 ### Next Steps
 
 - **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
 - **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
 - **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
 - **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
+
+
 
 ## Features
 
@@ -483,6 +508,19 @@ echo "\n\nCompleted! Processed $totalProcessed files.\n";
 | **Scientific** | `.tex`, `.latex`, `.typst`, `.jats`, `.ipynb`, `.docbook` | LaTeX, Jupyter notebooks, PubMed JATS |
 | **Documentation** | `.opml`, `.pod`, `.mdoc`, `.troff` | Technical documentation formats |
 
+#### Code Intelligence (248 Languages)
+
+| Feature | Description |
+|---------|-------------|
+| **Structure Extraction** | Functions, classes, methods, structs, interfaces, enums |
+| **Import/Export Analysis** | Module dependencies, re-exports, wildcard imports |
+| **Symbol Extraction** | Variables, constants, type aliases, properties |
+| **Docstring Parsing** | Google, NumPy, Sphinx, JSDoc, RustDoc, and 10+ formats |
+| **Diagnostics** | Parse errors with line/column positions |
+| **Syntax-Aware Chunking** | Split code by semantic boundaries, not arbitrary byte offsets |
+
+Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sitter-language-pack) — [documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev).
+
 **[Complete Format Reference](https://kreuzberg.dev/reference/formats/)**
 
 ### Key Capabilities
@@ -493,13 +531,18 @@ echo "\n\nCompleted! Processed $totalProcessed files.\n";
 - **Image Extraction** - Extract embedded images and render page previews
 - **OCR Support** - Integrate multiple OCR backends for scanned documents
 
+
 - **Plugin System** - Extensible post-processing for custom text transformation
+
 
 - **Embeddings** - Generate vector embeddings using ONNX Runtime models
 
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
+
+- **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
+
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics
@@ -512,13 +555,17 @@ echo "\n\nCompleted! Processed $totalProcessed files.\n";
 | **Archives** | 5-50 MB/s | ~200MB per doc | ZIP, TAR, etc. |
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
+
+
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
 
+
 - **Tesseract**
 
 - **Paddleocr**
+
 
 ### OCR Configuration Example
 
@@ -650,17 +697,26 @@ if ($avgCharsPerPage < 100) {
 }
 ```
 
+
+
+
+
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
 
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
 
+
+
+
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
 **[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+
+
 
 ## Batch Processing
 
@@ -820,6 +876,9 @@ foreach ($batches as $index => $batch) {
 
 echo "\n\nCompleted! Processed $totalProcessed files.\n";
 ```
+
+
+
 
 ## Configuration
 

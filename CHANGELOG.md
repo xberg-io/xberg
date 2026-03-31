@@ -39,6 +39,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **FictionBook image and link extraction**: Base64-encoded `<binary>` images and `<a>` hyperlinks now extracted from FB2 documents.
 - **Apple iWork extractor improvements**: Numbers outputs tables instead of paragraphs, Keynote has improved slide structure, Pages has heading detection. All three extract metadata from ZIP plist.
 
+### Code Intelligence
+
+- **Tree-sitter integration** for 248 programming languages via [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sitter-language-pack)
+  - Extract functions, classes, imports, exports, symbols, docstrings, diagnostics
+  - Syntax-aware code chunking
+  - Language detection from file extension and shebang
+  - Dynamic grammar download (native) / 30-language static subset (WASM)
+  - New `tree-sitter` and `tree-sitter-wasm` feature flags (included in `full` and `wasm-target`)
+  - `TreeSitterConfig` and `TreeSitterProcessConfig` in `ExtractionConfig`
+  - Re-exported TSLP types (`ProcessResult`, `StructureItem`, `FileMetrics`, etc.)
+  - [TSLP documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev)
+
+### Typed Metadata
+
+- New `FormatMetadata` variants: `Code`, `Csv`, `Bibtex`, `Citation`, `FictionBook`, `Dbf`, `Jats`, `Epub`, `Pst`
+- Extended `PptxMetadata` with `image_count` and `table_count`
+- Migrated deprecated `metadata.additional` writes to typed fields across all extractors
+- Strong types for all new metadata variants across all 11 language bindings
+
 ### Fixed
 
 - **Metadata standardization**: Metadata from PPTX, Excel, ODT, RST, OrgMode, Typst, RTF, JATS, DOC, PPT, HTML, Email, BibTeX, and Citation extractors now mapped to standard `Metadata` struct fields (title, authors, dates, keywords, language) instead of only `additional` map.

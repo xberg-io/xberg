@@ -1,6 +1,6 @@
-### Supported File Formats (88+)
+### Supported File Formats (91+)
 
-88+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction.
+91+ file formats across 8 major categories with intelligent format detection and comprehensive metadata extraction.
 
 #### Office Documents
 
@@ -45,6 +45,19 @@
 | **Scientific** | `.tex`, `.latex`, `.typst`, `.jats`, `.ipynb`, `.docbook` | LaTeX, Jupyter notebooks, PubMed JATS |
 | **Documentation** | `.opml`, `.pod`, `.mdoc`, `.troff` | Technical documentation formats |
 
+#### Code Intelligence (248 Languages)
+
+| Feature | Description |
+|---------|-------------|
+| **Structure Extraction** | Functions, classes, methods, structs, interfaces, enums |
+| **Import/Export Analysis** | Module dependencies, re-exports, wildcard imports |
+| **Symbol Extraction** | Variables, constants, type aliases, properties |
+| **Docstring Parsing** | Google, NumPy, Sphinx, JSDoc, RustDoc, and 10+ formats |
+| **Diagnostics** | Parse errors with line/column positions |
+| **Syntax-Aware Chunking** | Split code by semantic boundaries, not arbitrary byte offsets |
+
+Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sitter-language-pack) — [documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev).
+
 **[Complete Format Reference](https://kreuzberg.dev/reference/formats/)**
 
 ### Key Capabilities
@@ -66,6 +79,9 @@
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
+{% if features.code_intelligence %}
+- **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
+{% endif %}
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics

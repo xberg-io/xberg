@@ -20,7 +20,7 @@ tasks:
     desc: Generate and format language package READMEs from templates
     cmds:
       - python3 scripts/generate_readme.py
-      - mdformat packages/python/README.md packages/go/README.md packages/java/README.md packages/php/README.md packages/ruby/README.md packages/csharp/README.md packages/elixir/README.md crates/kreuzberg-node/README.md crates/kreuzberg-wasm/README.md
+      - rumdl fmt packages/python/README.md packages/go/v4/README.md packages/java/README.md packages/php/README.md packages/ruby/README.md packages/csharp/README.md packages/elixir/README.md crates/kreuzberg-node/README.md crates/kreuzberg-wasm/README.md
 
   generate-readme:check:
     desc: Validate READMEs match templates (CI mode)

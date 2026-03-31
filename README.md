@@ -66,10 +66,11 @@
   </a>
 </div>
 
-Extract text and metadata from a wide range of file formats (91+), generate embeddings and post-process at native speeds without needing a GPU.
+Extract text, metadata, and code intelligence from 91+ file formats and 248 programming languages at native speeds without needing a GPU.
 
 ## Key Features
 
+- **Code intelligence** – Extract functions, classes, imports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
 - **Extensible architecture** – Plugin system for custom OCR backends, validators, post-processors, document extractors, and renderers
 - **Polyglot** – Native bindings for Rust, Python, TypeScript/Node.js, Ruby, Go, Java, C#, PHP, Elixir, R, and C
 - **91+ file formats** – PDF, Office documents, images, HTML, XML, emails, archives, academic formats across 8 categories
@@ -204,6 +205,19 @@ To use embeddings functionality:
 | **Documentation** | `.pod`, `.mdoc`, `.troff` | Perl POD, man pages, troff |
 
 **[Complete Format Reference →](https://docs.kreuzberg.dev/reference/formats/)**
+
+### Code Intelligence (248 Languages)
+
+| Feature | Description |
+|---------|-------------|
+| **Structure Extraction** | Functions, classes, methods, structs, interfaces, enums |
+| **Import/Export Analysis** | Module dependencies, re-exports, wildcard imports |
+| **Symbol Extraction** | Variables, constants, type aliases, properties |
+| **Docstring Parsing** | Google, NumPy, Sphinx, JSDoc, RustDoc, and 10+ formats |
+| **Diagnostics** | Parse errors with line/column positions |
+| **Syntax-Aware Chunking** | Split code by semantic boundaries, not arbitrary byte offsets |
+
+Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sitter-language-pack) with dynamic grammar download. See [TSLP documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev) for the full language list.
 
 ## Key Features
 

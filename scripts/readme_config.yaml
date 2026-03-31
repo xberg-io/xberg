@@ -11,12 +11,13 @@ languages:
     badge_url: https://img.shields.io/pypi/v/kreuzberg?label=Python&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native Python bindings with async/await support, multiple OCR backends (Tesseract, EasyOCR, PaddleOCR), and extensible plugin system.
     features:
       ocr: true
       async: true
       plugin_system: true
       embeddings: true
+      code_intelligence: true
     ocr_backends:
       - tesseract
       - easyocr
@@ -44,7 +45,7 @@ languages:
     badge_url: https://img.shields.io/npm/v/@kreuzberg/node?label=TypeScript&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions.
     features:
       ocr: true
       async: true
@@ -52,6 +53,7 @@ languages:
       embeddings: true
       worker_pools: true
       config_discovery: true
+      code_intelligence: true
     ocr_backends:
       - tesseract
       - paddleocr
@@ -81,12 +83,13 @@ languages:
     badge_url: https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. Go bindings with context-aware async support, idiomatic Go API, and CGO-based native performance.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Go bindings with context-aware async support, idiomatic Go API, and CGO-based native performance.
     features:
       ocr: true
       async: true
       plugin_system: true
       embeddings: false
+      code_intelligence: true
     ocr_backends:
       - tesseract
       - paddleocr
@@ -109,12 +112,13 @@ languages:
     badge_url: https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. Java bindings with type-safe API, Foreign Function & Memory API integration, and native performance.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Java bindings with type-safe API, Foreign Function & Memory API integration, and native performance.
     features:
       ocr: true
       async: true
       plugin_system: true
       embeddings: true
+      code_intelligence: true
     ocr_backends:
       - tesseract
       - paddleocr
@@ -137,12 +141,13 @@ languages:
     badge_url: https://img.shields.io/packagist/v/kreuzberg/kreuzberg?label=PHP&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. PHP bindings with modern PHP 8.2+ support and type-safe API.
     features:
       ocr: true
       async: false
       plugin_system: true
       embeddings: true
+      code_intelligence: true
     ocr_backends:
       - tesseract
       - paddleocr
@@ -164,12 +169,13 @@ languages:
     badge_url: https://img.shields.io/gem/v/kreuzberg?label=Ruby&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. Ruby bindings with idiomatic Ruby API and native performance.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Ruby bindings with idiomatic Ruby API and native performance.
     features:
       ocr: true
       async: true
       plugin_system: true
       embeddings: true
+      code_intelligence: true
     ocr_backends:
       - tesseract
       - paddleocr
@@ -191,12 +197,13 @@ languages:
     badge_url: https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. .NET bindings with full type safety, async/await support, and .NET 10.0+ compatibility.
     features:
       ocr: true
       async: true
       plugin_system: true
       embeddings: true
+      code_intelligence: true
     ocr_backends:
       - tesseract
       - paddleocr
@@ -218,12 +225,13 @@ languages:
     badge_url: https://img.shields.io/hexpm/v/kreuzberg?label=Elixir&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. Elixir bindings with native BEAM concurrency, OTP integration, and idiomatic Elixir API.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Elixir bindings with native BEAM concurrency, OTP integration, and idiomatic Elixir API.
     features:
       ocr: true
       async: true
       plugin_system: true
       embeddings: true
+      code_intelligence: true
     ocr_backends:
       - tesseract
       - paddleocr
@@ -250,12 +258,13 @@ languages:
     badge_url: https://img.shields.io/npm/v/@kreuzberg/wasm?label=WASM&color=007ec6
     docs_url: https://kreuzberg.dev/
     description: |
-      Extract text, tables, images, and metadata from 88+ file formats including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support.
+      Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. WebAssembly bindings for browsers, Deno, and Cloudflare Workers with portable deployment and multi-threading support.
     features:
       ocr: true
       async: true
       plugin_system: true
       embeddings: false
+      code_intelligence: true
     ocr_backends:
       - tesseract-wasm
     optional_sections:

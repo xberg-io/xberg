@@ -22,7 +22,7 @@
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
   <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
-    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v4.7.0" alt="Go">
+    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v4.0.0" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
     <img src="https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6" alt="C#">
@@ -42,13 +42,16 @@
 
   <!-- Project Info -->
   <a href="https://github.com/kreuzberg-dev/kreuzberg/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
+    <img src="https://img.shields.io/badge/License-MIT-007ec6" alt="License">
   </a>
   <a href="https://docs.kreuzberg.dev">
-    <img src="https://img.shields.io/badge/docs-kreuzberg.dev-blue" alt="Documentation">
+    <img src="https://img.shields.io/badge/docs-kreuzberg.dev-007ec6" alt="Documentation">
+  </a>
+  <a href="https://docs.kreuzberg.dev/demo.html">
+    <img src="https://img.shields.io/badge/%E2%96%B6%EF%B8%8F_Live_Demo-007ec6" alt="Live Demo">
   </a>
   <a href="https://huggingface.co/Kreuzberg">
-    <img src="https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-yellow" alt="Hugging Face">
+    <img src="https://img.shields.io/badge/%F0%9F%A4%97_Hugging_Face-007ec6" alt="Hugging Face">
   </a>
 </div>
 
@@ -60,13 +63,18 @@
   </a>
 </div>
 
-Extract text, tables, images, and metadata from 91+ file formats including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions.
+
+Extract text, tables, images, and metadata from 91+ file formats and 248 programming languages including PDF, Office documents, and images. Native NAPI-RS bindings for Node.js with superior performance, async/await support, and TypeScript type definitions.
+
 
 ## Installation
 
 ### Package Installation
 
+
 Install via one of the supported package managers:
+
+
 
 **npm:**
 
@@ -74,17 +82,27 @@ Install via one of the supported package managers:
 npm install @kreuzberg/node
 ```
 
+
+
+
 **pnpm:**
 
 ```bash
 pnpm add @kreuzberg/node
 ```
 
+
+
+
 **yarn:**
 
 ```bash
 yarn add @kreuzberg/node
 ```
+
+
+
+
 
 ### System Requirements
 
@@ -99,6 +117,9 @@ Pre-built binaries available for:
 - macOS (arm64, x64)
 - Linux (x64)
 - Windows (x64)
+
+
+
 
 ## Quick Start
 
@@ -120,11 +141,13 @@ console.log(result.content);
 console.log(`MIME Type: ${result.mimeType}`);
 ```
 
+
 ### Common Use Cases
 
 #### Extract with Custom Configuration
 
 Most use cases benefit from configuration to control extraction behavior:
+
 
 **With OCR (for scanned documents):**
 
@@ -145,7 +168,11 @@ const result = await extractFile('document.pdf', null, config);
 console.log(result.content);
 ```
 
+
+
+
 #### Table Extraction
+
 
 ```typescript
 import { extractFileSync } from '@kreuzberg/node';
@@ -159,7 +186,11 @@ for (const table of result.tables) {
 }
 ```
 
+
+
+
 #### Processing Multiple Files
+
 
 ```typescript
 import { batchExtractFilesSync } from '@kreuzberg/node';
@@ -172,6 +203,10 @@ results.forEach((result, i) => {
 });
 ```
 
+
+
+
+
 #### Async Processing
 
 For non-blocking document processing:
@@ -182,6 +217,10 @@ import { extractFile } from '@kreuzberg/node';
 const result = await extractFile('document.pdf');
 console.log(result.content);
 ```
+
+
+
+
 
 #### Configuration Discovery
 
@@ -199,6 +238,10 @@ if (config) {
   console.log(result.content);
 }
 ```
+
+
+
+
 
 #### Worker Thread Pool
 
@@ -230,6 +273,7 @@ try {
 }
 ```
 
+
 **Performance Benefits:**
 
 - **Parallel Processing**: Multiple documents extracted simultaneously
@@ -244,12 +288,16 @@ try {
 - Always close pools with `closeWorkerPool()` to prevent resource leaks
 - Reuse pools across multiple batch operations for efficiency
 
+
+
 ### Next Steps
 
 - **[Installation Guide](https://kreuzberg.dev/getting-started/installation/)** - Platform-specific setup
 - **[API Documentation](https://kreuzberg.dev/api/)** - Complete API reference
 - **[Examples & Guides](https://kreuzberg.dev/guides/)** - Full code examples and usage guides
 - **[Configuration Guide](https://kreuzberg.dev/guides/configuration/)** - Advanced configuration options
+
+
 
 ## NAPI-RS Implementation Details
 
@@ -275,6 +323,8 @@ This binding uses NAPI-RS to provide native Node.js bindings with:
 - Temporary files are created in system temp directory for extraction
 - Memory is automatically released after extraction completion
 - ONNX models are cached in memory for repeated embeddings operations
+
+
 
 ## Features
 
@@ -325,6 +375,19 @@ This binding uses NAPI-RS to provide native Node.js bindings with:
 | **Scientific** | `.tex`, `.latex`, `.typst`, `.jats`, `.ipynb`, `.docbook` | LaTeX, Jupyter notebooks, PubMed JATS |
 | **Documentation** | `.opml`, `.pod`, `.mdoc`, `.troff` | Technical documentation formats |
 
+#### Code Intelligence (248 Languages)
+
+| Feature | Description |
+|---------|-------------|
+| **Structure Extraction** | Functions, classes, methods, structs, interfaces, enums |
+| **Import/Export Analysis** | Module dependencies, re-exports, wildcard imports |
+| **Symbol Extraction** | Variables, constants, type aliases, properties |
+| **Docstring Parsing** | Google, NumPy, Sphinx, JSDoc, RustDoc, and 10+ formats |
+| **Diagnostics** | Parse errors with line/column positions |
+| **Syntax-Aware Chunking** | Split code by semantic boundaries, not arbitrary byte offsets |
+
+Powered by [tree-sitter-language-pack](https://github.com/kreuzberg-dev/tree-sitter-language-pack) — [documentation](https://docs.tree-sitter-language-pack.kreuzberg.dev).
+
 **[Complete Format Reference](https://kreuzberg.dev/reference/formats/)**
 
 ### Key Capabilities
@@ -337,13 +400,18 @@ This binding uses NAPI-RS to provide native Node.js bindings with:
 
 - **Async/Await** - Non-blocking document processing with concurrent operations
 
+
 - **Plugin System** - Extensible post-processing for custom text transformation
+
 
 - **Embeddings** - Generate vector embeddings using ONNX Runtime models
 
 - **Batch Processing** - Efficiently process multiple documents in parallel
 - **Memory Efficient** - Stream large files without loading entirely into memory
 - **Language Detection** - Detect and support multiple languages in documents
+
+- **Code Intelligence** - Extract structure, imports, exports, symbols, and docstrings from [248 programming languages](https://docs.tree-sitter-language-pack.kreuzberg.dev) via tree-sitter
+
 - **Configuration** - Fine-grained control over extraction behavior
 
 ### Performance Characteristics
@@ -356,13 +424,17 @@ This binding uses NAPI-RS to provide native Node.js bindings with:
 | **Archives** | 5-50 MB/s | ~200MB per doc | ZIP, TAR, etc. |
 | **Web formats** | 50-200 MB/s | Streaming | HTML, XML, JSON |
 
+
+
 ## OCR Support
 
 Kreuzberg supports multiple OCR backends for extracting text from scanned documents and images:
 
+
 - **Tesseract**
 
 - **Paddleocr**
+
 
 ### OCR Configuration Example
 
@@ -383,6 +455,9 @@ const result = await extractFile('document.pdf', null, config);
 console.log(result.content);
 ```
 
+
+
+
 ## Async Support
 
 This binding provides full async/await support for non-blocking document processing:
@@ -394,17 +469,25 @@ const result = await extractFile('document.pdf');
 console.log(result.content);
 ```
 
+
+
+
 ## Plugin System
 
 Kreuzberg supports extensible post-processing plugins for custom text transformation and filtering.
 
 For detailed plugin documentation, visit [Plugin System Guide](https://kreuzberg.dev/guides/plugins/).
 
+
+
+
 ## Embeddings Support
 
 Generate vector embeddings for extracted text using the built-in ONNX Runtime support. Requires ONNX Runtime installation.
 
 **[Embeddings Guide](https://kreuzberg.dev/features/#embeddings)**
+
+
 
 ## Batch Processing
 
@@ -420,6 +503,9 @@ results.forEach((result, i) => {
 	console.log(`File ${i + 1}: ${result.content.length} characters`);
 });
 ```
+
+
+
 
 ## Configuration
 
