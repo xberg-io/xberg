@@ -202,6 +202,44 @@ pub struct ProcessingWarning {
     pub message: Cow<'static, str>,
 }
 
+/// Semantic structural classification of a text chunk.
+///
+/// Assigned by the heuristic classifier in `chunking::classifier`.
+/// Defaults to `Unknown` when no rule matches.
+/// Designed to be extended in future versions without breaking changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum ChunkType {
+    /// Section heading or document title.
+    Heading,
+    /// Party list: names, addresses, and signatories.
+    PartyList,
+    /// Definition clause ("X means…", "X shall mean…").
+    Definitions,
+    /// Operative clause containing legal/contractual action verbs.
+    OperativeClause,
+    /// Signature block with signatures, names, and dates.
+    SignatureBlock,
+    /// Schedule, annex, appendix, or exhibit section.
+    Schedule,
+    /// Table-like content with aligned columns or repeated patterns.
+    TableLike,
+    /// Mathematical formula or equation.
+    Formula,
+    /// Code block or preformatted content.
+    CodeBlock,
+    /// Embedded or referenced image content.
+    Image,
+    /// Organizational chart or hierarchy diagram.
+    OrgChart,
+    /// Diagram, figure, or visual illustration.
+    Diagram,
+    /// Unclassified or mixed content.
+    #[default]
+    Unknown,
+}
+
 /// A text chunk with optional embedding and metadata.
 ///
 /// Chunks are created when chunking is enabled in `ExtractionConfig`. Each chunk
@@ -212,6 +250,13 @@ pub struct ProcessingWarning {
 pub struct Chunk {
     /// The text content of this chunk.
     pub content: String,
+
+    /// Semantic structural classification of this chunk.
+    ///
+    /// Assigned by the heuristic classifier based on content patterns and
+    /// heading context. Defaults to `ChunkType::Unknown` when no rule matches.
+    #[serde(default)]
+    pub chunk_type: ChunkType,
 
     /// Optional embedding vector for this chunk.
     ///
