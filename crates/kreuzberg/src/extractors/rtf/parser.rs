@@ -228,11 +228,11 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                         '\\' | '{' | '}' => {
                             chars.next();
                             expect_destination = false;
-                            if skip_depth > 0 {
-                                continue;
-                            }
+                            // Capture escaped chars in fldinst buffer even when skipping
                             if in_fldinst {
                                 fldinst_content.push(next_ch);
+                            }
+                            if skip_depth > 0 {
                                 continue;
                             }
                             text_offset += next_ch.len_utf8();
@@ -266,6 +266,15 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
 
                                 if ignorable_pending {
                                     ignorable_pending = false;
+                                    // Allow \*\fldinst through for hyperlink parsing
+                                    if word == "fldinst" {
+                                        in_fldinst = true;
+                                        fldinst_depth = group_depth;
+                                        if skip_depth == 0 {
+                                            skip_depth = group_depth;
+                                        }
+                                        continue;
+                                    }
                                     if skip_depth == 0 {
                                         skip_depth = group_depth;
                                     }
@@ -277,6 +286,9 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                                     "fldinst" => {
                                         in_fldinst = true;
                                         fldinst_depth = group_depth;
+                                        if skip_depth == 0 {
+                                            skip_depth = group_depth;
+                                        }
                                         continue;
                                     }
                                     "fldrslt" => {
@@ -296,11 +308,11 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                                 }
                             }
 
-                            if skip_depth > 0 {
-                                continue;
-                            }
+                            // Capture control words in fldinst buffer even when skipping
                             if in_fldinst {
                                 fldinst_content.push_str(&word);
+                            }
+                            if skip_depth > 0 {
                                 continue;
                             }
 
@@ -462,7 +474,12 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
             }
             '\n' | '\r' => {}
             _ => {
-                if skip_depth > 0 || in_fldinst {
+                // Capture field instruction content for HYPERLINK parsing
+                if in_fldinst {
+                    fldinst_content.push(ch);
+                    continue;
+                }
+                if skip_depth > 0 {
                     continue;
                 }
                 text_offset += ch.len_utf8();
@@ -685,6 +702,10 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
     // The space is only emitted when actual text follows (not another `{`).
     let mut pending_boundary_space = false;
 
+    // Hidden text tracking: \v enables, \v0 or \plain disables.
+    // Stack tracks hidden state per group depth for proper scoping.
+    let mut hidden_stack: Vec<bool> = vec![false];
+
     let ensure_table = |table_state: &mut Option<TableState>| {
         if table_state.is_none() {
             *table_state = Some(TableState::new());
@@ -708,6 +729,9 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 // Inherit current uc value into new group scope
                 let current_uc = uc_stack.last().copied().unwrap_or(1);
                 uc_stack.push(current_uc);
+                // Inherit hidden state into new group scope
+                let current_hidden = hidden_stack.last().copied().unwrap_or(false);
+                hidden_stack.push(current_hidden);
                 // Adjacent group open `}{`: clear pending boundary space so that
                 // `x}{\super superscript}` produces `xsuperscript` not `x superscript`.
                 pending_boundary_space = false;
@@ -716,9 +740,12 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 group_depth -= 1;
                 expect_destination = false;
                 ignorable_pending = false;
-                // Pop uc_stack for this group
+                // Pop uc_stack and hidden_stack for this group
                 if uc_stack.len() > 1 {
                     uc_stack.pop();
+                }
+                if hidden_stack.len() > 1 {
+                    hidden_stack.pop();
                 }
                 // If we were skipping and just exited the skipped group, stop skipping
                 if skip_depth > 0 && group_depth < skip_depth {
@@ -811,6 +838,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 in_footnote,
                                 &mut footnote_buf,
                                 &mut pending_boundary_space,
+                                &mut hidden_stack,
                             );
                         }
                         '\\' | '{' | '}' => {
@@ -824,6 +852,10 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 footnote_buf.push(next_ch);
                             }
                             if skip_depth > 0 {
+                                continue;
+                            }
+                            // Skip hidden text
+                            if hidden_stack.last().copied().unwrap_or(false) {
                                 continue;
                             }
                             // Flush deferred boundary space
@@ -854,6 +886,10 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                     footnote_buf.push(decode_windows_1252(byte));
                                 }
                             if skip_depth > 0 {
+                                continue;
+                            }
+                            // Skip hidden text
+                            if hidden_stack.last().copied().unwrap_or(false) {
                                 continue;
                             }
                             if let (Some(h1), Some(h2)) = (hex1, hex2)
@@ -1021,6 +1057,8 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 &mut footnote_count,
                                 in_footnote,
                                 &mut footnote_buf,
+                                &mut pending_boundary_space,
+                                &mut hidden_stack,
                             );
                         }
                     }
@@ -1066,6 +1104,10 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                     footnote_buf.push(ch);
                 }
                 if skip_depth > 0 {
+                    continue;
+                }
+                // Skip hidden text (\v)
+                if hidden_stack.last().copied().unwrap_or(false) {
                     continue;
                 }
                 if let Some(state) = table_state.as_ref()
@@ -1160,8 +1202,16 @@ fn handle_control_word(
     _in_footnote: bool,
     _footnote_buf: &mut String,
     pending_boundary_space: &mut bool,
+    hidden_stack: &mut Vec<bool>,
 ) {
     match control_word {
+        // Hidden text: \v enables, \v0 disables
+        "v" => {
+            let hidden = param.unwrap_or(1) != 0;
+            if let Some(h) = hidden_stack.last_mut() {
+                *h = hidden;
+            }
+        }
         // Paragraph reset — start tracking new paragraph properties.
         // \pard starts a new paragraph definition. If there's already text,
         // emit a paragraph break and record metadata for the previous paragraph.
@@ -1226,6 +1276,15 @@ fn handle_control_word(
                     {
                         state.current_cell.push(c);
                     } else {
+                        // Flush deferred boundary space
+                        if *pending_boundary_space
+                            && !result.is_empty()
+                            && !result.ends_with(' ')
+                            && !result.ends_with('\n')
+                        {
+                            result.push(' ');
+                        }
+                        *pending_boundary_space = false;
                         result.push(c);
                         if let Some(flag) = group_has_text.last_mut() {
                             *flag = true;
@@ -1301,6 +1360,7 @@ fn handle_control_word(
             }
         }
         "par" | "line" => {
+            *pending_boundary_space = false;
             let in_table_row = table_state.as_ref().is_some_and(|s| s.in_row);
             if in_table_row {
                 // Inside a table row, \par is just a line break within a cell —
@@ -1427,6 +1487,12 @@ fn handle_control_word(
                 is_table: true,
                 ..Default::default()
             });
+        }
+        // \plain resets all character formatting including hidden text
+        "plain" => {
+            if let Some(h) = hidden_stack.last_mut() {
+                *h = false;
+            }
         }
         _ => {}
     }

@@ -66,8 +66,17 @@ pub fn extract_pict_image(chars: &mut std::iter::Peekable<std::str::Chars>) -> (
                     "picwgoal" => width_goal = value,
                     "pichgoal" => height_goal = value,
                     "bin" => {
-                        has_bin = true;
-                        break;
+                        // \binN means N raw binary bytes follow. Skip them.
+                        if let Some(count) = value {
+                            let count = count.max(0) as usize;
+                            for _ in 0..count {
+                                chars.next();
+                            }
+                            has_bin = true;
+                        }
+                        // Without a count parameter, \bin is non-standard.
+                        // Continue parsing — hex data that follows will be
+                        // collected normally.
                     }
                     _ => {}
                 }
@@ -105,8 +114,10 @@ pub fn extract_pict_image(chars: &mut std::iter::Peekable<std::str::Chars>) -> (
         metadata.push_str("image.jpg");
     }
 
-    // Decode hex data to binary if we have it and it's not binary mode
-    let image = if !has_bin && !hex_chars.is_empty() {
+    // Decode hex data to binary. When \bin was used with a count,
+    // the binary data was already skipped; hex_chars may still contain
+    // hex-encoded image data collected from the group.
+    let image = if !hex_chars.is_empty() {
         match hex::decode(&hex_chars) {
             Ok(data) if !data.is_empty() => Some(RtfImage {
                 format,
