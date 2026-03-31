@@ -52,7 +52,7 @@ test_that("token_reduction_with_chunking", {
   result <- run_fixture(
     "token_reduction_with_chunking",
     "pdf/fake_memo.pdf",
-    list(chunking = list(max_chars = 500L, max_overlap = 50L), token_reduction = list(mode = "moderate")),
+    list(token_reduction = list(mode = "moderate"), chunking = list(max_chars = 500L, max_overlap = 50L)),
     requirements = character(0),
     notes = NULL,
     skip_if_missing = TRUE

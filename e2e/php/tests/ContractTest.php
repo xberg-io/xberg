@@ -307,7 +307,7 @@ class ContractTest extends TestCase
             $this->markTestSkipped('Skipping config_acceleration_cpu_provider: missing document at ' . $documentPath);
         }
 
-        $config = Helpers::buildConfig(['acceleration' => ['device_id' => 0, 'provider' => 'cpu']]);
+        $config = Helpers::buildConfig(['acceleration' => ['provider' => 'cpu', 'device_id' => 0]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -476,7 +476,7 @@ class ContractTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('chunking-tokenizers');
 
-        $config = Helpers::buildConfig(['chunking' => ['max_chars' => 200, 'max_overlap' => 40, 'sizing' => ['model' => 'Xenova/gpt-4o', 'type' => 'tokenizer']]]);
+        $config = Helpers::buildConfig(['chunking' => ['max_chars' => 200, 'max_overlap' => 40, 'sizing' => ['type' => 'tokenizer', 'model' => 'Xenova/gpt-4o']]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -716,7 +716,7 @@ class ContractTest extends TestCase
             $this->markTestSkipped('Skipping config_html_options: missing document at ' . $documentPath);
         }
 
-        $config = Helpers::buildConfig(['html_options' => ['extract_metadata' => true]]);
+        $config = Helpers::buildConfig(['html_options' => ['extractMetadata' => true]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -816,7 +816,7 @@ class ContractTest extends TestCase
             $this->markTestSkipped('Skipping config_language_detection_multi: missing document at ' . $documentPath);
         }
 
-        $config = Helpers::buildConfig(['language_detection' => ['detect_multiple' => true, 'enabled' => true, 'min_confidence' => 0.3]]);
+        $config = Helpers::buildConfig(['language_detection' => ['enabled' => true, 'detect_multiple' => true, 'min_confidence' => 0.3]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -838,7 +838,7 @@ class ContractTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('language-detection');
 
-        $config = Helpers::buildConfig(['language_detection' => ['detect_multiple' => true, 'enabled' => true]]);
+        $config = Helpers::buildConfig(['language_detection' => ['enabled' => true, 'detect_multiple' => true]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -969,7 +969,7 @@ class ContractTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('pdf');
 
-        $config = Helpers::buildConfig(['pages' => ['extract_pages' => true], 'pdf_options' => ['hierarchy' => ['enabled' => true, 'include_bbox' => true]]]);
+        $config = Helpers::buildConfig(['pdf_options' => ['hierarchy' => ['enabled' => true, 'include_bbox' => true]], 'pages' => ['extract_pages' => true]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -990,7 +990,7 @@ class ContractTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('pdf');
 
-        $config = Helpers::buildConfig(['pdf_options' => ['bottom_margin_fraction' => 0.1, 'top_margin_fraction' => 0.1]]);
+        $config = Helpers::buildConfig(['pdf_options' => ['top_margin_fraction' => 0.1, 'bottom_margin_fraction' => 0.1]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -1159,6 +1159,48 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/vnd.openxmlformats-officedocument.wordprocessingml.document']);
         Helpers::assertTableCount($result, 1, null);
+    }
+
+    /**
+     * Tests tree-sitter configuration round-trip
+     */
+    public function test_config_tree_sitter(): void
+    {
+        $documentPath = Helpers::resolveDocument('code/hello.py');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_tree_sitter: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tree-sitter');
+
+        $config = Helpers::buildConfig(['tree_sitter' => ['languages' => ['python', 'rust'], 'groups' => ['web'], 'process' => ['structure' => true, 'imports' => true, 'exports' => true, 'comments' => false, 'docstrings' => false, 'symbols' => false, 'diagnostics' => false]]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['text/x-source-code']);
+        Helpers::assertMinContentLength($result, 5);
+    }
+
+    /**
+     * Tests tree-sitter process config with all options enabled
+     */
+    public function test_config_tree_sitter_process(): void
+    {
+        $documentPath = Helpers::resolveDocument('code/hello.py');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_tree_sitter_process: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('tree-sitter');
+
+        $config = Helpers::buildConfig(['tree_sitter' => ['process' => ['structure' => true, 'imports' => true, 'exports' => true, 'comments' => true, 'docstrings' => true, 'symbols' => true, 'diagnostics' => true, 'chunk_max_size' => 2000]]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['text/x-source-code']);
+        Helpers::assertMinContentLength($result, 5);
     }
 
     /**

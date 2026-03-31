@@ -56,6 +56,7 @@ public class OfficeTest {
   @Test
   public void officeDbfBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("office");
     E2EHelpers.runFixture(
         "office_dbf_basic",
         "dbf/stations.dbf",
@@ -90,6 +91,7 @@ public class OfficeTest {
   @Test
   public void officeDocLegacy() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("office");
     E2EHelpers.runFixture(
         "office_doc_legacy",
         "doc/unit_test_lists.doc",
@@ -310,6 +312,7 @@ public class OfficeTest {
   @Test
   public void officeHwpBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("office");
     E2EHelpers.runFixture(
         "office_hwp_basic",
         "hwp/converted_output.hwp",
@@ -326,6 +329,7 @@ public class OfficeTest {
   @Test
   public void officeHwpStyled() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("hwp");
     if ((System.getProperty("os.arch").equals("aarch64")
         && System.getProperty("os.name").startsWith("Linux"))) {
       org.junit.jupiter.api.Assumptions.assumeTrue(
@@ -673,6 +677,7 @@ public class OfficeTest {
   @Test
   public void officePptLegacy() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("office");
     E2EHelpers.runFixture(
         "office_ppt_legacy",
         "ppt/simple.ppt",

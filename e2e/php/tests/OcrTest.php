@@ -27,7 +27,7 @@ class OcrTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('tesseract');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'language' => 'eng']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'tesseract', 'language' => 'eng'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -49,7 +49,7 @@ class OcrTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('tesseract');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'language' => 'eng']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'tesseract', 'language' => 'eng'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -71,7 +71,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'paddle_ocr_config' => ['min_confidence' => 80.0]]]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'paddle_ocr_config' => ['min_confidence' => 80.0]], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -93,7 +93,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'element_config' => ['build_hierarchy' => true, 'include_elements' => true], 'language' => 'en']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'element_config' => ['include_elements' => true, 'build_hierarchy' => true]], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -116,7 +116,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'element_config' => ['include_elements' => true, 'min_level' => 'word'], 'language' => 'en']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'element_config' => ['include_elements' => true, 'min_level' => 'word']], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -139,7 +139,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'language' => 'ch']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'ch'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -161,7 +161,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'language' => 'en']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'en'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -184,7 +184,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'paddle_ocr_config' => ['output_format' => 'markdown']]]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'paddle_ocr_config' => ['output_format' => 'markdown']], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -207,7 +207,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'language' => 'en']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'en'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -230,7 +230,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'element_config' => ['include_elements' => true], 'language' => 'en']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'element_config' => ['include_elements' => true]], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -253,7 +253,7 @@ class OcrTest extends TestCase
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
         Helpers::skipIfFeatureUnavailable('paddle-ocr');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'paddle_ocr_config' => ['enable_table_detection' => true]]]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'paddle-ocr', 'language' => 'en', 'paddle_ocr_config' => ['enable_table_detection' => true]], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -275,7 +275,7 @@ class OcrTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('tesseract');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'language' => 'deu']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'tesseract', 'language' => 'deu'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -297,7 +297,7 @@ class OcrTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('tesseract');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'language' => 'eng']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'tesseract', 'language' => 'eng'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -318,7 +318,7 @@ class OcrTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('tesseract');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'language' => 'eng']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'tesseract', 'language' => 'eng'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -340,7 +340,7 @@ class OcrTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('tesseract');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'element_config' => ['include_elements' => true], 'language' => 'eng']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'tesseract', 'language' => 'eng', 'element_config' => ['include_elements' => true]], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -362,7 +362,7 @@ class OcrTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('tesseract');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'element_config' => ['include_elements' => true, 'min_level' => 'line'], 'language' => 'eng']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'tesseract', 'language' => 'eng', 'element_config' => ['include_elements' => true, 'min_level' => 'line']], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -384,7 +384,7 @@ class OcrTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('tesseract');
 
-        $config = Helpers::buildConfig(['force_ocr' => true, 'ocr' => ['backend' => 'tesseract', 'language' => 'deu']]);
+        $config = Helpers::buildConfig(['ocr' => ['backend' => 'tesseract', 'language' => 'deu'], 'force_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);

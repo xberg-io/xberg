@@ -4,6 +4,8 @@ mod elixir;
 mod fixtures;
 mod go;
 mod java;
+mod manifest;
+mod parity;
 mod php;
 mod python;
 mod r;
@@ -44,6 +46,12 @@ enum Commands {
         /// Fixture directory (defaults to workspace fixtures/).
         #[arg(long, default_value = "fixtures")]
         fixtures: Utf8PathBuf,
+    },
+    /// Generate parity manifest from kreuzberg core types.
+    Manifest {
+        /// Output path for the parity manifest JSON.
+        #[arg(long, default_value = "tools/e2e-generator/parity-manifest.json")]
+        output: Utf8PathBuf,
     },
 }
 
@@ -91,6 +99,16 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Generate { lang, fixtures, output } => {
             let fixtures = load_fixtures(fixtures.as_path())?;
+
+            // Load parity manifest once for all languages
+            let manifest_path = camino::Utf8PathBuf::from("tools/e2e-generator/parity-manifest.json");
+            let manifest = if manifest_path.exists() {
+                Some(parity::load_manifest(&manifest_path)?)
+            } else {
+                eprintln!("Warning: parity manifest not found at {manifest_path}, skipping parity generation");
+                None
+            };
+
             let langs = if matches!(lang, Language::All) {
                 Language::all_concrete().to_vec()
             } else {
@@ -101,57 +119,100 @@ fn main() -> Result<()> {
                     Language::All => unreachable!(),
                     Language::C => {
                         c::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            c::generate_parity(m, output.as_path())?;
+                        }
                     }
                     Language::Rust => {
                         rust::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            rust::generate_parity(m, output.as_path())?;
+                        }
                         run_cargo_fmt(&output.join("rust"));
                     }
                     Language::Python => {
                         python::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            python::generate_parity(m, output.as_path())?;
+                        }
                         run_ruff_format(&output.join("python/tests"));
                     }
                     Language::Typescript => {
                         typescript::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            typescript::generate_parity(m, output.as_path())?;
+                        }
                         run_biome_format(&output.join("typescript"));
                     }
                     Language::Ruby => {
                         ruby::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            ruby::generate_parity(m, output.as_path())?;
+                        }
                         run_rubocop_format(&output.join("ruby"));
                     }
                     Language::Java => {
                         java::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            java::generate_parity(m, output.as_path())?;
+                        }
                         run_google_java_format(&output.join("java"));
                     }
                     Language::Go => {
                         go::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            go::generate_parity(m, output.as_path())?;
+                        }
                         run_go_format(&output.join("go"));
                     }
                     Language::Csharp => {
                         csharp::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            csharp::generate_parity(m, output.as_path())?;
+                        }
                         run_dotnet_format(&output.join("csharp"));
                     }
                     Language::Php => {
                         php::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            php::generate_parity(m, output.as_path())?;
+                        }
                         run_php_format(&output.join("php"));
                     }
                     Language::Elixir => {
                         elixir::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            elixir::generate_parity(m, output.as_path())?;
+                        }
                         run_mix_format(&output.join("elixir"));
                     }
                     Language::R => {
                         r::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            r::generate_parity(m, output.as_path())?;
+                        }
                         run_styler_format(&output.join("r"));
                     }
                     Language::WasmDeno => {
                         wasm_deno::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            wasm_deno::generate_parity(m, output.as_path())?;
+                        }
                         run_biome_format(&output.join("wasm-deno"));
                     }
                     Language::WasmWorkers => {
                         wasm_workers::generate(&fixtures, output.as_path())?;
+                        if let Some(ref m) = manifest {
+                            wasm_workers::generate_parity(m, output.as_path())?;
+                        }
                         run_biome_format(&output.join("wasm-workers"));
                     }
                 };
             }
+        }
+        Commands::Manifest { output } => {
+            manifest::generate(output.as_path())?;
+            println!("Generated parity manifest at {output}");
         }
         Commands::List { fixtures } => {
             let fixtures = load_fixtures(fixtures.as_path())?;

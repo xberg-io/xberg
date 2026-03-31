@@ -16,7 +16,7 @@ describe("ocr", () => {
 			return;
 		}
 
-		const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "eng" } });
+		const config = buildConfig({ ocr: { backend: "tesseract", language: "eng" }, force_ocr: true });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "image/png", config);
@@ -48,7 +48,7 @@ describe("ocr", () => {
 			return;
 		}
 
-		const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "eng" } });
+		const config = buildConfig({ ocr: { backend: "tesseract", language: "eng" }, force_ocr: true });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "image/jpeg", config);
@@ -72,7 +72,7 @@ describe("ocr", () => {
 			return;
 		}
 
-		const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "deu" } });
+		const config = buildConfig({ ocr: { backend: "tesseract", language: "deu" }, force_ocr: true });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/pdf", config);
@@ -104,7 +104,7 @@ describe("ocr", () => {
 			return;
 		}
 
-		const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "eng" } });
+		const config = buildConfig({ ocr: { backend: "tesseract", language: "eng" }, force_ocr: true });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/pdf", config);
@@ -130,7 +130,7 @@ describe("ocr", () => {
 			return;
 		}
 
-		const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "eng" } });
+		const config = buildConfig({ ocr: { backend: "tesseract", language: "eng" }, force_ocr: true });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/pdf", config);
@@ -163,8 +163,8 @@ describe("ocr", () => {
 		}
 
 		const config = buildConfig({
+			ocr: { backend: "tesseract", language: "eng", element_config: { include_elements: true } },
 			force_ocr: true,
-			ocr: { backend: "tesseract", element_config: { include_elements: true }, language: "eng" },
 		});
 		let result: ExtractionResult | null = null;
 		try {
@@ -191,8 +191,8 @@ describe("ocr", () => {
 		}
 
 		const config = buildConfig({
+			ocr: { backend: "tesseract", language: "eng", element_config: { include_elements: true, min_level: "line" } },
 			force_ocr: true,
-			ocr: { backend: "tesseract", element_config: { include_elements: true, min_level: "line" }, language: "eng" },
 		});
 		let result: ExtractionResult | null = null;
 		try {
@@ -220,7 +220,7 @@ describe("ocr", () => {
 			return;
 		}
 
-		const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "deu" } });
+		const config = buildConfig({ ocr: { backend: "tesseract", language: "deu" }, force_ocr: true });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/pdf", config);

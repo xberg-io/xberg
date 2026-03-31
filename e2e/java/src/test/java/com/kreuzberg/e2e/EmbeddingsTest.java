@@ -27,7 +27,8 @@ public class EmbeddingsTest {
   public void embeddingAsync() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"balanced\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+            "{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"balanced\"},\"normalize\":true}}}");
+    E2EHelpers.skipIfFeatureUnavailable("embeddings");
     if ((System.getProperty("os.arch").equals("amd64")
         && System.getProperty("os.name").startsWith("Windows"))) {
       org.junit.jupiter.api.Assumptions.assumeTrue(
@@ -75,7 +76,8 @@ public class EmbeddingsTest {
   public void embeddingBalancedPreset() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"balanced\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+            "{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"balanced\"},\"normalize\":true}}}");
+    E2EHelpers.skipIfFeatureUnavailable("embeddings");
     if ((System.getProperty("os.arch").equals("amd64")
         && System.getProperty("os.name").startsWith("Windows"))) {
       org.junit.jupiter.api.Assumptions.assumeTrue(
@@ -117,7 +119,8 @@ public class EmbeddingsTest {
   public void embeddingFastPreset() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"fast\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+            "{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"fast\"},\"normalize\":true}}}");
+    E2EHelpers.skipIfFeatureUnavailable("embeddings");
     if ((System.getProperty("os.arch").equals("amd64")
         && System.getProperty("os.name").startsWith("Windows"))) {
       org.junit.jupiter.api.Assumptions.assumeTrue(

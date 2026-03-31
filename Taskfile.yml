@@ -235,8 +235,15 @@ tasks:
     cmds:
       - python3 scripts/publish/check_all_registries.py {{.CLI_ARGS}}
 
+  generate:manifest:
+    desc: Regenerate parity manifest from Rust types
+    cmds:
+      - cargo run -p kreuzberg-e2e-generator -- manifest
+
   e2e:generate:all:
     desc: Generate all E2E tests from fixtures across all supported languages
+    deps:
+      - generate:manifest
     cmds:
       - task: rust:e2e:generate
       - task: python:e2e:generate

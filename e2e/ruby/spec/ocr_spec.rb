@@ -13,7 +13,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_image_hello_world',
       'images/test_hello_world.png',
-      { force_ocr: true, ocr: { backend: 'tesseract', language: 'eng' } },
+      { ocr: { backend: 'tesseract', language: 'eng' }, force_ocr: true },
       requirements: %w[tesseract tesseract],
       notes: 'Requires Tesseract OCR for image text extraction.',
       skip_if_missing: true
@@ -32,7 +32,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_image_no_text',
       'images/flower_no_text.jpg',
-      { force_ocr: true, ocr: { backend: 'tesseract', language: 'eng' } },
+      { ocr: { backend: 'tesseract', language: 'eng' }, force_ocr: true },
       requirements: %w[tesseract tesseract],
       notes: 'Skip when Tesseract is unavailable.',
       skip_if_missing: true
@@ -51,7 +51,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_confidence_filter',
       'images/ocr_image.jpg',
-      { force_ocr: true, ocr: { backend: 'paddle-ocr', language: 'en', paddle_ocr_config: { min_confidence: 80 } } },
+      { ocr: { backend: 'paddle-ocr', language: 'en', paddle_ocr_config: { min_confidence: 80 } }, force_ocr: true },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Tests confidence threshold filtering with PaddleOCR',
       skip_if_missing: true
@@ -70,9 +70,10 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_element_hierarchy',
       'images/test_hello_world.png',
-      { force_ocr: true,
-        ocr: { backend: 'paddle-ocr', element_config: { build_hierarchy: true, include_elements: true },
-               language: 'en' } },
+      {
+        ocr: { backend: 'paddle-ocr', language: 'en',
+               element_config: { include_elements: true, build_hierarchy: true } }, force_ocr: true
+      },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Requires PaddleOCR with ONNX Runtime',
       skip_if_missing: true
@@ -93,8 +94,8 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_element_levels',
       'images/test_hello_world.png',
-      { force_ocr: true,
-        ocr: { backend: 'paddle-ocr', element_config: { include_elements: true, min_level: 'word' }, language: 'en' } },
+      { ocr: { backend: 'paddle-ocr', language: 'en', element_config: { include_elements: true, min_level: 'word' } },
+        force_ocr: true },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Requires PaddleOCR with ONNX Runtime',
       skip_if_missing: true
@@ -114,7 +115,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_image_chinese',
       'images/chi_sim_image.jpeg',
-      { force_ocr: true, ocr: { backend: 'paddle-ocr', language: 'ch' } },
+      { ocr: { backend: 'paddle-ocr', language: 'ch' }, force_ocr: true },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Requires PaddleOCR with Chinese models',
       skip_if_missing: true
@@ -133,7 +134,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_image_english',
       'images/test_hello_world.png',
-      { force_ocr: true, ocr: { backend: 'paddle-ocr', language: 'en' } },
+      { ocr: { backend: 'paddle-ocr', language: 'en' }, force_ocr: true },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Requires PaddleOCR with ONNX Runtime',
       skip_if_missing: true
@@ -153,8 +154,8 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_markdown',
       'images/test_hello_world.png',
-      { force_ocr: true,
-        ocr: { backend: 'paddle-ocr', language: 'en', paddle_ocr_config: { output_format: 'markdown' } } },
+      { ocr: { backend: 'paddle-ocr', language: 'en', paddle_ocr_config: { output_format: 'markdown' } },
+        force_ocr: true },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Tests markdown output format parity with Tesseract',
       skip_if_missing: true
@@ -174,7 +175,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_pdf_scanned',
       'pdf/ocr_test.pdf',
-      { force_ocr: true, ocr: { backend: 'paddle-ocr', language: 'en' } },
+      { ocr: { backend: 'paddle-ocr', language: 'en' }, force_ocr: true },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Requires PaddleOCR with ONNX Runtime',
       skip_if_missing: true
@@ -194,7 +195,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_structured',
       'images/test_hello_world.png',
-      { force_ocr: true, ocr: { backend: 'paddle-ocr', element_config: { include_elements: true }, language: 'en' } },
+      { ocr: { backend: 'paddle-ocr', language: 'en', element_config: { include_elements: true } }, force_ocr: true },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Tests structured output with bbox/confidence preservation',
       skip_if_missing: true
@@ -215,8 +216,8 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_paddle_table_detection',
       'images/simple_table.png',
-      { force_ocr: true,
-        ocr: { backend: 'paddle-ocr', language: 'en', paddle_ocr_config: { enable_table_detection: true } } },
+      { ocr: { backend: 'paddle-ocr', language: 'en', paddle_ocr_config: { enable_table_detection: true } },
+        force_ocr: true },
       requirements: %w[paddle-ocr paddle-ocr onnxruntime],
       notes: 'Tests table detection capability with PaddleOCR',
       skip_if_missing: true
@@ -235,7 +236,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_pdf_image_only_german',
       'pdf/image_only_german_pdf.pdf',
-      { force_ocr: true, ocr: { backend: 'tesseract', language: 'deu' } },
+      { ocr: { backend: 'tesseract', language: 'deu' }, force_ocr: true },
       requirements: %w[tesseract tesseract],
       notes: 'Requires Tesseract OCR with German language data.',
       skip_if_missing: true
@@ -254,7 +255,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_pdf_rotated_90',
       'pdf/ocr_test_rotated_90.pdf',
-      { force_ocr: true, ocr: { backend: 'tesseract', language: 'eng' } },
+      { ocr: { backend: 'tesseract', language: 'eng' }, force_ocr: true },
       requirements: %w[tesseract tesseract],
       notes: 'Skip automatically when OCR backend is missing.',
       skip_if_missing: true
@@ -272,7 +273,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_pdf_tesseract',
       'pdf/ocr_test.pdf',
-      { force_ocr: true, ocr: { backend: 'tesseract', language: 'eng' } },
+      { ocr: { backend: 'tesseract', language: 'eng' }, force_ocr: true },
       requirements: %w[tesseract tesseract],
       notes: 'Skip automatically if OCR backend is unavailable.',
       skip_if_missing: true
@@ -291,7 +292,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_tesseract_elements',
       'images/test_hello_world.png',
-      { force_ocr: true, ocr: { backend: 'tesseract', element_config: { include_elements: true }, language: 'eng' } },
+      { ocr: { backend: 'tesseract', language: 'eng', element_config: { include_elements: true } }, force_ocr: true },
       requirements: %w[tesseract tesseract],
       notes: 'Requires Tesseract OCR backend',
       skip_if_missing: true
@@ -311,8 +312,8 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_tesseract_elements_min_count',
       'images/test_hello_world.png',
-      { force_ocr: true,
-        ocr: { backend: 'tesseract', element_config: { include_elements: true, min_level: 'line' }, language: 'eng' } },
+      { ocr: { backend: 'tesseract', language: 'eng', element_config: { include_elements: true, min_level: 'line' } },
+        force_ocr: true },
       requirements: %w[tesseract tesseract],
       notes: 'Requires Tesseract OCR backend',
       skip_if_missing: true
@@ -331,7 +332,7 @@ RSpec.describe 'ocr fixtures' do
     E2ERuby.run_fixture(
       'ocr_tesseract_language_german',
       'pdf/image_only_german_pdf.pdf',
-      { force_ocr: true, ocr: { backend: 'tesseract', language: 'deu' } },
+      { ocr: { backend: 'tesseract', language: 'deu' }, force_ocr: true },
       requirements: %w[tesseract tesseract],
       notes: 'Requires Tesseract OCR with German language data (deu)',
       skip_if_missing: true

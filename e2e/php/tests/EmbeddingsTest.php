@@ -27,7 +27,7 @@ class EmbeddingsTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('embeddings');
 
-        $config = Helpers::buildConfig(['chunking' => ['embedding' => ['model' => ['name' => 'balanced', 'type' => 'preset'], 'normalize' => true], 'max_chars' => 500, 'max_overlap' => 50]]);
+        $config = Helpers::buildConfig(['chunking' => ['max_chars' => 500, 'max_overlap' => 50, 'embedding' => ['model' => ['type' => 'preset', 'name' => 'balanced'], 'normalize' => true]]]);
 
         $kreuzberg = new Kreuzberg($config);
         $deferred = $kreuzberg->extractFileAsync($documentPath);
@@ -50,7 +50,7 @@ class EmbeddingsTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('embeddings');
 
-        $config = Helpers::buildConfig(['chunking' => ['embedding' => ['model' => ['name' => 'balanced', 'type' => 'preset'], 'normalize' => true], 'max_chars' => 500, 'max_overlap' => 50]]);
+        $config = Helpers::buildConfig(['chunking' => ['max_chars' => 500, 'max_overlap' => 50, 'embedding' => ['model' => ['type' => 'preset', 'name' => 'balanced'], 'normalize' => true]]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -92,7 +92,7 @@ class EmbeddingsTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('embeddings');
 
-        $config = Helpers::buildConfig(['chunking' => ['embedding' => ['model' => ['name' => 'fast', 'type' => 'preset'], 'normalize' => true], 'max_chars' => 500, 'max_overlap' => 50]]);
+        $config = Helpers::buildConfig(['chunking' => ['max_chars' => 500, 'max_overlap' => 50, 'embedding' => ['model' => ['type' => 'preset', 'name' => 'fast'], 'normalize' => true]]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);

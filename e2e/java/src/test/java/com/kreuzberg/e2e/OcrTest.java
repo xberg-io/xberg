@@ -22,7 +22,8 @@ public class OcrTest {
   public void ocrImageHelloWorld() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+            "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "ocr_image_hello_world",
         "images/test_hello_world.png",
@@ -41,7 +42,8 @@ public class OcrTest {
   public void ocrImageNoText() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+            "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "ocr_image_no_text",
         "images/flower_no_text.jpg",
@@ -59,8 +61,9 @@ public class OcrTest {
   public void ocrPaddleConfidenceFilter() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"min_confidence\":80.0}}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"min_confidence\":80.0}},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_confidence_filter",
         "images/ocr_image.jpg",
@@ -78,8 +81,9 @@ public class OcrTest {
   public void ocrPaddleElementHierarchy() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"element_config\":{\"build_hierarchy\":true,\"include_elements\":true},\"language\":\"en\"}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"element_config\":{\"include_elements\":true,\"build_hierarchy\":true}},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_element_hierarchy",
         "images/test_hello_world.png",
@@ -98,8 +102,9 @@ public class OcrTest {
   public void ocrPaddleElementLevels() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"element_config\":{\"include_elements\":true,\"min_level\":\"word\"},\"language\":\"en\"}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"element_config\":{\"include_elements\":true,\"min_level\":\"word\"}},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_element_levels",
         "images/test_hello_world.png",
@@ -118,8 +123,9 @@ public class OcrTest {
   public void ocrPaddleImageChinese() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"ch\"}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"ch\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_image_chinese",
         "images/chi_sim_image.jpeg",
@@ -137,8 +143,9 @@ public class OcrTest {
   public void ocrPaddleImageEnglish() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_image_english",
         "images/test_hello_world.png",
@@ -158,8 +165,9 @@ public class OcrTest {
   public void ocrPaddleMarkdown() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"output_format\":\"markdown\"}}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"output_format\":\"markdown\"}},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_markdown",
         "images/test_hello_world.png",
@@ -179,8 +187,9 @@ public class OcrTest {
   public void ocrPaddlePdfScanned() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_pdf_scanned",
         "pdf/ocr_test.pdf",
@@ -200,8 +209,9 @@ public class OcrTest {
   public void ocrPaddleStructured() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"element_config\":{\"include_elements\":true},\"language\":\"en\"}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"element_config\":{\"include_elements\":true}},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_structured",
         "images/test_hello_world.png",
@@ -220,8 +230,9 @@ public class OcrTest {
   public void ocrPaddleTableDetection() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"enable_table_detection\":true}}}");
-    E2EHelpers.skipIfPaddleOcrUnavailable();
+            "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"enable_table_detection\":true}},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
+    E2EHelpers.skipIfFeatureUnavailable("paddle-ocr");
     E2EHelpers.runFixture(
         "ocr_paddle_table_detection",
         "images/simple_table.png",
@@ -240,7 +251,8 @@ public class OcrTest {
   public void ocrPdfImageOnlyGerman() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"}}");
+            "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "ocr_pdf_image_only_german",
         "pdf/image_only_german_pdf.pdf",
@@ -260,7 +272,8 @@ public class OcrTest {
   public void ocrPdfRotated90() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+            "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "ocr_pdf_rotated_90",
         "pdf/ocr_test_rotated_90.pdf",
@@ -278,7 +291,8 @@ public class OcrTest {
   public void ocrPdfTesseract() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+            "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "ocr_pdf_tesseract",
         "pdf/ocr_test.pdf",
@@ -298,7 +312,8 @@ public class OcrTest {
   public void ocrTesseractElements() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"element_config\":{\"include_elements\":true},\"language\":\"eng\"}}");
+            "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\",\"element_config\":{\"include_elements\":true}},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "ocr_tesseract_elements",
         "images/test_hello_world.png",
@@ -317,7 +332,8 @@ public class OcrTest {
   public void ocrTesseractElementsMinCount() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"element_config\":{\"include_elements\":true,\"min_level\":\"line\"},\"language\":\"eng\"}}");
+            "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\",\"element_config\":{\"include_elements\":true,\"min_level\":\"line\"}},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "ocr_tesseract_elements_min_count",
         "images/test_hello_world.png",
@@ -336,7 +352,8 @@ public class OcrTest {
   public void ocrTesseractLanguageGerman() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"}}");
+            "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"},\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "ocr_tesseract_language_german",
         "pdf/image_only_german_pdf.pdf",

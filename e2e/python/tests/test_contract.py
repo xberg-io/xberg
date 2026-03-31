@@ -278,7 +278,7 @@ def test_config_acceleration_cpu_provider() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping config_acceleration_cpu_provider: missing document at {document_path}")
 
-    config = helpers.build_config({"acceleration": {"device_id": 0, "provider": "cpu"}})
+    config = helpers.build_config({"acceleration": {"provider": "cpu", "device_id": 0}})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -408,7 +408,7 @@ def test_config_chunking_tokenizer() -> None:
         pytest.skip(f"Skipping config_chunking_tokenizer: missing document at {document_path}")
 
     config = helpers.build_config(
-        {"chunking": {"max_chars": 200, "max_overlap": 40, "sizing": {"model": "Xenova/gpt-4o", "type": "tokenizer"}}}
+        {"chunking": {"max_chars": 200, "max_overlap": 40, "sizing": {"type": "tokenizer", "model": "Xenova/gpt-4o"}}}
     )
 
     result = extract_file_sync(document_path, None, config)
@@ -591,7 +591,7 @@ def test_config_html_options() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping config_html_options: missing document at {document_path}")
 
-    config = helpers.build_config({"html_options": {"extract_metadata": True}})
+    config = helpers.build_config({"html_options": {"extractMetadata": True}})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -670,7 +670,7 @@ def test_config_language_detection_multi() -> None:
         pytest.skip(f"Skipping config_language_detection_multi: missing document at {document_path}")
 
     config = helpers.build_config(
-        {"language_detection": {"detect_multiple": True, "enabled": True, "min_confidence": 0.3}}
+        {"language_detection": {"enabled": True, "detect_multiple": True, "min_confidence": 0.3}}
     )
 
     result = extract_file_sync(document_path, None, config)
@@ -687,7 +687,7 @@ def test_config_language_multi() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping config_language_multi: missing document at {document_path}")
 
-    config = helpers.build_config({"language_detection": {"detect_multiple": True, "enabled": True}})
+    config = helpers.build_config({"language_detection": {"enabled": True, "detect_multiple": True}})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -788,7 +788,7 @@ def test_config_pdf_hierarchy() -> None:
         pytest.skip(f"Skipping config_pdf_hierarchy: missing document at {document_path}")
 
     config = helpers.build_config(
-        {"pages": {"extract_pages": True}, "pdf_options": {"hierarchy": {"enabled": True, "include_bbox": True}}}
+        {"pdf_options": {"hierarchy": {"enabled": True, "include_bbox": True}}, "pages": {"extract_pages": True}}
     )
 
     result = extract_file_sync(document_path, None, config)
@@ -804,7 +804,7 @@ def test_config_pdf_margins() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping config_pdf_margins: missing document at {document_path}")
 
-    config = helpers.build_config({"pdf_options": {"bottom_margin_fraction": 0.1, "top_margin_fraction": 0.1}})
+    config = helpers.build_config({"pdf_options": {"top_margin_fraction": 0.1, "bottom_margin_fraction": 0.1}})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -937,6 +937,67 @@ def test_config_tables_content() -> None:
 
     helpers.assert_expected_mime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
     helpers.assert_table_count(result, 1, None)
+
+
+def test_config_tree_sitter() -> None:
+    """Tests tree-sitter configuration round-trip"""
+
+    document_path = helpers.resolve_document("code/hello.py")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_tree_sitter: missing document at {document_path}")
+
+    config = helpers.build_config(
+        {
+            "tree_sitter": {
+                "languages": ["python", "rust"],
+                "groups": ["web"],
+                "process": {
+                    "structure": True,
+                    "imports": True,
+                    "exports": True,
+                    "comments": False,
+                    "docstrings": False,
+                    "symbols": False,
+                    "diagnostics": False,
+                },
+            }
+        }
+    )
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["text/x-source-code"])
+    helpers.assert_min_content_length(result, 5)
+
+
+def test_config_tree_sitter_process() -> None:
+    """Tests tree-sitter process config with all options enabled"""
+
+    document_path = helpers.resolve_document("code/hello.py")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_tree_sitter_process: missing document at {document_path}")
+
+    config = helpers.build_config(
+        {
+            "tree_sitter": {
+                "process": {
+                    "structure": True,
+                    "imports": True,
+                    "exports": True,
+                    "comments": True,
+                    "docstrings": True,
+                    "symbols": True,
+                    "diagnostics": True,
+                    "chunk_max_size": 2000,
+                }
+            }
+        }
+    )
+
+    result = extract_file_sync(document_path, None, config)
+
+    helpers.assert_expected_mime(result, ["text/x-source-code"])
+    helpers.assert_min_content_length(result, 5)
 
 
 def test_config_use_cache_false() -> None:

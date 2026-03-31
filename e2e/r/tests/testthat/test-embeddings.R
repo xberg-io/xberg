@@ -9,7 +9,7 @@ test_that("embedding_async", {
   result <- run_fixture_with_method(
     "embedding_async",
     "pdf/fake_memo.pdf",
-    list(chunking = list(embedding = list(model = list(name = "balanced", type = "preset"), normalize = TRUE), max_chars = 500L, max_overlap = 50L)),
+    list(chunking = list(max_chars = 500L, max_overlap = 50L, embedding = list(model = list(type = "preset", name = "balanced"), normalize = TRUE))),
     "async",
     "file",
     requirements = c("embeddings"),
@@ -26,7 +26,7 @@ test_that("embedding_balanced_preset", {
   result <- run_fixture(
     "embedding_balanced_preset",
     "pdf/fake_memo.pdf",
-    list(chunking = list(embedding = list(model = list(name = "balanced", type = "preset"), normalize = TRUE), max_chars = 500L, max_overlap = 50L)),
+    list(chunking = list(max_chars = 500L, max_overlap = 50L, embedding = list(model = list(type = "preset", name = "balanced"), normalize = TRUE))),
     requirements = c("embeddings"),
     notes = "Embeddings not supported on Windows",
     skip_if_missing = TRUE
@@ -55,7 +55,7 @@ test_that("embedding_fast_preset", {
   result <- run_fixture(
     "embedding_fast_preset",
     "pdf/fake_memo.pdf",
-    list(chunking = list(embedding = list(model = list(name = "fast", type = "preset"), normalize = TRUE), max_chars = 500L, max_overlap = 50L)),
+    list(chunking = list(max_chars = 500L, max_overlap = 50L, embedding = list(model = list(type = "preset", name = "fast"), normalize = TRUE))),
     requirements = c("embeddings"),
     notes = "Embeddings not supported on Windows",
     skip_if_missing = TRUE

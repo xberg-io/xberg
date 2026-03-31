@@ -524,7 +524,7 @@ public class ContractTest {
 
   @Test
   public void configAccelerationCpuProvider() throws Exception {
-    JsonNode config = MAPPER.readTree("{\"acceleration\":{\"device_id\":0,\"provider\":\"cpu\"}}");
+    JsonNode config = MAPPER.readTree("{\"acceleration\":{\"provider\":\"cpu\",\"device_id\":0}}");
     E2EHelpers.runFixture(
         "config_acceleration_cpu_provider",
         "pdf/fake_memo.pdf",
@@ -562,6 +562,7 @@ public class ContractTest {
     JsonNode config =
         MAPPER.readTree(
             "{\"chunking\":{\"chunker_type\":\"markdown\",\"max_chars\":300,\"max_overlap\":50}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking");
     E2EHelpers.runFixture(
         "config_chunking_heading_context",
         "markdown/extraction_test.md",
@@ -580,6 +581,7 @@ public class ContractTest {
     JsonNode config =
         MAPPER.readTree(
             "{\"chunking\":{\"chunker_type\":\"markdown\",\"max_chars\":500,\"max_overlap\":50}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking");
     E2EHelpers.runFixture(
         "config_chunking_markdown",
         "pdf/fake_memo.pdf",
@@ -599,6 +601,7 @@ public class ContractTest {
     JsonNode config =
         MAPPER.readTree(
             "{\"chunking\":{\"chunker_type\":\"markdown\",\"max_chars\":300,\"max_overlap\":50}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking");
     E2EHelpers.runFixture(
         "config_chunking_no_headings",
         "text/book_war_and_peace_1p.txt",
@@ -617,6 +620,7 @@ public class ContractTest {
     JsonNode config =
         MAPPER.readTree(
             "{\"chunking\":{\"chunker_type\":\"markdown\",\"max_chars\":300,\"max_overlap\":50,\"prepend_heading_context\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking");
     E2EHelpers.runFixture(
         "config_chunking_prepend_heading_context",
         "markdown/extraction_test.md",
@@ -633,6 +637,7 @@ public class ContractTest {
   @Test
   public void configChunkingSmall() throws Exception {
     JsonNode config = MAPPER.readTree("{\"chunking\":{\"max_chars\":100,\"max_overlap\":20}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking");
     E2EHelpers.runFixture(
         "config_chunking_small",
         "pdf/fake_memo.pdf",
@@ -670,7 +675,8 @@ public class ContractTest {
   public void configChunkingTokenizer() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"chunking\":{\"max_chars\":200,\"max_overlap\":40,\"sizing\":{\"model\":\"Xenova/gpt-4o\",\"type\":\"tokenizer\"}}}");
+            "{\"chunking\":{\"max_chars\":200,\"max_overlap\":40,\"sizing\":{\"type\":\"tokenizer\",\"model\":\"Xenova/gpt-4o\"}}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking-tokenizers");
     E2EHelpers.runFixture(
         "config_chunking_tokenizer",
         "markdown/comprehensive.md",
@@ -687,6 +693,7 @@ public class ContractTest {
   @Test
   public void configDjotContent() throws Exception {
     JsonNode config = MAPPER.readTree("{\"output_format\":\"djot\"}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "config_djot_content",
         "pdf/fake_memo.pdf",
@@ -735,6 +742,7 @@ public class ContractTest {
   @Test
   public void configDocumentStructureGroups() throws Exception {
     JsonNode config = MAPPER.readTree("{\"include_document_structure\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("office");
     E2EHelpers.runFixture(
         "config_document_structure_groups",
         "docx/unit_test_headers.docx",
@@ -754,6 +762,7 @@ public class ContractTest {
   @Test
   public void configDocumentStructureHeadings() throws Exception {
     JsonNode config = MAPPER.readTree("{\"include_document_structure\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("office");
     E2EHelpers.runFixture(
         "config_document_structure_headings",
         "docx/unit_test_headers.docx",
@@ -793,6 +802,7 @@ public class ContractTest {
   @Test
   public void configElementTypes() throws Exception {
     JsonNode config = MAPPER.readTree("{\"result_format\":\"element_based\"}");
+    E2EHelpers.skipIfFeatureUnavailable("office");
     E2EHelpers.runFixture(
         "config_element_types",
         "docx/unit_test_headers.docx",
@@ -845,6 +855,7 @@ public class ContractTest {
   @Test
   public void configForceOcr() throws Exception {
     JsonNode config = MAPPER.readTree("{\"force_ocr\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "config_force_ocr",
         "pdf/fake_memo.pdf",
@@ -863,6 +874,7 @@ public class ContractTest {
     JsonNode config =
         MAPPER.readTree(
             "{\"force_ocr_pages\":[1],\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+    E2EHelpers.skipIfFeatureUnavailable("ocr");
     E2EHelpers.runFixture(
         "config_force_ocr_pages",
         "pdf/fake_memo.pdf",
@@ -878,7 +890,7 @@ public class ContractTest {
 
   @Test
   public void configHtmlOptions() throws Exception {
-    JsonNode config = MAPPER.readTree("{\"html_options\":{\"extract_metadata\":true}}");
+    JsonNode config = MAPPER.readTree("{\"html_options\":{\"extractMetadata\":true}}");
     E2EHelpers.runFixture(
         "config_html_options",
         "html/complex_table.html",
@@ -932,6 +944,7 @@ public class ContractTest {
   public void configKeywords() throws Exception {
     JsonNode config =
         MAPPER.readTree("{\"keywords\":{\"algorithm\":\"yake\",\"max_keywords\":10}}");
+    E2EHelpers.skipIfFeatureUnavailable("keywords-yake");
     E2EHelpers.runFixture(
         "config_keywords",
         "pdf/fake_memo.pdf",
@@ -967,7 +980,7 @@ public class ContractTest {
   public void configLanguageDetectionMulti() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"language_detection\":{\"detect_multiple\":true,\"enabled\":true,\"min_confidence\":0.3}}");
+            "{\"language_detection\":{\"enabled\":true,\"detect_multiple\":true,\"min_confidence\":0.3}}");
     E2EHelpers.runFixture(
         "config_language_detection_multi",
         "pdf/fake_memo.pdf",
@@ -985,7 +998,8 @@ public class ContractTest {
   @Test
   public void configLanguageMulti() throws Exception {
     JsonNode config =
-        MAPPER.readTree("{\"language_detection\":{\"detect_multiple\":true,\"enabled\":true}}");
+        MAPPER.readTree("{\"language_detection\":{\"enabled\":true,\"detect_multiple\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("language-detection");
     E2EHelpers.runFixture(
         "config_language_multi",
         "pdf/fake_memo.pdf",
@@ -1004,6 +1018,7 @@ public class ContractTest {
   public void configPages() throws Exception {
     JsonNode config =
         MAPPER.readTree("{\"pages\":{\"extract_pages\":true,\"insert_page_markers\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "config_pages",
         "pdf/fake_memo.pdf",
@@ -1021,6 +1036,7 @@ public class ContractTest {
   @Test
   public void configPagesExactCount() throws Exception {
     JsonNode config = MAPPER.readTree("{\"pages\":{\"extract_pages\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "config_pages_exact_count",
         "pdf/multi_page.pdf",
@@ -1038,6 +1054,7 @@ public class ContractTest {
   @Test
   public void configPagesExtract() throws Exception {
     JsonNode config = MAPPER.readTree("{\"pages\":{\"extract_pages\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "config_pages_extract",
         "pdf/fake_memo.pdf",
@@ -1055,6 +1072,7 @@ public class ContractTest {
   @Test
   public void configPagesMarkers() throws Exception {
     JsonNode config = MAPPER.readTree("{\"pages\":{\"insert_page_markers\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "config_pages_markers",
         "pdf/fake_memo.pdf",
@@ -1072,6 +1090,7 @@ public class ContractTest {
   @Test
   public void configPdfAnnotationsCount() throws Exception {
     JsonNode config = MAPPER.readTree("{\"pdf_options\":{\"extract_annotations\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     if ((System.getProperty("os.arch").equals("aarch64")
         && System.getProperty("os.name").startsWith("Linux"))) {
       org.junit.jupiter.api.Assumptions.assumeTrue(
@@ -1095,7 +1114,8 @@ public class ContractTest {
   public void configPdfHierarchy() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"pages\":{\"extract_pages\":true},\"pdf_options\":{\"hierarchy\":{\"enabled\":true,\"include_bbox\":true}}}");
+            "{\"pdf_options\":{\"hierarchy\":{\"enabled\":true,\"include_bbox\":true}},\"pages\":{\"extract_pages\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "config_pdf_hierarchy",
         "pdf/fake_memo.pdf",
@@ -1113,7 +1133,8 @@ public class ContractTest {
   public void configPdfMargins() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"pdf_options\":{\"bottom_margin_fraction\":0.1,\"top_margin_fraction\":0.1}}");
+            "{\"pdf_options\":{\"top_margin_fraction\":0.1,\"bottom_margin_fraction\":0.1}}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "config_pdf_margins",
         "pdf/fake_memo.pdf",
@@ -1181,6 +1202,7 @@ public class ContractTest {
   @Test
   public void configQualityEnabled() throws Exception {
     JsonNode config = MAPPER.readTree("{\"enable_quality_processing\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("quality");
     E2EHelpers.runFixture(
         "config_quality_enabled",
         "pdf/fake_memo.pdf",
@@ -1198,6 +1220,7 @@ public class ContractTest {
   @Test
   public void configQualityScoreRange() throws Exception {
     JsonNode config = MAPPER.readTree("{\"enable_quality_processing\":true}");
+    E2EHelpers.skipIfFeatureUnavailable("quality");
     E2EHelpers.runFixture(
         "config_quality_score_range",
         "pdf/fake_memo.pdf",
@@ -1233,6 +1256,7 @@ public class ContractTest {
   @Test
   public void configStructuredOutput() throws Exception {
     JsonNode config = MAPPER.readTree("{\"output_format\":\"structured\"}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "config_structured_output",
         "pdf/fake_memo.pdf",
@@ -1262,6 +1286,44 @@ public class ContractTest {
               Arrays.asList(
                   "application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
           E2EHelpers.Assertions.assertTableCount(result, 1, null);
+        });
+  }
+
+  @Test
+  public void configTreeSitter() throws Exception {
+    JsonNode config =
+        MAPPER.readTree(
+            "{\"tree_sitter\":{\"languages\":[\"python\",\"rust\"],\"groups\":[\"web\"],\"process\":{\"structure\":true,\"imports\":true,\"exports\":true,\"comments\":false,\"docstrings\":false,\"symbols\":false,\"diagnostics\":false}}}");
+    E2EHelpers.skipIfFeatureUnavailable("tree-sitter");
+    E2EHelpers.runFixture(
+        "config_tree_sitter",
+        "code/hello.py",
+        config,
+        Arrays.asList("tree-sitter"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/x-source-code"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 5);
+        });
+  }
+
+  @Test
+  public void configTreeSitterProcess() throws Exception {
+    JsonNode config =
+        MAPPER.readTree(
+            "{\"tree_sitter\":{\"process\":{\"structure\":true,\"imports\":true,\"exports\":true,\"comments\":true,\"docstrings\":true,\"symbols\":true,\"diagnostics\":true,\"chunk_max_size\":2000}}}");
+    E2EHelpers.skipIfFeatureUnavailable("tree-sitter");
+    E2EHelpers.runFixture(
+        "config_tree_sitter_process",
+        "code/hello.py",
+        config,
+        Arrays.asList("tree-sitter"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/x-source-code"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 5);
         });
   }
 

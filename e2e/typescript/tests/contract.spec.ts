@@ -410,7 +410,7 @@ describe("contract fixtures", () => {
 				console.warn("Skipping config_acceleration_cpu_provider: missing document at", documentPath);
 				return;
 			}
-			const config = buildConfig({ acceleration: { device_id: 0, provider: "cpu" } });
+			const config = buildConfig({ acceleration: { provider: "cpu", device_id: 0 } });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -635,7 +635,7 @@ describe("contract fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
-				chunking: { max_chars: 200, max_overlap: 40, sizing: { model: "Xenova/gpt-4o", type: "tokenizer" } },
+				chunking: { max_chars: 200, max_overlap: 40, sizing: { type: "tokenizer", model: "Xenova/gpt-4o" } },
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -975,7 +975,7 @@ describe("contract fixtures", () => {
 				console.warn("Skipping config_html_options: missing document at", documentPath);
 				return;
 			}
-			const config = buildConfig({ html_options: { extract_metadata: true } });
+			const config = buildConfig({ html_options: { extractMetadata: true } });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -1115,7 +1115,7 @@ describe("contract fixtures", () => {
 				console.warn("Skipping config_language_detection_multi: missing document at", documentPath);
 				return;
 			}
-			const config = buildConfig({ language_detection: { detect_multiple: true, enabled: true, min_confidence: 0.3 } });
+			const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true, min_confidence: 0.3 } });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -1143,7 +1143,7 @@ describe("contract fixtures", () => {
 				console.warn("Skipping config_language_multi: missing document at", documentPath);
 				return;
 			}
-			const config = buildConfig({ language_detection: { detect_multiple: true, enabled: true } });
+			const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true } });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -1323,8 +1323,8 @@ describe("contract fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
-				pages: { extract_pages: true },
 				pdf_options: { hierarchy: { enabled: true, include_bbox: true } },
+				pages: { extract_pages: true },
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -1352,7 +1352,7 @@ describe("contract fixtures", () => {
 				console.warn("Skipping config_pdf_margins: missing document at", documentPath);
 				return;
 			}
-			const config = buildConfig({ pdf_options: { bottom_margin_fraction: 0.1, top_margin_fraction: 0.1 } });
+			const config = buildConfig({ pdf_options: { top_margin_fraction: 0.1, bottom_margin_fraction: 0.1 } });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -1591,6 +1591,87 @@ describe("contract fixtures", () => {
 				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 			]);
 			assertions.assertTableCount(result, 1, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_tree_sitter",
+		() => {
+			const documentPath = resolveDocument("code/hello.py");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_tree_sitter: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({
+				tree_sitter: {
+					languages: ["python", "rust"],
+					groups: ["web"],
+					process: {
+						structure: true,
+						imports: true,
+						exports: true,
+						comments: false,
+						docstrings: false,
+						symbols: false,
+						diagnostics: false,
+					},
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_tree_sitter", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_tree_sitter_process",
+		() => {
+			const documentPath = resolveDocument("code/hello.py");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_tree_sitter_process: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({
+				tree_sitter: {
+					process: {
+						structure: true,
+						imports: true,
+						exports: true,
+						comments: true,
+						docstrings: true,
+						symbols: true,
+						diagnostics: true,
+						chunk_max_size: 2000,
+					},
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_tree_sitter_process", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 5);
 		},
 		TEST_TIMEOUT_MS,
 	);

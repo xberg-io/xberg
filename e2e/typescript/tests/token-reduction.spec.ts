@@ -107,8 +107,8 @@ describe("token_reduction fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
-				chunking: { max_chars: 500, max_overlap: 50 },
 				token_reduction: { mode: "moderate" },
+				chunking: { max_chars: 500, max_overlap: 50 },
 			});
 			let result: ExtractionResult | null = null;
 			try {

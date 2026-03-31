@@ -30,6 +30,8 @@ from kreuzberg import (
     PostProcessorConfig,
     ResultFormat,
     TokenReductionConfig,
+    TreeSitterConfig,
+    TreeSitterProcessConfig,
 )
 
 _WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -104,6 +106,12 @@ def _build_config_objects(config: dict[str, Any], kwargs: dict[str, Any]) -> Non
         kwargs["acceleration"] = AccelerationConfig(**accel_data)
     if (email_data := config.get("email")) is not None and isinstance(email_data, dict):
         kwargs["email"] = EmailConfig(**email_data)
+    if (tree_sitter_data := config.get("tree_sitter")) is not None:
+        ts = dict(tree_sitter_data)
+        process_data = ts.pop("process", None)
+        if process_data is not None:
+            ts["process"] = TreeSitterProcessConfig(**process_data)
+        kwargs["tree_sitter"] = TreeSitterConfig(**ts)
 
 
 def build_config(config: dict[str, Any] | None) -> ExtractionConfig:

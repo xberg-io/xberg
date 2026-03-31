@@ -21,6 +21,7 @@ public class ImageTest {
   @Test
   public void imageBmpBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "image_bmp_basic",
         "images/bmp_24.bmp",
@@ -37,6 +38,7 @@ public class ImageTest {
   @Test
   public void imageGifBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "image_gif_basic",
         "images_extra/ocr_image.gif",
@@ -53,6 +55,7 @@ public class ImageTest {
   @Test
   public void imageJp2Basic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "image_jp2_basic",
         "images_extra/ocr_image.jp2",
@@ -86,6 +89,7 @@ public class ImageTest {
   @Test
   public void imagePbmBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "image_pbm_basic",
         "images_extra/ocr_image.pbm",
@@ -103,6 +107,7 @@ public class ImageTest {
   @Test
   public void imagePgmBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "image_pgm_basic",
         "images_extra/ocr_image.pgm",
@@ -120,6 +125,7 @@ public class ImageTest {
   @Test
   public void imagePpmBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "image_ppm_basic",
         "images_extra/ocr_image.ppm",
@@ -153,6 +159,7 @@ public class ImageTest {
   @Test
   public void imageTiffBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "image_tiff_basic",
         "images_extra/ocr_image.tif",
@@ -169,6 +176,7 @@ public class ImageTest {
   @Test
   public void imageWebpBasic() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("tesseract");
     E2EHelpers.runFixture(
         "image_webp_basic",
         "images_extra/ocr_image.webp",

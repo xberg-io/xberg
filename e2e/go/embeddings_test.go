@@ -9,15 +9,15 @@ func TestEmbeddingsEmbeddingAsync(t *testing.T) {
 	skipIfFeatureUnavailable(t, "embeddings")
 	result := runExtractionAsync(t, "pdf/fake_memo.pdf", []byte(`{
 "chunking": {
+	"max_chars": 500,
+	"max_overlap": 50,
 	"embedding": {
 	"model": {
-		"name": "balanced",
-		"type": "preset"
+		"type": "preset",
+		"name": "balanced"
 	},
 	"normalize": true
-	},
-	"max_chars": 500,
-	"max_overlap": 50
+	}
 }
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
@@ -29,15 +29,15 @@ func TestEmbeddingsEmbeddingBalancedPreset(t *testing.T) {
 	skipIfFeatureUnavailable(t, "embeddings")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "chunking": {
+	"max_chars": 500,
+	"max_overlap": 50,
 	"embedding": {
 	"model": {
-		"name": "balanced",
-		"type": "preset"
+		"type": "preset",
+		"name": "balanced"
 	},
 	"normalize": true
-	},
-	"max_chars": 500,
-	"max_overlap": 50
+	}
 }
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
@@ -61,15 +61,15 @@ func TestEmbeddingsEmbeddingFastPreset(t *testing.T) {
 	skipIfFeatureUnavailable(t, "embeddings")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "chunking": {
+	"max_chars": 500,
+	"max_overlap": 50,
 	"embedding": {
 	"model": {
-		"name": "fast",
-		"type": "preset"
+		"type": "preset",
+		"name": "fast"
 	},
 	"normalize": true
-	},
-	"max_chars": 500,
-	"max_overlap": 50
+	}
 }
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})

@@ -34,7 +34,7 @@ static void test_token_reduction_token_reduction_light(void) {
 }
 
 static void test_token_reduction_token_reduction_with_chunking(void) {
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"chunking\":{\"max_chars\":500,\"max_overlap\":50},\"token_reduction\":{\"mode\":\"moderate\"}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"token_reduction\":{\"mode\":\"moderate\"},\"chunking\":{\"max_chars\":500,\"max_overlap\":50}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 5);

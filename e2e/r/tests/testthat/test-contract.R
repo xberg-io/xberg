@@ -209,7 +209,7 @@ test_that("config_acceleration_cpu_provider", {
   result <- run_fixture(
     "config_acceleration_cpu_provider",
     "pdf/fake_memo.pdf",
-    list(acceleration = list(device_id = 0L, provider = "cpu")),
+    list(acceleration = list(provider = "cpu", device_id = 0L)),
     requirements = character(0),
     notes = NULL,
     skip_if_missing = TRUE
@@ -324,7 +324,7 @@ test_that("config_chunking_tokenizer", {
   result <- run_fixture(
     "config_chunking_tokenizer",
     "markdown/comprehensive.md",
-    list(chunking = list(max_chars = 200L, max_overlap = 40L, sizing = list(model = "Xenova/gpt-4o", type = "tokenizer"))),
+    list(chunking = list(max_chars = 200L, max_overlap = 40L, sizing = list(type = "tokenizer", model = "Xenova/gpt-4o"))),
     requirements = c("chunking-tokenizers"),
     notes = "Requires network access for HuggingFace Hub tokenizer download",
     skip_if_missing = TRUE
@@ -486,7 +486,7 @@ test_that("config_html_options", {
   result <- run_fixture(
     "config_html_options",
     "html/complex_table.html",
-    list(html_options = list(extract_metadata = TRUE)),
+    list(html_options = list(extractMetadata = TRUE)),
     requirements = character(0),
     notes = NULL,
     skip_if_missing = TRUE
@@ -555,7 +555,7 @@ test_that("config_language_detection_multi", {
   result <- run_fixture(
     "config_language_detection_multi",
     "pdf/fake_memo.pdf",
-    list(language_detection = list(detect_multiple = TRUE, enabled = TRUE, min_confidence = 0.3)),
+    list(language_detection = list(enabled = TRUE, detect_multiple = TRUE, min_confidence = 0.3)),
     requirements = character(0),
     notes = NULL,
     skip_if_missing = TRUE
@@ -570,7 +570,7 @@ test_that("config_language_multi", {
   result <- run_fixture(
     "config_language_multi",
     "pdf/fake_memo.pdf",
-    list(language_detection = list(detect_multiple = TRUE, enabled = TRUE)),
+    list(language_detection = list(enabled = TRUE, detect_multiple = TRUE)),
     requirements = c("language-detection"),
     notes = NULL,
     skip_if_missing = TRUE
@@ -659,7 +659,7 @@ test_that("config_pdf_hierarchy", {
   result <- run_fixture(
     "config_pdf_hierarchy",
     "pdf/fake_memo.pdf",
-    list(pages = list(extract_pages = TRUE), pdf_options = list(hierarchy = list(enabled = TRUE, include_bbox = TRUE))),
+    list(pdf_options = list(hierarchy = list(enabled = TRUE, include_bbox = TRUE)), pages = list(extract_pages = TRUE)),
     requirements = c("pdf"),
     notes = NULL,
     skip_if_missing = TRUE
@@ -673,7 +673,7 @@ test_that("config_pdf_margins", {
   result <- run_fixture(
     "config_pdf_margins",
     "pdf/fake_memo.pdf",
-    list(pdf_options = list(bottom_margin_fraction = 0.1, top_margin_fraction = 0.1)),
+    list(pdf_options = list(top_margin_fraction = 0.1, bottom_margin_fraction = 0.1)),
     requirements = c("pdf"),
     notes = NULL,
     skip_if_missing = TRUE
@@ -791,6 +791,34 @@ test_that("config_tables_content", {
   )
   assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
   assert_table_count(result, minimum = 1L, maximum = NULL)
+})
+
+test_that("config_tree_sitter", {
+  skip_if_feature_unavailable("tree-sitter")
+  result <- run_fixture(
+    "config_tree_sitter",
+    "code/hello.py",
+    list(tree_sitter = list(languages = c("python", "rust"), groups = c("web"), process = list(structure = TRUE, imports = TRUE, exports = TRUE, comments = FALSE, docstrings = FALSE, symbols = FALSE, diagnostics = FALSE))),
+    requirements = c("tree-sitter"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 5L)
+})
+
+test_that("config_tree_sitter_process", {
+  skip_if_feature_unavailable("tree-sitter")
+  result <- run_fixture(
+    "config_tree_sitter_process",
+    "code/hello.py",
+    list(tree_sitter = list(process = list(structure = TRUE, imports = TRUE, exports = TRUE, comments = TRUE, docstrings = TRUE, symbols = TRUE, diagnostics = TRUE, chunk_max_size = 2000L))),
+    requirements = c("tree-sitter"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 5L)
 })
 
 test_that("config_use_cache_false", {

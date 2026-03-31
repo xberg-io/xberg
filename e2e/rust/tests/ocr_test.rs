@@ -20,11 +20,11 @@ fn test_ocr_image_hello_world() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "tesseract",
     "language": "eng"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -64,11 +64,11 @@ fn test_ocr_image_no_text() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "tesseract",
     "language": "eng"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -107,14 +107,14 @@ fn test_ocr_paddle_confidence_filter() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
     "language": "en",
     "paddle_ocr_config": {
       "min_confidence": 80.0
     }
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -156,15 +156,15 @@ fn test_ocr_paddle_element_hierarchy() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
+    "language": "en",
     "element_config": {
-      "build_hierarchy": true,
-      "include_elements": true
-    },
-    "language": "en"
-  }
+      "include_elements": true,
+      "build_hierarchy": true
+    }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -207,15 +207,15 @@ fn test_ocr_paddle_element_levels() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
+    "language": "en",
     "element_config": {
       "include_elements": true,
       "min_level": "word"
-    },
-    "language": "en"
-  }
+    }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -258,11 +258,11 @@ fn test_ocr_paddle_image_chinese() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
     "language": "ch"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -301,11 +301,11 @@ fn test_ocr_paddle_image_english() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
     "language": "en"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -345,14 +345,14 @@ fn test_ocr_paddle_markdown() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
     "language": "en",
     "paddle_ocr_config": {
       "output_format": "markdown"
     }
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -392,11 +392,11 @@ fn test_ocr_paddle_pdf_scanned() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
     "language": "en"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -436,14 +436,14 @@ fn test_ocr_paddle_structured() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
+    "language": "en",
     "element_config": {
       "include_elements": true
-    },
-    "language": "en"
-  }
+    }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -483,14 +483,14 @@ fn test_ocr_paddle_table_detection() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "paddle-ocr",
     "language": "en",
     "paddle_ocr_config": {
       "enable_table_detection": true
     }
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -533,11 +533,11 @@ fn test_ocr_pdf_image_only_german() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "tesseract",
     "language": "deu"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -580,11 +580,11 @@ fn test_ocr_pdf_rotated_90() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "tesseract",
     "language": "eng"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -623,11 +623,11 @@ fn test_ocr_pdf_tesseract() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "tesseract",
     "language": "eng"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -667,14 +667,14 @@ fn test_ocr_tesseract_elements() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "tesseract",
+    "language": "eng",
     "element_config": {
       "include_elements": true
-    },
-    "language": "eng"
-  }
+    }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -714,15 +714,15 @@ fn test_ocr_tesseract_elements_min_count() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "tesseract",
+    "language": "eng",
     "element_config": {
       "include_elements": true,
       "min_level": "line"
-    },
-    "language": "eng"
-  }
+    }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -765,11 +765,11 @@ fn test_ocr_tesseract_language_german() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "force_ocr": true,
   "ocr": {
     "backend": "tesseract",
     "language": "deu"
-  }
+  },
+  "force_ocr": true
 }"#,
     )
     .expect("Fixture config should deserialize");

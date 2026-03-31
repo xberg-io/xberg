@@ -84,6 +84,7 @@ public class PdfTest {
   @Test
   public void pdfBoundingBoxes() throws Exception {
     JsonNode config = MAPPER.readTree("{\"images\":{\"extract_images\":true}}");
+    E2EHelpers.skipIfFeatureUnavailable("pdf");
     E2EHelpers.runFixture(
         "pdf_bounding_boxes",
         "pdf/tiny.pdf",
@@ -195,6 +196,7 @@ public class PdfTest {
     JsonNode config =
         MAPPER.readTree(
             "{\"layout\":{\"preset\":\"accurate\",\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
+    E2EHelpers.skipIfFeatureUnavailable("layout-detection");
     E2EHelpers.runFixture(
         "pdf_layout_detection",
         "pdf/docling.pdf",
@@ -317,6 +319,7 @@ public class PdfTest {
   @Test
   public void pdfTablesSmall() throws Exception {
     JsonNode config = null;
+    E2EHelpers.skipIfFeatureUnavailable("ocr");
     E2EHelpers.runFixture(
         "pdf_tables_small",
         "pdf/tiny.pdf",

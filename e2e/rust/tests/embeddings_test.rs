@@ -22,15 +22,15 @@ async fn test_embedding_async() {
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
   "chunking": {
+    "max_chars": 500,
+    "max_overlap": 50,
     "embedding": {
       "model": {
-        "name": "balanced",
-        "type": "preset"
+        "type": "preset",
+        "name": "balanced"
       },
       "normalize": true
-    },
-    "max_chars": 500,
-    "max_overlap": 50
+    }
   }
 }"#,
     )
@@ -72,15 +72,15 @@ fn test_embedding_balanced_preset() {
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
   "chunking": {
+    "max_chars": 500,
+    "max_overlap": 50,
     "embedding": {
       "model": {
-        "name": "balanced",
-        "type": "preset"
+        "type": "preset",
+        "name": "balanced"
       },
       "normalize": true
-    },
-    "max_chars": 500,
-    "max_overlap": 50
+    }
   }
 }"#,
     )
@@ -157,15 +157,15 @@ fn test_embedding_fast_preset() {
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
   "chunking": {
+    "max_chars": 500,
+    "max_overlap": 50,
     "embedding": {
       "model": {
-        "name": "fast",
-        "type": "preset"
+        "type": "preset",
+        "name": "fast"
       },
       "normalize": true
-    },
-    "max_chars": 500,
-    "max_overlap": 50
+    }
   }
 }"#,
     )

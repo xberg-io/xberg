@@ -9,7 +9,7 @@ test_that("ocr_image_hello_world", {
   result <- run_fixture(
     "ocr_image_hello_world",
     "images/test_hello_world.png",
-    list(force_ocr = TRUE, ocr = list(backend = "tesseract", language = "eng")),
+    list(ocr = list(backend = "tesseract", language = "eng"), force_ocr = TRUE),
     requirements = c("tesseract", "tesseract"),
     notes = "Requires Tesseract OCR for image text extraction.",
     skip_if_missing = TRUE
@@ -24,7 +24,7 @@ test_that("ocr_image_no_text", {
   result <- run_fixture(
     "ocr_image_no_text",
     "images/flower_no_text.jpg",
-    list(force_ocr = TRUE, ocr = list(backend = "tesseract", language = "eng")),
+    list(ocr = list(backend = "tesseract", language = "eng"), force_ocr = TRUE),
     requirements = c("tesseract", "tesseract"),
     notes = "Skip when Tesseract is unavailable.",
     skip_if_missing = TRUE
@@ -39,7 +39,7 @@ test_that("ocr_paddle_confidence_filter", {
   result <- run_fixture(
     "ocr_paddle_confidence_filter",
     "images/ocr_image.jpg",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", language = "en", paddle_ocr_config = list(min_confidence = 80.0))),
+    list(ocr = list(backend = "paddle-ocr", language = "en", paddle_ocr_config = list(min_confidence = 80.0)), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Tests confidence threshold filtering with PaddleOCR",
     skip_if_missing = TRUE
@@ -54,7 +54,7 @@ test_that("ocr_paddle_element_hierarchy", {
   result <- run_fixture(
     "ocr_paddle_element_hierarchy",
     "images/test_hello_world.png",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", element_config = list(build_hierarchy = TRUE, include_elements = TRUE), language = "en")),
+    list(ocr = list(backend = "paddle-ocr", language = "en", element_config = list(include_elements = TRUE, build_hierarchy = TRUE)), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Requires PaddleOCR with ONNX Runtime",
     skip_if_missing = TRUE
@@ -70,7 +70,7 @@ test_that("ocr_paddle_element_levels", {
   result <- run_fixture(
     "ocr_paddle_element_levels",
     "images/test_hello_world.png",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", element_config = list(include_elements = TRUE, min_level = "word"), language = "en")),
+    list(ocr = list(backend = "paddle-ocr", language = "en", element_config = list(include_elements = TRUE, min_level = "word")), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Requires PaddleOCR with ONNX Runtime",
     skip_if_missing = TRUE
@@ -86,7 +86,7 @@ test_that("ocr_paddle_image_chinese", {
   result <- run_fixture(
     "ocr_paddle_image_chinese",
     "images/chi_sim_image.jpeg",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", language = "ch")),
+    list(ocr = list(backend = "paddle-ocr", language = "ch"), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Requires PaddleOCR with Chinese models",
     skip_if_missing = TRUE
@@ -101,7 +101,7 @@ test_that("ocr_paddle_image_english", {
   result <- run_fixture(
     "ocr_paddle_image_english",
     "images/test_hello_world.png",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", language = "en")),
+    list(ocr = list(backend = "paddle-ocr", language = "en"), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Requires PaddleOCR with ONNX Runtime",
     skip_if_missing = TRUE
@@ -117,7 +117,7 @@ test_that("ocr_paddle_markdown", {
   result <- run_fixture(
     "ocr_paddle_markdown",
     "images/test_hello_world.png",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", language = "en", paddle_ocr_config = list(output_format = "markdown"))),
+    list(ocr = list(backend = "paddle-ocr", language = "en", paddle_ocr_config = list(output_format = "markdown")), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Tests markdown output format parity with Tesseract",
     skip_if_missing = TRUE
@@ -133,7 +133,7 @@ test_that("ocr_paddle_pdf_scanned", {
   result <- run_fixture(
     "ocr_paddle_pdf_scanned",
     "pdf/ocr_test.pdf",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", language = "en")),
+    list(ocr = list(backend = "paddle-ocr", language = "en"), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Requires PaddleOCR with ONNX Runtime",
     skip_if_missing = TRUE
@@ -149,7 +149,7 @@ test_that("ocr_paddle_structured", {
   result <- run_fixture(
     "ocr_paddle_structured",
     "images/test_hello_world.png",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", element_config = list(include_elements = TRUE), language = "en")),
+    list(ocr = list(backend = "paddle-ocr", language = "en", element_config = list(include_elements = TRUE)), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Tests structured output with bbox/confidence preservation",
     skip_if_missing = TRUE
@@ -165,7 +165,7 @@ test_that("ocr_paddle_table_detection", {
   result <- run_fixture(
     "ocr_paddle_table_detection",
     "images/simple_table.png",
-    list(force_ocr = TRUE, ocr = list(backend = "paddle-ocr", language = "en", paddle_ocr_config = list(enable_table_detection = TRUE))),
+    list(ocr = list(backend = "paddle-ocr", language = "en", paddle_ocr_config = list(enable_table_detection = TRUE)), force_ocr = TRUE),
     requirements = c("paddle-ocr", "paddle-ocr", "onnxruntime"),
     notes = "Tests table detection capability with PaddleOCR",
     skip_if_missing = TRUE
@@ -180,7 +180,7 @@ test_that("ocr_pdf_image_only_german", {
   result <- run_fixture(
     "ocr_pdf_image_only_german",
     "pdf/image_only_german_pdf.pdf",
-    list(force_ocr = TRUE, ocr = list(backend = "tesseract", language = "deu")),
+    list(ocr = list(backend = "tesseract", language = "deu"), force_ocr = TRUE),
     requirements = c("tesseract", "tesseract"),
     notes = "Requires Tesseract OCR with German language data.",
     skip_if_missing = TRUE
@@ -195,7 +195,7 @@ test_that("ocr_pdf_rotated_90", {
   result <- run_fixture(
     "ocr_pdf_rotated_90",
     "pdf/ocr_test_rotated_90.pdf",
-    list(force_ocr = TRUE, ocr = list(backend = "tesseract", language = "eng")),
+    list(ocr = list(backend = "tesseract", language = "eng"), force_ocr = TRUE),
     requirements = c("tesseract", "tesseract"),
     notes = "Skip automatically when OCR backend is missing.",
     skip_if_missing = TRUE
@@ -209,7 +209,7 @@ test_that("ocr_pdf_tesseract", {
   result <- run_fixture(
     "ocr_pdf_tesseract",
     "pdf/ocr_test.pdf",
-    list(force_ocr = TRUE, ocr = list(backend = "tesseract", language = "eng")),
+    list(ocr = list(backend = "tesseract", language = "eng"), force_ocr = TRUE),
     requirements = c("tesseract", "tesseract"),
     notes = "Skip automatically if OCR backend is unavailable.",
     skip_if_missing = TRUE
@@ -224,7 +224,7 @@ test_that("ocr_tesseract_elements", {
   result <- run_fixture(
     "ocr_tesseract_elements",
     "images/test_hello_world.png",
-    list(force_ocr = TRUE, ocr = list(backend = "tesseract", element_config = list(include_elements = TRUE), language = "eng")),
+    list(ocr = list(backend = "tesseract", language = "eng", element_config = list(include_elements = TRUE)), force_ocr = TRUE),
     requirements = c("tesseract", "tesseract"),
     notes = "Requires Tesseract OCR backend",
     skip_if_missing = TRUE
@@ -239,7 +239,7 @@ test_that("ocr_tesseract_elements_min_count", {
   result <- run_fixture(
     "ocr_tesseract_elements_min_count",
     "images/test_hello_world.png",
-    list(force_ocr = TRUE, ocr = list(backend = "tesseract", element_config = list(include_elements = TRUE, min_level = "line"), language = "eng")),
+    list(ocr = list(backend = "tesseract", language = "eng", element_config = list(include_elements = TRUE, min_level = "line")), force_ocr = TRUE),
     requirements = c("tesseract", "tesseract"),
     notes = "Requires Tesseract OCR backend",
     skip_if_missing = TRUE
@@ -254,7 +254,7 @@ test_that("ocr_tesseract_language_german", {
   result <- run_fixture(
     "ocr_tesseract_language_german",
     "pdf/image_only_german_pdf.pdf",
-    list(force_ocr = TRUE, ocr = list(backend = "tesseract", language = "deu")),
+    list(ocr = list(backend = "tesseract", language = "deu"), force_ocr = TRUE),
     requirements = c("tesseract", "tesseract"),
     notes = "Requires Tesseract OCR with German language data (deu)",
     skip_if_missing = TRUE

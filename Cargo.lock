@@ -1785,7 +1785,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "e2e-rust"
-version = "4.7.0"
+version = "0.0.0"
 dependencies = [
  "kreuzberg",
  "serde_json",
@@ -3456,9 +3456,11 @@ version = "4.7.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "bytes",
  "camino",
  "clap",
  "itertools 0.14.0",
+ "kreuzberg",
  "predicates",
  "serde",
  "serde_json",

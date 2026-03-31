@@ -19,7 +19,7 @@ namespace Kreuzberg.E2E.Embeddings
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"balanced\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+            var config = TestHelpers.BuildConfig("{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"balanced\"},\"normalize\":true}}}");
 
             var result = await KreuzbergClient.ExtractFileAsync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
@@ -35,7 +35,7 @@ namespace Kreuzberg.E2E.Embeddings
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"balanced\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+            var config = TestHelpers.BuildConfig("{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"balanced\"},\"normalize\":true}}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
@@ -65,7 +65,7 @@ namespace Kreuzberg.E2E.Embeddings
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"fast\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+            var config = TestHelpers.BuildConfig("{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"fast\"},\"normalize\":true}}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });

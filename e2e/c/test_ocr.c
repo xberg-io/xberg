@@ -6,7 +6,7 @@
 
 static void test_ocr_ocr_image_hello_world(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
-    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 5);
@@ -16,7 +16,7 @@ static void test_ocr_ocr_image_hello_world(void) {
 
 static void test_ocr_ocr_image_no_text(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
-    CExtractionResult *result = run_extraction("images/flower_no_text.jpg", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+    CExtractionResult *result = run_extraction("images/flower_no_text.jpg", "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/jpeg"}, 1);
     assert_max_content_length(result, 300);
@@ -26,7 +26,7 @@ static void test_ocr_ocr_image_no_text(void) {
 static void test_ocr_ocr_paddle_confidence_filter(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("images/ocr_image.jpg", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"min_confidence\":80.0}}}");
+    CExtractionResult *result = run_extraction("images/ocr_image.jpg", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"min_confidence\":80.0}},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/jpeg"}, 1);
     assert_min_content_length(result, 1);
@@ -36,7 +36,7 @@ static void test_ocr_ocr_paddle_confidence_filter(void) {
 static void test_ocr_ocr_paddle_element_hierarchy(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"element_config\":{\"build_hierarchy\":true,\"include_elements\":true},\"language\":\"en\"}}");
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"element_config\":{\"include_elements\":true,\"build_hierarchy\":true}},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 5);
@@ -47,7 +47,7 @@ static void test_ocr_ocr_paddle_element_hierarchy(void) {
 static void test_ocr_ocr_paddle_element_levels(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"element_config\":{\"include_elements\":true,\"min_level\":\"word\"},\"language\":\"en\"}}");
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"element_config\":{\"include_elements\":true,\"min_level\":\"word\"}},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 5);
@@ -58,7 +58,7 @@ static void test_ocr_ocr_paddle_element_levels(void) {
 static void test_ocr_ocr_paddle_image_chinese(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("images/chi_sim_image.jpeg", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"ch\"}}");
+    CExtractionResult *result = run_extraction("images/chi_sim_image.jpeg", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"ch\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/jpeg"}, 1);
     assert_min_content_length(result, 1);
@@ -68,7 +68,7 @@ static void test_ocr_ocr_paddle_image_chinese(void) {
 static void test_ocr_ocr_paddle_image_english(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"}}");
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 5);
@@ -79,7 +79,7 @@ static void test_ocr_ocr_paddle_image_english(void) {
 static void test_ocr_ocr_paddle_markdown(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"output_format\":\"markdown\"}}}");
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"output_format\":\"markdown\"}},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 5);
@@ -90,7 +90,7 @@ static void test_ocr_ocr_paddle_markdown(void) {
 static void test_ocr_ocr_paddle_pdf_scanned(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("pdf/ocr_test.pdf", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"}}");
+    CExtractionResult *result = run_extraction("pdf/ocr_test.pdf", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 20);
@@ -101,7 +101,7 @@ static void test_ocr_ocr_paddle_pdf_scanned(void) {
 static void test_ocr_ocr_paddle_structured(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"element_config\":{\"include_elements\":true},\"language\":\"en\"}}");
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"element_config\":{\"include_elements\":true}},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 5);
@@ -112,7 +112,7 @@ static void test_ocr_ocr_paddle_structured(void) {
 static void test_ocr_ocr_paddle_table_detection(void) {
     if (skip_if_feature_unavailable("paddle-ocr")) return;
     if (skip_if_feature_unavailable("paddle-ocr")) return;
-    CExtractionResult *result = run_extraction("images/simple_table.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"enable_table_detection\":true}}}");
+    CExtractionResult *result = run_extraction("images/simple_table.png", "{\"ocr\":{\"backend\":\"paddle-ocr\",\"language\":\"en\",\"paddle_ocr_config\":{\"enable_table_detection\":true}},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 10);
@@ -122,7 +122,7 @@ static void test_ocr_ocr_paddle_table_detection(void) {
 
 static void test_ocr_ocr_pdf_image_only_german(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
-    CExtractionResult *result = run_extraction("pdf/image_only_german_pdf.pdf", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"}}");
+    CExtractionResult *result = run_extraction("pdf/image_only_german_pdf.pdf", "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 20);
@@ -133,7 +133,7 @@ static void test_ocr_ocr_pdf_image_only_german(void) {
 
 static void test_ocr_ocr_pdf_rotated_90(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
-    CExtractionResult *result = run_extraction("pdf/ocr_test_rotated_90.pdf", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+    CExtractionResult *result = run_extraction("pdf/ocr_test_rotated_90.pdf", "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
@@ -142,7 +142,7 @@ static void test_ocr_ocr_pdf_rotated_90(void) {
 
 static void test_ocr_ocr_pdf_tesseract(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
-    CExtractionResult *result = run_extraction("pdf/ocr_test.pdf", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+    CExtractionResult *result = run_extraction("pdf/ocr_test.pdf", "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 20);
@@ -152,7 +152,7 @@ static void test_ocr_ocr_pdf_tesseract(void) {
 
 static void test_ocr_ocr_tesseract_elements(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
-    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"element_config\":{\"include_elements\":true},\"language\":\"eng\"}}");
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\",\"element_config\":{\"include_elements\":true}},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 5);
@@ -162,7 +162,7 @@ static void test_ocr_ocr_tesseract_elements(void) {
 
 static void test_ocr_ocr_tesseract_elements_min_count(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
-    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"element_config\":{\"include_elements\":true,\"min_level\":\"line\"},\"language\":\"eng\"}}");
+    CExtractionResult *result = run_extraction("images/test_hello_world.png", "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\",\"element_config\":{\"include_elements\":true,\"min_level\":\"line\"}},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 5);
@@ -172,7 +172,7 @@ static void test_ocr_ocr_tesseract_elements_min_count(void) {
 
 static void test_ocr_ocr_tesseract_language_german(void) {
     if (skip_if_feature_unavailable("tesseract")) return;
-    CExtractionResult *result = run_extraction("pdf/image_only_german_pdf.pdf", "{\"force_ocr\":true,\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"}}");
+    CExtractionResult *result = run_extraction("pdf/image_only_german_pdf.pdf", "{\"ocr\":{\"backend\":\"tesseract\",\"language\":\"deu\"},\"force_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 20);

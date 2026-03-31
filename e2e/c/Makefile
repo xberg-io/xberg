@@ -17,7 +17,7 @@ else
   RPATH = -Wl,-rpath,$(LIBDIR)
 endif
 
-TESTS = test_archive test_contract test_email test_embeddings test_html test_image test_keywords test_ocr test_office test_pdf test_smoke test_structured test_token_reduction test_xml test_plugin_apis test_render
+TESTS = test_archive test_code test_contract test_email test_embeddings test_html test_image test_keywords test_ocr test_office test_pdf test_smoke test_structured test_token_reduction test_xml test_plugin_apis test_render test_parity
 
 .PHONY: all test clean
 
@@ -28,6 +28,9 @@ test: all
 
 test_archive: test_archive.c helpers.c helpers.h
 	$(CC) $(CFLAGS) $(RPATH) -o $@ test_archive.c helpers.c $(LDFLAGS)
+
+test_code: test_code.c helpers.c helpers.h
+	$(CC) $(CFLAGS) $(RPATH) -o $@ test_code.c helpers.c $(LDFLAGS)
 
 test_contract: test_contract.c helpers.c helpers.h
 	$(CC) $(CFLAGS) $(RPATH) -o $@ test_contract.c helpers.c $(LDFLAGS)
@@ -73,6 +76,9 @@ test_plugin_apis: test_plugin_apis.c helpers.c helpers.h
 
 test_render: test_render.c helpers.c helpers.h
 	$(CC) $(CFLAGS) $(RPATH) -o $@ test_render.c helpers.c $(LDFLAGS)
+
+test_parity: test_parity.c helpers.c helpers.h
+	$(CC) $(CFLAGS) $(RPATH) -o $@ test_parity.c helpers.c $(LDFLAGS)
 
 clean:
 	rm -f $(TESTS)

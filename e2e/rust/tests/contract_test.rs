@@ -356,8 +356,8 @@ fn test_config_acceleration_cpu_provider() {
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
   "acceleration": {
-    "device_id": 0,
-    "provider": "cpu"
+    "provider": "cpu",
+    "device_id": 0
   }
 }"#,
     )
@@ -682,8 +682,8 @@ fn test_config_chunking_tokenizer() {
     "max_chars": 200,
     "max_overlap": 40,
     "sizing": {
-      "model": "Xenova/gpt-4o",
-      "type": "tokenizer"
+      "type": "tokenizer",
+      "model": "Xenova/gpt-4o"
     }
   }
 }"#,
@@ -1123,7 +1123,7 @@ fn test_config_html_options() {
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
   "html_options": {
-    "extract_metadata": true
+    "extractMetadata": true
   }
 }"#,
     )
@@ -1291,8 +1291,8 @@ fn test_config_language_detection_multi() {
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
   "language_detection": {
-    "detect_multiple": true,
     "enabled": true,
+    "detect_multiple": true,
     "min_confidence": 0.3
   }
 }"#,
@@ -1324,8 +1324,8 @@ fn test_config_language_multi() {
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
   "language_detection": {
-    "detect_multiple": true,
-    "enabled": true
+    "enabled": true,
+    "detect_multiple": true
   }
 }"#,
     )
@@ -1576,14 +1576,14 @@ fn test_config_pdf_hierarchy() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
-  "pages": {
-    "extract_pages": true
-  },
   "pdf_options": {
     "hierarchy": {
       "enabled": true,
       "include_bbox": true
     }
+  },
+  "pages": {
+    "extract_pages": true
   }
 }"#,
     )
@@ -1624,8 +1624,8 @@ fn test_config_pdf_margins() {
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
   "pdf_options": {
-    "bottom_margin_fraction": 0.1,
-    "top_margin_fraction": 0.1
+    "top_margin_fraction": 0.1,
+    "bottom_margin_fraction": 0.1
   }
 }"#,
     )
@@ -1912,6 +1912,115 @@ fn test_config_tables_content() {
         &["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
     );
     assertions::assert_table_count(&result, Some(1), None);
+}
+
+#[test]
+fn test_config_tree_sitter() {
+    // Tests tree-sitter configuration round-trip
+
+    let document_path = resolve_document("code/hello.py");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_tree_sitter: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "tree_sitter": {
+    "languages": [
+      "python",
+      "rust"
+    ],
+    "groups": [
+      "web"
+    ],
+    "process": {
+      "structure": true,
+      "imports": true,
+      "exports": true,
+      "comments": false,
+      "docstrings": false,
+      "symbols": false,
+      "diagnostics": false
+    }
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping config_tree_sitter: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_tree_sitter: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_tree_sitter: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["text/x-source-code"]);
+    assertions::assert_min_content_length(&result, 5);
+}
+
+#[test]
+fn test_config_tree_sitter_process() {
+    // Tests tree-sitter process config with all options enabled
+
+    let document_path = resolve_document("code/hello.py");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_tree_sitter_process: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "tree_sitter": {
+    "process": {
+      "structure": true,
+      "imports": true,
+      "exports": true,
+      "comments": true,
+      "docstrings": true,
+      "symbols": true,
+      "diagnostics": true,
+      "chunk_max_size": 2000
+    }
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_tree_sitter_process: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_tree_sitter_process: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_tree_sitter_process: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["text/x-source-code"]);
+    assertions::assert_min_content_length(&result, 5);
 }
 
 #[test]

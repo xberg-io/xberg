@@ -296,7 +296,7 @@ Deno.test("api_extract_file_sync", { permissions: { read: true, net: true } }, a
 });
 
 Deno.test("config_acceleration_cpu_provider", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig({ acceleration: { device_id: 0, provider: "cpu" } });
+	const config = buildConfig({ acceleration: { provider: "cpu", device_id: 0 } });
 	let result: ExtractionResult | null = null;
 	try {
 		const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
@@ -683,7 +683,7 @@ Deno.test("config_force_ocr_pages", { permissions: { read: true, net: true } }, 
 });
 
 Deno.test("config_html_options", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig({ html_options: { extract_metadata: true } });
+	const config = buildConfig({ html_options: { extractMetadata: true } });
 	let result: ExtractionResult | null = null;
 	try {
 		const documentBytes = await resolveDocument("html/complex_table.html");
@@ -765,7 +765,7 @@ Deno.test("config_language_detection", { permissions: { read: true, net: true } 
 });
 
 Deno.test("config_language_detection_multi", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig({ language_detection: { detect_multiple: true, enabled: true, min_confidence: 0.3 } });
+	const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true, min_confidence: 0.3 } });
 	let result: ExtractionResult | null = null;
 	try {
 		const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
@@ -786,7 +786,7 @@ Deno.test("config_language_detection_multi", { permissions: { read: true, net: t
 });
 
 Deno.test("config_language_multi", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig({ language_detection: { detect_multiple: true, enabled: true } });
+	const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true } });
 	let result: ExtractionResult | null = null;
 	try {
 		const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
@@ -919,8 +919,8 @@ Deno.test("config_pdf_annotations_count", { permissions: { read: true, net: true
 
 Deno.test("config_pdf_hierarchy", { permissions: { read: true, net: true } }, async () => {
 	const config = buildConfig({
-		pages: { extract_pages: true },
 		pdf_options: { hierarchy: { enabled: true, include_bbox: true } },
+		pages: { extract_pages: true },
 	});
 	let result: ExtractionResult | null = null;
 	try {
@@ -941,7 +941,7 @@ Deno.test("config_pdf_hierarchy", { permissions: { read: true, net: true } }, as
 });
 
 Deno.test("config_pdf_margins", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig({ pdf_options: { bottom_margin_fraction: 0.1, top_margin_fraction: 0.1 } });
+	const config = buildConfig({ pdf_options: { top_margin_fraction: 0.1, bottom_margin_fraction: 0.1 } });
 	let result: ExtractionResult | null = null;
 	try {
 		const documentBytes = await resolveDocument("pdf/fake_memo.pdf");
@@ -1127,6 +1127,73 @@ Deno.test("config_tables_content", { permissions: { read: true, net: true } }, a
 	if (result.tables.length > 0) {
 		assertions.assertTableCount(result, 1, null);
 	}
+});
+
+Deno.test("config_tree_sitter", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig({
+		tree_sitter: {
+			languages: ["python", "rust"],
+			groups: ["web"],
+			process: {
+				structure: true,
+				imports: true,
+				exports: true,
+				comments: false,
+				docstrings: false,
+				symbols: false,
+				diagnostics: false,
+			},
+		},
+	});
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("code/hello.py");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/octet-stream", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "config_tree_sitter", ["tree-sitter"], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["text/x-source-code"]);
+	assertions.assertMinContentLength(result, 5);
+});
+
+Deno.test("config_tree_sitter_process", { permissions: { read: true, net: true } }, async () => {
+	const config = buildConfig({
+		tree_sitter: {
+			process: {
+				structure: true,
+				imports: true,
+				exports: true,
+				comments: true,
+				docstrings: true,
+				symbols: true,
+				diagnostics: true,
+				chunk_max_size: 2000,
+			},
+		},
+	});
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("code/hello.py");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/octet-stream", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "config_tree_sitter_process", ["tree-sitter"], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["text/x-source-code"]);
+	assertions.assertMinContentLength(result, 5);
 });
 
 Deno.test("config_use_cache_false", { permissions: { read: true, net: true } }, async () => {

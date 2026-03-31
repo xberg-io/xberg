@@ -42,12 +42,12 @@ func TestTokenReductionTokenReductionLight(t *testing.T) {
 
 func TestTokenReductionTokenReductionWithChunking(t *testing.T) {
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
+"token_reduction": {
+	"mode": "moderate"
+},
 "chunking": {
 	"max_chars": 500,
 	"max_overlap": 50
-},
-"token_reduction": {
-	"mode": "moderate"
 }
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})

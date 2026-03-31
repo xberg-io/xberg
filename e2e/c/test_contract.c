@@ -279,7 +279,7 @@ static void test_contract_api_extract_file_sync(void) {
 }
 
 static void test_contract_config_acceleration_cpu_provider(void) {
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"acceleration\":{\"device_id\":0,\"provider\":\"cpu\"}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"acceleration\":{\"provider\":\"cpu\",\"device_id\":0}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 50);
@@ -354,7 +354,7 @@ static void test_contract_config_chunking_text(void) {
 
 static void test_contract_config_chunking_tokenizer(void) {
     if (skip_if_feature_unavailable("chunking-tokenizers")) return;
-    CExtractionResult *result = run_extraction("markdown/comprehensive.md", "{\"chunking\":{\"max_chars\":200,\"max_overlap\":40,\"sizing\":{\"model\":\"Xenova/gpt-4o\",\"type\":\"tokenizer\"}}}");
+    CExtractionResult *result = run_extraction("markdown/comprehensive.md", "{\"chunking\":{\"max_chars\":200,\"max_overlap\":40,\"sizing\":{\"type\":\"tokenizer\",\"model\":\"Xenova/gpt-4o\"}}}");
     if (!result) return; /* skipped */
     assert_min_content_length(result, 10);
     assert_chunks(result, 1, 2, 0, 0);
@@ -456,7 +456,7 @@ static void test_contract_config_force_ocr_pages(void) {
 }
 
 static void test_contract_config_html_options(void) {
-    CExtractionResult *result = run_extraction("html/complex_table.html", "{\"html_options\":{\"extract_metadata\":true}}");
+    CExtractionResult *result = run_extraction("html/complex_table.html", "{\"html_options\":{\"extractMetadata\":true}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"text/html"}, 1);
     assert_min_content_length(result, 10);
@@ -500,7 +500,7 @@ static void test_contract_config_language_detection(void) {
 }
 
 static void test_contract_config_language_detection_multi(void) {
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"language_detection\":{\"detect_multiple\":true,\"enabled\":true,\"min_confidence\":0.3}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"language_detection\":{\"enabled\":true,\"detect_multiple\":true,\"min_confidence\":0.3}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
@@ -510,7 +510,7 @@ static void test_contract_config_language_detection_multi(void) {
 
 static void test_contract_config_language_multi(void) {
     if (skip_if_feature_unavailable("language-detection")) return;
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"language_detection\":{\"detect_multiple\":true,\"enabled\":true}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"language_detection\":{\"enabled\":true,\"detect_multiple\":true}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
@@ -569,7 +569,7 @@ static void test_contract_config_pdf_annotations_count(void) {
 
 static void test_contract_config_pdf_hierarchy(void) {
     if (skip_if_feature_unavailable("pdf")) return;
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"pages\":{\"extract_pages\":true},\"pdf_options\":{\"hierarchy\":{\"enabled\":true,\"include_bbox\":true}}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"pdf_options\":{\"hierarchy\":{\"enabled\":true,\"include_bbox\":true}},\"pages\":{\"extract_pages\":true}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 50);
@@ -578,7 +578,7 @@ static void test_contract_config_pdf_hierarchy(void) {
 
 static void test_contract_config_pdf_margins(void) {
     if (skip_if_feature_unavailable("pdf")) return;
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"pdf_options\":{\"bottom_margin_fraction\":0.1,\"top_margin_fraction\":0.1}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"pdf_options\":{\"top_margin_fraction\":0.1,\"bottom_margin_fraction\":0.1}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 5);
@@ -653,6 +653,24 @@ static void test_contract_config_tables_content(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}, 1);
     assert_table_count(result, 1, 1, 0, 0);
+    kreuzberg_free_result(result);
+}
+
+static void test_contract_config_tree_sitter(void) {
+    if (skip_if_feature_unavailable("tree-sitter")) return;
+    CExtractionResult *result = run_extraction("code/hello.py", "{\"tree_sitter\":{\"languages\":[\"python\",\"rust\"],\"groups\":[\"web\"],\"process\":{\"structure\":true,\"imports\":true,\"exports\":true,\"comments\":false,\"docstrings\":false,\"symbols\":false,\"diagnostics\":false}}}");
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"text/x-source-code"}, 1);
+    assert_min_content_length(result, 5);
+    kreuzberg_free_result(result);
+}
+
+static void test_contract_config_tree_sitter_process(void) {
+    if (skip_if_feature_unavailable("tree-sitter")) return;
+    CExtractionResult *result = run_extraction("code/hello.py", "{\"tree_sitter\":{\"process\":{\"structure\":true,\"imports\":true,\"exports\":true,\"comments\":true,\"docstrings\":true,\"symbols\":true,\"diagnostics\":true,\"chunk_max_size\":2000}}}");
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"text/x-source-code"}, 1);
+    assert_min_content_length(result, 5);
     kreuzberg_free_result(result);
 }
 
@@ -776,6 +794,8 @@ int main(void) {
     test_contract_config_security_limits();
     test_contract_config_structured_output();
     test_contract_config_tables_content();
+    test_contract_config_tree_sitter();
+    test_contract_config_tree_sitter_process();
     test_contract_config_use_cache_false();
     test_contract_output_format_bytes_markdown();
     test_contract_output_format_djot();

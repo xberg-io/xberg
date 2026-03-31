@@ -87,7 +87,7 @@ class Token_reductionTest extends TestCase
             $this->markTestSkipped('Skipping token_reduction_with_chunking: missing document at ' . $documentPath);
         }
 
-        $config = Helpers::buildConfig(['chunking' => ['max_chars' => 500, 'max_overlap' => 50], 'token_reduction' => ['mode' => 'moderate']]);
+        $config = Helpers::buildConfig(['token_reduction' => ['mode' => 'moderate'], 'chunking' => ['max_chars' => 500, 'max_overlap' => 50]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);

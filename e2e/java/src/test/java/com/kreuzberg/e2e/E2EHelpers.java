@@ -83,11 +83,16 @@ public final class E2EHelpers {
     return details;
   }
 
-  public static void skipIfPaddleOcrUnavailable() {
-    String flag = System.getenv("KREUZBERG_PADDLE_OCR_AVAILABLE");
+  public static void skipIfFeatureUnavailable(String feature) {
+    String envVar = "KREUZBERG_" + feature.replace("-", "_").toUpperCase() + "_AVAILABLE";
+    String flag = System.getenv(envVar);
     Assumptions.assumeTrue(
         flag != null && !flag.isEmpty() && !"0".equals(flag) && !"false".equalsIgnoreCase(flag),
-        "Skipping: PaddleOCR not available (set KREUZBERG_PADDLE_OCR_AVAILABLE=1)");
+        String.format("Skipping: feature '%s' not available (set %s=1)", feature, envVar));
+  }
+
+  public static void skipIfPaddleOcrUnavailable() {
+    skipIfFeatureUnavailable("paddle-ocr");
   }
 
   public static void runFixture(

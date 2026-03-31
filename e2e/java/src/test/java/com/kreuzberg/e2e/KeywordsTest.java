@@ -21,6 +21,7 @@ public class KeywordsTest {
   public void keywordsRake() throws Exception {
     JsonNode config =
         MAPPER.readTree("{\"keywords\":{\"algorithm\":\"rake\",\"max_keywords\":10}}");
+    E2EHelpers.skipIfFeatureUnavailable("keywords-rake");
     E2EHelpers.runFixture(
         "keywords_rake",
         "pdf/fake_memo.pdf",
@@ -39,6 +40,7 @@ public class KeywordsTest {
   public void keywordsYake() throws Exception {
     JsonNode config =
         MAPPER.readTree("{\"keywords\":{\"algorithm\":\"yake\",\"max_keywords\":10}}");
+    E2EHelpers.skipIfFeatureUnavailable("keywords-yake");
     E2EHelpers.runFixture(
         "keywords_yake",
         "pdf/fake_memo.pdf",

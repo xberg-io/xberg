@@ -6,7 +6,7 @@
 
 static void test_embeddings_embedding_async(void) {
     if (skip_if_feature_unavailable("embeddings")) return;
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"balanced\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"balanced\"},\"normalize\":true}}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
@@ -16,7 +16,7 @@ static void test_embeddings_embedding_async(void) {
 
 static void test_embeddings_embedding_balanced_preset(void) {
     if (skip_if_feature_unavailable("embeddings")) return;
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"balanced\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"balanced\"},\"normalize\":true}}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
@@ -35,7 +35,7 @@ static void test_embeddings_embedding_disabled(void) {
 
 static void test_embeddings_embedding_fast_preset(void) {
     if (skip_if_feature_unavailable("embeddings")) return;
-    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"chunking\":{\"embedding\":{\"model\":{\"name\":\"fast\",\"type\":\"preset\"},\"normalize\":true},\"max_chars\":500,\"max_overlap\":50}}");
+    CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"chunking\":{\"max_chars\":500,\"max_overlap\":50,\"embedding\":{\"model\":{\"type\":\"preset\",\"name\":\"fast\"},\"normalize\":true}}}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);

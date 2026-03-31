@@ -115,12 +115,12 @@ fn test_token_reduction_with_chunking() {
     }
     let config: ExtractionConfig = serde_json::from_str(
         r#"{
+  "token_reduction": {
+    "mode": "moderate"
+  },
   "chunking": {
     "max_chars": 500,
     "max_overlap": 50
-  },
-  "token_reduction": {
-    "mode": "moderate"
   }
 }"#,
     )

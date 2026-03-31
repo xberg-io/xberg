@@ -20,7 +20,7 @@ def test_ocr_image_hello_world() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_image_hello_world: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "tesseract", "language": "eng"}})
+    config = helpers.build_config({"ocr": {"backend": "tesseract", "language": "eng"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -36,7 +36,7 @@ def test_ocr_image_no_text() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_image_no_text: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "tesseract", "language": "eng"}})
+    config = helpers.build_config({"ocr": {"backend": "tesseract", "language": "eng"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -53,8 +53,8 @@ def test_ocr_paddle_confidence_filter() -> None:
 
     config = helpers.build_config(
         {
-            "force_ocr": True,
             "ocr": {"backend": "paddle-ocr", "language": "en", "paddle_ocr_config": {"min_confidence": 80.0}},
+            "force_ocr": True,
         }
     )
 
@@ -73,12 +73,12 @@ def test_ocr_paddle_element_hierarchy() -> None:
 
     config = helpers.build_config(
         {
-            "force_ocr": True,
             "ocr": {
                 "backend": "paddle-ocr",
-                "element_config": {"build_hierarchy": True, "include_elements": True},
                 "language": "en",
+                "element_config": {"include_elements": True, "build_hierarchy": True},
             },
+            "force_ocr": True,
         }
     )
 
@@ -98,12 +98,12 @@ def test_ocr_paddle_element_levels() -> None:
 
     config = helpers.build_config(
         {
-            "force_ocr": True,
             "ocr": {
                 "backend": "paddle-ocr",
-                "element_config": {"include_elements": True, "min_level": "word"},
                 "language": "en",
+                "element_config": {"include_elements": True, "min_level": "word"},
             },
+            "force_ocr": True,
         }
     )
 
@@ -121,7 +121,7 @@ def test_ocr_paddle_image_chinese() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_paddle_image_chinese: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "paddle-ocr", "language": "ch"}})
+    config = helpers.build_config({"ocr": {"backend": "paddle-ocr", "language": "ch"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -136,7 +136,7 @@ def test_ocr_paddle_image_english() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_paddle_image_english: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "paddle-ocr", "language": "en"}})
+    config = helpers.build_config({"ocr": {"backend": "paddle-ocr", "language": "en"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -154,8 +154,8 @@ def test_ocr_paddle_markdown() -> None:
 
     config = helpers.build_config(
         {
-            "force_ocr": True,
             "ocr": {"backend": "paddle-ocr", "language": "en", "paddle_ocr_config": {"output_format": "markdown"}},
+            "force_ocr": True,
         }
     )
 
@@ -173,7 +173,7 @@ def test_ocr_paddle_pdf_scanned() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_paddle_pdf_scanned: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "paddle-ocr", "language": "en"}})
+    config = helpers.build_config({"ocr": {"backend": "paddle-ocr", "language": "en"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -191,8 +191,8 @@ def test_ocr_paddle_structured() -> None:
 
     config = helpers.build_config(
         {
+            "ocr": {"backend": "paddle-ocr", "language": "en", "element_config": {"include_elements": True}},
             "force_ocr": True,
-            "ocr": {"backend": "paddle-ocr", "element_config": {"include_elements": True}, "language": "en"},
         }
     )
 
@@ -212,8 +212,8 @@ def test_ocr_paddle_table_detection() -> None:
 
     config = helpers.build_config(
         {
-            "force_ocr": True,
             "ocr": {"backend": "paddle-ocr", "language": "en", "paddle_ocr_config": {"enable_table_detection": True}},
+            "force_ocr": True,
         }
     )
 
@@ -231,7 +231,7 @@ def test_ocr_pdf_image_only_german() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_pdf_image_only_german: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "tesseract", "language": "deu"}})
+    config = helpers.build_config({"ocr": {"backend": "tesseract", "language": "deu"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -247,7 +247,7 @@ def test_ocr_pdf_rotated_90() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_pdf_rotated_90: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "tesseract", "language": "eng"}})
+    config = helpers.build_config({"ocr": {"backend": "tesseract", "language": "eng"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -262,7 +262,7 @@ def test_ocr_pdf_tesseract() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_pdf_tesseract: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "tesseract", "language": "eng"}})
+    config = helpers.build_config({"ocr": {"backend": "tesseract", "language": "eng"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 
@@ -280,8 +280,8 @@ def test_ocr_tesseract_elements() -> None:
 
     config = helpers.build_config(
         {
+            "ocr": {"backend": "tesseract", "language": "eng", "element_config": {"include_elements": True}},
             "force_ocr": True,
-            "ocr": {"backend": "tesseract", "element_config": {"include_elements": True}, "language": "eng"},
         }
     )
 
@@ -301,12 +301,12 @@ def test_ocr_tesseract_elements_min_count() -> None:
 
     config = helpers.build_config(
         {
-            "force_ocr": True,
             "ocr": {
                 "backend": "tesseract",
-                "element_config": {"include_elements": True, "min_level": "line"},
                 "language": "eng",
+                "element_config": {"include_elements": True, "min_level": "line"},
             },
+            "force_ocr": True,
         }
     )
 
@@ -324,7 +324,7 @@ def test_ocr_tesseract_language_german() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping ocr_tesseract_language_german: missing document at {document_path}")
 
-    config = helpers.build_config({"force_ocr": True, "ocr": {"backend": "tesseract", "language": "deu"}})
+    config = helpers.build_config({"ocr": {"backend": "tesseract", "language": "deu"}, "force_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 

@@ -24,7 +24,17 @@ module E2ERuby
   def build_config(raw)
     return nil unless raw.is_a?(Hash) && !raw.empty?
 
-    symbolize_keys(raw)
+    config = symbolize_keys(raw)
+
+    if (ts_data = config.delete(:tree_sitter))
+      process_data = ts_data.delete(:process)
+      if process_data
+        ts_data[:process] = Kreuzberg::TreeSitterProcessConfig.new(**process_data)
+      end
+      config[:tree_sitter] = Kreuzberg::TreeSitterConfig.new(**ts_data)
+    end
+
+    config
   end
 
   def symbolize_keys(value)

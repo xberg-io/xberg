@@ -18,9 +18,9 @@ defmodule E2E.EmbeddingsTest do
                "pdf/fake_memo.pdf",
                %{
                  chunking: %{
-                   embedding: %{model: %{name: "balanced", type: "preset"}, normalize: true},
                    max_chars: 500,
-                   max_overlap: 50
+                   max_overlap: 50,
+                   embedding: %{model: %{type: "preset", name: "balanced"}, normalize: true}
                  }
                },
                :async,
@@ -53,9 +53,9 @@ defmodule E2E.EmbeddingsTest do
                "pdf/fake_memo.pdf",
                %{
                  chunking: %{
-                   embedding: %{model: %{name: "balanced", type: "preset"}, normalize: true},
                    max_chars: 500,
-                   max_overlap: 50
+                   max_overlap: 50,
+                   embedding: %{model: %{type: "preset", name: "balanced"}, normalize: true}
                  }
                },
                requirements: ["embeddings"],
@@ -109,9 +109,9 @@ defmodule E2E.EmbeddingsTest do
                "pdf/fake_memo.pdf",
                %{
                  chunking: %{
-                   embedding: %{model: %{name: "fast", type: "preset"}, normalize: true},
                    max_chars: 500,
-                   max_overlap: 50
+                   max_overlap: 50,
+                   embedding: %{model: %{type: "preset", name: "fast"}, normalize: true}
                  }
                },
                requirements: ["embeddings"],

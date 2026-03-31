@@ -13,6 +13,8 @@ import type {
 	Table,
 	TesseractConfig,
 	TokenReductionConfig,
+	TreeSitterConfig,
+	TreeSitterProcessConfig,
 } from "npm:@kreuzberg/wasm@^4.0.0";
 // @deno-types="../../crates/kreuzberg-wasm/dist/index.d.ts"
 import { enableOcr, extractBytes, initWasm } from "npm:@kreuzberg/wasm@^4.0.0";
@@ -32,6 +34,8 @@ export type {
 	Table,
 	TesseractConfig,
 	TokenReductionConfig,
+	TreeSitterConfig,
+	TreeSitterProcessConfig,
 };
 
 export { enableOcr, extractBytes, initWasm };
@@ -186,6 +190,38 @@ function mapPostProcessorConfig(raw: PlainRecord): PostProcessorConfig {
 	return config as unknown as PostProcessorConfig;
 }
 
+function mapTreeSitterProcessConfig(raw: PlainRecord): TreeSitterProcessConfig {
+	const config: PlainRecord = {};
+	assignBooleanField(config, raw, "structure", "structure");
+	assignBooleanField(config, raw, "imports", "imports");
+	assignBooleanField(config, raw, "exports", "exports");
+	assignBooleanField(config, raw, "comments", "comments");
+	assignBooleanField(config, raw, "docstrings", "docstrings");
+	assignBooleanField(config, raw, "symbols", "symbols");
+	assignBooleanField(config, raw, "diagnostics", "diagnostics");
+	assignNumberField(config, raw, "chunk_max_size", "chunkMaxSize");
+	return config as unknown as TreeSitterProcessConfig;
+}
+
+function mapTreeSitterConfig(raw: PlainRecord): TreeSitterConfig {
+	const config: PlainRecord = {};
+	if (typeof raw.cache_dir === "string") {
+		config.cacheDir = raw.cache_dir;
+	}
+	const languages = mapStringArray(raw.languages);
+	if (languages) {
+		(config as unknown as TreeSitterConfig).languages = languages;
+	}
+	const groups = mapStringArray(raw.groups);
+	if (groups) {
+		(config as unknown as TreeSitterConfig).groups = groups;
+	}
+	if (isPlainRecord(raw.process)) {
+		(config as unknown as TreeSitterConfig).process = mapTreeSitterProcessConfig(raw.process as PlainRecord);
+	}
+	return config as unknown as TreeSitterConfig;
+}
+
 export function buildConfig(raw: unknown): ExtractionConfig {
 	if (!isPlainRecord(raw)) {
 		return {};
@@ -235,6 +271,10 @@ export function buildConfig(raw: unknown): ExtractionConfig {
 
 	if (isPlainRecord(source.postprocessor)) {
 		result.postprocessor = mapPostProcessorConfig(source.postprocessor as PlainRecord);
+	}
+
+	if (isPlainRecord(source.tree_sitter)) {
+		target.treeSitter = mapTreeSitterConfig(source.tree_sitter as PlainRecord);
 	}
 
 	if (isPlainRecord(source.acceleration)) {

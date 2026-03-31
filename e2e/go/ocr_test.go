@@ -8,11 +8,11 @@ import "testing"
 func TestOcrOcrImageHelloWorld(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "tesseract",
 	"language": "eng"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 5)
@@ -22,11 +22,11 @@ func TestOcrOcrImageHelloWorld(t *testing.T) {
 func TestOcrOcrImageNoText(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "images/flower_no_text.jpg", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "tesseract",
 	"language": "eng"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/jpeg"})
 	assertMaxContentLength(t, result, 300)
@@ -36,14 +36,14 @@ func TestOcrOcrPaddleConfidenceFilter(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "images/ocr_image.jpg", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
 	"language": "en",
 	"paddle_ocr_config": {
 	"min_confidence": 80.0
 	}
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/jpeg"})
 	assertMinContentLength(t, result, 1)
@@ -53,15 +53,15 @@ func TestOcrOcrPaddleElementHierarchy(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
+	"language": "en",
 	"element_config": {
-	"build_hierarchy": true,
-	"include_elements": true
-	},
-	"language": "en"
-}
+	"include_elements": true,
+	"build_hierarchy": true
+	}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 5)
@@ -72,15 +72,15 @@ func TestOcrOcrPaddleElementLevels(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
+	"language": "en",
 	"element_config": {
 	"include_elements": true,
 	"min_level": "word"
-	},
-	"language": "en"
-}
+	}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 5)
@@ -91,11 +91,11 @@ func TestOcrOcrPaddleImageChinese(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "images/chi_sim_image.jpeg", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
 	"language": "ch"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/jpeg"})
 	assertMinContentLength(t, result, 1)
@@ -105,11 +105,11 @@ func TestOcrOcrPaddleImageEnglish(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
 	"language": "en"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 5)
@@ -120,14 +120,14 @@ func TestOcrOcrPaddleMarkdown(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
 	"language": "en",
 	"paddle_ocr_config": {
 	"output_format": "markdown"
 	}
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 5)
@@ -138,11 +138,11 @@ func TestOcrOcrPaddlePdfScanned(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "pdf/ocr_test.pdf", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
 	"language": "en"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 20)
@@ -153,14 +153,14 @@ func TestOcrOcrPaddleStructured(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
+	"language": "en",
 	"element_config": {
 	"include_elements": true
-	},
-	"language": "en"
-}
+	}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 5)
@@ -171,14 +171,14 @@ func TestOcrOcrPaddleTableDetection(t *testing.T) {
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	skipIfFeatureUnavailable(t, "paddle-ocr")
 	result := runExtraction(t, "images/simple_table.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "paddle-ocr",
 	"language": "en",
 	"paddle_ocr_config": {
 	"enable_table_detection": true
 	}
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 10)
@@ -188,11 +188,11 @@ func TestOcrOcrPaddleTableDetection(t *testing.T) {
 func TestOcrOcrPdfImageOnlyGerman(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "pdf/image_only_german_pdf.pdf", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "tesseract",
 	"language": "deu"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 20)
@@ -201,11 +201,11 @@ func TestOcrOcrPdfImageOnlyGerman(t *testing.T) {
 func TestOcrOcrPdfRotated90(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "pdf/ocr_test_rotated_90.pdf", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "tesseract",
 	"language": "eng"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
@@ -214,11 +214,11 @@ func TestOcrOcrPdfRotated90(t *testing.T) {
 func TestOcrOcrPdfTesseract(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "pdf/ocr_test.pdf", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "tesseract",
 	"language": "eng"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 20)
@@ -228,14 +228,14 @@ func TestOcrOcrPdfTesseract(t *testing.T) {
 func TestOcrOcrTesseractElements(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "tesseract",
+	"language": "eng",
 	"element_config": {
 	"include_elements": true
-	},
-	"language": "eng"
-}
+	}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 5)
@@ -245,15 +245,15 @@ func TestOcrOcrTesseractElements(t *testing.T) {
 func TestOcrOcrTesseractElementsMinCount(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "images/test_hello_world.png", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "tesseract",
+	"language": "eng",
 	"element_config": {
 	"include_elements": true,
 	"min_level": "line"
-	},
-	"language": "eng"
-}
+	}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 5)
@@ -263,11 +263,11 @@ func TestOcrOcrTesseractElementsMinCount(t *testing.T) {
 func TestOcrOcrTesseractLanguageGerman(t *testing.T) {
 	skipIfFeatureUnavailable(t, "tesseract")
 	result := runExtraction(t, "pdf/image_only_german_pdf.pdf", []byte(`{
-"force_ocr": true,
 "ocr": {
 	"backend": "tesseract",
 	"language": "deu"
-}
+},
+"force_ocr": true
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 20)

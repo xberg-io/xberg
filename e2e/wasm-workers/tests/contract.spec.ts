@@ -360,7 +360,7 @@ describe("contract", () => {
 			return;
 		}
 
-		const config = buildConfig({ acceleration: { device_id: 0, provider: "cpu" } });
+		const config = buildConfig({ acceleration: { provider: "cpu", device_id: 0 } });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/pdf", config);
@@ -823,7 +823,7 @@ describe("contract", () => {
 			return;
 		}
 
-		const config = buildConfig({ html_options: { extract_metadata: true } });
+		const config = buildConfig({ html_options: { extractMetadata: true } });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/octet-stream", config);
@@ -923,7 +923,7 @@ describe("contract", () => {
 			return;
 		}
 
-		const config = buildConfig({ language_detection: { detect_multiple: true, enabled: true, min_confidence: 0.3 } });
+		const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true, min_confidence: 0.3 } });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/octet-stream", config);
@@ -948,7 +948,7 @@ describe("contract", () => {
 			return;
 		}
 
-		const config = buildConfig({ language_detection: { detect_multiple: true, enabled: true } });
+		const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true } });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/octet-stream", config);
@@ -1105,8 +1105,8 @@ describe("contract", () => {
 		}
 
 		const config = buildConfig({
-			pages: { extract_pages: true },
 			pdf_options: { hierarchy: { enabled: true, include_bbox: true } },
+			pages: { extract_pages: true },
 		});
 		let result: ExtractionResult | null = null;
 		try {
@@ -1131,7 +1131,7 @@ describe("contract", () => {
 			return;
 		}
 
-		const config = buildConfig({ pdf_options: { bottom_margin_fraction: 0.1, top_margin_fraction: 0.1 } });
+		const config = buildConfig({ pdf_options: { top_margin_fraction: 0.1, bottom_margin_fraction: 0.1 } });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "application/octet-stream", config);
@@ -1344,6 +1344,81 @@ describe("contract", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
 		assertions.assertTableCount(result, 1, null);
+	});
+
+	it("config_tree_sitter", async () => {
+		const documentBytes = getFixture("code/hello.py");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig({
+			tree_sitter: {
+				languages: ["python", "rust"],
+				groups: ["web"],
+				process: {
+					structure: true,
+					imports: true,
+					exports: true,
+					comments: false,
+					docstrings: false,
+					symbols: false,
+					diagnostics: false,
+				},
+			},
+		});
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/octet-stream", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "config_tree_sitter", ["tree-sitter"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["text/x-source-code"]);
+		assertions.assertMinContentLength(result, 5);
+	});
+
+	it("config_tree_sitter_process", async () => {
+		const documentBytes = getFixture("code/hello.py");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
+
+		const config = buildConfig({
+			tree_sitter: {
+				process: {
+					structure: true,
+					imports: true,
+					exports: true,
+					comments: true,
+					docstrings: true,
+					symbols: true,
+					diagnostics: true,
+					chunk_max_size: 2000,
+				},
+			},
+		});
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/octet-stream", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "config_tree_sitter_process", ["tree-sitter"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["text/x-source-code"]);
+		assertions.assertMinContentLength(result, 5);
 	});
 
 	it("config_use_cache_false", async () => {

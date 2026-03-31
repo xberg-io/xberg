@@ -21,7 +21,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Requires Tesseract OCR for image text extraction.");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "eng" } });
+			const config = buildConfig({ ocr: { backend: "tesseract", language: "eng" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -57,7 +57,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Skip when Tesseract is unavailable.");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "eng" } });
+			const config = buildConfig({ ocr: { backend: "tesseract", language: "eng" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -86,8 +86,8 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
-				force_ocr: true,
 				ocr: { backend: "paddle-ocr", language: "en", paddle_ocr_config: { min_confidence: 80.0 } },
+				force_ocr: true,
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -124,12 +124,12 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
-				force_ocr: true,
 				ocr: {
 					backend: "paddle-ocr",
-					element_config: { build_hierarchy: true, include_elements: true },
 					language: "en",
+					element_config: { include_elements: true, build_hierarchy: true },
 				},
+				force_ocr: true,
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -167,8 +167,8 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
+				ocr: { backend: "paddle-ocr", language: "en", element_config: { include_elements: true, min_level: "word" } },
 				force_ocr: true,
-				ocr: { backend: "paddle-ocr", element_config: { include_elements: true, min_level: "word" }, language: "en" },
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -205,7 +205,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Requires PaddleOCR with Chinese models");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "paddle-ocr", language: "ch" } });
+			const config = buildConfig({ ocr: { backend: "paddle-ocr", language: "ch" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -240,7 +240,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Requires PaddleOCR with ONNX Runtime");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "paddle-ocr", language: "en" } });
+			const config = buildConfig({ ocr: { backend: "paddle-ocr", language: "en" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -277,8 +277,8 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
-				force_ocr: true,
 				ocr: { backend: "paddle-ocr", language: "en", paddle_ocr_config: { output_format: "markdown" } },
+				force_ocr: true,
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -315,7 +315,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Requires PaddleOCR with ONNX Runtime");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "paddle-ocr", language: "en" } });
+			const config = buildConfig({ ocr: { backend: "paddle-ocr", language: "en" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -352,8 +352,8 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
+				ocr: { backend: "paddle-ocr", language: "en", element_config: { include_elements: true } },
 				force_ocr: true,
-				ocr: { backend: "paddle-ocr", element_config: { include_elements: true }, language: "en" },
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -391,8 +391,8 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
-				force_ocr: true,
 				ocr: { backend: "paddle-ocr", language: "en", paddle_ocr_config: { enable_table_detection: true } },
+				force_ocr: true,
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -429,7 +429,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Requires Tesseract OCR with German language data.");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "deu" } });
+			const config = buildConfig({ ocr: { backend: "tesseract", language: "deu" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -465,7 +465,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Skip automatically when OCR backend is missing.");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "eng" } });
+			const config = buildConfig({ ocr: { backend: "tesseract", language: "eng" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -500,7 +500,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Skip automatically if OCR backend is unavailable.");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "eng" } });
+			const config = buildConfig({ ocr: { backend: "tesseract", language: "eng" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -537,8 +537,8 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
+				ocr: { backend: "tesseract", language: "eng", element_config: { include_elements: true } },
 				force_ocr: true,
-				ocr: { backend: "tesseract", element_config: { include_elements: true }, language: "eng" },
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -569,8 +569,8 @@ describe("ocr fixtures", () => {
 				return;
 			}
 			const config = buildConfig({
+				ocr: { backend: "tesseract", language: "eng", element_config: { include_elements: true, min_level: "line" } },
 				force_ocr: true,
-				ocr: { backend: "tesseract", element_config: { include_elements: true, min_level: "line" }, language: "eng" },
 			});
 			let result: ExtractionResult | null = null;
 			try {
@@ -602,7 +602,7 @@ describe("ocr fixtures", () => {
 				console.warn("Notes: Requires Tesseract OCR with German language data (deu)");
 				return;
 			}
-			const config = buildConfig({ force_ocr: true, ocr: { backend: "tesseract", language: "deu" } });
+			const config = buildConfig({ ocr: { backend: "tesseract", language: "deu" }, force_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);

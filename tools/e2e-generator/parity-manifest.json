@@ -1,0 +1,768 @@
+{
+  "version": 1,
+  "types": {
+    "AnnotationKind": {
+      "kind": "tagged_enum",
+      "tag_field": "annotation_type",
+      "variants": {
+        "bold": {
+          "fields": {}
+        },
+        "code": {
+          "fields": {}
+        },
+        "color": {
+          "fields": {
+            "value": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "custom": {
+          "fields": {
+            "name": {
+              "json_type": "string",
+              "required": true
+            },
+            "value": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "font_size": {
+          "fields": {
+            "value": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "highlight": {
+          "fields": {}
+        },
+        "italic": {
+          "fields": {}
+        },
+        "link": {
+          "fields": {
+            "title": {
+              "json_type": "string",
+              "required": true
+            },
+            "url": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "strikethrough": {
+          "fields": {}
+        },
+        "subscript": {
+          "fields": {}
+        },
+        "superscript": {
+          "fields": {}
+        },
+        "underline": {
+          "fields": {}
+        }
+      }
+    },
+    "ArchiveEntry": {
+      "kind": "struct",
+      "fields": {
+        "mime_type": {
+          "json_type": "string",
+          "required": true
+        },
+        "path": {
+          "json_type": "string",
+          "required": true
+        },
+        "result": {
+          "json_type": "object",
+          "required": true
+        }
+      }
+    },
+    "BoundingBox": {
+      "kind": "struct",
+      "fields": {
+        "x0": {
+          "json_type": "number",
+          "required": true
+        },
+        "x1": {
+          "json_type": "number",
+          "required": true
+        },
+        "y0": {
+          "json_type": "number",
+          "required": true
+        },
+        "y1": {
+          "json_type": "number",
+          "required": true
+        }
+      }
+    },
+    "ContentLayer": {
+      "kind": "enum",
+      "values": [
+        "body",
+        "header",
+        "footer",
+        "footnote"
+      ]
+    },
+    "ElementType": {
+      "kind": "enum",
+      "values": [
+        "title",
+        "narrative_text",
+        "heading",
+        "list_item",
+        "table",
+        "image",
+        "page_break",
+        "code_block",
+        "block_quote",
+        "footer",
+        "header"
+      ]
+    },
+    "ExtractionConfig": {
+      "kind": "struct",
+      "fields": {
+        "acceleration": {
+          "json_type": "object",
+          "required": false
+        },
+        "cache_namespace": {
+          "json_type": "string",
+          "required": false
+        },
+        "cache_ttl_secs": {
+          "json_type": "number",
+          "required": false
+        },
+        "chunking": {
+          "json_type": "object",
+          "required": false
+        },
+        "concurrency": {
+          "json_type": "object",
+          "required": false
+        },
+        "email": {
+          "json_type": "object",
+          "required": false
+        },
+        "enable_quality_processing": {
+          "json_type": "boolean",
+          "required": true
+        },
+        "extraction_timeout_secs": {
+          "json_type": "number",
+          "required": false
+        },
+        "force_ocr": {
+          "json_type": "boolean",
+          "required": true
+        },
+        "force_ocr_pages": {
+          "json_type": "array",
+          "required": false
+        },
+        "html_options": {
+          "json_type": "object",
+          "required": false,
+          "feature_gate": "html"
+        },
+        "images": {
+          "json_type": "object",
+          "required": false
+        },
+        "include_document_structure": {
+          "json_type": "boolean",
+          "required": true
+        },
+        "keywords": {
+          "json_type": "object",
+          "required": false,
+          "feature_gate": "keywords"
+        },
+        "language_detection": {
+          "json_type": "object",
+          "required": false
+        },
+        "layout": {
+          "json_type": "object",
+          "required": false,
+          "feature_gate": "layout-detection"
+        },
+        "max_archive_depth": {
+          "json_type": "number",
+          "required": true
+        },
+        "max_concurrent_extractions": {
+          "json_type": "number",
+          "required": false
+        },
+        "ocr": {
+          "json_type": "object",
+          "required": false
+        },
+        "output_format": {
+          "json_type": "string",
+          "required": true
+        },
+        "pages": {
+          "json_type": "object",
+          "required": false
+        },
+        "pdf_options": {
+          "json_type": "object",
+          "required": false,
+          "feature_gate": "pdf"
+        },
+        "postprocessor": {
+          "json_type": "object",
+          "required": false
+        },
+        "result_format": {
+          "json_type": "string",
+          "required": true
+        },
+        "security_limits": {
+          "json_type": "object",
+          "required": false,
+          "feature_gate": "archives"
+        },
+        "token_reduction": {
+          "json_type": "object",
+          "required": false
+        },
+        "tree_sitter": {
+          "json_type": "object",
+          "required": false,
+          "feature_gate": "tree-sitter"
+        },
+        "use_cache": {
+          "json_type": "boolean",
+          "required": true
+        }
+      }
+    },
+    "ExtractionResult": {
+      "kind": "struct",
+      "fields": {
+        "annotations": {
+          "json_type": "array",
+          "required": false
+        },
+        "children": {
+          "json_type": "array",
+          "required": false
+        },
+        "chunks": {
+          "json_type": "array",
+          "required": false
+        },
+        "content": {
+          "json_type": "string",
+          "required": true
+        },
+        "detected_languages": {
+          "json_type": "array",
+          "required": false
+        },
+        "djot_content": {
+          "json_type": "object",
+          "required": false
+        },
+        "document": {
+          "json_type": "object",
+          "required": false
+        },
+        "elements": {
+          "json_type": "array",
+          "required": false
+        },
+        "extracted_keywords": {
+          "json_type": "array",
+          "required": false,
+          "feature_gate": "keywords"
+        },
+        "images": {
+          "json_type": "array",
+          "required": false
+        },
+        "metadata": {
+          "json_type": "object",
+          "required": true
+        },
+        "mime_type": {
+          "json_type": "string",
+          "required": true
+        },
+        "ocr_elements": {
+          "json_type": "array",
+          "required": false
+        },
+        "pages": {
+          "json_type": "array",
+          "required": false
+        },
+        "processing_warnings": {
+          "json_type": "array",
+          "required": true
+        },
+        "quality_score": {
+          "json_type": "number",
+          "required": false
+        },
+        "tables": {
+          "json_type": "array",
+          "required": true
+        },
+        "uris": {
+          "json_type": "array",
+          "required": false
+        }
+      }
+    },
+    "Keyword": {
+      "kind": "struct",
+      "fields": {
+        "algorithm": {
+          "json_type": "string",
+          "required": true
+        },
+        "positions": {
+          "json_type": "array",
+          "required": false
+        },
+        "score": {
+          "json_type": "number",
+          "required": true
+        },
+        "text": {
+          "json_type": "string",
+          "required": true
+        }
+      }
+    },
+    "KeywordAlgorithm": {
+      "kind": "enum",
+      "values": [
+        "yake",
+        "rake"
+      ]
+    },
+    "NodeContent": {
+      "kind": "tagged_enum",
+      "tag_field": "node_type",
+      "variants": {
+        "admonition": {
+          "fields": {
+            "kind": {
+              "json_type": "string",
+              "required": true
+            },
+            "title": {
+              "json_type": "string",
+              "required": false
+            }
+          }
+        },
+        "citation": {
+          "fields": {
+            "key": {
+              "json_type": "string",
+              "required": true
+            },
+            "text": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "code": {
+          "fields": {
+            "language": {
+              "json_type": "string",
+              "required": false
+            },
+            "text": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "definition_item": {
+          "fields": {
+            "definition": {
+              "json_type": "string",
+              "required": true
+            },
+            "term": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "definition_list": {
+          "fields": {}
+        },
+        "footnote": {
+          "fields": {
+            "text": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "formula": {
+          "fields": {
+            "text": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "group": {
+          "fields": {
+            "heading_level": {
+              "json_type": "number",
+              "required": false
+            },
+            "heading_text": {
+              "json_type": "string",
+              "required": false
+            },
+            "label": {
+              "json_type": "string",
+              "required": false
+            }
+          }
+        },
+        "heading": {
+          "fields": {
+            "level": {
+              "json_type": "number",
+              "required": true
+            },
+            "text": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "image": {
+          "fields": {
+            "description": {
+              "json_type": "string",
+              "required": false
+            },
+            "image_index": {
+              "json_type": "number",
+              "required": false
+            },
+            "src": {
+              "json_type": "string",
+              "required": false
+            }
+          }
+        },
+        "list": {
+          "fields": {
+            "ordered": {
+              "json_type": "boolean",
+              "required": true
+            }
+          }
+        },
+        "list_item": {
+          "fields": {
+            "text": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "metadata_block": {
+          "fields": {
+            "entries": {
+              "json_type": "array",
+              "required": true
+            }
+          }
+        },
+        "page_break": {
+          "fields": {}
+        },
+        "paragraph": {
+          "fields": {
+            "text": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "quote": {
+          "fields": {}
+        },
+        "raw_block": {
+          "fields": {
+            "content": {
+              "json_type": "string",
+              "required": true
+            },
+            "format": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        },
+        "slide": {
+          "fields": {
+            "number": {
+              "json_type": "number",
+              "required": true
+            },
+            "title": {
+              "json_type": "string",
+              "required": false
+            }
+          }
+        },
+        "table": {
+          "fields": {
+            "grid": {
+              "json_type": "object",
+              "required": true
+            }
+          }
+        },
+        "title": {
+          "fields": {
+            "text": {
+              "json_type": "string",
+              "required": true
+            }
+          }
+        }
+      }
+    },
+    "OcrBoundingGeometry": {
+      "kind": "tagged_enum",
+      "tag_field": "type",
+      "variants": {
+        "quadrilateral": {
+          "fields": {
+            "points": {
+              "json_type": "array",
+              "required": true
+            }
+          }
+        },
+        "rectangle": {
+          "fields": {
+            "height": {
+              "json_type": "number",
+              "required": true
+            },
+            "left": {
+              "json_type": "number",
+              "required": true
+            },
+            "top": {
+              "json_type": "number",
+              "required": true
+            },
+            "width": {
+              "json_type": "number",
+              "required": true
+            }
+          }
+        }
+      }
+    },
+    "OcrElementLevel": {
+      "kind": "enum",
+      "values": [
+        "word",
+        "line",
+        "block",
+        "page"
+      ]
+    },
+    "OutputFormat": {
+      "kind": "enum",
+      "values": [
+        "plain",
+        "markdown",
+        "djot",
+        "html",
+        "structured"
+      ]
+    },
+    "PageUnitType": {
+      "kind": "enum",
+      "values": [
+        "page",
+        "slide",
+        "sheet"
+      ]
+    },
+    "PdfAnnotation": {
+      "kind": "struct",
+      "fields": {
+        "annotation_type": {
+          "json_type": "string",
+          "required": true
+        },
+        "bounding_box": {
+          "json_type": "object",
+          "required": false
+        },
+        "content": {
+          "json_type": "string",
+          "required": false
+        },
+        "page_number": {
+          "json_type": "number",
+          "required": true
+        }
+      }
+    },
+    "PdfAnnotationType": {
+      "kind": "enum",
+      "values": [
+        "text",
+        "highlight",
+        "link",
+        "stamp",
+        "underline",
+        "strike_out",
+        "other"
+      ]
+    },
+    "ProcessingWarning": {
+      "kind": "struct",
+      "fields": {
+        "message": {
+          "json_type": "string",
+          "required": true
+        },
+        "source": {
+          "json_type": "string",
+          "required": true
+        }
+      }
+    },
+    "RelationshipKind": {
+      "kind": "enum",
+      "values": [
+        "footnote_reference",
+        "citation_reference",
+        "internal_link",
+        "caption",
+        "label",
+        "toc_entry",
+        "cross_reference"
+      ]
+    },
+    "ResultFormat": {
+      "kind": "enum",
+      "values": [
+        "unified",
+        "element_based"
+      ]
+    },
+    "Table": {
+      "kind": "struct",
+      "fields": {
+        "bounding_box": {
+          "json_type": "object",
+          "required": false
+        },
+        "cells": {
+          "json_type": "array",
+          "required": true
+        },
+        "markdown": {
+          "json_type": "string",
+          "required": true
+        },
+        "page_number": {
+          "json_type": "number",
+          "required": true
+        }
+      }
+    },
+    "Uri": {
+      "kind": "struct",
+      "fields": {
+        "kind": {
+          "json_type": "string",
+          "required": true
+        },
+        "label": {
+          "json_type": "string",
+          "required": false
+        },
+        "page": {
+          "json_type": "number",
+          "required": false
+        },
+        "url": {
+          "json_type": "string",
+          "required": true
+        }
+      }
+    },
+    "UriKind": {
+      "kind": "enum",
+      "values": [
+        "hyperlink",
+        "image",
+        "anchor",
+        "citation",
+        "reference",
+        "email"
+      ]
+    }
+  },
+  "feature_profiles": {
+    "ffi": [
+      "pdf",
+      "html",
+      "archives",
+      "keywords",
+      "layout-detection",
+      "tree-sitter"
+    ],
+    "full": [
+      "pdf",
+      "html",
+      "archives",
+      "keywords",
+      "layout-detection",
+      "tree-sitter",
+      "embeddings",
+      "chunking-tokenizers"
+    ],
+    "wasm": [
+      "pdf",
+      "html",
+      "archives",
+      "keywords",
+      "tree-sitter"
+    ]
+  }
+}

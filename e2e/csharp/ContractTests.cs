@@ -215,7 +215,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"acceleration\":{\"device_id\":0,\"provider\":\"cpu\"}}");
+            var config = TestHelpers.BuildConfig("{\"acceleration\":{\"provider\":\"cpu\",\"device_id\":0}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
@@ -330,7 +330,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("markdown/comprehensive.md");
             TestHelpers.SkipIfOfficeTestOnWindows("markdown/comprehensive.md");
             var documentPath = TestHelpers.EnsureDocument("markdown/comprehensive.md", true);
-            var config = TestHelpers.BuildConfig("{\"chunking\":{\"max_chars\":200,\"max_overlap\":40,\"sizing\":{\"model\":\"Xenova/gpt-4o\",\"type\":\"tokenizer\"}}}");
+            var config = TestHelpers.BuildConfig("{\"chunking\":{\"max_chars\":200,\"max_overlap\":40,\"sizing\":{\"type\":\"tokenizer\",\"model\":\"Xenova/gpt-4o\"}}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertMinContentLength(result, 10);
@@ -492,7 +492,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("html/complex_table.html");
             TestHelpers.SkipIfOfficeTestOnWindows("html/complex_table.html");
             var documentPath = TestHelpers.EnsureDocument("html/complex_table.html", true);
-            var config = TestHelpers.BuildConfig("{\"html_options\":{\"extract_metadata\":true}}");
+            var config = TestHelpers.BuildConfig("{\"html_options\":{\"extractMetadata\":true}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "text/html" });
@@ -561,7 +561,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"language_detection\":{\"detect_multiple\":true,\"enabled\":true,\"min_confidence\":0.3}}");
+            var config = TestHelpers.BuildConfig("{\"language_detection\":{\"enabled\":true,\"detect_multiple\":true,\"min_confidence\":0.3}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
@@ -576,7 +576,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"language_detection\":{\"detect_multiple\":true,\"enabled\":true}}");
+            var config = TestHelpers.BuildConfig("{\"language_detection\":{\"enabled\":true,\"detect_multiple\":true}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
@@ -665,7 +665,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"pages\":{\"extract_pages\":true},\"pdf_options\":{\"hierarchy\":{\"enabled\":true,\"include_bbox\":true}}}");
+            var config = TestHelpers.BuildConfig("{\"pdf_options\":{\"hierarchy\":{\"enabled\":true,\"include_bbox\":true}},\"pages\":{\"extract_pages\":true}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
@@ -679,7 +679,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/fake_memo.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/fake_memo.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"pdf_options\":{\"bottom_margin_fraction\":0.1,\"top_margin_fraction\":0.1}}");
+            var config = TestHelpers.BuildConfig("{\"pdf_options\":{\"top_margin_fraction\":0.1,\"bottom_margin_fraction\":0.1}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
@@ -795,6 +795,34 @@ namespace Kreuzberg.E2E.Contract
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
             TestHelpers.AssertTableCount(result, 1, null);
+        }
+
+        [SkippableFact]
+        public void ConfigTreeSitter()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tree-sitter");
+            TestHelpers.SkipIfLegacyOfficeDisabled("code/hello.py");
+            TestHelpers.SkipIfOfficeTestOnWindows("code/hello.py");
+            var documentPath = TestHelpers.EnsureDocument("code/hello.py", true);
+            var config = TestHelpers.BuildConfig("{\"tree_sitter\":{\"languages\":[\"python\",\"rust\"],\"groups\":[\"web\"],\"process\":{\"structure\":true,\"imports\":true,\"exports\":true,\"comments\":false,\"docstrings\":false,\"symbols\":false,\"diagnostics\":false}}}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "text/x-source-code" });
+            TestHelpers.AssertMinContentLength(result, 5);
+        }
+
+        [SkippableFact]
+        public void ConfigTreeSitterProcess()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("tree-sitter");
+            TestHelpers.SkipIfLegacyOfficeDisabled("code/hello.py");
+            TestHelpers.SkipIfOfficeTestOnWindows("code/hello.py");
+            var documentPath = TestHelpers.EnsureDocument("code/hello.py", true);
+            var config = TestHelpers.BuildConfig("{\"tree_sitter\":{\"process\":{\"structure\":true,\"imports\":true,\"exports\":true,\"comments\":true,\"docstrings\":true,\"symbols\":true,\"diagnostics\":true,\"chunk_max_size\":2000}}}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "text/x-source-code" });
+            TestHelpers.AssertMinContentLength(result, 5);
         }
 
         [SkippableFact]

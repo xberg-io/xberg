@@ -27,9 +27,9 @@ describe("embeddings fixtures", () => {
 			}
 			const config = buildConfig({
 				chunking: {
-					embedding: { model: { name: "balanced", type: "preset" }, normalize: true },
 					max_chars: 500,
 					max_overlap: 50,
+					embedding: { model: { type: "preset", name: "balanced" }, normalize: true },
 				},
 			});
 			let result: ExtractionResult | null = null;
@@ -66,9 +66,9 @@ describe("embeddings fixtures", () => {
 			}
 			const config = buildConfig({
 				chunking: {
-					embedding: { model: { name: "balanced", type: "preset" }, normalize: true },
 					max_chars: 500,
 					max_overlap: 50,
+					embedding: { model: { type: "preset", name: "balanced" }, normalize: true },
 				},
 			});
 			let result: ExtractionResult | null = null;
@@ -135,9 +135,9 @@ describe("embeddings fixtures", () => {
 			}
 			const config = buildConfig({
 				chunking: {
-					embedding: { model: { name: "fast", type: "preset" }, normalize: true },
 					max_chars: 500,
 					max_overlap: 50,
+					embedding: { model: { type: "preset", name: "fast" }, normalize: true },
 				},
 			});
 			let result: ExtractionResult | null = null;

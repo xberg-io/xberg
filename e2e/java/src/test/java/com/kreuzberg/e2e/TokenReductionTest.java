@@ -75,7 +75,7 @@ public class TokenReductionTest {
   public void tokenReductionWithChunking() throws Exception {
     JsonNode config =
         MAPPER.readTree(
-            "{\"chunking\":{\"max_chars\":500,\"max_overlap\":50},\"token_reduction\":{\"mode\":\"moderate\"}}");
+            "{\"token_reduction\":{\"mode\":\"moderate\"},\"chunking\":{\"max_chars\":500,\"max_overlap\":50}}");
     E2EHelpers.runFixture(
         "token_reduction_with_chunking",
         "pdf/fake_memo.pdf",

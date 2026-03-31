@@ -84,7 +84,7 @@ Deno.test("token_reduction_light", { permissions: { read: true, net: true } }, a
 });
 
 Deno.test("token_reduction_with_chunking", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig({ chunking: { max_chars: 500, max_overlap: 50 }, token_reduction: { mode: "moderate" } });
+	const config = buildConfig({ token_reduction: { mode: "moderate" }, chunking: { max_chars: 500, max_overlap: 50 } });
 	let result: ExtractionResult | null = null;
 	try {
 		const documentBytes = await resolveDocument("pdf/fake_memo.pdf");

@@ -132,8 +132,8 @@ func TestContractApiExtractFileSync(t *testing.T) {
 func TestContractConfigAccelerationCpuProvider(t *testing.T) {
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "acceleration": {
-	"device_id": 0,
-	"provider": "cpu"
+	"provider": "cpu",
+	"device_id": 0
 }
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
@@ -240,8 +240,8 @@ func TestContractConfigChunkingTokenizer(t *testing.T) {
 	"max_chars": 200,
 	"max_overlap": 40,
 	"sizing": {
-	"model": "Xenova/gpt-4o",
-	"type": "tokenizer"
+	"type": "tokenizer",
+	"model": "Xenova/gpt-4o"
 	}
 }
 }`))
@@ -352,7 +352,7 @@ func TestContractConfigForceOcrPages(t *testing.T) {
 func TestContractConfigHtmlOptions(t *testing.T) {
 	result := runExtraction(t, "html/complex_table.html", []byte(`{
 "html_options": {
-	"extract_metadata": true
+	"extractMetadata": true
 }
 }`))
 	assertExpectedMime(t, result, []string{"text/html"})
@@ -407,8 +407,8 @@ func TestContractConfigLanguageDetection(t *testing.T) {
 func TestContractConfigLanguageDetectionMulti(t *testing.T) {
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "language_detection": {
-	"detect_multiple": true,
 	"enabled": true,
+	"detect_multiple": true,
 	"min_confidence": 0.3
 }
 }`))
@@ -421,8 +421,8 @@ func TestContractConfigLanguageMulti(t *testing.T) {
 	skipIfFeatureUnavailable(t, "language-detection")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "language_detection": {
-	"detect_multiple": true,
-	"enabled": true
+	"enabled": true,
+	"detect_multiple": true
 }
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
@@ -493,14 +493,14 @@ func TestContractConfigPdfAnnotationsCount(t *testing.T) {
 func TestContractConfigPdfHierarchy(t *testing.T) {
 	skipIfFeatureUnavailable(t, "pdf")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
-"pages": {
-	"extract_pages": true
-},
 "pdf_options": {
 	"hierarchy": {
 	"enabled": true,
 	"include_bbox": true
 	}
+},
+"pages": {
+	"extract_pages": true
 }
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
@@ -511,8 +511,8 @@ func TestContractConfigPdfMargins(t *testing.T) {
 	skipIfFeatureUnavailable(t, "pdf")
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "pdf_options": {
-	"bottom_margin_fraction": 0.1,
-	"top_margin_fraction": 0.1
+	"top_margin_fraction": 0.1,
+	"bottom_margin_fraction": 0.1
 }
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
@@ -590,6 +590,52 @@ func TestContractConfigTablesContent(t *testing.T) {
 	result := runExtraction(t, "docx/docx_tables.docx", nil)
 	assertExpectedMime(t, result, []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document"})
 	assertTableCount(t, result, intPtr(1), nil)
+}
+
+func TestContractConfigTreeSitter(t *testing.T) {
+	skipIfFeatureUnavailable(t, "tree-sitter")
+	result := runExtraction(t, "code/hello.py", []byte(`{
+"tree_sitter": {
+	"languages": [
+	"python",
+	"rust"
+	],
+	"groups": [
+	"web"
+	],
+	"process": {
+	"structure": true,
+	"imports": true,
+	"exports": true,
+	"comments": false,
+	"docstrings": false,
+	"symbols": false,
+	"diagnostics": false
+	}
+}
+}`))
+	assertExpectedMime(t, result, []string{"text/x-source-code"})
+	assertMinContentLength(t, result, 5)
+}
+
+func TestContractConfigTreeSitterProcess(t *testing.T) {
+	skipIfFeatureUnavailable(t, "tree-sitter")
+	result := runExtraction(t, "code/hello.py", []byte(`{
+"tree_sitter": {
+	"process": {
+	"structure": true,
+	"imports": true,
+	"exports": true,
+	"comments": true,
+	"docstrings": true,
+	"symbols": true,
+	"diagnostics": true,
+	"chunk_max_size": 2000
+	}
+}
+}`))
+	assertExpectedMime(t, result, []string{"text/x-source-code"})
+	assertMinContentLength(t, result, 5)
 }
 
 func TestContractConfigUseCacheFalse(t *testing.T) {

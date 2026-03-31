@@ -265,7 +265,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_acceleration_cpu_provider',
       'pdf/fake_memo.pdf',
-      { acceleration: { device_id: 0, provider: 'cpu' } },
+      { acceleration: { provider: 'cpu', device_id: 0 } },
       requirements: [],
       notes: nil,
       skip_if_missing: true
@@ -404,7 +404,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_chunking_tokenizer',
       'markdown/comprehensive.md',
-      { chunking: { max_chars: 200, max_overlap: 40, sizing: { model: 'Xenova/gpt-4o', type: 'tokenizer' } } },
+      { chunking: { max_chars: 200, max_overlap: 40, sizing: { type: 'tokenizer', model: 'Xenova/gpt-4o' } } },
       requirements: %w[chunking-tokenizers],
       notes: 'Requires network access for HuggingFace Hub tokenizer download',
       skip_if_missing: true
@@ -613,7 +613,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_html_options',
       'html/complex_table.html',
-      { html_options: { extract_metadata: true } },
+      { html_options: { 'extractMetadata' => true } },
       requirements: [],
       notes: nil,
       skip_if_missing: true
@@ -702,7 +702,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_language_detection_multi',
       'pdf/fake_memo.pdf',
-      { language_detection: { detect_multiple: true, enabled: true, min_confidence: 0.3 } },
+      { language_detection: { enabled: true, detect_multiple: true, min_confidence: 0.3 } },
       requirements: [],
       notes: nil,
       skip_if_missing: true
@@ -721,7 +721,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_language_multi',
       'pdf/fake_memo.pdf',
-      { language_detection: { detect_multiple: true, enabled: true } },
+      { language_detection: { enabled: true, detect_multiple: true } },
       requirements: %w[language-detection],
       notes: nil,
       skip_if_missing: true
@@ -834,7 +834,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_pdf_hierarchy',
       'pdf/fake_memo.pdf',
-      { pages: { extract_pages: true }, pdf_options: { hierarchy: { enabled: true, include_bbox: true } } },
+      { pdf_options: { hierarchy: { enabled: true, include_bbox: true } }, pages: { extract_pages: true } },
       requirements: %w[pdf],
       notes: nil,
       skip_if_missing: true
@@ -852,7 +852,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_pdf_margins',
       'pdf/fake_memo.pdf',
-      { pdf_options: { bottom_margin_fraction: 0.1, top_margin_fraction: 0.1 } },
+      { pdf_options: { top_margin_fraction: 0.1, bottom_margin_fraction: 0.1 } },
       requirements: %w[pdf],
       notes: nil,
       skip_if_missing: true
@@ -1005,6 +1005,44 @@ RSpec.describe 'contract fixtures' do
         ['application/vnd.openxmlformats-officedocument.wordprocessingml.document']
       )
       E2ERuby::Assertions.assert_table_count(result, 1, nil)
+    end
+  end
+
+  it 'config_tree_sitter' do
+    E2ERuby.skip_if_feature_unavailable('tree-sitter')
+    E2ERuby.run_fixture(
+      'config_tree_sitter',
+      'code/hello.py',
+      { tree_sitter: { languages: %w[python rust], groups: ['web'],
+                       process: { structure: true, imports: true, exports: true, comments: false, docstrings: false, symbols: false, diagnostics: false } } },
+      requirements: %w[tree-sitter],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['text/x-source-code']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 5)
+    end
+  end
+
+  it 'config_tree_sitter_process' do
+    E2ERuby.skip_if_feature_unavailable('tree-sitter')
+    E2ERuby.run_fixture(
+      'config_tree_sitter_process',
+      'code/hello.py',
+      { tree_sitter: { process: { structure: true, imports: true, exports: true, comments: true, docstrings: true,
+                                  symbols: true, diagnostics: true, chunk_max_size: 2_000 } } },
+      requirements: %w[tree-sitter],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['text/x-source-code']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 5)
     end
   end
 
