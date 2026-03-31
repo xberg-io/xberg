@@ -3,9 +3,45 @@
 //! Parses markdown into typed blocks (headings, paragraphs, code, formulas, etc.)
 //! and computes structural F1 scores by matching extracted blocks against ground truth.
 //!
-//! Uses **fuzzy cross-type matching**: blocks can match across types with a
-//! continuous compatibility score. Heading level mismatches get partial credit,
-//! bold paragraphs matching headings get small credit, etc.
+//! # Block weights
+//!
+//! Each block type carries a weight that reflects how much it tells us about
+//! layout detection quality:
+//!
+//! | Weight | Types | Rationale |
+//! |--------|-------|-----------|
+//! | 2.0 | Headings (H1-H6) | Layout detection is the primary differentiator for heading identification; getting headings right matters most. |
+//! | 1.5 | Code, Formula, Table | These require format-specific handling (fence detection, LaTeX parsing, cell alignment) and are strong quality signals. |
+//! | 1.0 | ListItem | Standard structural element; neither trivially extracted nor especially hard. |
+//! | 0.5 | Paragraph, Image | Common and less discriminating -- most extractors get paragraphs right, so they contribute less to the score. |
+//!
+//! # Fuzzy cross-type matching
+//!
+//! Blocks can match across types with a continuous compatibility score in
+//! `[0.0, 1.0]`. The rationale for the key cross-type scores:
+//!
+//! - **Heading level mismatch** (0.6-0.9): content is correct, only the level
+//!   is wrong -- partial credit scaled by level distance.
+//! - **Bold paragraph matching heading** (0.4): extractors that miss heading
+//!   markup but preserve bold formatting deserve some credit since bold
+//!   paragraphs are a plausible pseudo-heading representation.
+//! - **Plain paragraph matching heading** (0.25): content preserved but heading
+//!   detection failed entirely.
+//! - **Code/Formula cross-match** (0.3): math content is frequently code-fenced
+//!   in practice, so misclassification between these two is understandable.
+//! - **ListItem/Paragraph** (0.5): structurally different but the content is
+//!   essentially the same.
+//!
+//! # Greedy matching algorithm
+//!
+//! The matcher builds all candidate `(GT block, extracted block)` pairs,
+//! scores each as `content_similarity * type_compatibility`, then greedily
+//! assigns matches from highest score to lowest. This is an O(n*m) approach
+//! where n and m are the block counts.
+//!
+//! An **O(n^2) complexity safeguard** at [`MAX_PAIRS_FOR_MATCHING`] (40,000
+//! candidate pairs) prevents degenerate performance on very large documents.
+//! When the safeguard triggers, scoring falls back to a count-ratio heuristic.
 
 use std::collections::HashMap;
 

@@ -36,7 +36,7 @@ repos:
 
   # TOML formatting
   - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: "v2.20.0"
+    rev: "v2.21.0"
     hooks:
       - id: pyproject-fmt
 
@@ -118,7 +118,7 @@ repos:
       - id: biome-lint
 
   - repo: https://github.com/oxc-project/mirrors-oxlint
-    rev: v1.57.0
+    rev: v1.58.0
     hooks:
       - id: oxlint
         args: ["--fix"]

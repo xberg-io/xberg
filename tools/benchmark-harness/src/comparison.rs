@@ -3,6 +3,29 @@
 //!
 //! Replaces the logic previously in `crates/kreuzberg/tests/framework_comparison.rs`.
 //! Uses canonical scoring from [`crate::markdown_quality`] and [`crate::quality`].
+//!
+//! # Pipeline semantics
+//!
+//! Each [`Pipeline`] variant represents a distinct extraction configuration:
+//!
+//! - **Baseline / Layout**: native pdfium text extraction; `Layout` adds layout
+//!   detection for heading/table identification without OCR.
+//! - **Tesseract / TesseractLayout**: Tesseract OCR with `force_ocr`; the
+//!   `Layout` suffix adds layout detection on top.
+//! - **Paddle / PaddleLayout / PaddleServer / PaddleServerLayout**: PaddleOCR
+//!   at mobile or server model tier, with optional layout detection.
+//! - **Docling / PaddleOcrPython / RapidOcr**: vendored pipelines whose
+//!   outputs are pre-computed and read from disk (no live extraction).
+//! - **LayoutSlanet***: layout detection with explicit SLANeXT table model
+//!   variants (wired, wireless, plus, auto).
+//!
+//! # Guardrail thresholds
+//!
+//! When `guardrails` is enabled, the comparison enforces per-document minimum
+//! SF1 and TF1 thresholds. Thresholds are set to approximately 90% of observed
+//! scores (a floor) to catch regressions without false-positive failures from
+//! run-to-run variance. The guardrail table is updated manually after
+//! significant quality improvements.
 
 use crate::Result;
 use crate::corpus::{self, CorpusDocument, CorpusFilter};

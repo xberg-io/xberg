@@ -144,6 +144,13 @@ impl ApiError {
     pub fn internal(error: KreuzbergError) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, error)
     }
+
+    /// Create a bad gateway error (502).
+    ///
+    /// Use when an upstream service (e.g., model download from HuggingFace) fails.
+    pub fn bad_gateway(error: KreuzbergError) -> Self {
+        Self::new(StatusCode::BAD_GATEWAY, error)
+    }
 }
 
 impl IntoResponse for ApiError {

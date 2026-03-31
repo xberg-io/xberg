@@ -1,8 +1,39 @@
-//! Benchmark harness for comparing document extraction frameworks
+//! Benchmark harness for comparing document extraction frameworks.
 //!
 //! This crate provides infrastructure for benchmarking Kreuzberg against other
 //! document extraction frameworks, measuring performance (throughput, memory, latency)
 //! and quality (F1 scores, text accuracy).
+//!
+//! # Dual-use pattern
+//!
+//! The harness serves two distinct workflows through the CLI subcommands:
+//!
+//! - **CI benchmarking** (`run` / `consolidate`): automated multi-framework
+//!   performance sweeps that produce JSON artifacts consumed by dashboards.
+//!   `run` executes one framework at a time; `consolidate` merges per-framework
+//!   result files into a single ranked report.
+//!
+//! - **Local quality assessment** (`compare` / `pipeline-benchmark`): interactive
+//!   tools for developers tuning extraction quality. `compare` runs multiple
+//!   Kreuzberg pipeline configurations side-by-side on the corpus, printing an
+//!   SF1/TF1 table. `pipeline-benchmark` extends this with timing data.
+//!
+//! # Module organization
+//!
+//! | Module | Purpose |
+//! |--------|---------|
+//! | [`adapter`] / [`adapters`] | Framework adapter trait and concrete implementations (native, Node, Python, Ruby). |
+//! | [`aggregate`] | Consolidation aggregation: groups results by framework/mode/file-type, computes percentiles. |
+//! | [`comparison`] | Multi-pipeline quality comparison on the corpus with guardrail thresholds. |
+//! | [`config`] | Configuration types for benchmark runs and profiling. |
+//! | [`consolidate`] | Recursive loading of `results.json` files from disk. |
+//! | [`corpus`] | Test corpus discovery and filtering. |
+//! | [`fixture`] | Fixture loading and validation. |
+//! | [`markdown_quality`] | Structural F1 scoring via fuzzy cross-type block matching. |
+//! | [`quality`] | Token-level (bag-of-words) text and numeric F1 scoring. |
+//! | [`runner`] | Benchmark execution orchestrator (warmup, iterations, resource monitoring). |
+//! | [`stats`] | Percentile calculations (R-7 interpolation) and NaN sanitization. |
+//! | [`types`] | Core data types (`BenchmarkResult`, `QualityMetrics`, etc.). |
 
 pub mod adapter;
 pub mod adapters;
@@ -33,7 +64,7 @@ pub mod types;
 pub mod validate_gt;
 
 pub use adapter::FrameworkAdapter;
-pub use adapters::{NativeAdapter, NodeAdapter, PythonAdapter, RubyAdapter};
+pub use adapters::NativeAdapter;
 pub use aggregate::{
     ComparisonData, ConsolidationMetadata, DeltaMetrics, DurationPercentiles, FileTypeAggregation,
     FrameworkModeAggregation, NewConsolidatedResults, Percentiles, PerformancePercentiles, QualityPercentiles,

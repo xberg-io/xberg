@@ -450,6 +450,16 @@ impl KreuzbergMcp {
         &self,
         Parameters(params): Parameters<super::params::CacheWarmParams>,
     ) -> Result<CallToolResult, rmcp::ErrorData> {
+        // Validate embedding_model is not an empty string
+        if let Some(ref name) = params.embedding_model
+            && name.trim().is_empty()
+        {
+            return Err(rmcp::ErrorData::invalid_params(
+                "Field 'embedding_model' must not be empty. Omit the field or provide a valid preset name.".to_string(),
+                None,
+            ));
+        }
+
         let cache_base = resolve_cache_base();
 
         let mut downloaded: Vec<String> = Vec::new();

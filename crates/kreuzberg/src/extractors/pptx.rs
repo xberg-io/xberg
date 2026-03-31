@@ -189,8 +189,19 @@ impl PptxExtractor {
         // Put remaining office metadata into additional map
         for (key, value) in &pptx_result.office_metadata {
             match key.as_str() {
+                // Skip fields already mapped to standard Metadata fields
                 "title" | "subject" | "created_by" | "modified_by" | "created_at" | "modified_at" | "author"
                 | "keywords" => {}
+                // Skip slide_count — already in PptxMetadata.slide_count (as a numeric type)
+                "slide_count" => {}
+                // Numeric fields: parse as JSON numbers so they serialize as integers, not strings
+                "notes_count" | "hidden_slides" => {
+                    let json_value = value
+                        .parse::<u64>()
+                        .map(|n| serde_json::Value::Number(n.into()))
+                        .unwrap_or_else(|_| serde_json::json!(value));
+                    additional.insert(Cow::Owned(key.clone()), json_value);
+                }
                 _ => {
                     additional.insert(Cow::Owned(key.clone()), serde_json::json!(value));
                 }

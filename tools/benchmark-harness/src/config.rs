@@ -298,3 +298,177 @@ pub fn load_framework_sizes(config_path: &Path) -> Result<HashMap<String, DiskSi
 
     Ok(sizes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- BenchmarkConfig::validate tests --
+
+    #[test]
+    fn test_valid_batch_config() {
+        let config = BenchmarkConfig::new(
+            PathBuf::from("/tmp/results"),
+            4,
+            3,
+            Duration::from_secs(60),
+            BenchmarkMode::Batch,
+        );
+        assert!(config.is_ok());
+    }
+
+    #[test]
+    fn test_valid_single_file_config() {
+        let config = BenchmarkConfig::new(
+            PathBuf::from("/tmp/results"),
+            1,
+            3,
+            Duration::from_secs(60),
+            BenchmarkMode::SingleFile,
+        );
+        assert!(config.is_ok());
+    }
+
+    #[test]
+    fn test_zero_timeout_rejected() {
+        let config = BenchmarkConfig::new(
+            PathBuf::from("/tmp/results"),
+            4,
+            3,
+            Duration::from_secs(0),
+            BenchmarkMode::Batch,
+        );
+        assert!(config.is_err());
+        let msg = format!("{}", config.unwrap_err());
+        assert!(msg.contains("Timeout must be > 0"));
+    }
+
+    #[test]
+    fn test_zero_max_concurrent_rejected() {
+        let config = BenchmarkConfig::new(
+            PathBuf::from("/tmp/results"),
+            0,
+            3,
+            Duration::from_secs(60),
+            BenchmarkMode::Batch,
+        );
+        assert!(config.is_err());
+        let msg = format!("{}", config.unwrap_err());
+        assert!(msg.contains("max_concurrent must be > 0"));
+    }
+
+    #[test]
+    fn test_zero_iterations_rejected() {
+        let config = BenchmarkConfig::new(
+            PathBuf::from("/tmp/results"),
+            4,
+            0,
+            Duration::from_secs(60),
+            BenchmarkMode::Batch,
+        );
+        assert!(config.is_err());
+        let msg = format!("{}", config.unwrap_err());
+        assert!(msg.contains("benchmark_iterations must be > 0"));
+    }
+
+    #[test]
+    fn test_single_file_mode_requires_max_concurrent_one() {
+        let config = BenchmarkConfig::new(
+            PathBuf::from("/tmp/results"),
+            4, // not 1
+            3,
+            Duration::from_secs(60),
+            BenchmarkMode::SingleFile,
+        );
+        assert!(config.is_err());
+        let msg = format!("{}", config.unwrap_err());
+        assert!(msg.contains("single-file mode requires max_concurrent=1"));
+    }
+
+    #[test]
+    fn test_default_config_validates() {
+        let config = BenchmarkConfig::default();
+        // Default is Batch mode with max_concurrent = num_cpus which is >= 1.
+        // This should pass unless running on a system with 0 CPUs.
+        assert!(config.validate().is_ok());
+    }
+
+    // -- ProfilingConfig::validate tests --
+
+    #[test]
+    fn test_valid_profiling_config() {
+        let config = ProfilingConfig::new(1000, 10, 500);
+        assert!(config.is_ok());
+    }
+
+    #[test]
+    fn test_profiling_frequency_too_low() {
+        let config = ProfilingConfig::new(50, 10, 500);
+        assert!(config.is_err());
+        let msg = format!("{}", config.unwrap_err());
+        assert!(msg.contains("sampling_frequency must be 100-10000 Hz"));
+    }
+
+    #[test]
+    fn test_profiling_frequency_too_high() {
+        let config = ProfilingConfig::new(20_000, 10, 500);
+        assert!(config.is_err());
+        let msg = format!("{}", config.unwrap_err());
+        assert!(msg.contains("sampling_frequency must be 100-10000 Hz"));
+    }
+
+    #[test]
+    fn test_profiling_zero_batch_size() {
+        let config = ProfilingConfig::new(1000, 0, 500);
+        assert!(config.is_err());
+        let msg = format!("{}", config.unwrap_err());
+        assert!(msg.contains("batch_size must be > 0"));
+    }
+
+    #[test]
+    fn test_profiling_zero_sample_threshold() {
+        let config = ProfilingConfig::new(1000, 10, 0);
+        assert!(config.is_err());
+        let msg = format!("{}", config.unwrap_err());
+        assert!(msg.contains("sample_count_threshold must be > 0"));
+    }
+
+    #[test]
+    fn test_profiling_boundary_frequencies() {
+        // Minimum valid frequency
+        assert!(ProfilingConfig::new(100, 1, 1).is_ok());
+        // Maximum valid frequency
+        assert!(ProfilingConfig::new(10000, 1, 1).is_ok());
+        // Just below minimum
+        assert!(ProfilingConfig::new(99, 1, 1).is_err());
+        // Just above maximum
+        assert!(ProfilingConfig::new(10001, 1, 1).is_err());
+    }
+
+    #[test]
+    fn test_optimal_frequency_zero_duration() {
+        let freq = ProfilingConfig::calculate_optimal_frequency(0);
+        assert_eq!(freq, 500); // REALISTIC_MAX_HZ
+    }
+
+    #[test]
+    fn test_optimal_frequency_short_task() {
+        let freq = ProfilingConfig::calculate_optimal_frequency(100);
+        // 500 * 1000 / 100 = 5000, clamped to 500
+        assert_eq!(freq, 500);
+    }
+
+    #[test]
+    fn test_optimal_frequency_long_task() {
+        let freq = ProfilingConfig::calculate_optimal_frequency(10_000);
+        // 500 * 1000 / 10000 = 50, clamped to 100
+        assert_eq!(freq, 100);
+    }
+
+    #[test]
+    fn test_sample_interval_calculation() {
+        assert_eq!(ProfilingConfig::calculate_sample_interval_ms(1000), 1);
+        assert_eq!(ProfilingConfig::calculate_sample_interval_ms(100), 10);
+        assert_eq!(ProfilingConfig::calculate_sample_interval_ms(500), 2);
+    }
+}

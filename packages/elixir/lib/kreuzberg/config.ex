@@ -134,6 +134,7 @@ defmodule Kreuzberg.ExtractionConfig do
         "result_format" => "unified",
         "security_limits" => nil,
         "token_reduction" => nil,
+        "tree_sitter" => nil,
         "use_cache" => true
       }
   """
@@ -343,6 +344,7 @@ defmodule Kreuzberg.ExtractionConfig do
         "result_format" => "unified",
         "security_limits" => nil,
         "token_reduction" => nil,
+        "tree_sitter" => nil,
         "use_cache" => true
       }
 
@@ -375,6 +377,7 @@ defmodule Kreuzberg.ExtractionConfig do
         "result_format" => "unified",
         "security_limits" => nil,
         "token_reduction" => nil,
+        "tree_sitter" => nil,
         "use_cache" => true
       }
 

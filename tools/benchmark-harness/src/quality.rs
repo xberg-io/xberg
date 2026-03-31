@@ -1,7 +1,37 @@
-//! Quality scoring module for benchmark results
+//! Quality scoring module for benchmark results.
 //!
 //! Computes F1-based quality metrics by comparing extracted text against ground truth.
-//! Uses token-level (bag of words) precision and recall.
+//! Uses token-level (bag-of-words) precision and recall.
+//!
+//! # Scoring weights
+//!
+//! Text-only scoring uses a **0.6 / 0.4 text / numeric split**:
+//!
+//! ```text
+//! quality_score = 0.6 * f1_text + 0.4 * f1_numeric
+//! ```
+//!
+//! Numeric tokens receive disproportionate weight (40% despite typically being
+//! a small fraction of the token count) because financial documents, scientific
+//! papers, and tabular data depend heavily on number accuracy. A single wrong
+//! digit can invalidate an entire table row or equation.
+//!
+//! When markdown ground truth is available, **combined scoring** kicks in:
+//!
+//! ```text
+//! quality_score = 0.5 * f1_text + 0.2 * f1_numeric + 0.3 * f1_layout
+//! ```
+//!
+//! The layout component (`f1_layout`) comes from [`crate::markdown_quality`]
+//! and captures structural fidelity (headings, tables, code blocks, etc.).
+//!
+//! # Tokenization
+//!
+//! Tokenization is intentionally simple: lowercase, split on whitespace,
+//! strip non-alphanumeric characters except periods and commas embedded between
+//! alphanumeric characters (preserving decimal numbers like "3.14" and European
+//! format "3,14"). This preserves punctuation that is semantically meaningful
+//! while ignoring decorative punctuation.
 
 use crate::types::QualityMetrics;
 use std::collections::HashMap;

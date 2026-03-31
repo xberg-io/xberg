@@ -39,27 +39,8 @@ defaults:
     shell: bash
 
 jobs:
-  validate-ground-truth:
-    name: Validate Ground Truth
-    runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.inputs.branch || github.ref }}
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
-      - name: Validate ground truth organization
-        run: python tools/benchmark-harness/scripts/validate_ground_truth.py
-
   setup:
     name: Build harness + native libs
-    needs: validate-ground-truth
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     permissions:
@@ -122,6 +103,9 @@ jobs:
 
       - name: Build kreuzberg-extract binary
         run: cargo build --release -p benchmark-harness --bin kreuzberg-extract
+
+      - name: Validate ground truth
+        run: cargo run --release -p benchmark-harness -- validate-gt --fixtures tools/benchmark-harness/fixtures/
 
       - name: Log disk space before artifact upload
         run: scripts/ci/validate/show-disk-space.sh "Disk space before artifact upload"

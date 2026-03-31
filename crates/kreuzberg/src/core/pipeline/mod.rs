@@ -200,10 +200,8 @@ pub fn run_pipeline_sync(doc: InternalDocument, config: &ExtractionConfig) -> Re
     #[cfg(feature = "chunking")]
     let chunker_only_markdown = result.formatted_content.is_none();
     #[cfg(feature = "chunking")]
-    if chunker_only_markdown {
-        if let Some(md) = chunker_heading_source {
-            result.formatted_content = Some(md);
-        }
+    if chunker_only_markdown && let Some(md) = chunker_heading_source {
+        result.formatted_content = Some(md);
     }
 
     // 2. Run synchronous post-processing

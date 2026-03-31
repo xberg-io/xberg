@@ -715,6 +715,11 @@ pub fn detect_mime_type_from_bytes(content: &[u8]) -> Result<String> {
         }
     }
 
+    // PST (Outlook Personal Folders) magic signature: "!BDN" at offset 0
+    if content.len() >= 4 && content[..4] == [0x21, 0x42, 0x44, 0x4E] {
+        return Ok(PST_MIME_TYPE.to_string());
+    }
+
     if let Ok(text) = std::str::from_utf8(content) {
         let trimmed = text.trim_start();
 
@@ -992,7 +997,11 @@ mod tests {
     fn test_detect_mime_type_email() {
         let dir = tempdir().unwrap();
 
-        let test_cases = vec![("test.eml", EML_MIME_TYPE), ("test.msg", MSG_MIME_TYPE)];
+        let test_cases = vec![
+            ("test.eml", EML_MIME_TYPE),
+            ("test.msg", MSG_MIME_TYPE),
+            ("test.pst", PST_MIME_TYPE),
+        ];
 
         for (filename, expected_mime) in test_cases {
             let file_path = dir.path().join(filename);
@@ -1145,6 +1154,17 @@ mod tests {
         ];
         let mime = detect_mime_type_from_bytes(plain_zip_bytes).unwrap();
         assert_eq!(mime, "application/zip", "Plain ZIP should remain as application/zip");
+    }
+
+    #[test]
+    fn test_detect_pst_from_bytes() {
+        // PST magic signature: "!BDN" followed by format-specific bytes
+        let pst_bytes: &[u8] = &[
+            0x21, 0x42, 0x44, 0x4E, // "!BDN" magic signature
+            0x00, 0x00, 0x00, 0x00, // padding (real PST files have more header data)
+        ];
+        let mime = detect_mime_type_from_bytes(pst_bytes).unwrap();
+        assert_eq!(mime, PST_MIME_TYPE, "Should detect PST from magic bytes");
     }
 
     #[test]

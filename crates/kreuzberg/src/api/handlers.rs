@@ -821,13 +821,23 @@ pub async fn cache_manifest_handler() -> Json<ManifestResponse> {
     request_body = WarmRequest,
     responses(
         (status = 200, description = "Models warmed", body = WarmResponse),
-        (status = 400, description = "Bad request - unknown embedding model", body = crate::api::types::ErrorResponse),
+        (status = 400, description = "Bad request - unknown or empty embedding model", body = crate::api::types::ErrorResponse),
         (status = 422, description = "Unprocessable entity - invalid JSON body", body = crate::api::types::ErrorResponse),
         (status = 500, description = "Internal server error", body = crate::api::types::ErrorResponse),
+        (status = 502, description = "Bad gateway - upstream model download failed", body = crate::api::types::ErrorResponse),
     )
 )]
 #[cfg_attr(feature = "otel", tracing::instrument(name = "api.cache_warm", skip(request)))]
 pub async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -> Result<Json<WarmResponse>, ApiError> {
+    // Validate embedding_model is not an empty string
+    if let Some(ref name) = request.embedding_model
+        && name.trim().is_empty()
+    {
+        return Err(ApiError::validation(crate::error::KreuzbergError::validation(
+            "Field 'embedding_model' must not be empty. Omit the field or provide a valid preset name.",
+        )));
+    }
+
     let cache_base = resolve_cache_base();
 
     #[allow(unused_mut)]
@@ -840,7 +850,7 @@ pub async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -> Resul
         let paddle_dir = cache_base.join("paddle-ocr");
         let manager = crate::paddle_ocr::ModelManager::new(paddle_dir);
 
-        manager.ensure_all_models().map_err(ApiError::internal)?;
+        manager.ensure_all_models().map_err(ApiError::bad_gateway)?;
         downloaded.push("paddle-ocr v2 (server+mobile det, cls, doc_ori, unified+per-script rec)".to_string());
     }
 
@@ -855,7 +865,7 @@ pub async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -> Resul
             already_cached.push("layout (rtdetr, tatr)".to_string());
         } else {
             manager.ensure_all_models().map_err(|e| {
-                ApiError::internal(crate::error::KreuzbergError::Other(format!(
+                ApiError::bad_gateway(crate::error::KreuzbergError::Other(format!(
                     "Failed to download layout models: {}",
                     e
                 )))
@@ -894,7 +904,7 @@ pub async fn cache_warm_handler(JsonApi(request): JsonApi<WarmRequest>) -> Resul
                 Some(embeddings_dir.clone()),
             )
             .map_err(|e| {
-                ApiError::internal(crate::error::KreuzbergError::Other(format!(
+                ApiError::bad_gateway(crate::error::KreuzbergError::Other(format!(
                     "Failed to download embedding model '{}': {}",
                     preset.name, e
                 )))
@@ -1034,6 +1044,50 @@ mod tests {
         assert!(json["cache_dir"].is_string());
         assert!(json["downloaded"].is_array());
         assert!(json["already_cached"].is_array());
+    }
+
+    #[tokio::test]
+    async fn test_cache_warm_handler_empty_embedding_model_returns_400() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/cache/warm")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"embedding_model": ""}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let error_msg = json["message"].as_str().unwrap_or("");
+        assert!(
+            error_msg.contains("must not be empty"),
+            "Expected empty embedding_model validation error, got: {}",
+            error_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cache_warm_handler_whitespace_embedding_model_returns_400() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/cache/warm")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"embedding_model": "   "}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 
     #[cfg(feature = "embeddings")]

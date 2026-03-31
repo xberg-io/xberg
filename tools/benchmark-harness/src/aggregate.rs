@@ -1,11 +1,22 @@
-//! New aggregation module for benchmark results
+//! Aggregation module for benchmark results (v2.2.0 output schema).
 //!
-//! This module provides aggregation functions that group results by:
-//! - Framework and mode (single/batch)
-//! - File type
-//! - OCR usage (yes/no)
+//! Groups [`BenchmarkResult`] records by framework-and-mode, file type, and
+//! OCR usage (yes/no), then computes percentile-based statistics for each
+//! group. The output schema (`schema_version: "2.2.0"`) is consumed by the
+//! consolidation dashboard.
 //!
-//! Calculates percentile-based statistics for better understanding of performance distributions.
+//! # Percentile methodology
+//!
+//! All percentiles use the **R-7 interpolation** method (the default in R and
+//! NumPy) via [`crate::stats::percentile_r7`]. Three percentiles are reported
+//! per metric: **p50** (median), **p95**, and **p99**. Values that are `NaN`
+//! or `Inf` after interpolation are sanitized to `0.0` by
+//! [`crate::stats::sanitize_f64`] so that downstream JSON consumers never
+//! encounter non-finite floats.
+//!
+//! Failed results (non-zero `error_kind`) are excluded from percentile
+//! calculations but still counted in `total_sample_count` to preserve the
+//! `success_rate_percent` metric.
 
 use crate::stats::{percentile_r7, sanitize_f64};
 use crate::types::{BenchmarkResult, DiskSizeInfo, ErrorKind};

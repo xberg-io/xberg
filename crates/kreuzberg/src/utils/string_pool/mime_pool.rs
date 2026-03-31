@@ -45,6 +45,7 @@ impl MimeStringPool {
             "application/vnd.ms-powerpoint",
             "message/rfc822",
             "application/vnd.ms-outlook",
+            "application/vnd.ms-outlook-pst",
             "application/json",
             "text/json",
             "application/x-yaml",

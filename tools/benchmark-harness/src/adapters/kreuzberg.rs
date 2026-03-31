@@ -18,88 +18,105 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// Get supported formats for Kreuzberg bindings
-/// Kreuzberg supports 50+ document, text, data, and image formats
-fn get_kreuzberg_supported_formats() -> Vec<String> {
-    vec![
-        // Documents
-        "pdf",
-        "docx",
-        "doc",
-        "odt",
-        "pptx",
-        "ppsx",
-        "pptm",
-        "pptm",
-        "ppt",
-        "pages",
-        "key",
-        "xlsx",
-        "xlsm",
-        "xlsb",
-        "xlam",
-        "xltm",
-        "xla",
-        "xls",
-        "ods",
-        "numbers",
-        // Text formats
-        "txt",
-        "md",
-        "markdown",
-        "commonmark",
-        "html",
-        "htm",
-        "xml",
-        "rtf",
-        "rst",
-        "org",
-        // Data formats
-        "json",
-        "yaml",
-        "yml",
-        "toml",
-        "csv",
-        "tsv",
-        // Email
-        "eml",
-        "msg",
-        // Archives
-        "zip",
-        "tar",
-        "gz",
-        "tgz",
-        "7z",
-        // Images (OCR supported)
-        "bmp",
-        "gif",
-        "jpg",
-        "jpeg",
-        "png",
-        "tiff",
-        "tif",
-        "webp",
-        "jp2",
-        "jpx",
-        "jpm",
-        "mj2",
-        // Academic/Publishing
-        "epub",
-        "bib",
-        "ipynb",
-        "tex",
-        "latex",
-        "typst",
-        "typ",
-        "fb2",
-        // Other
-        "svg",
-        "djot",
-    ]
-    .into_iter()
-    .map(|s| s.to_string())
-    .collect()
+// ---------------------------------------------------------------------------
+// Shared format lists
+// ---------------------------------------------------------------------------
+
+/// Base formats supported by all Kreuzberg bindings (native and WASM).
+const BASE_FORMATS: &[&str] = &[
+    // Documents
+    "pdf",
+    "docx",
+    "doc",
+    "odt",
+    "pptx",
+    "ppsx",
+    "pptm",
+    "ppt",
+    "pages",
+    "key",
+    "xlsx",
+    "xlsm",
+    "xlsb",
+    "xlam",
+    "xla",
+    "xls",
+    "ods",
+    "numbers",
+    // Text formats
+    "txt",
+    "md",
+    "markdown",
+    "commonmark",
+    "html",
+    "htm",
+    "xml",
+    "rtf",
+    "rst",
+    "org",
+    // Data formats
+    "json",
+    "yaml",
+    "yml",
+    "toml",
+    "csv",
+    "tsv",
+    // Email
+    "eml",
+    "msg",
+    // Archives
+    "zip",
+    "tar",
+    "gz",
+    "tgz",
+    "7z",
+    // Images (OCR supported)
+    "bmp",
+    "gif",
+    "jpg",
+    "jpeg",
+    "png",
+    "tiff",
+    "tif",
+    "webp",
+    "jp2",
+    "jpx",
+    "jpm",
+    "mj2",
+    // Academic/Publishing
+    "epub",
+    "bib",
+    "ipynb",
+    "tex",
+    "latex",
+    "typst",
+    "typ",
+    "fb2",
+    // Other
+    "svg",
+    "djot",
+];
+
+/// Extra formats only available in native (non-WASM) builds.
+const NATIVE_EXTRA_FORMATS: &[&str] = &["xltm"];
+
+fn formats_to_vec(base: &[&str], extra: &[&str]) -> Vec<String> {
+    base.iter().chain(extra.iter()).map(|s| (*s).to_string()).collect()
 }
+
+/// Get supported formats for native Kreuzberg bindings.
+fn get_kreuzberg_supported_formats() -> Vec<String> {
+    formats_to_vec(BASE_FORMATS, NATIVE_EXTRA_FORMATS)
+}
+
+/// Get supported formats for Kreuzberg WASM bindings.
+fn get_kreuzberg_wasm_supported_formats() -> Vec<String> {
+    formats_to_vec(BASE_FORMATS, &[])
+}
+
+// ---------------------------------------------------------------------------
+// Shared helpers (kept as-is)
+// ---------------------------------------------------------------------------
 
 /// Convert boolean OCR flag to command-line argument string
 fn ocr_flag(ocr_enabled: bool) -> String {
@@ -336,12 +353,464 @@ fn build_library_env() -> Result<Vec<(String, String)>> {
     Ok(envs)
 }
 
+// ---------------------------------------------------------------------------
+// Data-driven adapter factory
+// ---------------------------------------------------------------------------
+
+/// Function pointer returning environment variable pairs.
+type EnvFn = fn() -> Result<Vec<(String, String)>>;
+
+/// Specification for a script-based language adapter.
+///
+/// Each language binding defines one of these to capture the differences;
+/// the shared `create_from_spec` function handles the common wiring.
+struct AdapterSpec {
+    /// Framework name used in benchmark results (e.g. "kreuzberg-python").
+    name: &'static str,
+    /// Script filename under `tools/benchmark-harness/scripts/`.
+    script: &'static str,
+    /// How to locate the runtime binary and its base arguments.
+    find_runtime: fn() -> Result<(PathBuf, Vec<String>)>,
+    /// Extra environment variables beyond the defaults.
+    extra_env: Option<EnvFn>,
+    /// Post-creation hook for adapter-specific tweaks (e.g. set_working_dir).
+    extra_setup: Option<fn(&mut SubprocessAdapter) -> Result<()>>,
+    /// Override supported formats (defaults to `get_kreuzberg_supported_formats`).
+    supported_formats: Option<fn() -> Vec<String>>,
+    /// Extra args inserted *before* the script path (e.g. Ruby `-I` flag).
+    pre_script_args: Option<fn() -> Result<Vec<String>>>,
+    /// Override max timeout (e.g. WASM needs longer).
+    max_timeout: Option<Duration>,
+}
+
+/// Create a `SubprocessAdapter` from a spec, for either server or batch mode.
+fn create_from_spec(spec: &AdapterSpec, ocr_enabled: bool, batch: bool) -> Result<SubprocessAdapter> {
+    let script_path = get_script_path(spec.script)?;
+    let (command, mut args) = (spec.find_runtime)()?;
+
+    if let Some(pre_args_fn) = spec.pre_script_args {
+        args.extend(pre_args_fn()?);
+    }
+
+    args.push(script_path.to_string_lossy().to_string());
+    args.push(ocr_flag(ocr_enabled));
+    args.push(if batch { "batch" } else { "server" }.to_string());
+
+    let env = if let Some(env_fn) = spec.extra_env {
+        env_fn()?
+    } else {
+        vec![]
+    };
+
+    let formats = if let Some(fmt_fn) = spec.supported_formats {
+        fmt_fn()
+    } else {
+        get_kreuzberg_supported_formats()
+    };
+
+    let mut adapter = if batch {
+        SubprocessAdapter::with_batch_support(spec.name, command, args, env, formats)
+    } else {
+        SubprocessAdapter::with_persistent_mode(spec.name, command, args, env, formats)
+    };
+
+    if let Some(timeout) = spec.max_timeout {
+        adapter = adapter.with_max_timeout(timeout);
+    }
+
+    if let Some(setup_fn) = spec.extra_setup {
+        setup_fn(&mut adapter)?;
+    }
+
+    Ok(adapter)
+}
+
+// ---------------------------------------------------------------------------
+// Language adapter specs
+// ---------------------------------------------------------------------------
+
+fn python_spec() -> AdapterSpec {
+    AdapterSpec {
+        name: "kreuzberg-python",
+        script: "kreuzberg_extract.py",
+        find_runtime: find_python,
+        extra_env: None,
+        extra_setup: None,
+        supported_formats: None,
+        pre_script_args: None,
+        max_timeout: None,
+    }
+}
+
+fn node_spec() -> AdapterSpec {
+    AdapterSpec {
+        name: "kreuzberg-node",
+        script: "kreuzberg_extract.ts",
+        find_runtime: find_node,
+        extra_env: None,
+        extra_setup: None,
+        supported_formats: None,
+        pre_script_args: None,
+        max_timeout: None,
+    }
+}
+
+fn wasm_spec() -> AdapterSpec {
+    AdapterSpec {
+        name: "kreuzberg-wasm",
+        script: "kreuzberg_extract_wasm.ts",
+        find_runtime: find_node,
+        extra_env: None,
+        extra_setup: None,
+        supported_formats: Some(get_kreuzberg_wasm_supported_formats),
+        pre_script_args: None,
+        // WASM execution is significantly slower than native — use a higher timeout
+        // to avoid restart loops that waste the entire CI budget
+        max_timeout: Some(Duration::from_secs(600)),
+    }
+}
+
+fn ruby_spec() -> AdapterSpec {
+    AdapterSpec {
+        name: "kreuzberg-ruby",
+        script: "kreuzberg_extract.rb",
+        find_runtime: find_ruby,
+        extra_env: Some(build_library_env),
+        extra_setup: None,
+        supported_formats: None,
+        pre_script_args: Some(ruby_pre_script_args),
+        max_timeout: None,
+    }
+}
+
+fn ruby_pre_script_args() -> Result<Vec<String>> {
+    if let Ok(gem_lib_path) = get_ruby_gem_lib_path() {
+        Ok(vec!["-I".to_string(), gem_lib_path.to_string_lossy().to_string()])
+    } else {
+        Ok(vec![])
+    }
+}
+
+fn r_spec() -> AdapterSpec {
+    AdapterSpec {
+        name: "kreuzberg-r",
+        script: "kreuzberg_extract.R",
+        find_runtime: find_r,
+        extra_env: Some(build_library_env),
+        extra_setup: None,
+        supported_formats: None,
+        pre_script_args: None,
+        max_timeout: None,
+    }
+}
+
+fn find_r() -> Result<(PathBuf, Vec<String>)> {
+    Ok((find_tool("Rscript")?, vec![]))
+}
+
+fn php_spec() -> AdapterSpec {
+    AdapterSpec {
+        name: "kreuzberg-php",
+        script: "kreuzberg_extract.php",
+        find_runtime: find_php,
+        extra_env: Some(build_library_env),
+        extra_setup: None,
+        supported_formats: None,
+        pre_script_args: None,
+        max_timeout: None,
+    }
+}
+
+fn elixir_spec() -> AdapterSpec {
+    AdapterSpec {
+        name: "kreuzberg-elixir",
+        script: "kreuzberg_extract.exs",
+        find_runtime: find_elixir,
+        extra_env: Some(build_elixir_env),
+        extra_setup: None,
+        supported_formats: None,
+        pre_script_args: None,
+        max_timeout: None,
+    }
+}
+
+fn find_elixir() -> Result<(PathBuf, Vec<String>)> {
+    Ok((find_tool("elixir")?, vec![]))
+}
+
+fn build_elixir_env() -> Result<Vec<(String, String)>> {
+    let mut env = build_library_env()?;
+
+    // Ensure the Erlang VM uses UTF-8 for filenames and string encoding.
+    // Without this, Rust NIFs returning UTF-8 strings corrupt when the VM
+    // interprets them as latin1.
+    env.push(("ELIXIR_ERL_OPTIONS".to_string(), "+fnu".to_string()));
+    env.push(("LC_ALL".to_string(), "C.UTF-8".to_string()));
+    env.push(("LANG".to_string(), "C.UTF-8".to_string()));
+
+    // Add Elixir package path for the compiled kreuzberg package
+    let elixir_pkg_path = workspace_root()?.join("packages/elixir");
+    if elixir_pkg_path.exists() {
+        env.push(("MIX_EXTS".to_string(), elixir_pkg_path.to_string_lossy().to_string()));
+
+        // Set ERL_LIBS to include _build/prod or _build/dev lib path.
+        // Verify the .app manifest exists to avoid using incomplete builds.
+        let dev_path = elixir_pkg_path.join("_build/dev/lib");
+        let prod_path = elixir_pkg_path.join("_build/prod/lib");
+
+        let erl_libs = if prod_path.join("kreuzberg/ebin/kreuzberg.app").exists() {
+            prod_path.to_string_lossy().to_string()
+        } else if dev_path.join("kreuzberg/ebin/kreuzberg.app").exists() {
+            dev_path.to_string_lossy().to_string()
+        } else {
+            String::new()
+        };
+
+        if !erl_libs.is_empty() {
+            env.push(("ERL_LIBS".to_string(), prepend_env("ERL_LIBS", &erl_libs, ":")));
+        }
+    }
+
+    Ok(env)
+}
+
+// ---------------------------------------------------------------------------
+// Public factory functions — script-based languages via specs
+// ---------------------------------------------------------------------------
+
+/// Create Python adapter (persistent server mode)
+pub fn create_python_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&python_spec(), ocr_enabled, false)
+}
+
+/// Create Python batch adapter (batch_extract_file)
+pub fn create_python_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&python_spec(), ocr_enabled, true)
+}
+
+/// Create Node adapter (persistent server mode)
+pub fn create_node_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&node_spec(), ocr_enabled, false)
+}
+
+/// Create Node batch adapter (batchExtractFile)
+pub fn create_node_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&node_spec(), ocr_enabled, true)
+}
+
+/// Create WASM adapter (persistent server mode)
+pub fn create_wasm_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&wasm_spec(), ocr_enabled, false)
+}
+
+/// Create WASM batch adapter (Promise.all extractFile via @kreuzberg/wasm)
+pub fn create_wasm_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&wasm_spec(), ocr_enabled, true)
+}
+
+/// Create Ruby adapter (persistent server mode)
+pub fn create_ruby_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&ruby_spec(), ocr_enabled, false)
+}
+
+/// Create Ruby batch adapter (batch_extract_file)
+pub fn create_ruby_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&ruby_spec(), ocr_enabled, true)
+}
+
+/// Create R adapter (persistent server mode)
+pub fn create_r_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&r_spec(), ocr_enabled, false)
+}
+
+/// Create R batch adapter (batch_extract_files_sync)
+pub fn create_r_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&r_spec(), ocr_enabled, true)
+}
+
+/// Create PHP adapter (persistent server mode)
+pub fn create_php_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&php_spec(), ocr_enabled, false)
+}
+
+/// Create PHP batch adapter (batch_extract_files)
+pub fn create_php_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&php_spec(), ocr_enabled, true)
+}
+
+/// Create Elixir adapter (persistent server mode)
+pub fn create_elixir_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&elixir_spec(), ocr_enabled, false)
+}
+
+/// Create Elixir batch adapter (batch_extract_files)
+pub fn create_elixir_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_from_spec(&elixir_spec(), ocr_enabled, true)
+}
+
+// ---------------------------------------------------------------------------
+// Go adapter — uses spec pattern but needs set_working_dir and custom args
+// ---------------------------------------------------------------------------
+
+/// Create Go adapter (persistent server mode)
+pub fn create_go_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_go_impl(ocr_enabled, false)
+}
+
+/// Create Go batch adapter
+pub fn create_go_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_go_impl(ocr_enabled, true)
+}
+
+fn create_go_impl(ocr_enabled: bool, batch: bool) -> Result<SubprocessAdapter> {
+    let script_path = get_script_path("kreuzberg_extract_go.go")?;
+    let scripts_dir = script_path
+        .parent()
+        .ok_or_else(|| crate::Error::Config("Unable to determine scripts directory".to_string()))?
+        .to_path_buf();
+    let command = find_tool("go")?;
+    let mode = if batch { "batch" } else { "server" };
+    let args = vec![
+        "run".to_string(),
+        "-tags".to_string(),
+        "kreuzberg_dev".to_string(),
+        "kreuzberg_extract_go.go".to_string(),
+        ocr_flag(ocr_enabled),
+        mode.to_string(),
+    ];
+    let mut env = build_library_env()?;
+    if env::var("KREUZBERG_BENCHMARK_DEBUG").is_ok() {
+        env.push(("KREUZBERG_BENCHMARK_DEBUG".to_string(), "true".to_string()));
+    }
+    let supported_formats = get_kreuzberg_supported_formats();
+    let mut adapter = if batch {
+        SubprocessAdapter::with_batch_support("kreuzberg-go", command, args, env, supported_formats)
+    } else {
+        SubprocessAdapter::with_persistent_mode("kreuzberg-go", command, args, env, supported_formats)
+    };
+    adapter.set_working_dir(scripts_dir);
+    Ok(adapter)
+}
+
+// ---------------------------------------------------------------------------
+// Java adapter — custom classpath and JVM flags
+// ---------------------------------------------------------------------------
+
+/// Create Java adapter (persistent server mode)
+///
+/// Uses persistent mode to keep the JVM alive, avoiding per-file JVM startup overhead.
+pub fn create_java_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_java_impl(ocr_enabled, false)
+}
+
+/// Create Java batch adapter
+pub fn create_java_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_java_impl(ocr_enabled, true)
+}
+
+fn create_java_impl(ocr_enabled: bool, batch: bool) -> Result<SubprocessAdapter> {
+    let _script_path = get_script_path("KreuzbergExtractJava.java")?;
+    let command = find_tool("java")?;
+    let classpath = build_java_classpath()?;
+    let lib_dir = native_library_dir()?;
+    let lib_dir_str = lib_dir.to_string_lossy().to_string();
+    let mut env = build_library_env()?;
+    env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir_str.clone()));
+    let mode = if batch { "batch" } else { "server" };
+    let args = vec![
+        "--enable-native-access=ALL-UNNAMED".to_string(),
+        format!("-Djava.library.path={}", lib_dir.display()),
+        "--class-path".to_string(),
+        classpath,
+        "KreuzbergExtractJava".to_string(),
+        ocr_flag(ocr_enabled),
+        mode.to_string(),
+    ];
+    let supported_formats = get_kreuzberg_supported_formats();
+    Ok(if batch {
+        SubprocessAdapter::with_batch_support("kreuzberg-java", command, args, env, supported_formats)
+    } else {
+        SubprocessAdapter::with_persistent_mode("kreuzberg-java", command, args, env, supported_formats)
+    })
+}
+
+// ---------------------------------------------------------------------------
+// C# adapter — dotnet run --project pattern
+// ---------------------------------------------------------------------------
+
+/// Create C# adapter (persistent server mode)
+pub fn create_csharp_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_csharp_impl(ocr_enabled, false)
+}
+
+/// Create C# batch adapter
+pub fn create_csharp_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_csharp_impl(ocr_enabled, true)
+}
+
+fn create_csharp_impl(ocr_enabled: bool, batch: bool) -> Result<SubprocessAdapter> {
+    let command = find_tool("dotnet")?;
+    let project = workspace_root()?.join("packages/csharp/Benchmark/Benchmark.csproj");
+    if !project.exists() {
+        return Err(crate::Error::Config(format!(
+            "C# benchmark project missing at {}",
+            project.display()
+        )));
+    }
+    let mode = if batch { "batch" } else { "server" };
+    let args = vec![
+        "run".to_string(),
+        "--project".to_string(),
+        project.to_string_lossy().to_string(),
+        "--".to_string(),
+        ocr_flag(ocr_enabled),
+        mode.to_string(),
+    ];
+    let lib_dir = native_library_dir()?;
+    let mut env = build_library_env()?;
+    env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir.to_string_lossy().to_string()));
+    let supported_formats = get_kreuzberg_supported_formats();
+    Ok(if batch {
+        SubprocessAdapter::with_batch_support("kreuzberg-csharp", command, args, env, supported_formats)
+    } else {
+        SubprocessAdapter::with_persistent_mode("kreuzberg-csharp", command, args, env, supported_formats)
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Rust adapters — use binary path, not script path
+// ---------------------------------------------------------------------------
+
+/// Find the kreuzberg-extract binary
+fn find_kreuzberg_extract_binary() -> Result<PathBuf> {
+    // Check in target/release first
+    if let Ok(root) = workspace_root() {
+        let release_path = root.join("target/release/kreuzberg-extract");
+        if release_path.exists() {
+            return Ok(release_path);
+        }
+        let debug_path = root.join("target/debug/kreuzberg-extract");
+        if debug_path.exists() {
+            return Ok(debug_path);
+        }
+    }
+
+    // Try which
+    if let Ok(path) = which::which("kreuzberg-extract") {
+        return Ok(path);
+    }
+
+    Err(crate::Error::Config(
+        "kreuzberg-extract binary not found. Build with: cargo build -p benchmark-harness --bin kreuzberg-extract"
+            .to_string(),
+    ))
+}
+
 /// Create Rust subprocess adapter (persistent server mode)
 ///
 /// Runs kreuzberg extraction in a subprocess for fair timing comparisons.
 /// Uses the `kreuzberg-extract` binary built from the benchmark harness crate.
 pub fn create_rust_subprocess_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    // Find the kreuzberg-extract binary in target directory
     let binary_path = find_kreuzberg_extract_binary()?;
 
     let args = vec![ocr_flag(ocr_enabled)];
@@ -379,31 +848,6 @@ pub fn create_rust_paddle_subprocess_adapter(ocr_enabled: bool) -> Result<Subpro
     ))
 }
 
-/// Find the kreuzberg-extract binary
-fn find_kreuzberg_extract_binary() -> Result<PathBuf> {
-    // Check in target/release first
-    if let Ok(root) = workspace_root() {
-        let release_path = root.join("target/release/kreuzberg-extract");
-        if release_path.exists() {
-            return Ok(release_path);
-        }
-        let debug_path = root.join("target/debug/kreuzberg-extract");
-        if debug_path.exists() {
-            return Ok(debug_path);
-        }
-    }
-
-    // Try which
-    if let Ok(path) = which::which("kreuzberg-extract") {
-        return Ok(path);
-    }
-
-    Err(crate::Error::Config(
-        "kreuzberg-extract binary not found. Build with: cargo build -p benchmark-harness --bin kreuzberg-extract"
-            .to_string(),
-    ))
-}
-
 /// Create Rust batch adapter (batch_extract_file_sync via subprocess)
 ///
 /// Uses the `kreuzberg-extract` binary with `batch` subcommand for fair
@@ -424,608 +868,9 @@ pub fn create_rust_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter>
     ))
 }
 
-/// Create Python adapter (persistent server mode)
-pub fn create_python_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.py")?;
-    let (command, mut args) = find_python()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("server".to_string());
-
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-python",
-        command,
-        args,
-        vec![],
-        supported_formats,
-    ))
-}
-
-/// Create Python batch adapter (batch_extract_file)
-pub fn create_python_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.py")?;
-    let (command, mut args) = find_python()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("batch".to_string());
-
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-python",
-        command,
-        args,
-        vec![],
-        supported_formats,
-    ))
-}
-
-/// Create Node adapter (persistent server mode)
-pub fn create_node_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.ts")?;
-    let (command, mut args) = find_node()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("server".to_string());
-
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-node",
-        command,
-        args,
-        vec![],
-        supported_formats,
-    ))
-}
-
-/// Create Node batch adapter (batchExtractFile)
-pub fn create_node_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.ts")?;
-    let (command, mut args) = find_node()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("batch".to_string());
-
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-node",
-        command,
-        args,
-        vec![],
-        supported_formats,
-    ))
-}
-
-/// Get supported formats for Kreuzberg WASM bindings.
-///
-/// The WASM build now has full feature parity with native bindings: pdf, html, xml, email,
-/// office, excel, ocr/images, archives. PDF uses PDFium (WASM build). Office formats use
-/// native Rust parsers. OCR uses Tesseract WASM.
-fn get_kreuzberg_wasm_supported_formats() -> Vec<String> {
-    vec![
-        // Documents
-        "pdf",
-        "docx",
-        "doc",
-        "odt",
-        "pptx",
-        "ppt",
-        "ppsx",
-        "pptm",
-        "pages",
-        "key",
-        "rtf",
-        "rst",
-        "org",
-        // Spreadsheets (excel-wasm feature)
-        "xlsx",
-        "xlsm",
-        "xlsb",
-        "xlam",
-        "xla",
-        "xls",
-        "ods",
-        "numbers",
-        // Text formats
-        "txt",
-        "md",
-        "markdown",
-        "commonmark",
-        // HTML
-        "html",
-        "htm",
-        // XML
-        "xml",
-        // Data formats
-        "json",
-        "toml",
-        "csv",
-        "tsv",
-        "yaml",
-        "yml",
-        // Email
-        "eml",
-        "msg",
-        // Archives (archives feature in wasm-target)
-        "zip",
-        "tar",
-        "gz",
-        "tgz",
-        "7z",
-        // Images (OCR via Tesseract WASM)
-        "bmp",
-        "gif",
-        "jpg",
-        "jpeg",
-        "png",
-        "tiff",
-        "tif",
-        "webp",
-        "jp2",
-        "jpx",
-        "jpm",
-        "mj2",
-        // Academic/Publishing
-        "epub",
-        "bib",
-        "ipynb",
-        "tex",
-        "latex",
-        "typst",
-        "typ",
-        "fb2",
-        // Other
-        "svg",
-        "djot",
-    ]
-    .into_iter()
-    .map(|s| s.to_string())
-    .collect()
-}
-
-/// Create WASM adapter (persistent server mode)
-pub fn create_wasm_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract_wasm.ts")?;
-    let (command, mut args) = find_node()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("server".to_string());
-
-    let supported_formats = get_kreuzberg_wasm_supported_formats();
-    // WASM execution is significantly slower than native — use a higher timeout
-    // to avoid restart loops that waste the entire CI budget
-    Ok(
-        SubprocessAdapter::with_persistent_mode("kreuzberg-wasm", command, args, vec![], supported_formats)
-            .with_max_timeout(Duration::from_secs(600)),
-    )
-}
-
-/// Create WASM batch adapter (Promise.all extractFile via @kreuzberg/wasm)
-pub fn create_wasm_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract_wasm.ts")?;
-    let (command, mut args) = find_node()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("batch".to_string());
-
-    let supported_formats = get_kreuzberg_wasm_supported_formats();
-    Ok(
-        SubprocessAdapter::with_batch_support("kreuzberg-wasm", command, args, vec![], supported_formats)
-            .with_max_timeout(Duration::from_secs(600)),
-    )
-}
-
-/// Create Ruby adapter (persistent server mode)
-pub fn create_ruby_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.rb")?;
-    let (command, mut args) = find_ruby()?;
-
-    if let Ok(gem_lib_path) = get_ruby_gem_lib_path() {
-        args.push("-I".to_string());
-        args.push(gem_lib_path.to_string_lossy().to_string());
-    }
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("server".to_string());
-
-    let env = build_library_env()?;
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-ruby",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create Ruby batch adapter (batch_extract_file)
-pub fn create_ruby_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.rb")?;
-    let (command, mut args) = find_ruby()?;
-
-    if let Ok(gem_lib_path) = get_ruby_gem_lib_path() {
-        args.push("-I".to_string());
-        args.push(gem_lib_path.to_string_lossy().to_string());
-    }
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("batch".to_string());
-
-    let env = build_library_env()?;
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-ruby",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create R adapter (persistent server mode)
-pub fn create_r_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.R")?;
-    let command = find_tool("Rscript")?;
-
-    let mut args = vec![script_path.to_string_lossy().to_string()];
-    args.push(ocr_flag(ocr_enabled));
-    args.push("server".to_string());
-
-    let env = build_library_env()?;
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-r",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create R batch adapter (batch_extract_files_sync)
-pub fn create_r_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.R")?;
-    let command = find_tool("Rscript")?;
-
-    let mut args = vec![script_path.to_string_lossy().to_string()];
-    args.push(ocr_flag(ocr_enabled));
-    args.push("batch".to_string());
-
-    let env = build_library_env()?;
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-r",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create Go adapter (persistent server mode)
-pub fn create_go_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract_go.go")?;
-    let scripts_dir = script_path
-        .parent()
-        .ok_or_else(|| crate::Error::Config("Unable to determine scripts directory".to_string()))?
-        .to_path_buf();
-    let command = find_tool("go")?;
-    let args = vec![
-        "run".to_string(),
-        "-tags".to_string(),
-        "kreuzberg_dev".to_string(),
-        "kreuzberg_extract_go.go".to_string(),
-        ocr_flag(ocr_enabled),
-        "server".to_string(),
-    ];
-    let mut env = build_library_env()?;
-    if env::var("KREUZBERG_BENCHMARK_DEBUG").is_ok() {
-        env.push(("KREUZBERG_BENCHMARK_DEBUG".to_string(), "true".to_string()));
-    }
-    let supported_formats = get_kreuzberg_supported_formats();
-    let mut adapter = SubprocessAdapter::with_persistent_mode("kreuzberg-go", command, args, env, supported_formats);
-    adapter.set_working_dir(scripts_dir);
-    Ok(adapter)
-}
-
-/// Create Go batch adapter
-pub fn create_go_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract_go.go")?;
-    let scripts_dir = script_path
-        .parent()
-        .ok_or_else(|| crate::Error::Config("Unable to determine scripts directory".to_string()))?
-        .to_path_buf();
-    let command = find_tool("go")?;
-    let args = vec![
-        "run".to_string(),
-        "-tags".to_string(),
-        "kreuzberg_dev".to_string(),
-        "kreuzberg_extract_go.go".to_string(),
-        ocr_flag(ocr_enabled),
-        "batch".to_string(),
-    ];
-    let mut env = build_library_env()?;
-    if env::var("KREUZBERG_BENCHMARK_DEBUG").is_ok() {
-        env.push(("KREUZBERG_BENCHMARK_DEBUG".to_string(), "true".to_string()));
-    }
-    let supported_formats = get_kreuzberg_supported_formats();
-    let mut adapter = SubprocessAdapter::with_batch_support("kreuzberg-go", command, args, env, supported_formats);
-    adapter.set_working_dir(scripts_dir);
-    Ok(adapter)
-}
-
-/// Create Java adapter (persistent server mode)
-///
-/// Uses persistent mode to keep the JVM alive, avoiding per-file JVM startup overhead.
-pub fn create_java_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let _script_path = get_script_path("KreuzbergExtractJava.java")?;
-    let command = find_tool("java")?;
-    let classpath = build_java_classpath()?;
-    let lib_dir = native_library_dir()?;
-    let lib_dir_str = lib_dir.to_string_lossy().to_string();
-    let mut env = build_library_env()?;
-    env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir_str.clone()));
-    let args = vec![
-        "--enable-native-access=ALL-UNNAMED".to_string(),
-        format!("-Djava.library.path={}", lib_dir.display()),
-        "--class-path".to_string(),
-        classpath,
-        "KreuzbergExtractJava".to_string(),
-        ocr_flag(ocr_enabled),
-        "server".to_string(),
-    ];
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-java",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create Java batch adapter
-pub fn create_java_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let _script_path = get_script_path("KreuzbergExtractJava.java")?;
-    let command = find_tool("java")?;
-    let classpath = build_java_classpath()?;
-    let lib_dir = native_library_dir()?;
-    let lib_dir_str = lib_dir.to_string_lossy().to_string();
-    let mut env = build_library_env()?;
-    env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir_str.clone()));
-    let args = vec![
-        "--enable-native-access=ALL-UNNAMED".to_string(),
-        format!("-Djava.library.path={}", lib_dir.display()),
-        "--class-path".to_string(),
-        classpath,
-        "KreuzbergExtractJava".to_string(),
-        ocr_flag(ocr_enabled),
-        "batch".to_string(),
-    ];
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-java",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create C# adapter (persistent server mode)
-pub fn create_csharp_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let command = find_tool("dotnet")?;
-    let project = workspace_root()?.join("packages/csharp/Benchmark/Benchmark.csproj");
-    if !project.exists() {
-        return Err(crate::Error::Config(format!(
-            "C# benchmark project missing at {}",
-            project.display()
-        )));
-    }
-    let args = vec![
-        "run".to_string(),
-        "--project".to_string(),
-        project.to_string_lossy().to_string(),
-        "--".to_string(),
-        ocr_flag(ocr_enabled),
-        "server".to_string(),
-    ];
-    let lib_dir = native_library_dir()?;
-    let mut env = build_library_env()?;
-    env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir.to_string_lossy().to_string()));
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-csharp",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create C# batch adapter
-pub fn create_csharp_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let command = find_tool("dotnet")?;
-    let project = workspace_root()?.join("packages/csharp/Benchmark/Benchmark.csproj");
-    if !project.exists() {
-        return Err(crate::Error::Config(format!(
-            "C# benchmark project missing at {}",
-            project.display()
-        )));
-    }
-    let args = vec![
-        "run".to_string(),
-        "--project".to_string(),
-        project.to_string_lossy().to_string(),
-        "--".to_string(),
-        ocr_flag(ocr_enabled),
-        "server".to_string(),
-    ];
-    let lib_dir = native_library_dir()?;
-    let mut env = build_library_env()?;
-    env.push(("KREUZBERG_FFI_DIR".to_string(), lib_dir.to_string_lossy().to_string()));
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-csharp",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create PHP adapter (persistent server mode)
-pub fn create_php_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.php")?;
-    let (command, mut args) = find_php()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("server".to_string());
-
-    let env = build_library_env()?;
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-php",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create PHP batch adapter (batch_extract_files)
-pub fn create_php_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.php")?;
-    let (command, mut args) = find_php()?;
-
-    args.push(script_path.to_string_lossy().to_string());
-    args.push(ocr_flag(ocr_enabled));
-    args.push("batch".to_string());
-
-    let env = build_library_env()?;
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-php",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create Elixir adapter (persistent server mode)
-pub fn create_elixir_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.exs")?;
-    let command = find_tool("elixir")?;
-
-    let args = vec![
-        script_path.to_string_lossy().to_string(),
-        ocr_flag(ocr_enabled),
-        "server".to_string(),
-    ];
-
-    let mut env = build_library_env()?;
-
-    // Ensure the Erlang VM uses UTF-8 for filenames and string encoding.
-    // Without this, Rust NIFs returning UTF-8 strings corrupt when the VM
-    // interprets them as latin1.
-    env.push(("ELIXIR_ERL_OPTIONS".to_string(), "+fnu".to_string()));
-    env.push(("LC_ALL".to_string(), "C.UTF-8".to_string()));
-    env.push(("LANG".to_string(), "C.UTF-8".to_string()));
-
-    // Add Elixir package path for the compiled kreuzberg package
-    let elixir_pkg_path = workspace_root()?.join("packages/elixir");
-    if elixir_pkg_path.exists() {
-        env.push(("MIX_EXTS".to_string(), elixir_pkg_path.to_string_lossy().to_string()));
-
-        // Set ERL_LIBS to include _build/prod or _build/dev lib path.
-        // Verify the .app manifest exists to avoid using incomplete builds.
-        let dev_path = elixir_pkg_path.join("_build/dev/lib");
-        let prod_path = elixir_pkg_path.join("_build/prod/lib");
-
-        let erl_libs = if prod_path.join("kreuzberg/ebin/kreuzberg.app").exists() {
-            prod_path.to_string_lossy().to_string()
-        } else if dev_path.join("kreuzberg/ebin/kreuzberg.app").exists() {
-            dev_path.to_string_lossy().to_string()
-        } else {
-            String::new()
-        };
-
-        if !erl_libs.is_empty() {
-            env.push(("ERL_LIBS".to_string(), prepend_env("ERL_LIBS", &erl_libs, ":")));
-        }
-    }
-
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-elixir",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
-
-/// Create Elixir batch adapter (batch_extract_files)
-pub fn create_elixir_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let script_path = get_script_path("kreuzberg_extract.exs")?;
-    let command = find_tool("elixir")?;
-
-    let args = vec![
-        script_path.to_string_lossy().to_string(),
-        ocr_flag(ocr_enabled),
-        "batch".to_string(),
-    ];
-
-    let mut env = build_library_env()?;
-
-    // Ensure the Erlang VM uses UTF-8 for filenames and string encoding.
-    env.push(("ELIXIR_ERL_OPTIONS".to_string(), "+fnu".to_string()));
-    env.push(("LC_ALL".to_string(), "C.UTF-8".to_string()));
-    env.push(("LANG".to_string(), "C.UTF-8".to_string()));
-
-    // Add Elixir package path for the compiled kreuzberg package
-    let elixir_pkg_path = workspace_root()?.join("packages/elixir");
-    if elixir_pkg_path.exists() {
-        env.push(("MIX_EXTS".to_string(), elixir_pkg_path.to_string_lossy().to_string()));
-
-        // Set ERL_LIBS to include _build/prod or _build/dev lib path.
-        // Verify the .app manifest exists to avoid using incomplete builds.
-        let dev_path = elixir_pkg_path.join("_build/dev/lib");
-        let prod_path = elixir_pkg_path.join("_build/prod/lib");
-
-        let erl_libs = if prod_path.join("kreuzberg/ebin/kreuzberg.app").exists() {
-            prod_path.to_string_lossy().to_string()
-        } else if dev_path.join("kreuzberg/ebin/kreuzberg.app").exists() {
-            dev_path.to_string_lossy().to_string()
-        } else {
-            String::new()
-        };
-
-        if !erl_libs.is_empty() {
-            env.push(("ERL_LIBS".to_string(), prepend_env("ERL_LIBS", &erl_libs, ":")));
-        }
-    }
-
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-elixir",
-        command,
-        args,
-        env,
-        supported_formats,
-    ))
-}
+// ---------------------------------------------------------------------------
+// C adapter — compiles from source, very different pattern
+// ---------------------------------------------------------------------------
 
 /// Find a C compiler (cc, gcc, or clang)
 fn find_c_compiler() -> Result<PathBuf> {
@@ -1114,32 +959,20 @@ fn compile_c_extraction_binary(source: &Path) -> Result<PathBuf> {
 
 /// Create C adapter (persistent server mode)
 pub fn create_c_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
-    let source_path = get_script_path("c/kreuzberg_extract_c.c")?;
-    let binary_path = compile_c_extraction_binary(&source_path)?;
-
-    let args = vec![ocr_flag(ocr_enabled), "server".to_string()];
-
-    let mut env = build_library_env()?;
-    if env::var("KREUZBERG_BENCHMARK_DEBUG").is_ok() {
-        env.push(("KREUZBERG_BENCHMARK_DEBUG".to_string(), "true".to_string()));
-    }
-
-    let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_persistent_mode(
-        "kreuzberg-c",
-        binary_path,
-        args,
-        env,
-        supported_formats,
-    ))
+    create_c_impl(ocr_enabled, false)
 }
 
 /// Create C batch adapter
 pub fn create_c_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
+    create_c_impl(ocr_enabled, true)
+}
+
+fn create_c_impl(ocr_enabled: bool, batch: bool) -> Result<SubprocessAdapter> {
     let source_path = get_script_path("c/kreuzberg_extract_c.c")?;
     let binary_path = compile_c_extraction_binary(&source_path)?;
 
-    let args = vec![ocr_flag(ocr_enabled), "batch".to_string()];
+    let mode = if batch { "batch" } else { "server" };
+    let args = vec![ocr_flag(ocr_enabled), mode.to_string()];
 
     let mut env = build_library_env()?;
     if env::var("KREUZBERG_BENCHMARK_DEBUG").is_ok() {
@@ -1147,14 +980,16 @@ pub fn create_c_batch_adapter(ocr_enabled: bool) -> Result<SubprocessAdapter> {
     }
 
     let supported_formats = get_kreuzberg_supported_formats();
-    Ok(SubprocessAdapter::with_batch_support(
-        "kreuzberg-c",
-        binary_path,
-        args,
-        env,
-        supported_formats,
-    ))
+    Ok(if batch {
+        SubprocessAdapter::with_batch_support("kreuzberg-c", binary_path, args, env, supported_formats)
+    } else {
+        SubprocessAdapter::with_persistent_mode("kreuzberg-c", binary_path, args, env, supported_formats)
+    })
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {

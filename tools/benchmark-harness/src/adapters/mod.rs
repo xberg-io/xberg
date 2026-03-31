@@ -3,10 +3,6 @@
 pub mod external;
 pub mod kreuzberg;
 pub mod native;
-pub mod node;
-pub mod python;
-pub mod r;
-pub mod ruby;
 pub mod subprocess;
 
 pub use external::{
@@ -24,10 +20,6 @@ pub use kreuzberg::{
     create_wasm_batch_adapter,
 };
 pub use native::NativeAdapter;
-pub use node::NodeAdapter;
-pub use python::PythonAdapter;
-pub use r::RAdapter;
-pub use ruby::RubyAdapter;
 pub use subprocess::SubprocessAdapter;
 
 /// Returns the OCR flag string based on the provided boolean
