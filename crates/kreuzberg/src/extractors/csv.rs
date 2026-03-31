@@ -73,6 +73,7 @@ impl DocumentExtractor for CsvExtractor {
         mime_type: &str,
         _config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "csv", size_bytes = content.len(), "extraction starting");
         let text = decode_csv_bytes(content);
         let delimiter = if mime_type == "text/tab-separated-values" {
             '\t'
@@ -130,6 +131,11 @@ impl DocumentExtractor for CsvExtractor {
             ..Default::default()
         };
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "csv",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

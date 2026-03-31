@@ -35,7 +35,7 @@ func TestTypeVerificationExtractionConfig(t *testing.T) {
 	config := &kreuzberg.ExtractionConfig{
 		UseCache:                kreuzberg.BoolPtr(true),
 		EnableQualityProcessing: kreuzberg.BoolPtr(false),
-		ForceOCR:                kreuzberg.BoolPtr(false),
+		ForceOcr:                kreuzberg.BoolPtr(false),
 	}
 	assert.NotNil(t, config)
 	assert.NotNil(t, config.UseCache)
@@ -462,7 +462,7 @@ func TestExtractionConfigBuilding(t *testing.T) {
 	config := &kreuzberg.ExtractionConfig{
 		UseCache:                 kreuzberg.BoolPtr(true),
 		EnableQualityProcessing:  kreuzberg.BoolPtr(false),
-		ForceOCR:                 kreuzberg.BoolPtr(false),
+		ForceOcr:                 kreuzberg.BoolPtr(false),
 		MaxConcurrentExtractions: kreuzberg.IntPtr(4),
 	}
 
@@ -950,11 +950,11 @@ func TestExtractionConfigWithOutputFormat(t *testing.T) {
 // TestExtractionConfigWithResultFormat tests extraction config with ResultFormat set.
 func TestExtractionConfigWithResultFormat(t *testing.T) {
 	config := &kreuzberg.ExtractionConfig{
-		ForceOCR:     kreuzberg.BoolPtr(false),
+		ForceOcr:     kreuzberg.BoolPtr(false),
 		ResultFormat: string(kreuzberg.ResultFormatElementBased),
 	}
 	assert.NotNil(t, config)
-	assert.False(t, *config.ForceOCR)
+	assert.False(t, *config.ForceOcr)
 	assert.Equal(t, "element_based", config.ResultFormat)
 }
 
@@ -1074,12 +1074,12 @@ func TestConfigMergePreservesResultFormat(t *testing.T) {
 		ResultFormat: string(kreuzberg.ResultFormatUnified),
 	}
 	overrideConfig := &kreuzberg.ExtractionConfig{
-		ForceOCR: kreuzberg.BoolPtr(true),
+		ForceOcr: kreuzberg.BoolPtr(true),
 	}
 	err := kreuzberg.ConfigMerge(baseConfig, overrideConfig)
 	assert.NoError(t, err)
 	assert.Equal(t, "unified", baseConfig.ResultFormat)
-	assert.True(t, *baseConfig.ForceOCR)
+	assert.True(t, *baseConfig.ForceOcr)
 }
 
 // TestConfigMergeOverridesResultFormat tests that ConfigMerge overrides ResultFormat.
@@ -1270,8 +1270,8 @@ func TestNestedConfigBuilding(t *testing.T) {
 		),
 	)
 	assert.NotNil(t, config)
-	assert.NotNil(t, config.OCR)
-	assert.Equal(t, "tesseract", config.OCR.Backend)
+	assert.NotNil(t, config.Ocr)
+	assert.Equal(t, "tesseract", config.Ocr.Backend)
 	assert.NotNil(t, config.Chunking)
 	assert.NotNil(t, config.Chunking.MaxChars)
 	assert.Equal(t, 512, *config.Chunking.MaxChars)
@@ -1997,7 +1997,7 @@ func TestConfigMergeComplexStructures(t *testing.T) {
 
 	err := kreuzberg.ConfigMerge(baseConfig, overrideConfig)
 	assert.NoError(t, err)
-	assert.NotNil(t, baseConfig.OCR)
+	assert.NotNil(t, baseConfig.Ocr)
 	assert.NotNil(t, baseConfig.Chunking)
 	assert.Equal(t, 1024, *baseConfig.Chunking.MaxChars)
 }

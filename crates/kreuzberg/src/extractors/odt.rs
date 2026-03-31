@@ -666,6 +666,7 @@ impl DocumentExtractor for OdtExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "odt", size_bytes = content.len(), "extraction starting");
         let _ = config; // conditionally used by ocr feature
         let content_owned = content.to_vec();
 
@@ -817,6 +818,11 @@ impl DocumentExtractor for OdtExtractor {
             ..Default::default()
         };
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "odt",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

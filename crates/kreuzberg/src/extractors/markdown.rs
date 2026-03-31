@@ -585,6 +585,7 @@ impl DocumentExtractor for MarkdownExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "markdown", size_bytes = content.len(), "extraction starting");
         let _ = config; // config is used by the pipeline for image OCR
         let text = String::from_utf8_lossy(content).into_owned();
 
@@ -626,6 +627,11 @@ impl DocumentExtractor for MarkdownExtractor {
             }
         }
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "markdown",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

@@ -242,6 +242,8 @@ impl Plugin for HtmlExtractor {
 
 impl SyncExtractor for HtmlExtractor {
     fn extract_sync(&self, content: &[u8], mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {
+        let _span = tracing::debug_span!("extract_html", element_count = tracing::field::Empty,).entered();
+
         let html = utf8_validation::from_utf8(content)
             .map(|s| s.to_string())
             .unwrap_or_else(|_| String::from_utf8_lossy(content).into_owned());
@@ -374,6 +376,8 @@ impl SyncExtractor for HtmlExtractor {
                 doc.push_image(extracted);
             }
         }
+
+        _span.record("element_count", doc.elements.len());
 
         Ok(doc)
     }

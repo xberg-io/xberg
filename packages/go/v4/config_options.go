@@ -46,14 +46,14 @@ func WithEnableQualityProcessing(enabled bool) ExtractionOption {
 // WithOCR sets the OCR configuration with functional options.
 func WithOCR(opts ...OCROption) ExtractionOption {
 	return func(c *ExtractionConfig) {
-		c.OCR = NewOCRConfig(opts...)
+		c.Ocr = NewOCRConfig(opts...)
 	}
 }
 
 // WithForceOCR sets whether OCR should be forced.
 func WithForceOCR(enabled bool) ExtractionOption {
 	return func(c *ExtractionConfig) {
-		c.ForceOCR = &enabled
+		c.ForceOcr = &enabled
 	}
 }
 
@@ -116,7 +116,7 @@ func WithHTMLOptions(opts ...HTMLConversionOption) ExtractionOption {
 // WithLayoutDetection sets the layout detection configuration with functional options.
 func WithLayoutDetection(opts ...LayoutDetectionOption) ExtractionOption {
 	return func(c *ExtractionConfig) {
-		c.LayoutDetection = NewLayoutDetectionConfig(opts...)
+		c.Layout = NewLayoutDetectionConfig(opts...)
 	}
 }
 

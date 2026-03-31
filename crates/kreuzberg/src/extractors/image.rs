@@ -335,6 +335,7 @@ impl DocumentExtractor for ImageExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "image", size_bytes = content.len(), "extraction starting");
         let extraction_metadata = extract_image_metadata(content)?;
 
         let format_str = extraction_metadata.format;
@@ -407,6 +408,11 @@ impl DocumentExtractor for ImageExtractor {
         };
         doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "image",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

@@ -1982,7 +1982,7 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
         writeln!(buffer, "\ttyp := reflect.TypeOf(kreuzberg.ExtractionResult{{}})")?;
         writeln!(buffer, "\texpectedFields := map[string]string{{")?;
         for field_name in fields.keys() {
-            let go_name = parity::to_pascal_case(field_name);
+            let go_name = parity::to_go_pascal_case(field_name);
             writeln!(buffer, "\t\t\"{go_name}\": \"{field_name}\",")?;
         }
         writeln!(buffer, "\t}}")?;
@@ -2016,7 +2016,7 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
         writeln!(buffer, "\ttyp := reflect.TypeOf(kreuzberg.ExtractionConfig{{}})")?;
         writeln!(buffer, "\texpectedFields := map[string]string{{")?;
         for field_name in fields.keys() {
-            let go_name = parity::to_pascal_case(field_name);
+            let go_name = parity::to_go_pascal_case(field_name);
             writeln!(buffer, "\t\t\"{go_name}\": \"{field_name}\",")?;
         }
         writeln!(buffer, "\t}}")?;
@@ -2065,7 +2065,7 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
         writeln!(buffer, "\ttyp := reflect.TypeOf(kreuzberg.{go_name}{{}})")?;
         writeln!(buffer, "\texpectedFields := map[string]string{{")?;
         for field_name in fields.keys() {
-            let go_name = parity::to_pascal_case(field_name);
+            let go_name = parity::to_go_pascal_case(field_name);
             writeln!(buffer, "\t\t\"{go_name}\": \"{field_name}\",")?;
         }
         writeln!(buffer, "\t}}")?;

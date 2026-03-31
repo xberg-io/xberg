@@ -266,7 +266,7 @@ final class ResultParser {
 					wire.elements != null ? wire.elements : List.of(),
 					wire.ocrElements != null ? wire.ocrElements : List.of(), wire.djotContent, wire.document,
 					wire.extractedKeywords, wire.qualityScore, wire.processingWarnings, wire.annotations,
-					wire.uris);
+					wire.uris, wire.children);
 		} catch (Exception e) {
 			throw new KreuzbergException("Failed to parse result JSON", e);
 		}
@@ -279,7 +279,8 @@ final class ResultParser {
 				result.getOcrElements(), result.getDjotContent().orElse(null),
 				result.getDocumentStructure().orElse(null), result.getExtractedKeywords().orElse(null),
 				result.getQualityScore().orElse(null), result.getProcessingWarnings().orElse(null),
-				result.getAnnotations().orElse(null), result.getUris().orElse(null));
+				result.getAnnotations().orElse(null), result.getUris().orElse(null),
+				result.getChildren().orElse(null));
 		return MAPPER.writeValueAsString(wire);
 	}
 
@@ -310,6 +311,7 @@ final class ResultParser {
 		private final List<ProcessingWarning> processingWarnings;
 		private final List<PdfAnnotation> annotations;
 		private final List<Uri> uris;
+		private final List<ArchiveEntry> children;
 
 		WireExtractionResult(@JsonProperty("content") String content, @JsonProperty("mime_type") String mimeType,
 				@JsonProperty("metadata") Metadata metadata, @JsonProperty("tables") List<Table> tables,
@@ -325,7 +327,8 @@ final class ResultParser {
 				@JsonProperty("quality_score") Double qualityScore,
 				@JsonProperty("processing_warnings") List<ProcessingWarning> processingWarnings,
 				@JsonProperty("annotations") List<PdfAnnotation> annotations,
-				@JsonProperty("uris") List<Uri> uris) {
+				@JsonProperty("uris") List<Uri> uris,
+				@JsonProperty("children") List<ArchiveEntry> children) {
 			this.content = content;
 			this.mimeType = mimeType;
 			this.metadata = metadata;
@@ -344,6 +347,7 @@ final class ResultParser {
 			this.processingWarnings = processingWarnings;
 			this.annotations = annotations;
 			this.uris = uris;
+			this.children = children;
 		}
 	}
 }

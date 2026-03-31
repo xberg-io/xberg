@@ -92,7 +92,7 @@ module E2ERuby
   end
 
   def skip_if_feature_unavailable(feature)
-    env_var = "KREUZBERG_#{feature.gsub('-', '_').upcase}_AVAILABLE"
+    env_var = "KREUZBERG_#{feature.tr('-', '_').upcase}_AVAILABLE"
     flag = ENV.fetch(env_var, nil)
     return unless flag.nil? || flag.empty? || flag == '0' || flag.casecmp('false').zero?
 
@@ -100,9 +100,9 @@ module E2ERuby
           "Feature #{feature} not available (set #{env_var}=1)"
   end
 
-  def run_fixture(fixture_id, relative_path, config_hash, requirements:, notes:, skip_if_missing: true, &block)
+  def run_fixture(fixture_id, relative_path, config_hash, requirements:, notes:, skip_if_missing: true, &)
     run_fixture_with_method(fixture_id, relative_path, config_hash, :sync, :file,
-                            requirements: requirements, notes: notes, skip_if_missing: skip_if_missing, &block)
+                            requirements: requirements, notes: notes, skip_if_missing: skip_if_missing, &)
   end
 
   def run_fixture_with_method(fixture_id, relative_path, config_hash, method, input_type, requirements:, notes:, skip_if_missing: true)
@@ -260,9 +260,9 @@ module E2ERuby
       elsif each_has_heading_context == false
         chunks.each { |chunk| expect(chunk.metadata&.heading_context).to be_nil }
       end
-      if content_starts_with_heading == true
-        chunks.each { |chunk| expect(chunk.content).to start_with('#') }
-      end
+      return unless content_starts_with_heading == true
+
+      chunks.each { |chunk| expect(chunk.content).to start_with('#') }
     end
 
     def self.assert_images(result, min_count: nil, max_count: nil, formats_include: nil)
@@ -271,7 +271,7 @@ module E2ERuby
       expect(images.length).to be <= max_count if max_count
       return unless formats_include
 
-      found_formats = images.map(&:format).compact.uniq
+      found_formats = images.filter_map(&:format).uniq
       formats_include.each do |fmt|
         expect(found_formats).to include(fmt)
       end
@@ -283,7 +283,7 @@ module E2ERuby
       expect(pages.length).to eq(exact_count) if exact_count
       pages.each do |page|
         if page.respond_to?(:is_blank)
-          expect(page.is_blank).to be(nil).or be(true).or be(false)
+          expect(page.is_blank).to be_nil.or be(true).or be(false)
         end
       end
     end
@@ -293,7 +293,7 @@ module E2ERuby
       expect(elements.length).to be >= min_count if min_count
       return unless types_include
 
-      found_types = elements.map(&:element_type).compact.uniq
+      found_types = elements.filter_map(&:element_type).uniq
       types_include.each do |t|
         expect(found_types).to include(t)
       end
@@ -303,7 +303,7 @@ module E2ERuby
       ocr_elements = result.ocr_elements
       if has_elements
         expect(ocr_elements).not_to be_nil
-        expect(Array(ocr_elements).length).not_to eq(0)
+        expect(Array(ocr_elements).length).not_to be(0)
       end
       return unless ocr_elements.is_a?(Array)
 
@@ -311,14 +311,14 @@ module E2ERuby
       if elements_have_geometry
         ocr_elements.each do |el|
           expect(el.geometry).not_to be_nil
-          expect(el.geometry&.type).to eq("rectangle").or eq("quadrilateral")
+          expect(el.geometry&.type).to eq('rectangle').or eq('quadrilateral')
         end
       end
       return unless elements_have_confidence
 
       ocr_elements.each do |el|
         expect(el.confidence).not_to be_nil
-        expect(el.confidence&.recognition).to be > 0
+        expect(el.confidence&.recognition).to be_positive
       end
     end
 
@@ -330,10 +330,10 @@ module E2ERuby
         expect(nodes).not_to be_nil
         expect(nodes.length).to be >= min_node_count if min_node_count
         if node_types_include
-          found_types = nodes.map do |n|
+          found_types = nodes.filter_map do |n|
             c = n.respond_to?(:content) ? n.content : n
             c.is_a?(Hash) ? (c['node_type'] || c[:node_type]) : nil
-          end.compact.uniq
+          end.uniq
           node_types_include.each do |t|
             expect(found_types).to include(t)
           end
@@ -343,7 +343,7 @@ module E2ERuby
             c = n.respond_to?(:content) ? n.content : n
             (c.is_a?(Hash) ? (c['node_type'] || c[:node_type]) : nil) == 'group'
           end
-          expect(has_group_nodes).to eq(has_groups)
+          expect(has_group_nodes).to be(has_groups)
         end
       else
         expect(document).to be_nil
@@ -355,7 +355,7 @@ module E2ERuby
       if has_keywords == true
         expect(keywords).not_to be_nil
         expect(keywords).to be_a(Array)
-        expect(keywords.length).not_to eq(0)
+        expect(keywords.length).not_to be(0)
       end
       if has_keywords == false
         if keywords.nil?
@@ -429,7 +429,7 @@ module E2ERuby
       if has_annotations
         expect(annotations).not_to be_nil
         expect(annotations).to be_a(Array)
-        expect(annotations.length).not_to eq(0)
+        expect(annotations.length).not_to be(0)
       end
       return unless annotations.is_a?(Array)
 
@@ -1570,7 +1570,7 @@ fn render_mime_from_bytes_test(buffer: &mut String, fixture: &Fixture) -> Result
 
     writeln!(
         buffer,
-        "    test_bytes = '{}'.dup.force_encoding('ASCII-8BIT')",
+        "    test_bytes = (+'{}').force_encoding('ASCII-8BIT')",
         escape_ruby_string_content(test_data)
     )?;
     writeln!(buffer, "    result = Kreuzberg.{}(test_bytes)", function_name)?;
@@ -1667,7 +1667,7 @@ fn render_object_property_assertion(
                 writeln!(buffer, "{}expect({}.{}).to eq({})", indent, var_name, ruby_path, n)?;
             }
             Value::Bool(b) => {
-                writeln!(buffer, "{}expect({}.{}).to eq({})", indent, var_name, ruby_path, b)?;
+                writeln!(buffer, "{}expect({}.{}).to be({})", indent, var_name, ruby_path, b)?;
             }
             Value::String(s) => {
                 writeln!(
@@ -1903,13 +1903,16 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
 
         writeln!(buffer)?;
         writeln!(buffer, "  describe '{type_name} enum parity' do")?;
-        for value in values {
+        for (i, value) in values.iter().enumerate() {
             writeln!(buffer, "    it 'has variant {value}' do")?;
             writeln!(
                 buffer,
                 "      expect(Kreuzberg::{type_name}.respond_to?(:values) ? Kreuzberg::{type_name}.values : []).to include('{value}')"
             )?;
             writeln!(buffer, "    end")?;
+            if i < values.len() - 1 {
+                writeln!(buffer)?;
+            }
         }
         writeln!(buffer, "  end")?;
     }

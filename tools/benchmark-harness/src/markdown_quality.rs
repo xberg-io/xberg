@@ -141,6 +141,17 @@ pub struct TypeScore {
     pub count_gt: usize,
 }
 
+/// Diagnostic information about block matching for debugging poor scores.
+#[derive(Debug)]
+pub struct MatchDiagnostics {
+    /// GT blocks that were not matched to any extracted block: (index, block).
+    pub unmatched_gt: Vec<(usize, MdBlock)>,
+    /// Extracted blocks that were not matched to any GT block: (index, block).
+    pub unmatched_extracted: Vec<(usize, MdBlock)>,
+    /// Cross-type matches: (gt_block, ext_block, content_similarity, type_compatibility).
+    pub cross_type_matches: Vec<(MdBlock, MdBlock, f64, f64)>,
+}
+
 /// Overall structural quality metrics.
 #[derive(Debug, Clone)]
 pub struct StructuralQuality {
@@ -581,6 +592,82 @@ pub fn score_structural_quality(extracted_md: &str, ground_truth_md: &str) -> St
 /// fuzzy type compatibility system.
 pub fn score_structural_quality_normalized(extracted_md: &str, ground_truth_md: &str) -> StructuralQuality {
     score_structural_quality_impl(extracted_md, ground_truth_md)
+}
+
+/// Compute structural quality with diagnostic information about unmatched and cross-type matched blocks.
+///
+/// Returns both the standard `StructuralQuality` scores and a `MatchDiagnostics` with details
+/// about which blocks were unmatched or matched across types.
+pub fn score_structural_quality_diagnostic(
+    extracted_md: &str,
+    ground_truth_md: &str,
+) -> (StructuralQuality, MatchDiagnostics) {
+    let ext_blocks = parse_markdown_blocks(extracted_md);
+    let gt_blocks = parse_markdown_blocks(ground_truth_md);
+
+    let (match_results, all_matches) = match_blocks_global(&gt_blocks, &ext_blocks);
+
+    let structural_f1 = compute_weighted_sf1_from_matches(&gt_blocks, &ext_blocks, &match_results);
+    let per_type = derive_per_type_scores(&gt_blocks, &ext_blocks, &match_results);
+    let order_score = compute_order_score(&all_matches);
+
+    let ext_tokens = tokenize(extracted_md);
+    let gt_tokens = tokenize(ground_truth_md);
+    let text_f1 = crate::quality::compute_f1(&ext_tokens, &gt_tokens);
+
+    // Build sets of matched indices
+    let matched_gt_indices: std::collections::HashSet<usize> = match_results.iter().map(|m| m.gt_idx).collect();
+    let mut matched_ext_indices: std::collections::HashSet<usize> = std::collections::HashSet::new();
+    for m in &match_results {
+        matched_ext_indices.insert(m.ext_idx);
+        if m.is_concat && m.ext_idx + 1 < ext_blocks.len() {
+            matched_ext_indices.insert(m.ext_idx + 1);
+        }
+    }
+
+    // Collect unmatched blocks
+    let unmatched_gt: Vec<(usize, MdBlock)> = gt_blocks
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !matched_gt_indices.contains(i))
+        .map(|(i, b)| (i, b.clone()))
+        .collect();
+
+    let unmatched_extracted: Vec<(usize, MdBlock)> = ext_blocks
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !matched_ext_indices.contains(i))
+        .map(|(i, b)| (i, b.clone()))
+        .collect();
+
+    // Collect cross-type matches (where gt type != ext type)
+    let cross_type_matches: Vec<(MdBlock, MdBlock, f64, f64)> = match_results
+        .iter()
+        .filter(|m| gt_blocks[m.gt_idx].block_type != ext_blocks[m.ext_idx].block_type)
+        .map(|m| {
+            (
+                gt_blocks[m.gt_idx].clone(),
+                ext_blocks[m.ext_idx].clone(),
+                m.content_sim,
+                m.type_compat,
+            )
+        })
+        .collect();
+
+    let quality = StructuralQuality {
+        structural_f1,
+        per_type,
+        order_score,
+        text_f1,
+    };
+
+    let diagnostics = MatchDiagnostics {
+        unmatched_gt,
+        unmatched_extracted,
+        cross_type_matches,
+    };
+
+    (quality, diagnostics)
 }
 
 /// Maximum total candidate pairs before falling back to count-based scoring.

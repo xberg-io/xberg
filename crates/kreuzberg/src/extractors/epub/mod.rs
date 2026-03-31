@@ -488,6 +488,7 @@ impl DocumentExtractor for EpubExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "epub", size_bytes = content.len(), "extraction starting");
         let _ = config; // conditionally used by ocr feature
         let cursor = Cursor::new(content.to_vec());
 
@@ -557,6 +558,11 @@ impl DocumentExtractor for EpubExtractor {
             ..Default::default()
         };
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "epub",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

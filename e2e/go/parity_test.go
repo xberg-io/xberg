@@ -50,7 +50,7 @@ func TestExtractionConfigFieldParity(t *testing.T) {
 	expectedFields := map[string]string{
 		"Acceleration":             "acceleration",
 		"CacheNamespace":           "cache_namespace",
-		"CacheTtlSecs":             "cache_ttl_secs",
+		"CacheTTLSecs":             "cache_ttl_secs",
 		"Chunking":                 "chunking",
 		"Concurrency":              "concurrency",
 		"Email":                    "email",
@@ -58,7 +58,7 @@ func TestExtractionConfigFieldParity(t *testing.T) {
 		"ExtractionTimeoutSecs":    "extraction_timeout_secs",
 		"ForceOcr":                 "force_ocr",
 		"ForceOcrPages":            "force_ocr_pages",
-		"HtmlOptions":              "html_options",
+		"HTMLOptions":              "html_options",
 		"Images":                   "images",
 		"IncludeDocumentStructure": "include_document_structure",
 		"Keywords":                 "keywords",
@@ -199,7 +199,7 @@ func TestURIFieldParity(t *testing.T) {
 		"Kind":  "kind",
 		"Label": "label",
 		"Page":  "page",
-		"Url":   "url",
+		"URL":   "url",
 	}
 	for goName, jsonTag := range expectedFields {
 		field, ok := typ.FieldByName(goName)

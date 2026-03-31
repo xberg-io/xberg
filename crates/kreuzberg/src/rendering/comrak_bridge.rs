@@ -253,6 +253,12 @@ fn build_inlines<'a>(
 
         // Skip overlapping annotations.
         if start < pos {
+            tracing::trace!(
+                ann_start = start,
+                ann_end = end,
+                current_pos = pos,
+                "skipping overlapping annotation"
+            );
             continue;
         }
 
@@ -533,6 +539,7 @@ pub fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Arena<'a>
 
             ElementKind::Paragraph => {
                 if elem_text.is_empty() && elem_annotations.is_empty() {
+                    tracing::trace!(index = orig_idx, "skipping empty paragraph");
                     continue;
                 }
                 let para = mk(arena, NodeValue::Paragraph);
@@ -593,6 +600,7 @@ pub fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Arena<'a>
             ElementKind::Table { table_index } => {
                 if let Some(table) = doc.tables.get(table_index as usize) {
                     if !table.cells.is_empty() {
+                        tracing::trace!(table_index, rows = table.cells.len(), "rendering table");
                         let table_node = build_table(arena, &table.cells);
                         parent.append(table_node);
                     } else if !table.markdown.trim().is_empty() {

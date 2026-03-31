@@ -115,8 +115,8 @@ func TestExtractionConfig_WithForceOCR(t *testing.T) {
 		kreuzberg.WithForceOCR(true),
 	)
 
-	if config.ForceOCR == nil || !*config.ForceOCR {
-		t.Error("expected ForceOCR to be true")
+	if config.ForceOcr == nil || !*config.ForceOcr {
+		t.Error("expected ForceOcr to be true")
 	}
 }
 
@@ -1371,8 +1371,8 @@ func TestExtractionConfig_WithAllSubConfigs(t *testing.T) {
 	if config.UseCache == nil || !*config.UseCache {
 		t.Error("UseCache not set")
 	}
-	if config.OCR == nil || config.OCR.Backend != "tesseract" {
-		t.Error("OCR not set correctly")
+	if config.Ocr == nil || config.Ocr.Backend != "tesseract" {
+		t.Error("Ocr not set correctly")
 	}
 	if config.Chunking == nil || config.Chunking.MaxChars == nil {
 		t.Error("Chunking not set")
@@ -1398,7 +1398,7 @@ func TestComplexNestedConfig_JSON_Roundtrip(t *testing.T) {
 
 	original := &kreuzberg.ExtractionConfig{
 		UseCache: &enabled,
-		OCR: &kreuzberg.OCRConfig{
+		Ocr: &kreuzberg.OCRConfig{
 			Backend: "tesseract",
 			Tesseract: &kreuzberg.TesseractConfig{
 				Language: "eng",
@@ -1429,13 +1429,13 @@ func TestComplexNestedConfig_JSON_Roundtrip(t *testing.T) {
 	if restored.UseCache == nil || *restored.UseCache != *original.UseCache {
 		t.Error("UseCache not preserved")
 	}
-	if restored.OCR == nil || restored.OCR.Backend != original.OCR.Backend {
-		t.Error("OCR Backend not preserved")
+	if restored.Ocr == nil || restored.Ocr.Backend != original.Ocr.Backend {
+		t.Error("Ocr Backend not preserved")
 	}
-	if restored.OCR.Tesseract == nil || restored.OCR.Tesseract.Language != original.OCR.Tesseract.Language {
+	if restored.Ocr.Tesseract == nil || restored.Ocr.Tesseract.Language != original.Ocr.Tesseract.Language {
 		t.Error("Tesseract Language not preserved")
 	}
-	if restored.OCR.Tesseract.Preprocessing == nil || *restored.OCR.Tesseract.Preprocessing.TargetDPI != *original.OCR.Tesseract.Preprocessing.TargetDPI {
+	if restored.Ocr.Tesseract.Preprocessing == nil || *restored.Ocr.Tesseract.Preprocessing.TargetDPI != *original.Ocr.Tesseract.Preprocessing.TargetDPI {
 		t.Error("Preprocessing TargetDPI not preserved")
 	}
 	if restored.Chunking == nil || *restored.Chunking.MaxChars != *original.Chunking.MaxChars {
@@ -1594,8 +1594,8 @@ func TestResultFormat_WithOtherOptions(t *testing.T) {
 		t.Errorf("expected ResultFormat 'element_based', got %q", config.ResultFormat)
 	}
 
-	if config.ForceOCR == nil || !*config.ForceOCR {
-		t.Error("expected ForceOCR to be true")
+	if config.ForceOcr == nil || !*config.ForceOcr {
+		t.Error("expected ForceOcr to be true")
 	}
 
 	if config.MaxConcurrentExtractions == nil || *config.MaxConcurrentExtractions != 4 {

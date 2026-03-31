@@ -30,7 +30,8 @@
 use crate::Result;
 use crate::corpus::{self, CorpusDocument, CorpusFilter};
 use crate::markdown_quality::score_structural_quality;
-use crate::quality::{compute_f1, tokenize};
+use crate::quality::{compute_f1, compute_token_diff, tokenize};
+use futures::FutureExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Instant;
@@ -148,6 +149,14 @@ pub struct ComparisonConfig {
     pub guardrails: bool,
     /// Optional name filter (only run docs whose name contains this)
     pub name_filter: Option<String>,
+    /// Optional path to write full comparison results as JSON.
+    pub json_output: Option<std::path::PathBuf>,
+    /// Run noise detection on extracted outputs.
+    pub noise: bool,
+    /// Enable diagnostic diff mode for poor-scoring documents.
+    pub diagnose: bool,
+    /// SF1 threshold below which to generate diagnostics.
+    pub diagnose_threshold: f64,
 }
 
 /// Result of running one pipeline on one document.
@@ -163,6 +172,12 @@ pub struct PipelineResult {
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub per_type_sf1: HashMap<String, f64>,
     pub time_ms: f64,
+    /// Top tokens present in GT but missing/under-represented in extraction (recall misses).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_tokens: Vec<(String, usize)>,
+    /// Top tokens present in extraction but absent/over-represented vs GT (precision misses).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_tokens: Vec<(String, usize)>,
     #[serde(skip)]
     pub content: String,
 }
@@ -171,6 +186,7 @@ pub struct PipelineResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DocResult {
     pub name: String,
+    pub file_type: String,
     pub results: Vec<PipelineResult>,
 }
 
@@ -407,23 +423,47 @@ pub async fn extract_pipeline(
         _ => {
             let t = Instant::now();
             let config = build_extraction_config(pipeline);
-            let result = match tokio::time::timeout(
-                std::time::Duration::from_secs(60),
-                kreuzberg::core::batch_mode::with_batch_mode(kreuzberg::extract_file(
-                    &doc.document_path,
-                    None,
-                    &config,
-                )),
-            )
-            .await
-            {
-                Ok(Ok(result)) => result.content,
-                Ok(Err(e)) => {
-                    eprintln!("  ERROR {}/{}: {}", doc.name, pipeline.name(), e);
+            let doc_path = doc.document_path.clone();
+            let doc_name = doc.name.clone();
+            let pipeline_name = pipeline.name().to_string();
+
+            // Use AssertUnwindSafe + catch_unwind to handle panics in comrak or
+            // other extraction code without crashing the entire benchmark run.
+            let extraction_future = async {
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(60),
+                    kreuzberg::core::batch_mode::with_batch_mode(kreuzberg::extract_file(&doc_path, None, &config)),
+                )
+                .await
+            };
+
+            let result = match std::panic::AssertUnwindSafe(extraction_future).catch_unwind().await {
+                Ok(Ok(Ok(result))) => result.content,
+                Ok(Ok(Err(e))) => {
+                    eprintln!("  ERROR {}/{}: {}", doc_name, pipeline_name, e);
                     String::new()
                 }
-                Err(_) => {
-                    eprintln!("  TIMEOUT {}/{}: exceeded 60s", doc.name, pipeline.name());
+                Ok(Err(_)) => {
+                    eprintln!("  TIMEOUT {}/{}: exceeded 60s", doc_name, pipeline_name);
+                    String::new()
+                }
+                Err(panic_info) => {
+                    let panic_msg = if let Some(s) = panic_info.downcast_ref::<String>() {
+                        s.clone()
+                    } else if let Some(s) = panic_info.downcast_ref::<&str>() {
+                        (*s).to_string()
+                    } else {
+                        format!("{:?}", panic_info)
+                    };
+                    eprintln!(
+                        "  PANIC {}/{}: {}\n    document: {}\n    pipeline: {}\n    file_type: {}",
+                        doc_name,
+                        pipeline_name,
+                        panic_msg,
+                        doc_path.display(),
+                        pipeline_name,
+                        doc.file_type,
+                    );
                     String::new()
                 }
             };
@@ -443,6 +483,12 @@ async fn run_pipeline(
     let (content, time_ms) = extract_pipeline(pipeline, doc, fixtures_dir).await;
     let (tf1, sf1, order_score, per_type_sf1) = score_document(&content, gt_text, gt_markdown);
 
+    let ext_tokens = tokenize(&content);
+    let gt_tokens = tokenize(gt_text);
+    let (mut missing_tokens, mut extra_tokens) = compute_token_diff(&ext_tokens, &gt_tokens);
+    missing_tokens.truncate(50);
+    extra_tokens.truncate(50);
+
     PipelineResult {
         pipeline,
         sf1,
@@ -450,6 +496,8 @@ async fn run_pipeline(
         order_score,
         per_type_sf1,
         time_ms,
+        missing_tokens,
+        extra_tokens,
         content,
     }
 }
@@ -504,6 +552,7 @@ pub async fn run_comparison(config: &ComparisonConfig) -> Result<Vec<DocResult>>
 
         results.push(DocResult {
             name: doc.name.clone(),
+            file_type: doc.file_type.clone(),
             results: pipeline_results,
         });
     }
@@ -576,6 +625,161 @@ pub fn print_comparison_table(results: &[DocResult]) {
         eprint!(" {:>9.1}% {:>9.1}% {:>8}", avg_sf1 * 100.0, avg_tf1 * 100.0, time_str);
     }
     eprintln!();
+}
+
+/// Print a per-format summary table to stderr, grouping documents by file_type.
+pub fn print_per_format_summary(results: &[DocResult]) {
+    if results.is_empty() {
+        return;
+    }
+
+    // Collect pipeline names from the first result
+    let pipeline_names: Vec<&str> = results
+        .first()
+        .map(|r| r.results.iter().map(|pr| pr.pipeline.name()).collect())
+        .unwrap_or_default();
+
+    // Group by file_type
+    let mut by_format: std::collections::BTreeMap<&str, Vec<&DocResult>> = std::collections::BTreeMap::new();
+    for doc in results {
+        by_format.entry(&doc.file_type).or_default().push(doc);
+    }
+
+    eprintln!("\nPer-Format Summary:");
+
+    // Header
+    eprint!("{:<12} {:>5}", "Format", "Count");
+    for name in &pipeline_names {
+        eprint!("  {:>10} {:>10}", format!("{} SF1", name), format!("{} TF1", name));
+    }
+    eprintln!();
+    let line_width = 12 + 5 + pipeline_names.len() * 22;
+    eprintln!("{}", "\u{2500}".repeat(line_width));
+
+    // Rows
+    for (format, docs) in &by_format {
+        let n = docs.len() as f64;
+        eprint!("{:<12} {:>5}", format, docs.len());
+        for (i, _) in pipeline_names.iter().enumerate() {
+            let avg_sf1: f64 = docs.iter().map(|d| d.results[i].sf1).sum::<f64>() / n;
+            let avg_tf1: f64 = docs.iter().map(|d| d.results[i].tf1).sum::<f64>() / n;
+            eprint!("  {:>9.1}% {:>9.1}%", avg_sf1 * 100.0, avg_tf1 * 100.0);
+        }
+        eprintln!();
+    }
+}
+
+/// Per-format aggregation entry for JSON output.
+#[derive(Debug, Clone, Serialize)]
+struct FormatSummary {
+    count: usize,
+    pipelines: Vec<FormatPipelineSummary>,
+}
+
+/// Per-pipeline averages within a format group.
+#[derive(Debug, Clone, Serialize)]
+struct FormatPipelineSummary {
+    pipeline: String,
+    avg_sf1: f64,
+    avg_tf1: f64,
+}
+
+/// Overall summary for JSON output.
+#[derive(Debug, Clone, Serialize)]
+struct OverallSummary {
+    total_documents: usize,
+    pipelines: Vec<FormatPipelineSummary>,
+}
+
+/// Top-level JSON output structure.
+#[derive(Debug, Clone, Serialize)]
+struct ComparisonJsonOutput {
+    documents: Vec<DocResult>,
+    by_format: std::collections::BTreeMap<String, FormatSummary>,
+    overall: OverallSummary,
+}
+
+/// Write full comparison results (documents + per-format + overall) to a JSON file.
+pub fn write_comparison_json(results: &[DocResult], path: &std::path::Path) -> Result<()> {
+    let pipeline_names: Vec<String> = results
+        .first()
+        .map(|r| r.results.iter().map(|pr| pr.pipeline.name().to_string()).collect())
+        .unwrap_or_default();
+
+    // Per-format aggregation
+    let mut by_format_map: std::collections::BTreeMap<String, Vec<&DocResult>> = std::collections::BTreeMap::new();
+    for doc in results {
+        by_format_map.entry(doc.file_type.clone()).or_default().push(doc);
+    }
+
+    let by_format: std::collections::BTreeMap<String, FormatSummary> = by_format_map
+        .iter()
+        .map(|(format, docs)| {
+            let n = docs.len() as f64;
+            let pipelines = pipeline_names
+                .iter()
+                .enumerate()
+                .map(|(i, name)| {
+                    let avg_sf1 = docs.iter().map(|d| d.results[i].sf1).sum::<f64>() / n;
+                    let avg_tf1 = docs.iter().map(|d| d.results[i].tf1).sum::<f64>() / n;
+                    FormatPipelineSummary {
+                        pipeline: name.clone(),
+                        avg_sf1,
+                        avg_tf1,
+                    }
+                })
+                .collect();
+            (
+                format.clone(),
+                FormatSummary {
+                    count: docs.len(),
+                    pipelines,
+                },
+            )
+        })
+        .collect();
+
+    // Overall
+    let n = results.len() as f64;
+    let overall_pipelines = pipeline_names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let avg_sf1 = if n > 0.0 {
+                results.iter().map(|r| r.results[i].sf1).sum::<f64>() / n
+            } else {
+                0.0
+            };
+            let avg_tf1 = if n > 0.0 {
+                results.iter().map(|r| r.results[i].tf1).sum::<f64>() / n
+            } else {
+                0.0
+            };
+            FormatPipelineSummary {
+                pipeline: name.clone(),
+                avg_sf1,
+                avg_tf1,
+            }
+        })
+        .collect();
+
+    let output = ComparisonJsonOutput {
+        documents: results.to_vec(),
+        by_format,
+        overall: OverallSummary {
+            total_documents: results.len(),
+            pipelines: overall_pipelines,
+        },
+    };
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(crate::Error::Io)?;
+    }
+    let json = serde_json::to_string_pretty(&output)
+        .map_err(|e| crate::Error::Benchmark(format!("Failed to serialize comparison JSON: {}", e)))?;
+    std::fs::write(path, json).map_err(crate::Error::Io)?;
+
+    Ok(())
 }
 
 /// A quality guardrail: minimum threshold for a specific document + pipeline.
@@ -884,6 +1088,12 @@ pub fn check_guardrails(results: &[DocResult]) -> Vec<String> {
 pub async fn run_with_guardrails(config: &ComparisonConfig) -> Result<i32> {
     let results = run_comparison(config).await?;
     print_comparison_table(&results);
+    print_per_format_summary(&results);
+
+    if let Some(ref json_path) = config.json_output {
+        write_comparison_json(&results, json_path)?;
+        eprintln!("\nComparison JSON written to: {}", json_path.display());
+    }
 
     if config.guardrails {
         let failures = check_guardrails(&results);
@@ -897,7 +1107,165 @@ pub async fn run_with_guardrails(config: &ComparisonConfig) -> Result<i32> {
         eprintln!("\nAll guardrails passed.");
     }
 
+    if config.noise {
+        print_noise_summary(&results);
+    }
+
+    if config.diagnose {
+        run_diagnostics(config, &results)?;
+    }
+
     Ok(0)
+}
+
+/// Run diagnostic diff mode on documents with SF1 below the threshold.
+fn run_diagnostics(config: &ComparisonConfig, results: &[DocResult]) -> Result<()> {
+    use crate::diagnostics::{diagnose_document, write_diagnostic_files};
+
+    // Rebuild corpus to access GT paths
+    let filter = CorpusFilter {
+        file_types: None,
+        require_ground_truth: true,
+        require_markdown_ground_truth: true,
+        name_patterns: config.name_filter.clone().into_iter().collect(),
+        ..Default::default()
+    };
+    let docs = corpus::build_corpus(&config.fixtures_dir, &filter)?;
+    let doc_map: HashMap<String, &CorpusDocument> = docs.iter().map(|d| (d.name.clone(), d)).collect();
+
+    let mut diagnosed_count = 0;
+
+    for doc_result in results {
+        let corpus_doc = match doc_map.get(&doc_result.name) {
+            Some(d) => d,
+            None => continue,
+        };
+
+        let gt_text = corpus_doc
+            .ground_truth_text
+            .as_ref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .unwrap_or_default();
+
+        let gt_markdown = corpus_doc
+            .ground_truth_markdown
+            .as_ref()
+            .and_then(|p| std::fs::read_to_string(p).ok());
+
+        for pr in &doc_result.results {
+            if pr.sf1 < config.diagnose_threshold {
+                let diag = diagnose_document(
+                    &doc_result.name,
+                    &doc_result.file_type,
+                    pr.pipeline.name(),
+                    &pr.content,
+                    &gt_text,
+                    gt_markdown.as_deref(),
+                );
+
+                if let Err(e) = write_diagnostic_files(&diag, gt_markdown.as_deref(), &pr.content) {
+                    eprintln!(
+                        "  Warning: failed to write diagnostics for {}/{}: {}",
+                        doc_result.name,
+                        pr.pipeline.name(),
+                        e
+                    );
+                }
+
+                diagnosed_count += 1;
+            }
+        }
+    }
+
+    if diagnosed_count > 0 {
+        eprintln!(
+            "\nDiagnosed {} document(s) with SF1 < {:.0}% -> /tmp/kreuzberg_diagnose/",
+            diagnosed_count,
+            config.diagnose_threshold * 100.0
+        );
+    } else {
+        eprintln!(
+            "\nNo documents below SF1 threshold ({:.0}%) — no diagnostics generated.",
+            config.diagnose_threshold * 100.0
+        );
+    }
+
+    Ok(())
+}
+
+/// Run noise detection on all pipeline outputs and print summary.
+fn print_noise_summary(results: &[DocResult]) {
+    use crate::noise_detection::{Severity, detect_noise};
+    use std::collections::HashMap;
+
+    eprintln!("\n{:=<70}", "");
+    eprintln!("NOISE DETECTION SUMMARY");
+    eprintln!("{:=<70}", "");
+
+    let mut total_docs_with_noise = 0;
+    let mut total_issues = 0;
+    let mut kind_counts: HashMap<String, usize> = HashMap::new();
+    let mut noisy_docs: Vec<(String, String, usize, usize, usize)> = Vec::new(); // (doc, pipeline, errors, warnings, infos)
+
+    for doc_result in results {
+        for pr in &doc_result.results {
+            if pr.content.is_empty() {
+                continue;
+            }
+            let report = detect_noise(&pr.content);
+            if report.issues.is_empty() {
+                continue;
+            }
+            total_docs_with_noise += 1;
+            total_issues += report.issues.len();
+            for issue in &report.issues {
+                *kind_counts.entry(format!("{:?}", issue.kind)).or_insert(0) += 1;
+            }
+            let errors = report.issues.iter().filter(|i| i.severity == Severity::Error).count();
+            let warnings = report.issues.iter().filter(|i| i.severity == Severity::Warning).count();
+            let infos = report.issues.iter().filter(|i| i.severity == Severity::Info).count();
+            noisy_docs.push((
+                doc_result.name.clone(),
+                pr.pipeline.name().to_string(),
+                errors,
+                warnings,
+                infos,
+            ));
+        }
+    }
+
+    if total_docs_with_noise == 0 {
+        eprintln!("No noise detected in any extracted output.");
+        return;
+    }
+
+    eprintln!(
+        "{} documents with noise issues ({} total issues)",
+        total_docs_with_noise, total_issues
+    );
+
+    // Print kind breakdown
+    eprintln!("\nBy kind:");
+    let mut sorted_kinds: Vec<_> = kind_counts.into_iter().collect();
+    sorted_kinds.sort_by(|a, b| b.1.cmp(&a.1));
+    for (kind, count) in &sorted_kinds {
+        eprintln!("  {:<30} {}", kind, count);
+    }
+
+    // Print top noisy docs (sorted by errors desc, then warnings desc)
+    noisy_docs.sort_by(|a, b| b.2.cmp(&a.2).then(b.3.cmp(&a.3)));
+    let show = noisy_docs.len().min(20);
+    eprintln!("\nTop {} noisy documents:", show);
+    eprintln!(
+        "  {:<30} {:<15} {:>6} {:>6} {:>6}",
+        "Document", "Pipeline", "Errors", "Warns", "Infos"
+    );
+    for (doc, pipeline, errors, warnings, infos) in noisy_docs.iter().take(show) {
+        eprintln!(
+            "  {:<30} {:<15} {:>6} {:>6} {:>6}",
+            doc, pipeline, errors, warnings, infos
+        );
+    }
 }
 
 #[cfg(test)]

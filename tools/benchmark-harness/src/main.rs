@@ -148,6 +148,22 @@ enum Commands {
         /// Only run documents whose name contains this string
         #[arg(long)]
         filter: Option<String>,
+
+        /// Write full comparison results to JSON file
+        #[arg(long)]
+        json_output: Option<PathBuf>,
+
+        /// Run noise detection on extracted outputs
+        #[arg(long)]
+        noise: bool,
+
+        /// Enable diagnostic diff mode for poor-scoring documents
+        #[arg(long)]
+        diagnose: bool,
+
+        /// SF1 threshold below which to diagnose (default 0.8)
+        #[arg(long, default_value = "0.8")]
+        diagnose_threshold: f64,
     },
 
     /// Run 6-path pipeline benchmark across the document corpus
@@ -677,6 +693,10 @@ async fn main() -> Result<()> {
             dump_outputs,
             guardrails,
             filter,
+            json_output,
+            noise,
+            diagnose,
+            diagnose_threshold,
         } => {
             use benchmark_harness::comparison::{ComparisonConfig, Pipeline, run_with_guardrails};
 
@@ -691,6 +711,10 @@ async fn main() -> Result<()> {
                 dump_outputs,
                 guardrails,
                 name_filter: filter,
+                json_output,
+                noise,
+                diagnose,
+                diagnose_threshold,
             };
 
             let exit_code = run_with_guardrails(&config).await?;
@@ -875,11 +899,35 @@ async fn main() -> Result<()> {
                 }
             }
 
+            if !report.noisy_gt_files.is_empty() {
+                println!(
+                    "\nNoisy GT files ({} file(s) with Warning/Error noise issues):",
+                    report.noisy_gt_files.len()
+                );
+                for (path, count) in &report.noisy_gt_files {
+                    println!("  {} ({} issue(s))", path, count);
+                }
+            }
+
+            if !report.low_diversity_gt.is_empty() {
+                println!(
+                    "\nLow diversity GT files ({} file(s) with no headings for >100 byte docs):",
+                    report.low_diversity_gt.len()
+                );
+                for path in &report.low_diversity_gt {
+                    println!("  {}", path);
+                }
+            }
+
             if fix && report.fixes_applied > 0 {
                 println!("\nFixes applied: {}", report.fixes_applied);
             }
 
-            if report.html_issues.is_empty() && report.small_gt_files.is_empty() {
+            if report.html_issues.is_empty()
+                && report.small_gt_files.is_empty()
+                && report.noisy_gt_files.is_empty()
+                && report.low_diversity_gt.is_empty()
+            {
                 println!("\nAll ground truth files are valid.");
             }
 

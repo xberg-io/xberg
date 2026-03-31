@@ -41,12 +41,25 @@ public final class ExtractionResult {
 	private final List<PdfAnnotation> annotations;
 	@JsonProperty("uris")
 	private final List<Uri> uris;
+	@JsonProperty("children")
+	private final List<ArchiveEntry> children;
 
 	ExtractionResult(String content, String mimeType, Metadata metadata, List<Table> tables,
 			List<String> detectedLanguages, List<Chunk> chunks, List<ExtractedImage> images, List<PageContent> pages,
 			PageStructure pageStructure, List<Element> elements, List<OcrElement> ocrElements, DjotContent djotContent,
 			DocumentStructure document, List<ExtractedKeyword> extractedKeywords, Double qualityScore,
 			List<ProcessingWarning> processingWarnings, List<PdfAnnotation> annotations, List<Uri> uris) {
+		this(content, mimeType, metadata, tables, detectedLanguages, chunks, images, pages, pageStructure, elements,
+				ocrElements, djotContent, document, extractedKeywords, qualityScore, processingWarnings, annotations,
+				uris, null);
+	}
+
+	ExtractionResult(String content, String mimeType, Metadata metadata, List<Table> tables,
+			List<String> detectedLanguages, List<Chunk> chunks, List<ExtractedImage> images, List<PageContent> pages,
+			PageStructure pageStructure, List<Element> elements, List<OcrElement> ocrElements, DjotContent djotContent,
+			DocumentStructure document, List<ExtractedKeyword> extractedKeywords, Double qualityScore,
+			List<ProcessingWarning> processingWarnings, List<PdfAnnotation> annotations, List<Uri> uris,
+			List<ArchiveEntry> children) {
 		this.content = Objects.requireNonNull(content, "content must not be null");
 		this.mimeType = Objects.requireNonNull(mimeType, "mimeType must not be null");
 		this.metadata = metadata != null ? metadata : Metadata.empty();
@@ -69,6 +82,7 @@ public final class ExtractionResult {
 		this.processingWarnings = processingWarnings != null ? Collections.unmodifiableList(processingWarnings) : null;
 		this.annotations = annotations != null ? Collections.unmodifiableList(annotations) : null;
 		this.uris = uris != null ? Collections.unmodifiableList(uris) : null;
+		this.children = children != null ? Collections.unmodifiableList(children) : null;
 	}
 
 	public String getContent() {
@@ -269,6 +283,21 @@ public final class ExtractionResult {
 	}
 
 	/**
+	 * Get the archive children extracted from archive documents (optional).
+	 *
+	 * <p>
+	 * Available when the document is an archive (ZIP, TAR, etc.) and archive
+	 * extraction is enabled. Each child entry contains the extraction result
+	 * for a file within the archive.
+	 *
+	 * @return optional unmodifiable list of archive entries, or empty if none
+	 * @since 4.6.0
+	 */
+	public Optional<List<ArchiveEntry>> getChildren() {
+		return Optional.ofNullable(children);
+	}
+
+	/**
 	 * Check if the extraction was successful.
 	 *
 	 * <p>
@@ -437,6 +466,7 @@ public final class ExtractionResult {
 				+ (extractedKeywords != null ? extractedKeywords.size() : "null") + ", qualityScore=" + qualityScore
 				+ ", processingWarnings=" + (processingWarnings != null ? processingWarnings.size() : "null")
 				+ ", annotations=" + (annotations != null ? annotations.size() : "null")
-				+ ", uris=" + (uris != null ? uris.size() : "null") + '}';
+				+ ", uris=" + (uris != null ? uris.size() : "null")
+				+ ", children=" + (children != null ? children.size() : "null") + '}';
 	}
 }

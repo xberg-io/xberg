@@ -252,6 +252,7 @@ module E2ERuby
         chunks.each { |chunk| expect(chunk.metadata&.heading_context).to be_nil }
       end
       return unless content_starts_with_heading == true
+
       chunks.each { |chunk| expect(chunk.content).to start_with('#') }
     end
 
@@ -293,7 +294,7 @@ module E2ERuby
       ocr_elements = result.ocr_elements
       if has_elements
         expect(ocr_elements).not_to be_nil
-        expect(Array(ocr_elements).length).not_to eq(0)
+        expect(Array(ocr_elements).length).not_to be(0)
       end
       return unless ocr_elements.is_a?(Array)
 
@@ -333,7 +334,7 @@ module E2ERuby
             c = n.respond_to?(:content) ? n.content : n
             (c.is_a?(Hash) ? (c['node_type'] || c[:node_type]) : nil) == 'group'
           end
-          expect(has_group_nodes).to eq(has_groups)
+          expect(has_group_nodes).to be(has_groups)
         end
       else
         expect(document).to be_nil
@@ -345,7 +346,7 @@ module E2ERuby
       if has_keywords == true
         expect(keywords).not_to be_nil
         expect(keywords).to be_a(Array)
-        expect(keywords.length).not_to eq(0)
+        expect(keywords.length).not_to be(0)
       end
       if has_keywords == false
         if keywords.nil?
@@ -419,7 +420,7 @@ module E2ERuby
       if has_annotations
         expect(annotations).not_to be_nil
         expect(annotations).to be_a(Array)
-        expect(annotations.length).not_to eq(0)
+        expect(annotations.length).not_to be(0)
       end
       return unless annotations.is_a?(Array)
 

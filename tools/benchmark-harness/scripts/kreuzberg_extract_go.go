@@ -149,7 +149,7 @@ func createConfig(ocrEnabled bool, forceOCR bool) *kz.ExtractionConfig {
 		UseCache: boolPtr(false),
 	}
 	if ocrEnabled || forceOCR {
-		config.OCR = &kz.OCRConfig{}
+		config.Ocr = &kz.OCRConfig{}
 	}
 	return config
 }

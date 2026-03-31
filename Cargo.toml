@@ -49,9 +49,10 @@ console_error_panic_hook = "0.1"
 criterion = { version = "0.8", features = ["html_reports"] }
 ctor = "0.8"
 dbase = "0.7"
+futures = "0.3"
 getrandom = { version = "0.4.2", features = ["wasm_js"] }
 hex = "0.4.3"
-html-to-markdown-rs = { version = "3.0.0", default-features = false }
+html-to-markdown-rs = { version = "3.0.1", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.14"
 js-sys = "0.3"

@@ -171,7 +171,10 @@ type ExtractionResult struct {
 	Annotations []PdfAnnotation `json:"annotations,omitempty"`
 
 	// Uris contains hyperlinks, image references, citations, and other URI-like references.
-	URIs []URI `json:"uris,omitempty"`
+	Uris []URI `json:"uris,omitempty"`
+
+	// Children contains nested extraction results (e.g., from archive entries).
+	Children []ExtractionResult `json:"children,omitempty"`
 }
 
 // Table represents a detected table in the source document.
@@ -866,3 +869,46 @@ type Footnote struct {
 	// Content contains footnote content blocks.
 	Content []FormattedBlock `json:"content"`
 }
+
+// ArchiveEntry represents a single file extracted from an archive.
+type ArchiveEntry struct {
+	// Path is the file path within the archive.
+	Path string `json:"path"`
+	// MimeType is the detected MIME type of the file.
+	MimeType string `json:"mime_type"`
+	// Result is the extraction result for this archive entry.
+	Result ExtractionResult `json:"result"`
+}
+
+// KeywordAlgorithm enumerates keyword extraction algorithm types.
+type KeywordAlgorithm string
+
+const (
+	// KeywordAlgorithmYake selects the YAKE keyword extraction algorithm.
+	KeywordAlgorithmYake KeywordAlgorithm = "yake"
+	// KeywordAlgorithmRake selects the RAKE keyword extraction algorithm.
+	KeywordAlgorithmRake KeywordAlgorithm = "rake"
+)
+
+// RelationshipKind enumerates semantic relationship types between document elements.
+type RelationshipKind string
+
+const (
+	RelationshipKindFootnoteReference RelationshipKind = "footnote_reference"
+	RelationshipKindCitationReference RelationshipKind = "citation_reference"
+	RelationshipKindInternalLink      RelationshipKind = "internal_link"
+	RelationshipKindCaption           RelationshipKind = "caption"
+	RelationshipKindLabel             RelationshipKind = "label"
+	RelationshipKindTocEntry          RelationshipKind = "toc_entry"
+	RelationshipKindCrossReference    RelationshipKind = "cross_reference"
+)
+
+// OcrElementLevel enumerates OCR element granularity levels.
+type OcrElementLevel string
+
+const (
+	OcrElementLevelWord  OcrElementLevel = "word"
+	OcrElementLevelLine  OcrElementLevel = "line"
+	OcrElementLevelBlock OcrElementLevel = "block"
+	OcrElementLevelPage  OcrElementLevel = "page"
+)

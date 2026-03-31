@@ -50,21 +50,21 @@ func TestConfigFromJSON(t *testing.T) {
 				if cfg == nil {
 					t.Fatal("config should not be nil")
 				}
-				if cfg.ForceOCR == nil || !*cfg.ForceOCR {
-					t.Error("ForceOCR should be true")
+				if cfg.ForceOcr == nil || !*cfg.ForceOcr {
+					t.Error("ForceOcr should be true")
 				}
 			},
 		},
 		{
-			name:    "config with OCR backend",
+			name:    "config with Ocr backend",
 			json:    `{"ocr": {"backend": "tesseract"}}`,
 			wantErr: false,
 			check: func(t *testing.T, cfg *kreuzberg.ExtractionConfig) {
 				if cfg == nil {
 					t.Fatal("config should not be nil")
 				}
-				if cfg.OCR == nil || cfg.OCR.Backend != "tesseract" {
-					t.Error("OCR backend should be tesseract")
+				if cfg.Ocr == nil || cfg.Ocr.Backend != "tesseract" {
+					t.Error("Ocr backend should be tesseract")
 				}
 			},
 		},
@@ -167,9 +167,9 @@ func TestConfigToJSON(t *testing.T) {
 			},
 		},
 		{
-			name: "config with nested OCR",
+			name: "config with nested Ocr",
 			config: &kreuzberg.ExtractionConfig{
-				OCR: &kreuzberg.OCRConfig{
+				Ocr: &kreuzberg.OCRConfig{
 					Backend: "tesseract",
 				},
 			},
@@ -205,7 +205,7 @@ func TestConfigToJSON(t *testing.T) {
 func TestConfigGetField(t *testing.T) {
 	baseConfig := &kreuzberg.ExtractionConfig{
 		UseCache: kreuzberg.BoolPtr(true),
-		OCR: &kreuzberg.OCRConfig{
+		Ocr: &kreuzberg.OCRConfig{
 			Backend:  "tesseract",
 			Language: kreuzberg.StringPtr("eng"),
 		},
@@ -308,7 +308,7 @@ func TestConfigMerge(t *testing.T) {
 		{
 			name: "merge use_cache into base",
 			baseConfig: &kreuzberg.ExtractionConfig{
-				ForceOCR: kreuzberg.BoolPtr(true),
+				ForceOcr: kreuzberg.BoolPtr(true),
 			},
 			override: &kreuzberg.ExtractionConfig{
 				UseCache: kreuzberg.BoolPtr(true),
@@ -318,8 +318,8 @@ func TestConfigMerge(t *testing.T) {
 				if merged.UseCache == nil || !*merged.UseCache {
 					t.Error("UseCache should be true after merge")
 				}
-				if merged.ForceOCR == nil || !*merged.ForceOCR {
-					t.Error("ForceOCR should remain true after merge")
+				if merged.ForceOcr == nil || !*merged.ForceOcr {
+					t.Error("ForceOcr should remain true after merge")
 				}
 			},
 		},
@@ -356,15 +356,15 @@ func TestConfigMerge(t *testing.T) {
 		{
 			name: "override to default value (force_ocr: false -> true)",
 			baseConfig: &kreuzberg.ExtractionConfig{
-				ForceOCR: kreuzberg.BoolPtr(false),
+				ForceOcr: kreuzberg.BoolPtr(false),
 			},
 			override: &kreuzberg.ExtractionConfig{
-				ForceOCR: kreuzberg.BoolPtr(true),
+				ForceOcr: kreuzberg.BoolPtr(true),
 			},
 			wantErr: false,
 			check: func(t *testing.T, merged *kreuzberg.ExtractionConfig) {
-				if merged.ForceOCR == nil || !*merged.ForceOCR {
-					t.Error("ForceOCR should be overridden to true")
+				if merged.ForceOcr == nil || !*merged.ForceOcr {
+					t.Error("ForceOcr should be overridden to true")
 				}
 			},
 		},

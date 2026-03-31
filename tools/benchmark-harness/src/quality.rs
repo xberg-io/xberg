@@ -182,9 +182,9 @@ fn build_counts(tokens: &[String]) -> HashMap<&str, usize> {
 /// - extra_tokens: tokens in extraction with higher count than in GT (precision misses)
 ///
 /// Both are sorted by deficit/surplus count descending.
-type TokenDiff = (Vec<(String, usize)>, Vec<(String, usize)>);
+pub type TokenDiff = (Vec<(String, usize)>, Vec<(String, usize)>);
 
-fn compute_token_diff(extracted: &[String], truth: &[String]) -> TokenDiff {
+pub fn compute_token_diff(extracted: &[String], truth: &[String]) -> TokenDiff {
     let extracted_counts = build_counts(extracted);
     let truth_counts = build_counts(truth);
 

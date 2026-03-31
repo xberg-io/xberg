@@ -72,9 +72,9 @@
 //	lang := "eng"
 //	cfg := &kreuzberg.ExtractionConfig{
 //		UseCache:        true,
-//		ForceOCR:        false,
+//		ForceOcr:        false,
 //		ImageExtraction: &kreuzberg.ImageExtractionConfig{Enabled: true},
-//		OCR: &kreuzberg.OcrConfig{
+//		Ocr: &kreuzberg.OcrConfig{
 //			Backend:   "tesseract",
 //			Language:  &lang,
 //			PageRange: nil,

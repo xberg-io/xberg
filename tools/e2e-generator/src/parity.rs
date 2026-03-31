@@ -112,6 +112,36 @@ pub fn to_pascal_case(s: &str) -> String {
     result
 }
 
+/// Go-idiomatic acronyms that should be fully uppercased in PascalCase field names.
+/// See <https://github.com/golang/lint/blob/master/lint.go#L770> for the canonical list.
+const GO_ACRONYMS: &[&str] = &[
+    "acl", "api", "ascii", "cpu", "css", "dns", "eof", "guid", "html", "http", "https", "id", "ip", "json", "lhs",
+    "qps", "ram", "rhs", "rpc", "sla", "smtp", "sql", "ssh", "tcp", "tls", "ttl", "udp", "ui", "uid", "uri", "url",
+    "utf8", "uuid", "vm", "xml", "xmpp", "xsrf", "xss",
+];
+
+/// Convert a `snake_case` field name to Go-idiomatic `PascalCase`.
+///
+/// Like [`to_pascal_case`] but uppercases well-known Go acronyms (HTML, URL, TTL, etc.)
+/// per Go naming conventions.
+pub fn to_go_pascal_case(s: &str) -> String {
+    s.split('_')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let lower = part.to_lowercase();
+            if GO_ACRONYMS.contains(&lower.as_str()) {
+                part.to_uppercase()
+            } else {
+                let mut chars = part.chars();
+                match chars.next() {
+                    None => String::new(),
+                    Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                }
+            }
+        })
+        .collect()
+}
+
 /// Return the feature profile name that applies to a given language target.
 pub fn profile_for_language(lang: &str) -> &'static str {
     match lang {
@@ -164,6 +194,16 @@ mod tests {
         assert_eq!(to_pascal_case("hello"), "Hello");
         assert_eq!(to_pascal_case("one_two_three"), "OneTwoThree");
         assert_eq!(to_pascal_case(""), "");
+    }
+
+    #[test]
+    fn test_to_go_pascal_case() {
+        assert_eq!(to_go_pascal_case("html_options"), "HTMLOptions");
+        assert_eq!(to_go_pascal_case("cache_ttl_secs"), "CacheTTLSecs");
+        assert_eq!(to_go_pascal_case("url"), "URL");
+        assert_eq!(to_go_pascal_case("foo_bar"), "FooBar");
+        assert_eq!(to_go_pascal_case("mime_type"), "MimeType");
+        assert_eq!(to_go_pascal_case(""), "");
     }
 
     #[test]

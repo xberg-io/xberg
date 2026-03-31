@@ -181,6 +181,23 @@ pub fn resolve_file_config(config: Option<JsFileExtractionConfig>) -> Result<Opt
 
 #[napi(object)]
 #[derive(serde::Serialize, serde::Deserialize)]
+pub struct JsUri {
+    pub url: String,
+    pub label: Option<String>,
+    pub page: Option<u32>,
+    pub kind: String,
+}
+
+#[napi(object)]
+pub struct JsArchiveEntry {
+    pub path: String,
+    #[napi(js_name = "mimeType")]
+    pub mime_type: String,
+    pub result: JsExtractionResult,
+}
+
+#[napi(object)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct JsExtractionResult {
     pub content: String,
     pub mime_type: String,
@@ -207,6 +224,9 @@ pub struct JsExtractionResult {
     #[napi(js_name = "processingWarnings")]
     pub processing_warnings: Vec<JsProcessingWarning>,
     pub annotations: Option<Vec<JsPdfAnnotation>>,
+    #[serde(skip)]
+    pub children: Option<Vec<JsArchiveEntry>>,
+    pub uris: Option<Vec<JsUri>>,
 }
 
 impl TryFrom<RustExtractionResult> for JsExtractionResult {
@@ -471,6 +491,38 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                 .collect()
         });
 
+        let children = val.children.map(|entries| {
+            entries
+                .into_iter()
+                .filter_map(|entry| {
+                    let result = JsExtractionResult::try_from(*entry.result).ok()?;
+                    Some(JsArchiveEntry {
+                        path: entry.path,
+                        mime_type: entry.mime_type,
+                        result,
+                    })
+                })
+                .collect()
+        });
+
+        let uris = val.uris.map(|uri_vec| {
+            uri_vec
+                .into_iter()
+                .map(|u| {
+                    let kind_str = serde_json::to_value(u.kind)
+                        .ok()
+                        .and_then(|v| v.as_str().map(String::from))
+                        .unwrap_or_default();
+                    JsUri {
+                        url: u.url,
+                        label: u.label,
+                        page: u.page,
+                        kind: kind_str,
+                    }
+                })
+                .collect()
+        });
+
         Ok(JsExtractionResult {
             content: val.content,
             mime_type: val.mime_type.to_string(),
@@ -541,6 +593,8 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
             quality_score: val.quality_score,
             processing_warnings,
             annotations,
+            children,
+            uris,
         })
     }
 }
@@ -822,8 +876,34 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                     })
                     .collect()
             }),
-            children: None,
-            uris: None,
+            children: val.children.map(|entries| {
+                entries
+                    .into_iter()
+                    .filter_map(|entry| {
+                        let result = RustExtractionResult::try_from(entry.result).ok()?;
+                        Some(kreuzberg::ArchiveEntry {
+                            path: entry.path,
+                            mime_type: entry.mime_type,
+                            result: Box::new(result),
+                        })
+                    })
+                    .collect()
+            }),
+            uris: val.uris.map(|uri_vec| {
+                uri_vec
+                    .into_iter()
+                    .filter_map(|u| {
+                        let kind: kreuzberg::UriKind =
+                            serde_json::from_value(serde_json::Value::String(u.kind)).ok()?;
+                        Some(kreuzberg::Uri {
+                            url: u.url,
+                            label: u.label,
+                            page: u.page,
+                            kind,
+                        })
+                    })
+                    .collect()
+            }),
             formatted_content: None,
         })
     }

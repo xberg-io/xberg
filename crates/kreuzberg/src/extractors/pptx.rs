@@ -272,6 +272,7 @@ impl DocumentExtractor for PptxExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "pptx", size_bytes = content.len(), "extraction starting");
         let extract_images = config.images.as_ref().is_some_and(|img| img.extract_images);
         let plain = matches!(config.output_format, crate::core::config::OutputFormat::Plain);
 
@@ -336,6 +337,11 @@ impl DocumentExtractor for PptxExtractor {
             doc.processing_warnings.extend(embed_warnings);
         }
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "pptx",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

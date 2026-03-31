@@ -72,6 +72,7 @@ export type {
 	ValidatorProtocol,
 } from "./protocols.js";
 export type {
+	ArchiveEntry,
 	BoundingBox,
 	Chunk,
 	ChunkMetadata,
@@ -83,8 +84,14 @@ export type {
 	HeadingContext,
 	HeadingLevel,
 	HierarchicalBlock,
+	OutputFormat,
 	PageContent,
 	PageHierarchy,
+	PageUnitType,
 	ProcessingWarning,
+	RelationshipKind,
+	ResultFormat,
 	Table,
+	Uri,
+	UriKind,
 } from "./results.js";

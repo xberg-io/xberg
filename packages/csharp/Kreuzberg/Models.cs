@@ -265,29 +265,34 @@ public sealed class OcrRotation
 }
 
 /// <summary>
-/// OCR element level classification constants.
+/// OCR element level classification.
 /// </summary>
-public static class OcrElementLevel
+[JsonConverter(typeof(JsonStringEnumConverter<OcrElementLevel>))]
+public enum OcrElementLevel
 {
     /// <summary>
     /// Individual word level.
     /// </summary>
-    public const string Word = "word";
+    [JsonStringEnumMemberName("word")]
+    Word,
 
     /// <summary>
     /// Line level (sequence of words).
     /// </summary>
-    public const string Line = "line";
+    [JsonStringEnumMemberName("line")]
+    Line,
 
     /// <summary>
     /// Paragraph/block level.
     /// </summary>
-    public const string Block = "block";
+    [JsonStringEnumMemberName("block")]
+    Block,
 
     /// <summary>
     /// Page level.
     /// </summary>
-    public const string Page = "page";
+    [JsonStringEnumMemberName("page")]
+    Page,
 }
 
 /// <summary>
@@ -3203,27 +3208,20 @@ public sealed class HtmlPreprocessingOptions
 /// <summary>
 /// Keyword extraction algorithms supported by Kreuzberg.
 /// </summary>
-public static class KeywordAlgorithm
+[JsonConverter(typeof(JsonStringEnumConverter<KeywordAlgorithm>))]
+public enum KeywordAlgorithm
 {
     /// <summary>
     /// YAKE (Yet Another Keyword Extractor) algorithm.
     /// </summary>
-    public const string Yake = "yake";
+    [JsonStringEnumMemberName("yake")]
+    Yake,
 
     /// <summary>
     /// RAKE (Rapid Automatic Keyword Extraction) algorithm.
     /// </summary>
-    public const string Rake = "rake";
-
-    /// <summary>
-    /// Alias for YAKE (uppercase version).
-    /// </summary>
-    public const string YAKE = Yake;
-
-    /// <summary>
-    /// Alias for RAKE (uppercase version).
-    /// </summary>
-    public const string RAKE = Rake;
+    [JsonStringEnumMemberName("rake")]
+    Rake,
 }
 
 /// <summary>
@@ -4834,4 +4832,343 @@ public sealed class PstMetadata
     /// </summary>
     [JsonPropertyName("message_count")]
     public int MessageCount { get; set; }
+}
+
+/// <summary>
+/// Represents an entry extracted from an archive (ZIP, TAR, etc.).
+/// </summary>
+public sealed class ArchiveEntry
+{
+    /// <summary>
+    /// The path of the entry within the archive.
+    /// </summary>
+    [JsonPropertyName("path")]
+    public string Path { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The detected MIME type of the entry.
+    /// </summary>
+    [JsonPropertyName("mime_type")]
+    public string MimeType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The extraction result for this entry.
+    /// </summary>
+    [JsonPropertyName("result")]
+    public ExtractionResult? Result { get; set; }
+}
+
+/// <summary>
+/// Content layer classification for document content regions.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ContentLayer>))]
+public enum ContentLayer
+{
+    /// <summary>
+    /// Main body content.
+    /// </summary>
+    [JsonStringEnumMemberName("body")]
+    Body,
+
+    /// <summary>
+    /// Header content.
+    /// </summary>
+    [JsonStringEnumMemberName("header")]
+    Header,
+
+    /// <summary>
+    /// Footer content.
+    /// </summary>
+    [JsonStringEnumMemberName("footer")]
+    Footer,
+
+    /// <summary>
+    /// Footnote content.
+    /// </summary>
+    [JsonStringEnumMemberName("footnote")]
+    Footnote,
+}
+
+/// <summary>
+/// Output format for document extraction.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<OutputFormat>))]
+public enum OutputFormat
+{
+    /// <summary>
+    /// Plain text output.
+    /// </summary>
+    [JsonStringEnumMemberName("plain")]
+    Plain,
+
+    /// <summary>
+    /// Markdown formatted output.
+    /// </summary>
+    [JsonStringEnumMemberName("markdown")]
+    Markdown,
+
+    /// <summary>
+    /// Djot formatted output.
+    /// </summary>
+    [JsonStringEnumMemberName("djot")]
+    Djot,
+
+    /// <summary>
+    /// HTML formatted output.
+    /// </summary>
+    [JsonStringEnumMemberName("html")]
+    Html,
+
+    /// <summary>
+    /// Structured output with semantic elements.
+    /// </summary>
+    [JsonStringEnumMemberName("structured")]
+    Structured,
+}
+
+/// <summary>
+/// Unit type for page-like divisions in a document.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<PageUnitType>))]
+public enum PageUnitType
+{
+    /// <summary>
+    /// A document page (e.g., PDF page).
+    /// </summary>
+    [JsonStringEnumMemberName("page")]
+    Page,
+
+    /// <summary>
+    /// A presentation slide.
+    /// </summary>
+    [JsonStringEnumMemberName("slide")]
+    Slide,
+
+    /// <summary>
+    /// A spreadsheet sheet/tab.
+    /// </summary>
+    [JsonStringEnumMemberName("sheet")]
+    Sheet,
+}
+
+/// <summary>
+/// Classification of PDF annotation types.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<PdfAnnotationType>))]
+public enum PdfAnnotationType
+{
+    /// <summary>
+    /// Text annotation (sticky note or comment).
+    /// </summary>
+    [JsonStringEnumMemberName("text")]
+    Text,
+
+    /// <summary>
+    /// Highlight annotation.
+    /// </summary>
+    [JsonStringEnumMemberName("highlight")]
+    Highlight,
+
+    /// <summary>
+    /// Link annotation.
+    /// </summary>
+    [JsonStringEnumMemberName("link")]
+    Link,
+
+    /// <summary>
+    /// Stamp annotation.
+    /// </summary>
+    [JsonStringEnumMemberName("stamp")]
+    Stamp,
+
+    /// <summary>
+    /// Underline annotation.
+    /// </summary>
+    [JsonStringEnumMemberName("underline")]
+    Underline,
+
+    /// <summary>
+    /// Strikeout annotation.
+    /// </summary>
+    [JsonStringEnumMemberName("strike_out")]
+    StrikeOut,
+
+    /// <summary>
+    /// Other/unclassified annotation type.
+    /// </summary>
+    [JsonStringEnumMemberName("other")]
+    Other,
+}
+
+/// <summary>
+/// Semantic relationship kinds between document elements.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<RelationshipKind>))]
+public enum RelationshipKind
+{
+    /// <summary>
+    /// Reference to a footnote.
+    /// </summary>
+    [JsonStringEnumMemberName("footnote_reference")]
+    FootnoteReference,
+
+    /// <summary>
+    /// Reference to a citation.
+    /// </summary>
+    [JsonStringEnumMemberName("citation_reference")]
+    CitationReference,
+
+    /// <summary>
+    /// Internal link within the document.
+    /// </summary>
+    [JsonStringEnumMemberName("internal_link")]
+    InternalLink,
+
+    /// <summary>
+    /// Caption for a figure, table, or other element.
+    /// </summary>
+    [JsonStringEnumMemberName("caption")]
+    Caption,
+
+    /// <summary>
+    /// Label for an element.
+    /// </summary>
+    [JsonStringEnumMemberName("label")]
+    Label,
+
+    /// <summary>
+    /// Table of contents entry.
+    /// </summary>
+    [JsonStringEnumMemberName("toc_entry")]
+    TocEntry,
+
+    /// <summary>
+    /// Cross-reference to another element.
+    /// </summary>
+    [JsonStringEnumMemberName("cross_reference")]
+    CrossReference,
+}
+
+/// <summary>
+/// Format of the extraction result output.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<ResultFormat>))]
+public enum ResultFormat
+{
+    /// <summary>
+    /// Unified text content result.
+    /// </summary>
+    [JsonStringEnumMemberName("unified")]
+    Unified,
+
+    /// <summary>
+    /// Element-based structured result.
+    /// </summary>
+    [JsonStringEnumMemberName("element_based")]
+    ElementBased,
+}
+
+/// <summary>
+/// Semantic classification of extracted URIs.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<UriKind>))]
+public enum UriKind
+{
+    /// <summary>
+    /// A standard hyperlink.
+    /// </summary>
+    [JsonStringEnumMemberName("hyperlink")]
+    Hyperlink,
+
+    /// <summary>
+    /// An image reference URI.
+    /// </summary>
+    [JsonStringEnumMemberName("image")]
+    Image,
+
+    /// <summary>
+    /// An anchor within the document.
+    /// </summary>
+    [JsonStringEnumMemberName("anchor")]
+    Anchor,
+
+    /// <summary>
+    /// A citation reference.
+    /// </summary>
+    [JsonStringEnumMemberName("citation")]
+    Citation,
+
+    /// <summary>
+    /// A general reference.
+    /// </summary>
+    [JsonStringEnumMemberName("reference")]
+    Reference,
+
+    /// <summary>
+    /// An email address URI.
+    /// </summary>
+    [JsonStringEnumMemberName("email")]
+    Email,
+}
+
+/// <summary>
+/// Represents a keyword extracted from a document.
+/// Alias for <see cref="ExtractedKeyword"/> for parity across language bindings.
+/// </summary>
+public sealed class Keyword
+{
+    /// <summary>
+    /// The keyword text.
+    /// </summary>
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Relevance score (higher is better, algorithm-specific range).
+    /// </summary>
+    [JsonPropertyName("score")]
+    public float Score { get; set; }
+
+    /// <summary>
+    /// Algorithm that extracted this keyword (e.g., "yake", "rake").
+    /// </summary>
+    [JsonPropertyName("algorithm")]
+    public string Algorithm { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional positions where keyword appears in text (character offsets).
+    /// </summary>
+    [JsonPropertyName("positions")]
+    public List<int>? Positions { get; set; }
+}
+
+/// <summary>
+/// Represents a URI/link discovered during document extraction.
+/// Alias for <see cref="ExtractedUri"/> for parity across language bindings.
+/// </summary>
+public sealed class Uri
+{
+    /// <summary>
+    /// Semantic classification of the URI (hyperlink, image, anchor, citation, reference, email).
+    /// </summary>
+    [JsonPropertyName("kind")]
+    public string Kind { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Optional display text / label for the link.
+    /// </summary>
+    [JsonPropertyName("label")]
+    public string? Label { get; init; }
+
+    /// <summary>
+    /// Optional page number where the URI was found (1-indexed).
+    /// </summary>
+    [JsonPropertyName("page")]
+    public uint? Page { get; init; }
+
+    /// <summary>
+    /// The URL or path string.
+    /// </summary>
+    [JsonPropertyName("url")]
+    public string Url { get; init; } = string.Empty;
 }

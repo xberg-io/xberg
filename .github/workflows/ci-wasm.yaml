@@ -89,7 +89,7 @@ jobs:
       group: ci-wasm-unit-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
       cancel-in-progress: false
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - os: ubuntu-latest
@@ -171,7 +171,7 @@ jobs:
       group: ci-wasm-build-${{ github.event.pull_request.number || github.ref }}-${{ matrix.os }}
       cancel-in-progress: false
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - os: ubuntu-latest
@@ -317,62 +317,10 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
 
-  integration-tests-node:
-    name: Integration Tests (Node ${{ matrix.node-version }})
+  wasm-e2e:
+    name: WASM E2E Tests
     if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
     needs: [build-wasm-targets]
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    permissions:
-      contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: ["22"]
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Node
-        uses: kreuzberg-dev/actions/setup-node-workspace@v1
-        with:
-          node-version: ${{ matrix.node-version }}
-
-      - name: Download WASM artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: wasm-x86_64-unknown-linux-gnu
-          path: crates/kreuzberg-wasm/pkg/
-
-      - name: Setup Rust
-        uses: kreuzberg-dev/actions/setup-rust@v1
-        with:
-          cache-key-prefix: wasm-test-ubuntu
-          use-sccache: 'true'
-          report-stats: 'true'
-          target: wasm32-unknown-unknown
-
-      - name: Install wasm-pack
-        shell: bash
-        run: scripts/ci/wasm/install-wasm-pack.sh
-
-      - name: Install Task
-        uses: kreuzberg-dev/actions/install-task@v1
-
-      - name: Run WASM tests
-        shell: bash
-        # Use pre-built WASM artifacts (downloaded above) — skip wasm-pack rebuild
-        # which would require WASI SDK for Tesseract/Leptonica compilation.
-        run: |
-          cd crates/kreuzberg-wasm
-          pnpm run fix:wasi
-          pnpm run build:ts
-          pnpm run copy:pkg
-          pnpm test
-
-
-  deno-tests:
-    name: Deno Tests
-    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -384,25 +332,22 @@ jobs:
       - name: Install system dependencies
         uses: ./.github/actions/install-system-deps
 
-      - name: Install WASI SDK
-        uses: kreuzberg-dev/actions/install-wasi-sdk@v1
+      - name: Setup Node
+        uses: kreuzberg-dev/actions/setup-node-workspace@v1
 
-      - name: Configure WASM C compiler
-        shell: bash
-        run: |
-          echo "CC_wasm32_unknown_unknown=${WASI_SDK_PATH}/bin/clang" >> "$GITHUB_ENV"
-          echo "AR_wasm32_unknown_unknown=${WASI_SDK_PATH}/bin/ar" >> "$GITHUB_ENV"
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: wasm-x86_64-unknown-linux-gnu
+          path: crates/kreuzberg-wasm/pkg/
 
       - name: Setup Rust
         uses: kreuzberg-dev/actions/setup-rust@v1
         with:
-          cache-key-prefix: wasm-deno-ubuntu
+          cache-key-prefix: wasm-e2e-ubuntu
           use-sccache: 'true'
           report-stats: 'true'
           target: wasm32-unknown-unknown
-
-      - name: Setup Node (for wasm-pack and build tools)
-        uses: kreuzberg-dev/actions/setup-node-workspace@v1
 
       - name: Install wasm-pack
         shell: bash
@@ -410,6 +355,15 @@ jobs:
 
       - name: Install Task
         uses: kreuzberg-dev/actions/install-task@v1
+
+      - name: Run WASM unit tests
+        shell: bash
+        run: |
+          cd crates/kreuzberg-wasm
+          pnpm run fix:wasi
+          pnpm run build:ts
+          pnpm run copy:pkg
+          pnpm test
 
       - name: Install Deno
         uses: denoland/setup-deno@v2
@@ -426,69 +380,19 @@ jobs:
         shell: bash
         run: task wasm:build:all
 
-      - name: Generate Deno E2E tests
+      - name: Generate and run Deno E2E tests
         shell: bash
-        run: task wasm:e2e:deno:generate
-
-      - name: Run Deno E2E tests
-        shell: bash
-        run: task wasm:e2e:deno:test
+        run: |
+          task wasm:e2e:deno:generate
+          task wasm:e2e:deno:test
         env:
           TESSDATA_PREFIX: ${{ github.workspace }}/tessdata
 
-      - name: Cleanup Rust cache
-        if: always() && steps.checkout.outcome == 'success'
-        uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
-
-
-  workers-tests:
-    name: Cloudflare Workers Tests
-    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v6
-        id: checkout
-
-      - name: Install system dependencies
-        uses: ./.github/actions/install-system-deps
-
-      - name: Install WASI SDK
-        uses: kreuzberg-dev/actions/install-wasi-sdk@v1
-
-      - name: Configure WASM C compiler
+      - name: Generate and run Workers E2E tests
         shell: bash
         run: |
-          echo "CC_wasm32_unknown_unknown=${WASI_SDK_PATH}/bin/clang" >> "$GITHUB_ENV"
-          echo "AR_wasm32_unknown_unknown=${WASI_SDK_PATH}/bin/ar" >> "$GITHUB_ENV"
-
-      - name: Setup Rust
-        uses: kreuzberg-dev/actions/setup-rust@v1
-        with:
-          cache-key-prefix: wasm-workers
-          use-sccache: 'true'
-          report-stats: 'true'
-          target: wasm32-unknown-unknown
-
-      - name: Setup Node
-        uses: kreuzberg-dev/actions/setup-node-workspace@v1
-
-      - name: Install wasm-pack
-        run: scripts/ci/wasm/install-wasm-pack.sh
-
-      - name: Install Task
-        uses: kreuzberg-dev/actions/install-task@v1
-
-      - name: Build WASM (all targets for E2E)
-        run: task wasm:build:all
-
-      - name: Generate Workers E2E tests
-        run: task wasm:e2e:workers:generate
-
-      - name: Run Cloudflare Workers E2E tests
-        run: task wasm:e2e:workers:test
+          task wasm:e2e:workers:generate
+          task wasm:e2e:workers:test
 
       - name: Cleanup Rust cache
         if: always() && steps.checkout.outcome == 'success'

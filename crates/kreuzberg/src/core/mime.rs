@@ -594,18 +594,20 @@ pub fn detect_mime_type(path: impl AsRef<Path>, check_exists: bool) -> Result<St
         return Ok(mime_type.to_string());
     }
 
-    let guess = mime_guess::from_path(path).first();
-    if let Some(mime) = guess {
-        return Ok(mime.to_string());
-    }
-
-    // Tree-sitter fallback: if no extractor claimed this extension, check if
-    // TSLP recognises it as a programming language.
+    // Tree-sitter detection: check if the extension belongs to a known
+    // programming language *before* falling back to mime_guess, which returns
+    // language-specific MIME types (e.g. "text/x-python") that are not in our
+    // supported set.
     #[cfg(feature = "tree-sitter")]
     if let Some(ext) = &extension
         && tree_sitter_language_pack::detect_language_from_extension(ext).is_some()
     {
         return Ok(SOURCE_CODE_MIME_TYPE.to_string());
+    }
+
+    let guess = mime_guess::from_path(path).first();
+    if let Some(mime) = guess {
+        return Ok(mime.to_string());
     }
 
     if let Some(ext) = extension {

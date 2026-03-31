@@ -57,6 +57,14 @@ pub(crate) fn extract_all_from_document(
     #[cfg(feature = "layout-detection")] layout_results: Option<&[crate::pdf::layout_runner::PageLayoutResult]>,
     #[cfg(not(feature = "layout-detection"))] _layout_results: Option<()>,
 ) -> Result<PdfExtractionPhaseResult> {
+    let _span = tracing::debug_span!(
+        "extract_pdf",
+        page_count = document.pages().len(),
+        element_count = tracing::field::Empty,
+        has_text_layer = tracing::field::Empty,
+    )
+    .entered();
+
     #[cfg(feature = "layout-detection")]
     let has_layout = config.layout.is_some();
     #[cfg(not(feature = "layout-detection"))]
@@ -168,6 +176,11 @@ pub(crate) fn extract_all_from_document(
     } else {
         None
     };
+
+    let element_count = pre_rendered_doc.as_ref().map(|d| d.elements.len()).unwrap_or(0);
+    let has_text = !native_text.trim().is_empty();
+    _span.record("element_count", element_count);
+    _span.record("has_text_layer", has_text);
 
     Ok((
         pdf_metadata,

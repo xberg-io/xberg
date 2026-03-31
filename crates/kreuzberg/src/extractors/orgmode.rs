@@ -901,6 +901,7 @@ impl DocumentExtractor for OrgModeExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "orgmode", size_bytes = content.len(), "extraction starting");
         let _ = config;
         let org_text = String::from_utf8_lossy(content).into_owned();
 
@@ -920,6 +921,11 @@ impl DocumentExtractor for OrgModeExtractor {
             doc.push_table(table);
         }
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "orgmode",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

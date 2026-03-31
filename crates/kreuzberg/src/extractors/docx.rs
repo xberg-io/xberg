@@ -924,6 +924,8 @@ impl DocumentExtractor for DocxExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!("extract_docx: starting");
+
         // When image extraction is enabled, force Markdown output so that
         // image placeholders (![](image)) are included in the text.
         let output_format = if config.images.as_ref().is_some_and(|i| i.extract_images) {
@@ -1358,6 +1360,8 @@ impl DocumentExtractor for DocxExtractor {
             }
             internal_doc.processing_warnings.extend(embed_warnings);
         }
+
+        tracing::debug!(element_count = internal_doc.elements.len(), "extract_docx: complete");
 
         Ok(internal_doc)
     }

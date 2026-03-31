@@ -77,6 +77,7 @@ impl DocumentExtractor for OpmlExtractor {
         mime_type: &str,
         _config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "opml", size_bytes = content.len(), "extraction starting");
         let (_extracted_content, mut metadata_map) = parser::extract_content_and_metadata(content)?;
 
         // Map standard OPML metadata to typed Metadata fields
@@ -104,6 +105,11 @@ impl DocumentExtractor for OpmlExtractor {
             ..Default::default()
         };
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "opml",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

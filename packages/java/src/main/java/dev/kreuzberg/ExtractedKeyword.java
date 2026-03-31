@@ -17,7 +17,7 @@ import java.util.Optional;
  *
  * @since 4.5.0
  */
-public final class ExtractedKeyword {
+public class ExtractedKeyword {
 	private final String text;
 	private final float score;
 	private final String algorithm;

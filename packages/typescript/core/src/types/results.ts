@@ -530,6 +530,92 @@ export interface PdfAnnotation {
 	boundingBox?: PdfAnnotationBoundingBox | null;
 }
 
+// ============================================================================
+// URI types
+
+/**
+ * Semantic classification of an extracted URI.
+ */
+export type UriKind = "hyperlink" | "image" | "anchor" | "citation" | "reference" | "email";
+
+/**
+ * A URI extracted from a document.
+ *
+ * Represents any link, reference, or resource pointer found during extraction.
+ * The `kind` field classifies the URI semantically, while `label` carries
+ * optional human-readable display text.
+ */
+export interface Uri {
+	/** The URL or path string */
+	url: string;
+	/** Optional display text / label for the link */
+	label?: string | null;
+	/** Optional page number where the URI was found (1-indexed) */
+	page?: number | null;
+	/** Semantic classification of the URI */
+	kind: UriKind;
+}
+
+// ============================================================================
+// Archive types
+
+/**
+ * A single file extracted from an archive.
+ *
+ * When archives (ZIP, TAR, 7Z, GZIP) are extracted with recursive extraction
+ * enabled, each processable file produces its own full ExtractionResult.
+ */
+export interface ArchiveEntry {
+	/** Archive-relative file path (e.g. "folder/document.pdf") */
+	path: string;
+	/** Detected MIME type of the file */
+	mimeType: string;
+	/** Full extraction result for this file */
+	result: ExtractionResult;
+}
+
+// ============================================================================
+// Document structure relationship types
+
+/**
+ * Semantic kind of a relationship between document elements.
+ */
+export type RelationshipKind =
+	| "footnote_reference"
+	| "citation_reference"
+	| "internal_link"
+	| "caption"
+	| "label"
+	| "toc_entry"
+	| "cross_reference";
+
+// ============================================================================
+// Page unit types
+
+/**
+ * Type of paginated unit in a document.
+ */
+export type PageUnitType = "page" | "slide" | "sheet";
+
+// ============================================================================
+// Format types
+
+/**
+ * Content text output format.
+ *
+ * Controls the format of the extracted content string.
+ */
+export type OutputFormat = "plain" | "markdown" | "djot" | "html" | "structured";
+
+/**
+ * Result structure format.
+ *
+ * Controls whether results are returned in unified format or element-based format.
+ */
+export type ResultFormat = "unified" | "element_based";
+
+// ============================================================================
+
 export interface ExtractionResult {
 	content: string;
 	mimeType: string;
@@ -546,4 +632,8 @@ export interface ExtractionResult {
 	qualityScore?: number;
 	processingWarnings: ProcessingWarning[];
 	annotations?: PdfAnnotation[];
+	/** Nested extraction results from archive contents */
+	children?: ArchiveEntry[];
+	/** URIs/links discovered during document extraction */
+	uris?: Uri[];
 }

@@ -636,6 +636,12 @@ pub fn derive_extraction_result(
     include_document_structure: bool,
     output_format: crate::core::config::OutputFormat,
 ) -> ExtractionResult {
+    tracing::debug!(
+        element_count = doc.elements.len(),
+        source_format = %doc.source_format,
+        include_document_structure,
+        "derivation pipeline starting"
+    );
     // 1. Resolve relationships first — renderers need resolved targets for footnotes.
     resolve_relationships(&mut doc);
 
@@ -698,6 +704,11 @@ pub fn derive_extraction_result(
         Some(doc.uris)
     };
 
+    tracing::debug!(
+        content_length = content.len(),
+        has_document_structure = document.is_some(),
+        "derivation pipeline complete"
+    );
     ExtractionResult {
         content,
         mime_type,

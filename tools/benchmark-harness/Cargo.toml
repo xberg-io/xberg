@@ -34,6 +34,7 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 
 clap = { workspace = true }
+futures = { workspace = true }
 kreuzberg = { path = "../../crates/kreuzberg", features = ["full", "bundled-pdfium"] }
 num_cpus = { workspace = true }
 

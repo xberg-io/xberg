@@ -8,6 +8,7 @@ use super::comrak_bridge::build_comrak_ast;
 
 /// Render an `InternalDocument` to GFM Markdown.
 pub fn render_markdown(doc: &InternalDocument) -> String {
+    tracing::debug!(element_count = doc.elements.len(), "markdown rendering starting");
     let arena = Arena::new();
     let root = build_comrak_ast(doc, &arena);
 
@@ -24,6 +25,7 @@ pub fn render_markdown(doc: &InternalDocument) -> String {
     }
     output.truncate(trimmed_len);
     output.push('\n');
+    tracing::debug!(output_length = output.len(), "markdown rendering complete");
     output
 }
 

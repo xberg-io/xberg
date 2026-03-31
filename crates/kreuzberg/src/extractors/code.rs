@@ -137,6 +137,7 @@ impl DocumentExtractor for CodeExtractor {
         _mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "code", size_bytes = content.len(), "extraction starting");
         let source = String::from_utf8_lossy(content);
 
         let language = tslp::detect_language_from_content(&source).ok_or_else(|| {
@@ -147,7 +148,13 @@ impl DocumentExtractor for CodeExtractor {
             )
         })?;
 
-        Self::extract_with_language(&source, language, config)
+        let doc = Self::extract_with_language(&source, language, config)?;
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "code",
+            "extraction complete"
+        );
+        Ok(doc)
     }
 
     async fn extract_file(&self, path: &Path, _mime_type: &str, config: &ExtractionConfig) -> Result<InternalDocument> {

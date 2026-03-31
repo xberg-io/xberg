@@ -1033,6 +1033,7 @@ impl DocumentExtractor for RstExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "rst", size_bytes = content.len(), "extraction starting");
         let _ = config;
         let text = String::from_utf8_lossy(content).into_owned();
 
@@ -1049,6 +1050,11 @@ impl DocumentExtractor for RstExtractor {
             doc.push_table(table);
         }
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "rst",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

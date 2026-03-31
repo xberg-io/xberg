@@ -138,11 +138,11 @@ func ConfigMerge(base, override *ExtractionConfig) error {
 	if override.EnableQualityProcessing != nil {
 		base.EnableQualityProcessing = override.EnableQualityProcessing
 	}
-	if override.OCR != nil {
-		base.OCR = override.OCR
+	if override.Ocr != nil {
+		base.Ocr = override.Ocr
 	}
-	if override.ForceOCR != nil {
-		base.ForceOCR = override.ForceOCR
+	if override.ForceOcr != nil {
+		base.ForceOcr = override.ForceOcr
 	}
 	if override.Chunking != nil {
 		base.Chunking = override.Chunking

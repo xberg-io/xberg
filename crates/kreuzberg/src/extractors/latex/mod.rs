@@ -655,12 +655,18 @@ impl DocumentExtractor for LatexExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "latex", size_bytes = content.len(), "extraction starting");
         let _ = config;
         let latex_str = String::from_utf8_lossy(content).into_owned();
         let (_text, metadata, _tables) = Self::extract_from_latex(&latex_str);
         let mut doc = Self::build_internal_document(&latex_str);
         doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
         doc.metadata = metadata;
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "latex",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

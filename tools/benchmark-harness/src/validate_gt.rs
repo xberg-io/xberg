@@ -28,6 +28,10 @@ pub struct ValidateGtReport {
     pub html_issues: Vec<(String, Vec<String>)>,
     /// Number of fixes applied (only non-zero when `--fix` is used).
     pub fixes_applied: usize,
+    /// GT files containing noise issues (Warning or Error severity): (path, issue_count).
+    pub noisy_gt_files: Vec<(String, usize)>,
+    /// GT files with low block diversity (no headings for files > 100 bytes).
+    pub low_diversity_gt: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +213,8 @@ pub fn validate_ground_truth(config: &ValidateGtConfig) -> Result<ValidateGtRepo
         small_gt_files: Vec::new(),
         html_issues: Vec::new(),
         fixes_applied: 0,
+        noisy_gt_files: Vec::new(),
+        low_diversity_gt: Vec::new(),
     };
 
     let fixture_files = collect_json_files(&config.fixtures_dir)?;
@@ -249,6 +255,8 @@ pub fn validate_ground_truth(config: &ValidateGtConfig) -> Result<ValidateGtRepo
                 report.with_markdown_gt += 1;
                 check_small_file(&md_path, &config.fixtures_dir, &mut report);
                 check_html_in_markdown(&md_path, config.fix, &mut report);
+                check_noise_in_markdown(&md_path, &config.fixtures_dir, &mut report);
+                check_block_diversity(&md_path, &config.fixtures_dir, &mut report);
             } else {
                 report.missing_markdown_gt += 1;
             }
@@ -296,6 +304,53 @@ fn check_small_file(path: &Path, base: &Path, report: &mut ValidateGtReport) {
     {
         let display = path.strip_prefix(base).unwrap_or(path).display().to_string();
         report.small_gt_files.push((display, meta.len()));
+    }
+}
+
+/// Check a markdown GT file for noise issues (Warning or Error severity).
+fn check_noise_in_markdown(path: &Path, base: &Path, report: &mut ValidateGtReport) {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return;
+    };
+
+    let diagnostic = crate::noise_detection::detect_noise(&content);
+    let serious_count = diagnostic
+        .issues
+        .iter()
+        .filter(|issue| {
+            matches!(
+                issue.severity,
+                crate::noise_detection::Severity::Warning | crate::noise_detection::Severity::Error
+            )
+        })
+        .count();
+
+    if serious_count > 0 {
+        let display = path.strip_prefix(base).unwrap_or(path).display().to_string();
+        report.noisy_gt_files.push((display, serious_count));
+    }
+}
+
+/// Check if a markdown GT file has at least one heading for files > 100 bytes.
+fn check_block_diversity(path: &Path, base: &Path, report: &mut ValidateGtReport) {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return;
+    };
+
+    if meta.len() <= 100 {
+        return;
+    }
+
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return;
+    };
+
+    let blocks = crate::markdown_quality::parse_markdown_blocks(&content);
+    let has_heading = blocks.iter().any(|b| b.block_type.is_heading());
+
+    if !has_heading {
+        let display = path.strip_prefix(base).unwrap_or(path).display().to_string();
+        report.low_diversity_gt.push(display);
     }
 }
 

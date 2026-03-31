@@ -210,6 +210,7 @@ impl DocumentExtractor for EmailExtractor {
         mime_type: &str,
         config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "email", size_bytes = content.len(), "extraction starting");
         let mut doc = self.extract_sync(content, mime_type, config)?;
 
         // Recursively extract attachment content and nested messages when archive depth allows.
@@ -235,6 +236,11 @@ impl DocumentExtractor for EmailExtractor {
             }
         }
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "email",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

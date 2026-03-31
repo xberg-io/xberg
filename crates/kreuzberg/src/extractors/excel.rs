@@ -135,6 +135,13 @@ impl ExcelExtractor {
 
 impl SyncExtractor for ExcelExtractor {
     fn extract_sync(&self, content: &[u8], mime_type: &str, _config: &ExtractionConfig) -> Result<InternalDocument> {
+        let _span = tracing::debug_span!(
+            "extract_excel",
+            sheet_count = tracing::field::Empty,
+            element_count = tracing::field::Empty,
+        )
+        .entered();
+
         let extension = match mime_type {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => ".xlsx",
             "application/vnd.ms-excel.sheet.macroEnabled.12" => ".xlsm",

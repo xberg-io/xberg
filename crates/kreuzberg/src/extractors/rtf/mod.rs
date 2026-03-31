@@ -304,6 +304,7 @@ impl DocumentExtractor for RtfExtractor {
         mime_type: &str,
         _config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "rtf", size_bytes = content.len(), "extraction starting");
         let rtf_content = String::from_utf8_lossy(content);
         let plain = true; // InternalDocument doesn't need markdown formatting
 
@@ -349,6 +350,11 @@ impl DocumentExtractor for RtfExtractor {
             ..Default::default()
         };
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "rtf",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

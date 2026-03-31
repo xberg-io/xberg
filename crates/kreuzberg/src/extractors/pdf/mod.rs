@@ -297,6 +297,7 @@ impl PdfExtractor {
         config: &ExtractionConfig,
         path: Option<&std::path::Path>,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "pdf", size_bytes = content.len(), "extraction starting");
         let _ = &path; // used only when `ocr` feature is enabled
 
         // Strip /Rotate from page dicts to work around pdfium text extraction bug

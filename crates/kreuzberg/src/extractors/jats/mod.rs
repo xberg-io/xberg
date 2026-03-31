@@ -383,6 +383,7 @@ impl DocumentExtractor for JatsExtractor {
         mime_type: &str,
         _config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
+        tracing::debug!(format = "jats", size_bytes = content.len(), "extraction starting");
         let jats_content = utf8_validation::from_utf8(content)
             .map(|s| s.to_string())
             .unwrap_or_else(|_| String::from_utf8_lossy(content).to_string());
@@ -514,6 +515,11 @@ impl DocumentExtractor for JatsExtractor {
             ));
         }
 
+        tracing::debug!(
+            element_count = doc.elements.len(),
+            format = "jats",
+            "extraction complete"
+        );
         Ok(doc)
     }
 

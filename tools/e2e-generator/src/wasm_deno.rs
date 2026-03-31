@@ -1704,7 +1704,7 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
         "// To regenerate: cargo run -p kreuzberg-e2e-generator -- generate --lang wasm-deno"
     )?;
     writeln!(buf)?;
-    writeln!(buf, "import {{ assertEquals }} from \"jsr:@std/assert\";")?;
+    writeln!(buf, "import {{ assertEquals }} from \"@std/assert\";")?;
     writeln!(
         buf,
         "import {{ extractBytes, initWasm, enableOcr }} from \"./helpers.ts\";"
@@ -1747,7 +1747,7 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path) -> Res
 
         writeln!(
             buf,
-            "Deno.test(\"ExtractionConfig field parity\", {{ permissions: {{ read: true, net: true }} }}, async () => {{"
+            "Deno.test(\"ExtractionConfig field parity\", {{ permissions: {{ read: true, net: true }} }}, () => {{"
         )?;
         writeln!(
             buf,

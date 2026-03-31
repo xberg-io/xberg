@@ -156,6 +156,12 @@ async fn extract_and_score(
         None => (f64::NAN, f64::NAN, HashMap::new()),
     };
 
+    let ext_tokens = crate::quality::tokenize(&content);
+    let gt_tok = crate::quality::tokenize(gt_text);
+    let (mut missing_tokens, mut extra_tokens) = crate::quality::compute_token_diff(&ext_tokens, &gt_tok);
+    missing_tokens.truncate(50);
+    extra_tokens.truncate(50);
+
     PipelineResult {
         pipeline,
         sf1,
@@ -163,6 +169,8 @@ async fn extract_and_score(
         order_score,
         per_type_sf1,
         time_ms,
+        missing_tokens,
+        extra_tokens,
         content,
     }
 }
