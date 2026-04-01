@@ -17,7 +17,9 @@ pub(crate) fn map_output_format(format: KreuzbergOutputFormat) -> LibOutputForma
         KreuzbergOutputFormat::Plain => LibOutputFormat::Plain,
         // Html and Structured default to Markdown for HTML conversions
         // Structured output includes the converted content plus full element metadata
-        KreuzbergOutputFormat::Html | KreuzbergOutputFormat::Structured => LibOutputFormat::Markdown,
+        KreuzbergOutputFormat::Html | KreuzbergOutputFormat::Json | KreuzbergOutputFormat::Structured => {
+            LibOutputFormat::Markdown
+        }
         KreuzbergOutputFormat::Custom(_) => LibOutputFormat::Markdown,
     }
 }
