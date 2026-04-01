@@ -201,12 +201,12 @@ echo "Empty/near-empty GT files: $empty_count"
 
 echo ""
 echo "=== Summary ==="
-echo "DocBook MD GT files: $(find test_documents/ground_truth/docbook/*.md -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
-echo "DocBook TXT GT files: $(find test_documents/ground_truth/docbook/*.txt -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
-echo "Typst MD GT files: $(find test_documents/ground_truth/typ/*.md -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
-echo "Typst TXT GT files: $(find test_documents/ground_truth/typ/*.txt -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
-echo "FB2 MD GT files: $(find test_documents/ground_truth/fb2/*.md -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
-echo "FB2 TXT GT files: $(find test_documents/ground_truth/fb2/*.txt -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
+echo "DocBook MD GT files: $(find test_documents/ground_truth/docbook/*.md -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
+echo "DocBook TXT GT files: $(find test_documents/ground_truth/docbook/*.txt -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
+echo "Typst MD GT files: $(find test_documents/ground_truth/typ/*.md -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
+echo "Typst TXT GT files: $(find test_documents/ground_truth/typ/*.txt -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
+echo "FB2 MD GT files: $(find test_documents/ground_truth/fb2/*.md -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
+echo "FB2 TXT GT files: $(find test_documents/ground_truth/fb2/*.txt -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')"
 echo ""
 echo "Fixture files created/updated:"
 ls -1 "${FIXTURES_DIR}"/docbook_*.json "${FIXTURES_DIR}"/typst_*.json "${FIXTURES_DIR}"/fb2_*.json "${FIXTURES_DIR}"/dbk_*.json 2>/dev/null
