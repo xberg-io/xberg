@@ -276,6 +276,10 @@ impl RstExtractor {
         let rest = &trimmed[1..];
         if let Some(end_pos) = rest.find(':') {
             let key = rest[..end_pos].to_string();
+            // A valid field list key must be non-empty
+            if key.is_empty() {
+                return None;
+            }
             let value = rest[end_pos + 1..].trim().to_string();
             return Some((key, value));
         }
@@ -332,19 +336,45 @@ impl RstExtractor {
         {
             return true;
         }
-        // Auto-numbered list: #. item (space or tab)
-        if trimmed.starts_with("#. ") || trimmed.starts_with("#.\t") {
+        // Auto-numbered list: #. or (#) item
+        if trimmed.starts_with("#. ")
+            || trimmed.starts_with("#.\t")
+            || trimmed.starts_with("(#) ")
+            || trimmed.starts_with("(#)\t")
+        {
             return true;
+        }
+        // Parenthesized markers: (2), (A), (d) etc.
+        if trimmed.starts_with('(')
+            && let Some(close) = trimmed.find(')')
+            && close > 1
+            && close < 6
+        {
+            let inner = &trimmed[1..close];
+            let after = &trimmed[close + 1..];
+            if (after.starts_with(' ') || after.starts_with('\t'))
+                && (inner.chars().all(|c| c.is_alphanumeric()) || inner == "#")
+            {
+                return true;
+            }
         }
         // Find the first whitespace (space or tab) after the marker
         let sep_pos = trimmed.find([' ', '\t']);
         if let Some(space_pos) = sep_pos
             && space_pos > 0
-            && space_pos < 5
+            && space_pos < 6
         {
             let prefix = &trimmed[..space_pos];
             if prefix.ends_with('.') || prefix.ends_with(')') {
-                return prefix[..prefix.len() - 1].chars().all(|c| c.is_numeric());
+                let body = &prefix[..prefix.len() - 1];
+                // Numeric: 1. 2. etc.
+                if body.chars().all(|c| c.is_ascii_digit()) {
+                    return true;
+                }
+                // Alpha: A. B. a. b. etc.
+                if body.chars().all(|c| c.is_ascii_alphabetic()) && body.len() <= 3 {
+                    return true;
+                }
             }
         }
         false
@@ -940,10 +970,12 @@ impl RstExtractor {
                 continue;
             }
 
-            // Other directives - skip
+            // Other directives - skip (including their indented body, tabs or spaces)
             if trimmed.starts_with(".. ") || trimmed == ".." {
                 i += 1;
-                while i < lines.len() && (lines[i].starts_with("   ") || lines[i].is_empty()) {
+                while i < lines.len()
+                    && (lines[i].starts_with("   ") || lines[i].starts_with("\t") || lines[i].is_empty())
+                {
                     i += 1;
                 }
                 continue;
