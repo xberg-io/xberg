@@ -506,7 +506,7 @@ fn decompress_rtf_compressed(data: &[u8]) -> Option<Vec<u8>> {
     }
 
     let comp_size = u32::from_le_bytes(data[0..4].try_into().ok()?) as usize;
-    let _raw_size = u32::from_le_bytes(data[4..8].try_into().ok()?);
+    let raw_size = u32::from_le_bytes(data[4..8].try_into().ok()?);
     let magic = u32::from_le_bytes(data[8..12].try_into().ok()?);
     // _crc at 12..16 — we skip validation, matching common implementations.
 
@@ -528,7 +528,7 @@ fn decompress_rtf_compressed(data: &[u8]) -> Option<Vec<u8>> {
     // comp_size includes the 12 bytes after the first u32, so input length should be comp_size - 12.
     let end = (comp_size.saturating_sub(12)).min(input.len());
 
-    let mut output = Vec::with_capacity(_raw_size as usize);
+    let mut output = Vec::with_capacity(raw_size as usize);
     let mut pos = 0usize;
 
     while pos < end {
@@ -684,7 +684,7 @@ fn strip_rtf_to_plain_text(rtf: &[u8]) -> String {
                         let word = &text[word_start..i];
 
                         // Skip optional numeric parameter.
-                        let _num_start = i;
+                        // Skip optional numeric parameter position tracking (position advanced below).
                         if i < len && (bytes[i] == b'-' || bytes[i].is_ascii_digit()) {
                             if bytes[i] == b'-' {
                                 i += 1;

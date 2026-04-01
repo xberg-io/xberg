@@ -531,7 +531,7 @@ fn build_internal_elements(
                 // Extract footnotes from this paragraph and collect markers for inline injection
                 for child in node.descendants() {
                     if child.tag_name().name() == "note" {
-                        let _note_class = child
+                        let _ = child
                             .attribute(("urn:oasis:names:tc:opendocument:xmlns:text:1.0", "note-class"))
                             .or_else(|| child.attribute("text:note-class"))
                             .unwrap_or("footnote");

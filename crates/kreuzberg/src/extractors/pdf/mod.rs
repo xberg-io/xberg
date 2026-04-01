@@ -750,8 +750,6 @@ impl PdfExtractor {
 
         // Always preserve the original document MIME type (e.g. application/pdf).
         // The output format is tracked separately in metadata.output_format.
-        let _effective_mime_type = mime_type.to_string();
-
         // Signal pre-formatted output so the pipeline doesn't double-convert.
         // Only skip conversion for Markdown; Djot and HTML get the structured
         // content but still need apply_output_format() for format-specific conversion.

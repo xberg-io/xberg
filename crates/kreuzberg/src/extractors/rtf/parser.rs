@@ -320,8 +320,8 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                         '\'' => {
                             chars.next();
                             expect_destination = false;
-                            let _h1 = chars.next();
-                            let _h2 = chars.next();
+                            let _ = chars.next();
+                            let _ = chars.next();
                             if skip_depth > 0 {
                                 continue;
                             }

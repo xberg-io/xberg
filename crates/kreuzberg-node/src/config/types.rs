@@ -37,14 +37,6 @@ unsafe extern "C" {
     /// Parse ListIndentType from string to discriminant
     pub fn kreuzberg_parse_list_indent_type(value: *const c_char) -> i32;
 
-    /// Parse WhitespaceMode from string to discriminant
-    pub fn kreuzberg_parse_whitespace_mode(value: *const c_char) -> i32;
-
-    /// Parse NewlineStyle from string to discriminant
-    pub fn kreuzberg_parse_newline_style(value: *const c_char) -> i32;
-
-    /// Parse PreprocessingPreset from string to discriminant
-    pub fn kreuzberg_parse_preprocessing_preset(value: *const c_char) -> i32;
 }
 
 #[napi(object)]
@@ -927,19 +919,6 @@ fn highlight_style_to_string(style: HighlightStyle) -> &'static str {
 }
 
 fn parse_whitespace_mode(value: &str) -> Result<WhitespaceMode> {
-    // Use FFI parsing to validate the input
-    let c_str = std::ffi::CString::new(value).map_err(|_| {
-        Error::new(
-            Status::InvalidArg,
-            format!("Invalid htmlOptions.whitespaceMode '{}'", value),
-        )
-    })?;
-
-    let _discriminant = unsafe { kreuzberg_parse_whitespace_mode(c_str.as_ptr()) };
-
-    // Map _discriminant to the actual enum variants
-    // The FFI recognizes: "normalized" and "strict" map to discriminants
-    // Map based on the original behavior
     match value.to_lowercase().as_str() {
         "normalized" => Ok(WhitespaceMode::Normalized),
         "strict" => Ok(WhitespaceMode::Strict),
@@ -958,16 +937,6 @@ fn whitespace_mode_to_string(mode: WhitespaceMode) -> &'static str {
 }
 
 fn parse_newline_style(value: &str) -> Result<NewlineStyle> {
-    let c_str = std::ffi::CString::new(value).map_err(|_| {
-        Error::new(
-            Status::InvalidArg,
-            format!("Invalid htmlOptions.newlineStyle '{}'", value),
-        )
-    })?;
-
-    let _discriminant = unsafe { kreuzberg_parse_newline_style(c_str.as_ptr()) };
-
-    // Map to actual enum variants
     match value.to_lowercase().as_str() {
         "spaces" => Ok(NewlineStyle::Spaces),
         "backslash" => Ok(NewlineStyle::Backslash),
@@ -1015,16 +984,6 @@ fn code_block_style_to_string(value: CodeBlockStyle) -> &'static str {
 }
 
 fn parse_preprocessing_preset(value: &str) -> Result<PreprocessingPreset> {
-    let c_str = std::ffi::CString::new(value).map_err(|_| {
-        Error::new(
-            Status::InvalidArg,
-            format!("Invalid htmlOptions.preprocessing.preset '{}'", value),
-        )
-    })?;
-
-    let _discriminant = unsafe { kreuzberg_parse_preprocessing_preset(c_str.as_ptr()) };
-
-    // Map to actual enum variants
     match value.to_lowercase().as_str() {
         "minimal" => Ok(PreprocessingPreset::Minimal),
         "standard" => Ok(PreprocessingPreset::Standard),

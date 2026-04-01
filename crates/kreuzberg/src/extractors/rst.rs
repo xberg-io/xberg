@@ -337,7 +337,7 @@ impl RstExtractor {
             return true;
         }
         // Find the first whitespace (space or tab) after the marker
-        let sep_pos = trimmed.find(|c: char| c == ' ' || c == '\t');
+        let sep_pos = trimmed.find([' ', '\t']);
         if let Some(space_pos) = sep_pos
             && space_pos > 0
             && space_pos < 5
@@ -960,7 +960,7 @@ impl RstExtractor {
                     // Auto-numbered lists (#.) are ordered
                     if t.starts_with("#. ") || t.starts_with("#.\t") {
                         true
-                    } else if let Some(space_pos) = t.find(|c: char| c == ' ' || c == '\t') {
+                    } else if let Some(space_pos) = t.find([' ', '\t']) {
                         let prefix = &t[..space_pos];
                         prefix.ends_with('.') || prefix.ends_with(')')
                     } else {
@@ -981,7 +981,7 @@ impl RstExtractor {
                         .or_else(|| item_trimmed.strip_prefix("#.\t"))
                     {
                         rest
-                    } else if let Some(space_pos) = item_trimmed.find(|c: char| c == ' ' || c == '\t') {
+                    } else if let Some(space_pos) = item_trimmed.find([' ', '\t']) {
                         &item_trimmed[space_pos + 1..]
                     } else {
                         item_trimmed

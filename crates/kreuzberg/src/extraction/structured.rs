@@ -128,7 +128,7 @@ pub fn parse_json(data: &[u8], config: Option<JsonExtractionConfig>) -> Result<S
 
     // Still extract text fields for metadata population
     let mut path_buf = String::new();
-    let _text_parts = extract_from_json_value(&value, &mut path_buf, &config, &mut metadata, &mut text_fields);
+    let _ = extract_from_json_value(&value, &mut path_buf, &config, &mut metadata, &mut text_fields);
     // Output pretty-printed JSON to preserve structure (matches ground truth format)
     let content = serde_json::to_string_pretty(&value).unwrap_or_else(|_| String::from_utf8_lossy(data).to_string());
 
@@ -373,7 +373,7 @@ pub fn parse_yaml(data: &[u8]) -> Result<StructuredDataResult> {
 
     // Still extract for metadata population
     let mut path_buf = String::new();
-    let _text_parts = extract_from_value(&value, &mut path_buf, &mut metadata, &mut text_fields);
+    let _ = extract_from_value(&value, &mut path_buf, &mut metadata, &mut text_fields);
     // Output original YAML content to preserve structure (matches ground truth format)
     let content = yaml_str.to_string();
 
@@ -454,7 +454,7 @@ pub fn parse_toml(data: &[u8]) -> Result<StructuredDataResult> {
 
     // Still extract for metadata population
     let mut path_buf = String::new();
-    let _text_parts = extract_from_toml_value(&value, &mut path_buf, &mut metadata, &mut text_fields);
+    let _ = extract_from_toml_value(&value, &mut path_buf, &mut metadata, &mut text_fields);
     // Output original TOML content to preserve structure (matches ground truth format)
     let content = toml_str.to_string();
 
