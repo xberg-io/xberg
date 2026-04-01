@@ -1215,7 +1215,11 @@ internal class MetadataConverter : JsonConverter<Metadata>
                     }
                     else if (reader.TokenType != JsonTokenType.Null)
                     {
-                        var node = JsonNode.Parse(reader.GetString() ?? "null");
+                        // Handle all scalar JSON types (string, number, boolean)
+                        // reader.GetString() only works for String tokens; use JsonDocument
+                        // to parse any scalar value type correctly.
+                        using var scalarDoc = JsonDocument.ParseValue(ref reader);
+                        var node = JsonNode.Parse(scalarDoc.RootElement.GetRawText());
                         if (node != null)
                         {
                             formatFields[propertyName!] = node;
@@ -1462,6 +1466,30 @@ internal class MetadataConverter : JsonConverter<Metadata>
             case FormatType.Ocr:
                 metadata.Format.Ocr = DeserializeFromNode<OcrMetadata>(formatFields);
                 break;
+            case FormatType.Csv:
+                metadata.Format.Csv = DeserializeFromNode<CsvMetadata>(formatFields);
+                break;
+            case FormatType.Bibtex:
+                metadata.Format.Bibtex = DeserializeFromNode<BibtexMetadata>(formatFields);
+                break;
+            case FormatType.Citation:
+                metadata.Format.Citation = DeserializeFromNode<CitationMetadata>(formatFields);
+                break;
+            case FormatType.FictionBook:
+                metadata.Format.FictionBook = DeserializeFromNode<FictionBookMetadata>(formatFields);
+                break;
+            case FormatType.Dbf:
+                metadata.Format.Dbf = DeserializeFromNode<DbfMetadata>(formatFields);
+                break;
+            case FormatType.Jats:
+                metadata.Format.Jats = DeserializeFromNode<JatsMetadata>(formatFields);
+                break;
+            case FormatType.Epub:
+                metadata.Format.Epub = DeserializeFromNode<EpubMetadata>(formatFields);
+                break;
+            case FormatType.Pst:
+                metadata.Format.Pst = DeserializeFromNode<PstMetadata>(formatFields);
+                break;
         }
     }
 
@@ -1674,6 +1702,14 @@ internal static class Serialization
         { FormatType.Text, new[] { "line_count", "word_count", "character_count", "headers", "links", "code_blocks" } },
         { FormatType.Html, new[] { "title", "description", "keywords", "author", "canonical", "base_href", "og_title", "og_description", "og_image", "og_url", "og_type", "og_site_name", "twitter_card", "twitter_title", "twitter_description", "twitter_image", "twitter_site", "twitter_creator", "link_author", "link_license", "link_alternate" } },
         { FormatType.Ocr, new[] { "language", "psm", "output_format", "table_count", "table_rows", "table_cols" } },
+        { FormatType.Csv, new[] { "row_count", "column_count", "delimiter", "has_header", "column_types" } },
+        { FormatType.Bibtex, new[] { "entry_count", "citation_keys", "authors", "year_range", "entry_types" } },
+        { FormatType.Citation, new[] { "citation_count", "format", "authors", "year_range", "dois", "keywords" } },
+        { FormatType.FictionBook, new[] { "genres", "sequences", "annotation" } },
+        { FormatType.Dbf, new[] { "record_count", "field_count", "fields" } },
+        { FormatType.Jats, new[] { "copyright", "license", "history_dates", "contributor_roles" } },
+        { FormatType.Epub, new[] { "coverage", "dc_format", "relation", "source", "dc_type", "cover_image" } },
+        { FormatType.Pst, new[] { "message_count" } },
     }.ToFrozenDictionary();
 
     private static readonly FrozenSet<string> CoreMetadataKeys = new HashSet<string>
@@ -2072,6 +2108,30 @@ internal static class Serialization
             case FormatType.Ocr:
                 metadata.Format.Ocr = DeserializeElement<OcrMetadata>(root);
                 break;
+            case FormatType.Csv:
+                metadata.Format.Csv = DeserializeElement<CsvMetadata>(root);
+                break;
+            case FormatType.Bibtex:
+                metadata.Format.Bibtex = DeserializeElement<BibtexMetadata>(root);
+                break;
+            case FormatType.Citation:
+                metadata.Format.Citation = DeserializeElement<CitationMetadata>(root);
+                break;
+            case FormatType.FictionBook:
+                metadata.Format.FictionBook = DeserializeElement<FictionBookMetadata>(root);
+                break;
+            case FormatType.Dbf:
+                metadata.Format.Dbf = DeserializeElement<DbfMetadata>(root);
+                break;
+            case FormatType.Jats:
+                metadata.Format.Jats = DeserializeElement<JatsMetadata>(root);
+                break;
+            case FormatType.Epub:
+                metadata.Format.Epub = DeserializeElement<EpubMetadata>(root);
+                break;
+            case FormatType.Pst:
+                metadata.Format.Pst = DeserializeElement<PstMetadata>(root);
+                break;
             default:
                 metadata.Format.Type = FormatType.Unknown;
                 break;
@@ -2462,6 +2522,14 @@ internal static class Serialization
             "text" => FormatType.Text,
             "html" => FormatType.Html,
             "ocr" => FormatType.Ocr,
+            "csv" => FormatType.Csv,
+            "bibtex" => FormatType.Bibtex,
+            "citation" => FormatType.Citation,
+            "fiction_book" => FormatType.FictionBook,
+            "dbf" => FormatType.Dbf,
+            "jats" => FormatType.Jats,
+            "epub" => FormatType.Epub,
+            "pst" => FormatType.Pst,
             _ => FormatType.Unknown,
         };
     }
@@ -2480,6 +2548,14 @@ internal static class Serialization
             FormatType.Text => "text",
             FormatType.Html => "html",
             FormatType.Ocr => "ocr",
+            FormatType.Csv => "csv",
+            FormatType.Bibtex => "bibtex",
+            FormatType.Citation => "citation",
+            FormatType.FictionBook => "fiction_book",
+            FormatType.Dbf => "dbf",
+            FormatType.Jats => "jats",
+            FormatType.Epub => "epub",
+            FormatType.Pst => "pst",
             _ => null,
         };
     }
