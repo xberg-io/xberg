@@ -11,14 +11,17 @@ Some background information here.
 - First item in unordered list - Nested item 1 - Nested item 2
 - Second item in unordered list
 
+<!-- end list -->
 
 - Nested item 1
 - Nested item 2
 
+<!-- end list -->
 
 1. First item in ordered list 1. Nested ordered item 1 2. Nested ordered item 2
 2. Second item in ordered list
 
+<!-- end list -->
 
 1. Nested ordered item 1
 2. Nested ordered item 2

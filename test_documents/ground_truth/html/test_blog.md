@@ -82,12 +82,14 @@ The need for model selection, parameter tuning and cost saving is not specific t
 - \[GPT\](/autogen/blog/tags/gpt)
 - \[research\](/autogen/blog/tags/research)
 
+<!-- end list -->
 
 - \[Experiment Setup\](\#experiment-setup)
 - \[Experiment Results\](\#experiment-results)
 - \[Analysis and Discussion\](\#analysis-and-discussion)
 - \[For Further Reading\](\#for-further-reading)
 
+<!-- end list -->
 
 - \[Discord\!\[SVG Image\](data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIHdpZHRoPSIxMy41IiBoZWlnaHQ9IjEzLjUiIGFyaWEtaGlkZGVuPSJ0cnVlIiBjbGFzcz0iaWNvbkV4dGVybmFsTGlua19uUElVIj48cGF0aCBmaWxsPSJjdXJyZW50Q29sb3IiIGQ9Ik0yMSAxM3YxMGgtMjF2LTE5aDEydjJoLTEwdjE1aDE3di04aDJ6bTMtMTJoLTEwLjk4OGw0LjAzNSA0LTYuOTc3IDcuMDcgMi44MjggMi44MjggNi45NzctNy4wNyA0LjEyNSA0LjE3MnYtMTF6IiAvPjwvc3ZnPg==)\](https://discord.gg/pAbnFJrkgZ)
 - \[Twitter\!\[SVG Image\](data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjQgMjQiIGhlaWdodD0iMTMuNSIgd2lkdGg9IjEzLjUiIGFyaWEtaGlkZGVuPSJ0cnVlIiBjbGFzcz0iaWNvbkV4dGVybmFsTGlua19uUElVIj48cGF0aCBmaWxsPSJjdXJyZW50Q29sb3IiIGQ9Ik0yMSAxM3YxMGgtMjF2LTE5aDEydjJoLTEwdjE1aDE3di04aDJ6bTMtMTJoLTEwLjk4OGw0LjAzNSA0LTYuOTc3IDcuMDcgMi44MjggMi44MjggNi45NzctNy4wNyA0LjEyNSA0LjE3MnYtMTF6IiAvPjwvc3ZnPg==)\](https://twitter.com/pyautogen)

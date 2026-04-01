@@ -601,6 +601,7 @@ In 2020, \[Salesforce\](/wiki/Salesforce "Salesforce"), the manufacturer of the 
 8. \*\*\[^\](\#cite_ref-8)\*\* Blodget, Henry (August 23, 2013). \["And Microsoft Is Giving Up On The Software Business\!"\](https://www.businessinsider.com.au/microsoft-device-and-services-2013-8). \*Business Insider Australia\*. \[Archived\](https://web.archive.org/web/20170802165822/https://www.businessinsider.com.au/microsoft-device-and-services-2013-8) from the original on August 2, 2017. Retrieved August 2, 2017.
 9. \*\*\[^\](\#cite_ref-9)\*\* \["Notify The Next Of Kin"\](http://www.informationweek.com/applications/notify-the-next-of-kin/d/d-id/1090416). \*\[InformationWeek\](/wiki/InformationWeek "InformationWeek")\*. June 30, 2010. \[Archived\](https://web.archive.org/web/20140424124515/http://www.informationweek.com/applications/notify-the-next-of-kin/d/d-id/1090416) from the original on April 24, 2014. Retrieved April 24, 2014.
 
+<!-- end list -->
 
 1. \*\*\[^\](\#cite_ref-MicrosoftClimeworks_253-0)\*\* \[\[248\]\](\#cite_note-248)\[\[249\]\](\#cite_note-249)\[\[250\]\](\#cite_note-250)\[\[251\]\](\#cite_note-251)\[\[252\]\](\#cite_note-252)
 
@@ -868,6 +869,7 @@ In 2020, \[Salesforce\](/wiki/Salesforce "Salesforce"), the manufacturer of the 
 - \[Technology companies of the United States\](/wiki/Category:Technology_companies_of_the_United_States "Category:Technology companies of the United States")
 - \[Web service providers\](/wiki/Category:Web_service_providers "Category:Web service providers")
 
+<!-- end list -->
 
 - \[Pages with non-numeric formatnum arguments\](/wiki/Category:Pages_with_non-numeric_formatnum_arguments "Category:Pages with non-numeric formatnum arguments")
 - \[Webarchive template wayback links\](/wiki/Category:Webarchive_template_wayback_links "Category:Webarchive template wayback links")
@@ -917,10 +919,12 @@ In 2020, \[Salesforce\](/wiki/Salesforce "Salesforce"), the manufacturer of the 
 - \[Articles with EMU identifiers\](/wiki/Category:Articles_with_EMU_identifiers "Category:Articles with EMU identifiers")
 - \[Articles with SUDOC identifiers\](/wiki/Category:Articles_with_SUDOC_identifiers "Category:Articles with SUDOC identifiers")
 
+<!-- end list -->
 
 - This page was last edited on 13 March 2024, at 14:21 (UTC).
 - Text is available under the \[Creative Commons Attribution-ShareAlike License 4.0\](//en.wikipedia.org/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License)\[\](//en.wikipedia.org/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License); additional terms may apply. By using this site, you agree to the \[Terms of Use\](//foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Terms_of_Use) and \[Privacy Policy\](//foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy). Wikipedia® is a registered trademark of the \[Wikimedia Foundation, Inc.\](//www.wikimediafoundation.org/), a non-profit organization.
 
+<!-- end list -->
 
 - \[Privacy policy\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy)
 - \[About Wikipedia\](/wiki/Wikipedia:About)
@@ -932,6 +936,7 @@ In 2020, \[Salesforce\](/wiki/Salesforce "Salesforce"), the manufacturer of the 
 - \[Cookie statement\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Cookie_statement)
 - \[Mobile view\](//en.m.wikipedia.org/w/index.php?title=Microsoft\&mobileaction=toggle_view_mobile)
 
+<!-- end list -->
 
 - \[\!\[Wikimedia Foundation\](/static/images/footer/wikimedia-button.png)\](https://wikimediafoundation.org/)
 - \[\!\[Powered by MediaWiki\](/static/images/footer/poweredby_mediawiki_88x31.png)\](https://www.mediawiki.org/)

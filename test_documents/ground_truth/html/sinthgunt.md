@@ -52,16 +52,19 @@ The figures \[Fulla\](/wiki/Fulla "Fulla") (\*Uolla\*) and \[Frigg\](/wiki/Frigg
 
 - \[Germanic goddesses\](/wiki/Category:Germanic_goddesses "Category:Germanic goddesses")
 
+<!-- end list -->
 
 - \[Articles with short description\](/wiki/Category:Articles_with_short_description "Category:Articles with short description")
 - \[Short description matches Wikidata\](/wiki/Category:Short_description_matches_Wikidata "Category:Short description matches Wikidata")
 - \[Articles needing IPA\](/wiki/Category:Articles_needing_IPA "Category:Articles needing IPA")
 - \[Good articles\](/wiki/Category:Good_articles "Category:Good articles")
 
+<!-- end list -->
 
 - This page was last edited on 21 June 2025, at 03:09 (UTC).
 - Text is available under the \[Creative Commons Attribution-ShareAlike 4.0 License\](/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License "Wikipedia:Text of the Creative Commons Attribution-ShareAlike 4.0 International License"); additional terms may apply. By using this site, you agree to the \[Terms of Use\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Terms_of_Use "foundation:Special:MyLanguage/Policy:Terms of Use") and \[Privacy Policy\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy "foundation:Special:MyLanguage/Policy:Privacy policy"). Wikipedia® is a registered trademark of the \[Wikimedia Foundation, Inc.\](https://wikimediafoundation.org/), a non-profit organization.
 
+<!-- end list -->
 
 - \[Privacy policy\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy)
 - \[About Wikipedia\](/wiki/Wikipedia:About)
@@ -73,6 +76,7 @@ The figures \[Fulla\](/wiki/Fulla "Fulla") (\*Uolla\*) and \[Frigg\](/wiki/Frigg
 - \[Cookie statement\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Cookie_statement)
 - \[Mobile view\](//en.m.wikipedia.org/w/index.php?title=Sinthgunt\&mobileaction=toggle_view_mobile)
 
+<!-- end list -->
 
 - \[\!\[Wikimedia Foundation\](/static/images/footer/wikimedia.svg)\](https://www.wikimedia.org/)
 - \[\!\[Powered by MediaWiki\](/w/resources/assets/mediawiki_compact.svg)\](https://www.mediawiki.org/)

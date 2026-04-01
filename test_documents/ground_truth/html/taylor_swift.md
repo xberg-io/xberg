@@ -422,6 +422,7 @@ During the Eras Tour, Swift donated to food banks in Florida, Arizona, and Las V
 - \*\[Midnights\](/wiki/Midnights "Midnights")\* (2022)
 - \*\[The Tortured Poets Department\](/wiki/The_Tortured_Poets_Department "The Tortured Poets Department")\* (2024)
 
+<!-- end list -->
 
 - \*\[Fearless (Taylor's Version)\](/wiki/Fearless_(Taylor%27s_Version) "Fearless (Taylor's Version)")\* (2021)
 - \*\[Red (Taylor's Version)\](/wiki/Red_(Taylor%27s_Version) "Red (Taylor's Version)")\* (2021)
@@ -440,6 +441,7 @@ During the Eras Tour, Swift donated to food banks in Florida, Arizona, and Las V
 - \*\[All Too Well: The Short Film\](/wiki/All_Too_Well:_The_Short_Film "All Too Well: The Short Film")\* (2021)
 - \*\[Amsterdam\](/wiki/Amsterdam_(2022_film) "Amsterdam (2022 film)")\* (2022)
 
+<!-- end list -->
 
 - \*\[Miss Americana\](/wiki/Miss_Americana "Miss Americana")\* (2020)
 - \*\[Taylor Swift: City of Lover\](/wiki/Taylor_Swift:_City_of_Lover "Taylor Swift: City of Lover")\* (2020)
@@ -1092,6 +1094,7 @@ During the Eras Tour, Swift donated to food banks in Florida, Arizona, and Las V
 608. \*\*\[^\](\#cite_ref-618)\*\* Willman, Chris (February 16, 2024). \["Taylor Swift Donates $100K to GoFundMe for Family of Woman Killed at Chiefs Victory Parade"\](https://variety.com/2024/music/news/taylor-swift-donation-gofundme-victim-killed-chiefs-parade-1235913423/). \*\[Variety\](/wiki/Variety_(magazine) "Variety (magazine)")\*. Retrieved February 16, 2024.
 609. \*\*\[^\](\#cite_ref-619)\*\* West, Bryan (December 21, 2024). \["Taylor Swift donates $250,000 to organization Travis Kelce has supported for last decade"\](https://eu.usatoday.com/story/entertainment/music/2024/12/22/taylor-swift-kansas-city-operation-breakthrough-donation/77134418007/). \*USA Today\*. Retrieved December 22, 2024.
 
+<!-- end list -->
 
 - \["Top Touring Artist of the Pollstar Era"\](https://data.pollstar.com/Chart/2022/07/072522_top.touring.artists_1020.pdf) (PDF). \*\[Pollstar\](/wiki/Pollstar "Pollstar")\*. June 10, 2022. \[Archived\](https://web.archive.org/web/20220805190603/https://data.pollstar.com/Chart/2022/07/072522_top.touring.artists_1020.pdf) (PDF) from the original on August 5, 2022. Retrieved August 4, 2022.
 - Pollstar staff (December 9, 2024). \["Taylor Swift's 'Eras Tour' Smashes All-Time Touring Record, Surpasses $2 Billion"\](https://news.pollstar.com/2024/12/09/taylor-swifts-eras-tour-sets-all-time-touring-record-breaking-2b/). \*Pollstar\*. Retrieved December 10, 2024.
@@ -1866,6 +1869,7 @@ During the Eras Tour, Swift donated to food banks in Florida, Arizona, and Las V
 - \[Time Person of the Year\](/wiki/Category:Time_Person_of_the_Year "Category:Time Person of the Year")
 - \[Universal Music Group artists\](/wiki/Category:Universal_Music_Group_artists "Category:Universal Music Group artists")
 
+<!-- end list -->
 
 - \[CS1 German-language sources (de)\](/wiki/Category:CS1_German-language_sources_(de) "Category:CS1 German-language sources (de)")
 - \[CS1 Portuguese-language sources (pt)\](/wiki/Category:CS1_Portuguese-language_sources_(pt) "Category:CS1 Portuguese-language sources (pt)")
@@ -1885,10 +1889,12 @@ During the Eras Tour, Swift donated to food banks in Florida, Arizona, and Las V
 - \[MusicBrainz artist same as Wikidata\](/wiki/Category:MusicBrainz_artist_same_as_Wikidata "Category:MusicBrainz artist same as Wikidata")
 - \[Articles with MusicBrainz artist links\](/wiki/Category:Articles_with_MusicBrainz_artist_links "Category:Articles with MusicBrainz artist links")
 
+<!-- end list -->
 
 - This page was last edited on 1 July 2025, at 12:04 (UTC).
 - Text is available under the \[Creative Commons Attribution-ShareAlike 4.0 License\](/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License "Wikipedia:Text of the Creative Commons Attribution-ShareAlike 4.0 International License"); additional terms may apply. By using this site, you agree to the \[Terms of Use\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Terms_of_Use "foundation:Special:MyLanguage/Policy:Terms of Use") and \[Privacy Policy\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy "foundation:Special:MyLanguage/Policy:Privacy policy"). Wikipedia® is a registered trademark of the \[Wikimedia Foundation, Inc.\](https://wikimediafoundation.org/), a non-profit organization.
 
+<!-- end list -->
 
 - \[Privacy policy\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy)
 - \[About Wikipedia\](/wiki/Wikipedia:About)
@@ -1900,6 +1906,7 @@ During the Eras Tour, Swift donated to food banks in Florida, Arizona, and Las V
 - \[Cookie statement\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Cookie_statement)
 - \[Mobile view\](//en.m.wikipedia.org/w/index.php?title=Taylor_Swift\&mobileaction=toggle_view_mobile)
 
+<!-- end list -->
 
 - \[\!\[Wikimedia Foundation\](/static/images/footer/wikimedia.svg)\](https://www.wikimedia.org/)
 - \[\!\[Powered by MediaWiki\](/w/resources/assets/mediawiki_compact.svg)\](https://www.mediawiki.org/)

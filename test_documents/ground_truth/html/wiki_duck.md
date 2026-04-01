@@ -410,6 +410,7 @@ The 1992 Disney film \*\[The Mighty Ducks\](/wiki/The_Mighty_Ducks_(film) "The M
 - \[Game birds\](/wiki/Category:Game_birds "Category:Game birds")
 - \[Bird common names\](/wiki/Category:Bird_common_names "Category:Bird common names")
 
+<!-- end list -->
 
 - \[All accuracy disputes\](/wiki/Category:All_accuracy_disputes "Category:All accuracy disputes")
 - \[Accuracy disputes from February 2020\](/wiki/Category:Accuracy_disputes_from_February_2020 "Category:Accuracy disputes from February 2020")
@@ -437,10 +438,12 @@ The 1992 Disney film \*\[The Mighty Ducks\](/wiki/The_Mighty_Ducks_(film) "The M
 - \[Articles with Project Gutenberg links\](/wiki/Category:Articles_with_Project_Gutenberg_links "Category:Articles with Project Gutenberg links")
 - \[Articles containing video clips\](/wiki/Category:Articles_containing_video_clips "Category:Articles containing video clips")
 
+<!-- end list -->
 
 - This page was last edited on 21 September 2024, at 12:11 (UTC).
 - Text is available under the \[Creative Commons Attribution-ShareAlike License 4.0\](//en.wikipedia.org/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License)\[\](//en.wikipedia.org/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License); additional terms may apply. By using this site, you agree to the \[Terms of Use\](//foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Terms_of_Use) and \[Privacy Policy\](//foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy). Wikipedia® is a registered trademark of the \[Wikimedia Foundation, Inc.\](//wikimediafoundation.org/), a non-profit organization.
 
+<!-- end list -->
 
 - \[Privacy policy\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy)
 - \[About Wikipedia\](/wiki/Wikipedia:About)
@@ -452,6 +455,7 @@ The 1992 Disney film \*\[The Mighty Ducks\](/wiki/The_Mighty_Ducks_(film) "The M
 - \[Cookie statement\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Cookie_statement)
 - \[Mobile view\](//en.m.wikipedia.org/w/index.php?title=Duck\&mobileaction=toggle_view_mobile)
 
+<!-- end list -->
 
 - \[\!\[Wikimedia Foundation\](/static/images/footer/wikimedia-button.svg)\](https://wikimediafoundation.org/)
 - \[\!\[Powered by MediaWiki\](/w/resources/assets/poweredby_mediawiki.svg)\](https://www.mediawiki.org/)
