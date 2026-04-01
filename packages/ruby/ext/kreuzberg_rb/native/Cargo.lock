@@ -2031,10 +2031,11 @@ dependencies = [
 
 [[package]]
 name = "hashify"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "149e3ea90eb5a26ad354cfe3cb7f7401b9329032d0235f2687d03a35f30e5d4c"
+checksum = "9aef90ca205eea9394af4f58f4db837082ab1499e9866fec8ddd929999784dfa"
 dependencies = [
+ "indexmap",
  "proc-macro2",
  "quote",
  "syn",
@@ -2137,9 +2138,9 @@ dependencies = [
 
 [[package]]
 name = "html-to-markdown-rs"
-version = "3.0.2"
+version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fb8107a123b581730eb2e5c107482bbae7358087e9acf69aff8f1d46c2e0259"
+checksum = "c116fad2be99a76c9d9bce6197e0e3271de05f26a967b30888ba07eb669bc666"
 dependencies = [
  "ahash",
  "astral-tl",
@@ -2993,9 +2994,9 @@ checksum = "2c4a545a15244c7d945065b5d392b2d2d7f21526fba56ce51467b06ed445e8f7"
 
 [[package]]
 name = "libc"
-version = "0.2.183"
+version = "0.2.184"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d"
+checksum = "48f5d2a454e16a5ea0f4ced81bd44e4cfc7bd3a507b61887c99fd3538b28e4af"
 
 [[package]]
 name = "libfuzzer-sys"

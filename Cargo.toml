@@ -52,14 +52,14 @@ dbase = "0.7"
 futures = "0.3"
 getrandom = { version = "0.4.2", features = ["wasm_js"] }
 hex = "0.4.3"
-html-to-markdown-rs = { path = "../html-to-markdown/crates/html-to-markdown", default-features = false }
+html-to-markdown-rs = { version = "3.1.0", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.14"
 js-sys = "0.3"
 kreuzberg = { path = "./crates/kreuzberg", version = "4.7.0", default-features = false }
 kreuzberg-ffi = { path = "./crates/kreuzberg-ffi", version = "4.7.0" }
 lazy_static = "1.5.0"
-libc = "0.2.183"
+libc = "0.2.184"
 log = "0.4"
 lzma-rust2 = { version = "0.16.2" }
 memmap2 = "0.9"
