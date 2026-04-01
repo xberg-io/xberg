@@ -2,11 +2,8 @@
 
 Before the table
 
-| A
-text | B |
-|--------|---|
+| A\<br\>text | B |
+| --- | --- |
 | 1... | 2... |
 
 ## Section After
-
-After the table

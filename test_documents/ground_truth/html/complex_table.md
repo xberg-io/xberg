@@ -1,8 +1,8 @@
 # Quarterly Sales Report
 
 | Region | 2024 Sales (in thousands) |  |  |  | Total |
-|--------|---------------------------|---|---|---|-------|
-| Region | Q1 | Q2 | Q3 | Q4 | Total |
+| --- | --- | --- | --- | --- | --- |
+| Q1 | Q2 | Q3 | Q4 |  |  |
 | North America |  |  |  |  |  |
 | USA | $150 | $180 | $165 | $200 | $695 |
 | Canada | $45 | $52 | $48 | $60 | $205 |
@@ -10,11 +10,11 @@
 | UK | $80 | $95 | $88 | $110 | $373 |
 | Germany | $65 | $75 | $70 | $85 | $295 |
 | France | $40 | $48 | $45 | $55 | $188 |
-| **Grand Total** | **$380** | **$450** | **$416** | **$510** | **$1,756** |
+| \*\*Grand Total\*\* | \*\*$380\*\* | \*\*$450\*\* | \*\*$416\*\* | \*\*$510\*\* | \*\*$1,756\*\* |
 
 ## Performance Metrics
 
-| Metric         | Target   | Actual   | Status     |
-|----------------|----------|----------|------------|
+| Metric | Target | Actual | Status |
+| --- | --- | --- | --- |
 | Annual Revenue | $1,500K | $1,756K | ✓ Exceeded |
-| Growth Rate    | 10%      | 17%      | ✓ Exceeded |
+| Growth Rate | 10% | 17% | ✓ Exceeded |
