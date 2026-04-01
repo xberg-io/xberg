@@ -131,7 +131,7 @@ fn extract_text_word97(word_doc: &[u8], table_stream: &[u8]) -> Result<String> {
         return Err(KreuzbergError::parsing("FIB too short for cbRgFcLcb"));
     }
 
-    let _cb_rg_fc_lcb = u16::from_le_bytes([word_doc[cbrgfclcb_offset], word_doc[cbrgfclcb_offset + 1]]) as usize;
+    let _ = u16::from_le_bytes([word_doc[cbrgfclcb_offset], word_doc[cbrgfclcb_offset + 1]]) as usize;
     let rg_fc_lcb_offset = cbrgfclcb_offset + 2;
 
     // fcClx is at index 66 of FibRgFcLcb97 (each entry is fc:4 + lcb:4 = 8 bytes)
@@ -176,7 +176,7 @@ fn extract_text_word97(word_doc: &[u8], table_stream: &[u8]) -> Result<String> {
             if pos + 4 > clx.len() {
                 return Err(KreuzbergError::parsing("Pcdt truncated at lcb"));
             }
-            let _lcb = u32::from_le_bytes([clx[pos], clx[pos + 1], clx[pos + 2], clx[pos + 3]]) as usize;
+            let _ = u32::from_le_bytes([clx[pos], clx[pos + 1], clx[pos + 2], clx[pos + 3]]) as usize;
             pos += 4;
 
             // Parse PlcPcd - array of CPs followed by array of PCDs

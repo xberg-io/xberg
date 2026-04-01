@@ -553,7 +553,7 @@ mod tests {
             let stats_before = kreuzberg_string_intern_stats();
 
             let ptr1 = kreuzberg_intern_string(s1.as_ptr());
-            let _ptr2 = kreuzberg_intern_string(s1.as_ptr());
+            let ptr2 = kreuzberg_intern_string(s1.as_ptr());
             let ptr3 = kreuzberg_intern_string(s2.as_ptr());
 
             let stats = kreuzberg_string_intern_stats();
@@ -563,7 +563,7 @@ mod tests {
             assert!(stats.cache_misses - stats_before.cache_misses >= 2);
 
             kreuzberg_free_interned_string(ptr1);
-            kreuzberg_free_interned_string(_ptr2);
+            kreuzberg_free_interned_string(ptr2);
             kreuzberg_free_interned_string(ptr3);
         }
     }

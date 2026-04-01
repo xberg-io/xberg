@@ -713,7 +713,7 @@ impl DocumentExtractor for MdxExtractor {
         let events: Vec<Event> = parser.collect();
 
         let mut extracted_images = Vec::new();
-        let _extracted_text = super::markdown_utils::extract_text_from_events(&events, &mut extracted_images);
+        let _ = super::markdown_utils::extract_text_from_events(&events, &mut extracted_images);
 
         let raw_jsx = jsx_blocks_buf.unwrap_or_default();
 

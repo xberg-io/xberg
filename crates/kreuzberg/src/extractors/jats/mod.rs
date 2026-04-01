@@ -262,7 +262,7 @@ fn build_jats_internal_document(content: &str) -> crate::Result<InternalDocument
                     }
                     "fig" if in_body => {
                         // Skip figures in internal representation (no image data available)
-                        let _text = jats_extract_text(&mut reader)?;
+                        let _ = jats_extract_text(&mut reader)?;
                         continue;
                     }
                     "disp-formula" | "inline-formula" if in_body => {
@@ -281,7 +281,7 @@ fn build_jats_internal_document(content: &str) -> crate::Result<InternalDocument
                     }
                     "supplementary-material" if in_back => {
                         // Skip supplementary material content
-                        let _text = jats_extract_text(&mut reader)?;
+                        let _ = jats_extract_text(&mut reader)?;
                         continue;
                     }
                     "title" if in_back && !in_ref_list => {
