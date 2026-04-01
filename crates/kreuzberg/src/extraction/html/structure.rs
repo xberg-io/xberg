@@ -542,9 +542,13 @@ impl<'a, 'b> HtmlWalker<'a, 'b> {
                 // HR is just a separator; we don't have a dedicated node type,
                 // so we skip it.
             }
-            // Structural containers we pass through
-            "div" | "section" | "article" | "main" | "aside" | "header" | "footer" | "nav" | "details" | "summary"
-            | "span" | "html" | "body" | "title" | "link" => {}
+            // Block-level structural containers: flush any accumulated text
+            // so that each block boundary produces a paragraph break.
+            "div" | "section" | "article" | "main" | "aside" | "header" | "footer" | "nav" | "details" | "summary" => {
+                self.flush_paragraph();
+            }
+            // Inline / root-level elements we pass through without flushing
+            "span" | "html" | "body" | "title" | "link" => {}
             _ => {}
         }
     }
@@ -675,6 +679,10 @@ impl<'a, 'b> HtmlWalker<'a, 'b> {
                     let entries = std::mem::take(&mut self.meta_entries);
                     self.builder.push_metadata_block(entries, None);
                 }
+            }
+            // Block-level structural containers: flush accumulated text on close
+            "div" | "section" | "article" | "main" | "aside" | "header" | "footer" | "nav" | "details" | "summary" => {
+                self.flush_paragraph();
             }
             _ => {}
         }
@@ -1198,6 +1206,51 @@ mod tests {
         let quote = &doc.nodes[0];
         assert!(matches!(quote.content, NodeContent::Quote));
         assert_eq!(quote.children.len(), 1);
+    }
+
+    #[test]
+    fn test_blockquote_with_divs() {
+        // Simulates EPUB verse structure: blockquote > div > div lines
+        let html = r#"<div>Before</div>
+<blockquote><div><div>Line one</div><div>Line two</div></div></blockquote>
+<div>After</div>"#;
+        let doc = build_document_structure(html);
+        assert!(doc.validate().is_ok(), "validate: {:?}", doc.validate());
+
+        // Should have: Paragraph("Before"), Quote with children, Paragraph("After")
+        let roots: Vec<_> = doc.body_roots().collect();
+        println!("=== ALL NODES ===");
+        for (i, node) in doc.nodes.iter().enumerate() {
+            println!(
+                "  [{}] {:?} parent={:?} children={:?}",
+                i, node.content, node.parent, node.children
+            );
+        }
+
+        // Find the Quote node
+        let quote_idx = doc.nodes.iter().position(|n| matches!(n.content, NodeContent::Quote));
+        assert!(
+            quote_idx.is_some(),
+            "Should have a Quote node. Roots: {:?}",
+            roots.len()
+        );
+        let quote = &doc.nodes[quote_idx.unwrap()];
+        assert!(
+            !quote.children.is_empty(),
+            "Quote should have children with div content"
+        );
+
+        // The paragraphs inside the blockquote should be children of the Quote
+        let child_texts: Vec<_> = quote
+            .children
+            .iter()
+            .filter_map(|ci| match &doc.nodes[ci.0 as usize].content {
+                NodeContent::Paragraph { text } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert!(child_texts.contains(&"Line one"), "Quote children: {:?}", child_texts);
+        assert!(child_texts.contains(&"Line two"), "Quote children: {:?}", child_texts);
     }
 
     #[test]

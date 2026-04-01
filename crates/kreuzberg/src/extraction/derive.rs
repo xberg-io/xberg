@@ -14,8 +14,7 @@ use std::sync::Arc;
 use ahash::AHashMap;
 
 use crate::types::document_structure::{
-    ContentLayer, DocumentNode, DocumentRelationship, DocumentStructure, GridCell, NodeContent, NodeId, NodeIndex,
-    TableGrid,
+    DocumentNode, DocumentRelationship, DocumentStructure, GridCell, NodeContent, NodeId, NodeIndex, TableGrid,
 };
 use crate::types::extraction::ExtractionResult;
 use crate::types::internal::{ElementKind, InternalDocument, InternalElement, RelationshipTarget};
@@ -543,81 +542,6 @@ fn parse_metadata_entries(text: &str) -> Vec<(String, String)> {
 }
 
 // ============================================================================
-// 3. Content String Derivation
-// ============================================================================
-
-/// Ensure the buffer ends with `"\n\n"`, adding newlines as needed.
-/// No-op if the buffer is empty.
-fn ensure_double_newline(buf: &mut String) {
-    if !buf.is_empty() && !buf.ends_with("\n\n") {
-        if buf.ends_with('\n') {
-            buf.push('\n');
-        } else {
-            buf.push_str("\n\n");
-        }
-    }
-}
-
-/// Derive a plain-text content string from the internal document.
-///
-/// Concatenates text from all text-carrying elements, separated by double
-/// newlines for paragraphs/headings. Tables use their markdown representation.
-/// Page breaks insert `\n---\n`.
-#[deprecated(note = "Use crate::rendering::render_plain(&doc) once available; kept for test compatibility")]
-pub fn derive_content_string(doc: &InternalDocument) -> String {
-    let mut result = String::with_capacity(doc.elements.iter().map(|e| e.text.len() + 2).sum::<usize>());
-
-    for elem in &doc.elements {
-        // Skip container markers (they don't carry content)
-        if elem.kind.is_container_start() || elem.kind.is_container_end() {
-            continue;
-        }
-
-        // Skip non-body content (headers, footers, footnotes)
-        if elem.layer != ContentLayer::Body {
-            continue;
-        }
-
-        // Skip raw blocks (JSX/LaTeX/HTML markup)
-        if matches!(elem.kind, ElementKind::RawBlock) {
-            continue;
-        }
-
-        match elem.kind {
-            ElementKind::PageBreak => {
-                if !result.is_empty() && !result.ends_with('\n') {
-                    result.push('\n');
-                }
-                result.push_str("---\n");
-            }
-            ElementKind::Table { table_index } => {
-                ensure_double_newline(&mut result);
-                if let Some(table) = doc.tables.get(table_index as usize) {
-                    result.push_str(&table.markdown);
-                }
-                if !result.ends_with('\n') {
-                    result.push('\n');
-                }
-            }
-            ElementKind::Image { .. } => {
-                // Images don't contribute to content string
-            }
-            ElementKind::FootnoteRef => {
-                // Footnote refs don't contribute standalone text
-            }
-            _ => {
-                if !elem.text.is_empty() {
-                    ensure_double_newline(&mut result);
-                    result.push_str(&elem.text);
-                }
-            }
-        }
-    }
-
-    result
-}
-
-// ============================================================================
 // 4. ExtractionResult Assembly
 // ============================================================================
 
@@ -1036,62 +960,6 @@ mod tests {
         assert!(ds.validate().is_ok());
         assert_eq!(ds.relationships.len(), 1);
         assert_eq!(ds.relationships[0].kind, RelationshipKind::FootnoteReference);
-    }
-
-    // -----------------------------------------------------------------------
-    // Test 4: Content string derivation
-    // -----------------------------------------------------------------------
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_content_string_basic() {
-        let mut doc = make_doc("markdown");
-        doc.push_element(InternalElement::text(ElementKind::Title, "Title", 0));
-        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Body text.", 0));
-
-        let content = derive_content_string(&doc);
-        assert_eq!(content, "Title\n\nBody text.");
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_content_string_with_table() {
-        let mut doc = make_doc("markdown");
-        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Before table.", 0));
-
-        let table = Table {
-            cells: vec![
-                vec!["A".to_string(), "B".to_string()],
-                vec!["1".to_string(), "2".to_string()],
-            ],
-            markdown: "| A | B |\n|---|---|\n| 1 | 2 |".to_string(),
-            page_number: 1,
-            bounding_box: None,
-        };
-        let table_idx = doc.push_table(table);
-        doc.push_element(InternalElement::text(
-            ElementKind::Table { table_index: table_idx },
-            "",
-            0,
-        ));
-
-        let content = derive_content_string(&doc);
-        assert!(content.contains("Before table."));
-        assert!(content.contains("| A | B |"));
-    }
-
-    #[test]
-    #[allow(deprecated)]
-    fn test_content_string_page_break() {
-        let mut doc = make_doc("pdf");
-        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Page 1.", 0));
-        doc.push_element(InternalElement::text(ElementKind::PageBreak, "", 0));
-        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Page 2.", 0));
-
-        let content = derive_content_string(&doc);
-        assert!(content.contains("Page 1."));
-        assert!(content.contains("---"));
-        assert!(content.contains("Page 2."));
     }
 
     // -----------------------------------------------------------------------

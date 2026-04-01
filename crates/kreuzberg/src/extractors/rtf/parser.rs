@@ -1,7 +1,7 @@
 //! Core RTF parsing logic.
 
 use crate::extractors::rtf::encoding::{decode_windows_1252, parse_hex_byte, parse_rtf_control_word};
-use crate::extractors::rtf::formatting::normalize_whitespace;
+use crate::extractors::rtf::formatting::{map_offset, normalize_whitespace_with_mapping};
 use crate::extractors::rtf::images::{RtfImage, extract_pict_image};
 use crate::extractors::rtf::tables::TableState;
 use crate::types::Table;
@@ -55,6 +55,166 @@ pub struct RtfFormattingData {
     pub footer_text: Option<String>,
     /// Hyperlink spans: (start_byte, end_byte, url).
     pub hyperlinks: Vec<(usize, usize, String)>,
+}
+
+/// Tracks formatting state during the text extraction pass so that
+/// formatting spans have byte offsets that exactly match the extracted text.
+///
+/// This is used inside `extract_text_from_rtf` to produce spans whose
+/// byte ranges are guaranteed to align with the output text, eliminating
+/// the offset-drift bug that occurred when formatting was tracked in a
+/// separate pass.
+#[derive(Clone, Default)]
+struct FmtState {
+    bold: bool,
+    italic: bool,
+    underline: bool,
+    strikethrough: bool,
+    color_idx: u16,
+}
+
+struct FormattingTracker {
+    /// Current formatting state.
+    fmt: FmtState,
+    /// Stack of formatting states pushed on `{` and popped on `}`.
+    fmt_stack: Vec<FmtState>,
+    /// Byte offset where the current span started.
+    span_start: usize,
+    /// Accumulated formatting spans (byte offsets into pre-normalized result).
+    spans: Vec<RtfFormattingSpan>,
+}
+
+impl FormattingTracker {
+    fn new() -> Self {
+        Self {
+            fmt: FmtState::default(),
+            fmt_stack: Vec::new(),
+            span_start: 0,
+            spans: Vec::new(),
+        }
+    }
+
+    /// Push current formatting state onto the stack (called on `{`).
+    fn push(&mut self) {
+        self.fmt_stack.push(self.fmt.clone());
+    }
+
+    /// Pop formatting state from the stack (called on `}`).
+    /// If formatting changed inside the group, close the current span.
+    fn pop(&mut self, text_offset: usize) {
+        if let Some(parent) = self.fmt_stack.pop() {
+            let changed = self.fmt.bold != parent.bold
+                || self.fmt.italic != parent.italic
+                || self.fmt.underline != parent.underline
+                || self.fmt.strikethrough != parent.strikethrough
+                || self.fmt.color_idx != parent.color_idx;
+            if changed {
+                if text_offset > self.span_start {
+                    self.spans.push(RtfFormattingSpan {
+                        start: self.span_start,
+                        end: text_offset,
+                        bold: self.fmt.bold,
+                        italic: self.fmt.italic,
+                        underline: self.fmt.underline,
+                        strikethrough: self.fmt.strikethrough,
+                        color_index: self.fmt.color_idx,
+                    });
+                }
+                self.span_start = text_offset;
+                self.fmt = parent;
+            }
+        }
+    }
+
+    /// Update a formatting field, closing the current span if the value changed.
+    fn update_bold(&mut self, text_offset: usize, val: bool) {
+        if val != self.fmt.bold {
+            self.close_span(text_offset);
+            self.fmt.bold = val;
+        }
+    }
+
+    fn update_italic(&mut self, text_offset: usize, val: bool) {
+        if val != self.fmt.italic {
+            self.close_span(text_offset);
+            self.fmt.italic = val;
+        }
+    }
+
+    fn update_underline(&mut self, text_offset: usize, val: bool) {
+        if val != self.fmt.underline {
+            self.close_span(text_offset);
+            self.fmt.underline = val;
+        }
+    }
+
+    fn update_strikethrough(&mut self, text_offset: usize, val: bool) {
+        if val != self.fmt.strikethrough {
+            self.close_span(text_offset);
+            self.fmt.strikethrough = val;
+        }
+    }
+
+    fn update_color(&mut self, text_offset: usize, val: u16) {
+        if val != self.fmt.color_idx {
+            self.close_span(text_offset);
+            self.fmt.color_idx = val;
+        }
+    }
+
+    /// Reset all formatting to default, closing the current span if needed.
+    fn reset_all(&mut self, text_offset: usize) {
+        if self.fmt.bold || self.fmt.italic || self.fmt.underline || self.fmt.strikethrough || self.fmt.color_idx != 0 {
+            self.close_span(text_offset);
+            self.fmt = FmtState::default();
+        }
+    }
+
+    fn close_span(&mut self, text_offset: usize) {
+        if text_offset > self.span_start {
+            self.spans.push(RtfFormattingSpan {
+                start: self.span_start,
+                end: text_offset,
+                bold: self.fmt.bold,
+                italic: self.fmt.italic,
+                underline: self.fmt.underline,
+                strikethrough: self.fmt.strikethrough,
+                color_index: self.fmt.color_idx,
+            });
+        }
+        self.span_start = text_offset;
+    }
+
+    /// Close the final span at the end of parsing.
+    fn finalize(&mut self, text_offset: usize) {
+        if text_offset > self.span_start
+            && (self.fmt.bold
+                || self.fmt.italic
+                || self.fmt.underline
+                || self.fmt.strikethrough
+                || self.fmt.color_idx != 0)
+        {
+            self.spans.push(RtfFormattingSpan {
+                start: self.span_start,
+                end: text_offset,
+                bold: self.fmt.bold,
+                italic: self.fmt.italic,
+                underline: self.fmt.underline,
+                strikethrough: self.fmt.strikethrough,
+                color_index: self.fmt.color_idx,
+            });
+        }
+    }
+
+    /// Remap all span byte offsets using a normalization mapping.
+    fn remap_spans(&mut self, mapping: &[(usize, usize)]) {
+        for span in &mut self.spans {
+            span.start = map_offset(mapping, span.start);
+            span.end = map_offset(mapping, span.end);
+        }
+        // Remove zero-length spans that may result from normalization
+        self.spans.retain(|s| s.start < s.end);
+    }
 }
 
 /// Extract the color table from RTF content.
@@ -753,7 +913,13 @@ const SKIP_DESTINATIONS: &[&str] = &[
 /// 5. Extracting text while skipping formatting groups
 /// 6. Detecting and extracting image metadata (\pict sections)
 /// 7. Normalizing whitespace
-pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>, Vec<RtfImage>, Vec<ParagraphMeta>) {
+pub fn extract_text_from_rtf(
+    content: &str,
+    plain: bool,
+) -> (String, Vec<Table>, Vec<RtfImage>, Vec<ParagraphMeta>, RtfFormattingData) {
+    let color_table = parse_rtf_color_table(content);
+    let mut fmt_tracker = FormattingTracker::new();
+
     let mut result = String::new();
     let mut chars = content.chars().peekable();
     let mut tables: Vec<Table> = Vec::new();
@@ -786,7 +952,9 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
     let mut fldinst_content = String::new();
     let mut in_fldrslt = false;
     let mut fldrslt_depth: i32 = 0;
-    let mut _pending_hyperlink_url: Option<String> = None;
+    let mut fldrslt_start: usize = 0;
+    let mut pending_hyperlink_url: Option<String> = None;
+    let mut hyperlinks: Vec<(usize, usize, String)> = Vec::new();
 
     // Footnote tracking
     let mut in_footnote = false;
@@ -845,6 +1013,8 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 // Inherit hidden state into new group scope
                 let current_hidden = hidden_stack.last().copied().unwrap_or(false);
                 hidden_stack.push(current_hidden);
+                // Push formatting state so it's restored on `}`
+                fmt_tracker.push();
                 // Adjacent group open `}{`: clear pending boundary space so that
                 // `x}{\super superscript}` produces `xsuperscript` not `x superscript`.
                 pending_boundary_space = false;
@@ -853,6 +1023,8 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 group_depth -= 1;
                 expect_destination = false;
                 ignorable_pending = false;
+                // Pop formatting state — closes span if formatting changed
+                fmt_tracker.pop(result.len());
                 // Pop uc_stack and hidden_stack for this group
                 if uc_stack.len() > 1 {
                     uc_stack.pop();
@@ -905,7 +1077,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                             url
                         };
                         if !url.is_empty() {
-                            _pending_hyperlink_url = Some(url);
+                            pending_hyperlink_url = Some(url);
                         }
                     }
                     fldinst_content.clear();
@@ -913,7 +1085,9 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 // Handle \fldrslt group closing
                 if in_fldrslt && group_depth < fldrslt_depth {
                     in_fldrslt = false;
-                    _pending_hyperlink_url = None;
+                    if let Some(url) = pending_hyperlink_url.take() {
+                        hyperlinks.push((fldrslt_start, result.len(), url));
+                    }
                 }
                 // Handle \footnote group closing — store footnote text
                 if in_footnote && group_depth < footnote_depth {
@@ -975,6 +1149,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 &mut footnote_buf,
                                 &mut pending_boundary_space,
                                 &mut hidden_stack,
+                                &mut fmt_tracker,
                             );
                         }
                         '\\' | '{' | '}' => {
@@ -1080,6 +1255,17 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                         }
                                         continue;
                                     }
+                                    // Allow \listtext/\pntext through — needed for ordered/unordered
+                                    // list detection (capture marker text like "1.", "a.", etc.)
+                                    if control_word == "listtext" || control_word == "pntext" {
+                                        in_listtext = true;
+                                        listtext_depth = group_depth;
+                                        listtext_buf.clear();
+                                        if skip_depth == 0 {
+                                            skip_depth = group_depth;
+                                        }
+                                        continue;
+                                    }
                                     if control_word != "shppict" {
                                         if skip_depth == 0 {
                                             skip_depth = group_depth;
@@ -1114,6 +1300,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 if control_word == "fldrslt" {
                                     in_fldrslt = true;
                                     fldrslt_depth = group_depth;
+                                    fldrslt_start = result.len();
                                     // Don't skip — we want the text extracted
                                     continue;
                                 }
@@ -1201,6 +1388,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 &mut footnote_buf,
                                 &mut pending_boundary_space,
                                 &mut hidden_stack,
+                                &mut fmt_tracker,
                             );
                         }
                     }
@@ -1257,7 +1445,6 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 }
                 if let Some(state) = table_state.as_ref()
                     && !state.in_row
-                    && !state.expecting_next_row
                     && !state.rows.is_empty()
                 {
                     finalize_table(&mut table_state, &mut tables);
@@ -1287,14 +1474,15 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
         finalize_table(&mut table_state, &mut tables);
     }
 
+    // Finalize formatting tracker — close any open span
+    fmt_tracker.finalize(result.len());
+
     // Finalize the last paragraph's metadata if there's text after the last \par
-    let final_text = result.trim_end();
+    let (normalized, mapping) = normalize_whitespace_with_mapping(&result);
+    let final_text = normalized.trim_end();
     if !final_text.is_empty() {
         // Count how many paragraphs we have (split by \n\n)
-        let para_count = normalize_whitespace(&result)
-            .split("\n\n")
-            .filter(|p| !p.trim().is_empty())
-            .count();
+        let para_count = normalized.split("\n\n").filter(|p| !p.trim().is_empty()).count();
         while para_metas.len() < para_count {
             para_metas.push(ParagraphMeta {
                 heading_level: cur_heading_level,
@@ -1307,19 +1495,38 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
     }
 
     // Append footnote definitions at the end
+    let mut final_result = normalized;
     if !footnotes.is_empty() {
-        if !result.ends_with('\n') {
-            result.push('\n');
-            result.push('\n');
+        if !final_result.ends_with('\n') {
+            final_result.push('\n');
+            final_result.push('\n');
         }
         for (i, note) in footnotes.iter().enumerate() {
-            result.push_str(&format!("[^{}]: {}", i + 1, note.trim()));
-            result.push('\n');
-            result.push('\n');
+            final_result.push_str(&format!("[^{}]: {}", i + 1, note.trim()));
+            final_result.push('\n');
+            final_result.push('\n');
         }
     }
 
-    (normalize_whitespace(&result), tables, images, para_metas)
+    // Remap formatting span byte offsets through the normalization mapping
+    fmt_tracker.remap_spans(&mapping);
+
+    // Also remap hyperlink byte offsets
+    for link in &mut hyperlinks {
+        link.0 = map_offset(&mapping, link.0);
+        link.1 = map_offset(&mapping, link.1);
+    }
+    hyperlinks.retain(|l| l.0 < l.1);
+
+    let formatting_data = RtfFormattingData {
+        spans: fmt_tracker.spans,
+        color_table,
+        header_text: None, // Headers are extracted by extract_rtf_formatting
+        footer_text: None, // Footers are extracted by extract_rtf_formatting
+        hyperlinks,
+    };
+
+    (final_result, tables, images, para_metas, formatting_data)
 }
 
 /// Handle an RTF control word during parsing.
@@ -1348,6 +1555,7 @@ fn handle_control_word(
     _footnote_buf: &mut String,
     pending_boundary_space: &mut bool,
     hidden_stack: &mut Vec<bool>,
+    fmt_tracker: &mut FormattingTracker,
 ) {
     match control_word {
         // Hidden text: \v enables, \v0 disables
@@ -1642,19 +1850,42 @@ fn handle_control_word(
             });
         }
         // \intbl marks a paragraph as inside a table. If we have a table state
-        // that just finished a row (expecting_next_row), ensure it stays alive.
+        // that just finished a row (expecting_next_row), start a new row so
+        // that subsequent text goes into cells rather than leaking into the
+        // result string. This handles RTFs where \trowd appears only once and
+        // subsequent rows use \pard\intbl without repeating \trowd.
         "intbl" => {
             ensure_table(table_state);
-            // Keep the table state expecting more rows
-            if let Some(state) = table_state.as_mut() {
-                state.expecting_next_row = true;
-            }
+            if let Some(state) = table_state.as_mut()
+                && !state.in_row {
+                    state.start_row();
+                }
+        }
+        // Formatting control words — tracked for annotation spans
+        "b" => {
+            fmt_tracker.update_bold(result.len(), param.unwrap_or(1) != 0);
+        }
+        "i" => {
+            fmt_tracker.update_italic(result.len(), param.unwrap_or(1) != 0);
+        }
+        "ul" => {
+            fmt_tracker.update_underline(result.len(), param.unwrap_or(1) != 0);
+        }
+        "ulnone" => {
+            fmt_tracker.update_underline(result.len(), false);
+        }
+        "strike" => {
+            fmt_tracker.update_strikethrough(result.len(), param.unwrap_or(1) != 0);
+        }
+        "cf" => {
+            fmt_tracker.update_color(result.len(), param.unwrap_or(0) as u16);
         }
         // \plain resets all character formatting including hidden text
         "plain" => {
             if let Some(h) = hidden_stack.last_mut() {
                 *h = false;
             }
+            fmt_tracker.reset_all(result.len());
         }
         _ => {}
     }

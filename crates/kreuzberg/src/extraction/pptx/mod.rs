@@ -582,7 +582,9 @@ impl elements::Slide {
                 })
             });
 
-        // Emit title first as a heading
+        // Emit title first as a heading. If no title element was found,
+        // emit a synthetic title from the slide number (matches Pandoc
+        // behavior for untitled slides).
         if let Some(tidx) = title_idx
             && let SlideElement::Text(text, _) = &self.elements[tidx]
         {
@@ -593,6 +595,10 @@ impl elements::Slide {
             };
             let normalized = text_content.replace('\n', " ");
             builder.add_title(normalized.trim());
+        } else if !self.elements.is_empty() {
+            // Untitled slide: emit "Slide N" as synthetic title
+            let synthetic_title = format!("Slide {}", self.slide_number);
+            builder.add_title(&synthetic_title);
         }
 
         for &idx in &element_indices {
@@ -911,6 +917,32 @@ mod tests {
         assert_eq!(
             image_handling::get_full_image_path("ppt/slides/slide1.xml", "image1.png"),
             "ppt/slides/image1.png"
+        );
+    }
+
+    #[test]
+    fn test_powerpoint_sample_slide3_content() {
+        let path = "test_documents/vendored/docling/pptx/powerpoint_sample.pptx";
+        if !std::path::Path::new(path).exists() {
+            eprintln!("Skipping: {} not found", path);
+            return;
+        }
+        let result = extract_pptx_from_path(path, false, None, false, false).unwrap();
+        eprintln!(
+            "=== RAW CONTENT ({} bytes, {} slides) ===",
+            result.content.len(),
+            result.slide_count
+        );
+        eprintln!("{}", &result.content);
+        eprintln!("=== END ===");
+        assert_eq!(result.slide_count, 3);
+        assert!(
+            result.content.contains("List item4"),
+            "Missing slide 3 content: List item4"
+        );
+        assert!(
+            result.content.contains("List item5"),
+            "Missing slide 3 content: List item5"
         );
     }
 }

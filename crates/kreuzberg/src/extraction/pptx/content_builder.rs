@@ -105,7 +105,7 @@ impl ContentBuilder {
     pub(super) fn add_title(&mut self, title: &str) {
         if !title.trim().is_empty() {
             if !self.plain {
-                self.content.push_str("# ");
+                self.content.push_str("## ");
             }
             self.content.push_str(title.trim());
             self.content.push_str("\n\n");

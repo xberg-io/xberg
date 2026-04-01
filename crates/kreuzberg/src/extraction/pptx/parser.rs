@@ -58,8 +58,7 @@ fn parse_group(node: &Node) -> Result<Vec<SlideElement>> {
     match tag_name {
         "sp" => {
             let position = extract_position(node);
-            // parse_sp returns None for shapes without txBody (e.g., image placeholders)
-            if let Some(content) = parse_sp(node)? {
+            for content in parse_sp(node)? {
                 match content {
                     ParsedContent::Text(text) => elements.push(SlideElement::Text(text, position)),
                     ParsedContent::List(list) => elements.push(SlideElement::List(list, position)),
@@ -67,8 +66,24 @@ fn parse_group(node: &Node) -> Result<Vec<SlideElement>> {
             }
         }
         "graphicFrame" => {
-            if let Some(graphic_element) = parse_graphic_frame(node)? {
-                elements.push(SlideElement::Table(graphic_element, position));
+            match parse_graphic_frame(node)? {
+                GraphicFrameResult::Table(table) => {
+                    elements.push(SlideElement::Table(table, position));
+                }
+                GraphicFrameResult::Graphic(uri) => {
+                    // Emit a placeholder text element for non-table graphics (charts, diagrams, etc.)
+                    let placeholder = format!("\\[Graphic: other: {}\\]", uri);
+                    let text_el = TextElement {
+                        runs: vec![Run {
+                            text: placeholder,
+                            formatting: Formatting::default(),
+                            hyperlink_id: None,
+                        }],
+                        is_title: false,
+                    };
+                    elements.push(SlideElement::Text(text_el, position));
+                }
+                GraphicFrameResult::None => {}
             }
         }
         "pic" => {
@@ -112,7 +127,12 @@ fn is_title_placeholder(sp_node: &Node) -> bool {
     false
 }
 
-fn parse_sp(sp_node: &Node) -> Result<Option<ParsedContent>> {
+/// Parse a shape element, returning zero or more content items.
+///
+/// Mixed shapes (containing both plain text paragraphs and bulleted list
+/// paragraphs) are split into separate `Text` and `List` items so that the
+/// output matches tools like Pandoc which render them as distinct blocks.
+fn parse_sp(sp_node: &Node) -> Result<Vec<ParsedContent>> {
     // Some shapes like image placeholders (<p:ph type="pic"/>) don't have txBody.
     // These should be skipped gracefully - they contain no text to extract.
     // GitHub Issue #321 Bug 1
@@ -121,32 +141,117 @@ fn parse_sp(sp_node: &Node) -> Result<Option<ParsedContent>> {
         .find(|n| n.tag_name().name() == "txBody" && n.tag_name().namespace() == Some(PRESENTATIONML_NAMESPACE))
     {
         Some(node) => node,
-        None => return Ok(None), // Skip shapes without txBody
+        None => return Ok(Vec::new()), // Skip shapes without txBody
     };
 
     let is_title = is_title_placeholder(sp_node);
 
-    // Title placeholders should not be treated as lists even if they have
-    // paragraph-level properties that look like bullet markers.
-    let is_list = !is_title
-        && tx_body_node.descendants().any(|n| {
-            n.is_element()
-                && n.tag_name().name() == "pPr"
-                && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
-                && (n.attribute("lvl").is_some()
-                    || n.children().any(|child| {
-                        child.is_element()
-                            && (child.tag_name().name() == "buAutoNum" || child.tag_name().name() == "buChar")
-                    }))
+    // Title placeholders are always treated as a single text element.
+    if is_title {
+        let mut text_el = parse_text(&tx_body_node)?;
+        text_el.is_title = true;
+        return Ok(vec![ParsedContent::Text(text_el)]);
+    }
+
+    // Inspect each paragraph to classify it as list or text. Adjacent
+    // paragraphs of the same kind are grouped together so that a shape
+    // with mixed content produces multiple content items (e.g. a plain
+    // paragraph followed by a bullet list).
+    let paragraphs: Vec<_> = tx_body_node
+        .children()
+        .filter(|n| {
+            n.is_element() && n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
+        })
+        .collect();
+
+    // Fast path: check if all paragraphs are uniformly text or list.
+    let has_any_bullet = paragraphs.iter().any(|p| paragraph_has_bullet(p));
+    let all_have_bullet = has_any_bullet
+        && paragraphs.iter().all(|p| {
+            // An empty paragraph is neutral
+            let has_runs = p.children().any(|n| {
+                n.is_element() && n.tag_name().name() == "r" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
+            });
+            !has_runs || paragraph_has_bullet(p)
         });
 
-    if is_list {
-        Ok(Some(ParsedContent::List(parse_list(&tx_body_node)?)))
-    } else {
-        let mut text_el = parse_text(&tx_body_node)?;
-        text_el.is_title = is_title;
-        Ok(Some(ParsedContent::Text(text_el)))
+    if !has_any_bullet {
+        // All text
+        let text_el = parse_text(&tx_body_node)?;
+        return Ok(vec![ParsedContent::Text(text_el)]);
     }
+    if all_have_bullet {
+        // All list
+        let list_el = parse_list(&tx_body_node)?;
+        return Ok(vec![ParsedContent::List(list_el)]);
+    }
+
+    // Mixed content: split into groups of consecutive text vs list paragraphs.
+    let mut results = Vec::new();
+    let mut current_text_runs: Vec<Run> = Vec::new();
+    let mut current_list_items: Vec<ListItem> = Vec::new();
+
+    for p_node in &paragraphs {
+        let has_runs = p_node.children().any(|n| {
+            n.is_element() && n.tag_name().name() == "r" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
+        });
+        if !has_runs {
+            continue;
+        }
+
+        if paragraph_has_bullet(p_node) {
+            // Flush any accumulated text runs
+            if !current_text_runs.is_empty() {
+                results.push(ParsedContent::Text(TextElement {
+                    runs: std::mem::take(&mut current_text_runs),
+                    is_title: false,
+                }));
+            }
+            let (level, is_ordered) = parse_list_properties(p_node)?;
+            let runs = parse_paragraph(p_node, true)?;
+            current_list_items.push(ListItem {
+                level,
+                is_ordered,
+                runs,
+            });
+        } else {
+            // Flush any accumulated list items
+            if !current_list_items.is_empty() {
+                results.push(ParsedContent::List(ListElement {
+                    items: std::mem::take(&mut current_list_items),
+                }));
+            }
+            let mut runs = parse_paragraph(p_node, true)?;
+            current_text_runs.append(&mut runs);
+        }
+    }
+
+    // Flush remaining
+    if !current_text_runs.is_empty() {
+        results.push(ParsedContent::Text(TextElement {
+            runs: current_text_runs,
+            is_title: false,
+        }));
+    }
+    if !current_list_items.is_empty() {
+        results.push(ParsedContent::List(ListElement {
+            items: current_list_items,
+        }));
+    }
+
+    Ok(results)
+}
+
+/// Check whether a paragraph element has bullet markers (buAutoNum or buChar).
+fn paragraph_has_bullet(p_node: &Node) -> bool {
+    p_node.children().any(|n| {
+        n.is_element()
+            && n.tag_name().name() == "pPr"
+            && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
+            && n.children().any(|child| {
+                child.is_element() && (child.tag_name().name() == "buAutoNum" || child.tag_name().name() == "buChar")
+            })
+    })
 }
 
 pub(super) fn parse_text(tx_body_node: &Node) -> Result<TextElement> {
@@ -162,24 +267,42 @@ pub(super) fn parse_text(tx_body_node: &Node) -> Result<TextElement> {
     Ok(TextElement { runs, is_title: false })
 }
 
-fn parse_graphic_frame(node: &Node) -> Result<Option<TableElement>> {
+/// Result of parsing a graphicFrame element.
+enum GraphicFrameResult {
+    /// A table was found.
+    Table(TableElement),
+    /// A non-table graphic with the given URI (chart, diagram, SmartArt, etc.).
+    Graphic(String),
+    /// No recognizable graphic content.
+    None,
+}
+
+fn parse_graphic_frame(node: &Node) -> Result<GraphicFrameResult> {
+    // Find any graphicData element to determine the graphic type
     let graphic_data_node = node.descendants().find(|n| {
-        n.is_element()
-            && n.tag_name().name() == "graphicData"
-            && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
-            && n.attribute("uri") == Some("http://schemas.openxmlformats.org/drawingml/2006/table")
+        n.is_element() && n.tag_name().name() == "graphicData" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
     });
 
-    if let Some(graphic_data) = graphic_data_node
-        && let Some(tbl_node) = graphic_data.children().find(|n| {
-            n.is_element() && n.tag_name().name() == "tbl" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
-        })
-    {
-        let table = parse_table(&tbl_node)?;
-        return Ok(Some(table));
+    if let Some(graphic_data) = graphic_data_node {
+        let uri = graphic_data.attribute("uri").unwrap_or("");
+
+        // Check if this is a table graphic
+        if uri == "http://schemas.openxmlformats.org/drawingml/2006/table"
+            && let Some(tbl_node) = graphic_data.children().find(|n| {
+                n.is_element() && n.tag_name().name() == "tbl" && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
+            })
+        {
+            let table = parse_table(&tbl_node)?;
+            return Ok(GraphicFrameResult::Table(table));
+        }
+
+        // Non-table graphic (chart, diagram, SmartArt, etc.)
+        if !uri.is_empty() {
+            return Ok(GraphicFrameResult::Graphic(uri.to_string()));
+        }
     }
 
-    Ok(None)
+    Ok(GraphicFrameResult::None)
 }
 
 fn parse_table(tbl_node: &Node) -> Result<TableElement> {

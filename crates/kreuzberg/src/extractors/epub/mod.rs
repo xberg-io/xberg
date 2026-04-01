@@ -287,8 +287,42 @@ impl EpubExtractor {
                 // Convert DocumentStructure nodes to InternalDocument elements
                 let mut first_heading_idx: Option<u32> = None;
                 let mut in_list = false;
-                for node in &chapter_structure.nodes {
+                let mut in_blockquote = false;
+
+                // Build a set of node indices that are Quote containers so we
+                // can detect when child nodes are inside a blockquote.
+                let quote_indices: AHashSet<crate::types::document_structure::NodeIndex> = chapter_structure
+                    .nodes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, n)| matches!(n.content, crate::types::document_structure::NodeContent::Quote))
+                    .map(|(i, _)| crate::types::document_structure::NodeIndex(i as u32))
+                    .collect();
+
+                // Debugging: print nodes around blockquotes
+                for (ni, n) in chapter_structure.nodes.iter().enumerate() {
+                    if matches!(n.content, crate::types::document_structure::NodeContent::Quote) {
+                        eprintln!("DEBUG: Quote at idx={}, children={:?}", ni, n.children);
+                        for ci in &n.children {
+                            let cn = &chapter_structure.nodes[ci.0 as usize];
+                            eprintln!("  child[{}] parent={:?} content={:?}", ci.0, cn.parent, &format!("{:?}", cn.content)[..80.min(format!("{:?}", cn.content).len())]);
+                        }
+                    }
+                }
+
+                for node in chapter_structure.nodes.iter() {
                     use crate::types::document_structure::NodeContent;
+
+                    // Track blockquote entry/exit based on parent relationships
+                    let is_inside_quote = node.parent.as_ref().is_some_and(|p| quote_indices.contains(p));
+
+                    if is_inside_quote && !in_blockquote {
+                        builder.push_quote_start();
+                        in_blockquote = true;
+                    } else if !is_inside_quote && in_blockquote {
+                        builder.push_quote_end();
+                        in_blockquote = false;
+                    }
 
                     // Close an open list if the current node is not a ListItem
                     if in_list && !matches!(&node.content, NodeContent::ListItem { .. }) {
@@ -297,6 +331,8 @@ impl EpubExtractor {
                     }
 
                     match &node.content {
+                        // Skip Quote container nodes — we handle them via parent tracking
+                        NodeContent::Quote => continue,
                         NodeContent::Heading { level, text } => {
                             let idx = builder.push_heading(*level, text, None, None);
                             if first_heading_idx.is_none() {
@@ -407,9 +443,12 @@ impl EpubExtractor {
                     }
                 }
 
-                // Close any trailing open list
+                // Close any trailing open list or blockquote
                 if in_list {
                     builder.end_list();
+                }
+                if in_blockquote {
+                    builder.push_quote_end();
                 }
 
                 // Chapter headings get automatic slug-based anchors from push_heading,

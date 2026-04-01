@@ -797,23 +797,44 @@ fn collect_odt_annotations(
 }
 
 /// Extract table cells as `Vec<Vec<String>>` from an ODT table element.
+///
+/// Handles both direct `table:table-row` children and rows nested inside
+/// `table:table-header-rows` containers, which ODT uses for header rows.
 fn extract_table_cells(table_node: roxmltree::Node) -> Vec<Vec<String>> {
     let mut rows = Vec::new();
-    for row_node in table_node.children() {
-        if row_node.tag_name().name() == "table-row" {
-            let mut row_cells = Vec::new();
-            for cell_node in row_node.children() {
-                if cell_node.tag_name().name() == "table-cell" {
-                    let cell_text = extract_node_text(cell_node).unwrap_or_default();
-                    row_cells.push(cell_text.trim().to_string());
+    for child in table_node.children() {
+        match child.tag_name().name() {
+            "table-row" => {
+                if let Some(row) = extract_row_cells(child) {
+                    rows.push(row);
                 }
             }
-            if !row_cells.is_empty() {
-                rows.push(row_cells);
+            "table-header-rows" => {
+                // Header rows are wrapped in a container element
+                for row_node in child.children() {
+                    if row_node.tag_name().name() == "table-row"
+                        && let Some(row) = extract_row_cells(row_node)
+                    {
+                        rows.push(row);
+                    }
+                }
             }
+            _ => {}
         }
     }
     rows
+}
+
+/// Extract cell text values from a single table row node.
+fn extract_row_cells(row_node: roxmltree::Node) -> Option<Vec<String>> {
+    let mut row_cells = Vec::new();
+    for cell_node in row_node.children() {
+        if cell_node.tag_name().name() == "table-cell" {
+            let cell_text = extract_node_text(cell_node).unwrap_or_default();
+            row_cells.push(cell_text.trim().to_string());
+        }
+    }
+    if row_cells.is_empty() { None } else { Some(row_cells) }
 }
 
 /// Extract text from a single XML node, handling spans and formatting

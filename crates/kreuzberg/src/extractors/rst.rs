@@ -584,6 +584,22 @@ impl RstExtractor {
                 i = end + 1;
                 continue;
             }
+            // RST citation/footnote reference: [label]_  ->  [label]
+            // Strip the trailing underscore so that the brackets render unescaped.
+            if bytes[i] == b'['
+                && let Some(close) = raw[i + 1..].find(']')
+            {
+                let label_end = i + 1 + close;
+                // Check for trailing _
+                if label_end + 1 < len && bytes[label_end + 1] == b'_' {
+                    let label = &raw[i + 1..label_end];
+                    out.push('[');
+                    out.push_str(label);
+                    out.push(']');
+                    i = label_end + 2; // skip past ]_
+                    continue;
+                }
+            }
             let ch = raw[i..].chars().next().unwrap();
             out.push(ch);
             i += ch.len_utf8();
@@ -690,7 +706,9 @@ impl RstExtractor {
                 while i + 1 < lines.len() {
                     let next = lines[i + 1];
                     if !next.is_empty() && (next.starts_with("   ") || next.starts_with("\t")) {
-                        full_value.push('\n');
+                        if !full_value.is_empty() {
+                            full_value.push(' ');
+                        }
                         full_value.push_str(next.trim());
                         i += 1;
                     } else {
@@ -906,6 +924,20 @@ impl RstExtractor {
                 continue;
             }
 
+            // Contents directive: emit the title text as a paragraph
+            if trimmed.starts_with(".. contents::") {
+                let title = trimmed.strip_prefix(".. contents::").unwrap_or("").trim();
+                if !title.is_empty() {
+                    b.push_paragraph(title, vec![], None, None);
+                }
+                i += 1;
+                // Skip options block
+                while i < lines.len() && (lines[i].starts_with("   ") || lines[i].is_empty()) {
+                    i += 1;
+                }
+                continue;
+            }
+
             // Other directives - skip
             if trimmed.starts_with(".. ") || trimmed == ".." {
                 i += 1;
@@ -916,10 +948,10 @@ impl RstExtractor {
             }
 
             // Simple RST table (=====  =====  ====== separator lines)
+            // Collect all non-blank lines. The table ends at a blank line or at a
+            // closing separator followed by a blank line / EOF.
             if Self::is_simple_table_separator(trimmed) {
                 let mut table_lines = Vec::new();
-                table_lines.push(lines[i]);
-                i += 1;
                 while i < lines.len() {
                     let tl = lines[i].trim();
                     if tl.is_empty() {
@@ -927,10 +959,6 @@ impl RstExtractor {
                     }
                     table_lines.push(lines[i]);
                     i += 1;
-                    // Stop after closing separator
-                    if Self::is_simple_table_separator(tl) {
-                        break;
-                    }
                 }
                 let cells = Self::parse_simple_table_cells(&table_lines);
                 if !cells.is_empty() {
@@ -986,8 +1014,20 @@ impl RstExtractor {
                     } else {
                         item_trimmed
                     };
-                    b.push_list_item(text, is_ordered, vec![], None, None);
+                    // Collect continuation lines (indented, not a new list item)
+                    let mut full_text = text.to_string();
                     i += 1;
+                    while i < lines.len()
+                        && !lines[i].trim().is_empty()
+                        && (lines[i].starts_with("   ") || lines[i].starts_with("\t"))
+                        && !Self::is_list_item(lines[i])
+                    {
+                        full_text.push(' ');
+                        full_text.push_str(lines[i].trim());
+                        i += 1;
+                    }
+                    let (parsed_text, item_annotations) = Self::parse_inline_markup(&full_text);
+                    b.push_list_item(&parsed_text, is_ordered, item_annotations, None, None);
                 }
                 b.end_list();
                 continue;
@@ -1035,10 +1075,61 @@ impl RstExtractor {
                 continue;
             }
 
-            // Regular paragraph with footnote refs and cross-references
+            // Regular paragraph with footnote refs and cross-references.
+            // Join consecutive non-blank, non-indented lines into a single paragraph
+            // (RST hard-wrapping).
             if !trimmed.is_empty() && !Self::is_markup_line(line) {
-                let footnote_refs = Self::find_footnote_references(trimmed);
-                let (stripped, annotations) = Self::parse_inline_markup(trimmed);
+                let mut para_text = trimmed.to_string();
+                // Peek ahead: join continuation lines that are part of the same paragraph.
+                // A continuation line is non-empty, not indented, not a list item,
+                // not a directive, not a section underline, not a markup line.
+                while i + 1 < lines.len() {
+                    let next = lines[i + 1];
+                    let next_trimmed = next.trim();
+                    // Stop at blank lines
+                    if next_trimmed.is_empty() {
+                        break;
+                    }
+                    // Stop at indented lines (could be a directive body, code block, etc.)
+                    if next.starts_with(' ') || next.starts_with('\t') {
+                        break;
+                    }
+                    // Stop at section underlines
+                    if Self::is_section_underline(next_trimmed) {
+                        break;
+                    }
+                    // Stop at markup lines
+                    if Self::is_markup_line(next) {
+                        break;
+                    }
+                    // Stop at directives
+                    if next_trimmed.starts_with(".. ") || next_trimmed == ".." {
+                        break;
+                    }
+                    // Stop at list items
+                    if Self::is_list_item(next) {
+                        break;
+                    }
+                    // Stop at field lists
+                    if next_trimmed.starts_with(':')
+                        && next_trimmed.len() > 1
+                        && Self::parse_field_list_line(next_trimmed).is_some()
+                    {
+                        break;
+                    }
+                    // Stop at table separators
+                    if Self::is_simple_table_separator(next_trimmed) {
+                        break;
+                    }
+                    if next_trimmed.starts_with('+') && next_trimmed.ends_with('+') && next_trimmed.contains('-') {
+                        break;
+                    }
+                    para_text.push(' ');
+                    para_text.push_str(next_trimmed);
+                    i += 1;
+                }
+                let footnote_refs = Self::find_footnote_references(&para_text);
+                let (stripped, annotations) = Self::parse_inline_markup(&para_text);
                 let idx = b.push_paragraph(&stripped, annotations, None, None);
 
                 // Emit footnote reference relationships
@@ -1048,7 +1139,7 @@ impl RstExtractor {
                 }
 
                 // Check for cross-reference patterns like :ref:`target`
-                Self::extract_rst_cross_refs(trimmed, idx, &mut b);
+                Self::extract_rst_cross_refs(&para_text, idx, &mut b);
             }
 
             i += 1;

@@ -61,8 +61,13 @@ impl RtfExtractor {
     fn build_internal_document(rtf_content: &str, plain: bool) -> InternalDocument {
         use crate::types::document_structure::ContentLayer;
 
-        let (extracted_text, tables, rtf_images, para_metas) = extract_text_from_rtf(rtf_content, plain);
-        let formatting = extract_rtf_formatting(rtf_content);
+        let (extracted_text, tables, rtf_images, para_metas, mut formatting) =
+            extract_text_from_rtf(rtf_content, plain);
+        // Headers/footers are still extracted by the separate formatting pass since
+        // the text pass skips those destinations. Merge them in.
+        let legacy_formatting = extract_rtf_formatting(rtf_content);
+        formatting.header_text = legacy_formatting.header_text;
+        formatting.footer_text = legacy_formatting.footer_text;
 
         let mut builder = InternalDocumentBuilder::new("rtf");
 
@@ -310,7 +315,7 @@ impl DocumentExtractor for RtfExtractor {
         let plain = true; // InternalDocument doesn't need markdown formatting
 
         // extract_rtf_metadata needs the extracted text; get it from the same pass
-        let (extracted_text, _tables, _images, _metas) = extract_text_from_rtf(&rtf_content, plain);
+        let (extracted_text, _tables, _images, _metas, _formatting_data) = extract_text_from_rtf(&rtf_content, plain);
         let mut metadata_map = extract_rtf_metadata(&rtf_content, &extracted_text);
 
         // Map standard fields from metadata_map to typed Metadata fields
@@ -385,28 +390,28 @@ mod tests {
     fn test_simple_rtf_extraction() {
         let _extractor = RtfExtractor;
         let rtf_content = r#"{\rtf1 Hello World}"#;
-        let (extracted, _, _, _) = extract_text_from_rtf(rtf_content, false);
+        let (extracted, _, _, _, _) = extract_text_from_rtf(rtf_content, false);
         assert!(extracted.contains("Hello") || extracted.contains("World"));
     }
 
     #[test]
     fn test_plain_text_no_image_markdown() {
         let rtf_content = r#"{\rtf1 Before image {\pict\jpegblip\picw100\pich100 ffd8ffe0} After image}"#;
-        let (plain, _, _, _) = extract_text_from_rtf(rtf_content, true);
+        let (plain, _, _, _, _) = extract_text_from_rtf(rtf_content, true);
         assert!(!plain.contains("!["), "Plain text should not contain image markdown");
         assert!(
             !plain.contains("]("),
             "Plain text should not contain image markdown links"
         );
 
-        let (md, _, _, _) = extract_text_from_rtf(rtf_content, false);
+        let (md, _, _, _, _) = extract_text_from_rtf(rtf_content, false);
         assert!(md.contains("![image]"), "Markdown output should contain image markers");
     }
 
     #[test]
     fn test_plain_text_table_uses_pipes() {
         let rtf_content = r#"{\rtf1 {\trowd Cell1\cell Cell2\cell\row}}"#;
-        let (plain, tables, _, _) = extract_text_from_rtf(rtf_content, true);
+        let (plain, tables, _, _, _) = extract_text_from_rtf(rtf_content, true);
         // Table rows produce [TABLE_ROW] placeholders in plain text
         assert!(
             plain.contains("[TABLE_ROW]"),
@@ -485,5 +490,335 @@ mod tests {
         assert!(result.document.is_some(), "Should produce document structure");
         let doc = result.document.unwrap();
         assert!(!doc.nodes.is_empty(), "Document structure should have nodes");
+    }
+
+    #[test]
+    fn test_bookmark_hyperlink_boundaries() {
+        let rtf_content = r#"{\rtf1\ansi
+\pard
+{\*\bkmkstart bookmark_1}Bookmark_1{\*\bkmkend bookmark_1}
+\par
+\pard
+{\field{\*\fldinst { HYPERLINK  \\l "bookmark_1" }}{\fldrslt{click me}}}
+\par
+}"#;
+        let (text, _, _, _, formatting) = extract_text_from_rtf(rtf_content, false);
+        eprintln!("Extracted text: {:?}", text);
+        eprintln!("Hyperlinks: {:?}", formatting.hyperlinks);
+        assert!(!formatting.hyperlinks.is_empty(), "Should have hyperlinks");
+        let (start, end, ref url) = formatting.hyperlinks[0];
+        let link_text = &text[start..end];
+        eprintln!("Link text: {:?} (start={}, end={})", link_text, start, end);
+        assert_eq!(
+            link_text, "click me",
+            "Hyperlink should cover 'click me', got: {:?}",
+            link_text
+        );
+        assert_eq!(url, "#bookmark_1");
+    }
+
+    #[test]
+    fn test_bold_italic_span_alignment() {
+        // Verify that formatting spans from the text extraction pass have byte
+        // offsets that exactly match the extracted text.
+        let rtf_content = r#"{\rtf1 Normal {\b bold text} more normal}"#;
+        let (text, _, _, _, formatting) = extract_text_from_rtf(rtf_content, false);
+        let bold_spans: Vec<_> = formatting.spans.iter().filter(|s| s.bold).collect();
+        assert!(!bold_spans.is_empty(), "Should have bold spans");
+        let span = &bold_spans[0];
+        let bold_text = &text[span.start..span.end];
+        assert_eq!(
+            bold_text, "bold text",
+            "Bold span should exactly cover 'bold text', got: {:?} (span {}..{}, text={:?})",
+            bold_text, span.start, span.end, text
+        );
+    }
+
+    #[test]
+    fn test_italic_span_alignment() {
+        let rtf_content = r#"{\rtf1 Normal {\i italic text} more normal}"#;
+        let (text, _, _, _, formatting) = extract_text_from_rtf(rtf_content, false);
+        let italic_spans: Vec<_> = formatting.spans.iter().filter(|s| s.italic).collect();
+        assert!(!italic_spans.is_empty(), "Should have italic spans");
+        let span = &italic_spans[0];
+        let italic_text = &text[span.start..span.end];
+        assert_eq!(
+            italic_text, "italic text",
+            "Italic span should exactly cover 'italic text', got: {:?}",
+            italic_text
+        );
+    }
+
+    #[test]
+    fn test_bold_and_italic_span_alignment() {
+        // Test the pattern from the formatting.rtf ground truth: **bold *and italics***
+        let rtf_content = r#"{\rtf1 {\b bold }{\b\i and italics} end}"#;
+        let (text, _, _, _, formatting) = extract_text_from_rtf(rtf_content, false);
+        // Bold should cover "bold and italics"
+        let bold_spans: Vec<_> = formatting.spans.iter().filter(|s| s.bold).collect();
+        assert!(!bold_spans.is_empty(), "Should have bold spans");
+        let full_bold: String = bold_spans
+            .iter()
+            .map(|s| &text[s.start..s.end])
+            .collect::<Vec<_>>()
+            .join("");
+        assert!(
+            full_bold.contains("bold"),
+            "Bold text should include 'bold', got: {:?}",
+            full_bold
+        );
+        // Bold+italic should cover "and italics"
+        let bi_spans: Vec<_> = formatting.spans.iter().filter(|s| s.bold && s.italic).collect();
+        assert!(!bi_spans.is_empty(), "Should have bold+italic spans");
+        let bi_text = &text[bi_spans[0].start..bi_spans[0].end];
+        assert_eq!(
+            bi_text, "and italics",
+            "Bold+italic span should cover 'and italics', got: {:?}",
+            bi_text
+        );
+    }
+
+    #[test]
+    fn test_formatting_with_paragraph_breaks() {
+        // Simulate the formatting.rtf structure with paragraphs
+        let rtf_content = r#"{\rtf1 Normal text\par {\b bold}\par {\i italics}\par }"#;
+        let (text, _, _, _, formatting) = extract_text_from_rtf(rtf_content, true);
+        // Check bold span
+        let bold_spans: Vec<_> = formatting.spans.iter().filter(|s| s.bold).collect();
+        if !bold_spans.is_empty() {
+            let span = &bold_spans[0];
+            assert!(
+                span.end <= text.len(),
+                "Bold span end {} should not exceed text length {}",
+                span.end,
+                text.len()
+            );
+            let bold_text = &text[span.start..span.end];
+            assert_eq!(bold_text, "bold", "Bold span should cover 'bold', got: {:?}", bold_text);
+        }
+        // Check italic span
+        let italic_spans: Vec<_> = formatting.spans.iter().filter(|s| s.italic).collect();
+        if !italic_spans.is_empty() {
+            let span = &italic_spans[0];
+            assert!(
+                span.end <= text.len(),
+                "Italic span end {} should not exceed text length {}",
+                span.end,
+                text.len()
+            );
+            let italic_text = &text[span.start..span.end];
+            assert_eq!(
+                italic_text, "italics",
+                "Italic span should cover 'italics', got: {:?}",
+                italic_text
+            );
+        }
+    }
+
+    #[test]
+    fn test_bookmark_hyperlink_with_formatting() {
+        // Test with color/font formatting inside fldrslt, which creates nested groups
+        let rtf_content = r#"{\rtf1\ansi
+\pard
+{\*\bkmkstart bookmark_1}Bookmark_1{\*\bkmkend bookmark_1}
+\par
+\pard
+{\field{\*\fldinst { HYPERLINK  \\l "bookmark_1" }}{\fldrslt {\cf1\ul click me}}}
+\par
+}"#;
+        let (text, _, _, _, formatting) = extract_text_from_rtf(rtf_content, false);
+        eprintln!("Formatted link text: {:?}", text);
+        eprintln!("Formatted hyperlinks: {:?}", formatting.hyperlinks);
+        assert!(!formatting.hyperlinks.is_empty(), "Should have hyperlinks");
+        let (start, end, ref url) = formatting.hyperlinks[0];
+        let link_text = &text[start..end];
+        eprintln!("Formatted link text: {:?} (start={}, end={})", link_text, start, end);
+        assert_eq!(
+            link_text, "click me",
+            "Hyperlink should cover 'click me', got: {:?}",
+            link_text
+        );
+        assert_eq!(url, "#bookmark_1");
+    }
+
+    #[test]
+    fn test_bookmark_hyperlink_with_extra_spaces() {
+        // Test with extra spaces that cause normalization drift
+        let rtf_content = r#"{\rtf1\ansi
+\pard
+{\*\bkmkstart bookmark_1}Bookmark_1{\*\bkmkend bookmark_1}
+\par
+\pard
+Some  text  before {\field{\*\fldinst { HYPERLINK  \\l "bookmark_1" }}{\fldrslt {\cf1\ul click me}}} after
+\par
+}"#;
+        let (text, _, _, _, formatting) = extract_text_from_rtf(rtf_content, false);
+        eprintln!("Spaced text: {:?}", text);
+        eprintln!("Spaced hyperlinks: {:?}", formatting.hyperlinks);
+        assert!(!formatting.hyperlinks.is_empty(), "Should have hyperlinks");
+        let (start, end, ref url) = formatting.hyperlinks[0];
+        let link_text = &text[start..end];
+        eprintln!("Spaced link text: {:?} (start={}, end={})", link_text, start, end);
+        assert_eq!(
+            link_text, "click me",
+            "Hyperlink should cover 'click me', got: {:?}",
+            link_text
+        );
+        assert_eq!(url, "#bookmark_1");
+    }
+
+    #[test]
+    fn test_listtext_ordered_detection() {
+        // Test that ordered list detection works when listtext appears in standard position
+        let rtf_content = r#"{\rtf1\ansi
+\pard\ilvl0\ls1{\listtext 1.\tab}First item\par
+\pard\ilvl0\ls1{\listtext 2.\tab}Second item\par
+}"#;
+        let (text, _, _, metas, _) = extract_text_from_rtf(rtf_content, true);
+        eprintln!("List text: {:?}", text);
+        eprintln!("List metas: {:?}", metas);
+        let ordered_items: Vec<_> = metas.iter().filter(|m| m.ordered && m.list_level.is_some()).collect();
+        assert!(
+            !ordered_items.is_empty(),
+            "Should have ordered list items, metas: {:?}",
+            metas
+        );
+    }
+
+    #[test]
+    fn test_bookmark_hyperlink_end_to_end() {
+        // Test the full pipeline with the actual bookmark.rtf test document
+        let rtf_content = r#"{\rtf1\ansi
+\pard
+{\*\bkmkstart bookmark_1}Bookmark_1{\*\bkmkend bookmark_1}
+\par
+\pard
+{\field{\*\fldinst { HYPERLINK  \\l "bookmark_1" }}{\fldrslt{click me}}}
+\par
+}"#;
+        let doc = RtfExtractor::build_internal_document(rtf_content, true);
+        // Check that hyperlink annotations are present and correct
+        for elem in &doc.elements {
+            if !elem.annotations.is_empty() {
+                for ann in &elem.annotations {
+                    if let crate::types::document_structure::AnnotationKind::Link { ref url, .. } = ann.kind {
+                        let link_text = &elem.text[ann.start as usize..ann.end as usize];
+                        eprintln!(
+                            "E2E link: text={:?}, url={:?}, start={}, end={}, full_text={:?}",
+                            link_text, url, ann.start, ann.end, elem.text
+                        );
+                        assert_eq!(
+                            link_text, "click me",
+                            "E2E: Hyperlink should cover 'click me', got: {:?}",
+                            link_text
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_bookmark_hyperlink_rendered_markdown() {
+        // Test full rendering pipeline to catch any link boundary issues
+        let rtf_content = r#"{\rtf1\ansi
+\pard
+{\*\bkmkstart bookmark_1}Bookmark_1{\*\bkmkend bookmark_1}
+\par
+\pard
+{\field{\*\fldinst { HYPERLINK  \\l "bookmark_1" }}{\fldrslt{click me}}}
+\par
+}"#;
+        let doc = RtfExtractor::build_internal_document(rtf_content, false);
+        let rendered = crate::rendering::comrak_bridge::render(&doc);
+        eprintln!("Rendered markdown: {:?}", rendered);
+        // The link should be [click me](#bookmark_1)
+        assert!(rendered.contains("[click me](#bookmark_1)"),
+            "Should render as [click me](#bookmark_1), got: {:?}", rendered);
+        // Should NOT have text outside the link like [click m](#bookmark_1)e
+        assert!(!rendered.contains("[click m](#bookmark_1)e"),
+            "Link boundary should not be off by one");
+    }
+
+    #[test]
+    fn test_fake_doc_table_extraction() {
+        let rtf_content = r#"{\rtf1\ansi\deff0
+{\pard \ql \f0 \sa180 \li0 \fi0 \outlinelevel0 \b \fs36 My First Heading\par}
+{\pard \ql \f0 \sa180 \li0 \fi0 My first paragraph.\par}
+{\pard \sa180 \li0 \fi0 \b Table Example:\par}
+{\trowd\cellx3000\cellx6000
+\pard\intbl\qc\fs20 Column 1\cell Column 2\cell\row
+\pard\intbl\qc\fs20 Row 1, Cell 1\cell Row 1, Cell 2\cell\row
+\pard\intbl\qc\fs20 Row 2, Cell 1\cell Row 2, Cell 2\cell\row
+}
+}"#;
+        let (text, tables, _, metas, _) = extract_text_from_rtf(rtf_content, true);
+        eprintln!("Fake doc text: {:?}", text);
+        eprintln!("Tables: {:?}", tables);
+        eprintln!("Metas: {:?}", metas);
+        // Should have at least one table with 3 rows
+        assert!(!tables.is_empty(), "Should extract at least one table");
+        assert_eq!(
+            tables[0].cells.len(),
+            3,
+            "Table should have 3 rows (header + 2 data), got: {:?}",
+            tables[0].cells
+        );
+        // The text before the table should contain "Table Example:" as a paragraph
+        assert!(text.contains("Table Example:"), "Should have 'Table Example:' in text");
+        // Table rows should be marked as is_table in metas
+        let table_metas: Vec<_> = metas.iter().filter(|m| m.is_table).collect();
+        assert_eq!(
+            table_metas.len(),
+            3,
+            "Should have 3 table row metas, got: {}",
+            table_metas.len()
+        );
+    }
+
+    #[test]
+    fn test_multiple_tables_with_captions() {
+        // Two separate tables with caption text between them
+        let rtf_content = r#"{\rtf1\ansi
+{\pard First Caption\par}
+{\trowd\cellx3000\cellx6000
+\pard\intbl A1\cell A2\cell\row
+\pard\intbl B1\cell B2\cell\row
+}
+{\pard Second Caption\par}
+{\trowd\cellx3000\cellx6000
+\pard\intbl C1\cell C2\cell\row
+\pard\intbl D1\cell D2\cell\row
+}
+}"#;
+        let (text, tables, _, metas, _) = extract_text_from_rtf(rtf_content, true);
+        eprintln!("Multi-table text: {:?}", text);
+        eprintln!("Multi-table tables: {:?}", tables);
+        eprintln!("Multi-table metas: {:?}", metas);
+        // Should have two separate tables
+        assert_eq!(tables.len(), 2, "Should have 2 tables, got: {}", tables.len());
+        assert_eq!(tables[0].cells.len(), 2, "First table: 2 rows");
+        assert_eq!(tables[1].cells.len(), 2, "Second table: 2 rows");
+        // Captions should be in the text
+        assert!(text.contains("First Caption"), "Should have 'First Caption'");
+        assert!(text.contains("Second Caption"), "Should have 'Second Caption'");
+    }
+
+    #[test]
+    fn test_listtext_ignorable_ordered_detection() {
+        // Test ordered detection when listtext is inside ignorable destination (\*)
+        let rtf_content = r#"{\rtf1\ansi
+\pard\ilvl0\ls1{\*\listtext 1.\tab}First item\par
+\pard\ilvl0\ls1{\*\listtext 2.\tab}Second item\par
+}"#;
+        let (text, _, _, metas, _) = extract_text_from_rtf(rtf_content, true);
+        eprintln!("Ignorable list text: {:?}", text);
+        eprintln!("Ignorable list metas: {:?}", metas);
+        let ordered_items: Vec<_> = metas.iter().filter(|m| m.ordered && m.list_level.is_some()).collect();
+        assert!(
+            !ordered_items.is_empty(),
+            "Should have ordered list items with \\* prefix, metas: {:?}",
+            metas
+        );
     }
 }
