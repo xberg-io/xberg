@@ -1,7 +1,7 @@
 - one
-- two
-  - sub
 
-<!-- end list -->
+- two
+
+  - sub
 
 - new list

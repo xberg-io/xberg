@@ -2,125 +2,157 @@
 
 ## Status of this Document
 
-This publication is currently considered \[UNDER DEVELOPMENT\] by the IDPF.
+This publication is currently considered [UNDER DEVELOPMENT] by the IDPF.
 
 This publication is part of version X.X of the EPUB 3.0 Compliance Test Suite released on TBD.
 
-Before using this publication to evaluate reading systems, testers are strongly encouraged to verify that they have the latest release by checking the current release version and date of the test suite at TBD[](http://idpf.org/)
+Before using this publication to evaluate reading systems, testers are strongly encouraged to verify that they have the latest release by checking the current release version and date of the test suite at [TBD](http://idpf.org/)
 
 This publication is one of several that currently comprise the EPUB 3 conformance test suite for reflowable content. The complete test suite includes all of the following publications:
 
-- .
+1.  .
 
 ## About this Document
 
-This document focuses on human-evaluated binary (pass/fail) tests in a reflowable context. Tests for fixed-layout content and other individual tests that require a dedicated epub file are available in additional sibling documents; refer to the test suite wiki (https:/[/github.com/mgylling/epu](https://github.com/mgylling/epub-testsuite/wiki/Overview)b-`testsuite/wiki/Overview) for additional information.`
+This document focuses on human-evaluated binary (pass/fail) tests in a reflowable context. Tests for fixed-layout content and other individual tests that require a dedicated epub file are available in additional sibling documents; refer to the [test suite wiki](https://github.com/mgylling/epub-testsuite/wiki/Overview) (`https://github.com/mgylling/epub-testsuite/wiki/Overview`) for additional information.
 
 ## Conventions
 
 The following conventions are used throughout the document:
 
+1\. Locating a test
+
+Tests for *required* Reading System functionality are preceded by the label: [REQUIRED]
+
+Tests for *optional* Reading System functionality are preceded by the label: [OPTIONAL]
+
+2\. Performing the test
+Each test includes a description of its purpose followed by the actual **test statement, which can always be evaluated to true or false**. These statements typically have the form: "If [some condition], the test passes".
+
+3\. Scoring in the results form
+@@@TODO provide info on where to get the results form
+
 ## MathML
 
-## \[REQUIRED\] &#9;&#9;&#9;&#9;mathml-010 Rendering
+## [REQUIRED] mathml-010 Rendering
 
 Tests whether MathML equation rendering is supported.
 
-∫ − ∞ ∞ e − x 2 d x = π ∑ n = 1 ∞ 1 n 2 = π 2 6 x = − b ± b 2 − 4 a c 2 a
+``` math
+\int_{- \infty}^{\infty}e^{- x^{2}}\, dx = \sqrt{\pi}
+```
+``` math
+\sum\limits_{n = 1}^{\infty}\frac{1}{n^{2}} = \frac{\pi^{2}}{6}
+```
+``` math
+x = \frac{- b \pm \sqrt{b^{2} - 4ac}}{2a}
+```
 
 If the preceding equations are not presented as linear text (e.g., x=-b±b2-4ac2a), the test passes.
 
-## \[OPTIONAL\] &#9;&#9;&#9;&#9;mathml-020 CSS Styling of the math element
+## [OPTIONAL] mathml-020 CSS Styling of the `math` element
 
 Tests whether basic CSS styling of MathML is supported on the `math` element.
 
-2 ⁡ x + y - z
+$`{2x}{+ y - z}`$
 
 The test passes if the equation has a yellow background and a dashed border.
 
-If the reading system does not have a viewport, or does not support CSS styles, this test should be marked Not Supp`orted.`
+If the reading system does not have a viewport, or does not support CSS styles, this test should be marked `Not Supported`.
 
-## \[OPTIONAL\] mathml-021 CSS Styling of the mo element
+## [OPTIONAL] mathml-021 CSS Styling of the `mo` element
 
 Tests whether basic CSS styling of MathML is supported on the `mo` element.
 
-2 ⁡ x + y - z
+$`{2x}{+ y - z}`$
 
 The test passes if the operators are enlarged relative to the other symbols and numbers.
 
-If the reading system does not have a viewport, or does not support CSS styles, this test should be marked Not Supported.
+If the reading system does not have a viewport, or does not support CSS styles, this test should be marked `Not Supported`.
 
-## \[OPTIONAL\] mathml-022 CSS Styling of the mi element
+## [OPTIONAL] mathml-022 CSS Styling of the `mi` element
 
 Tests whether basic CSS styling of MathML is supported on the `mi` element.
 
-2 ⁡ x + y - z
+$`{2x}{+ y - z}`$
 
 The test passes if the identifiers are bolded and blue.
 
-If the reading system does not have a viewport, or does not support CSS styles, this test should be marked Not Supported.
+If the reading system does not have a viewport, or does not support CSS styles, this test should be marked `Not Supported`.
 
-## \[OPTIONAL\] mathml-023 CSS Styling of the mn element
+## [OPTIONAL] mathml-023 CSS Styling of the `mn` element
 
 Tests whether basic CSS styling of MathML is supported on the `mn` element.
 
-2 ⁡ x + y - z
+$`{2x}{+ y - z}`$
 
 The test passes if the number 2 is italicized and blue.
 
-If the reading system does not have a viewport, or does not support CSS styles, this test should be marked Not Supported.
+If the reading system does not have a viewport, or does not support CSS styles, this test should be marked `Not Supported`.
 
-## \[REQUIRED\] mathml-024Horizontal stretch, mover, munder, and mspace elements
+## [REQUIRED] mathml-024Horizontal stretch, `mover`, `munder`, and `mspace` elements
 
 Tests whether horizontal stretch, `mover`, `munder`, `mspace` elements are supported.
 
-c = a ⏟ real + b ⁢ ⅈ ⏟ imaginary ⏞ complex number
+``` math
+c = \overset{\text{complex number}}{\overbrace{\underset{\text{real}}{\underbrace{\mspace{20mu} a\mspace{20mu}}} + \underset{\text{imaginary}}{\underbrace{\quad b{\mathbb{i}}\quad}}}}
+```
 
 The test passes if the rendering looks like .
 
-## \[REQUIRED\] mathml-025Testing mtable with colspan and rowspan attributes, Hebrew and Script fonts
+## [REQUIRED] mathml-025Testing `mtable` with `colspan` and `rowspan` attributes, Hebrew and Script fonts
 
 Tests whether `mtable` with `colspan` and `mspace` attributes (column and row spanning) are supported; uses Hebrew and Script alphabets.
 
-cov ℒ ⟶ non 𝒦 ⟶ cof 𝒦 ⟶ cof ℒ ⟶ 2 ℵ 0 ↑ ↑ ↑ ↑ 𝔟 ⟶ 𝔡 ↑ ↑ ℵ 1 ⟶ add ℒ ⟶ add 𝒦 ⟶ cov 𝒦 ⟶ non ℒ
+``` math
+\begin{matrix}
+ &(\mathcal{L})} & \longrightarrow &(\mathcal{K})} & \longrightarrow &(\mathcal{K})} & \longrightarrow &(\mathcal{L})} & \longrightarrow & 2^{\aleph_{0}} \\
+ & \uparrow & & \uparrow & & \uparrow & & \uparrow & & \\
+ &} & \longrightarrow &} & & & & & & \\
+ & \uparrow & & \uparrow & & & & & & \\
+\aleph_{1} & \longrightarrow &(\mathcal{L})} & \longrightarrow &(\mathcal{K})} & \longrightarrow &(\mathcal{K})} & \longrightarrow &(\mathcal{L})} &
+\end{matrix}
+```
 
 The test passes if the rendering looks like [Cichoń's Diagram](http://en.wikipedia.org/wiki/Cicho%C5%84's_diagram): .
 
-## \[REQUIRED\] mathml-026BiDi, RTL and Arabic alphabets
+## [REQUIRED] mathml-026BiDi, RTL and Arabic alphabets
 
 Tests whether right-to-left and Arabic alphabets are supported.
 
-د ⁡ ( س ) = { ∑ ٮ = 1 ص ⁡ س ٮ إذاكان س \> 0 ∫ 1 ص ⁡ س ٮ ⁢ ء ⁡ س إذاكان س ∈ م طا ⁡ π غيرذلك ( مع π ≃ 3,141 )
+``` math
+{د(س)} = \left\{ \begin{matrix}
+{\sum\limits_{ٮ = 1}^{ص}س^{ٮ}} &س > 0} \\
+{\int_{1}^{ص}{س^{ٮ}ءس}} &س \in م} \\
+{{طا}\pi} &\left( \text{مع}\pi \simeq 3,141 \right)}
+\end{matrix} \right.
+```
 
 The test passes if the rendering looks like the following image:
 
-## \[REQUIRED\] mathml-027Elementary math: long division notation
+## [REQUIRED] mathml-027Elementary math: long division notation
 
 Tests whether `mlongdiv` elements (from elementary math) are supported.
 
-3 435.3 1306 12 10 9 16 15 1.0 9 1
+ 3 435.3 1306 12 10 9 16 15 1.0 9 1
 
 The test passes if the rendering looks like the following image: .
 
-### epub:switch
+### `epub:switch`
 
-#### \[REQUIRED\] switch-010 Support
+#### [REQUIRED] switch-010 Support
 
-Tests whether the [epub:switch](http://idpf.org/epub/30/spec/epub30-contentdocs.html#sec-xhtml-content-switch) element is supported.
-
-FAIL
+Tests whether the [`epub:switch`](http://idpf.org/epub/30/spec/epub30-contentdocs.html#sec-xhtml-content-switch) element is supported.
 
 PASS
 
 If only the word "PASS" is rendered before this paragraph, the test passes. If both "PASS" and "FAIL" are rendered, or neither "PASS" nor "FAIL" is rendered, the test fails.
 
-#### \[OPTIONAL\] &#9;&#9;&#9;switch-020 &#9;&#9;&#9;MathML Embedding
+#### [OPTIONAL] switch-020 MathML Embedding
 
-Tests whether the MathML namespace is recognized when used in an [epub:case](http://idpf.org/epub/30/spec/epub30-contentdocs.html#sec-xhtml-epub-case) element.
+Tests whether the MathML namespace is recognized when used in an [`epub:case`](http://idpf.org/epub/30/spec/epub30-contentdocs.html#sec-xhtml-epub-case) element.
 
-2 ⁡ x + y - z
-
-FAIL
+$`{2x}{+ y - z}`$
 
 If a MathML equation is rendered before this paragraph, the test passes.
 

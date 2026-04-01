@@ -1,21 +1,25 @@
-| reStructuredText Document |
-| --- |
+# reStructuredText Document
 
-**Author**: Emily Chen
+Author  
+Emily Chen
 
-**Date**: 2025-09-27
+Date  
+2025-09-27
 
-**Version**: 1.0
+Version  
+1.0
 
-**Organization**: Testing Department
+Organization  
+Testing Department
 
-**Abstract**: This reStructuredText document tests pandoc extraction capabilities
+Abstract  
+This reStructuredText document tests pandoc extraction capabilities with RST-specific features and metadata.
+
+Table of Contents
 
 ## Introduction
 
-reStructuredText is a plaintext markup syntax used primarily in Python documentation.
-
-This document tests various RST features.
+reStructuredText is a plaintext markup syntax used primarily in Python documentation. This document tests various RST features.
 
 ## Text Formatting
 
@@ -27,85 +31,72 @@ You can also use:
 
 - Bullet lists
 - With multiple items
+  - And nested items
+  - Like this
 
-<!-- end list -->
-
-- And nested items
-- Like this
-
-<!-- end list -->
-
-1. Numbered lists
-2. Also work well
-3. Auto-numbering is supported
+1.  Numbered lists
+2.  Also work well
+3.  Auto-numbering is supported
 
 ## Code Blocks
 
 ### Python Example
 
-```python
- def process_document(doc):
-     """Process an RST document."""
-     metadata = extract_metadata(doc)
-     content = parse_content(doc)
-     return {"metadata": metadata, "content": content}
+``` python
+def process_document(doc):
+    """Process an RST document."""
+    metadata = extract_metadata(doc)
+    content = parse_content(doc)
+    return
 ```
 
 ### Shell Example
 
-```bash
- $ pandoc input.rst -o output.md
- $ echo "Conversion complete"
+``` bash
+$ pandoc input.rst -o output.md
+$ echo "Conversion complete"
 ```
 
 ## Directives and Roles
 
 > [!NOTE]
-> note
-
-This is a note directive.
+> This is a note directive.
 
 > [!WARNING]
-> warning
-
-This is a warning directive.
+> This is a warning directive.
 
 > [!TIP]
-> tip
-
-RST supports various admonitions.
+> RST supports various admonitions.
 
 ## Tables
 
 ### Simple Table
 
 | Col1 | Col2 | Col3 |
-| --- | --- | --- |
-
-A B C
-
-D E F
+|------|------|------|
+| A    | B    | C    |
+| D    | E    | F    |
 
 ### Grid Table
 
 | Head1 | Head2 | Head3 |
-| --- | --- | --- |
+|-------|-------|-------|
 | Cell1 | Cell2 | Cell3 |
 | Cell4 | Cell5 | Cell6 |
 
 ## Citations and References
 
-According to \[Smith2024\]_, RST is widely used in technical documentation.
+According to [Smith2024], RST is widely used in technical documentation.
 
 ## Links and References
 
 External link: [Python Documentation](https://docs.python.org)
 
-Internal reference: See `Introduction` section.
+Internal reference: See [Introduction](#introduction) section.
 
 ## Conclusion
 
 This document demonstrates RST features for comprehensive pandoc testing.
 
-[^Smith2024]:
-    Smith, J. (2024). \*Technical Documentation with RST\*. Doc Press.
+Smith2024
+Smith, J. (2024). *Technical Documentation with RST*. Doc Press.

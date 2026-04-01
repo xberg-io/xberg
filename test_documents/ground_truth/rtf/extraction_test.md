@@ -2,19 +2,19 @@
 
 ## First Section
 
-**This is a regular text paragraph in the first section. It contains some content that should be extracted completely.**
+This is a regular text paragraph in the first section. It contains some content that should be extracted completely.
 
 ### Subsection 1.1
 
-**Here is more content in a subsection. This tests the heading hierarchy extraction.**
+Here is more content in a subsection. This tests the heading hierarchy extraction.
 
 ## Second Section
 
-**This is the content of the second section with different text.**
+This is the content of the second section with different text.
 
 ### Table Section
 
-**Here is a table with headers and multiple rows:**
+Here is a table with headers and multiple rows:
 
 | Header 1 | Header 2 | Header 3 |
 | --- | --- | --- |
@@ -32,14 +32,16 @@
 
 ## Third Section
 
-**This is content in the third section to ensure multiple sections are extracted.**
+This is content in the third section to ensure multiple sections are extracted.
 
-**More detailed content about the third section with additional text to verify complete extraction.**
+More detailed content about the third section with additional text to verify complete extraction.
 
 ### Subsection 3.1
 
-**Some more nested content in subsection 3.1.**
+Some more nested content in subsection 3.1.
 
 ## Final Section
 
-**This final section ensures we capture all content, including: - Multiple paragraphs - Different heading levels - Multiple tables - Various content types The extraction should capture everything listed here completely.**
+This final section ensures we capture all content, including: - Multiple paragraphs - Different heading levels - Multiple tables - Various content types
+
+The extraction should capture everything listed here completely.

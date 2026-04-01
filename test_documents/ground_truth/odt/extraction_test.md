@@ -16,15 +16,17 @@ This is the content of the second section with different text.
 
 Here is a table with headers and multiple rows:
 
-| Cell 1A | Cell 1B | Cell 1C |
+| Header 1 | Header 2 | Header 3 |
 | --- | --- | --- |
+| Cell 1A | Cell 1B | Cell 1C |
 | Cell 2A | Cell 2B | Cell 2C |
 | Cell 3A | Cell 3B | Cell 3C |
 
 ### Another Table
 
-| Apple | $1.00 | 10 |
+| Product | Price | Quantity |
 | --- | --- | --- |
+| Apple | $1.00 | 10 |
 | Banana | $0.50 | 20 |
 | Orange | $0.75 | 15 |
 

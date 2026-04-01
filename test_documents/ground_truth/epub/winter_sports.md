@@ -1,10 +1,12 @@
-![Cover](image_0.jpeg)
+![](8806185773604039852_cover.jpg)
+
+![Cover](8806185773604039852_cover.jpg)
 
 ## The Project Gutenberg eBook of Winter Sports in Switzerland, by E. F. Benson
 
-This ebook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this ebook or online at www.gu[tenberg.org. If y](https://www.gutenberg.org)ou are not located in the United States, you’ll have to check the laws of the country where you are located before using this eBook.
+This ebook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this ebook or online at www.gutenberg.org. If you are not located in the United States, you’ll have to check the laws of the country where you are located before using this eBook.
 
-**Title**: Winter Sports in Switzerland 
+**Title**: Winter Sports in Switzerland\
 
 **Author**: E. F. Benson
 
@@ -12,24 +14,27 @@ This ebook is for the use of anyone anywhere in the United States and most other
 
 **Photographer**: Mrs. Aubrey Le Blond
 
-**Release date**: August 23, 2019 \[EBook \#60153\] Most recently updated: January 30, 2020
+**Release date**: August 23, 2019 [EBook \#60153]\
+Most recently updated: January 30, 2020
 
 **Language**: English
 
-**Credits**: Produced by Chuck Greif and the Online Distributed Proofreading Team at http://www.pgdp.net (This file was produced from images available at The Internet Archive)
+**Credits**: Produced by Chuck Greif and the Online Distributed\
+Proofreading Team at http://www.pgdp.net (This file was\
+produced from images available at The Internet Archive)
 
-\*\*\* START OF THE PROJECT GUTENBERG EBOOK WINTER SPORTS IN SWITZERLAND \*\*\*
+*** START OF THE PROJECT GUTENBERG EBOOK WINTER SPORTS IN SWITZERLAND ***
 
- 
+------------------------------------------------------------------------
 
-|  Contents. List of Illustrations (In certain versions of this etext \[in certain browsers\] clicking on the image will bring up a larger version.) (etext transcriber's note) |
-| --- |
+| Contents. List of Illustrations (In certain versions of this etext [in certain browsers] clicking on the image will bring up a larger version.) (etext transcriber's note) |
+|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 
  
 
  
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
 THE EIGER
 
@@ -37,14 +42,34 @@ THE EIGER
 
  
 
-# WINTER SPORTS IN SWITZERLAND
+WINTER SPORTS\
+IN SWITZERLAND
+====================================
 
-BY E. F. BENSON WITH 12 FULL-PAGE ILLUSTRATIONS IN COLOUR BY C. FLEMING WILLIAMS AND 47 REPRODUCTIONS FROM PHOTOGRAPHS BY MRS. AUBREY LE BLOND LONDON GEORGE ALLEN & COMPANY, LTD. 44 & 45 RATHBONE PLACE 1913 \[All rights reserved\] Printed by Ballantyne, Hanson & Co. at the Ballantyne Press, Edinburgh 
+BY\
+ E. F. BENSON\
+
+WITH 12 FULL-PAGE ILLUSTRATIONS IN COLOUR BY\
+C. FLEMING WILLIAMS\
+
+AND 47 REPRODUCTIONS FROM PHOTOGRAPHS BY\
+MRS. AUBREY LE BLOND\
+
+LONDON\
+GEORGE ALLEN & COMPANY, LTD.\
+44 & 45 RATHBONE PLACE\
+1913\
+
+[All rights reserved]\
+
+Printed by Ballantyne, Hanson & Co.\
+at the Ballantyne Press, Edinburgh\
 
 ## CONTENTS
 
+|  |  |  |
+|----|----|----|
 | CHAP. |   | PAGE |
-| --- | --- | --- |
 | I. | The Sun-seeker | 1 |
 | II. | Rinks and Skaters | 23 |
 | III. | Tees and Crampits | 79 |
@@ -56,73 +81,74 @@ BY E. F. BENSON WITH 12 FULL-PAGE ILLUSTRATIONS IN COLOUR BY C. FLEMING WILLIAMS
 
 ## ILLUSTRATIONS
 
-| PLATE |  |  |
-| --- | --- | --- |
-| The Eiger (colour) | Frontispiece |  |
-| I. |  Winter Sunlight |  At end of Chap. I, between pp. 22 and 23. |
-| II. |  By the Stream-side |  |
-| III. |  Hoar-frost |  |
-| IV. |  Jewels of the Frost |  |
-| V. |  Black Ice on the Sils Lake |  |
-| VI. |  The Budding Ice Flowers |  |
-| VII. |  The Full-blown Ice Flowers (twenty-four hours later) |  |
-| VIII. |  Ice Flowers in Detail |  |
-| IX. |  Magnified Ice Flowers |  |
-| X. |  Winter Moonlight |  |
-| Skating, English Style (colour) | Facing p. 32 |  |
-| Skating, Continental Style (colour) | Facing p. 34 |  |
-| XI. |  A Winter Harvest |  At the end of Chap. II, between pp. 78 and 79 |
-| XII. |  Clearing the Snow From the Rink |  |
-| XIII. |  Sprinkling the Rink, Château d’Oex |  |
-| XIV. |  Public Rink, Davos |  |
-| XV. |  Skating-Rink at Mürren |  |
-| XVI. |  Skating-rink at Château d’Oex |  |
-| “She Lies” (colour)  | Facing p. 98 |  |
-| XVII. |  Curling |  At end of Chap. III, between pp. 114 and 115 |
-| XVIII. |  Curling at Mürren |  |
-| XIX. |  The Three Kulm Rinks |  |
-| XX. |  Ladies’ Curling Match, St. Moritz |  |
-| “Achtung\!” (colour) | Facing p. 116 |  |
-| On the Cresta Run (colour) | Facing p. 122 |  |
-| Tailing (colour) | Facing p. 126  |  |
-| XXI. |  The Building of the Cresta—“Battledore” |  At end of Chap. IV, between pp. 128 and 129 |
-| XXII. |  The Top of the Cresta, St. Moritz |  |
-| XXIII. |  Starting on the Cresta |  |
-| XXIV. |  Church Leap, Cresta Run |  |
-| XXV. |  Church Leap, Cresta Run |  |
-| XXVI. |  “Battledore” Corner, Cresta |  |
-| XXVII. |  Crossing the Road, Cresta |  |
-| XXVIII. |  Near the Finish on the Cresta |  |
-| XXIX. |  Bob-run, St. Moritz: In the Larch Woods |  |
-| XXX. |  Rounding Sunny Corner, St. Moritz Bob-run |  |
-| XXXI. |  Bob-run, St. Moritz |  |
-| XXXII. |  The Straight from the Bridge, St. Moritz Bob-run. |  |
-| XXXIII. |  St. Moritz Bob-run |  |
-| Ice Hockey (colour) | Facing p. 122 |  |
-| The Telemark Turn (colour) | Facing p. 156 |  |
-| The Jump (colour) | Facing p. 164 |  |
-| Ski-joring (colour) | Facing p. 166 |  |
-| XXXIV. |  At St. Moritz |  At end of Chap. VI, between pp. 166 and 167  |
-| XXXV. |  Practice Slopes, Montana, Switzerland |  |
-| XXXVI. |  A Slight Mishap |  |
-| XXXVII. |  Ski-jumping |  |
-| XXXVIII. |  Ski-jumping, Montana, Switzerland |  |
-| XXXIX. |  Veterans of the St. Moritz Ski Club |  |
-| XL. |  A Practice Ground |  At end of Chap. VII, between pp. 190 and 191 |
-| XLI. |  Crossing the Road on the Cresta |  |
-| XLII. |  Top of Klosters Run, Davos |  |
-| XLIII. |  The Start, Schatz Alp Run, Davos |  |
-| XLIV. |  Bobbing on the Schatz Alp Run, Davos |  |
-| XLV. |  Skating-rink at Villars |  |
-| XLVI. |  At La Bretaye, Villars |  |
-| XLVII. |  “Blow, Blow, Thou Winter Wind” |  |
-| The Ice Carnival (colour) | Facing p. 194 |  |
-
-      
+| PLATE    |                                                      |                                               |
+|----------|------------------------------------------------------|-----------------------------------------------|
+|          | The Eiger (colour)                                   | Frontispiece                                  |
+| I.       | Winter Sunlight                                      | At end of Chap. I, between pp. 22 and 23.     |
+| II.      | By the Stream-side                                   |                                               |
+| III.     | Hoar-frost                                           |                                               |
+| IV.      | Jewels of the Frost                                  |                                               |
+| V.       | Black Ice on the Sils Lake                           |                                               |
+| VI.      | The Budding Ice Flowers                              |                                               |
+| VII.     | The Full-blown Ice Flowers (twenty-four hours later) |                                               |
+| VIII.    | Ice Flowers in Detail                                |                                               |
+| IX.      | Magnified Ice Flowers                                |                                               |
+| X.       | Winter Moonlight                                     |                                               |
+|          | Skating, English Style (colour)                      | Facing p. 32                                  |
+|          | Skating, Continental Style (colour)                  | Facing p. 34                                  |
+| XI.      | A Winter Harvest                                     | At the end of Chap. II, between pp. 78 and 79 |
+| XII.     | Clearing the Snow From the Rink                      |                                               |
+| XIII.    | Sprinkling the Rink, Château d’Oex                   |                                               |
+| XIV.     | Public Rink, Davos                                   |                                               |
+| XV.      | Skating-Rink at Mürren                               |                                               |
+| XVI.     | Skating-rink at Château d’Oex                        |                                               |
+|          | “She Lies” (colour)                                  | Facing p. 98                                  |
+| XVII.    | Curling                                              | At end of Chap. III, between pp. 114 and 115  |
+| XVIII.   | Curling at Mürren                                    |                                               |
+| XIX.     | The Three Kulm Rinks                                 |                                               |
+| XX.      | Ladies’ Curling Match, St. Moritz                    |                                               |
+|          | “Achtung!” (colour)                                  | Facing p. 116                                 |
+|          | On the Cresta Run (colour)                           | Facing p. 122                                 |
+|          | Tailing (colour)                                     | Facing p. 126                                 |
+| XXI.     | The Building of the Cresta—“Battledore”              | At end of Chap. IV, between pp. 128 and 129   |
+| XXII.    | The Top of the Cresta, St. Moritz                    |                                               |
+| XXIII.   | Starting on the Cresta                               |                                               |
+| XXIV.    | Church Leap, Cresta Run                              |                                               |
+| XXV.     | Church Leap, Cresta Run                              |                                               |
+| XXVI.    | “Battledore” Corner, Cresta                          |                                               |
+| XXVII.   | Crossing the Road, Cresta                            |                                               |
+| XXVIII.  | Near the Finish on the Cresta                        |                                               |
+| XXIX.    | Bob-run, St. Moritz: In the Larch Woods              |                                               |
+| XXX.     | Rounding Sunny Corner, St. Moritz Bob-run            |                                               |
+| XXXI.    | Bob-run, St. Moritz                                  |                                               |
+| XXXII.   | The Straight from the Bridge, St. Moritz Bob-run.    |                                               |
+| XXXIII.  | St. Moritz Bob-run                                   |                                               |
+|          | Ice Hockey (colour)                                  | Facing p. 122                                 |
+|          | The Telemark Turn (colour)                           | Facing p. 156                                 |
+|          | The Jump (colour)                                    | Facing p. 164                                 |
+|          | Ski-joring (colour)                                  | Facing p. 166                                 |
+| XXXIV.   | At St. Moritz                                        | At end of Chap. VI, between pp. 166 and 167   |
+| XXXV.    | Practice Slopes, Montana, Switzerland                |                                               |
+| XXXVI.   | A Slight Mishap                                      |                                               |
+| XXXVII.  | Ski-jumping                                          |                                               |
+| XXXVIII. | Ski-jumping, Montana, Switzerland                    |                                               |
+| XXXIX.   | Veterans of the St. Moritz Ski Club                  |                                               |
+| XL.      | A Practice Ground                                    | At end of Chap. VII, between pp. 190 and 191  |
+| XLI.     | Crossing the Road on the Cresta                      |                                               |
+| XLII.    | Top of Klosters Run, Davos                           |                                               |
+| XLIII.   | The Start, Schatz Alp Run, Davos                     |                                               |
+| XLIV.    | Bobbing on the Schatz Alp Run, Davos                 |                                               |
+| XLV.     | Skating-rink at Villars                              |                                               |
+| XLVI.    | At La Bretaye, Villars                               |                                               |
+| XLVII.   | “Blow, Blow, Thou Winter Wind”                       |                                               |
+|          | The Ice Carnival (colour)                            | Facing p. 194                                 |
 
 WINTER SPORTS IN SWITZERLAND
 
-## CHAPTER I THE SUN-SEEKER
+CHAPTER I\
+
+THE SUN-SEEKER
+-----------------------------------------------------------------------------
 
 There is an amazingly silly proverb which quite mistakenly tells us that “seeing is believing.” The most ordinary conjurer at a village entertainment will prove the falsity of this saying. For who has not seen one of these plausible mountebanks put a watch into a top-hat, and, after clearly smashing it into a thousand pieces with a pestle, stir up the disintegrated fragments with a spoon and produce an omelette? Or who is so unacquainted with the affairs of the village schoolroom at Christmas as not to have seen a solid billiard-ball or a lively canary squeezed out of the side of a friend’s head? Such phenomena are by no means rare, and occur periodically all over England. The observer’s eyes have told him that he has seen such things, and the verb “to see” is merely a compendious expression to indicate that on the evidence of your eyes such or such a phenomenon has actually occurred. But no one believes that the disintegrated watch has become an omelette though ocular evidence—seeing—insists that it has. It was a conjuring trick. And this leads me to the consideration of the phenomena on which this whole book is based.
 
@@ -148,7 +174,7 @@ We paused in Interlaken Central Station to draw breath after our lake-side amble
 
 The Jungfrau is and will always be my mistress among mountains, as she was when I first saw her at the age of twelve. One mistake I have made in my conduct towards her, and that was ten years later when I climbed her—and yet who could tell she would prove so tedious and heavy (not in hand but in foot)? For I approached the lady of my adoration from the Concordia hut, and instead of feasting my eyes at every step on her queenly gracious carriage and maiden slenderness, I found that the closer I got to her the more did she appear round-shouldered, not to say hump-backed. In addition, a quantity of fresh snow had fallen, and we had a long tiresome and utterly unexciting trudge, a hot and stodgy affair. I had imagined that ventures and perils would have to be encountered for this wooing and winning of her, with balancings and poisings on stairways of precipitous ice and needles of pinnacled rock: instead she had to be solidly and laboriously and dully approached; it was like wooing some great bolster or gigantic cow. For a little while after that I cared nothing for her; she was a mature and silent barmaid of vast proportions, but gradually her charm and enchantment cast their spell over me again, the dissolution of which I intend never to risk in the future, unless I approach her by a more hazardous and daring route. To those who approach her dully, she gives herself dully: the more daring wooer she may perhaps kill, but she does not bore him.
 
-But the wonder of her, when seen through clear air with the brilliant winter sky around her head from the entrance to this valley that leads up to Lauterbrunnen\! Up it we steamed in a little angry rattling snorting train, which cut itself in half to take some of its aspiring contents to Grindelwald on the left, and others among whom I numbered myself to Wengen and to Mürren. By the side of our way ran a turbulent mountain stream fed by the glaciers of the Oberland, too swift to freeze altogether, but with its backwaters and sheltered reaches covered over with lids of ice. For all its glacier-birth steam rose from it in the icy air that hovered in shaded places, and the alders and hazels that hung over it were thickly encrusted with the marvellous jewellery of the hoar-frost, spiked and *parsemès* and refoliaged in wondrous winter growth with tendrils and scrolls of minutest diamond-dust. Narrower grew the valley, steeper and taller the wooded hills that overhung it till at last we reached Lauterbrunnen, close to which the Staubbach, most amazing of all waterfalls, leaps a clear eight hundred feet from the edge of the high plateau-shelf, which skirts along the mountain-side on to the rocks below. Even in summer, when the melting of the snows that feed the stream make it of far greater volume than when the stricture of frost is on it, the water, poured as from a jug-spout, disintegrates in its fall, so that it reaches the valley more in wreaths of mist than in solid water, and collects again from the dripping rocks; while in winter its diminished volume is further spent in the manufacture of the huge icicles that fringe the edge of its leaping-place, and hang in great streamers, the beard and hair, you would say, of the very Frost-king himself, who sits at ease on this precipitous throne. Little water to-day runs away from where the clouds of mist and water-smoke fall on the rocks, for most of them are frozen there, and a layer of ice covers the boulders where they come to earth. For here, so engorged lies the valley, so close to the great rampart of the Oberland, that the sun which blazed on Interlaken has not yet surmounted the barrier of mountain-peaks.
+But the wonder of her, when seen through clear air with the brilliant winter sky around her head from the entrance to this valley that leads up to Lauterbrunnen! Up it we steamed in a little angry rattling snorting train, which cut itself in half to take some of its aspiring contents to Grindelwald on the left, and others among whom I numbered myself to Wengen and to Mürren. By the side of our way ran a turbulent mountain stream fed by the glaciers of the Oberland, too swift to freeze altogether, but with its backwaters and sheltered reaches covered over with lids of ice. For all its glacier-birth steam rose from it in the icy air that hovered in shaded places, and the alders and hazels that hung over it were thickly encrusted with the marvellous jewellery of the hoar-frost, spiked and *parsemès* and refoliaged in wondrous winter growth with tendrils and scrolls of minutest diamond-dust. Narrower grew the valley, steeper and taller the wooded hills that overhung it till at last we reached Lauterbrunnen, close to which the Staubbach, most amazing of all waterfalls, leaps a clear eight hundred feet from the edge of the high plateau-shelf, which skirts along the mountain-side on to the rocks below. Even in summer, when the melting of the snows that feed the stream make it of far greater volume than when the stricture of frost is on it, the water, poured as from a jug-spout, disintegrates in its fall, so that it reaches the valley more in wreaths of mist than in solid water, and collects again from the dripping rocks; while in winter its diminished volume is further spent in the manufacture of the huge icicles that fringe the edge of its leaping-place, and hang in great streamers, the beard and hair, you would say, of the very Frost-king himself, who sits at ease on this precipitous throne. Little water to-day runs away from where the clouds of mist and water-smoke fall on the rocks, for most of them are frozen there, and a layer of ice covers the boulders where they come to earth. For here, so engorged lies the valley, so close to the great rampart of the Oberland, that the sun which blazed on Interlaken has not yet surmounted the barrier of mountain-peaks.
 
 Parallel with the Staubbach, and up a hillside which appears hardly less sheer than the precipice itself, runs the funicular railway which leads to the Mürren-plateau. At first sight it seems as if it must be meant for a practical joke, constructed by humorous engineers to astonish the weak minds of travellers, and, though practical from the point of view of a joke, to be perfectly impracticable as a means of conveyance. Its steepness is that of disordered images seen in a dream, and it was with a sense of utter incredulity that I first took my place in one of the small wooden compartments and was locked in by an apparently sane and serious conductor. He blew a whistle, or a bell sounded, just as is done on real lines of traffic, and immediately afterwards we began to ascend that impossible line of rails, sauntering with smooth and steady progress up that ridiculous precipice. More amazing still we soon observed a similar car sauntering steadily down it, just strolling down, even as we were strolling up. We met, we passed, and I had a vision of passengers smoking and chatting, as if nothing in the least remarkable was happening and imminent death did not await us all....
 
@@ -162,7 +188,11 @@ But after a few days, in all probability, even though no snow falls, the surface
 
 In that wonderful poem “By the Fireside,” Robert Browning, in speaking of the Alps in autumn, says:
 
-“But at afternoon or almost eve ’Tis better; then the silence grows To that extent you half believe It must get rid of what it knows Its bosom does so heave.” 
+“But at afternoon or almost eve\
+ ’Tis better; then the silence grows\
+ To that extent you half believe\
+ It must get rid of what it knows\
+ Its bosom does so heave.”\
 
 And that which he weds to such lovely language is another of the spells which the circle of the Alpine day and night weaves round us. Only, I think, in winter the silence which he speaks of at evening, or, he might have added at night, is a thing incredible to those who, I may almost say, have never heard that silence. In spring or summer or autumn it is broken by sounds of cowbells perhaps, and, almost certainly by a murmur of wind in pine-woods, or of water hurrying from the heights. But in winter, on a still evening those evidences of life are dumb, and yet the silence itself is pregnant with vitality. At sunset the high tops burn in rose-coloured flame, and as the glory fades into the toneless velvet of the frosty sky, the stars in their wheeling are of a brilliance utterly unknown to lower altitudes, except perhaps where the desert lies fallow and dry beneath Egyptian skies, and no emanation from the earth dims the burning of these “patins of bright gold.” But that “quiring to the bright-eyed Seraphim” reaches not the mortal ear, and at evening or at night in these High Alps, there is felt, as it were, that ecstasy of silence that seems on the point of bursting into chorus: “it must get rid of what it knows.” Nowhere else have I felt so rapturous a quality of stillness: the frozen snow lies taut under the grip of the immense energy of the frost: no avalanches slipping from the snow-laden flanks of the Jungfrau under the hot beams of the sun, startle the valley with sonorous thunder: the wind stirs not the lightest needle of the pines; the villagers are home from the frozen fields, and doors are shut. Slowly the last rose-colour fades from the peaks, and the stars brighten, and you hold your breath to hear the most wonderful thing you have ever heard—utter stillness, that yet is strained almost to bursting point with the energies that make it, the peace that passes understanding that lies above the snow and beneath the stars....
 
@@ -170,43 +200,43 @@ And that which he weds to such lovely language is another of the spells which th
 
 Then having heard it, having thought perhaps you understood it, or best of all, being conscious that you do not understand it at all, you may start for home, and glide on your skis down a slope to the very doors of your hotel. Probably you will have a great many falls, for it is the most difficult thing in the world—which is saying a good deal—to ski with the smallest success in a fading or faded light. But you will have heard the silence of the winter night: that will generously console you for your misadventures....
 
-\[I[mage unavailable.\]]()
+ [Image unavailable.]
 
 Plate I
 
 WINTER SUNLIGHT
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate II
 
 BY THE STREAM-SIDE
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate III
 
 HOAR-FROST
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate IV
 
 JEWELS OF THE FROST
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate V
 
 BLACK ICE ON THE SILS LAKE
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate VI
 
 THE BUDDING ICE FLOWERS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate VII
 
@@ -214,25 +244,28 @@ THE FULL-BLOWN ICE FLOWERS
 
 (twenty-four hours later)
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate VIII
 
 ICE FLOWERS IN DETAIL
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate IX
 
 MAGNIFIED ICE FLOWERS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate X
 
 WINTER MOONLIGHT
 
-## CHAPTER II RINKS AND SKATERS
+CHAPTER II\
+
+RINKS AND SKATERS
+-------------------------------------------------------------------------------
 
 Something has already been said about the swift-growing jungles of frost-flowers that so speedily cause the lakes in Switzerland to be utterly useless for all purposes connected with skates. It suddenly strikes the writer that the inexperienced in these matters will have concluded that I mean that when once those frost-flowers have formed all skating is over, and that if they have gone to Switzerland for the indulgence of this taste, all that is henceforth to be offered them is the opportunity to admire this frozen vegetation instead of cutting figures. I therefore hasten to assure them that lake skating in Switzerland *does not count*; indeed most winter resorts have no lake at all; and even if they have, skating there is quite the exception and not the rule. In nine cases out of ten the snow spoils the ice before it bears, and the frost-flowers spoil the greater part of it, even if the snow has held off, almost immediately afterwards. Lake-skating, in fact, is of the nature of a bonus rather than a dividend: to be enjoyed if it happens, but by no means to be reckoned on.
 
@@ -254,7 +287,7 @@ Such in brief is the making of these rinks that seem such simple affairs when ma
 
 Now there are two styles of skating (I do not refer to good skating and bad skating), known respectively as the English and the Continental or International. In past days, certain exponents of one or the other school, with the mistaken idea that to belittle another was to magnify themselves, fell into the stupid error of comparing the two to the accompaniment of robust vilifications of that style which happened not to be so fortunate as to number them among its adherents. But it is no exaggeration to say that the two styles have nothing whatever to do with one another. It is true that the performer in each case is on skates, and that the skates progress over ice; but the very skates are different; so, too, is the whole mode, manner, style, and effect of performance, and it would be as reasonable for the Rugby football player to assert that Association is not real football, as for the English skater to label the International skater an acrobat or contortionist, or for the International skater to call his detested English brother an exponent of the ramrod school. Many flowers of speech bloomed in the gardens of these controversialists, the more exotic and violently coloured blossoms springing, I think, from
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
 SKATING—ENGLISH STYLE
 
@@ -266,7 +299,7 @@ But of late this controversy has somewhat died down, the fact being that no one 
 
 Now skating, in both these styles, is largely a matter of form, and herein it differs from nearly every other sport. It does not suffice in skating, whether you are English or Internationalist, to *do* certain things, to cut threes, to execute rocking-turns, or loops or back-brackets. All these things have to be done in the manner prescribed by the Vedas, so to speak, of your school. Without doubt there is reason at the base of these methods, for it is clear that if, in a combined figure, four English skaters were
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
 SKATING—CONTINENTAL STYLE
 
@@ -274,7 +307,7 @@ SKATING—CONTINENTAL STYLE
 
 allowed to fly into their centre on a back edge with their unemployed leg waving, and there execute a rocker, there would immediately be a heap of mangled bodies on the ice, a result which is not recognised as being among the objects of combined skating; and similarly, in the International style, the graceful poses of arm and leg, which ignorant English skaters look upon as mere display, are designed to assist the movement. But in all other games (and this is where skating differs from them all) the point is to achieve a certain object, and the achievement of that object, however attained, renders the achiever a notable performer if he consistently attains it. The golfer, for instance, who consistently drives a long straight ball, puts his mashie shot near the hole, and generally putts out, is a magnificent golfer, in whatever manner or style he executes these tyrannously difficult feats. There are a hundred and a hundred hundred styles and modes of putting, and they are all good, provided only they enable the putter to hole his ball. At cricket, similarly, a man may bowl fast or slow with any sort of break, and with any sort of action (provided his shirt sleeve is not wantonly flapping), and he is a good bowler if only he gets wickets cheaply. But at skating the prescribed thing has to be done in the prescribed manner, and the prescriptions of the English school are, broadly speaking, all of them diametrically opposed to the principles of the International school. In the English style the employed leg (*i.e.* the one which for the moment is being skated on) must be straight; in the International style it must be bent. In the English style the unemployed leg must be close to the other, and hang beside it, loosely and easily; in the International, wherever the exigencies of the movement demand that it should be, it must at any rate never be there. In English the arms must not be spread and swung abroad to assist the movement, but must be carried inactively by the side, whereas in International, as long as the skate moves the arms must be engaged on their assigned activity. In both schools, in fact, every movement must be executed in a given way, but in no case is there the smallest resemblance between those ways, though both should result in clean edges and clean turns executed at defined places.
 
-It is not my intention to give here a manual of English skating, beginning with instruction to beginners and ending with timorous hints to experts, but any book on Winter Sports would necessarily be incomplete unless it babbled to some considerable extent about skating, which, without doubt, is the sport in pursuit of which the large majority of English folk visit the High Alps in winter. From whatever cause, this slippery art exercises a unique spell over the able-bodied and athletic section of Anglo-Saxon mankind. It may be that this is partly accounted for by the comparative rarity of the occasions on which we can skate, owing to our Gulf-Stream-beridden and generally pestilential climate, and it is sufficient that some puddle-place in a village green should be half-frozen to cause the majority, not only of youth but of sedate men and women, to hurry down to the spot, and there slide about on both feet with staggerings and frequent falls and the ever-present possibility of occasional immersions. But the rarity of even half-frozen puddles in England does not wholly account for the transcendent spell: there is something in the quality of motion which is started by a stroke of the tense muscles, and then continues of its own accord, without effort or friction, until the impetus is exhausted, that appeals to our unwinged race, who must otherwise keep putting foot before foot to get anywhere. The sensation itself is exquisite, and the sensation is rendered more precious by the fact that from the days when the tyro slides cautiously forward on both feet, to the days when, having become a master in his art, he executes back-counters at the centre in a combined figure, there is always a slight uncertainty as to what is going to happen next. The tyro rejoicing in the unaccustomed method of progress is conscious of a pleasing terror as to whether he will not fall flat down, and glows with callow raptures all the time that he does not; while the finest skater who ever lived, will never be quite sure that he will flick out his back-counter cleanly and unswervingly. We can all walk pretty perfectly—at least, there is no pleasing terror that we may be going to fall down—but none of us at our respective levels as artists in skating can skate pretty perfectly. We can only skate moderately well, considering how well we can skate. And the joy of it\! The unreasoning, delirious joy of the beginner who for the first time feels his outside edge bite the ice, and, no less, the secret elation of the finest performers in the world, when they execute their back-counter close to the centre, at high speed, and without the semblance of flatness in the edge\! And even if any of us was so proficient as to perform such a feat with absolute certainty, there is no doubt whatever that we should find some further feat that would put us back into the dignified ranks of stragglers again. And the same holds good with regard to International skating: at least if there is any among those delightful artists who will execute the Hugel star first on one foot and then on the other without a pleasing anxiety gnawing at his heart, I should very much like to know his name and black his boots for him.
+It is not my intention to give here a manual of English skating, beginning with instruction to beginners and ending with timorous hints to experts, but any book on Winter Sports would necessarily be incomplete unless it babbled to some considerable extent about skating, which, without doubt, is the sport in pursuit of which the large majority of English folk visit the High Alps in winter. From whatever cause, this slippery art exercises a unique spell over the able-bodied and athletic section of Anglo-Saxon mankind. It may be that this is partly accounted for by the comparative rarity of the occasions on which we can skate, owing to our Gulf-Stream-beridden and generally pestilential climate, and it is sufficient that some puddle-place in a village green should be half-frozen to cause the majority, not only of youth but of sedate men and women, to hurry down to the spot, and there slide about on both feet with staggerings and frequent falls and the ever-present possibility of occasional immersions. But the rarity of even half-frozen puddles in England does not wholly account for the transcendent spell: there is something in the quality of motion which is started by a stroke of the tense muscles, and then continues of its own accord, without effort or friction, until the impetus is exhausted, that appeals to our unwinged race, who must otherwise keep putting foot before foot to get anywhere. The sensation itself is exquisite, and the sensation is rendered more precious by the fact that from the days when the tyro slides cautiously forward on both feet, to the days when, having become a master in his art, he executes back-counters at the centre in a combined figure, there is always a slight uncertainty as to what is going to happen next. The tyro rejoicing in the unaccustomed method of progress is conscious of a pleasing terror as to whether he will not fall flat down, and glows with callow raptures all the time that he does not; while the finest skater who ever lived, will never be quite sure that he will flick out his back-counter cleanly and unswervingly. We can all walk pretty perfectly—at least, there is no pleasing terror that we may be going to fall down—but none of us at our respective levels as artists in skating can skate pretty perfectly. We can only skate moderately well, considering how well we can skate. And the joy of it! The unreasoning, delirious joy of the beginner who for the first time feels his outside edge bite the ice, and, no less, the secret elation of the finest performers in the world, when they execute their back-counter close to the centre, at high speed, and without the semblance of flatness in the edge! And even if any of us was so proficient as to perform such a feat with absolute certainty, there is no doubt whatever that we should find some further feat that would put us back into the dignified ranks of stragglers again. And the same holds good with regard to International skating: at least if there is any among those delightful artists who will execute the Hugel star first on one foot and then on the other without a pleasing anxiety gnawing at his heart, I should very much like to know his name and black his boots for him.
 
 To go more into detail with regard to the manner and style of these antipodal twins, we will take first the twin known as English skating. This falls into two broad classes, namely, single skating and that which is the cream and essence of English skating, combined skating. A further development of combined skating, namely, combined hand-in-hand skating, has not long ago been undergoing a successful evolution, under the auspices chiefly of Miss Cannan, Lord Doneraile and Mr. N. G. Thompson. Without doubt it holds many charming possibilities, and very likely there is a great future before it, but owing to right of primogeniture we will first consider the two elder branches. In both the technique, so to speak, is the same. The object is to skate fast on large bold edges, to make turns of all sorts and changes of edge cleanly and without effort, and to skate all these turns and edges in a particular and prescribed manner.
 
@@ -284,11 +317,11 @@ The skater having got his impetus by leaning against the inside edge of one skat
 
 I. *His head must be turned in the direction of his progress, whether he is progressing forwards or backwards.* Again common-sense is at the base of this rule. For if his head is turned in the direction of his progress, he is looking, unless unfortunately blind, where he is going. This avoids trouble to himself, if there are holes in the ice, and trouble to other people if there are other people on the ice.
 
-II. *He must be standing erect with his shoulders and body sideways to the direction of his curve, not facing square down it.* In other words, he must, among other things, be travelling not further forward than on the middle of his skate, otherwise he will not be standing erect, but leaning forward. This attitude is that which is referred to, in the humorous book I have already quoted, as characteristic of the ramrod school. But the author, in his blissful ignorance of skating matters, is not aware that it is impossible to execute a long smooth circumference of curve if you progress on the forepart of your skate. If you are on the forepart of the skate, you must be leaning forward, and no one of known anatomy can lean forward and execute a long smooth edge. The balance is unsteady, and the edge wobbles. Commonsense, then, again endorses this rule. In order to be steady on a long edge, your balance must be of the established order. You must be upright, and travelling without muscular effort to retain your position. This is only attained by travelling on the middle or the aft part of the skate. For nobody can stand still on their toes. But standing on the middle part of the foot or with the weight on the heel it is perfectly easy to do so. But when this humorous author (whom I drag out of his obscurity for the last time) calls this the ramrod school, he proves himself ignorant of the first principles of English skating, or perhaps has only observed himself in some mirror at Prince’s Club attempting to assume the correct attitude himself. As a matter of fact, the proper attitude of the skater in the English style is exactly that of a man who is well made and master of his limbs standing still with the weight chiefly on one foot. While skating, it is true, the weight is entirely on one foot, and the performer is moving, and not standing still. But the pose necessary to smooth and swift progression is exactly that. It no more resembles a ramrod, when decently done, as every good English skater does it, than it resembles a coal-scuttle or a pince-nez, or what you will.
+II\. *He must be standing erect with his shoulders and body sideways to the direction of his curve, not facing square down it.* In other words, he must, among other things, be travelling not further forward than on the middle of his skate, otherwise he will not be standing erect, but leaning forward. This attitude is that which is referred to, in the humorous book I have already quoted, as characteristic of the ramrod school. But the author, in his blissful ignorance of skating matters, is not aware that it is impossible to execute a long smooth circumference of curve if you progress on the forepart of your skate. If you are on the forepart of the skate, you must be leaning forward, and no one of known anatomy can lean forward and execute a long smooth edge. The balance is unsteady, and the edge wobbles. Commonsense, then, again endorses this rule. In order to be steady on a long edge, your balance must be of the established order. You must be upright, and travelling without muscular effort to retain your position. This is only attained by travelling on the middle or the aft part of the skate. For nobody can stand still on their toes. But standing on the middle part of the foot or with the weight on the heel it is perfectly easy to do so. But when this humorous author (whom I drag out of his obscurity for the last time) calls this the ramrod school, he proves himself ignorant of the first principles of English skating, or perhaps has only observed himself in some mirror at Prince’s Club attempting to assume the correct attitude himself. As a matter of fact, the proper attitude of the skater in the English style is exactly that of a man who is well made and master of his limbs standing still with the weight chiefly on one foot. While skating, it is true, the weight is entirely on one foot, and the performer is moving, and not standing still. But the pose necessary to smooth and swift progression is exactly that. It no more resembles a ramrod, when decently done, as every good English skater does it, than it resembles a coal-scuttle or a pince-nez, or what you will.
 
-III. *The unemployed leg*, i.e. *the leg of the foot which is not skating, must hang close to the employed leg*. Again the reason is obvious. If four persons came into their centre with a waving unemployed leg, they would hit each other. Also, if the unemployed leg is put out behind, the skater must lean forward in order to counteract its weight. He will then tend to skate on the forepart of his skate. In a series of long edges this attitude is impossible to maintain except by effort. Nobody could skate for a quarter of an hour in combined skating, accurately and largely on such a principle.
+III\. *The unemployed leg*, i.e. *the leg of the foot which is not skating, must hang close to the employed leg*. Again the reason is obvious. If four persons came into their centre with a waving unemployed leg, they would hit each other. Also, if the unemployed leg is put out behind, the skater must lean forward in order to counteract its weight. He will then tend to skate on the forepart of his skate. In a series of long edges this attitude is impossible to maintain except by effort. Nobody could skate for a quarter of an hour in combined skating, accurately and largely on such a principle.
 
-IV. *The arms must hang by the side, and be carried loosely easily, close to the body.* Again the explanation is obvious. There is no need for their flying abroad, since a long edge is most easily accomplished with the limbs and body in rest after the stroke, and these long smooth edges are part and parcel of English skating: it is founded on them. English skating postulates so perfect a balance, travelling on the middle of the skates, that it chooses (this is the reason for the rule) not to let that balance be assisted by the added or subtracted weight of a correcting arm. It says (this is what it comes to) that you must be so firm on your travelling root, so to speak, of balance, that you dispense with all adjustments of weight. The weight has to be practically perfectly adjusted. There must be no adjustments adventitiously obtained.
+IV\. *The arms must hang by the side, and be carried loosely easily, close to the body.* Again the explanation is obvious. There is no need for their flying abroad, since a long edge is most easily accomplished with the limbs and body in rest after the stroke, and these long smooth edges are part and parcel of English skating: it is founded on them. English skating postulates so perfect a balance, travelling on the middle of the skates, that it chooses (this is the reason for the rule) not to let that balance be assisted by the added or subtracted weight of a correcting arm. It says (this is what it comes to) that you must be so firm on your travelling root, so to speak, of balance, that you dispense with all adjustments of weight. The weight has to be practically perfectly adjusted. There must be no adjustments adventitiously obtained.
 
 Now these four rules are at the base of English skating. If you happen to play a game, you conform to the rules, and you do not argue, for instance, when you are playing cricket, whether you should be given out, when quite clearly you have been caught at the wicket. If you are at all sensible, or in any way like cricket, you pocket your duck’s egg and retire. Superb strokes may be made at cricket, which nevertheless are fatal to the striker. Superb attitudes, similarly, may be made in the International style, which are quite completely wrong. They may be supremely statuesque, but they are not skating. The case is exactly the same with the English style. Certain canons have been laid down, all of which seem to be necessary to the attainment of excellence. It is no doubt possible to skate charming “threes to a centre” doing everything quite wrong from beginning to end. But if you choose to adopt a style, you must conform to the rules of that style. Similarly, it is quite possible to skate the same “threes to a centre” in the International style, which shall leave the same mark on the ice (though the skating of them broke every possible rule) as the most finished performer could leave there. But who would not applaud the International judge who ruthlessly ploughed such a candidate? He has not kept the rules, which in contradistinction to other games prescribe not only what the object in view is, but the manner in which the performance is to take place. But this manner, we venture to point out, has not been laid down in an arbitrary way: it is the manner, both in International skating and in English alike, in which the feats demanded can alone be properly performed.
 
@@ -300,41 +333,43 @@ Now there are four groups of turns, common both to the English and International
 
 I. The first group is known as simple turns, and consists of turns (or changes of direction, from backwards to forwards or forwards to backwards) from:
 
-| (i) | Outside forward to inside back. |
-| --- | --- |
-| (ii) | Inside forward to outside back. |
-| (iii) | Outside back to inside forward. |
-| (iv) | Inside back to outside forward. |
+|         |                                 |
+|---------|:--------------------------------|
+| \(i\)   | Outside forward to inside back. |
+| \(ii\)  | Inside forward to outside back. |
+| \(iii\) | Outside back to inside forward. |
+| \(iv\)  | Inside back to outside forward. |
 
 They are all of the same shape with regard to the marks they leave on the ice, and from their shape are known as “three” turns, or “threes.”
 
 Thus:
 
-\[Image unavailable.\]
+[Image unavailable.]
 
 The arrow shows the direction of progress: the turn is the cusp in the middle between the two curves. Thus if the first edge is outside forward, the second is inside back: if the first is inside forward the second is outside back: if the first is outside back the second is inside forward: if the first is inside back the second is outside forward.
 
-II. The second group of turns is known as rocking turns, or more generally as “rockers.” Like the “three” turns, they are all of the same shape, thus:
+II\. The second group of turns is known as rocking turns, or more generally as “rockers.” Like the “three” turns, they are all of the same shape, thus:
 
-\[Image unavailable.\]
+[Image unavailable.]
 
 and are four in number, namely:
 
-| (i) | Outside forward to outside back. |
-| --- | --- |
-| (ii) | Inside forward to inside back. |
-| (iii) | Outside back to outside forward. |
-| (iv) | Inside back to inside forward. |
+|         |                                  |
+|---------|:---------------------------------|
+| \(i\)   | Outside forward to outside back. |
+| \(ii\)  | Inside forward to inside back.   |
+| \(iii\) | Outside back to outside forward. |
+| \(iv\)  | Inside back to inside forward.   |
 
 Now, in both these groups the body revolves or rotates at the moment of making the turn in the direction indicated by the dotted lines; it revolves, that is to say, *outside* the direction of the first curve. But it is possible for the body to revolve in the opposite direction, that is to say, *inside* the direction of its first curve. This makes possible the third and fourth groups of turns.
 
-III. This group, which is known as brackets, from the mark left on the ice, corresponds to Group I, and the edges employed in it are the same, namely, outside forward to inside back, \&c. But in this group the body revolves on the *inside* of the direction of the first curve, and the mark on the ice, consequently, is as follows, the dotted line again indicating the revolution of the body:
+III\. This group, which is known as brackets, from the mark left on the ice, corresponds to Group I, and the edges employed in it are the same, namely, outside forward to inside back, &c. But in this group the body revolves on the *inside* of the direction of the first curve, and the mark on the ice, consequently, is as follows, the dotted line again indicating the revolution of the body:
 
-\[Image unavailable.\]
+[Image unavailable.]
 
-IV. The fourth group is known as counter-rocking turns, or more generally as counters. It corresponds with Group II, for the marks on the ice are approximately the same, and the edges employed are outside forward to outside back, \&c. But here again the revolution of the body, as in the brackets, takes inside the direction of the first curve, thus:
+IV\. The fourth group is known as counter-rocking turns, or more generally as counters. It corresponds with Group II, for the marks on the ice are approximately the same, and the edges employed are outside forward to outside back, &c. But here again the revolution of the body, as in the brackets, takes inside the direction of the first curve, thus:
 
-\[Image unavailable.\]
+[Image unavailable.]
 
 These sixteen turns, or changes of direction while skating on one foot, comprise all the varieties of so doing that seem theoretically possible, since they include every forward edge to every back edge and every back edge to every forward edge, skated with rotation of the body both outside and inside the direction of the first curve, and until somebody discovers a third edge to a skate, or a third direction of rotating the body, it is not possible that they will be added to.
 
@@ -342,25 +377,26 @@ But changes of direction may be made by the employment, not of one but of both f
 
 I. Mohawks consist of either forward edge combined with the corresponding back edge taken up by the other foot. Thus if the right foot starts as an outside forward, the left, to complete the mohawk, is put down on the outside back edge, thus:
 
-\[Image unavailable.\]
+[Image unavailable.]
 
 Here the rotation is made, as in the brackets and counters, on the *inside* of the direction of the first curve, and the figure is known as the outside forward mohawk. Similarly, the mohawk can be skated on the inside edges, *i.e.* the right foot starts with an inside forward, and the left completes with an inside back. Here the rotation, as in the threes and rockers, takes place on the outside of the direction of the first curve.
 
-II. Choctaws also employ both feet, but the second curve of a choctaw is on the opposing edge to the first curve. An outside forward choctaw thus consists of an outside forward on one foot completed by an inside back on the other, thus:
+II\. Choctaws also employ both feet, but the second curve of a choctaw is on the opposing edge to the first curve. An outside forward choctaw thus consists of an outside forward on one foot completed by an inside back on the other, thus:
 
-\[Image unavailable.\]
+[Image unavailable.]
 
 In this, as in the corresponding mohawk, and the brackets and counters, the rotation of the body takes place *inside* the direction of the first curve. Similarly, the inside forward choctaw consists of an inside forward on one foot and an outside back on the other. Here, following the corresponding mohawk, the rotation of the body takes place outside the first curve.
 
-Theoretically, of course, there are corresponding mohawks and choctaws starting from the back edges, *i.e.* outside back to outside forward, \&c., but though these strokes are constantly used, both in single and combined skating, they are never dignified by this sounding title of “back mohawk” or “back choctaw,” merely because the manœuvre is so simple and common a one, that it needs no name at all, and if, for instance, in combined skating, the caller (who directs what shall be done) has his skaters on a back edge, and desires that the next stroke, let us say, shall be an inside forward edge, he calls “inside forward” merely.
+Theoretically, of course, there are corresponding mohawks and choctaws starting from the back edges, *i.e.* outside back to outside forward, &c., but though these strokes are constantly used, both in single and combined skating, they are never dignified by this sounding title of “back mohawk” or “back choctaw,” merely because the manœuvre is so simple and common a one, that it needs no name at all, and if, for instance, in combined skating, the caller (who directs what shall be done) has his skaters on a back edge, and desires that the next stroke, let us say, shall be an inside forward edge, he calls “inside forward” merely.
 
 Finally, in giving this catalogue of material out of which all English skating is built, there remain only the changes of edge, made on one foot, to enumerate. They, as must naturally be the case, are four in number:
 
-| (i) | Outside forward to inside forward. |
-| --- | --- |
-| (ii) | Inside forward to outside forward. |
-| (iii) | Outside back to inside back. |
-| (iv) | Inside back to outside back. |
+|         |                                    |
+|---------|:-----------------------------------|
+| \(i\)   | Outside forward to inside forward. |
+| \(ii\)  | Inside forward to outside forward. |
+| \(iii\) | Outside back to inside back.       |
+| \(iv\)  | Inside back to outside back.       |
 
 With regard to the cross-mohawks and cross-choctaws—in case the skater ever “hears tell” of them—he need not worry himself even to remember their existence, since, most rightly, they have been blotted out of the book of English skating, owing to their clumsiness and the fact that to skate any of them violates some canon of the essential form of English skating. Apart from them, the whole material of English skating has now been stated, namely, the four edges, the sixteen turns, the two mohawks, the two choctaws, and the four changes of edge.
 
@@ -382,51 +418,50 @@ Here, it will be seen, is the beginning, the ground-work of English skating. The
 
 (*a*) A set of combined figures skated with another skater, who will be selected by the judges, introducing the following calls in such order and with such repetitions as the judges may direct:—
 
-| 1. Forward three meet. |
-| --- |
-| 2. Once back—and forward meet. |
-| 3. Once back—and forward three meet. |
-| 4. Twice back off meet—and forward three meet. |
-| 5. Twice back meet—and back—and forward three meet. |
+|                                                      |
+|:-----------------------------------------------------|
+| 1\. Forward three meet.                              |
+| 2\. Once back—and forward meet.                      |
+| 3\. Once back—and forward three meet.                |
+| 4\. Twice back off meet—and forward three meet.      |
+| 5\. Twice back meet—and back—and forward three meet. |
 
 (*b*) The judges shall call three “unseen” figures of quite simple character, in order to test the candidate’s knowledge of calls and power of placing figures upon the ice. These shall be skated alone.
 
 (*c*) The following edges on each foot alternately for as long as the judges shall require, namely:—
 
-| 1. Inside back, each curve being 20 ft. at least. |
-| --- |
-| 2. Cross outside back, each curve being 12 ft. at least. |
+|                                                           |
+|:----------------------------------------------------------|
+| 1\. Inside back, each curve being 20 ft. at least.        |
+| 2\. Cross outside back, each curve being 12 ft. at least. |
 
 (*d*) The following figures skated on each foot, namely:—
 
-| 1. | Forward inside three, the length of each curve being 40 ft. at least | {R {L |
-| --- | --- | --- |
-| 2. | Forward outside three “ “ “ 50 ft. “ | {R {L |
-
- 
+| 1.  | Forward inside three, the length of each curve being 40 ft. at least | {R {L |
+|-----|----------------------------------------------------------------------|-------|
+| 2.  | Forward outside three “ “ “ 50 ft. “                                 | {R {L |
 
 (*e*) The following figures skated to a centre on alternate feet without pause, three times on each foot, namely:—
 
-| 1. Forward inside three, |  the length of each curve being |  15 ft. at least. |
-| --- | --- | --- |
-| 2. Forward outside three  |  “ “ “ |  15 “ |
-| 3. Forward inside two threes  |  “ “ “ |  10 “ |
-| 4. Forward outside two threes  |  “ “ “ |  10 “ |
-| 5. Back outside two threes  |  “ “ “ |  10 “ |
+|  |  |  |
+|:---|----|----|
+| 1\. Forward inside three, | the length of each curve being | 15 ft. at least. |
+| 2\. Forward outside three | “ “ “ | 15 “ |
+| 3\. Forward inside two threes | “ “ “ | 10 “ |
+| 4\. Forward outside two threes | “ “ “ | 10 “ |
+| 5\. Back outside two threes | “ “ “ | 10 “ |
 
 (*f*) The following figures skated on each foot, namely:—
 
-|  1. Forward inside “Q,” |  the length of each curve being |  30 ft. at least  |  {R {L |
-| --- | --- | --- | --- |
-|  2. Forward outside “Q”  |  “ “ “ | 30 ft. “ |  {R {L |
-|  3. Back inside “Q”  |  “ “ “ | 25 ft “ |  {R {L |
-|  4. Back outside “Q”  |  “ “ “ | 20 ft. “ |  {R {L |
-
- 
+| 1. Forward inside “Q,” | the length of each curve being | 30 ft. at least | {R {L |
+|------------------------|--------------------------------|-----------------|-------|
+| 2. Forward outside “Q” | “ “ “                          | 30 ft. “        | {R {L |
+| 3. Back inside “Q”     | “ “ “                          | 25 ft “         | {R {L |
+| 4. Back outside “Q”    | “ “ “                          | 20 ft. “        | {R {L |
 
 Here, it will be seen, the test begins with a combined figure. The whole subject of combined figures will be treated of separately, and for the present we need only remark that this is a very simple one. Then follow the inside back edge, which, as I have said, is the most difficult of the edges, skated larger than before, in curves of 20 feet, and the cross-stroke on the outside back. This means that the stroke is taken with the feet crossing, the one that is taking the stroke being crossed behind the other. As a matter of fact, this stroke, which at one time played a considerable part in English skating, since in combined figures all strokes from outside back to outside back were bound to be taken from the crossing position, is now not obligatory. But it is a pretty stroke in itself, and necessitates the skate being placed on the ice on the edge. Then follow the two forward turns, skated rather large, in order to begin to familiarise the learner with the feeling of turns taken at a high speed. This necessitates clean skating of the turn itself, since if a turn is skated fast, and not clean, it is quite possible that the skater may fall, and he will in any case make a blur instead of a sharp cut turn. Also these turns teach him to hold his edges out after the turn, the tendency being to let the body rotate, whereby the curve curls in, and the skater soon finds himself in a position that it is impossible to maintain. But if he skates his turn, and then can hold an edge for 50 feet *away* from it afterwards, he may congratulate himself on the fact that he is beginning to skate his edges big and in the proper style. For these cannot, practically speaking, be held out, unless the rules for position are being conformed with. Then follow four simple figures of the class known as 8’s, of which the simplest is that required in the third-class test, namely, an outside forward 8. All 8’s, as their name denotes, are of the same general shape, *i.e.* the shape implied by their name, but between the edges that trace the shape of the 8, the skater is now required to put in certain turns. He starts, for instance, on an outside forward edge, when half round his circle makes a three turn, and comes back to his centre on the inside back edge. Or he starts on an inside forward edge as in the third 8, and has to make two turns before he arrives at his centre again, which he reaches as an inside forward edge. Or, more searchingly, he has to start his 8 on an outside back edge, and make two turns and aim at his centre again on an outside back edge.
 
-The remainder of this test is taken up with the figures known as Q’s. In these the skater is required to start, at some speed, on any edge forward or back, and after travelling on it for varying distances, as laid down, to change his edge (from outside to inside, or inside to outside) and after holding that edge for the prescribed distance make the three appropriate to that edge. The Q’s are very largely used in combined skating, the change of edge being coupled not only to “three” turns, but to rockers, counters and brackets. Here the name “Q” is becoming obsolete, and indeed has become so in combined skating, the figure being called “forward change three” or “inside back change three,” \&c.
+The remainder of this test is taken up with the figures known as Q’s. In these the skater is required to start, at some speed, on any edge forward or back, and after travelling on it for varying distances, as laid down, to change his edge (from outside to inside, or inside to outside) and after holding that edge for the prescribed distance make the three appropriate to that edge. The Q’s are very largely used in combined skating, the change of edge being coupled not only to “three” turns, but to rockers, counters and brackets. Here the name “Q” is becoming obsolete, and indeed has become so in combined skating, the figure being called “forward change three” or “inside back change three,” &c.
 
 Now, as I have said, while the third test is supposed to encourage the skater, the second is supposed to discourage him. What is meant is that he has now run up against the really crucial difficulties in English skating, of which perhaps the greatest of all is to stand still, as the Irishman might say, while moving rapidly. As will be already seen in this test, he is required to do this for somewhat extensive travel: in his outside forward turn, for instance, he has to proceed for at least fifty feet on his forward edge before making his turn, and the same distance on his back edge after making his turn. And though this present disquisition is intended to be a statement of English skating and not a book of instruction, the writer cannot bear to let this one opportunity slip of giving just one hint. It is perfectly impossible to travel steadily for distances like these—and the skater will have to learn to go much further yet on his edges—if he is travelling on the forepart of his skate. All forward turns, by the slight check they give to the speed (I am not now talking of those ideal skaters who actually get speed out of a turn), tend to put the skater further forward on his skate. He must therefore approach all forward turns on the back part of his skate, so that by this tendency to rock forward he will make the turn itself on about the middle of the skate. Never for a moment, if he can help it, must he get on the toe of his skate, and if ever he does, he must regain position again by leaning fearlessly back. And in this second test, he will find that the difficulty of travelling well back on his skate is at first appalling. But having learned that, and learned it thoroughly, he will probably not come across any subsequent requirement which appears to him so clearly impossible.
 
@@ -434,7 +469,7 @@ Now, as I have said, while the third test is supposed to encourage the skater, t
 
 #### Section A
 
-This section consists of the combined figures in Parts I and II. The judges may also give such simple calls as they think fit, to enable the candidate to recover his position, to alternate the feet, \&c.
+This section consists of the combined figures in Parts I and II. The judges may also give such simple calls as they think fit, to enable the candidate to recover his position, to alternate the feet, &c.
 
 The figures shall be skated with another skater, to be selected by the judges, but if there are only two judges, neither of them shall skate.
 
@@ -448,7 +483,7 @@ To pass this section the candidate must satisfy all the judges in the manner in 
 
 The judges may pass a candidate in Part I, notwithstanding a reasonable number of errors on his part in the course of the set, provided that he ultimately skates all the calls to their satisfaction; and in Part II, notwithstanding errors, provided that the candidate has shown competent skill in skating unseen calls.
 
-##### Part I
+##### *Part I*
 
 1\. Twice back—and forward three—and forward inside three, off meet.
 
@@ -474,7 +509,7 @@ The judges may pass a candidate in Part I, notwithstanding a reasonable number o
 
 12\. Forward change, three, change, three, circle—and forward three, change, circle—and forward about change, three, off meet.
 
-##### Part II
+##### *Part II*
 
 In addition to the above, the judges shall call a further set of not more than six or less than four “unseen” figures of moderate difficulty, in order to test the candidate’s knowledge of calls and power of correct placing. This unseen set must include rockers, counters, and brackets, and shall be skated by the candidate alone.
 
@@ -484,22 +519,18 @@ No candidate shall be judged in Part II of this Section until he has passed in P
 
 The judges may allow a candidate any number of attempts at a given figure which they consider reasonable.
 
-##### Part I
+##### *Part I*
 
 The turns, mohawks, and choctaws of this part must be placed close to and on the near side of an orange or other fixed point on the ice. They must all be skated on each foot to the satisfaction of the judges.
 
 The curve before and after the turn or change of foot must be 40 feet long at least.
 
-| Threes | { Outside back. { Inside back. |
-| --- | --- |
-|   |  |
+| Threes                          | { Outside back. { Inside back.                                      |
+|---------------------------------|---------------------------------------------------------------------|
 | Rockers } Brackets } Counters } | { Outside forward. { Inside forward. { Outside back. { Inside back. |
-|   |  |
-| Mohawks } Choctaws } | { Outside forward. { Inside forward. |
+| Mohawks } Choctaws }            | { Outside forward. { Inside forward.                                |
 
- 
-
-##### Part II
+##### *Part II*
 
 To pass in this part, a candidate may select not more than one figure in each group, and must score forty-five marks at least. A selection once made by a candidate must not be altered.
 
@@ -517,77 +548,67 @@ In groups D and E the turns and choctaws respectively are to be made on the near
 
 The following eights are to be skated to a centre on alternate feet:—
 
-| Group A |  |
-| --- | --- |
-|   | Max. Marks |
-| Outside back two threes | 4 |
-| Inside back two threes | 13 |
-| Outside forward bracket | 6 |
-| Inside forward bracket | 4 |
-|   |  |
-| Group B |  |
-| Outside forward two brackets | 6 |
-| Inside forward two brackets | 10 |
-| Outside forward bracket, three | 9 |
-| Inside forward bracket, three | 5 |
-| Outside forward three, bracket | 4 |
-| Inside forward three, bracket | 12 |
-|   |  |
-| Group C |  |
-| Outside back two brackets | 14 |
-| Inside back two brackets | 11 |
-| Outside back bracket, three | 16 |
-| Inside back bracket, three | 8 |
-| Outside back three, bracket | 5 |
-| Inside back three, bracket | 14 |
-|   |  |
-| Group D |  |
-| Outside forward rocker | 8 |
-| Inside forward rocker | 4 |
-| Outside forward counter | 8 |
-| Inside forward counter | 4 |
-| Outside forward centre choctaw and inside forward centre     choctaw, beginning on each foot | 4 |
-| Outside forward mohawk and inside forward mohawk    to a centre, beginning on each foot | 4 |
+| Group A                                                                                  |            |
+|------------------------------------------------------------------------------------------|------------|
+|                                                                                          | Max. Marks |
+| Outside back two threes                                                                  | 4          |
+| Inside back two threes                                                                   | 13         |
+| Outside forward bracket                                                                  | 6          |
+| Inside forward bracket                                                                   | 4          |
+| Group B                                                                                  |            |
+| Outside forward two brackets                                                             | 6          |
+| Inside forward two brackets                                                              | 10         |
+| Outside forward bracket, three                                                           | 9          |
+| Inside forward bracket, three                                                            | 5          |
+| Outside forward three, bracket                                                           | 4          |
+| Inside forward three, bracket                                                            | 12         |
+| Group C                                                                                  |            |
+| Outside back two brackets                                                                | 14         |
+| Inside back two brackets                                                                 | 11         |
+| Outside back bracket, three                                                              | 16         |
+| Inside back bracket, three                                                               | 8          |
+| Outside back three, bracket                                                              | 5          |
+| Inside back three, bracket                                                               | 14         |
+| Group D                                                                                  |            |
+| Outside forward rocker                                                                   | 8          |
+| Inside forward rocker                                                                    | 4          |
+| Outside forward counter                                                                  | 8          |
+| Inside forward counter                                                                   | 4          |
+| Outside forward centre choctaw and inside forward centre choctaw, beginning on each foot | 4          |
+| Outside forward mohawk and inside forward mohawk to a centre, beginning on each foot     | 4          |
 
- 
-
-### Reverse Q’s
+### *Reverse Q’s*
 
 The turns and changes are to be made on the near side of fixed points determined by the candidate; the distance between these, and the lengths of the first and last curves, are to be each not less than 50 feet beginning on forward edges, 35 feet beginning on back edges.
 
-| Group E |  |
-| --- | --- |
-|   | Max. Marks. |
-| Outside forward three, change | 2 |
-| Inside forward three, change | 3 |
-| Outside forward rocker, change | 3 |
-| Inside forward rocker, change | 3 |
-| Outside forward bracket, change | 5 |
-| Inside forward bracket, change | 4 |
-| Outside forward counter, change | 5 |
-| Inside forward counter, change | 3 |
-|   |  |
-| Group F |  |
-| Outside back three, change | 5 |
-| Inside back three, change | 8 |
-| Outside back rocker, change | 6 |
-| Inside back rocker, change | 8 |
-|   |  |
-| Group G |  |
-| Outside back bracket, change | 16 |
-| Inside back bracket, change | 8 |
-| Outside back counter, change | 16 |
-| Inside back counter, change | 8 |
-|   |  |
-| Group H |  |
-| Grape Vines |  |
-| Single, each foot leading | 2 |
-| Double forward | 3 |
-| Double backward | 3 |
-| Pennsylvania | 5 |
-| Philadelphia | 6 |
-
- 
+| Group E                         |             |
+|---------------------------------|-------------|
+|                                 | Max. Marks. |
+| Outside forward three, change   | 2           |
+| Inside forward three, change    | 3           |
+| Outside forward rocker, change  | 3           |
+| Inside forward rocker, change   | 3           |
+| Outside forward bracket, change | 5           |
+| Inside forward bracket, change  | 4           |
+| Outside forward counter, change | 5           |
+| Inside forward counter, change  | 3           |
+| Group F                         |             |
+| Outside back three, change      | 5           |
+| Inside back three, change       | 8           |
+| Outside back rocker, change     | 6           |
+| Inside back rocker, change      | 8           |
+| Group G                         |             |
+| Outside back bracket, change    | 16          |
+| Inside back bracket, change     | 8           |
+| Outside back counter, change    | 16          |
+| Inside back counter, change     | 8           |
+| Group H                         |             |
+| Grape Vines                     |             |
+| Single, each foot leading       | 2           |
+| Double forward                  | 3           |
+| Double backward                 | 3           |
+| Pennsylvania                    | 5           |
+| Philadelphia                    | 6           |
 
 Now, again omitting for the moment the subject of combined skating, we see that in Part II the rest of the groundwork of English skating is very thoroughly traversed. To pass this final test the skater has to be able to execute all the threes (the two simple ones are omitted, as they have already been required in the second test), rockers, brackets, counters, mohawks, and choctaws at fair speed and on large edges at a given point on the ice. Having done that to the satisfaction of the judges, he has then to make his selection from a large number of 8’s, which include practically most possible 8’s comprising one or two turns, excepting these simple ones with regard to which he has already satisfied the judges in his second test. Here he has to score marks, selecting not more than one 8 of each group, and by the devilish ingenuity of those who drew up this test, it is impossible for him to get through unless the majority of the 8’s he selects to skate are really difficult. He may then add to his marks by executing what are called reverse Q’s at two given points on the ice. At the first of these he has to make his turn, whatever it is, and at the second to change his edge. This requires a considerable degree of accuracy, for in order to arrive smoothly and still at a fair travelling pace at the second point, he will find that he has to have a practically perfect control of the edge, which has not been disturbed by executing a difficult back turn, let us say, at the first given point. Finally, if he is still in want of marks, he may earn a few more by a grape-vine. This latter does not properly belong to English skating, since it is a two-footed figure, and those responsible for the test might have omitted this group with advantage.
 
@@ -601,7 +622,7 @@ Now no doubt two turns to a centre, as required in the second-class test, is a v
 
 Nor, again, in this respect, is Part I, in the first-class English test, up-to-date in requirements of size. Here we read that on a “twice back” the candidate must recede at least 35 feet from the centre. That no doubt was laid down because on the artificial rinks available in England, such a distance took the skaters nearly to the bounds of the space at his disposal. But any candidate who, on the Swiss rinks, where nowadays almost all first-class tests are passed, receded but 35 feet from the centre would have, practically speaking, no chance of getting through. His lawless judges would inevitably tell him to skate larger. Still less would he be able to take part in any combined figure-skating for amusement by skaters who had any pretension to be of the first-class. With these big surfaces of rink, the whole style and method has become larger and faster, and therefore more difficult.
 
-A third instance, to prove how greatly the art of combined skating has progressed, has the ring of pathos about it, and, though only oral, is trustworthy. A friend of mine, who resides at that excellent English skating centre, Oxford, told me that in old days he could scarcely get a combined figure, since the most elementary calls were sufficient to floor his partners. But not so long ago he told me he could scarcely get a combined figure, since nobody cared to skate such elementary calls as he was capable of. But he assures me that he skates just as well now as he did in the days when there was nobody up to his standard. Perhaps in twenty years more, no first-class skater will care to engage in such simple stuff as we now think rather advanced. And dearly will such present-day skaters who are fortunate enough to be alive then, love to see the newer and more arduous manœuvres\! But since it is impossible to prophesy about the things we cannot imagine, it must be sufficient to give the outlines of combined skating as practised by fairly expert gentlemen to-day.
+A third instance, to prove how greatly the art of combined skating has progressed, has the ring of pathos about it, and, though only oral, is trustworthy. A friend of mine, who resides at that excellent English skating centre, Oxford, told me that in old days he could scarcely get a combined figure, since the most elementary calls were sufficient to floor his partners. But not so long ago he told me he could scarcely get a combined figure, since nobody cared to skate such elementary calls as he was capable of. But he assures me that he skates just as well now as he did in the days when there was nobody up to his standard. Perhaps in twenty years more, no first-class skater will care to engage in such simple stuff as we now think rather advanced. And dearly will such present-day skaters who are fortunate enough to be alive then, love to see the newer and more arduous manœuvres! But since it is impossible to prophesy about the things we cannot imagine, it must be sufficient to give the outlines of combined skating as practised by fairly expert gentlemen to-day.
 
 There are two manners of combined skating, called respectively pair-skating and simultaneous skating. The first of these (which we will first consider) is the more difficult, and, so to speak, the more classical. Theoretically it can be skated by two, four, six, or eight persons: practically it is skated by four persons, grouped, at the beginning of things, at right angles to their neighbours, and at a few yards distant from their centre. One of these, who skates in the first pair, is known as the caller, and he announces (in a loud mellifluous voice) what he is about to skate, and what the trembling gentleman opposite, who is his partner, must also skate. They advance to the centre, from opposite sides, and begin skating whatever is ordered. The moment after they have left their centre, speeding out to the circumference of the huge imaginary circle, of which their orange or india-rubber ball, from which they have started, is the centre, the second pair (at right angles to them) proceed to do exactly the same. The size and pace of the figure, as well as its details, depend entirely on the caller: as he skates, so must his partner skate, putting down his edges and turns simultaneously and at like speed to him, and as the first pair skate, so (with certain modifications) must the second pair skate.
 
@@ -609,7 +630,7 @@ Now, the whole material of skating is at the caller’s command. He can (and doe
 
 Simultaneous combined has this advantage, that an uneven number of skaters can take part in it. The caller’s duties are the same, but there are no pairs of partners. All leave the centre simultaneously, all (it is hoped) arrive back at it simultaneously. Since there is no crossing of pairs at the centre, a far larger number of skaters can take part in it, as they have not to wait for a prior pair to clear, and if elementary calls only are ordered, upwards of ten or twelve skaters can join the dance with effect. No one of them, as in pair skating, crosses the path of another skater: they leave and arrive at the centre on converging not crossing lines. Thus it is an easier sport than is crossing pairs, since in the latter case the edges that leave and approach the centre intersect each other. Vastly enjoyable as it is, it lacks to the present writer that classical distinction that characterises pair-skating.
 
-The final item in English skating is hand-in-hand skating in the combined figure. Here, instead of single skaters combining to perform in unison, pairs take the place of units. Necessarily the figures compassable by a man and woman hand in hand are fewer in number, as at present worked out, than those which can be skated by single skaters, and the speed at which such figures are skated is less than in the combined skating of single skaters. Hand-holds have to be changed, and partners brought into the new position required by turns, \&c., by pulls, or by what in the nomenclature is called “steps”—*i.e.* single strokes and edges. Already this style has taken the place in the annual championship of English skating, and without doubt it will grow both in the number of its practitioners, and in the force and speed of their movements. It is scientifically based, being evolved from the charming movements that are possible to hand-in-hand skaters when going free on the ice, and not bound to consider their opposing partner, or to arrive in a given manner at a given point. But it resembles, at present, in the opinion of the writer, the performance of a yearling. It requires the devotion of a dozen first-class skaters of both sexes to determine its possibilities. His wish is, that it will get them. His fear is that the necessarily cramping influence of conjoined hands will prove to debar it from the speed and largeness of other branches of English skating. He sincerely hopes that his fears are quite unfounded.
+The final item in English skating is hand-in-hand skating in the combined figure. Here, instead of single skaters combining to perform in unison, pairs take the place of units. Necessarily the figures compassable by a man and woman hand in hand are fewer in number, as at present worked out, than those which can be skated by single skaters, and the speed at which such figures are skated is less than in the combined skating of single skaters. Hand-holds have to be changed, and partners brought into the new position required by turns, &c., by pulls, or by what in the nomenclature is called “steps”—*i.e.* single strokes and edges. Already this style has taken the place in the annual championship of English skating, and without doubt it will grow both in the number of its practitioners, and in the force and speed of their movements. It is scientifically based, being evolved from the charming movements that are possible to hand-in-hand skaters when going free on the ice, and not bound to consider their opposing partner, or to arrive in a given manner at a given point. But it resembles, at present, in the opinion of the writer, the performance of a yearling. It requires the devotion of a dozen first-class skaters of both sexes to determine its possibilities. His wish is, that it will get them. His fear is that the necessarily cramping influence of conjoined hands will prove to debar it from the speed and largeness of other branches of English skating. He sincerely hopes that his fears are quite unfounded.
 
 ### International Style
 
@@ -635,16 +656,13 @@ There are also the following directions for correct tracing, *i.e.* the marks le
 
 In this form, then, and with this accuracy of tracing, the following figures must be skated for the third test:—
 
-| Eight  |          Rfo—Lfo |
-| --- | --- |
-| Eight  |          Rfi—Lfi |
-| Eight  |          Rbo—Lbo |
-| Change  |  {(a) Rfoi—Lfio {(b) Lfoi—Rfio |
-| Threes  |          RfoTbi—LfoTbi |
-|   |  |
-|  R = Right. L = Left. T = Three.  |  f = Forwards. b = Backwards. o = Outside. i = Inside.  |
-
- 
+| Eight                           | Rfo—Lfo                                               |
+|---------------------------------|-------------------------------------------------------|
+| Eight                           | Rfi—Lfi                                               |
+| Eight                           | Rbo—Lbo                                               |
+| Change                          | {(a) Rfoi—Lfio {(b) Lfoi—Rfio                         |
+| Threes                          | RfoTbi—LfoTbi                                         |
+| R = Right. L = Left. T = Three. | f = Forwards. b = Backwards. o = Outside. i = Inside. |
 
 Into the system of marking—candidates have to get a certain proportion of marks in each figure—we need not go. It will be sufficient to say that it is necessary to skate each figure passably, and to earn more than half marks on the whole.
 
@@ -652,9 +670,9 @@ Into the system of marking—candidates have to get a certain proportion of mark
 
 This has to be passed before three judges, and is divided into two parts—(1) Compulsory Figures; (2) Free Skating. The regulations for them are as follow:—
 
-(1) *Compulsory Figures.*—Each figure may be marked up to a maximum of 6 points. The marks given for each figure are multiplied by the factor of value for that figure. In order to pass, a candidate must obtain a minimum of 2 marks out of 6 in each figure, and an aggregate of 130 out of the maximum of 234 marks.
+\(1\) *Compulsory Figures.*—Each figure may be marked up to a maximum of 6 points. The marks given for each figure are multiplied by the factor of value for that figure. In order to pass, a candidate must obtain a minimum of 2 marks out of 6 in each figure, and an aggregate of 130 out of the maximum of 234 marks.
 
-(2) *Free Skating.*—The candidate will be required to skate a free programme of three minutes’ duration.
+\(2\) *Free Skating.*—The candidate will be required to skate a free programme of three minutes’ duration.
 
 This will be marked:
 
@@ -664,35 +682,33 @@ This will be marked:
 
 The marks for compulsory figures and for free skating must be obtained from each judge. Judges may use half marks and quarter marks.
 
-#### Compulsory Figures
+#### *Compulsory Figures*
 
-|   |   | Marks. | Factor. | Total |
-| --- | --- | --- | --- | --- |
-| Eight |         Rbi—Lbi |   | 2 |  |
-| Change | {(a) Rboi—Lbio |   | 2 |  |
-| {(b) Lboi—Rbio |   | 2 |  |  |
-| Three | {(a) RfoTbi—LbiTfo |   | 2 |  |
-| {(b) LfoTbi—RbiTfo |   | 2 |  |  |
-| Double Three | RboTfiT—LboTfiT |   | 1 |  |
-| Change Three | {(a) RfoiT—LboiT |   | 2 |  |
-| {(b) LfoiT—RboiT |   | 2 |  |  |
-| Change Three | {(a) RfioT—LbioT |   | 3 |  |
-| {(b) LfioT—RbioT |   | 3 |  |  |
-| Loop |         RfoLP—LfoLP |   | 2 |  |
-| Loop |         RfiLP—LfiLP |   | 2 |  |
-| Loop |         RboLP—LboLP |   | 2 |  |
-| Loop |         RbiLP—LbiLP |   | 2 |  |
-| Bracket | {(a) RfoB—LbiB |   | 3 |  |
-|   | {(b) LfoB—RbiB |   | 3 |  |
-| One-foot Eight |  {(a) Rfoi—Lfio |   | 2 |  |
-|   | {(b) Lfoi—Rfio |   | 2 |  |
+|                    |                    | Marks. | Factor. | Total |
+|--------------------|--------------------|--------|---------|-------|
+| Eight              | Rbi—Lbi            |        | 2       |       |
+| Change             | {(a) Rboi—Lbio     |        | 2       |       |
+| {(b) Lboi—Rbio     |                    | 2      |         |       |
+| Three              | {(a) RfoTbi—LbiTfo |        | 2       |       |
+| {(b) LfoTbi—RbiTfo |                    | 2      |         |       |
+| Double Three       | RboTfiT—LboTfiT    |        | 1       |       |
+| Change Three       | {(a) RfoiT—LboiT   |        | 2       |       |
+| {(b) LfoiT—RboiT   |                    | 2      |         |       |
+| Change Three       | {(a) RfioT—LbioT   |        | 3       |       |
+| {(b) LfioT—RbioT   |                    | 3      |         |       |
+| Loop               | RfoLP—LfoLP        |        | 2       |       |
+| Loop               | RfiLP—LfiLP        |        | 2       |       |
+| Loop               | RboLP—LboLP        |        | 2       |       |
+| Loop               | RbiLP—LbiLP        |        | 2       |       |
+| Bracket            | {(a) RfoB—LbiB     |        | 3       |       |
+|                    | {(b) LfoB—RbiB     |        | 3       |       |
+| One-foot Eight     | {(a) Rfoi—Lfio     |        | 2       |       |
+|                    | {(b) Lfoi—Rfio     |        | 2       |       |
 
-|  R = Right. L = Left. T = Three. LP = Loop. B = Bracket. |  f = Forwards. b = Backwards. o = Outside. i = Inside. |
-| --- | --- |
+| R = Right. L = Left. T = Three. LP = Loop. B = Bracket. | f = Forwards. b = Backwards. o = Outside. i = Inside. |
+|---------------------------------------------------------|-------------------------------------------------------|
 
- 
-
-Here is a remarkably varied programme, and one that will obviously give a good spell of regular work to a candidate who intends to grapple with it. It contains more of the material for skating than does the corresponding English second test, in which only the four edges, the four simple turns, and the four changes of edge are introduced, since this International second test comprises as well as those, the four loops, and two out of the four brackets. These loops, which are most charming and effective figures, have nowadays no place in English skating, since it is quite impossible to execute any of them, as far as is at present known, without breaking the rules for English skating, since the unemployed leg (*i.e.* the one not tracing the figure) must be used to get the necessary balance and swing. They belong to a great class of figures like cross-cuts in all their varieties, beaks, pigs-ears, \&c., in which the skater nearly, or actually, stops still for a moment, and then, by a swing of the body or leg, resumes or reverses his movement. By this momentary loss and recovery of balance there is opened out to the skater whole new fields of intricate and delightful movements, and the patterns that can be traced on the ice are of endless variety. And here in this second International test the confines of this territory are entered on by the four loops, which are the simplest of the “check and recovery” figures. In the loops (the shape of which is accurately expressed by their names) the skater does not come absolutely to a standstill, though very nearly, and the swing of the body and leg is then thrown forward in front of the skate, and this restores to it its velocity, and pulls it, so to speak, out of its loop. A further extension of this check and resumption of speed occurs in cross-cuts, which do not enter into the International tests, but which figure largely in the performance of good skaters. Here the forward movement of the skate (or backward movement, if back cross-cuts are being skated) is entirely checked, the skater comes to a momentary standstill and moves backwards for a second. Then the forward swing of the body and unemployed leg gives him back his checked and reversed movement.
+Here is a remarkably varied programme, and one that will obviously give a good spell of regular work to a candidate who intends to grapple with it. It contains more of the material for skating than does the corresponding English second test, in which only the four edges, the four simple turns, and the four changes of edge are introduced, since this International second test comprises as well as those, the four loops, and two out of the four brackets. These loops, which are most charming and effective figures, have nowadays no place in English skating, since it is quite impossible to execute any of them, as far as is at present known, without breaking the rules for English skating, since the unemployed leg (*i.e.* the one not tracing the figure) must be used to get the necessary balance and swing. They belong to a great class of figures like cross-cuts in all their varieties, beaks, pigs-ears, &c., in which the skater nearly, or actually, stops still for a moment, and then, by a swing of the body or leg, resumes or reverses his movement. By this momentary loss and recovery of balance there is opened out to the skater whole new fields of intricate and delightful movements, and the patterns that can be traced on the ice are of endless variety. And here in this second International test the confines of this territory are entered on by the four loops, which are the simplest of the “check and recovery” figures. In the loops (the shape of which is accurately expressed by their names) the skater does not come absolutely to a standstill, though very nearly, and the swing of the body and leg is then thrown forward in front of the skate, and this restores to it its velocity, and pulls it, so to speak, out of its loop. A further extension of this check and resumption of speed occurs in cross-cuts, which do not enter into the International tests, but which figure largely in the performance of good skaters. Here the forward movement of the skate (or backward movement, if back cross-cuts are being skated) is entirely checked, the skater comes to a momentary standstill and moves backwards for a second. Then the forward swing of the body and unemployed leg gives him back his checked and reversed movement.
 
 Similarly, the bracket 8 is fresh material in this set of compulsory figures. The shape and nature of the bracket is the same as that in English skating.
 
@@ -702,9 +718,9 @@ The candidate for the second International test has also to skate a free program
 
 This has to be passed before three judges, and is divided into two parts—(1) Compulsory Figures; (2) Free Skating. The regulations for them are as follow:—
 
-(1) *Compulsory Figures.*—Each figure may be marked up to a maximum of 6 points. The marks given for each figure are multiplied by the factor of value for that figure. In order to pass, a candidate must obtain a minimum of 2 marks out of 6 in each figure, and an aggregate of 190 out of the maximum of 336 marks.
+\(1\) *Compulsory Figures.*—Each figure may be marked up to a maximum of 6 points. The marks given for each figure are multiplied by the factor of value for that figure. In order to pass, a candidate must obtain a minimum of 2 marks out of 6 in each figure, and an aggregate of 190 out of the maximum of 336 marks.
 
-(2) *Free Skating.*—The candidate will be required to skate a free programme of three minutes’ duration.
+\(2\) *Free Skating.*—The candidate will be required to skate a free programme of three minutes’ duration.
 
 This will be marked:
 
@@ -718,78 +734,74 @@ The marks for the compulsory figures and the free skating are arrived at by taki
 
 This free skating is a charming item in the system of International skating, and might, with great advantage, be introduced into the English branch. It is in itself perfectly fascinating to look at, and from the technical point of view it is quite admirable as a test of knowledge. A good programme will contain dozens of turns and changes of edge, all melting into each other without break or pause. None who have seen the free skating of a fine performer can ever forget or question the brilliance and variety of this three-minute free skating. As likely as not, he will make his entry on to the rink in a spiral edge, and before it has come to rest at the centre, start off on his coruscating performance. Rockers, brackets, counters, and turns succeed each other with bewildering rapidity; and all are performed with the utmost ease and grace. It seems impossible to tell where the motive-power comes from, so smooth and effortless is the travelling; you would have said the skater was wafted by some localised wind, or impelled by some invisible mechanism. But before he arrives at this part of his test, he has to skate his compulsory figures, the list of which is subjoined.
 
-#### Compulsory Figures
+#### *Compulsory Figures*
 
-|    |  Marks. | Factor. |  Total. |
-| --- | --- | --- | --- |
-| Rockers |  {(a) RfoRK—LboRK | 3 |  |
-|  {(b) LfoRK—RboRK | 3 |  |  |
-|  {(a) RfiRK—LbiRK | 4 |  |  |
-|  {(b) LfiRK—RbiRK | 4 |  |  |
-|   |  |  |  |
-| Counters |  {(a) RfoC—LboC | 2 |  |
-|  {(b) LfoC—RboC | 2 |  |  |
-|  {(a) RfiC—LbiC | 3 |  |  |
-|  {(b) Lfic—RbiC | 3 |  |  |
-|   |  |  |  |
-| Three, |  {(a) RboTfioT—LbiTfoiT | 3 |  |
-| Change Three |  {(b) LboTfioT—RbiTfoiT | 3 |  |
-|   |  |  |  |
-| Loop, |  {(a) RfoLPfoiLP—LfiLPfioLP | 4 |  |
-|  {(b) LfoLPfoiLP—RfiLPfioLP | 4 |  |  |
-|   |  |  |  |
-| Change Loop  | {(a) RboLPboiLP—LbiLPbioLP | 5 |  |
-|  {(b) LboLPboiLP—RbiLPbioLP | 5 |  |  |
-|   |  |  |  |
-| Bracket, |  {(a) RfoBbioB—LfiBboiB | 4 |  |
-| Change Bracket |  {(b) LfoBbioB—RfiBboiB | 4 |  |
+|                            | Marks.                     | Factor. | Total. |     |
+|----------------------------|----------------------------|---------|--------|-----|
+| Rockers                    | {(a) RfoRK—LboRK           |         | 3      |     |
+| {(b) LfoRK—RboRK           |                            | 3       |        |     |
+| {(a) RfiRK—LbiRK           |                            | 4       |        |     |
+| {(b) LfiRK—RbiRK           |                            | 4       |        |     |
+| Counters                   | {(a) RfoC—LboC             |         | 2      |     |
+| {(b) LfoC—RboC             |                            | 2       |        |     |
+| {(a) RfiC—LbiC             |                            | 3       |        |     |
+| {(b) Lfic—RbiC             |                            | 3       |        |     |
+| Three,                     | {(a) RboTfioT—LbiTfoiT     |         | 3      |     |
+| Change Three               | {(b) LboTfioT—RbiTfoiT     |         | 3      |     |
+| Loop,                      | {(a) RfoLPfoiLP—LfiLPfioLP |         | 4      |     |
+| {(b) LfoLPfoiLP—RfiLPfioLP |                            | 4       |        |     |
+| Change Loop                | {(a) RboLPboiLP—LbiLPbioLP |         | 5      |     |
+| {(b) LboLPboiLP—RbiLPbioLP |                            | 5       |        |     |
+| Bracket,                   | {(a) RfoBbioB—LfiBboiB     |         | 4      |     |
+| Change Bracket             | {(b) LfoBbioB—RfiBboiB     |         | 4      |     |
 
-|  R = Right. L = Left. RK = Rocker. C = Counter. LP = Loop. |  B = Bracket. f = Forwards. b = Backwards. o = Outside. i = Inside. |
-| --- | --- |
-
- 
+| R = Right. L = Left. RK = Rocker. C = Counter. LP = Loop. | B = Bracket. f = Forwards. b = Backwards. o = Outside. i = Inside. |
+|-----------------------------------------------------------|--------------------------------------------------------------------|
 
 Now, here is a list of requirements which, when we think of the accuracy demanded by the International style in the matter of tracing, will clearly be too much for any but the very elect. Not only has a figure as difficult as the back-loop 8 to be skated, but it has to be skated with accuracy: the loops must lie approximately one on the top of the other, and the edges that lead into and out of them must be symmetrically laid down. It is this accuracy which makes the International style so hard of achievement in its higher branches; to hope to get through this list of searching figures, it is clear that the balance, the pace, and the power of the skater must be in perfect control. And all the time the appearance of insouciant freedom is there, though all the time that freedom is bound by laws as relentless as those which regulate the tranquillity of the English style. The feats are so difficult that they cannot be executed except in a certain way, just as the ball that spins so carelessly over the tennis net cannot win a short chase off the back wall unless it has been hit in one way and no other.
 
 A further important branch of International skating is the pair-skating, which ranges from the simple waltz-step to the most intricate evolutions. The rhythm and grace of this delightful exhibition is beyond all words; beyond all words, too, is the training and skill which it implies. Every bar of the music which accompanies it has its appropriate movement: it is a perfect song of motion set to the band. But the beauty and swing of it are things quite indescribable; one might as well hope to reproduce the dancing of Pavlova in pen and ink as to convey any sense of it to those who have not seen it. And those who have seen it would very wisely yawn and pass on if they observed a purple paragraph on the subject looming ahead. But thistledown is not so light in a warm west breeze, nor the curves of a swallow’s flight more deliciously unconjecturable than a well-matched pair in this pastime so perfectly preconcerted that it looks entirely unrehearsed. On they drift, gliding, turning, parting to come together again.... Mrs. Gummidge, for the moment, would cease to think of the old ’un, and inquire the price of skates—and knee-pads.
 
-\[I[mage unavailable.\]]()
+ [Image unavailable.]
 
 Plate XI
 
 A WINTER HARVEST
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XII
 
 CLEARING THE SNOW FROM THE RINK
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XIII
 
 SPRINKLING THE RINK, CHÂTEAU D’OEX
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XIV
 
 PUBLIC RINK, DAVOS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XV
 
 SKATING-RINK AT MÜRREN
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XVI
 
 SKATING-RINK AT CHÂTEAU D’OEX
 
-## CHAPTER III TEES AND CRAMPITS
+CHAPTER III\
+
+TEES AND CRAMPITS
+---------------------------------------------------------------------------------
 
 These great Swiss rinks, the construction of which has already been dealt with, are made for the benefit of the skater and the curler, but wherever possible the curler should be accommodated with a separate rink of his own. Epicure though the skater is, with regard to the smoothness and levelness of his ice, the curler, quite rightly, is even more exigent, and slight slopes of surface and minute inequalities and roughnesses which do not interfere with the skater at all, make it impossible for the curler to have a satisfactory rink. In any case, the curler’s portion must be roped off from the skating part of the rink, for, naturally, no skate blade must make the smallest scratch on his sacred enclosure; while, on the other side, the curler is liable, in the ecstasies of his “sooping,” to shed and scatter pieces of broom which wander on to the skater’s ice and cause falls. Besides, the skip habitually shouts at the top of his voice, and a good stone evokes choruses of open-throated music: thus, if many curlers are shouting at the top of their voices, combined skaters cannot hear the caller, unless he shouts at the top of his voice. If he does this while skating a figure, he will speedily become purple in the face and quite breathless. Also, the curler smokes when he curls, which tempts the skater to do likewise, and for the sake of the rink he must not. For those and many other reasons, the curler should, when possible, have a separate rink of his own, where he can soop and shout and smoke without interfering with anybody.
 
@@ -889,7 +901,7 @@ He delivers the stone: the skip, eagle-eyed, watches the pace of it. It may seem
 
 No. 1 of the other side delivers his stone: No. 1 of the first side delivers his second stone, and No. 1 of the opposing side delivers his second stone. And from this moment the whole problem of the game becomes as complicated and interesting, given that the stones perform something like that which is required of them, as does a game of chess when the first four or five moves of a recognised gambit have been played and countered. Even at so early a period of a head at curling, the possibilities of its subsequent development are almost infinite; the building up of the house may progress in a hundred different ways, and it will be possible only to consider only one or two of the problems with which the skip is confronted.
 
-In actual “moves,” what has happened is this: the leads (No. 1) of each side have played their stones, and No. 2 on each side go up to the crampit for their turn. No. 3 on each side thereupon moves towards the crampit, while No. 1 on each side becomes the sweeper nearest the house, so that each stone as it comes down the ice may have its sweeper ready if sweeping is ordered. No. 3 (when No. 2 is playing) is nearest No. 2: he dances sideways along the ice ready to sweep if the order comes, until he delivers the stone into the keeping of No. 1, who has just played. Often, if sweeping is an urgent necessity, both he and No. 1 will vigorously scour in front of the progressing stone, since often in the ensuing situations it is not a question of additional feet that are required, but of an inch or two. There may be a stone in the house already, and it is doubtful whether an opposing stone has “legs” or vitality enough just to pass it, and thus lie nearer to the tee. In such a case all possible assistance must be rendered it; the skip will career wildly out of his house and join No. 3 and No. 1 in their operations. Anything, anything to give this dying stone an inch more of travel\!... Also, a stone with smooth ice in front of it will travel more directly, that is with less curl upon it, as it is becoming moribund, than a stone which has the infinitesimal fractions of tiny frost-flower or moisture to encounter. But that opens up the awful question of “handle.”... There will be something about that in its appropriate place.
+In actual “moves,” what has happened is this: the leads (No. 1) of each side have played their stones, and No. 2 on each side go up to the crampit for their turn. No. 3 on each side thereupon moves towards the crampit, while No. 1 on each side becomes the sweeper nearest the house, so that each stone as it comes down the ice may have its sweeper ready if sweeping is ordered. No. 3 (when No. 2 is playing) is nearest No. 2: he dances sideways along the ice ready to sweep if the order comes, until he delivers the stone into the keeping of No. 1, who has just played. Often, if sweeping is an urgent necessity, both he and No. 1 will vigorously scour in front of the progressing stone, since often in the ensuing situations it is not a question of additional feet that are required, but of an inch or two. There may be a stone in the house already, and it is doubtful whether an opposing stone has “legs” or vitality enough just to pass it, and thus lie nearer to the tee. In such a case all possible assistance must be rendered it; the skip will career wildly out of his house and join No. 3 and No. 1 in their operations. Anything, anything to give this dying stone an inch more of travel!... Also, a stone with smooth ice in front of it will travel more directly, that is with less curl upon it, as it is becoming moribund, than a stone which has the infinitesimal fractions of tiny frost-flower or moisture to encounter. But that opens up the awful question of “handle.”... There will be something about that in its appropriate place.
 
 But here, at any rate, we have the rink moving. Slow stones are being encouraged to cross the hog, or to enter the house, or, even at this early stage, to cannon rudely against the stones already in the house which must be ejected. Theoretically, I think, in the ideal game of curling, which we shall never see on this side of the grave, the leads should have laid down four stones a little in front of the house, or perhaps each lead should first have put down a stone in front of the house, and then delivered their second stones with in-handle or out-handle, round their first stones, which thus become guards of their second stones, which should lie, say, in the four-foot circle. But we need not consider so perfect an opening. If any leads led like that, they would be skips of a team of archangels, who would be soundly rated for their clumsy play.
 
@@ -901,11 +913,11 @@ We will suppose, then, that when No. 2 plays there are lying on the ice two ston
 
 The above analysis of these early stones takes, of course, only one case out of the hundred ways in which they may lie, and gives but one instance of the value of stones lying in front of the house, rather than (in the early stages of the game) in the house. Among other values they possess they are also capable of being promoted—*i.e.* a subsequent player may be directed to hit one of them gently, so as to push it into the house, while his will lie there in its place guarding it. Or he may be told, if the stone in question is lying rather wide, to get an inwick off it—*i.e.* play on to the inner side of it, as in the manner of a half-ball shot at billiards, and, cannoning off it, slip into the house himself. Perhaps it will be an enemy’s stone selected for this manœuvre, and perhaps, also, he will hit the wrong side of it (*i.e.* the outer side), and instead of slipping into the house himself, will kindly promote the other stone instead. Thus these stones in front of the house are both an asset and a danger, and it is not too much to say that their presence, lying there, is about the largest constituent in the interest of the “end” and the building of the house. They present, as has been seen, infinite possibilities of value and menace. And all their terrific potentialities have to be weighed and pondered by the skip.
 
-When twelve stones have been put down (*i.e.* when the first three players on each side have contributed two each) the skips, if playing four, leave the house and go down to the crampit to deliver their stones. One in all probability looks troubled, the other in that case will almost certainly wear a face of benignant elation and call attention to the beauty of the morning. Their places in the house to direct and hold the guiding besom are taken by other members of their side (probably the No. 3s), and before they go they will almost certainly hold a secret and muttered conversation with these gentlemen, consulting and conferring over the shots to be attempted. For by this time the situation, if the play has been respectable, is sure to have become complicated. Very likely four or five stones are in the house, and of those four or five all but one may happen to belong to one side. But that one is sitting there on the very tee itself, and thus takes precedence of all the others. If only it could be got at and evicted and soundly butted out of the house, the other four would all count. But it lies well guarded, for just in front of the house are two stones a little to right and left of it. There is clear ice (a “port” as it is called) of not more than two feet between them, through which it is possible to send a stone that will reach that tee-sitter. But, oh, how small a two-foot port looks at the distance of nearly forty yards\!
+When twelve stones have been put down (*i.e.* when the first three players on each side have contributed two each) the skips, if playing four, leave the house and go down to the crampit to deliver their stones. One in all probability looks troubled, the other in that case will almost certainly wear a face of benignant elation and call attention to the beauty of the morning. Their places in the house to direct and hold the guiding besom are taken by other members of their side (probably the No. 3s), and before they go they will almost certainly hold a secret and muttered conversation with these gentlemen, consulting and conferring over the shots to be attempted. For by this time the situation, if the play has been respectable, is sure to have become complicated. Very likely four or five stones are in the house, and of those four or five all but one may happen to belong to one side. But that one is sitting there on the very tee itself, and thus takes precedence of all the others. If only it could be got at and evicted and soundly butted out of the house, the other four would all count. But it lies well guarded, for just in front of the house are two stones a little to right and left of it. There is clear ice (a “port” as it is called) of not more than two feet between them, through which it is possible to send a stone that will reach that tee-sitter. But, oh, how small a two-foot port looks at the distance of nearly forty yards!
 
-Now, it is to the first skip that this by-every-means-in-his-power-to-be-guarded stone belongs, and with justice he fears that his opposing skip is perfectly capable of sailing blandly through that rather narrow port, butting the stone that lies so perfectly on the tee out of the house altogether, and lying there himself instead. So he has elected to play a shot that will close up that port and leave the stone on the tee for the moment impregnable. He wants to lie just over the hog and no more, for the nearer a stone is to the hog the more it blocks the passage. So, calling on his sweepers to be ready to sweep (“Sweepers wake\!” in fact), he puts down his stone with in-handle on it, directing this a little
+Now, it is to the first skip that this by-every-means-in-his-power-to-be-guarded stone belongs, and with justice he fears that his opposing skip is perfectly capable of sailing blandly through that rather narrow port, butting the stone that lies so perfectly on the tee out of the house altogether, and lying there himself instead. So he has elected to play a shot that will close up that port and leave the stone on the tee for the moment impregnable. He wants to lie just over the hog and no more, for the nearer a stone is to the hog the more it blocks the passage. So, calling on his sweepers to be ready to sweep (“Sweepers wake!” in fact), he puts down his stone with in-handle on it, directing this a little
 
-\[Im[age unavailable.\]]()
+[Image unavailable.]
 
 “SHE LIES”
 
@@ -913,21 +925,21 @@ Now, it is to the first skip that this by-every-means-in-his-power-to-be-guarded
 
 wide of the left-hand stone of those two guards, by which the temporary skip is holding his besom. For one moment he watches its passage, eyes glued to it, stricken to stone. Suddenly an awful misgiving occurs to him, his face turns to a perfect mask of agonised fury, and he yells at the top of a naturally powerful voice:
 
-“Sweep her, don’t leave her for a moment. Sweep\! Sweep\! Don’t leave her. Good Lord, can’t you sweep? Oh, well swept, well swept indeed\!”
+“Sweep her, don’t leave her for a moment. Sweep! Sweep! Don’t leave her. Good Lord, can’t you sweep? Oh, well swept, well swept indeed!”
 
 Then probably with infernal superiority he shouts, “Is that about where you wanted it?” knowing perfectly well that it is.
 
 All this means that
 
-(i) He was afraid he had put down his stone too weakly, and that it would not get over the hog.
+\(i\) He was afraid he had put down his stone too weakly, and that it would not get over the hog.
 
-(ii) It would then be ignominiously removed, and he would wish he had never been born.
+\(ii\) It would then be ignominiously removed, and he would wish he had never been born.
 
-(iii) The opposing skip would sail through that port, and out the winning stone.
+\(iii\) The opposing skip would sail through that port, and out the winning stone.
 
-(iv) That it is all his fault, and that he will never curl again, but take to that degraded pastime, skating.
+\(iv\) That it is all his fault, and that he will never curl again, but take to that degraded pastime, skating.
 
-(v) Finally, that his stone has been swept over the hog and lies now bang in the middle of the passage, closing it completely—a perfect gem, pearl, peach.
+\(v\) Finally, that his stone has been swept over the hog and lies now bang in the middle of the passage, closing it completely—a perfect gem, pearl, peach.
 
 Says the other skip grimly, “You’ve got some good sweepers on your side.”
 
@@ -955,11 +967,11 @@ Skip 2. No.
 
 (Long pause.)
 
-Skip 2. Yes, I can. At least there’s nothing else to be done. No, give me more ice than that\! (This means that he thinks his stone will take more curl, and wants the directing broom to be put wider.) That’s about right.
+Skip 2. Yes, I can. At least there’s nothing else to be done. No, give me more ice than that! (This means that he thinks his stone will take more curl, and wants the directing broom to be put wider.) That’s about right.
 
 He plays his shot amid dead silence. It soon becomes apparent that his stone is not going to curl round this guard at all, but will hit it. It does so, and lies by its side, merely giving an additional rampart to the granite fortification in the middle of the ice. The silence becomes rather painful.
 
-Skip 1. Bad luck\! (He does not mean that at all.) I think I’ll try and get another stone in the house.
+Skip 1. Bad luck! (He does not mean that at all.) I think I’ll try and get another stone in the house.
 
 Skip 1’s No. 3. For heaven’s sake don’t disturb our stone here.
 
@@ -967,7 +979,7 @@ Skip 1. No, I’ll play it just tee high....
 
 (He puts down a hopeless hog.)
 
-Skip 1. I wish you fellows would sweep\!
+Skip 1. I wish you fellows would sweep!
 
 (His pipe goes out.)
 
@@ -977,7 +989,7 @@ No. 3. Well?
 
 Skip 2. See what happens, I think. There’s nothing to play for.
 
-This means he is going to play for a fluke. There is no reasonable chance whatever of reaching that stone on the tee, and a wild toboggan of a shot sent down among all those guards may do something, though heaven alone knows what. He puts down stone with full swing, most unevenly, so that it careers up the ice violently rocking. It hits the long guard by the hog, which is exactly what he didn’t want to do, almost full in the face, and sends it scudding off into the abominably bad stone he himself has just put down before. It hits this nearly full, and starts it on its way. Bang into the middle of the house it goes, sends that impregnable tee-lying stone flying, and lies there itself. The five other stones in the house are all on its side, and instead of Skip 1 scoring one, Skip 2, off an incredible, revolting, pitiable fluke, scores five. Roars of execration and applause rend the skies, and Skip 2 modestly remarks, “Well, there are more ways than one of playing any shot\!”
+This means he is going to play for a fluke. There is no reasonable chance whatever of reaching that stone on the tee, and a wild toboggan of a shot sent down among all those guards may do something, though heaven alone knows what. He puts down stone with full swing, most unevenly, so that it careers up the ice violently rocking. It hits the long guard by the hog, which is exactly what he didn’t want to do, almost full in the face, and sends it scudding off into the abominably bad stone he himself has just put down before. It hits this nearly full, and starts it on its way. Bang into the middle of the house it goes, sends that impregnable tee-lying stone flying, and lies there itself. The five other stones in the house are all on its side, and instead of Skip 1 scoring one, Skip 2, off an incredible, revolting, pitiable fluke, scores five. Roars of execration and applause rend the skies, and Skip 2 modestly remarks, “Well, there are more ways than one of playing any shot!”
 
  
 
@@ -1005,57 +1017,60 @@ A further question arises. Is it not possible to regulate the amount of handle a
 
 But whatever the method of grip, whatever the curl to be imparted to the stone, the handle should be at rest in the crook of the fingers. To hold it tight implies muscular exertion, and muscular exertion, unless the object is to send a fast straight stone, the only requisite of which is great pace and moderate direction, is out of place at this delicate and “touchy” game. Even when the ice is very slow, better practice will be made with a longer and untightened swing than with momentum derived from the elbow and shoulder.
 
-Finally, but no less importantly, with regard to sweeping. It is hardly too much to say that a good sweeper is almost worth his place in a side, even though he is an indifferent player, so tremendous is the part which a good sweeper plays, for he is like a good field at cricket. He should always start before the stone gets to him, so that by the time it is opposite him he is moving down the rink with it, ready to begin operations the moment his skip tells him. The word of command may come at any second, and it is often of vital importance that he should begin instantly. Even skips have errors of judgment, and the skip may have not given the order to sweep soon enough. This can often be rectified by instant and vigorous sweeping, and the error repaired, whereas if a sweeper is slow to go about his job the mistakes on the part of the skip may be irremediable. All down his allotted portion of the ice the good sweeper will sidle along by the travelling stone, even though no order comes, until he has given it into keeping of the next sweeper or of the skip himself. And with the same promptitude as he began to sweep must he stop sweeping when he hears the word “Up brooms\!” Another yard of polish may, if the skip is correct in his estimate, be the death of a winner. Often again it is but a question of an inch or two to turn a hog into the most perfect of long guards, and this inch or two is entirely a matter of sweeping. The most moribund of travellers may be coaxed over the line and make an incalculable difference in the score by protecting a winner. But “a little less and what worlds away.”... A shot that good sweeping would have made into a gem is bundled off the ice like the worst stone ever sent down on its degraded handle.
+Finally, but no less importantly, with regard to sweeping. It is hardly too much to say that a good sweeper is almost worth his place in a side, even though he is an indifferent player, so tremendous is the part which a good sweeper plays, for he is like a good field at cricket. He should always start before the stone gets to him, so that by the time it is opposite him he is moving down the rink with it, ready to begin operations the moment his skip tells him. The word of command may come at any second, and it is often of vital importance that he should begin instantly. Even skips have errors of judgment, and the skip may have not given the order to sweep soon enough. This can often be rectified by instant and vigorous sweeping, and the error repaired, whereas if a sweeper is slow to go about his job the mistakes on the part of the skip may be irremediable. All down his allotted portion of the ice the good sweeper will sidle along by the travelling stone, even though no order comes, until he has given it into keeping of the next sweeper or of the skip himself. And with the same promptitude as he began to sweep must he stop sweeping when he hears the word “Up brooms!” Another yard of polish may, if the skip is correct in his estimate, be the death of a winner. Often again it is but a question of an inch or two to turn a hog into the most perfect of long guards, and this inch or two is entirely a matter of sweeping. The most moribund of travellers may be coaxed over the line and make an incalculable difference in the score by protecting a winner. But “a little less and what worlds away.”... A shot that good sweeping would have made into a gem is bundled off the ice like the worst stone ever sent down on its degraded handle.
 
-Besides matches between teams there is a very searching affair to be played with curling-stones called a “points” competition. Here single players compete against each other in attempting to make certain shots which are set them. Stones are put on the ice in certain given positions, and each competitor in turn has to try to bring off a certain definite shot. For instance, he will have to guard one stone, to promote another, to get an inwick off a third, to draw a port between two others, \&c. It is, of course, a very high test of skill, but is somewhat a Lenten or humiliating affair, since the very finest players seldom get as much as half-marks. It is, moreover, lacking in all the “team-feeling” which is one of the greatest charms in match play, and is also, in the present writer’s humble opinion, a terribly tedious affair, since after each shot, if the lying stones have been touched, they must be replaced on their marked spots, and a competition of this kind, if there is at all a large field, goes on rather longer than into eternity. According to the regulations drawn up by the Royal Caledonian Club there are nine shots to be played and a tenth is added in case of a tie. The necessary stones to play on to are placed in or around the house, and the competitor has then nine different shots to play.
+Besides matches between teams there is a very searching affair to be played with curling-stones called a “points” competition. Here single players compete against each other in attempting to make certain shots which are set them. Stones are put on the ice in certain given positions, and each competitor in turn has to try to bring off a certain definite shot. For instance, he will have to guard one stone, to promote another, to get an inwick off a third, to draw a port between two others, &c. It is, of course, a very high test of skill, but is somewhat a Lenten or humiliating affair, since the very finest players seldom get as much as half-marks. It is, moreover, lacking in all the “team-feeling” which is one of the greatest charms in match play, and is also, in the present writer’s humble opinion, a terribly tedious affair, since after each shot, if the lying stones have been touched, they must be replaced on their marked spots, and a competition of this kind, if there is at all a large field, goes on rather longer than into eternity. According to the regulations drawn up by the Royal Caledonian Club there are nine shots to be played and a tenth is added in case of a tie. The necessary stones to play on to are placed in or around the house, and the competitor has then nine different shots to play.
 
 These are—(i) striking; (ii) inwicking; (iii) drawing to the tee; (iv) guarding; (v) chap and lie (*i.e.* playing on to a stone on the tee, ejecting it, and remaining in the house); (vi) wick and curl in; (vii) raising; (viii) chipping the winner; (ix) drawing through a port. In case of a tie between competitors, those who are equal play *four* shots of “outwicking.”
 
 Different marks can be earned by each of these shots. For instance, if a competitor playing chap and lie remain in the seven-foot circle he scores one, if within the four-foot circle he scores two, given that he strikes the placed stone out of the house in both cases. Complete details are published by the Royal Caledonian Curling Club.
 
-\[I[mage unavailable.\]]()
+ [Image unavailable.]
 
 Plate XVII
 
 CURLING
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XVIII
 
 CURLING AT MURREN
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XIX
 
 THE THREE KULM RINKS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XX
 
 LADIES’ CURLING MATCH, ST. MORITZ
 
-## CHAPTER IV TOBOGGANING
+CHAPTER IV\
+
+TOBOGGANING
+-------------------------------------------------------------------------------
 
 To descend an ice-run like the Cresta at St. Moritz is no doubt a most thrilling and skilled adventure, but the vast majority of people who say (with perfect truth) that they enjoy tobogganing would sooner think of ascending in an aeroplane than descending the Cresta, and would freeze with fright at the thought of embarking on it. On the other hand, the skilled Cresta runner would no more think that the quiet descent of snow-covered roads on a Swiss luge was tobogganing in his sense of the word, than the aeroplanist would allow that a man practising high jump was flying. From which we may rightly infer that there are various sorts of movement which are covered by the word tobogganing.
 
 As a matter of fact there are, commonly practised in Switzerland, three broad and widely differing species of tobogganing. They are as follows:
 
-(i) Proceeding—quickly or leisurely—down frozen roads or artificial snow-made runs.
+\(i\) Proceeding—quickly or leisurely—down frozen roads or artificial snow-made runs.
 
-(ii) Proceeding—as quickly as possible—down artificial ice-runs.
+\(ii\) Proceeding—as quickly as possible—down artificial ice-runs.
 
-(iii) Bobsleighing (or bobbing)—as quickly as possible—down roads or artificial runs.
+\(iii\) Bobsleighing (or bobbing)—as quickly as possible—down roads or artificial runs.
 
 The number of folk who practise the first of these immensely outnumbers those who practise the other two; for everybody in Switzerland in the winter is guilty of the first practice, from the small Swiss native, aged perhaps eight or under, who marches up to school with its books tied on to its luge, and gaily and jauntily returns home seated on it, steering and guiding with its ridiculous little feet, and shouting “Gare” or “Achtung,” according to the canton, up to the skilled racer on the skeleton who carries off the Symonds bowl in the race on the Klosters road at Davos. But all these, different as their performances are, are going on snow-runs. The snow may in places, it is true, where it has thawed and frozen again, intimately resemble ice. But the ice-run is different in kind from any snow-runs.
 
 For ordinary travel, let us say from your hotel down to the rink, where there is no question of racing, but just getting there, the toboggan generally used is the Swiss toboggan or luge. It is a high wooden frame (high, that is, compared to the skeleton) with two runners shod with steel or iron, and you sit on it exactly as is most comfortable—it is never very comfortable—and tie your lunch and skates on to it, and push off. If you want to turn to the right, you put your right heel into the snow, or dab with your hand on the right side; if you want to go to the left, you perform the same operation in a sinister manner. If you want to stop, you put both heels into the snow. If you want to go quicker, you, while still sitting down, walk with both feet simultaneously. This sounds complicated; but it is quite clear the moment you feel you want to go quicker—it is done instinctively. Finally, if you are going fast, and must make a sudden stop,
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
-“ACHTUNG\!”
+“ACHTUNG!”
 
 *From the Drawing by Fleming Williams*
 
@@ -1063,11 +1078,11 @@ owing to some obstacle in the shape of an old lady or a sleigh immediately in fr
 
 The foregoing is a complete compendium of all that it is necessary to know or do, when tobogganing on an ordinary road. It is as simple as walking and generally quicker. The same, in the main, applies to the use of luges on an artificially-made run. But every artificial run implies the idea of racing, and thus the object is to get down it as quickly as possible. But every artificial run has turns in it, and the idea is to get round these turns without capsize and with as little loss of speed as possible. The outside of these turns is therefore banked up (*i.e.* if the turn is to the right, the left side of the track is banked up, and *vice versa*), so that you do not (if you manage properly) run out of the track, but climb the bank and descend again into the track. But if you do not manage properly, one of three things will happen to you.
 
-(i) You go over the bank and are heavily spilled. This is fatal if you want to win a race, unless everybody else does the same.
+\(i\) You go over the bank and are heavily spilled. This is fatal if you want to win a race, unless everybody else does the same.
 
-(ii) You upset on the bank. This is not necessarily so fatal, unless you entirely part company with your toboggan, which then finishes triumphantly without you.
+\(ii\) You upset on the bank. This is not necessarily so fatal, unless you entirely part company with your toboggan, which then finishes triumphantly without you.
 
-(iii) In excess of caution, you diminish your speed so much before you get to the bank that you merely crawl round the bend. This is moderately fatal.
+\(iii\) In excess of caution, you diminish your speed so much before you get to the bank that you merely crawl round the bend. This is moderately fatal.
 
 But we need not waste more time over artificial snow-runs. They are only a compendious form of road-running, and what is necessary in the way of steering and judgment of pace on them, is equally true with regard to such fine natural runs as the Klosters road. Here there are no artificial banks to keep the runner in his course. He has to get around the corners by judicious steering, and crawling when necessary, and, above all, by adjustment of weight. On the ordinary luge or Swiss toboggan there is little adjustment of weight that can be made, but it is a very different affair when you negotiate the same road on racing toboggans, namely skeletons, which are also used on ice-runs.
 
@@ -1077,7 +1092,7 @@ Apart from the “storm and stress” of racing, there is a wonderful pleasure, 
 
 (As a matter of fact, I had an awful spill by the cabbage garden corner: but though that was very vivid at the time, there remains nothing of it, except the fact, in my memory. It would have been more romantic, but less realistic, not to have mentioned it.)
 
-#### Ice-runs
+#### *Ice-runs*
 
 There is one Mecca: there is one St. Peter’s: there is one Cresta. As is Mecca to the Mohammedan, as is St. Peter’s to the Catholic, so is the Cresta run at St. Moritz to the tobogganer. It is *the* ice-run. There may be others, and there certainly are, but what does the Cresta care? It has a *cachet* which no other possesses.
 
@@ -1087,7 +1102,7 @@ To begin with, the snow is trampled down, after the manner of making the foundat
 
 A very high degree of nerve, skill, and judgment is required on such an ice-run as this. The rider’s object being to cover the course in as few seconds as possible, he must clearly take his banks (*i.e.* get round the curves) with as little loss of speed as possible, and he will only use his brakes when his judgment tells him that if unchecked he would be carried over the top of them. On the other hand, he does not want to brake unless it be necessary, and you will often see him with his top runners within an inch or two of the edge of these huge sloping ice-curves. At Battledore and Shuttlecock, the two biggest banks on the Cresta, he enters the second immediately after coming out of the first, and the two form a great S curve. Lower down again, before he threads the
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
 ON THE CRESTA RUN
 
@@ -1095,9 +1110,9 @@ ON THE CRESTA RUN
 
 arch of the railway bridge, there is another called Bulpett’s corner, designed to protect him from running out to the left of the course, and then a headlong descent takes him to the winning-post, which is at the bottom of the hill. Passing this he snaps a thread with an electric connection, which registers the exact fraction of a second at which he passes it. Then, on his run out, he whirls up a steep ice-covered slope, for if this were not iced too, his speed would be so abruptly checked that he and his toboggan would be bowled over and over like a shot rabbit, and comes to a stop just outside the little village of Cresta. But even with this steep slope to check him after his race is over, the momentum acquired is so great that, if he does not brake heavily all the way up this hill, he will, on reaching the level ground at the top, shoot high into the air, toboggan and all.
 
-Some idea of the speed at which toboggans travel on the straight reaches of the course may be gathered from the average speed at which the course can be run. It is over 1300 yards in length, and has been traversed in a shade over 60 seconds\! This means that the highest rate of speed must be well over 70 miles an hour. This on a pair of steel runners, head foremost, with your face a few inches above the solid ice, with nothing to check you except a small-toothed rake on the toe of each boot\! Yet so wonderfully skilful is the construction of the run, so cunningly is it built to safeguard the headlong traveller, that accidents are very few. Two fatal ones, indeed, there have been, but of these one had nothing to do with the course itself, but was owing to the fact that a rider started from the top before one of the barriers across the course, which show that it is not open for racing, had been removed. In the other, the rider ran over a bank and his toboggan fell on the top of him. One of the great difficulties which the builders and managers of this run, in company with other ice-runs, have to contend against, is the power of the sun. It is, of course, absolutely necessary that the icing of the run should be so solid that there is no chance of the runner of a toboggan going through it, which would naturally mean a bad spill. But it is also necessary that certain of the banks must have the sun blazing into them all day long, which would cause them to lose ice faster than it could be made by the sprinkling which goes on when the sun is off them. At such points, therefore, big canvas screens are put up, which shade the bank from the direct rays; also tobogganing is never permitted to go on all day. It starts early in the morning, when the run has been recuperated by the night of frost, and is closed when, in the opinion of the management, the sun has so softened the banks that there is danger of a toboggan cutting through the crust.
+Some idea of the speed at which toboggans travel on the straight reaches of the course may be gathered from the average speed at which the course can be run. It is over 1300 yards in length, and has been traversed in a shade over 60 seconds! This means that the highest rate of speed must be well over 70 miles an hour. This on a pair of steel runners, head foremost, with your face a few inches above the solid ice, with nothing to check you except a small-toothed rake on the toe of each boot! Yet so wonderfully skilful is the construction of the run, so cunningly is it built to safeguard the headlong traveller, that accidents are very few. Two fatal ones, indeed, there have been, but of these one had nothing to do with the course itself, but was owing to the fact that a rider started from the top before one of the barriers across the course, which show that it is not open for racing, had been removed. In the other, the rider ran over a bank and his toboggan fell on the top of him. One of the great difficulties which the builders and managers of this run, in company with other ice-runs, have to contend against, is the power of the sun. It is, of course, absolutely necessary that the icing of the run should be so solid that there is no chance of the runner of a toboggan going through it, which would naturally mean a bad spill. But it is also necessary that certain of the banks must have the sun blazing into them all day long, which would cause them to lose ice faster than it could be made by the sprinkling which goes on when the sun is off them. At such points, therefore, big canvas screens are put up, which shade the bank from the direct rays; also tobogganing is never permitted to go on all day. It starts early in the morning, when the run has been recuperated by the night of frost, and is closed when, in the opinion of the management, the sun has so softened the banks that there is danger of a toboggan cutting through the crust.
 
-#### Bobsleighing (or Bobbing)
+#### *Bobsleighing (or Bobbing)*
 
 This charming form of the sport may be described as combined tobogganing, and in bobbing races teams of four enter against each other. The form of toboggan used is, of course, immensely larger than that employed in single tobogganing, since it will hold five or six persons, and its construction is altogether different and most elaborate. It consists of a long, low platform some 10 feet in length, and is mounted, not on one pair of runners, but on two. The pair that supports the fore part of the bobsleigh is a sort of bogie-truck, pivoted under the platform, and it can be turned to the right and left in order to direct the course of the bob round curves. This turning of it is done by the captain, who sits first at the bows of the sleigh, and is worked by ropes, which he holds in his hands, or by a wheel which controls its movements. In long runs, as on the Schatz-alp at Davos, the wheel is far better than the ropes, since it entails so much less strain on the hands of the steersman: on a short run the ropes are as good. Behind the captain sit the members of his crew in line, with the loops of rope just outside the framework of the sleigh, in which they fix their heels. Last of them all sits the brakesman, at the stern of the sleigh, who has in his control a powerful steel-toothed brake, which crosses the sleigh behind and is worked with levers. But it is the captain who is in command of the bob, and the brakesman and other members of the crew only perform his orders. The word “bobsleigh” is derived from the movement of leaning or “bobbing” forward, which is done by all the crew together, to get up speed or increase it. They come forward quickly with a jerk, and go back again slowly and steadily, and this without doubt accelerates the movement of the sleigh.
 
@@ -1105,7 +1120,7 @@ As in all other forms of tobogganing, braking is employed to diminish speed in c
 
 Bobbing can be practised on an ordinary road covered with hard snow, or, *in excelsis*, on runs constructed for this express
 
-\[Im[age unavailable.\]]()
+[Image unavailable.]
 
 TAILING
 
@@ -1113,85 +1128,88 @@ TAILING
 
 purpose. Of these the two most famous are the St. Moritz bob-run, which starts by the Bandy rink and finishes side by side with the Cresta ice-run, after passing under the railway bridge, and the Schatz-alp run at Davos. Previous to its construction, not many years ago, bobbing at Davos chiefly took place on the Klosters road, which was the same track as that used by the ordinary toboggan, but now each has its own course. These artificially constructed bob-runs are engineered with the same care and nicety as ice-runs for the single toboggan, and at corners curved banks are built solidly of beaten-down snow. The track is then iced, for no snow could stand the continual passage of the heavy bobs over the same banks and narrow course without speedily being worn into ruts that would entirely spoil the going and upset the goers, and the ice is then sprinkled over with loose snow to prevent the toboggan skidding. But the greater part of bobbing is done on the public roads, which are frozen and hardened by the passage of sleighs. At most Swiss winter resorts there are facilities for this delightful form of sport.
 
-\[I[mage unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXI
 
 THE BUILDING OF THE CRESTA—“BATTLEDORE”
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXII
 
 THE TOP OF THE CRESTA, ST. MORITZ
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXIII
 
 STARTING ON THE CRESTA
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXIV
 
 CHURCH LEAP, CRESTA RUN
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXV
 
 CHURCH LEAP, CRESTA RUN
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXVI
 
 “BATTLEDORE” CORNER, CRESTA
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXVII
 
 CROSSING THE ROAD, CRESTA
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXVIII
 
 NEAR THE FINISH ON THE CRESTA
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXIX
 
 BOB-RUN, ST. MORITZ: IN THE LARCH WOODS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXX
 
 ROUNDING SUNNY CORNER, ST. MORITZ BOB-RUN
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXI
 
 BOB-RUN, ST. MORITZ
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXII
 
 THE STRAIGHT FROM THE BRIDGE, ST. MORITZ BOB-RUN
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXIII
 
 ST. MORITZ BOB-RUN
 
-## CHAPTER V ICE-HOCKEY
+CHAPTER V\
+
+ICE-HOCKEY
+-----------------------------------------------------------------------------
 
 Many of the Swiss winter-resorts can put into the field a very strong ice-hockey team, and fine teams from other countries often make winter tours there; but the ice-hockey which the ordinary winter visitor will be apt to join in will probably be of the most elementary and unscientific kind indulged in, when the skating day is drawing to a close, by picked-up sides. As will be readily understood, the ice over which a hockey match has been played is perfectly useless for skaters any more that day until it has been swept, scraped, and sprinkled or flooded; and in consequence, at all Swiss resorts, with the exception of St. Moritz, where there is a rink that has been made for the hockey-player, or when an important match is being played, this sport is supplementary to such others as I have spoken of. Nobody, that is, plays hockey and nothing else, since he cannot play hockey at all till the greedy skaters have finished with the ice.
 
@@ -1207,13 +1225,13 @@ But such is not the aspect of the game that will strike the observer who watches
 
 It so happened that the puck was in the neighbourhood of the goal away from the steep bank down into the field: it so happened, also, that all the twelve were on their feet. Somebody in the mélêe near the goal hit the puck with such amazing violence that it flew half-way down the rink. The whole field, with ever-increasing velocity, poured after it, spreading out on both sides of it. Another whack brought it close to the goal at the edge of the steep bank, and again at top-speed every player on the field was in pursuit. Faster and ever faster they neared the goal: somebody, with stick high uplifted in the manner of a three-quarter swing at golf, made a prodigious hit at it, but completely missed it. The next moment every single one of those players had poured like a resistless cataract down the steep snow-slope into the field below, leaving the rink completely untenanted except for a small innocent-looking puck, which lay a few yards in front of a yawning goal.
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
 ICE HOCKEY
 
 *From the Drawing by Fleming Williams*
 
-For a little while this impressive stillness and depopulation lasted. Then the first “strayed reveller” returned, heavily limping. He took his time, and with a superb, lightning-like shot sent the puck whirling through the unguarded goal. Simultaneously he sat down. Simultaneously a second player showed his head over the ice-bank and shouted “Offside\!” Simultaneously also, the puck hit him in the face. It is hard to believe, I know; but I assure the reader that it was harder to stop laughing.
+For a little while this impressive stillness and depopulation lasted. Then the first “strayed reveller” returned, heavily limping. He took his time, and with a superb, lightning-like shot sent the puck whirling through the unguarded goal. Simultaneously he sat down. Simultaneously a second player showed his head over the ice-bank and shouted “Offside!” Simultaneously also, the puck hit him in the face. It is hard to believe, I know; but I assure the reader that it was harder to stop laughing.
 
 At any rate, here are the rules:
 
@@ -1263,15 +1281,19 @@ If no referee is appointed, the captains shall arbitrate all disputes.
 
 17\. No alteration shall be made in the rules unless it be supported by at least two-thirds of those present at a Special General Meeting called for the purpose, of which at least seven days’ notice must be given in writing to each member, or by seven days’ notice posted on the Club Notice Board—the suggested alterations to accompany any such notice or to be affixed to the Club Notice Board. Any amendment to be brought forward at such Special General Meeting must be signed by the proposer and sent to the Hon. Secretary at least four days before the date of such Special Meeting.
 
-## CHAPTER VI SKI-ING
+CHAPTER VI\
+
+SKI-ING
+-------------------------------------------------------------------------------
 
 Of all the hundreds of folk who yearly spend a few weeks or, if they are excessively fortunate or opulent, more than a few weeks in Alpine resorts during the winter, there are many who devote themselves almost entirely to one sport. Thus you may, as a rule, never meet a man except on:
 
-| (i)  | The skating rink, |
-| --- | --- |
-| (ii) |  The curling rink, |
-| (iii) |  The ski-ing slopes, or |
-| (iv)  | The toboggan runs. |
+|         |                        |
+|---------|------------------------|
+| \(i\)   | The skating rink,      |
+| \(ii\)  | The curling rink,      |
+| \(iii\) | The ski-ing slopes, or |
+| \(iv\)  | The toboggan runs.     |
 
 Weather bad for his particular branch of sport may temporarily drive him to another and slightly despised diversion, but when possible, where his heart is, there will his legs be also. He will be adopting one particular method of sliding (I count curling a method of sliding, because your object is to make your curling-stones slide in a definite manner) to the exclusion of others, and sliding in some form or other, whether on skates or toboggan or skis, lies at the base of all winter sports. That is why we all go to Switzerland in the winter, because there we find frozen water (or hope to) in abundance. We then, having fixed on the particular and hazardous manner in which we wish to slide over frozen water, with steel blades or long wooden shoes, proceed to do so. In all cases the desire to slide instead of walk regulates the choice of our holiday. Exclusive tobogganers we must regard as a comparative rarity, for there are few who practise tobogganing whenever possible and nothing else at all. As a rule, tobogganers do not toboggan for the whole of every day. It entails too much hill-climbing.
 
@@ -1285,9 +1307,10 @@ Without going into any excessive details with regard to his equipment, certain f
 
 Next comes the awful, the intricate, the debated question of “bindings,” by which is denoted the system by which the boot of the skier is fastened to the ski. Into the merits of the different schools concerned with this I do not propose to enter, nor (under the breath be it spoken) does the fervour of the disputants seem quite to be warranted by the importance of the subject. Provided that the bindings are easily adjustable, and when adjusted are not easily displaced, and provided they are not so rigid as to render likely, in case of the “frequent fall,” a serious strain on the foot, resulting in a sprain or a broken bone, they must be considered satisfactory enough. Such bindings are:
 
-| (i)  | The Huitfeldt binding; |
-| --- | --- |
-| (ii) |  The Ellefsen binding. |
+|        |                        |
+|--------|------------------------|
+| \(i\)  | The Huitfeldt binding; |
+| \(ii\) | The Ellefsen binding.  |
 
 Many experts will be found to disapprove of each of these: on the other hand, each of them is supported by expert opinions. But the beginner, in choosing his skis, is solemnly warned against selecting unknown and patent bindings unless advised of their excellence by an expert who is familiar with them. He is safe, however (if anything connected with the skis can by any stretch of imagination be considered safe), if he selects either of the two above-mentioned bindings. They differ enormously in principle but are both excellent. A third binding, the Lilienfelt, has also many devotees: its opponents, however, assert that it is dangerously rigid. But it is possible to fall down, quite often, when using any of these bindings, with the most satisfactory results.
 
@@ -1305,12 +1328,13 @@ Now all these devices, the stamping of the skis, the stopping of the slip, the k
 
 Now, it is no part of any of these treatises to do more than state how various manœuvres on ice or snow or with the curling-stones are done, and in ski-ing (even as much as in skating) written instructions would be of very small use. What is far more to the point is to sally out (in print) on to a fairly easy slope and attempt to make these phenomena appear, so that the beginner will understand them when he sees them, and try to imitate with a knowledge of what he has to imitate. Best of all is it to get somebody actually on skis to show you what the thing looks like. Then—for we are all descended from the monkeys—it is part of our human birthright to attempt to ape what is shown, and a practical illustration, followed by actual practice, will do more for the beginner than a host of learned treatises. Still, when dusk has fallen, and he can no longer even see to fall down, he is strongly recommended to study some practical manual of ski-ing. Of these I will mention three, all of which are illustrated by a series of admirable photographs, which make a visual guide more valuable than any written instruction. These are:
 
-| (i)  | How to Ski, by Vivian Caulfield. (Nisbet.) |
-| --- | --- |
-| (ii) |  The Ski-runner, by E. C. Richardson. (Richardson & Wroughton.) |
-| (iii)  | Ski-ing, by W. R. Rickmers. (Fisher Unwin.) |
+|         |                                                                  |
+|---------|------------------------------------------------------------------|
+| \(i\)   | *How to Ski*, by Vivian Caulfield. (Nisbet.)                     |
+| \(ii\)  | *The Ski-runner*, by E. C. Richardson. (Richardson & Wroughton.) |
+| \(iii\) | *Ski-ing*, by W. R. Rickmers. (Fisher Unwin.)                    |
 
-Here he will find careful analyses of ski-ing manœuvres, clearly and at length explaining them, and elucidating the explanation by photographs. The curious student will no doubt find certain differences of opinion expressed by these Masters, but, if he is wise, he will leave academic disputation alone, and try to put into practice the precepts and instructions given by any one of them. He may rest assured that, however disputatious the pundits become over any theories advanced by these authors, there is a great deal to be said for them. Indeed, their very disputatiousness shows how much there is to be said\!
+Here he will find careful analyses of ski-ing manœuvres, clearly and at length explaining them, and elucidating the explanation by photographs. The curious student will no doubt find certain differences of opinion expressed by these Masters, but, if he is wise, he will leave academic disputation alone, and try to put into practice the precepts and instructions given by any one of them. He may rest assured that, however disputatious the pundits become over any theories advanced by these authors, there is a great deal to be said for them. Indeed, their very disputatiousness shows how much there is to be said!
 
 To return to our forlorn beginner on the slope, who has seen vanish from his ken the figure of the expert climber, we will suppose that he occupies himself with his flounderings while others with equal ease and absence of effort pass him in their ascension. Some of them, it appears, are not going out for any expedition, for they pause when they have got to a sufficient height and begin descending again. And here the tyro should surely find encouragement, for he will observe that they often stagger, fall, and are smothered in snow. That does not in the slightest degree deter them, and probably he will begin to realise that falling, even in the case of experts, is part of the day’s work, and, as a rule, does not hurt at all. Indeed the skier who does not fall is either so cautious a performer that he cannot be called a skier in any sense of the word, or so supreme a master that he is evidently not human but some form of Alpine ghost. On the skating-rink he will see the same thing, for even the “plus-players,” so to speak, if they are really practising, execute the most amazing tumbles, while on the curling-rink, the gods and demigods make shots of the most putrescent nature.
 
@@ -1330,7 +1354,7 @@ A fifth and final runner on this morning of revelation begins his descent, trave
 
 Now this gifted series of practisers on the slope have, in imagination, presented to the would-be skier all that is demanded of him in the practice of ski-running. When he has learned the more effortless ways of ascending slopes, as exhibited by the expert whom he first observed, and when he can make in his descents,
 
-\[Im[age unavailable.\]]()
+[Image unavailable.]
 
 THE TELEMARK TURN
 
@@ -1354,63 +1378,66 @@ Of all spectacular feats compassable upon frozen snow surfaces, ski-jumping is, 
 
 The glad word is passed round the hotel one evening that some famous ski-jumper has arrived and will give an exhibition next day; and next day, accordingly, you trudge out on to the slope where the jump has been erected. This is a long steep hillside, and the platform for the jump has been put up some hundred yards from the top of it. It is a champion jumper who has arrived, and the apparatus is on the big scale. Out from the slope of the hill is this platform, built in the manner of a dormer window in a house-roof or a header-board above a pool. It is made of wooden planks supported on posts, and covered with a layer of down-trodden snow. It is some 5 yards or so in length, 5 or 6 feet broad, and the edge of it is some 6 feet perpendicularly above the slope at its base. At the corners of it, to guide the jumper who approaches it, are boughs of fir stuck into the snow, or flags. Above it the slope is of moderate steepness, sufficient, anyhow, for a skier to get up a considerable speed when running straight down towards it from above; below the hillside is considerably steeper, and continues at a steep angle for two or three hundred yards. Both above and below the platform the snow is being industriously trodden down by those engaged on the preparations, so as to make a smooth firm run for the jumper before he gets to his platform, and a smooth firm landing-place after his flight through the air. The reason of this is that it is absolutely essential that the jumper should have no check when he touches ground again after his flight: if he landed in soft or deep snow he would quite certainly have a bad fall. But with hard smooth snow to land on there is no such check, and on landing he continues his course at high speed straight down the hill. It is also extremely important for him to land on a steep slope; for if the slope was but gentle, the shock of coming in contact with it from such a height would clearly be extremely severe, and broken bones would undoubtedly result. But the steep slope lends itself to the pace he is going and the height from which he comes, and, as it were, continues his flight on the ground. Also, the steeper the slope is, the longer obviously will the jump be, as measured from the platform to the point where he first lands.
 
-A good place to see the jumping from is to the side of the track down which the jumper will come and a little way below the platform: here let us suppose ourselves standing. On each side of the course stretch out lines of spectators, and a hundred yards above the jumper is standing talking to friends and seeming positively to enjoy what lies in front of him. Then the word is given, and, steadying himself on his two sticks he points his skis straight down towards the jump. He shoves off with his sticks, leaving them standing in the snow (for no jumper uses sticks when he jumps, which would be highly dangerous), and at swiftly accelerating speed glides down the slope. As he approaches the jumping-platform he crouches low, and just as he traverses it he springs upwards and forwards into the air. High above your head, a veritable flying man, he soars, with all the impetus that his run and his spring have given him. For a hundred feet or more he continues this amazing flight in a superb curve, and you wait breathless, scarcely able to believe that when he touches the ground again at that pace and from that height there will be anything but a heap of broken bones there. But he alights without shock or the least appearance of unsteadiness, and simultaneously, it appears, he is already another hundred feet down the slope, going like an arrow. Then comes perhaps the most astounding feat of all: he suddenly kneels, and in a moment has swung round with a Telemark, and has come to rest, facing up the hillside over which he has flown and skimmed. And then this extraordinary young man (he is usually rather young) will climb his slope again and instantly repeat the process, in evident enjoyment, or, more remarkable yet, he will get hold of another like himself, and they will take their jump hand-in-hand, let go of each other on landing, and Telemark, one to the right the other to the left\!
+A good place to see the jumping from is to the side of the track down which the jumper will come and a little way below the platform: here let us suppose ourselves standing. On each side of the course stretch out lines of spectators, and a hundred yards above the jumper is standing talking to friends and seeming positively to enjoy what lies in front of him. Then the word is given, and, steadying himself on his two sticks he points his skis straight down towards the jump. He shoves off with his sticks, leaving them standing in the snow (for no jumper uses sticks when he jumps, which would be highly dangerous), and at swiftly accelerating speed glides down the slope. As he approaches the jumping-platform he crouches low, and just as he traverses it he springs upwards and forwards into the air. High above your head, a veritable flying man, he soars, with all the impetus that his run and his spring have given him. For a hundred feet or more he continues this amazing flight in a superb curve, and you wait breathless, scarcely able to believe that when he touches the ground again at that pace and from that height there will be anything but a heap of broken bones there. But he alights without shock or the least appearance of unsteadiness, and simultaneously, it appears, he is already another hundred feet down the slope, going like an arrow. Then comes perhaps the most astounding feat of all: he suddenly kneels, and in a moment has swung round with a Telemark, and has come to rest, facing up the hillside over which he has flown and skimmed. And then this extraordinary young man (he is usually rather young) will climb his slope again and instantly repeat the process, in evident enjoyment, or, more remarkable yet, he will get hold of another like himself, and they will take their jump hand-in-hand, let go of each other on landing, and Telemark, one to the right the other to the left!
 
 This jumping is certainly ski-ing *in excelsis*, and jumpers tell
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
 THE JUMP
 
 *From the Drawing by Fleming Williams*
 
-us that if the beginner starts with small jumps, and is careful to do everything correctly and in the proper style from the beginning, he will not find it either a difficult or dangerous pursuit. But he must be careful to make his movements (his crouch, his spring, his angle in the air, the levelness of his skis as he alights, \&c.) with accuracy and correct timing; while it is not less important that the jump itself should be properly constructed and the slopes that lead to and from it be of suitable steepness. Indeed, what appears to the ignorant onlooker the most hazardous part of the whole affair, namely, the landing on a very steep slope, is safe only if the slope is steep, and the real obstacle that lies in the way of most men taking up jumping as a sport, is not that it is dangerous so much as that their nerves tell them that it must be, and refuse to make the crouch and spring (the *säts*, as the Norwegians call it) with vigour and confidence, even if they can master their nerves so far as to let themselves run down on to the platform at all. But having once reached the platform, the spring must be made: otherwise the would-be jumper will merely flow stickily, so to speak, over the edge, bury the toes of his skis in the snow, and certainly have a bad fall. But, indeed, the nerves must be in good condition, for the platform, approaching it from above, looks exactly like a cliff’s edge, and, jutting out as it does from the slope, it entirely conceals the slope below it: your eye tells you that you are merely leaping over the end of all things. But if, after considering the question, you decide, as most people do, that you will not begin jumping this season, you have only to repeat that prudent resolution for a few more seasons, and then you will be able to tell yourself and everybody else that it is no use trying to learn to jump unless you begin it quite as a boy. This does not really happen to be the case; but it is one of those excuses that are always granted acceptance, and, having firmly established it in your own mind, your nipped ambition will cease to worry you any more.
+us that if the beginner starts with small jumps, and is careful to do everything correctly and in the proper style from the beginning, he will not find it either a difficult or dangerous pursuit. But he must be careful to make his movements (his crouch, his spring, his angle in the air, the levelness of his skis as he alights, &c.) with accuracy and correct timing; while it is not less important that the jump itself should be properly constructed and the slopes that lead to and from it be of suitable steepness. Indeed, what appears to the ignorant onlooker the most hazardous part of the whole affair, namely, the landing on a very steep slope, is safe only if the slope is steep, and the real obstacle that lies in the way of most men taking up jumping as a sport, is not that it is dangerous so much as that their nerves tell them that it must be, and refuse to make the crouch and spring (the *säts*, as the Norwegians call it) with vigour and confidence, even if they can master their nerves so far as to let themselves run down on to the platform at all. But having once reached the platform, the spring must be made: otherwise the would-be jumper will merely flow stickily, so to speak, over the edge, bury the toes of his skis in the snow, and certainly have a bad fall. But, indeed, the nerves must be in good condition, for the platform, approaching it from above, looks exactly like a cliff’s edge, and, jutting out as it does from the slope, it entirely conceals the slope below it: your eye tells you that you are merely leaping over the end of all things. But if, after considering the question, you decide, as most people do, that you will not begin jumping this season, you have only to repeat that prudent resolution for a few more seasons, and then you will be able to tell yourself and everybody else that it is no use trying to learn to jump unless you begin it quite as a boy. This does not really happen to be the case; but it is one of those excuses that are always granted acceptance, and, having firmly established it in your own mind, your nipped ambition will cease to worry you any more.
 
 A further delightful pastime to be indulged in on skis is that known as ski-joring. For this it is necessary to secure the co-operation of a horse, and fit him with long reins or ropes, which you hold one in each hand, and stand behind the horse out of the way of his heels. He is lightly harnessed, and from his collar passes a long leather loop of rein, which passes round the ski-jorer’s body. You then encourage your horse to proceed, and if he is good enough to do so, he will naturally pull you along on your skis by this loop of rein from his collar. It is a fascinating pursuit to watch, and can be practised over a frozen lake or along the down-trodden snow of roads. Especially in the Engadine you will hear the sound of bells, and observe a horse trotting or cantering briskly on the road, followed at a yard or two distance by an upright figure that glides along after him, a charioteer with only his skis as chariot. But though it is concerned with skis, it is not exactly concerned with ski-ing, which enters into it, as an art, less than does the knowledge of horses and the use of reins.
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
 SKI-JORING
 
 *From the Drawing by Fleming Williams*
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXIV
 
 AT ST. MORITZ
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXV
 
 PRACTICE SLOPES, MONTANA, SWITZERLAND
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXVI
 
 A SLIGHT MISHAP
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXVII
 
 SKI-JUMPING
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXVIII
 
 SKI-JUMPING, MONTANA, SWITZERLAND
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XXXIX
 
 VETERANS OF THE ST. MORITZ SKI CLUB
 
-## CHAPTER VII NOTES ON WINTER RESORTS
+CHAPTER VII\
+
+NOTES ON WINTER RESORTS
+---------------------------------------------------------------------------------
 
 Of late years the number of the English and other nations who annually go to spend a portion at any rate of the winter at some High Alpine resort has enormously increased, and in consequence every year fresh hotels are opened in valleys which hitherto have hybernated like dormice beneath their snow-laden roofs, during the months of short days. But it is by no means every high-perched hotel that is suitable as a centre for winter sports, for there are several conditions to be considered. In the first place, such a spot must be sufficiently high up to make it probable that there will be fairly continuous frosts there throughout the winter, and this again depends not only on height but also on aspect. As regards height you cannot reasonably depend on getting this continuity of frost (allowing for reasonable breaks) under the height of round about 4000 feet, especially if the place in question is to enjoy long hours of sun. True, an exceptionally severe winter may come, and the strictness of the binding of the frost may hold, week after week, at a much lower altitude, but it is natural that the holiday-maker, who has only a week or two abroad and wants during all his hours of daylight to be employed in sliding movements, should wish to be fairly safe to find the conditions suitable, and he has, obviously, a better chance of finding them if he goes high. But there are several places considerably below this 4000-foot level, such as Grindelwald, which lies in a very cold valley, where he may in an average year find himself unhampered and rendered idle by thaws, and it is wonderful how continuous frost is at Grindelwald. But there both skating-rink and curling-rink are, all day long at midwinter, entirely in the shade, for the sun does not rise high enough at noon to look over the great barrier of rock that lies to the south of it. That protection, of course, preserves for the place its excellent ice, whereas if, as at other winter resorts, it basked in the sun all day, the rink would speedily be metamorphosed into a degraded glue with discouraging pools interspersed. But if you go to greater heights, you can combine the pleasures of skating with those of sitting in the sun, and that to this writer is a remarkably charming combination. But in order to enjoy that you must have greater height than is possessed by Grindelwald, and a place like Montana, where the sun is on the rink by nine in the morning, and continues to beat down on it till somewhere about five in the afternoon, would see its ice and snow disappear into slush and torrents of water were it not perched nearly 5000 feet above sea-level. St. Moritz and Mürren are throned higher yet, and it has to be a very warm winter indeed which will cause a general thaw at such places. And there is nothing more irritating than to have gone to some comparatively low place and find that day after day goes by in melting mood, and at the same time to know that a thousand feet higher up ideal conditions are being experienced.
 
@@ -1434,25 +1461,25 @@ Villars, again, in the Rhone valley, is neither of the type of Mürren nor Grind
 
 Switzerland, as regards its winter resorts, may be broadly divided into districts, such as the Engadine, the Oberland, the Rhone valley, and the strip of country between Montreux on the Lake of Geneva, and Spiez on the Lake of Thun, and pride of place must certainly be given to the Engadine and Davos, which are the cradle of winter sports. And the following are (at present) the chief hill-stations, with the sports for which they are famous.
 
-(i) *St. Moritz.*—This is the highest and probably the most populous of winter resorts. It is situated 6090 feet above sea-level, and is eminent for its rinks and toboggan-runs; namely, the Cresta or ice-run, spoken of already at length, the bob-run, and the village-run for luges. Rinks both for skating and curling are numerous, and below the town lies the St. Moritz lake, and further off towards the Maloja pass the Sils lake. The bandy-rink is one of the largest rinks in Switzerland; bandy is played here every day, and numerous skating contests are held. Owing to its height, the winter weather, as a rule, lasts here till well into March: indeed it is not till March that the big events happen on the Cresta.
+\(i\) *St. Moritz.*—This is the highest and probably the most populous of winter resorts. It is situated 6090 feet above sea-level, and is eminent for its rinks and toboggan-runs; namely, the Cresta or ice-run, spoken of already at length, the bob-run, and the village-run for luges. Rinks both for skating and curling are numerous, and below the town lies the St. Moritz lake, and further off towards the Maloja pass the Sils lake. The bandy-rink is one of the largest rinks in Switzerland; bandy is played here every day, and numerous skating contests are held. Owing to its height, the winter weather, as a rule, lasts here till well into March: indeed it is not till March that the big events happen on the Cresta.
 
 Round about St. Moritz are other smaller winter resorts: Celerina, with a fine skating-rink, lies a little below the end of the Cresta run, and further down, towards Chur, is Samaden. In the other directions, towards the Maloja pass down into Italy, is Campfer, with rink and greater length of sun than even at St. Moritz, from which it is distant about a mile and a half. The ski-ing also is much better there than at that place. St. Moritz and all these other smaller centres are fortunate in the number of hours of sun that they enjoy: they are less fortunate in the wind that rather frequently blows up from the Maloja pass, a chilly and disconcerting current of air that not very infrequently starts to blow shortly after mid-day. But there is probably no place in Switzerland which enjoys a larger proportion of perfect winter days, and in none are the rinks more carefully made and preserved. It was one of the earliest places in which the pursuit of winter sport began to develop, and from the earliest days the St. Moritz school of English skating was renowned for the strictness of its requirements. Of late years the International style has greatly developed there, owing probably to the very large number of German visitors who annually go there. But there is enough ice for everybody, since many of the hotels have private skating-rinks of their own, and there is no reason why the two schools should not flourish side by side. Just round about St. Moritz itself there is not any very extraordinary display of Alpine scenery, for the larger peaks are not visible therefrom. But there are, in addition to the winter sports already mentioned, innumerable excursions to be made, and the lake-skating, when the chronology of snow-fall and frost is propitious, is a tremendous though usually a short-lived attraction. The journey from England can be luxuriously made in the Engadine express, which reaches St. Moritz in the middle of the day after which the voyager has left London.
 
-(ii) *Davos*, in an adjoining valley, is now closely linked up to St. Moritz by train, so that it is accessible from it without a long detour by rail, or by crossing on sleighs the Fluela pass. It is rather over 5100 feet above sea-level, and, as already recorded, was probably the earliest place at which an attempt was made, by Mr. John Addington Symonds and a few friends, to construct an artificial ice-rink. This they did by industriously working the handle of a pump which stood in a meadow. Davos was originally known to the world as a resort for consumptives and the place where the open-air treatment was first scientifically adopted. There are to-day many sanatoriums for patients there, and readers of this essay may have heard of a false and wicked report that in consequence the whole native population is now riddled with consumption, and that there is a certain risk in staying there. No more absurdly malicious and unfounded statement could be made, and there is probably far more risk of catching consumption by walking down a London street than in staying at Davos. For since the dry cold of this wonderful valley is fatal to the bacillus, it is hard to see how it could be supposed to spread\! In addition, to ensure a double security, the most stringent regulations are enforced and every requirement of hygiene insisted on. Visitors, therefore, can go to Davos with precisely the same security as to any other place.
+\(ii\) *Davos*, in an adjoining valley, is now closely linked up to St. Moritz by train, so that it is accessible from it without a long detour by rail, or by crossing on sleighs the Fluela pass. It is rather over 5100 feet above sea-level, and, as already recorded, was probably the earliest place at which an attempt was made, by Mr. John Addington Symonds and a few friends, to construct an artificial ice-rink. This they did by industriously working the handle of a pump which stood in a meadow. Davos was originally known to the world as a resort for consumptives and the place where the open-air treatment was first scientifically adopted. There are to-day many sanatoriums for patients there, and readers of this essay may have heard of a false and wicked report that in consequence the whole native population is now riddled with consumption, and that there is a certain risk in staying there. No more absurdly malicious and unfounded statement could be made, and there is probably far more risk of catching consumption by walking down a London street than in staying at Davos. For since the dry cold of this wonderful valley is fatal to the bacillus, it is hard to see how it could be supposed to spread! In addition, to ensure a double security, the most stringent regulations are enforced and every requirement of hygiene insisted on. Visitors, therefore, can go to Davos with precisely the same security as to any other place.
 
 Davos is excellent alike for its rinks, its ski-ing slopes, and its toboggan-runs. Of the latter there is the excellent Klosters road for luges and skeletons, which leads from the hills above Davos down to the village of Klosters, where tobogganists find a train neatly drawn up close to the end of their run, in which they can return to Davos, if they will, or to Wolfgang again to make another descent. For this is no affair of a few hundred yards: the course is several miles in length. Lately a first-rate bob-run has been constructed from the Schatz-alp down into Davos: this is served by an electric railway for the ascent. Just below Davos, on the level land at the basin of the valley, lie the skating-rinks, three in number, an enormous public rink, the rink constructed by the English for purposes of English skating, and the curling-rink. Here all manner of important competitions are held: European championships in the International style, speed skating competitions round the circumference of the large rink, and for English skaters the annual Davos bowl. Indeed, Davos has had more to do with the formation of the modern school of English skating, especially in the matter of combined figures, executed large and fast, than any other place, and there is scarcely a single skater of any eminence in this style who has not “studied,” so to speak, at Davos. Usually the ice is of very good quality, but a better surface would probably be more often attained if the management would resort to sprinkling more, instead of letting a flood make ice for several days’ use. Above the town is a lake of considerable extent, on which occasional skating can be had. But a commoner phenomenon than the skater on that lake are the horse-drawn sledges which are loaded with solid blocks of ice sawn out of the frozen surface and taken away to make puddings with instead of figures on. The valley is gloriously free from wind, and extraordinarily healthy with its very dry cold air and abundance of sun.
 
-(iii) Between Chur and St. Moritz lies a high upland valley some 4800 feet above sea-level, and reached from Chur by a drive of some twelve miles, which, however, include 3000 feet of ascent. Here is situated Lenzenheide, one of the new winter resorts opened by the Public Schools Winter Sports Club, which is responsible for so much of the increased sporting population of Switzerland in winter, and has developed many fresh and suitable centres. There is a good skating-rink, curling-rink, a toboggan-run, and unlimited expeditions for skiers on country admirably adapted for the sport. Like Davos, it lies in a very sheltered valley, and is singularly free from wind. It is a four and a half hours’ sleigh-drive to Chur, while St. Moritz is two hours distant.
+\(iii\) Between Chur and St. Moritz lies a high upland valley some 4800 feet above sea-level, and reached from Chur by a drive of some twelve miles, which, however, include 3000 feet of ascent. Here is situated Lenzenheide, one of the new winter resorts opened by the Public Schools Winter Sports Club, which is responsible for so much of the increased sporting population of Switzerland in winter, and has developed many fresh and suitable centres. There is a good skating-rink, curling-rink, a toboggan-run, and unlimited expeditions for skiers on country admirably adapted for the sport. Like Davos, it lies in a very sheltered valley, and is singularly free from wind. It is a four and a half hours’ sleigh-drive to Chur, while St. Moritz is two hours distant.
 
-### Oberland District
+### *Oberland District*
 
-(i) First among the Oberland resorts, by virtue of its age and established attractions, must be mentioned Grindelwald. It is one of the lower winter centres, but, as has already been mentioned, the limitation is largely discounted from the point of view of skaters and curlers, because the rinks during the months of mid-winter lie practically entirely in the shade, and thus preserve their solidity. And if Davos and St. Moritz must be called the cradle of English skating, Grindelwald has no less earned the title of cradle of scientific ice-making. For years the Boss family, who own the Bear Hotel, have studied this intricate and delicate question, and their methods are beyond doubt productive of the best possible ice. Grindelwald, it is true, is not liable to exceedingly low temperatures, and thus the ice does not often become of that very hard and brittle quality which results therefrom; but, though the Bosses have not had to contrive how to deal with these unpleasant conditions, they must be considered the parents of the school of scientific ice-production. Originally Grindelwald was exclusively of the English school of skating, but it has now passed into International tutelage. Indeed there was hardly room for two schools; for excellent as is the quality of the ice, it is certainly defective in area, and the rinks should be increased in size or number, for even the Bear rink, which is the largest there, is but of very moderate extent, and cannot hold many skaters in comfort. There are curling-rinks of the same superlative quality of ice, good road toboggan-runs, both for luges and the bob-sleigh, while in every direction almost (except that of the Eiger precipice) there are admirable ski-ing runs. It is situated 3450 feet above sea-level, and is reached by a light railway from Interlaken.
+\(i\) First among the Oberland resorts, by virtue of its age and established attractions, must be mentioned Grindelwald. It is one of the lower winter centres, but, as has already been mentioned, the limitation is largely discounted from the point of view of skaters and curlers, because the rinks during the months of mid-winter lie practically entirely in the shade, and thus preserve their solidity. And if Davos and St. Moritz must be called the cradle of English skating, Grindelwald has no less earned the title of cradle of scientific ice-making. For years the Boss family, who own the Bear Hotel, have studied this intricate and delicate question, and their methods are beyond doubt productive of the best possible ice. Grindelwald, it is true, is not liable to exceedingly low temperatures, and thus the ice does not often become of that very hard and brittle quality which results therefrom; but, though the Bosses have not had to contrive how to deal with these unpleasant conditions, they must be considered the parents of the school of scientific ice-production. Originally Grindelwald was exclusively of the English school of skating, but it has now passed into International tutelage. Indeed there was hardly room for two schools; for excellent as is the quality of the ice, it is certainly defective in area, and the rinks should be increased in size or number, for even the Bear rink, which is the largest there, is but of very moderate extent, and cannot hold many skaters in comfort. There are curling-rinks of the same superlative quality of ice, good road toboggan-runs, both for luges and the bob-sleigh, while in every direction almost (except that of the Eiger precipice) there are admirable ski-ing runs. It is situated 3450 feet above sea-level, and is reached by a light railway from Interlaken.
 
-(ii) But if instead of taking that portion of the train from Interlaken that branches off to the left up to Grindelwald, the voyager disposes himself otherwise, he will be carried straight up the Lauterbrunnen valley, until he arrives at that village. On the right the incredible funicular ascends to Mürren, while a cog-line, lying in loops and curves up the hillside to the left, brings him to Wengen, which, like Mürren, has lately been opened up as a winter resort by the Public Schools Alpine Sports Club. It faces the Eiger, the Monch, and the northern and precipitous face of the Jungfrau, and is admirably sheltered from the north and east. It stands about 4500 feet above sea-level, basks for a long day in the sun, and is excellently equipped in the way of rinks for skating and curling. There are two rinks, one about 8000 square metres in extent, the other half that size. Here, as at Grindelwald, the International style “hath the pre-eminence.” The cog-railway by which the village of Wengen is reached continues up the Wengern Alp, where are excellent ski-ing slopes, and you can take a lift, instead of climbing, up towards the Scheidegg, from which the skier can descend to Grindelwald. Wengen was opened originally for the winter season in the years 1909-1910, and has already grown enormously in popularity.
+\(ii\) But if instead of taking that portion of the train from Interlaken that branches off to the left up to Grindelwald, the voyager disposes himself otherwise, he will be carried straight up the Lauterbrunnen valley, until he arrives at that village. On the right the incredible funicular ascends to Mürren, while a cog-line, lying in loops and curves up the hillside to the left, brings him to Wengen, which, like Mürren, has lately been opened up as a winter resort by the Public Schools Alpine Sports Club. It faces the Eiger, the Monch, and the northern and precipitous face of the Jungfrau, and is admirably sheltered from the north and east. It stands about 4500 feet above sea-level, basks for a long day in the sun, and is excellently equipped in the way of rinks for skating and curling. There are two rinks, one about 8000 square metres in extent, the other half that size. Here, as at Grindelwald, the International style “hath the pre-eminence.” The cog-railway by which the village of Wengen is reached continues up the Wengern Alp, where are excellent ski-ing slopes, and you can take a lift, instead of climbing, up towards the Scheidegg, from which the skier can descend to Grindelwald. Wengen was opened originally for the winter season in the years 1909-1910, and has already grown enormously in popularity.
 
-(iii) Opposite Wengen (or rather a little further south) and on the other side of the Lauterbrunnen valley, stands Mürren, at an altitude of 5500 feet, 1000 feet higher than Wengen. It has only been opened lately as a Swiss winter resort, and is blest with many natural and artificial excellences. A curling-rink adjoins the large skating-rink, and the ice, made in the “Boss method,” is wonderfully good. Here the Continental and English skaters may be seen side by side, and the two schools flourish, as is reasonable, without the smallest friction. For the skier there are any amount of expeditions, and the very large extent and variety of the northern slopes above Mürren, combined with its height, render it safe even in bad winters from continued thaws: it owns also (for the more daring) one of the best jumps in Switzerland. This year (1912) the railway has been continued to the top of the Allmendhubel, from where a bob-sleigh run will start, and will give skiers a lift to the upper snows. The inter-university ice-hockey match has for the last three years been played here. Apart from its excellent faculties for sport, it is a place of unrivalled natural beauty ... but perhaps you have heard enough about the view. It is excellently shielded from the northerly winds, and its height, as in the case of Davos and St. Moritz, gives it a reasonable chance of immunity from thaw.
+\(iii\) Opposite Wengen (or rather a little further south) and on the other side of the Lauterbrunnen valley, stands Mürren, at an altitude of 5500 feet, 1000 feet higher than Wengen. It has only been opened lately as a Swiss winter resort, and is blest with many natural and artificial excellences. A curling-rink adjoins the large skating-rink, and the ice, made in the “Boss method,” is wonderfully good. Here the Continental and English skaters may be seen side by side, and the two schools flourish, as is reasonable, without the smallest friction. For the skier there are any amount of expeditions, and the very large extent and variety of the northern slopes above Mürren, combined with its height, render it safe even in bad winters from continued thaws: it owns also (for the more daring) one of the best jumps in Switzerland. This year (1912) the railway has been continued to the top of the Allmendhubel, from where a bob-sleigh run will start, and will give skiers a lift to the upper snows. The inter-university ice-hockey match has for the last three years been played here. Apart from its excellent faculties for sport, it is a place of unrivalled natural beauty ... but perhaps you have heard enough about the view. It is excellently shielded from the northerly winds, and its height, as in the case of Davos and St. Moritz, gives it a reasonable chance of immunity from thaw.
 
-(iv) On the other and northern side of the Lake of Thun, and looking across the lake and the Interlaken valley straight at the Monch and Jungfrau (I am sorry to introduce this lady and gentleman again, but they cannot help dominating Oberland resorts) stands Beatenberg. It lies below the 4000-foot level, being only 3750 feet above sea-level, and in a warm winter (like that of 1911-1912) has the penalties of its day-long sun rigorously exacted from it. For the skier there are admirable runs above it on the Amisbühl, and there are good skating and curling rinks, and an artificial toboggan-run. But Beatenberg is distinctly a place to be visited in *severe* weather, in which the conditions there are ideal. But from its comparatively low altitude and its enormous abundance of sun, it must necessarily be among the places that soonest feel a thaw. It is an exceedingly picturesque village, and the lake below and the Oberland beyond make a charming panorama. It is within an easy sleigh-drive from Interlaken.
+\(iv\) On the other and northern side of the Lake of Thun, and looking across the lake and the Interlaken valley straight at the Monch and Jungfrau (I am sorry to introduce this lady and gentleman again, but they cannot help dominating Oberland resorts) stands Beatenberg. It lies below the 4000-foot level, being only 3750 feet above sea-level, and in a warm winter (like that of 1911-1912) has the penalties of its day-long sun rigorously exacted from it. For the skier there are admirable runs above it on the Amisbühl, and there are good skating and curling rinks, and an artificial toboggan-run. But Beatenberg is distinctly a place to be visited in *severe* weather, in which the conditions there are ideal. But from its comparatively low altitude and its enormous abundance of sun, it must necessarily be among the places that soonest feel a thaw. It is an exceedingly picturesque village, and the lake below and the Oberland beyond make a charming panorama. It is within an easy sleigh-drive from Interlaken.
 
 Slightly away from the Oberland lie two other attractive resorts—Kandersteg and Adelboden. Of these Adelboden is reached by a short train transit from Spiez on the Lake of Thun, followed by a sleigh-drive. It is essentially one of the high valley places, as opposed to the high “shelf” villages like Mürren and Wengen, and has admirable ski-ing expeditions to be made from it. The skating to be obtained there is not of the best; it has not “caught on” as a skating centre, and the rinks, when last the writer was there, were not up to the mark of that which the skater who goes to Switzerland for the sake of skating is entitled to expect. Skaters, for some reason, have not been enticed there, and thus that inter-breeding of good skaters and good rinks seems not to have taken place. But it lies in a high valley, the altitude being about 4500 feet, and both tobogganing and bobbing are catered for. Undoubtedly it is charming in situation, as all these upland valleys are, but, apart from the ski-ing expeditions which can be made from it, it does not boast any special attraction.
 
@@ -1470,55 +1497,58 @@ Opposite, on the north side of the Rhone, stands Villars, on a shelf of the moun
 
 On a similar northern shelf of mountain, but higher up the Rhone valley, and also higher up in the air, stands Montana. It is reached by an amazing funicular from Sierre, and is 4900 feet above sea-level. Behind and above it and around it stretch limitless ski-ing slopes, and there are any amount of expeditions to be made from it. There are two good rinks: one for curlers, another for skaters; and after a considerable period of Laodicean apathy, Montana seems to have made up its mind to be of the English school. But up till lately it had put its chief energies into ski-ing and curling, and had not pursued skating in that tense and scientific spirit which it deserves. There is a fairly good artificial ice-run for toboggans, and another snow-run down valleywards, and plenty of those quiet, hard-trodden paths down which the amateur tobogganer likes to ramble. There are two lakes which, when the snow has made an agreeable arrangement with the frost, can be used for skating, and in summer, when the sun has come to an understanding with the snow, a fine golf-course is found to reveal itself. But all winter long the sun blazes on Montana, while its altitude and the cold of its nights preserves its frozen mantle. Of the view I have already spoken: there is something to be said for a view in the intervals of falling-down, and in the meditation and quiescence which such falls sometimes entail.
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XL
 
 A PRACTICE GROUND
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XLI
 
 CROSSING THE ROAD ON THE CRESTA
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XLII
 
 TOP OF KLOSTERS RUN, DAVOS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XLIII
 
 THE START, SCHATZ ALP RUN, DAVOS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XLIV
 
 BOBBING ON THE SCHATZ ALP RUN, DAVOS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XLV
 
 SKATING-RINK AT VILLARS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XLVI
 
 AT LA BRETAYE, VILLARS
 
-\[Im[age unavailable.\]]()
+ [Image unavailable.]
 
 Plate XLVII
 
 “BLOW, BLOW, THOU WINTER WIND”
 
-## CHAPTER VIII FOR PARENTS AND GUARDIANS
+CHAPTER VIII\
+
+FOR PARENTS AND GUARDIANS
+-----------------------------------------------------------------------------------
 
 I have attempted in the foregoing pages to give some general account of the out-door sports which are, as a rule, indulged in by altitudinists in winter. But any picture of this enchanting Swiss life, however slight, would be imperfect without some allusion to other entertainments which take place between sunset and sunrise. As a matter of fact, there are a good many such, and at most Swiss resorts there is in one hotel or another a dance, or a fancy-dress ball, or a concert, or very often more than one of these, practically nightly.
 
@@ -1532,13 +1562,13 @@ A circle of light from hundreds of electric lamps, or a less potent but more var
 
 Or, while still the fireworks and Bengal lights are unlit, you can walk to the end of the rink, and, turning your back on its brightness, look out over the lower valley below and the hills beyond. Away from the glare of the festooned lights, your eye gets accustomed to the gloom, and presently it ceases to be gloom at all. Ivory white shine the untrodden snows beneath the full moon and the glory of innumerable stars: far below, perhaps, a level sea of cloud extends like a marble floor over the valley, and across it the aiguilles of Mont Blanc, and nearer the summits of the Dent du Midi stand sparkling like crystals. Then from behind you sounds the swish of an aspiring rocket, and across the firmament streams a line of light. Slower and slower it mounts, then from the end of it bursts a huge constellation of coloured
 
-\[I[mage unavailable.\]]()
+[Image unavailable.]
 
 THE ICE CARNIVAL
 
 *From the Drawing by Fleming Williams*
 
-globes of flame. Then suddenly the whole hillside, the village, the pine-trees, and the snow-slopes begin to shine with a red glow as if the whole world was on fire. Then stars are quenched, the moon resigns altogether, even the lights on and around the rink grow dim in the glow that turns everything into molten fire. But it is only a Bengal light behind the châlet. “Only” indeed\! As if there was anything more magical than these blood-red snows and red-hot pines beneath the cold of the winter night\! For it requires a hideously-sensible person to outlive the joys of fireworks.
+globes of flame. Then suddenly the whole hillside, the village, the pine-trees, and the snow-slopes begin to shine with a red glow as if the whole world was on fire. Then stars are quenched, the moon resigns altogether, even the lights on and around the rink grow dim in the glow that turns everything into molten fire. But it is only a Bengal light behind the châlet. “Only” indeed! As if there was anything more magical than these blood-red snows and red-hot pines beneath the cold of the winter night! For it requires a hideously-sensible person to outlive the joys of fireworks.
 
 Then after a while the lights are quenched and the band goes home, and you walk back beneath the moon to your hotel. All that artificial fire has not stained the white radiance of the guardians of the night. They whirl steadfast and remote and sparkling, turning the snow to glistening ivory and the shadows to ebony, as they “quire to the bright-eyed seraphim.” And all night long (thoughts come strangely and incongruously mixed in this intoxicating air) the patient and laborious ice-man will be clearing up the rink, and sprinkling it through the dark hours, so that to-morrow you shall have a virgin field for your quavering rockers.
 
@@ -1548,13 +1578,18 @@ But the main point for parents and guardians to remember is, that they will feel
 
 And already the year is on the turn again, and these foolish long summer days are beginning to get short. Very soon it will be time to settle whether we go to A——, or B——, or try that new place C——.... And then people speak well of D——, but on the other hand E——, which we went to three years ago, has got a new ice-run, and the rink has been enlarged. But there is more sun at F——, and even in that awful winter of 1911-1912, when Switzerland was a mere puddle, G—— held out against the thaw. But the hotels at H—— are very comfortable, and the ski-ing is good, though not so good as at I——.... That is the only Debating Society in which I enjoy taking a part.
 
-Printed by Ballantyne, Hanson & Co. at Paul’s Work, Edinburgh 
+Printed by Ballantyne, Hanson & Co.\
+at Paul’s Work, Edinburgh\
 
  
+
+------------------------------------------------------------------------
 
 *The original Drawings in colour by C. Fleming Williams reproduced in this book are for sale.*
 
 *For particulars apply to the Publishers.*
+
+------------------------------------------------------------------------
 
 *Recent Fine Art Books*
 
@@ -1570,9 +1605,11 @@ With 252 Illustrations, including 24 in Colour
 
 Demy 4to. Two Volumes. Cloth, gilt top, **£3, 3s.** net.
 
-With Complete Lists of the Artist’s Pictures and of those exhibited, a Bibliography, \&c.
+With Complete Lists of the Artist’s Pictures and of those exhibited, a Bibliography, &c.
 
 In this book the writer has endeavoured to give as complete an account as possible of the life and career of the younger Holbein, together with a description of every known picture painted by him, and of the more important of his drawings and designs. It is primarily intended to provide a complete biography of the painter, embodying all the more recent discoveries regarding his pictures.
+
+------------------------------------------------------------------------
 
 HOMES AND HAUNTS OF RUSKIN
 
@@ -1599,3 +1636,108 @@ Translated by A. Teixeira de Mattos. With 20 Plates in Colour by Edward J. Detmo
 M. Maeterlinck writes: “The Illustrations by Detmold are very remarkable. It was infinitely difficult to give style to the flowers, and to give them character ... all technically correct.”
 
 LONDON: GEORGE ALLEN & CO., LIMITED
+
+------------------------------------------------------------------------
+
+*** END OF THE PROJECT GUTENBERG EBOOK WINTER SPORTS IN SWITZERLAND ***
+
+Updated editions will replace the previous one—the old editions will be renamed.
+
+Creating the works from print editions not protected by U.S. copyright law means that no one owns a United States copyright in these works, so the Foundation (and you!) can copy and distribute it in the United States without permission and without paying copyright royalties. Special rules, set forth in the General Terms of Use part of this license, apply to copying and distributing Project Gutenberg™ electronic works to protect the PROJECT GUTENBERG™ concept and trademark. Project Gutenberg is a registered trademark, and may not be used if you charge for an eBook, except by following the terms of the trademark license, including paying royalties for use of the Project Gutenberg trademark. If you do not charge anything for copies of this eBook, complying with the trademark license is very easy. You may use this eBook for nearly any purpose such as creation of derivative works, reports, performances and research. Project Gutenberg eBooks may be modified and printed and given away—you may do practically ANYTHING in the United States with eBooks not protected by U.S. copyright law. Redistribution is subject to the trademark license, especially commercial redistribution.
+
+START: FULL LICENSE
+
+## THE FULL PROJECT GUTENBERG LICENSE
+
+PLEASE READ THIS BEFORE YOU DISTRIBUTE OR USE THIS WORK
+
+To protect the Project Gutenberg™ mission of promoting the free distribution of electronic works, by using or distributing this work (or any other work associated in any way with the phrase “Project Gutenberg”), you agree to comply with all the terms of the Full Project Gutenberg™ License available with this file or online at www.gutenberg.org/license.
+
+Section 1. General Terms of Use and Redistributing Project Gutenberg™ electronic works
+
+1.A. By reading or using any part of this Project Gutenberg™ electronic work, you indicate that you have read, understand, agree to and accept all the terms of this license and intellectual property (trademark/copyright) agreement. If you do not agree to abide by all the terms of this agreement, you must cease using and return or destroy all copies of Project Gutenberg™ electronic works in your possession. If you paid a fee for obtaining a copy of or access to a Project Gutenberg™ electronic work and you do not agree to be bound by the terms of this agreement, you may obtain a refund from the person or entity to whom you paid the fee as set forth in paragraph 1.E.8.
+
+1.B. “Project Gutenberg” is a registered trademark. It may only be used on or associated in any way with an electronic work by people who agree to be bound by the terms of this agreement. There are a few things that you can do with most Project Gutenberg™ electronic works even without complying with the full terms of this agreement. See paragraph 1.C below. There are a lot of things you can do with Project Gutenberg™ electronic works if you follow the terms of this agreement and help preserve free future access to Project Gutenberg™ electronic works. See paragraph 1.E below.
+
+1.C. The Project Gutenberg Literary Archive Foundation (“the Foundation” or PGLAF), owns a compilation copyright in the collection of Project Gutenberg™ electronic works. Nearly all the individual works in the collection are in the public domain in the United States. If an individual work is unprotected by copyright law in the United States and you are located in the United States, we do not claim a right to prevent you from copying, distributing, performing, displaying or creating derivative works based on the work as long as all references to Project Gutenberg are removed. Of course, we hope that you will support the Project Gutenberg™ mission of promoting free access to electronic works by freely sharing Project Gutenberg™ works in compliance with the terms of this agreement for keeping the Project Gutenberg™ name associated with the work. You can easily comply with the terms of this agreement by keeping this work in the same format with its attached full Project Gutenberg™ License when you share it without charge with others.
+
+1.D. The copyright laws of the place where you are located also govern what you can do with this work. Copyright laws in most countries are in a constant state of change. If you are outside the United States, check the laws of your country in addition to the terms of this agreement before downloading, copying, displaying, performing, distributing or creating derivative works based on this work or any other Project Gutenberg™ work. The Foundation makes no representations concerning the copyright status of any work in any country other than the United States.
+
+1.E. Unless you have removed all references to Project Gutenberg:
+
+1.E.1. The following sentence, with active links to, or other immediate access to, the full Project Gutenberg™ License must appear prominently whenever any copy of a Project Gutenberg™ work (any work on which the phrase “Project Gutenberg” appears, or with which the phrase “Project Gutenberg” is associated) is accessed, displayed, performed, viewed, copied or distributed:
+
+>
+>
+> This eBook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever. You may copy it, give it away or re-use it under the terms of the Project Gutenberg License included with this eBook or online at [www.gutenberg.org](https://www.gutenberg.org). If you are not located in the United States, you will have to check the laws of the country where you are located before using this eBook.
+>
+>
+
+1.E.2. If an individual Project Gutenberg™ electronic work is derived from texts not protected by U.S. copyright law (does not contain a notice indicating that it is posted with permission of the copyright holder), the work can be copied and distributed to anyone in the United States without paying any fees or charges. If you are redistributing or providing access to a work with the phrase “Project Gutenberg” associated with or appearing on the work, you must comply either with the requirements of paragraphs 1.E.1 through 1.E.7 or obtain permission for the use of the work and the Project Gutenberg™ trademark as set forth in paragraphs 1.E.8 or 1.E.9.
+
+1.E.3. If an individual Project Gutenberg™ electronic work is posted with the permission of the copyright holder, your use and distribution must comply with both paragraphs 1.E.1 through 1.E.7 and any additional terms imposed by the copyright holder. Additional terms will be linked to the Project Gutenberg™ License for all works posted with the permission of the copyright holder found at the beginning of this work.
+
+1.E.4. Do not unlink or detach or remove the full Project Gutenberg™ License terms from this work, or any files containing a part of this work or any other work associated with Project Gutenberg™.
+
+1.E.5. Do not copy, display, perform, distribute or redistribute this electronic work, or any part of this electronic work, without prominently displaying the sentence set forth in paragraph 1.E.1 with active links or immediate access to the full terms of the Project Gutenberg™ License.
+
+1.E.6. You may convert to and distribute this work in any binary, compressed, marked up, nonproprietary or proprietary form, including any word processing or hypertext form. However, if you provide access to or distribute copies of a Project Gutenberg™ work in a format other than “Plain Vanilla ASCII” or other format used in the official version posted on the official Project Gutenberg™ website (www.gutenberg.org), you must, at no additional cost, fee or expense to the user, provide a copy, a means of exporting a copy, or a means of obtaining a copy upon request, of the work in its original “Plain Vanilla ASCII” or other form. Any alternate format must include the full Project Gutenberg™ License as specified in paragraph 1.E.1.
+
+1.E.7. Do not charge a fee for access to, viewing, displaying, performing, copying or distributing any Project Gutenberg™ works unless you comply with paragraph 1.E.8 or 1.E.9.
+
+1.E.8. You may charge a reasonable fee for copies of or providing access to or distributing Project Gutenberg™ electronic works provided that:
+
+- • You pay a royalty fee of 20% of the gross profits you derive from the use of Project Gutenberg™ works calculated using the method you already use to calculate your applicable taxes. The fee is owed to the owner of the Project Gutenberg™ trademark, but he has agreed to donate royalties under this paragraph to the Project Gutenberg Literary Archive Foundation. Royalty payments must be paid within 60 days following each date on which you prepare (or are legally required to prepare) your periodic tax returns. Royalty payments should be clearly marked as such and sent to the Project Gutenberg Literary Archive Foundation at the address specified in Section 4, “Information about donations to the Project Gutenberg Literary Archive Foundation.”
+- • You provide a full refund of any money paid by a user who notifies you in writing (or by e-mail) within 30 days of receipt that s/he does not agree to the terms of the full Project Gutenberg™ License. You must require such a user to return or destroy all copies of the works possessed in a physical medium and discontinue all use of and all access to other copies of Project Gutenberg™ works.
+- • You provide, in accordance with paragraph 1.F.3, a full refund of any money paid for a work or a replacement copy, if a defect in the electronic work is discovered and reported to you within 90 days of receipt of the work.
+- • You comply with all other terms of this agreement for free distribution of Project Gutenberg™ works.
+
+1.E.9. If you wish to charge a fee or distribute a Project Gutenberg™ electronic work or group of works on different terms than are set forth in this agreement, you must obtain permission in writing from the Project Gutenberg Literary Archive Foundation, the manager of the Project Gutenberg™ trademark. Contact the Foundation as set forth in Section 3 below.
+
+1.F.
+
+1.F.1. Project Gutenberg volunteers and employees expend considerable effort to identify, do copyright research on, transcribe and proofread works not protected by U.S. copyright law in creating the Project Gutenberg™ collection. Despite these efforts, Project Gutenberg™ electronic works, and the medium on which they may be stored, may contain “Defects,” such as, but not limited to, incomplete, inaccurate or corrupt data, transcription errors, a copyright or other intellectual property infringement, a defective or damaged disk or other medium, a computer virus, or computer codes that damage or cannot be read by your equipment.
+
+1.F.2. LIMITED WARRANTY, DISCLAIMER OF DAMAGES - Except for the “Right of Replacement or Refund” described in paragraph 1.F.3, the Project Gutenberg Literary Archive Foundation, the owner of the Project Gutenberg™ trademark, and any other party distributing a Project Gutenberg™ electronic work under this agreement, disclaim all liability to you for damages, costs and expenses, including legal fees. YOU AGREE THAT YOU HAVE NO REMEDIES FOR NEGLIGENCE, STRICT LIABILITY, BREACH OF WARRANTY OR BREACH OF CONTRACT EXCEPT THOSE PROVIDED IN PARAGRAPH 1.F.3. YOU AGREE THAT THE FOUNDATION, THE TRADEMARK OWNER, AND ANY DISTRIBUTOR UNDER THIS AGREEMENT WILL NOT BE LIABLE TO YOU FOR ACTUAL, DIRECT, INDIRECT, CONSEQUENTIAL, PUNITIVE OR INCIDENTAL DAMAGES EVEN IF YOU GIVE NOTICE OF THE POSSIBILITY OF SUCH DAMAGE.
+
+1.F.3. LIMITED RIGHT OF REPLACEMENT OR REFUND - If you discover a defect in this electronic work within 90 days of receiving it, you can receive a refund of the money (if any) you paid for it by sending a written explanation to the person you received the work from. If you received the work on a physical medium, you must return the medium with your written explanation. The person or entity that provided you with the defective work may elect to provide a replacement copy in lieu of a refund. If you received the work electronically, the person or entity providing it to you may choose to give you a second opportunity to receive the work electronically in lieu of a refund. If the second copy is also defective, you may demand a refund in writing without further opportunities to fix the problem.
+
+1.F.4. Except for the limited right of replacement or refund set forth in paragraph 1.F.3, this work is provided to you ‘AS-IS’, WITH NO OTHER WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY OR FITNESS FOR ANY PURPOSE.
+
+1.F.5. Some states do not allow disclaimers of certain implied warranties or the exclusion or limitation of certain types of damages. If any disclaimer or limitation set forth in this agreement violates the law of the state applicable to this agreement, the agreement shall be interpreted to make the maximum disclaimer or limitation permitted by the applicable state law. The invalidity or unenforceability of any provision of this agreement shall not void the remaining provisions.
+
+1.F.6. INDEMNITY - You agree to indemnify and hold the Foundation, the trademark owner, any agent or employee of the Foundation, anyone providing copies of Project Gutenberg™ electronic works in accordance with this agreement, and any volunteers associated with the production, promotion and distribution of Project Gutenberg™ electronic works, harmless from all liability, costs and expenses, including legal fees, that arise directly or indirectly from any of the following which you do or cause to occur: (a) distribution of this or any Project Gutenberg™ work, (b) alteration, modification, or additions or deletions to any Project Gutenberg™ work, and (c) any Defect you cause.
+
+Section 2. Information about the Mission of Project Gutenberg™
+
+Project Gutenberg™ is synonymous with the free distribution of electronic works in formats readable by the widest variety of computers including obsolete, old, middle-aged and new computers. It exists because of the efforts of hundreds of volunteers and donations from people in all walks of life.
+
+Volunteers and financial support to provide volunteers with the assistance they need are critical to reaching Project Gutenberg™’s goals and ensuring that the Project Gutenberg™ collection will remain freely available for generations to come. In 2001, the Project Gutenberg Literary Archive Foundation was created to provide a secure and permanent future for Project Gutenberg™ and future generations. To learn more about the Project Gutenberg Literary Archive Foundation and how your efforts and donations can help, see Sections 3 and 4 and the Foundation information page at www.gutenberg.org.
+
+Section 3. Information about the Project Gutenberg Literary Archive Foundation
+
+The Project Gutenberg Literary Archive Foundation is a non-profit 501(c)(3) educational corporation organized under the laws of the state of Mississippi and granted tax exempt status by the Internal Revenue Service. The Foundation’s EIN or federal tax identification number is 64-6221541. Contributions to the Project Gutenberg Literary Archive Foundation are tax deductible to the full extent permitted by U.S. federal laws and your state’s laws.
+
+The Foundation’s business office is located at 809 North 1500 West, Salt Lake City, UT 84116, (801) 596-1887. Email contact links and up to date contact information can be found at the Foundation’s website and official page at www.gutenberg.org/contact
+
+Section 4. Information about Donations to the Project Gutenberg Literary Archive Foundation
+
+Project Gutenberg™ depends upon and cannot survive without widespread public support and donations to carry out its mission of increasing the number of public domain and licensed works that can be freely distributed in machine-readable form accessible by the widest array of equipment including outdated equipment. Many small donations ($1 to $5,000) are particularly important to maintaining tax exempt status with the IRS.
+
+The Foundation is committed to complying with the laws regulating charities and charitable donations in all 50 states of the United States. Compliance requirements are not uniform and it takes a considerable effort, much paperwork and many fees to meet and keep up with these requirements. We do not solicit donations in locations where we have not received written confirmation of compliance. To SEND DONATIONS or determine the status of compliance for any particular state visit [www.gutenberg.org/donate](https://www.gutenberg.org/donate/).
+
+While we cannot and do not solicit contributions from states where we have not met the solicitation requirements, we know of no prohibition against accepting unsolicited donations from donors in such states who approach us with offers to donate.
+
+International donations are gratefully accepted, but we cannot make any statements concerning tax treatment of donations received from outside the United States. U.S. laws alone swamp our small staff.
+
+Please check the Project Gutenberg web pages for current donation methods and addresses. Donations are accepted in a number of other ways including checks, online payments and credit card donations. To donate, please visit: www.gutenberg.org/donate
+
+Section 5. General Information About Project Gutenberg™ electronic works
+
+Professor Michael S. Hart was the originator of the Project Gutenberg™ concept of a library of electronic works that could be freely shared with anyone. For forty years, he produced and distributed Project Gutenberg™ eBooks with only a loose network of volunteer support.
+
+Project Gutenberg™ eBooks are often created from several printed editions, all of which are confirmed as not protected by copyright in the U.S. unless a copyright notice is included. Thus, we do not necessarily keep eBooks in compliance with any particular paper edition.
+
+Most people start at our website which has the main PG search facility: [www.gutenberg.org](https://www.gutenberg.org).
+
+This website includes information about Project Gutenberg™, including how to make donations to the Project Gutenberg Literary Archive Foundation, how to help produce our new eBooks, and how to subscribe to our email newsletter to hear about new eBooks.

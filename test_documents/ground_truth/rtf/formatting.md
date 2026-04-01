@@ -1,17 +1,17 @@
-This is a test of formatting. This is hidden:.
+This is a test of FORMATTING. This is hidden: .
 
 Small Caps
 
-bold
+**bold**
 
-**itali****cs**
+*italics*
 
-**bold and italics**
+**bold *and italics***
 
-**und****erlined**
+underlined
 
-**st****rikeout**
+~~strikeout~~
 
-**xsuperscript**
+xsuperscript
 
-**xsubscript**
+xsubscript

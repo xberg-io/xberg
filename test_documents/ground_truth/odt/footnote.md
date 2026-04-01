@@ -1,6 +1,5 @@
-[^1]
+Mead's landmark study has been amply annotated.\[^1\] It washer work in America during the Second World War, however, that formsthe basis for the paper. As others have noted,\[^2\]this period was a turning point for Margaret Mead.
 
-Some text with a footnote.\[^1\]
+\[^1\]: See Sahlins, Bateson, and Geertz for a complete bibliography.
 
-[^1]:
-    Footnote text
+\[^2\]: A complete bibliography will be found at the end of this chapter.

@@ -1,22 +1,31 @@
-One
+1.  One
 
-Two
+2.  Two
 
-- - Three
-  - Four
-    - Five
-    - Six
-      - Seven
-      - Eight
-        - Nine
-        - Ten
-          - Eleven
-          - Twelve
+    1.  Three
 
-Out of list\!
+    2.  Four
+
+        1.  Five
+
+        2.  Six
+
+            1.  Seven
+
+            2.  Eight
+
+                1.  Nine
+
+                2.  Ten
+
+                    - Eleven
+
+                    - Twelve
+
+Out of list!
 
 Start with
 
-Seven Start
+7.  Seven Start
 
-Eight Continue
+8.  Eight Continue

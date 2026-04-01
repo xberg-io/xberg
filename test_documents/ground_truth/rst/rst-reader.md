@@ -1,365 +1,292 @@
-## Pandoc Test Suite
+# Pandoc Test Suite
 
-### Subtitle
+## Subtitle
 
-**Authors**: John MacFarlane; Anonymous
+Authors  
+John MacFarlane; Anonymous
 
-**Date**: July 17, 2006
+Date  
+July 17, 2006
 
-**Revision**: 3
+Revision  
+3
 
-#### Level one header
+### Level one header
 
-This is a set of tests for pandoc. Most of them are adapted from
+This is a set of tests for pandoc. Most of them are adapted from John Gruber's markdown test suite.
 
-John Gruber's markdown test suite.
+#### Level two header
 
-##### Level two header
+##### Level three
 
-###### Level three
+###### Level four with *emphasis*
 
-####### Level four with \*emphasis\*
+####### Level five
 
-Level five
-
-''''''''''
-
-#### Paragraphs
+### Paragraphs
 
 Here's a regular paragraph.
 
-In Markdown 1.0.0 and earlier. Version
+In Markdown 1.0.0 and earlier. Version 8. This line turns into a list item. Because a hard-wrapped line in the middle of a paragraph looked like a list item.
 
-1. This line turns into a list item.
-
-Because a hard-wrapped line in the
-
-middle of a paragraph looked like a
-
-list item.
-
-Here's one with a bullet.
-
-- criminey.
+Here's one with a bullet. \* criminey.
 
 Horizontal rule:
 
+------------------------------------------------------------------------
+
 Another:
 
-#### Block Quotes
+------------------------------------------------------------------------
+
+### Block Quotes
 
 Here's a block quote:
 
-This is a block quote.
-
-It is pretty short.
+> This is a block quote. It is pretty short.
 
 Here's another, differently indented:
 
-This is a block quote.
+> This is a block quote. It's indented with a tab.
+>
+> Code in a block quote:
+>
+>     sub status {
+>         print "working";
+>     }
+>
+> List in a block quote:
+>
+> 1.  item one
+> 2.  item two
+>
+> Nested block quotes:
+>
+> > nested
+> >
+> > > nested
 
-It's indented with a tab.
-
-Code in a block quote::
-
-sub status {
-
-print "working";
-
-}
-
-List in a block quote:
-
-1. item one
-2. item two
-
-Nested block quotes:
-
-nested
-
-nested
-
-#### Code Blocks
+### Code Blocks
 
 Code:
 
-: 
+    ---- (should be four hyphens)
 
-\---- (should be four hyphens)
+    sub status {
+        print "working";
+    }
 
-sub status {
-
-print "working";
-
-}
-
-: 
-
-this code block is indented by one tab
-
-And::
-
-this block is indented by two tabs
-
-These should not be escaped: \\$ \\\\ \\\> \\\[ \\{
+    this code block is indented by one tab
 
 And:
 
-```python
+    this block is indented by two tabs
+
+    These should not be escaped:  $ \\ \> \[ \{
+
+And:
+
+``` python
 def my_function(x):
     return x + 1
 ```
 
-If we use the highlight directive, we can specify a default language
+If we use the highlight directive, we can specify a default language for literate blocks.
 
-for literate blocks.
-
-: 
-
-\-- this code is in haskell
-
+``` haskell
+-- this code is in haskell
 data Tree = Leaf | Node Tree Tree
+```
 
-: 
-
-\-- this code is in haskell too
-
+``` haskell
+-- this code is in haskell too
 data Nat = Zero | Succ Nat
+```
 
-: 
+``` javascript
+-- this code is in javascript
+let f = (x, y) => x + y
+```
 
-\-- this code is in javascript
+### Lists
 
-let f = (x, y) =\> x + y
-
-#### Lists
-
-##### Unordered
+#### Unordered
 
 Asterisks tight:
 
-\*&#9;asterisk 1
-
-\*&#9;asterisk 2
-
-\*&#9;asterisk 3
+- asterisk 1
+- asterisk 2
+- asterisk 3
 
 Asterisks loose:
 
-\*&#9;asterisk 1
-
-\*&#9;asterisk 2
-
-\*&#9;asterisk 3
+- asterisk 1
+- asterisk 2
+- asterisk 3
 
 Pluses tight:
 
-\+&#9;Plus 1
-
-\+&#9;Plus 2
-
-\+&#9;Plus 3
+- Plus 1
+- Plus 2
+- Plus 3
 
 Pluses loose:
 
-\+&#9;Plus 1
-
-\+&#9;Plus 2
-
-\+&#9;Plus 3
+- Plus 1
+- Plus 2
+- Plus 3
 
 Minuses tight:
 
-\-&#9;Minus 1
-
-\-&#9;Minus 2
-
-\-&#9;Minus 3
+- Minus 1
+- Minus 2
+- Minus 3
 
 Minuses loose:
 
-\-&#9;Minus 1
+- Minus 1
+- Minus 2
+- Minus 3
 
-\-&#9;Minus 2
-
-\-&#9;Minus 3
-
-##### Ordered
+#### Ordered
 
 Tight:
 
-1\.&#9;First
-
-2\.&#9;Second
-
-3\.&#9;Third
+1.  First
+2.  Second
+3.  Third
 
 and:
 
-1. One
-2. Two
-3. Three
+1.  One
+2.  Two
+3.  Three
 
 Loose using tabs:
 
-1\.&#9;First
-
-2\.&#9;Second
-
-3\.&#9;Third
+1.  First
+2.  Second
+3.  Third
 
 and using spaces:
 
-1. One
-
-<!-- end list -->
-
-1. Two
-
-<!-- end list -->
-
-1. Three
+1.  One
+2.  Two
+3.  Three
 
 Multiple paragraphs:
 
-1\.&#9;Item 1, graf one.
+1.  Item 1, graf one.
 
-Item 1. graf two. The quick brown fox jumped over the lazy dog's
+    Item 1. graf two. The quick brown fox jumped over the lazy dog's back.
 
-back.
+2.  Item 2.
 
-2\.&#9;Item 2.
-
-3\.&#9;Item 3.
+3.  Item 3.
 
 Nested:
 
-\*&#9;Tab
-
-\*&#9;Tab
-
-\*&#9;Tab
+- Tab
+  - Tab
+    - Tab
 
 Here's another:
 
-1. First
+1.  First
 
-<!-- end list -->
+2.  Second:
 
-1. Second:
+    > - Fee
+    > - Fie
+    > - Foe
 
-<!-- end list -->
+3.  Third
 
-- Fee
-- Fie
-- Foe
+#### Fancy list markers
 
-<!-- end list -->
+2)  begins with 2
 
-1. Third
+3)  and now 3
 
-##### Fancy list markers
+    with a continuation
 
-(2) begins with 2
-
-(3) and now 3
-
-with a continuation
-
-iv. sublist with roman numerals, starting with 4
-
-v. more items
-
-(A) a subsublist
-
-(B) a subsublist
+    4.  sublist with roman numerals, starting with 4
+    5.  more items
+        1)  a subsublist
+        2)  a subsublist
 
 Nesting:
 
-A. Upper Alpha
-
-I. Upper Roman.
-
-(6) Decimal start with 6
-
-c) Lower alpha with paren
+1.  Upper Alpha
+    1.  Upper Roman.
+        6)  Decimal start with 6
+            3)  Lower alpha with paren
 
 Autonumbering:
 
-1. Autonumber.
+1.  Autonumber.
 2.  More.
-
-<!-- end list -->
-
-1. Nested.
+    1.  Nested.
 
 Autonumbering with explicit start:
 
-(d) item 1
+4)  item 1
+5)  item 2
 
-(\#) item 2
+#### Definition
 
-##### Definition
-
-term 1
-
+term 1  
 Definition 1.
 
-term 2
-
+term 2  
 Definition 2, paragraph 1.
 
 Definition 2, paragraph 2.
 
-term with *emphasis*
-
+term with *emphasis*  
 Definition 3.
 
-#### Field Lists
+### Field Lists
 
-**address**: 61 Main St.
+> address  
+> 61 Main St.
+>
+> city  
+> *Nowhere*, MA, USA
+>
+> phone  
+> 123-4567
 
-**city**: \*Nowhere\*, MA,
+address  
+61 Main St.
 
-**phone**: 123-4567
+city  
+*Nowhere*, MA, USA
 
-**address**: 61 Main St.
-
-**city**: \*Nowhere\*, MA,
-
-**phone**: 
-
+phone  
 123-4567
 
-#### HTML Blocks
+### HTML Blocks
 
 Simple block on one line:
 
+foo
+
 Now, nested:
-
-\<div\>
-
-\<div\>
 
 foo
 
-\</div\>
+### LaTeX Block
 
-\</div\>
-
-\</div\>
-
-#### LaTeX Block
-
-#### Inline Markup
+### Inline Markup
 
 This is *emphasized*. This is **strong**.
 
-This is code: `>`, `$`, `\`, `\$`, `<html>`.
+This is code: `>`, `$`, `\`, `$`, ``.
 
-This is\\ :sub:`subscripted` and this is :sup:`superscripted`\\ .
+This is~subscripted~ and this is ^superscripted^.
 
-#### Special Characters
+### Special Characters
 
 Here is some unicode:
 
@@ -369,7 +296,7 @@ Here is some unicode:
 - set membership: ∈
 - copyright: ©
 
-AT\&T has an ampersand in their name.
+AT&T has an ampersand in their name.
 
 This & that.
 
@@ -377,83 +304,73 @@ This & that.
 
 6 \> 5.
 
-Backslash: \\\\
+Backslash: \\
 
-Backtick: \\\`
+Backtick: \`
 
-Asterisk: \\\*
+Asterisk: \*
 
-Underscore: \\_
+Underscore: \_
 
-Left brace: \\{
+Left brace: {
 
-Right brace: \\}
+Right brace: }
 
-Left bracket: \\\[
+Left bracket: \[
 
-Right bracket: \\\]
+Right bracket: \]
 
-Left paren: \\(
+Left paren: (
 
-Right paren: \\)
+Right paren: )
 
-Greater-than: \\\>
+Greater-than: \>
 
-Hash: \\\#
+Hash: \#
 
-Period: \\.
+Period: .
 
-Bang: \\\!
+Bang: !
 
-Plus: \\+
+Plus: +
 
-Minus: \\-
+Minus: -
 
-#### Links
+### Links
 
 Explicit: a [URL](/url/).
 
-Explicit with no label: .
+Explicit with no label: [foo](foo).
 
-Two anonymous links: `the first`_ and `the second`_
+Two anonymous links: [the first](/url1/) and [the second](/url2/)
 
-__ /url1/
+Reference links: [link1](/url1/) and [link2](/url2/) and [link1](/url1/) again.
 
-__ /url2/
+Another [style of reference link](/url1/).
 
-Reference links: `link1` and `link2` and link1_ again.
+Here's a [link with an ampersand in the URL](http://example.com/?foo=1&bar=2).
 
-[link1](/url1/)
+Here's a link with an amersand in the link text: [AT&T](/url/).
 
-[\`link2\`](/url2/)
+Autolinks: <http://example.com/?foo=1&bar=2> and <nobody@nowhere.net>.
 
-Another [style of reference link](link1_).
+But not here:
 
-Here's a `link with an ampersand in the URL`.
+    http://example.com/
 
-Here's a link with an amersand in the link text: [AT\&T](/url/).
-
-[link with an ampersand in the URL](http://example.com/?foo=1&bar=2)
-
-Autolinks: http://example.com/?foo=1\&bar=2 and nobody@nowhere.net.
-
-But not here::
-
-http://example.com/
-
-#### Images
+### Images
 
 From "Voyage dans la Lune" by Georges Melies (1902):
 
-\[image: lalune.jpg\]
+![image](lalune.jpg)
 
-\[image: Voyage dans la Lune\]
+![Voyage dans la Lune](lalune.jpg)
 
-Here is a movie |movie| icon.
+Here is a movie ![movie](movie.jpg) icon.
 
-And an |image with a link|.
+And an [![A movie](movie.jpg)](/url).
 
-#### Comments
+### Comments
 
 First paragraph
 
@@ -461,160 +378,156 @@ Another paragraph
 
 A third paragraph
 
-#### Line blocks
+### Line blocks
 
-| But can a bee be said to be
+But can a bee be said to be\
+    or not to be an entire bee,\
+        when half the bee is not a bee,\
+            due to some ancient injury?\
+\
+Continuation line\
+  and another
 
-| or not to be an entire bee,
-
-| when half the bee is not a bee,
-
-| due to some ancient injury?
-
-|
-
-| Continuation
-
-line
-
-| and
-
-another
-
-#### Simple Tables
+### Simple Tables
 
 | col 1 | col 2 | col 3 |
-| --- | --- | --- |
-
-r1 a b c
-
-r2 d e f
+|-------|-------|-------|
+| r1 a  | b     | c     |
+| r2 d  | e     | f     |
 
 Headless
 
-| r1 a | b | c |
-| --- | --- | --- |
-| r2 d | e | f |
+|      |     |     |
+|------|-----|-----|
+| r1 a | b   | c   |
+| r2 d | e   | f   |
 
-#### Grid Tables
+### Grid Tables
 
-| col 1 | col 2 | col 3 |
-| --- | --- | --- |
-| r1 a | b | c |
-| r1 bis | b 2 | c 2 |
-| r2 d | e | f |
+| col 1       | col 2 | col 3 |
+|-------------|-------|-------|
+| r1 a r1 bis | b b 2 | c c 2 |
+| r2 d        | e     | f     |
 
 Headless
 
-| r1 a | b | c |
-| --- | --- | --- |
-| r1 bis | b 2 | c 2 |
-| r2 d | e | f |
+|             |       |       |
+|-------------|-------|-------|
+| r1 a r1 bis | b b 2 | c c 2 |
+| r2 d        | e     | f     |
 
 Spaces at ends of lines
 
-| r1 a | b | c |
-| --- | --- | --- |
-| r1 bis | b 2 | c 2 |
-| r2 d | e | f |
+|             |       |       |
+|-------------|-------|-------|
+| r1 a r1 bis | b b 2 | c c 2 |
+| r2 d        | e     | f     |
 
 Multiple blocks in a cell
 
-| r1 a | - b | c |
-| --- | --- | --- |
-| - b 2 | c 2 |  |
-| r1 bis | - b 2 | c 2 |
+|             |               |           |
+|-------------|---------------|-----------|
+| r1 a r1 bis | b, b 2, b 2   | c c 2 c 2 |
 
 Table with cells spanning multiple rows or columns:
 
-| Property | Earth |  |
-| --- | --- | --- |
-| min | -89.2 °C |  |
-| Temperature +-------+----------+ |  |  |
-| 1961-1990 | mean | 14 °C |
-| min | 56.7 °C |  |
+| Property               |      | Earth    |
+|------------------------|------|----------|
+| Temperature 1961-1990  | min  | -89.2 °C |
+|                        | mean | 14 °C    |
+|                        | min  | 56.7 °C  |
 
 Table with complex header:
 
-| Location | Temperature 1961-1990 |  |  |
-| --- | --- | --- | --- |
-| in degree Celsius |  |  |  |
-| min | mean | max |  |
-| Antarctica | -89.2 | N/A | 19.8 |
-| Earth | -89.2 | 14 | 56.7 |
+| Location   | min   | mean | max  |
+|------------|-------|------|------|
+| Antarctica | -89.2 | N/A  | 19.8 |
+| Earth      | -89.2 | 14   | 56.7 |
 
-#### Footnotes
+### Footnotes
 
-\[1\]_[^1]
+[^1]
 
-\[\#\]_[^2]
+[^2]
 
-\[\#\]_[^2]
+[^3]
 
-\[\*\]_
-
-continuation line.
-
-continuation block.
-
-and a second para.
+[^4]
 
 Not in note.
 
-#### Math
+### Math
 
-Some inline math :math:`E=mc^2`\\ . Now some
+Some inline math $`E=mc^2`$. Now some display math:
 
-display math:
+``` math
+E=mc^2
+```
 
-$$E=mc^2$$
+``` math
+E = mc^2
+```
 
-$$E = mc^2$$
+``` math
+E = mc^2
+```
+``` math
+\alpha = \beta
+```
 
-$$E = mc^2
-\alpha = \beta$$
-
-$$:label: hithere
-:nowrap:
+``` math
+\begin{aligned}
 E &= mc^2\\
 F &= \pi E
-F &= \gamma \alpha^2$$
+\end{aligned}
+```
+``` math
+F &= \gamma \alpha^2
+```
 
 All done.
 
-#### Default-Role
+### Default-Role
 
 Try changing the default role to a few different things.
 
-##### Doesn't Break Title Parsing
+#### Doesn't Break Title Parsing
 
-Inline math: `E=mc^2` or :math:`E=mc^2` or `E=mc^2`:math:.
+Inline math: $`E=mc^2`$ or $`E=mc^2`$ or $`E=mc^2`$. Other roles: ^super^, ~sub~.
 
-Other roles: :sup:`super`, `sub`:sub:.
+``` math
+\alpha = beta
+```
+``` math
+E = mc^2
+```
 
-$$\alpha = beta
-E = mc^2$$
-
-Some `of` these :sup:`words` are in `superscript`:sup:.
+Some ^of^ these ^words^ are in ^superscript^.
 
 Reset default-role to the default default.
 
-And now `some-invalid-string-3231231` is nonsense.
+And now some-invalid-string-3231231 is nonsense.
 
-And now with :html:`<b>inline</b> <span id="test">HTML</span>`.
+And now with **inline** HTML.
 
-And some inline haskell :haskell:`fmap id [1,2..10]`.
+And some inline haskell `fmap id [1,2..10]`.
 
-Indirect python role :py:`[x*x for x in [1,2,3,4,5]]`.
+Indirect python role `[x*x for x in [1,2,3,4,5]]`.
 
-Different indirect C :c:`int x = 15;`.
+Different indirect C `int x = 15;`.
 
-##### Literal symbols
+#### Literal symbols
 
-2*2 = 4*1
+2\*2 = 4\*1
 
-[^1]:
-    Note with one line.
+[^1]: Note with one line.
 
-[^2]:
-    Note with
+[^2]: Note with continuation line.
+
+[^3]: Note with
+
+    continuation block.
+
+[^4]: Note with continuation line
+
+    and a second para.

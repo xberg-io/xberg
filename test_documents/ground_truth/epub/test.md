@@ -11,4 +11,4 @@ It includes:
 
 Here's a second chapter with a *different* style.
 
-This is a blockquote for testing.
+> This is a blockquote for testing.
