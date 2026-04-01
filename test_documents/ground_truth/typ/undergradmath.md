@@ -1,462 +1,338 @@
-<div class="columns-flow" count="2">
+// Licensed under the Creative Commons Attribution-ShareAlike 4.0 International License. // https://creativecommons.org/licenses/by-sa/4.0/
 
-<span align="center">[ **Typst Math for Undergrads** ](https://github.com/johanvx/typst-undergradmath)</span>
+// Meta data
 
-This is a Typst port of *<span class="box">L A <span class="box">T E X</span></span> Math for Undergrads* by Jim Hefferon. The original version is available at <u><https://gitlab.com/jim.hefferon/undergradmath></u>.
+// Margin
 
-**Meaning of annotations  **
+// Font size
 
-|  |  |
-|:---|:---|
-| <span class="box">2023-05-22 ❌</span> | This is unavailable. Last check date is 2023-05-22. |
+// Some horizontal spacing
 
-<span id="unavailable"></span>
+// For table/grid, something like "lhs \\enspace rhs" // Grid for code blocks // Table for math-code listing
 
-|  |  |
-|:---|:---|
-| <span class="box">💦</span> | Get this in a tricky way. Need a simpler method. |
+// LaTeX and TeX logos let e = measure(text(normalsize, "E"), styles) let T = "T" let E = text(normalsize, baseline: e.height / 2, "E") let X = "X" box(T + kern(-0.1667em) + E + kern(-0.125em) + X) }) let l = measure(text(10pt, "L"), styles) let a = measure(text(7pt, "A"), styles) let L = "L" let A = text(7pt, baseline: a.height - l.height, "A") box(L + kern(-0.36em) + A + kern(-0.15em) + TeX) })
 
-<span id="tricky"></span>
+// Update date
 
-|                                     |                             |
-|:------------------------------------|:----------------------------|
-| <span class="box">No idea 😕</span> | Don’t know how to get this. |
+// Unavailable (last check date) \#show "??": box(text(red, \[\#date \#emoji.crossmark\])) // Tricky \#show "\!\!": box(text(blue, emoji.drops)) // No idea \#show "?\!": box(text(orange, \[No idea \#emoji.face.unhappy\])) // Tricky figure numbering (\[??\], \[\!\!\], \[?\!\]).at(n - 1) }) // No prefix
 
-<span id="noidea"></span>
+// Justified paragraphs
 
-**Rule One  **Any mathematics at all, even a single character, gets a mathematical setting. Thus, for “the value of $`x`$ is $`7`$” enter `the value of $x$ is $7$`.
+// Two-column body \#show: rest =\> columns(2, rest)
 
-**Template  **Your document should contain at least this.
+// headcolor
 
-<table>
-<tbody>
-<tr>
-<td></td>
-<td><pre><code>-- document body here --</code></pre></td>
-</tr>
-</tbody>
-</table>
+// Run-in sections, like LaTeX \\paragraph \#show heading.where( level: 1 ): it =\> text( size: normalsize, weight: "bold", fill: headcolor, it.body + h(0.67em) )
 
-**Common constructs  **
+// Black raw code // \#show raw.where(block: false): it =\> { it.text }
 
-<div align="center">
+// Title \#align(center, link("https://github.com/johanvx/typst-undergradmath")\[ \#text(large, headcolor)\[**Typst Math for Undergrads**\] \])
 
-|  |  |
-|:---|:---|
-| <span class="box">$`x^{2}`$ `x^2`</span> | <span class="box">$`\sqrt{2}`$, $`\sqrt[n]{3}`$ `sqrt(2)`, `root(n, 3)`</span> |
-| <span class="box">$`x_{i,j}`$ `x_(i, j)`</span> | <span class="box">$`\frac{2}{3}`$, $`2/3`$ `2 / 3`, `2 \/ 3` or `2 slash 3`</span> |
+// Put this here to avoid affecting the title \#show link: underline
 
-</div>
+This is a Typst port of *\#LaTeX Math for Undergrads* by Jim Hefferon. The original version is available at \#link("https://gitlab.com/jim.hefferon/undergradmath").
 
-**Calligraphic letters  **Use as in `$cal(A)$`.
+# Meaning of annotations
 
-``` math
-\mathcal{ABCDEFGHIJKLMNOPQRSTUVWXYZ}
+\#figure( table( columns: (1fr, 2fr), \[??\], \[This is unavailable. Last check date is \#date.\], ) ) \<unavailable\> \#figure( table( columns: (1fr, 2fr), \[\!\!\], \[Get this in a tricky way. Need a simpler method.\], ) ) \<tricky\> \#figure( table( columns: (1fr, 2fr), \[?\!\], \[Don't know how to get this.\], ) ) \<noidea\>
+
+# Rule One
+
+Any mathematics at all, even a single character, gets a mathematical setting. Thus, for "the value of $x$ is $7$" enter `the value of $x$ is $7$`.
+
+# Template
+
+Your document should contain at least this.
+
+\#grid( "",
+
+```
+  -- document body here --
 ```
 
-Getting script letters is <a href="#unavailable" class="ref">[unavailable]</a>.
+)
 
-**Greek  **
+# Common constructs
 
-<div align="center">
+\#align(center, table( columns: 2, column-gutter: 1.5em, cell($x^2$, `x^2`), cell(\[$sqrt(2)$, $root(n, 3)$\], \[`sqrt(2)`, `root(n, 3)`\]), cell($x*(i, j)$, \`x*(i, j)`), cell([$2 / 3$, $2 \/ 3$], [`2 / 3` ,  `2 \\/ 3`  or  `2 slash 3` ]), // Maybe use  `slash\`? ))
 
-|  |  |
-|:---|:---|
-| <span class="box">$`\alpha`$ `alpha`</span> | <span class="box">$`\xi`$, $`\Xi`$ `xi`, `Xi`</span> |
-| <span class="box">$`\beta`$ `beta`</span> | <span class="box">$`ο`$ `omicron`</span> |
-| <span class="box">$`\gamma`$, $`\Gamma`$ `gamma`, `Gamma`</span> | <span class="box">$`\pi`$, $`\Pi`$ `pi`, `Pi`</span> |
-| <span class="box">$`\delta`$, $`\Delta`$ `delta`, `Delta`</span> | <span class="box">$`\varpi`$ `pi.alt`</span> |
-| <span class="box">$`\epsilon`$ `epsilon.alt`</span> | <span class="box">$`\rho`$ `rho`</span> |
-| <span class="box">$`\varepsilon`$ `epsilon`</span> | <span class="box">$`\varrho`$ `rho.alt`</span> |
-| <span class="box">$`\zeta`$ `zeta`</span> | <span class="box">$`\sigma`$, $`\Sigma`$ `sigma`, `Sigma`</span> |
-| <span class="box">$`\eta`$ `eta`</span> | <span class="box">$`\varsigma`$ `\u{03C2}` <a href="#tricky" class="ref">[tricky]</a></span> |
-| <span class="box">$`\theta`$, $`\Theta`$ `theta`, `Theta`</span> | <span class="box">$`\tau`$ `tau`</span> |
-| <span class="box">$`\vartheta`$ `theta.alt`</span> | <span class="box">$`\upsilon`$, $`\Upsilon`$ `upsilon`, `Upsilon`</span> |
-| <span class="box">$`\iota`$ `iota`</span> | <span class="box">$`\phi`$, $`\Phi`$ `phi.alt`, `Phi`</span> |
-| <span class="box">$`\kappa`$ $`Κ`$</span> | <span class="box">$`\varphi`$ `phi`</span> |
-| <span class="box">$`\lambda`$, $`\Lambda`$ `lambda`, `Lambda`</span> | <span class="box">$`\chi`$ `chi`</span> |
-| <span class="box">$`\mu`$ `mu`</span> | <span class="box">$`\psi`$, $`\Psi`$ `psi`, `Psi`</span> |
-| <span class="box">$`\nu`$ `nu`</span> | <span class="box">$`\omega`$, $`\Omega`$ `omega`, `Omega`</span> |
+# Calligraphic letters
 
-</div>
+Use as in `$cal(A)$`.
 
-**Sets and logic  **
+$$cal(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z)$$
 
-<div align="center">
+Getting script letters is @unavailable.
 
-|  |  |  |
-|:---|:---|:---|
-| <span class="box">$`\cup`$ `union`</span> | <span class="box">$`\mathbb{R}`$ `RR`, `bb(R)`</span> | <span class="box">$`\forall`$ `forall`</span> |
-| <span class="box">$`\cap`$ `sect`</span> | <span class="box">$`\mathbb{Z}`$ `ZZ`, `bb(Z)`</span> | <span class="box">$`\exists`$ `exists`</span> |
-| <span class="box">$`\subset`$ `subset`</span> | <span class="box">$`\mathbb{Q}`$ `QQ`, `bb(Q)`</span> | <span class="box">$`\neg`$ `not`</span> |
-| <span class="box">$`\subseteq`$ `subset.eq`</span> | <span class="box">$`\mathbb{N}`$ `NN`, `bb(N)`</span> | <span class="box">$`\vee`$ `or`</span> |
-| <span class="box">$`\supset`$ `supset`</span> | <span class="box">$`\mathbb{C}`$ `CC`, `bb(C)`</span> | <span class="box">$`\land`$ `and`</span> |
-| <span class="box">$`\supseteq`$ `supset.eq`</span> | <span class="box">$`\varnothing`$ `diameter`</span> | <span class="box">$`\vdash`$ `tack.r`</span> |
-| <span class="box">$`\in`$ `in`</span> | <span class="box">$`\varnothing`$ `nothing`</span> | <span class="box">$`\models`$ `models`</span> |
-| <span class="box">$`\notin`$ `in.not`</span> | <span class="box">$`א`$ `alef`</span> | <span class="box">$`\smallsetminus`$ `without`</span> |
+# Greek
 
-</div>
+\#align(center, table( columns: 2, column-gutter: 1em, cell($alpha$, `alpha`), cell(\[$xi$, $Xi$\], \[`xi`, `Xi`\]), cell($beta$, `beta`), cell($omicron$, `omicron`), cell(\[$gamma$, $Gamma$\], \[`gamma`, `Gamma`\]), cell(\[$pi$, $Pi$\], \[`pi`, `Pi`\]), cell(\[$delta$, $Delta$\], \[`delta`, `Delta`\]), cell($pi.alt$, `pi.alt`), cell($epsilon.alt$, `epsilon.alt`), cell($rho$, `rho`), cell($epsilon$, `epsilon`), cell($rho.alt$, `rho.alt`), cell($zeta$, `zeta`), cell(\[$sigma$, $Sigma$\], \[`sigma`, `Sigma`\]), cell($eta$, `eta`), cell($\\u{03C2}$, \[`\u{03C2}` @tricky\]), cell(\[$theta$, $Theta$\], \[`theta`, `Theta`\]), cell($tau$, `tau`), cell($theta.alt$, `theta.alt`), cell(\[$upsilon$, $Upsilon$\], \[`upsilon`, `Upsilon`\]), cell($iota$, `iota`), cell(\[$phi.alt$, $Phi$\], \[`phi.alt`, `Phi`\]), cell($kappa$, $Kappa$), cell($phi$, `phi`), cell(\[$lambda$, $Lambda$\], \[`lambda`, `Lambda`\]), cell($chi$, `chi`), cell($mu$, `mu`), cell(\[$psi$, $Psi$\], \[`psi`, `Psi`\]), cell($nu$, `nu`), cell(\[$omega$, $Omega$\], \[`omega`, `Omega`\]), ))
 
-Negate an operator, as in $`⊄`$, with `subset.not`. Get the set complement $`A^{\mathsf{c}}`$ with `A^(sans(c))` (or $`A^{\complement}`$ with `A^(complement)`, or $`\overline{A}`$ with `overline(A)`).
+# Sets and logic
 
-Remark  
-Using `diameter` for `\varnothing` may cause some confusion. However, <span class="box">L A <span class="box">T E X</span></span> also uses $`\varnothing`$ (`\u{2300}`) instead of $`\varnothing`$ (`\u{2205}`), see <u>[newcm $`§`$<!-- -->13.3](https://mirrors.sustech.edu.cn/CTAN/fonts/newcomputermodern/doc/newcm-doc.pdf)</u>. Another solution is to use `text(font: "Fira Sans", nothing)`, but the resultant glyph $`\varnothing`$ is subtly different from the widely used one. Ultimately, the choice is always **your decision**.
+\#align(center, table( columns: 3, column-gutter: 1em, cell($union$, `union`), cell($RR$, \[`RR`, `bb(R)`\]), cell($forall$, `forall`), cell($sect$, `sect`), cell($bb(Z)$, \[`ZZ`, `bb(Z)`\]), cell($exists$, `exists`), cell($subset$, `subset`), cell($bb(Q)$, \[`QQ`, `bb(Q)`\]), cell($not$, `not`), cell($subset.eq$, `subset.eq`), cell($bb(N)$, \[`NN`, `bb(N)`\]), cell($or$, `or`), cell($supset$, `supset`), cell($bb(C)$, \[`CC`, `bb(C)`\]), cell($and$, `and`), cell($supset.eq$, `supset.eq`), cell($diameter$, \[`diameter`\]), cell($tack.r$, `tack.r`), cell($in$, `in`), cell($nothing$, `nothing`), cell($models$, `models`), cell($in.not$, `in.not`), cell($alef$, `alef`), cell($without$, `without`), ))
 
-**Decorations  **
+Negate an operator, as in $subset.not$, with `subset.not`. Get the set complement $A^(sans(c))$ with `A^(sans(c))` (or $A^(complement)$ with `A^(complement)`, or $overline(A)$ with `overline(A)`).
 
-<div align="center">
+// https://www.ctan.org/tex-archive/fonts/newcomputermodern // // README // // Version 3.93 // // Provides access to Russian and Greek guillemotleft and guillemotright // using the character variant tables cv3 and cv4 respectively. // // The Math fonts provide the character \\varnothing, an alternative to \\emptyset, // through Character Variant cv01. The fontsetup package provides the option // 'varnothing' to easily switch to the alternative character.
 
-|  |  |  |
-|:---|:---|:---|
-| <span class="box">$`f'`$ `f'`, `f prime`</span> | <span class="box">$`\dot{a}`$ `dot(a)`</span> | <span class="box">$`\widetilde{a}`$ `tilde(a)`</span> |
-| <span class="box">$`f''`$ `f prime.double`</span> | <span class="box">$`\ddot{a}`$ `diaer(a)`</span> | <span class="box">$`\overline{a}`$ `macron(a)`</span> |
-| <span class="box">$`\Sigma^{\ast}`$ `Sigma^*`</span> | <span class="box">$`\hat{a}`$ `hat(a)`</span> | <span class="box">$`\overset{\rightarrow}{a}`$ `arrow(a)`</span> |
+// https://mirrors.sustech.edu.cn/CTAN/fonts/newcomputermodern/doc/newcm-doc.pdf // The NewComputerModern FontFamily §13.3 // The Math fonts provide the character \\varnothing (⌀, U+2300), as an alternative to \\emptyset (a slashed zero), through Character Variant cv01. // The fontsetup package provides the option ‘varnothing’ to easily switch to the alternative character.
 
-</div>
+/ Remark: Using `diameter` for `\varnothing` may cause some confusion. However, \#LaTeX also uses $diameter$ (`\u{2300}`) instead of $\\u{2205}$ (`\u{2205}`), see [newcm $section$13.3](https://mirrors.sustech.edu.cn/CTAN/fonts/newcomputermodern/doc/newcm-doc.pdf). Another solution is to use `text(font: "Fira Sans", nothing)`, but the resultant glyph $text(font: "Fira Sans", nothing)$ is subtly different from the widely used one. Ultimately, the choice is always **your decision**.
 
-If the decorated letter is $`i`$ or $`j`$ then some decorations need `\u{1D6A4}` <a href="#tricky" class="ref">[tricky]</a> and `\u{1D6A5}` <a href="#tricky" class="ref">[tricky]</a>, as in $`\overset{\rightarrow}{\imath}`$ with `arrow(\u{1D6A4})`. Some authors use boldface for vectors: `bold(x)`.
+# Decorations
 
-Entering `overline(x + y)` produces $`\overline{x + y}`$, and `hat(x + y)` gives $`\hat{x + y}`$. Comment on an expression as here (there is also `overbrace(..)`).
+\#align(center, table( columns: 3, column-gutter: 1em, cell($f'$, \[`f'`, `f prime`\]), cell($dot(a)$, `dot(a)`), cell($tilde(a)$, `tilde(a)`), cell($f prime.double$, `f prime.double`), cell($diaer(a)$, `diaer(a)`), cell($macron(a)$, `macron(a)`), cell($Sigma^**$, \`Sigma^**` ), cell($hat(a)$,  `hat(a)` ), cell($arrow(a)$,  `arrow(a)\`), ))
 
-<span align="center"><span class="box">$`\underset{|A|}{\underbrace{x + y}}`$ `underbrace(x + y, |A|)`</span></span>
+If the decorated letter is $i$ or $j$ then some decorations need `\u{1D6A4}` @tricky and `\u{1D6A5}` @tricky, as in $arrow(\\u{1D6A4})$ with `arrow(\u{1D6A4})`. Some authors use boldface for vectors: `bold(x)`.
 
-**Dots  **Use low dots in a list $`\left\{ 0,1,2,\ldots \right\}`$, entered as `{0, 1, 2, ...}`. Use centered dots in a sum or product $`1 + \cdots + 100`$, entered as `1 + dots.h.c + 100`. You can also get vertical dots `dots.v`, diagonal dots `dots.down` and anti-diagonal dots `dots.up`.
+Entering `overline(x + y)` produces $overline(x + y)$, and `hat(x + y)` gives $hat(x + y)$. Comment on an expression as here (there is also `overbrace(..)`).
 
-**Roman names  **Just type them!
+\#align(center, cell( $underbrace(x + y, |A|)$, `underbrace(x + y, |A|)`, ))
 
-<div align="center">
+# Dots
 
-|  |  |  |
-|:---|:---|:---|
-| <span class="box">$`\sin`$ `sin`</span> | <span class="box">$`\sinh`$ `sinh`</span> | <span class="box">$`\arcsin`$ `arcsin`</span> |
-| <span class="box">$`\cos`$ `cos`</span> | <span class="box">$`\cosh`$ `cosh`</span> | <span class="box">$`\arccos`$ `arccos`</span> |
-| <span class="box">$`\tan`$ `tan`</span> | <span class="box">$`\tanh`$ `tanh`</span> | <span class="box">$`\arctan`$ `arctan`</span> |
-| <span class="box">$`\sec`$ `sec`</span> | <span class="box">$`\coth`$ `coth`</span> | <span class="box">$`\min`$ `min`</span> |
-| <span class="box">$`\csc`$ `csc`</span> | <span class="box">$`\det`$ `det`</span> | <span class="box">$`\max`$ `max`</span> |
-| <span class="box">$`\cot`$ `cot`</span> | <span class="box">$`\dim`$ `dim`</span> | <span class="box">$`\inf`$ `inf`</span> |
-| <span class="box">$`\exp`$ `exp`</span> | <span class="box">$`\ker`$ `ker`</span> | <span class="box">$`\sup`$ `sup`</span> |
-| <span class="box">$`\log`$ `log`</span> | <span class="box">$`\deg`$ `deg`</span> | <span class="box">$`\liminf`$ `liminf`</span> |
-| <span class="box">$`\ln`$ `ln`</span> | <span class="box">$`\arg`$ `arg`</span> | <span class="box">$`\limsup`$ `limsup`</span> |
-| <span class="box">$`\lg`$ `lg`</span> | <span class="box">$`\gcd`$ `gcd`</span> | <span class="box">$`\lim`$ `lim`</span> |
+Use low dots in a list ${0, 1, 2, ...}$, entered as `{0, 1, 2, ...}`. Use centered dots in a sum or product $1 + dots.h.c + 100$, entered as `1 + dots.h.c + 100`. You can also get vertical dots `dots.v`, diagonal dots `dots.down` and anti-diagonal dots `dots.up`.
 
-</div>
+# Roman names
 
-**Other symbols  **
+Just type them\!
 
-<div align="center">
+\#align(center, table( columns: 3, column-gutter: 1.5em, cell($sin$, `sin`), cell($sinh$, `sinh`), cell($arcsin$, `arcsin`), cell($cos$, `cos`), cell($cosh$, `cosh`), cell($arccos$, `arccos`), cell($tan$, `tan`), cell($tanh$, `tanh`), cell($arctan$, `arctan`), cell($sec$, `sec`), cell($coth$, `coth`), cell($min$, `min`), cell($csc$, `csc`), cell($det$, `det`), cell($max$, `max`), cell($cot$, `cot`), cell($dim$, `dim`), cell($inf$, `inf`), cell($exp$, `exp`), cell($ker$, `ker`), cell($sup$, `sup`), cell($log$, `log`), cell($deg$, `deg`), cell($liminf$, `liminf`), cell($ln$, `ln`), cell($arg$, `arg`), cell($limsup$, `limsup`), cell($lg$, `lg`), cell($gcd$, `gcd`), cell($lim$, `lim`), ))
 
-|  |  |  |
-|:---|:---|:---|
-| <span class="box">$`<`$ `<`, `lt`</span> | <span class="box">$`\angle`$ `angle`</span> | <span class="box">$`\cdot`$ `dot`</span> |
-| <span class="box">$`\leq`$ `<=`, `lt.eq`</span> | <span class="box">$`\measuredangle`$ `angle.arc`</span> | <span class="box">$`\pm`$ `plus.minus`</span> |
-| <span class="box">$`>`$ `>`, `gt`</span> | <span class="box">$`\ell`$ `ell`</span> | <span class="box">$`\mp`$ `minus.plus`</span> |
-| <span class="box">$`\geq`$ `>=`, `gt.eq`</span> | <span class="box">$`\parallel`$ `parallel`</span> | <span class="box">$`\times`$ `times`</span> |
-| <span class="box">$`\neq`$ `!=`, `eq.not`</span> | <span class="box">$`45{^\circ}`$ `45 degree`</span> | <span class="box">$`\div`$ `div`</span> |
-| <span class="box">$`\ll`$ `<<`, `lt.double`</span> | <span class="box">$`\cong`$ `tilde.equiv`</span> | <span class="box">$`\ast`$ `*`, `ast`</span> |
-| <span class="box">$`\gg`$ `>>`, `gt.double`</span> | <span class="box">$`\ncong`$ `tilde.equiv.not`</span> | <span class="box">$`\mid`$ `divides`</span> |
-| <span class="box">$`\approx`$ `approx`</span> | <span class="box">$`\sim`$ `tilde`</span> | <span class="box">$`\nmid`$ `divides.not`</span> |
-| <span class="box">$`\asymp`$ `\u{224D}` <a href="#tricky" class="ref">[tricky]</a></span> | <span class="box">$`\simeq`$ `tilde.eq`</span> | <span class="box">$`n!`$ `n!`</span> |
-| <span class="box">$`\equiv`$ `equiv`</span> | <span class="box">$`\nsim`$ `tilde.not`</span> | <span class="box">$`\partial`$ `diff`</span> |
-| <span class="box">$`\prec`$ `prec`</span> | <span class="box">$`\oplus`$ `plus.circle`</span> | <span class="box">$`\nabla`$ `nabla`</span> |
-| <span class="box">$`\preceq`$ `prec.eq`</span> | <span class="box">$`\ominus`$ `minus.circle`</span> | <span class="box">$`ħ`$ `planck.reduce`</span> |
-| <span class="box">$`\succ`$ `succ`</span> | <span class="box">$`\odot`$ `dot.circle`</span> | <span class="box">$`\circ`$ `circle.stroked.tiny`</span> |
-| <span class="box">$`\succeq`$ `succ.eq`</span> | <span class="box">$`\otimes`$ `times.circle`</span> | <span class="box">$`\star`$ `star`</span> |
-| <span class="box">$`\propto`$ `prop`</span> | <span class="box">$`\oslash`$ `\u{2298}` <a href="#tricky" class="ref">[tricky]</a></span> | <span class="box">$`\sqrt{}`$ `sqrt("")`</span> |
-| <span class="box">$`\doteq`$ `\u{2250}` <a href="#tricky" class="ref">[tricky]</a></span> | <span class="box">$`\upharpoonright`$ `harpoon.tr`</span> | <span class="box">$`✓`$ `checkmark`</span> |
+# Other symbols
 
-</div>
+\#align(center, table( columns: 3, column-gutter: 1.2em, cell($\<$, \[`<`, `lt`\]), cell($angle$, `angle`), cell($dot$, \[`dot`\]), cell($\<=$, \[`<=`, `lt.eq`\]), cell($angle.arc$, `angle.arc`), cell($plus.minus$, `plus.minus`), cell($\>$, \[`>`, `gt`\]), cell($ell$, `ell`), cell($minus.plus$, `minus.plus`), cell($\>=$, \[`>=`, `gt.eq`\]), cell($parallel$, `parallel`), cell($times$, `times`), cell($\!=$, \[`!=`, `eq.not`\]), cell($45 degree$, `45 degree`), cell($div$, `div`), cell($\<\<$, \[`<<`, `lt.double`\]), cell($tilde.equiv$, `tilde.equiv`), cell($**$, \[\`**` ,  `ast`]), cell($>>$, [`\>\>` ,  `gt.double` ]), cell($tilde.equiv.not$,  `tilde.equiv.not` ), cell($divides$,  `divides` ), cell($approx$,  `approx` ), cell($tilde$,  `tilde` ), cell($divides.not$,  `divides.not`), cell($\u{224D}$, [`\\u{224D}`  @tricky]), cell($tilde.eq$,  `tilde.eq` ), cell($n!$,  `n\!` ), cell($equiv$,  `equiv` ), cell($tilde.not$,  `tilde.not` ), cell($diff$,  `diff` ), cell($prec$,  `prec` ), cell($plus.circle$,  `plus.circle` ), cell($nabla$,  `nabla` ), cell($prec.eq$,  `prec.eq` ), cell($minus.circle$,  `minus.circle` ), cell($planck.reduce$,  `planck.reduce` ), cell($succ$,  `succ` ), cell($dot.circle$,  `dot.circle` ), cell($circle.stroked.tiny$,  `circle.stroked.tiny` ), cell($succ.eq$,  `succ.eq` ), cell($times.circle$,  `times.circle` ), cell($star$,  `star` ), cell($prop$,  `prop`), cell($\u{2298}$, [`\\u{2298}`  @tricky]), cell($sqrt("")$,  `sqrt("")`), cell($\u{2250}$, [`\\u{2250}`  @tricky]), cell($harpoon.tr$,  `harpoon.tr` ), cell($checkmark$,  `checkmark\`), ))
 
-Use `a divides b` for the divides relation, $`a \mid b`$, and `a divides.not b` for the negation, $`a \nmid b`$. Use `|` to get set builder notation $`\left\{ a \in S~|~a\text{ is odd} \right\}`$ with `{a in S | a "is odd"}`.
+Use `a divides b` for the divides relation, $a divides b$, and `a divides.not b` for the negation, $a divides.not b$. Use `|` to get set builder notation ${a in S | a "is odd"}$ with `{a in S | a "is odd"}`.
 
-**Arrows  **
+# Arrows
 
-<div align="center">
-
-|  |  |
-|:---|:---|
-| <span class="box">$`\rightarrow`$ `->`, `arrow.r`</span> | <span class="box">$`\mapsto`$ `|->`, `arrow.r.bar`</span> |
-| <span class="box">$`\nrightarrow`$ `arrow.r.not`</span> | <span class="box">$`\longmapsto`$ `arrow.r.long.bar`</span> |
-| <span class="box">$`\longrightarrow`$ `arrow.r.long`</span> | <span class="box">$`\leftarrow`$ `<-`, `arrow.l`</span> |
-| <span class="box">$`\Rightarrow`$ `=>`, `arrow.r.double`</span> | <span class="box">$`\longleftrightarrow`$ `<-->`, `arrow.l.r.long`</span> |
-| <span class="box">$`\nRightarrow`$ `arrow.r.double.not`</span> | <span class="box">$`\downarrow`$ `arrow.b`</span> |
-| <span class="box">$`\Longrightarrow`$ `arrow.r.double.long`</span> | <span class="box">$`\uparrow`$ `arrow.t`</span> |
-| <span class="box">$`\rightsquigarrow`$ `arrow.squiggly`</span> | <span class="box">$`\updownarrow`$ `arrow.t.b`</span> |
-
-</div>
+\#align(center, table( columns: 2, column-gutter: 1.5em, cell($-\>$, \[`->`, `arrow.r`\]), cell($|-\>$, \[`|->`, `arrow.r.bar`\]), cell($arrow.r.not$, `arrow.r.not`), cell($arrow.r.long.bar$, `arrow.r.long.bar`), cell($arrow.r.long$, `arrow.r.long`), cell($\<-$, \[`<-`, `arrow.l`\]), cell($=\>$, \[`=>`, `arrow.r.double`\]), cell($\<--\>$, \[`<-->`, `arrow.l.r.long`\]), cell($arrow.r.double.not$, `arrow.r.double.not`), cell($arrow.b$, `arrow.b`), cell($arrow.r.double.long$, `arrow.r.double.long`), cell($arrow.t$, `arrow.t`), cell($arrow.squiggly$, `arrow.squiggly`), cell($arrow.t.b$, `arrow.t.b`), ))
 
 The right arrows in the first column have matching left arrows, such as `arrow.l.not`, and there are some other matches for down arrows, etc.
 
-**Variable-sized operators  **The summation $`\sum_{j = 0}^{3}j^{2}`$ `sum_(j = 0)^3 j^2` and the integral $`\int_{x = 0}^{3}x^{2}dx`$ `integral_(x = 0)^3 x^2 dif x` expand when displayed.
+# Variable-sized operators
 
-``` math
-\sum_{j = 0}^{3}j^{2}\qquad\int_{x = 0}^{3}x^{2}dx
-```
+The summation $sum*(j = 0)^3 j^2$ \`sum*(j = 0)^3 j^2`  and the integral $integral_(x = 0)^3 x^2 dif x$  `integral_(x = 0)^3 x^2 dif x\` expand when displayed.
+
+$$sum_(j = 0)^3 j^2 qquad integral_(x = 0)^3 x^2 dif x$$
 
 These do the same.
 
-<div align="center">
+\#align(center, table( columns: 3, cell($integral$, `integral`), cell($integral.triple$, `integral.triple`), cell($union.big$, `union.big`), cell($integral.double$, `integral.double`), cell($integral.cont$, `integral.cont`), cell($sect.big$, `sect.big`), ))
 
-|  |  |  |
-|:---|:---|:---|
-| <span class="box">$`\int`$ `integral`</span> | <span class="box">$`\iiint`$ `integral.triple`</span> | <span class="box">$`\bigcup`$ `union.big`</span> |
-| <span class="box">$`\iint`$ `integral.double`</span> | <span class="box">$`\oint`$ `integral.cont`</span> | <span class="box">$`\bigcap`$ `sect.big`</span> |
+# Fences
 
-</div>
-
-**Fences  **
-
-<div align="center">
-
-|  |  |  |
-|:---|:---|:---|
-| <span class="box">$`()`$ `()`</span> | <span class="box">$`\langle\rangle`$ `angle.l angle.r`</span> | <span class="box">$`\left| {} \right|`$ `abs("")`</span> |
-| <span class="box">$`\lbrack\rbrack`$ `[]`</span> | <span class="box">$`\left\lfloor {} \right\rfloor`$ `floor("")`</span> | <span class="box">$`\left\| {} \right\|`$ `norm("")`</span> |
-| <span class="box">$`\left\{ \right\}`$ `{}`</span> | <span class="box">$`\left\lceil {} \right\rceil`$ `ceil("")`</span> |  |
-
-</div>
+\#align(center, table( columns: 3, column-gutter: 1.5em, cell($()$, `()`), cell($angle.l angle.r$, `angle.l angle.r`), cell($abs("")$, `abs("")`), cell($\[\]$, `[]`), cell($floor("")$, `floor("")`), cell($norm("")$, `norm("")`), cell(${}$, `{}`), cell($ceil("")$, `ceil("")`), ))
 
 Fix the size with the `lr` function.
 
-<div align="center">
+\#align(center, table( columns: 2, column-gutter: 0.5em, $ lr(\[sum_(k = 0)^n e^(k^2)\], size: \#50%) $,
 
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display">$$\left. \left\lbrack \sum_{k = 0}^{n}e^{k^{2}} \right\rbrack \right.$$</span></p></td>
-<td style="text-align: left;"><pre><code>lr([sum_(k = 0)^n e^(k^2)], size: #50%)</code></pre></td>
-</tr>
-</tbody>
-</table>
-
-</div>
+````
+  lr([sum_(k = 0)^n e^(k^2)], size: #50%)
+  ```,
+))
 
 To have them grow with the enclosed formula, also use the `lr` function.
 
-<div align="center">
+#align(center, table(
+  columns: 2,
+  column-gutter: 1em,
+  $ lr(angle.l i, 2^(2^i) angle.r) $,
+````
 
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display">⟨<em>i</em>, 2<sup>2<sup><em>i</em></sup></sup>⟩</span></p></td>
-<td style="text-align: left;"><pre><code>lr(angle.l i, 2^(2^i) angle.r)</code></pre></td>
-</tr>
-</tbody>
-</table>
+lr(angle.l i, 2^(2^i) angle.r)
 
-</div>
+```,
+))
 
-Fences scale by default if entered directly as codepoints, and don’t scale automatically if entered as symbol notation.
+Fences scale by default if entered directly as codepoints, and don't scale automatically if entered as symbol notation.
 
-<div align="center">
+#align(center, table(
+  columns: 2,
+  column-gutter: 1em,
+  $ (1 / n^(alpha)) $,
+```
 
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display">$$\left( \frac{1}{n^{\alpha}} \right)$$</span></p></td>
-<td style="text-align: left;"><pre><code>(1 / n^(alpha))</code></pre></td>
-</tr>
-<tr>
-<td style="text-align: left;"><p><span class="math display">$$(\frac{1}{n^{\alpha}})$$</span></p></td>
-<td style="text-align: left;"><pre><code>paren.l 1 / n^(alpha) paren.r</code></pre></td>
-</tr>
-</tbody>
-</table>
+(1 / n^(alpha))
 
-</div>
+```,
+  $ paren.l 1 / n^(alpha) paren.r $,
+```
+
+paren.l 1 / n^(alpha) paren.r
+
+```,
+))
 
 The `lr` function also allows to scale unmatched delimiters and one-side fences.
 
-<div align="center">
+#align(center, table(
+  columns: 2,
+  column-gutter: 1em,
+  $ lr(frac(dif f, dif x) |)_(x_0) $,
+```
 
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display">$$\left. \frac{df}{dx} \right|_{x_{0}}$$</span></p></td>
-<td style="text-align: left;"><pre><code>lr(frac(dif f, dif x) |)_(x_0)</code></pre></td>
-</tr>
-</tbody>
-</table>
+lr(frac(dif f, dif x) |)*(x*0)
 
-</div>
+```,
+))
 
-**Arrays, Matrices  **Get a matrix with the `mat` function. You can pass an array to it.
+= Arrays, Matrices
+Get a matrix with the `mat` function. You can pass an array to it.
 
-<div align="center">
+#align(center, table(
+  columns: 2,
+  column-gutter: 1em,
+  $ mat(a, b; c, d) $,
+```
 
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display">$$\begin{pmatrix}
-a &amp; b \\
-c &amp; d
-\end{pmatrix}$$</span></p></td>
-<td style="text-align: left;"><pre><code>$ mat(a, b; c, d) $</code></pre></td>
-</tr>
-</tbody>
-</table>
+$$mat(a, b; c, d)$$
 
-</div>
+    ))
+    
+    In Typst, #link("https://typst.app/docs/reference/typst/array")[array] is a sequence of values,
+    while in #LaTeX, array is a matrix without fences, which is `$mat(delim: #none, ..)$` in Typst.
+    
+    For the determinant use `|A|`, text operator $det$ `det` or `mat(delim: "|", ..)`.
+    
+    Definition by cases can be easily obtained with the `cases` function.
+    
+    #align(center, table(
+      columns: 2,
+      column-gutter: 1em,
+      $ f_n = cases(
+        a &"if" n = 0,
+        r dot f_(n - 1) &"else"
+      ) $,
 
-In Typst, <u>[array](https://typst.app/docs/reference/typst/array)</u> is a sequence of values, while in <span class="box">L A <span class="box">T E X</span></span>, array is a matrix without fences, which is `$mat(delim: #none, ..)$` in Typst.
+$ f*n = cases( a &"if" n = 0, r dot f*(n - 1) &"else" ) $
 
-For the determinant use `|A|`, text operator $`\det`$ `det` or `mat(delim: "|", ..)`.
+    ))
+    
+    = Spacing in mathematics
+    Improve $sqrt(2) x$ to $sqrt(2) thin x$ with a thin space, as in `sqrt(2) thin x`.
+    Slightly wider are `medium` and `thick` (the three are in ratio $3 : 4 : 5$).
+    Bigger space is `quad` for $arrow.r quad arrow.l$, which is useful between parts of a display.
+    Get arbitrary space with the `h` function.
+    For example, use `#h(2em)` for `\qquad` in #LaTeX and `#h(-0.1667em)` for `\!`.
+    
+    = Displayed equations
+    Display equations in a block level using `$ ... $` with at least one space separating the math content and the `$`.
+    
+    #align(center, table(
+      columns: 2,
+      column-gutter: 1em,
+      $ S = k dot lg W $,
 
-Definition by cases can be easily obtained with the `cases` function.
+$$S = k dot lg W$$
 
-<div align="center">
-
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display">$$f_{n} = \begin{cases}
-a &amp; \text{if }n = 0 \\
-r \cdot f_{n - 1} &amp; \text{else }
-\end{cases}$$</span></p></td>
-<td style="text-align: left;"><pre><code>$ f_n = cases(
-  a &amp;&quot;if&quot; n = 0,
-  r dot f_(n - 1) &amp;&quot;else&quot;
-) $</code></pre></td>
-</tr>
-</tbody>
-</table>
-
-</div>
-
-**Spacing in mathematics  **Improve $`\sqrt{2}x`$ to $`\sqrt{2}\, x`$ with a thin space, as in `sqrt(2) thin x`. Slightly wider are `medium` and `thick` (the three are in ratio $`3:4:5`$). Bigger space is `quad` for $`\rightarrow \quad \leftarrow`$, which is useful between parts of a display. Get arbitrary space with the `h` function. For example, use `#h(2em)` for `\qquad` in <span class="box">L A <span class="box">T E X</span></span> and `#h(-0.1667em)` for `\!`.
-
-**Displayed equations  **Display equations in a block level using `$ ... $` with at least one space separating the math content and the `$`.
-
-<div align="center">
-
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display"><em>S</em> = <em>k</em> ⋅ lg <em>W</em></span></p></td>
-<td style="text-align: left;"><pre><code>$ S = k dot lg W $</code></pre></td>
-</tr>
-</tbody>
-</table>
-
-</div>
+```,
+))
 
 You can break into multiple lines.
 
-<div align="center">
+#align(center, table(
+  columns: 2,
+  column-gutter: 1em,
+  $ sin(x) = x - x^3 / 3! \
+      + x^5 / 5! - dots.h.c $,
+```
 
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display">$$\begin{array}{r}
-\sin(x) = x - \frac{x^{3}}{3!} \\
- + \frac{x^{5}}{5!} - \cdots
-\end{array}$$</span></p></td>
-<td style="text-align: left;"><pre><code>$ sin(x) = x - x^3 / 3! \
-    + x^5 / 5! - dots.h.c $</code></pre></td>
-</tr>
-</tbody>
-</table>
+$ sin(x) = x - x^3 / 3\! \\
 
-</div>
+1. x^5 / 5\! - dots.h.c $
+   ```,
+   ))
+   
+   Align equations using `&`
+   
+   #align(center, table(
+     columns: 2,
+     column-gutter: 1em,
+     $ nabla dot bold(D) &= rho \
+       nabla dot bold(B) &= 0 $,
+   ```
 
-Align equations using `&`
+$ nabla dot bold(D) &= rho \\ nabla dot bold(B) &= 0 $
 
-<div align="center">
+```,
+))
 
-<table>
-<tbody>
-<tr>
-<td style="text-align: left;"><p><span class="math display">$$\begin{aligned}
-\nabla \cdot \mathbf{D} &amp; = \rho \\
-\nabla \cdot \mathbf{B} &amp; = 0
-\end{aligned}$$</span></p></td>
-<td style="text-align: left;"><pre><code>$ nabla dot bold(D) &amp;= rho \
-  nabla dot bold(B) &amp;= 0 $</code></pre></td>
-</tr>
-</tbody>
-</table>
+(the left or right side of an alignment can be empty).
+Get a numbered version by `#set math.equation(numbering: ..)`.
 
-</div>
+= Calculus examples
+The last three here are display style.
 
-(the left or right side of an alignment can be empty). Get a numbered version by `#set math.equation(numbering: ..)`.
+#align(center, table(
+  align: horizon,
+  columns: 2,
+  column-gutter: 1em,
+  block($f: RR -> RR$),
+```
 
-**Calculus examples  **The last three here are display style.
+f: RR -\> RR
 
-<div align="center">
+```,
+  block($"9.8" "m/s"^2$),
+  block([`"9.8" "m/s"^2` @tricky]),
+  $ lim_(h->0) (f(x+h)-f(x))/h $,
+```
 
-<table>
-<tbody>
-<tr>
-<td><p><span class="math inline"><em>f</em> : ℝ → ℝ</span></p></td>
-<td><pre><code>f: RR -&gt; RR</code></pre></td>
-</tr>
-<tr>
-<td><p><span class="math inline">9.8  m/s<sup>2</sup></span></p></td>
-<td><p><code>"9.8" "m/s"^2</code> <a href="#tricky" class="ref">[tricky]</a></p></td>
-</tr>
-<tr>
-<td><p><span class="math display">$$\lim\limits_{h \rightarrow 0}\frac{f(x + h) - f(x)}{h}$$</span></p></td>
-<td><pre><code>lim_(h -&gt; 0) (f(x + h) - f(x)) / h</code></pre></td>
-</tr>
-<tr>
-<td><p><span class="math display">∫<em>x</em><sup>2</sup><em>d</em><em>x</em> = <em>x</em><sup>3</sup>/3 + <em>C</em></span></p></td>
-<td><pre><code>integral x^2 dif x = x^3 \/ 3 + C</code></pre></td>
-</tr>
-<tr>
-<td><p><span class="math display">$$\nabla = \mathbf{i}\frac{d}{dx} + \mathbf{j}\frac{d}{dy} + \mathbf{k}\frac{d}{dz}$$</span></p></td>
-<td><pre><code>nabla = bold(i) dif / (dif x) + bold(j) dif / (dif y) + bold(k) dif / (dif z)</code></pre></td>
-</tr>
-</tbody>
-</table>
+lim_(h -\> 0) (f(x + h) - f(x)) / h
 
-</div>
+```,
+  $ integral x^2 dif x = x^3 \/ 3 + C $,
+```
 
-**Discrete mathematics examples  **For modulo, there is a symbol $`\equiv`$ from `equiv` and a text operator $`\operatorname{mod}`$ from `mod`.
+integral x^2 dif x = x^3 \\/ 3 + C
 
-For combinations the binomial symbol $`\binom{n}{k}`$ is from `binom(n, k)`. This resizes to be bigger in a display.
+```,
+  $ nabla = bold(i) dif / (dif x) + bold(j) dif / (dif y) + bold(k) dif / (dif z) $,
+```
 
-For permutations use $`n^{\underline{r}}`$ from `n^(underline(r))` (some authors use $`P(n,r)`$, or $`{}_{n}P_{r}`$ from `""_n P_r`).
+nabla = bold(i) dif / (dif x) + bold(j) dif / (dif y) + bold(k) dif / (dif z)
 
-**Statistics examples  **
+```,
+))
 
-<div align="center">
+= Discrete mathematics examples
+For modulo, there is a symbol $equiv$ from `equiv` and a text operator $mod$ from `mod`.
 
-<table>
-<tbody>
-<tr>
-<td><p><span class="math inline">$\sigma^{2} = \sqrt{{\sum(x_{i} - \mu)}^{2}/N}$</span></p></td>
-<td><pre><code>sigma^2 = sqrt(sum(x_i - mu)^2 \/ N)</code></pre></td>
-</tr>
-<tr>
-<td><p><span class="math inline"><em>E</em>(<em>X</em>) = <em>μ</em><sub><em>X</em></sub> = ∑(<em>x</em><sub><em>i</em></sub> − <em>P</em>(<em>x</em><sub><em>i</em></sub>))</span></p></td>
-<td><pre><code>E(X) = mu_X = sum(x_i - P(x_i))</code></pre></td>
-</tr>
-</tbody>
-</table>
+For combinations the binomial symbol $binom(n, k)$ is from `binom(n, k)`.
+This resizes to be bigger in a display.
 
-</div>
+For permutations use $n^(underline(r))$ from `n^(underline(r))` (some authors use $P(n, r)$, or $""_n P_r$ from `""_n P_r`).
+
+= Statistics examples
+#align(center, table(
+  align: horizon,
+  columns: 2,
+  block($sigma^2 = sqrt(sum(x_i - mu)^2 \/ N)$),
+```
+
+sigma^2 = sqrt(sum(x_i - mu)^2 \\/ N)
+
+```,
+  block($E(X) = mu_X = sum(x_i - P(x_i))$),
+```
+
+E(X) = mu*X = sum(x*i - P(x_i))
+
+```,
+))
 
 The probability density of the normal distribution
 
-``` math
-\frac{1}{\sqrt{2\sigma^{2}\pi}}e^{- \frac{(x - \mu)^{2}}{2\sigma^{2}}}
-```
+$ 1 / sqrt(2 sigma^2 pi) e^(- (x - mu)^2 / (2 sigma^2)) $
 
 comes from this.
 
-<table>
-<tbody>
-<tr>
-<td></td>
-<td><pre><code>1 / sqrt(2 sigma^2 pi)
-  e^(- (x - mu)^2 / (2 sigma^2))</code></pre></td>
-</tr>
-</tbody>
-</table>
+#grid(
+  "",
+```
 
-**For more  **See also the Typst Documentation at <u><https://typst.app/docs></u>.
-
-------------------------------------------------------------------------
-
-johanvx (<u><https://github.com/johanvx></u>)    2023-05-22
-
-</div>
+1 / sqrt(2 sigma^2 pi) e^(- (x - mu)^2 / (2 sigma^2))

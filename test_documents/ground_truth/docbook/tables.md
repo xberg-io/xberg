@@ -28,19 +28,19 @@ Simple table indented two spaces:
 
 Multiline table with caption:
 
-# Here's the caption. It may span multiple lines.
+# Here’s the caption. It may span multiple lines.
 
 | Centered Header | Left Aligned | Right Aligned | Default aligned |
 | --- | --- | --- | --- |
 | First | row | 12.0 | Example of a row that spans multiple lines. |
-| Second | row | 5.0 | Here's another one. Note the blank line between rows. |
+| Second | row | 5.0 | Here’s another one. Note the blank line between rows. |
 
 Multiline table without caption:
 
 | Centered Header | Left Aligned | Right Aligned | Default aligned |
 | --- | --- | --- | --- |
 | First | row | 12.0 | Example of a row that spans multiple lines. |
-| Second | row | 5.0 | Here's another one. Note the blank line between rows. |
+| Second | row | 5.0 | Here’s another one. Note the blank line between rows. |
 
 Table without column headers:
 
@@ -53,4 +53,4 @@ Multiline table without column headers:
 
 | First | row | 12.0 | Example of a row that spans multiple lines. |
 | --- | --- | --- | --- |
-| Second | row | 5.0 | Here's another one. Note the blank line between rows. |
+| Second | row | 5.0 | Here’s another one. Note the blank line between rows. |

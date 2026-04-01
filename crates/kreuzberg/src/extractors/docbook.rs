@@ -146,6 +146,7 @@ fn build_docbook_internal_document(content: &str) -> Result<InternalDocument> {
     let mut current_table: Vec<Vec<String>> = Vec::new();
     let mut current_row: Vec<String> = Vec::new();
     let mut section_depth: u8 = 0;
+    let mut title_depth: u8 = 0;
     let mut footnote_counter: u32 = 0;
     let mut in_list = false;
     let mut list_ordered = false;
@@ -168,6 +169,7 @@ fn build_docbook_internal_document(content: &str) -> Result<InternalDocument> {
                         let text = extract_element_text(&mut reader)?;
                         if !text.is_empty() {
                             builder.push_heading(1, &text, None, None);
+                            title_depth = section_depth;
                             title_extracted = true;
                         }
                     }
@@ -175,13 +177,17 @@ fn build_docbook_internal_document(content: &str) -> Result<InternalDocument> {
                         let text = extract_element_text(&mut reader)?;
                         if !text.is_empty() {
                             builder.push_heading(1, &text, None, None);
+                            title_depth = section_depth;
                             title_extracted = true;
                         }
                     }
                     "title" if title_extracted => {
                         let text = extract_element_text(&mut reader)?;
                         if !text.is_empty() {
-                            let level = std::cmp::min(section_depth.saturating_add(1), 6);
+                            // Compute heading level relative to the depth where the document
+                            // title was extracted, so the first nested section starts at level 2.
+                            let relative = section_depth.saturating_sub(title_depth);
+                            let level = std::cmp::min(relative.saturating_add(1), 6);
                             builder.push_heading(level, &text, None, None);
                         }
                     }

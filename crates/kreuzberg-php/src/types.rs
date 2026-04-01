@@ -7,6 +7,353 @@ use ext_php_rs::prelude::*;
 use ext_php_rs::types::Zval;
 use std::collections::HashMap;
 
+// ---------------------------------------------------------------------------
+// PHP Enums (backed enums via #[php_enum])
+// ---------------------------------------------------------------------------
+
+/// Content layer classification.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\ContentLayer")]
+pub enum ContentLayer {
+    #[php(name = "body")]
+    Body,
+    #[php(name = "header")]
+    Header,
+    #[php(name = "footer")]
+    Footer,
+    #[php(name = "footnote")]
+    Footnote,
+}
+
+/// Element type classification for structured extraction.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\ElementType")]
+pub enum ElementType {
+    #[php(name = "title")]
+    Title,
+    #[php(name = "narrativeText")]
+    NarrativeText,
+    #[php(name = "heading")]
+    Heading,
+    #[php(name = "listItem")]
+    ListItem,
+    #[php(name = "table")]
+    Table,
+    #[php(name = "image")]
+    Image,
+    #[php(name = "pageBreak")]
+    PageBreak,
+    #[php(name = "codeBlock")]
+    CodeBlock,
+    #[php(name = "blockQuote")]
+    BlockQuote,
+    #[php(name = "footer")]
+    Footer,
+    #[php(name = "header")]
+    Header,
+}
+
+/// Keyword extraction algorithm.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\KeywordAlgorithm")]
+pub enum KeywordAlgorithm {
+    #[php(name = "yake")]
+    Yake,
+    #[php(name = "rake")]
+    Rake,
+}
+
+/// OCR element granularity level.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\OcrElementLevel")]
+pub enum OcrElementLevel {
+    #[php(name = "word")]
+    Word,
+    #[php(name = "line")]
+    Line,
+    #[php(name = "block")]
+    Block,
+    #[php(name = "page")]
+    Page,
+}
+
+/// Output format for extraction results.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\OutputFormat")]
+pub enum OutputFormat {
+    #[php(name = "plain")]
+    Plain,
+    #[php(name = "markdown")]
+    Markdown,
+    #[php(name = "djot")]
+    Djot,
+    #[php(name = "html")]
+    Html,
+    #[php(name = "structured")]
+    Structured,
+}
+
+/// Page unit type classification.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\PageUnitType")]
+pub enum PageUnitType {
+    #[php(name = "page")]
+    Page,
+    #[php(name = "slide")]
+    Slide,
+    #[php(name = "sheet")]
+    Sheet,
+}
+
+/// Relationship kind between document elements.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\RelationshipKind")]
+pub enum RelationshipKind {
+    #[php(name = "footnoteReference")]
+    FootnoteReference,
+    #[php(name = "citationReference")]
+    CitationReference,
+    #[php(name = "internalLink")]
+    InternalLink,
+    #[php(name = "caption")]
+    Caption,
+    #[php(name = "label")]
+    Label,
+    #[php(name = "tocEntry")]
+    TocEntry,
+    #[php(name = "crossReference")]
+    CrossReference,
+}
+
+/// Result format for extraction output.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\ResultFormat")]
+pub enum ResultFormat {
+    #[php(name = "unified")]
+    Unified,
+    #[php(name = "elementBased")]
+    ElementBased,
+}
+
+/// URI kind classification.
+#[php_enum]
+#[php(name = "Kreuzberg\\Types\\UriKind")]
+pub enum UriKind {
+    #[php(name = "hyperlink")]
+    Hyperlink,
+    #[php(name = "image")]
+    Image,
+    #[php(name = "anchor")]
+    Anchor,
+    #[php(name = "citation")]
+    Citation,
+    #[php(name = "reference")]
+    Reference,
+    #[php(name = "email")]
+    Email,
+}
+
+// ---------------------------------------------------------------------------
+// Additional struct types required by parity tests
+// ---------------------------------------------------------------------------
+
+/// Archive entry containing extraction result for a file within an archive.
+#[php_class]
+#[php(name = "Kreuzberg\\Types\\ArchiveEntry")]
+#[derive(Clone)]
+pub struct ArchiveEntry {
+    /// MIME type of the archived file
+    #[php(prop)]
+    #[php(name = "mimeType")]
+    pub mime_type: String,
+
+    /// Path within the archive
+    #[php(prop)]
+    pub path: String,
+
+    /// Extraction result for this entry (accessed via getter property)
+    pub result: ExtractionResult,
+}
+
+#[php_impl]
+impl ArchiveEntry {
+    /// Result property getter.
+    #[php(getter)]
+    pub fn get_result(&self) -> ExtractionResult {
+        self.result.clone()
+    }
+}
+
+/// Axis-aligned bounding box with float coordinates.
+#[php_class]
+#[php(name = "Kreuzberg\\Types\\BoundingBox")]
+#[derive(Clone)]
+pub struct BoundingBoxType {
+    /// Left x coordinate
+    #[php(prop)]
+    pub x0: f64,
+
+    /// Right x coordinate
+    #[php(prop)]
+    pub x1: f64,
+
+    /// Top y coordinate
+    #[php(prop)]
+    pub y0: f64,
+
+    /// Bottom y coordinate
+    #[php(prop)]
+    pub y1: f64,
+}
+
+/// URI/link discovered during extraction.
+#[php_class]
+#[php(name = "Kreuzberg\\Types\\Uri")]
+#[derive(Clone)]
+pub struct UriType {
+    /// The kind of URI (e.g., hyperlink, image, anchor)
+    #[php(prop)]
+    pub kind: String,
+
+    /// Optional label text for the URI
+    #[php(prop)]
+    pub label: Option<String>,
+
+    /// Optional page number reference
+    #[php(prop)]
+    pub page: Option<i64>,
+
+    /// The URL string
+    #[php(prop)]
+    pub url: String,
+}
+
+/// Processing warning from extraction.
+#[php_class]
+#[php(name = "Kreuzberg\\Types\\ProcessingWarning")]
+#[derive(Clone)]
+pub struct ProcessingWarning {
+    /// Warning message
+    #[php(prop)]
+    pub message: String,
+
+    /// Source of the warning
+    #[php(prop)]
+    pub source: String,
+}
+
+/// Extraction configuration (parity type).
+///
+/// This is a native Rust-side class under `Kreuzberg\Types\` namespace
+/// that mirrors the PHP-side `Kreuzberg\Config\ExtractionConfig` for
+/// parity test compatibility.
+#[php_class]
+#[php(name = "Kreuzberg\\Types\\ExtractionConfig")]
+#[derive(Clone)]
+pub struct ExtractionConfigType {
+    #[php(prop)]
+    pub acceleration: Option<String>,
+    #[php(prop)]
+    #[php(name = "cacheNamespace")]
+    pub cache_namespace: Option<String>,
+    #[php(prop)]
+    #[php(name = "cacheTtlSecs")]
+    pub cache_ttl_secs: Option<i64>,
+    #[php(prop)]
+    pub chunking: Option<String>,
+    #[php(prop)]
+    pub concurrency: Option<String>,
+    #[php(prop)]
+    #[php(name = "disableOcr")]
+    pub disable_ocr: bool,
+    #[php(prop)]
+    pub email: Option<String>,
+    #[php(prop)]
+    #[php(name = "enableQualityProcessing")]
+    pub enable_quality_processing: bool,
+    #[php(prop)]
+    #[php(name = "extractionTimeoutSecs")]
+    pub extraction_timeout_secs: Option<i64>,
+    #[php(prop)]
+    #[php(name = "forceOcr")]
+    pub force_ocr: bool,
+    #[php(prop)]
+    #[php(name = "forceOcrPages")]
+    pub force_ocr_pages: Option<Vec<i64>>,
+    #[php(prop)]
+    #[php(name = "htmlOptions")]
+    pub html_options: Option<String>,
+    #[php(prop)]
+    pub images: Option<String>,
+    #[php(prop)]
+    #[php(name = "includeDocumentStructure")]
+    pub include_document_structure: bool,
+    #[php(prop)]
+    pub keywords: Option<String>,
+    #[php(prop)]
+    #[php(name = "languageDetection")]
+    pub language_detection: Option<String>,
+    #[php(prop)]
+    pub layout: Option<String>,
+    #[php(prop)]
+    #[php(name = "maxArchiveDepth")]
+    pub max_archive_depth: Option<i64>,
+    #[php(prop)]
+    #[php(name = "maxConcurrentExtractions")]
+    pub max_concurrent_extractions: Option<i64>,
+    #[php(prop)]
+    pub ocr: Option<String>,
+    #[php(prop)]
+    #[php(name = "outputFormat")]
+    pub output_format: Option<String>,
+    #[php(prop)]
+    pub pages: Option<String>,
+    #[php(prop)]
+    #[php(name = "pdfOptions")]
+    pub pdf_options: Option<String>,
+    #[php(prop)]
+    pub postprocessor: Option<String>,
+    #[php(prop)]
+    #[php(name = "resultFormat")]
+    pub result_format: Option<String>,
+    #[php(prop)]
+    #[php(name = "securityLimits")]
+    pub security_limits: Option<String>,
+    #[php(prop)]
+    #[php(name = "tokenReduction")]
+    pub token_reduction: Option<String>,
+    #[php(prop)]
+    #[php(name = "treeSitter")]
+    pub tree_sitter: Option<String>,
+    #[php(prop)]
+    #[php(name = "useCache")]
+    pub use_cache: bool,
+}
+
+/// Table structure for parity (separate from ExtractedTable to match canonical naming).
+#[php_class]
+#[php(name = "Kreuzberg\\Types\\Table")]
+#[derive(Clone)]
+pub struct TableType {
+    /// Table cells as nested arrays
+    #[php(prop)]
+    pub cells: Vec<Vec<String>>,
+
+    /// Markdown representation
+    #[php(prop)]
+    pub markdown: String,
+
+    /// Page number where table was found
+    #[php(prop)]
+    #[php(name = "pageNumber")]
+    pub page_number: usize,
+
+    /// Bounding box
+    #[php(prop)]
+    #[php(name = "boundingBox")]
+    pub bounding_box: Option<HashMap<String, f64>>,
+}
+
 /// Convert serde_json::Value to PHP Zval (array/string/number/bool/null).
 ///
 /// Recursively converts JSON structures to PHP arrays, preserving nested objects.
@@ -84,63 +431,135 @@ pub struct ExtractionResult {
 
     /// MIME type of the document
     #[php(prop)]
+    #[php(name = "mimeType")]
     pub mime_type: String,
 
-    /// Document metadata (stored as serialized JSON, accessed via property getter)
+    /// Document metadata (stored as serialized JSON, accessed via getter)
+    #[php(prop)]
+    #[php(name = "metadata")]
     metadata_json: String,
 
-    /// Extracted tables
+    /// Extracted tables (accessed via getter property)
     pub tables: Vec<ExtractedTable>,
 
     /// Detected languages
     #[php(prop)]
+    #[php(name = "detectedLanguages")]
     pub detected_languages: Option<Vec<String>>,
 
-    /// Extracted images
+    /// Extracted images (accessed via getter property)
     pub images: Option<Vec<ExtractedImage>>,
 
-    /// Text chunks
+    /// Text chunks (accessed via getter property)
     pub chunks: Option<Vec<TextChunk>>,
 
-    /// Per-page results
+    /// Per-page results (accessed via getter property)
     pub pages: Option<Vec<PageResult>>,
 
     /// Extracted keywords
     pub keywords: Option<Vec<Keyword>>,
 
-    /// Extracted keywords with algorithm metadata
+    /// Extracted keywords with algorithm metadata (accessed via getter property)
     pub extracted_keywords: Option<Vec<Keyword>>,
 
     /// Quality score
+    #[php(prop)]
+    #[php(name = "qualityScore")]
     pub quality_score: Option<f64>,
 
     /// Structured Djot content (when output_format='djot')
+    #[php(prop)]
+    #[php(name = "djotContent")]
     djot_content_json: Option<String>,
 
     /// Semantic elements (when output_format='element_based')
+    #[php(prop)]
+    #[php(name = "elements")]
     elements_json: Option<String>,
 
     /// Document structure (when include_document_structure=true)
+    #[php(prop)]
+    #[php(name = "document")]
     document_json: Option<String>,
 
     /// OCR elements with spatial/confidence metadata
+    #[php(prop)]
+    #[php(name = "ocrElements")]
     ocr_elements_json: Option<String>,
 
-    /// PDF annotations
+    /// PDF annotations (accessed via getter property)
     pub annotations: Option<Vec<PdfAnnotation>>,
 
     /// Nested extraction results from archive contents
+    #[php(prop)]
+    #[php(name = "children")]
     children_json: Option<String>,
 
     /// URIs/links discovered during extraction
+    #[php(prop)]
+    #[php(name = "uris")]
     uris_json: Option<String>,
+
+    /// Processing warnings (accessed via getter property)
+    pub processing_warnings: Vec<ProcessingWarning>,
 
     /// Full serialized JSON of the original ExtractionResult (for serialize_to_toon/json)
     pub(crate) result_json: String,
 }
 
 #[php_impl]
+#[allow(non_snake_case)]
 impl ExtractionResult {
+    // -----------------------------------------------------------------------
+    // Getter-backed properties (creates PHP properties visible to reflection)
+    // -----------------------------------------------------------------------
+
+    /// Tables property getter.
+    #[php(getter)]
+    pub fn get_tables(&self) -> Vec<ExtractedTable> {
+        self.tables.clone()
+    }
+
+    /// Images property getter.
+    #[php(getter)]
+    pub fn get_images(&self) -> Option<Vec<ExtractedImage>> {
+        self.images.clone()
+    }
+
+    /// Chunks property getter.
+    #[php(getter)]
+    pub fn get_chunks(&self) -> Option<Vec<TextChunk>> {
+        self.chunks.clone()
+    }
+
+    /// Pages property getter.
+    #[php(getter)]
+    pub fn get_pages(&self) -> Option<Vec<PageResult>> {
+        self.pages.clone()
+    }
+
+    /// Extracted keywords property getter.
+    #[php(getter)]
+    pub fn get_extractedKeywords(&self) -> Option<Vec<Keyword>> {
+        self.extracted_keywords.clone()
+    }
+
+    /// Annotations property getter.
+    #[php(getter)]
+    pub fn get_annotations(&self) -> Option<Vec<PdfAnnotation>> {
+        self.annotations.clone()
+    }
+
+    /// Processing warnings property getter.
+    #[php(getter)]
+    pub fn get_processingWarnings(&self) -> Vec<ProcessingWarning> {
+        self.processing_warnings.clone()
+    }
+
+    // -----------------------------------------------------------------------
+    // Regular methods
+    // -----------------------------------------------------------------------
+
     /// Get metadata as a Metadata object.
     ///
     /// Returns a Metadata object with common fields accessible as properties.
@@ -319,30 +738,6 @@ impl ExtractionResult {
         }
     }
 
-    /// Get all extracted tables.
-    #[php(name = "getTables")]
-    pub fn get_tables(&self) -> Vec<ExtractedTable> {
-        self.tables.clone()
-    }
-
-    /// Get all extracted images.
-    #[php(name = "getImages")]
-    pub fn get_images(&self) -> Option<Vec<ExtractedImage>> {
-        self.images.clone()
-    }
-
-    /// Get all text chunks.
-    #[php(name = "getChunks")]
-    pub fn get_chunks(&self) -> Option<Vec<TextChunk>> {
-        self.chunks.clone()
-    }
-
-    /// Get all page results.
-    #[php(name = "getPages")]
-    pub fn get_pages(&self) -> Option<Vec<PageResult>> {
-        self.pages.clone()
-    }
-
     /// Get the total number of pages in the document.
     pub fn get_page_count(&self) -> usize {
         self.pages.as_ref().map(|p| p.len()).unwrap_or(0)
@@ -361,7 +756,6 @@ impl ExtractionResult {
     }
 
     /// Get all extracted keywords.
-    #[php(name = "getKeywords")]
     pub fn get_keywords(&self) -> Option<Vec<Keyword>> {
         self.keywords.clone()
     }
@@ -369,17 +763,10 @@ impl ExtractionResult {
     /// Get all embeddings extracted from chunks.
     ///
     /// Extracts embeddings from chunks if available.
-    #[php(name = "getEmbeddings")]
     pub fn get_embeddings(&self) -> Option<Vec<Vec<f32>>> {
         self.chunks
             .as_ref()
             .map(|chunks| chunks.iter().filter_map(|chunk| chunk.embedding.clone()).collect())
-    }
-
-    /// Get all PDF annotations.
-    #[php(name = "getAnnotations")]
-    pub fn get_annotations(&self) -> Option<Vec<PdfAnnotation>> {
-        self.annotations.clone()
     }
 }
 
@@ -493,6 +880,7 @@ impl ExtractionResult {
                     text: kw.text.clone(),
                     score: kw.score,
                     algorithm: Some(format!("{:?}", kw.algorithm).to_lowercase()),
+                    positions: None,
                 })
                 .collect::<Vec<_>>()
         });
@@ -605,6 +993,15 @@ impl ExtractionResult {
             })
             .transpose()?;
 
+        let processing_warnings = result
+            .processing_warnings
+            .iter()
+            .map(|w| ProcessingWarning {
+                message: w.message.to_string(),
+                source: w.source.to_string(),
+            })
+            .collect();
+
         Ok(Self {
             content: result.content,
             mime_type: result.mime_type.to_string(),
@@ -624,6 +1021,7 @@ impl ExtractionResult {
             annotations,
             children_json,
             uris_json,
+            processing_warnings,
             result_json,
         })
     }
@@ -1086,80 +1484,50 @@ impl Metadata {
     }
 }
 
-/// PDF annotation type classification.
-///
-/// Represents the type of a PDF annotation (text, highlight, link, etc.).
-///
-/// # Values
-///
-/// - `Text` - Sticky note / text annotation
-/// - `Highlight` - Highlighted text region
-/// - `Link` - Hyperlink annotation
-/// - `Stamp` - Rubber stamp annotation
-/// - `Underline` - Underline text markup
-/// - `StrikeOut` - Strikeout text markup
-/// - `Other` - Any other annotation type
-#[php_class]
+/// PDF annotation type classification (PHP enum).
+#[php_enum]
 #[php(name = "Kreuzberg\\Types\\PdfAnnotationType")]
-#[derive(Clone, Debug)]
-pub struct PdfAnnotationType {
-    /// String representation of the annotation type
-    #[php(prop)]
-    pub value: String,
-}
-
-#[php_impl]
-impl PdfAnnotationType {
-    /// Check if this is a text annotation.
-    pub fn is_text(&self) -> bool {
-        self.value == "text"
-    }
-
-    /// Check if this is a highlight annotation.
-    pub fn is_highlight(&self) -> bool {
-        self.value == "highlight"
-    }
-
-    /// Check if this is a link annotation.
-    pub fn is_link(&self) -> bool {
-        self.value == "link"
-    }
-
-    /// Check if this is a stamp annotation.
-    pub fn is_stamp(&self) -> bool {
-        self.value == "stamp"
-    }
-
-    /// Check if this is an underline annotation.
-    pub fn is_underline(&self) -> bool {
-        self.value == "underline"
-    }
-
-    /// Check if this is a strikeout annotation.
-    pub fn is_strike_out(&self) -> bool {
-        self.value == "strike_out"
-    }
-
-    /// Check if this is an 'other' annotation type.
-    pub fn is_other(&self) -> bool {
-        self.value == "other"
-    }
+pub enum PdfAnnotationType {
+    #[php(name = "text")]
+    Text,
+    #[php(name = "highlight")]
+    Highlight,
+    #[php(name = "link")]
+    Link,
+    #[php(name = "stamp")]
+    Stamp,
+    #[php(name = "underline")]
+    Underline,
+    #[php(name = "strikeOut")]
+    StrikeOut,
+    #[php(name = "other")]
+    Other,
 }
 
 impl PdfAnnotationType {
     /// Convert from Rust PdfAnnotationType to PHP PdfAnnotationType.
     pub fn from_rust(annotation_type: kreuzberg::PdfAnnotationType) -> Self {
-        let value = match annotation_type {
-            kreuzberg::PdfAnnotationType::Text => "text",
-            kreuzberg::PdfAnnotationType::Highlight => "highlight",
-            kreuzberg::PdfAnnotationType::Link => "link",
-            kreuzberg::PdfAnnotationType::Stamp => "stamp",
-            kreuzberg::PdfAnnotationType::Underline => "underline",
-            kreuzberg::PdfAnnotationType::StrikeOut => "strike_out",
-            kreuzberg::PdfAnnotationType::Other => "other",
-        };
-        Self {
-            value: value.to_string(),
+        match annotation_type {
+            kreuzberg::PdfAnnotationType::Text => Self::Text,
+            kreuzberg::PdfAnnotationType::Highlight => Self::Highlight,
+            kreuzberg::PdfAnnotationType::Link => Self::Link,
+            kreuzberg::PdfAnnotationType::Stamp => Self::Stamp,
+            kreuzberg::PdfAnnotationType::Underline => Self::Underline,
+            kreuzberg::PdfAnnotationType::StrikeOut => Self::StrikeOut,
+            kreuzberg::PdfAnnotationType::Other => Self::Other,
+        }
+    }
+
+    /// Get the string value of this annotation type.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Highlight => "highlight",
+            Self::Link => "link",
+            Self::Stamp => "stamp",
+            Self::Underline => "underline",
+            Self::StrikeOut => "strike_out",
+            Self::Other => "other",
         }
     }
 }
@@ -1168,28 +1536,18 @@ impl PdfAnnotationType {
 ///
 /// # Properties
 ///
-/// - `annotation_type` (PdfAnnotationType): The type of annotation
+/// - `annotationType` (string): The type of annotation as string
 /// - `content` (string|null): Text content of the annotation
-/// - `page_number` (int): Page number where the annotation appears (1-indexed)
-/// - `bounding_box` (array|null): Bounding box as {x0, y0, x1, y1} or null
-///
-/// # Example
-///
-/// ```php
-/// foreach ($result->annotations as $annotation) {
-///     echo "Annotation on page {$annotation->page_number}: ";
-///     echo $annotation->annotation_type->value . "\n";
-///     if ($annotation->content !== null) {
-///         echo "  Content: {$annotation->content}\n";
-///     }
-/// }
-/// ```
+/// - `pageNumber` (int): Page number where the annotation appears (1-indexed)
+/// - `boundingBox` (array|null): Bounding box as {x0, y0, x1, y1} or null
 #[php_class]
 #[php(name = "Kreuzberg\\Types\\PdfAnnotation")]
 #[derive(Clone, Debug)]
 pub struct PdfAnnotation {
-    /// The type of annotation
-    pub annotation_type: PdfAnnotationType,
+    /// The type of annotation as string (exposed as property)
+    #[php(prop)]
+    #[php(name = "annotationType")]
+    pub annotation_type: String,
 
     /// Text content of the annotation (e.g., comment text, link URL)
     #[php(prop)]
@@ -1197,18 +1555,20 @@ pub struct PdfAnnotation {
 
     /// Page number where the annotation appears (1-indexed)
     #[php(prop)]
+    #[php(name = "pageNumber")]
     pub page_number: usize,
 
     /// Bounding box as associative array {x0, y0, x1, y1} or null
     #[php(prop)]
+    #[php(name = "boundingBox")]
     pub bounding_box: Option<HashMap<String, f64>>,
 }
 
 #[php_impl]
 impl PdfAnnotation {
-    /// Get the annotation type.
+    /// Get the annotation type as a string.
     #[php(name = "getAnnotationType")]
-    pub fn get_annotation_type(&self) -> PdfAnnotationType {
+    pub fn get_annotation_type(&self) -> String {
         self.annotation_type.clone()
     }
 }
@@ -1224,8 +1584,11 @@ impl PdfAnnotation {
             map.insert("y1".to_string(), bb.y1);
             map
         });
+        let annotation_type = PdfAnnotationType::from_rust(annotation.annotation_type)
+            .as_str()
+            .to_string();
         Ok(Self {
-            annotation_type: PdfAnnotationType::from_rust(annotation.annotation_type),
+            annotation_type,
             content: annotation.content,
             page_number: annotation.page_number,
             bounding_box,
@@ -1255,6 +1618,10 @@ pub struct Keyword {
     /// Algorithm used
     #[php(prop)]
     pub algorithm: Option<String>,
+
+    /// Positions where the keyword appears
+    #[php(prop)]
+    pub positions: Option<Vec<i64>>,
 }
 
 impl Keyword {
@@ -1275,7 +1642,17 @@ impl Keyword {
 
         let algorithm = obj.get("algorithm").and_then(|v| v.as_str()).map(|s| s.to_string());
 
-        Ok(Self { text, score, algorithm })
+        let positions = obj.get("positions").and_then(|v| {
+            v.as_array()
+                .map(|arr| arr.iter().filter_map(|item| item.as_i64()).collect())
+        });
+
+        Ok(Self {
+            text,
+            score,
+            algorithm,
+            positions,
+        })
     }
 }
 

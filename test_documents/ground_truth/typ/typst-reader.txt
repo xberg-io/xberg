@@ -1,12 +1,11 @@
 Fibonacci sequence
 
-The Fibonacci sequence is defined through the recurrence relation F_n =
-F_(n-1) + F_(n-2). It can also be expressed in closed form:
+The Fibonacci sequence is defined through the recurrence relation $F_n = F_(n-1) + F_(n-2)$. It can also be expressed in closed form:
 
-F_n = round(1 / sqrt(5) phi^n), phi = (1 + sqrt(5)) / 2
+$ F_n = round(1 / sqrt(5) phi.alt^n), quad phi.alt = (1 + sqrt(5)) / 2 $
 
-The first 8 numbers of the sequence are:
+if n <= 2 { 1 } else { fib(n - 1) + fib(n - 2) } )
 
-  F_1   F_2   F_3   F_4   F_5   F_6   F_7   F_8
-  ----- ----- ----- ----- ----- ----- ----- -----
-  1     1     2     3     5     8     13    21
+The first #count numbers of the sequence are:
+
+#align(center, table( columns: count, ..nums.map(n => $F_#n$), ..nums.map(n => str(fib(n))), ))

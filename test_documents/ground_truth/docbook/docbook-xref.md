@@ -1,24 +1,18 @@
+# An Example Book
+
 ## XRef Samples
 
-This paragraph demonstrates several features of XRef.
+This paragraph demonstrates several features of XRef .
 
-- A straight link generates the cross-reference text: [The Second Chapter](#ch02).
-
-- A link to an element with an XRefLabel: [Chapter the Third](#ch03).
-
-- A link with an EndTerm: [Chapter 4](#ch04).
-
-- A link to an cmdsynopsis element: [chgrp](#cmd01).
-
-- A link to an funcsynopsis element: [max](#func01).
-
-- A link to a figure element: [The Pythagorean Theorem Illustrated](#fig01).
-
-- A link to a table element: [Supported features by version](#table01).
-
-- A link to a part element: [Later Part](#part01).
-
-- A link to a book element: [An Example Book](#book01).
+- A straight link generates the cross-reference text: .
+- A link to an element with an XRefLabel : .
+- A link with an EndTerm : .
+- A link to an cmdsynopsis element: .
+- A link to an funcsynopsis element: .
+- A link to a figure element: .
+- A link to a table element: .
+- A link to a part element: .
+- A link to a book element: .
 
 ## The Second Chapter
 
@@ -34,41 +28,10 @@ Some content here
 
 Some content here
 
-chgrp
+\[Figure: The Pythagorean Theorem Illustrated\]
 
--R
-
--H
-
--L
-
--P
-
--f
-
-group
-
-file
-
-int
-
-max
-
-int
-
-int1
-
-int
-
-int2
-
-<figure id="fig01">
-<img src="figures/pythag.png" alt="An illustration of the Pythagorean Theorem" />
-<figcaption>The Pythagorean Theorem Illustrated</figcaption>
-</figure>
+## Supported features by version
 
 | Version | Feat |
-|---------|------|
-| Free    | no   |
-
-Supported features by version
+| --- | --- |
+| Free | no |

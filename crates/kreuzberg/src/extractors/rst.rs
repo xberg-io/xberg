@@ -1133,8 +1133,8 @@ impl RstExtractor {
                     if !code_content.is_empty() {
                         code_content.push('\n');
                     }
-                    if l.starts_with("\t") {
-                        code_content.push_str(&l[1..]);
+                    if let Some(stripped) = l.strip_prefix('\t') {
+                        code_content.push_str(stripped);
                     } else if is_indented && !l.is_empty() {
                         code_content.push_str(&l[indent..]);
                     }

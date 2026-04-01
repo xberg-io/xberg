@@ -747,14 +747,7 @@ impl FictionBookExtractor {
                             }
                             _ => {}
                         }
-                    } else if tag == "text-author" && in_body && !is_notes_body {
-                        match Self::extract_text_content(&mut reader) {
-                            Ok(text) if !text.is_empty() => {
-                                builder.push_paragraph(&text, vec![], None, None);
-                            }
-                            _ => {}
-                        }
-                    } else if tag == "date" && in_body && !is_notes_body {
+                    } else if (tag == "text-author" || tag == "date") && in_body && !is_notes_body {
                         match Self::extract_text_content(&mut reader) {
                             Ok(text) if !text.is_empty() => {
                                 builder.push_paragraph(&text, vec![], None, None);

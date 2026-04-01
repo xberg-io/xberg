@@ -111,18 +111,36 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
     }
 
     // Register all PHP classes (order matters for dependencies)
-    // Types module - base result types
+    // Types module - enums (must be registered before structs that reference them)
+    module = module
+        .class::<types::ContentLayer>()
+        .class::<types::ElementType>()
+        .class::<types::KeywordAlgorithm>()
+        .class::<types::OcrElementLevel>()
+        .class::<types::OutputFormat>()
+        .class::<types::PageUnitType>()
+        .class::<types::RelationshipKind>()
+        .class::<types::ResultFormat>()
+        .class::<types::UriKind>()
+        .class::<types::PdfAnnotationType>(); // Must be registered before PdfAnnotation
+
+    // Types module - struct types
     module = module
         .class::<types::Metadata>()
         .class::<types::ExtractedImage>()
         .class::<types::ExtractedTable>()
-        .class::<types::ChunkMetadata>()      // Must be registered before TextChunk
+        .class::<types::ChunkMetadata>()         // Must be registered before TextChunk
         .class::<types::TextChunk>()
         .class::<types::PageResult>()
-        .class::<types::Keyword>()            // Must be registered before ExtractionResult
-        .class::<types::PdfAnnotationType>()  // Must be registered before PdfAnnotation
-        .class::<types::PdfAnnotation>()      // Must be registered before ExtractionResult
-        .class::<types::ExtractionResult>();
+        .class::<types::Keyword>()               // Must be registered before ExtractionResult
+        .class::<types::PdfAnnotation>()          // Must be registered before ExtractionResult
+        .class::<types::ProcessingWarning>()
+        .class::<types::BoundingBoxType>()
+        .class::<types::UriType>()
+        .class::<types::ExtractionResult>()
+        .class::<types::ArchiveEntry>()           // Depends on ExtractionResult
+        .class::<types::ExtractionConfigType>()
+        .class::<types::TableType>();
 
     // Async module - DeferredResult for async operations
     module = module.class::<deferred::DeferredResult>();
