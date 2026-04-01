@@ -1,62 +1,48 @@
 # Configuration Guide <span class="version-badge">v4.0.0</span>
 
-For complete configuration field documentation, see [Configuration Reference](../reference/configuration.md).
+For complete field documentation, see [Configuration Reference](../reference/configuration.md).
 
-Kreuzberg's behavior is controlled through configuration objects. All settings are optional with sensible defaults, allowing you to configure only what you need.
-
-## Configuration Discovery
-
-Kreuzberg automatically discovers configuration files in these locations (in order):
-
-1. Current directory: `./kreuzberg.{toml,yaml,yml,json}`
-2. User config: `~/.config/kreuzberg/config.{toml,yaml,yml,json}`
-3. System config: `/etc/kreuzberg/config.{toml,yaml,yml,json}`
-
-Once found, configuration is merged with defaults. No configuration file is required—if none is found, defaults are used.
+All extraction behavior is controlled through `ExtractionConfig`. Every field is optional with sensible defaults — configure only what you need. You can pass config objects directly in code, or load them from TOML/YAML/JSON files.
 
 ## Quick Start
 
-### Configuration Methods
-
-Kreuzberg supports four ways to configure extraction:
-
-=== "C#"
-
-    --8<-- "snippets/csharp/config_discover.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/config/config_discover.md"
-
-=== "Java"
-
-    --8<-- "snippets/java/config/config_discover.md"
-
 === "Python"
 
-    --8<-- "snippets/python/config/config_discover.md"
-
-=== "Ruby"
-
-    --8<-- "snippets/ruby/config/config_discover.md"
-
-=== "R"
-
-    --8<-- "snippets/r/config/config_discover.md"
-
-=== "Rust"
-
-    --8<-- "snippets/rust/config/config_discover.md"
+    --8<-- "snippets/python/config/config_basic.md"
 
 === "TypeScript"
 
-    --8<-- "snippets/typescript/config/config_discover.md"
+    --8<-- "snippets/typescript/config/config_basic.md"
 
-=== "WASM"
+=== "Rust"
 
-    --8<-- "snippets/wasm/config/config_discover.md"
+    --8<-- "snippets/rust/config/config_basic.md"
 
-=== "TOML File"
+=== "Go"
+
+    --8<-- "snippets/go/config/config_basic.md"
+
+=== "Java"
+
+    --8<-- "snippets/java/config/config_basic.md"
+
+=== "C#"
+
+    --8<-- "snippets/csharp/config_basic.md"
+
+=== "Ruby"
+
+    --8<-- "snippets/ruby/config/config_basic.md"
+
+=== "R"
+
+    --8<-- "snippets/r/config/config_basic.md"
+
+## Configuration Files
+
+Kreuzberg supports three file formats. TOML is recommended for readability.
+
+=== "TOML (Recommended)"
 
     ```toml title="kreuzberg.toml"
     use_cache = true
@@ -70,10 +56,9 @@ Kreuzberg supports four ways to configure extraction:
     psm = 3
     ```
 
-=== "YAML File"
+=== "YAML"
 
-    ```yaml
-    # kreuzberg.yaml
+    ```yaml title="kreuzberg.yaml"
     use_cache: true
     enable_quality_processing: true
 
@@ -84,9 +69,9 @@ Kreuzberg supports four ways to configure extraction:
         psm: 3
     ```
 
-=== "JSON File"
+=== "JSON"
 
-    ```json
+    ```json title="kreuzberg.json"
     {
       "use_cache": true,
       "enable_quality_processing": true,
@@ -100,43 +85,27 @@ Kreuzberg supports four ways to configure extraction:
     }
     ```
 
-### Configuration Discovery
+### Automatic Discovery
 
-```mermaid
-flowchart TD
-    Start[ExtractionConfig.discover] --> Current{Check Current Directory}
+Kreuzberg searches for configuration files in this order:
 
-    Current -->|Found| LoadCurrent[Load ./kreuzberg.*]
-    Current -->|Not Found| User{Check User Config}
+1. **Current directory** — `./kreuzberg.{toml,yaml,yml,json}`
+2. **User config** — `~/.config/kreuzberg/config.{toml,yaml,yml,json}`
+3. **System config** — `/etc/kreuzberg/config.{toml,yaml,yml,json}`
 
-    User -->|Found| LoadUser[Load ~/.config/kreuzberg/config.*]
-    User -->|Not Found| System{Check System Config}
+The first file found is merged with defaults. If no file exists, defaults are used.
 
-    System -->|Found| LoadSystem[Load /etc/kreuzberg/config.*]
-    System -->|Not Found| Default[Use Default Config]
+=== "Python"
 
-    LoadCurrent --> Merge[Merge with Defaults]
-    LoadUser --> Merge
-    LoadSystem --> Merge
-    Default --> Return[Return Config]
+    --8<-- "snippets/python/config/config_discover.md"
 
-    Merge --> Return
+=== "TypeScript"
 
-    style LoadCurrent fill:#90EE90
-    style LoadUser fill:#87CEEB
-    style LoadSystem fill:#FFD700
-    style Default fill:#FFB6C1
-```
+    --8<-- "snippets/typescript/config/config_discover.md"
 
-Kreuzberg automatically discovers configuration files in the following locations (in order):
+=== "Rust"
 
-1. Current directory: `./kreuzberg.{toml,yaml,yml,json}`
-2. User config: `~/.config/kreuzberg/config.{toml,yaml,yml,json}`
-3. System config: `/etc/kreuzberg/config.{toml,yaml,yml,json}`
-
-=== "C#"
-
-    --8<-- "snippets/csharp/config_discover.md"
+    --8<-- "snippets/rust/config/config_discover.md"
 
 === "Go"
 
@@ -146,9 +115,9 @@ Kreuzberg automatically discovers configuration files in the following locations
 
     --8<-- "snippets/java/config/config_discover.md"
 
-=== "Python"
+=== "C#"
 
-    --8<-- "snippets/python/config/config_discover.md"
+    --8<-- "snippets/csharp/config_discover.md"
 
 === "Ruby"
 
@@ -158,63 +127,27 @@ Kreuzberg automatically discovers configuration files in the following locations
 
     --8<-- "snippets/r/config/config_discover.md"
 
-=== "Rust"
-
-    --8<-- "snippets/rust/config/config_discover.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/config/config_discover.md"
-
 === "WASM"
 
     --8<-- "snippets/wasm/config/config_discover.md"
 
 ## Common Use Cases
 
-### Basic Configuration
-
-Get started with minimal configuration:
-
-=== "C#"
-
-    --8<-- "snippets/csharp/config_basic.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/config/config_basic.md"
-
-=== "Java"
-
-    --8<-- "snippets/java/config/config_basic.md"
-
-=== "Python"
-
-    --8<-- "snippets/python/config/config_basic.md"
-
-=== "Ruby"
-
-    --8<-- "snippets/ruby/config/config_basic.md"
-
-=== "R"
-
-    --8<-- "snippets/r/config/config_basic.md"
-
-=== "Rust"
-
-    --8<-- "snippets/rust/config/config_basic.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/config/config_basic.md"
-
 ### Setting Up OCR
 
 Enable OCR for scanned documents and images:
 
-=== "C#"
+=== "Python"
 
-    --8<-- "snippets/csharp/config_ocr.md"
+    --8<-- "snippets/python/config/config_ocr.md"
+
+=== "TypeScript"
+
+    --8<-- "snippets/typescript/config/config_ocr.md"
+
+=== "Rust"
+
+    --8<-- "snippets/rust/ocr/config_ocr.md"
 
 === "Go"
 
@@ -224,9 +157,9 @@ Enable OCR for scanned documents and images:
 
     --8<-- "snippets/java/config/config_ocr.md"
 
-=== "Python"
+=== "C#"
 
-    --8<-- "snippets/python/config/config_ocr.md"
+    --8<-- "snippets/csharp/config_ocr.md"
 
 === "Ruby"
 
@@ -236,23 +169,23 @@ Enable OCR for scanned documents and images:
 
     --8<-- "snippets/r/config/config_ocr.md"
 
-=== "Rust"
-
-    --8<-- "snippets/rust/ocr/config_ocr.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/config/config_ocr.md"
-
-For more OCR options, see [Tesseract Configuration](../reference/configuration.md#tesseractconfig) in the reference.
+For backend selection and language packs, see [OCR Guide](ocr.md). For fine-grained Tesseract tuning, see [TesseractConfig Reference](../reference/configuration.md#tesseractconfig).
 
 ### Chunking for RAG
 
-Configure text chunking for vector database ingestion:
+Split extracted text into overlapping chunks for vector database ingestion:
 
-=== "C#"
+=== "Python"
 
-    --8<-- "snippets/csharp/advanced/embedding_with_chunking.md"
+    --8<-- "snippets/python/utils/chunking.md"
+
+=== "TypeScript"
+
+    --8<-- "snippets/typescript/utils/chunking.md"
+
+=== "Rust"
+
+    --8<-- "snippets/rust/advanced/chunking.md"
 
 === "Go"
 
@@ -262,9 +195,9 @@ Configure text chunking for vector database ingestion:
 
     --8<-- "snippets/java/utils/chunking.md"
 
-=== "Python"
+=== "C#"
 
-    --8<-- "snippets/python/utils/chunking.md"
+    --8<-- "snippets/csharp/advanced/embedding_with_chunking.md"
 
 === "Ruby"
 
@@ -274,70 +207,23 @@ Configure text chunking for vector database ingestion:
 
     --8<-- "snippets/r/utils/chunking.md"
 
-=== "Rust"
-
-    --8<-- "snippets/rust/advanced/chunking.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/utils/chunking.md"
-
-### File Format Examples
-
-#### TOML (Recommended)
-
-```toml title="kreuzberg.toml"
-use_cache = true
-enable_quality_processing = true
-
-[ocr]
-backend = "tesseract"
-language = "eng"
-
-[ocr.tesseract_config]
-psm = 3
-```
-
-#### YAML
-
-```yaml title="kreuzberg.yaml"
-use_cache: true
-enable_quality_processing: true
-
-ocr:
-  backend: tesseract
-  language: eng
-  tesseract_config:
-    psm: 3
-```
-
-#### JSON
-
-```json title="kreuzberg.json"
-{
-  "use_cache": true,
-  "enable_quality_processing": true,
-  "ocr": {
-    "backend": "tesseract",
-    "language": "eng",
-    "tesseract_config": {
-      "psm": 3
-    }
-  }
-}
-```
-
-## Configuration Field Reference
+## Field Reference
 
 For complete documentation of all configuration fields, see [Configuration Reference](../reference/configuration.md).
 
-Key sections include:
+Key sections:
 
-- [ExtractionConfig](../reference/configuration.md#extractionconfig) - Main configuration
-- [OcrConfig](../reference/configuration.md#ocrconfig) - OCR options
-- [TesseractConfig](../reference/configuration.md#tesseractconfig) - Fine-grained OCR tuning
-- [ChunkingConfig](../reference/configuration.md#chunkingconfig) - Text chunking
-- [TokenReductionConfig](../reference/configuration.md#tokenreductionconfig) - Token optimization
-- [PageConfig](../reference/configuration.md#pageconfig) - Page tracking
-- [AccelerationConfig](../reference/configuration.md#accelerationconfig) - Hardware acceleration
-- [All other configs](../reference/configuration.md) - Complete field list
+- [ExtractionConfig](../reference/configuration.md#extractionconfig) — top-level options (cache, quality processing, output format)
+- [OcrConfig](../reference/configuration.md#ocrconfig) — OCR backend, language, GPU
+- [TesseractConfig](../reference/configuration.md#tesseractconfig) — PSM mode, confidence, table detection
+- [ChunkingConfig](../reference/configuration.md#chunkingconfig) — chunk size, overlap, embedding model
+- [TokenReductionConfig](../reference/configuration.md#tokenreductionconfig) — token count optimization for LLMs
+- [PageConfig](../reference/configuration.md#pageconfig) — page tracking and markers
+- [AccelerationConfig](../reference/configuration.md#accelerationconfig) — hardware acceleration
+
+## Next Steps
+
+- [Extraction Basics](extraction.md) — core extraction API and supported formats
+- [OCR Guide](ocr.md) — backend installation and language setup
+- [Advanced Features](advanced.md) — embeddings, language detection, page tracking
+- [Plugins Guide](plugins.md) — custom post-processors and validators
