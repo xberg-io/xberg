@@ -9,6 +9,10 @@ pub struct TableState {
     pub current_row: Vec<String>,
     pub current_cell: String,
     pub in_row: bool,
+    /// Set after `\row` to indicate that another `\trowd` may follow
+    /// for the same table. Prevents premature finalization when stray
+    /// whitespace or formatting control words appear between rows.
+    pub expecting_next_row: bool,
 }
 
 impl TableState {
@@ -19,6 +23,7 @@ impl TableState {
             current_row: Vec::new(),
             current_cell: String::new(),
             in_row: false,
+            expecting_next_row: false,
         }
     }
 
@@ -37,6 +42,7 @@ impl TableState {
             self.push_cell();
         }
         self.in_row = false;
+        self.expecting_next_row = true;
         if !self.current_row.is_empty() {
             self.rows.push(self.current_row.clone());
             self.current_row.clear();
@@ -49,6 +55,7 @@ impl TableState {
             self.push_row();
         }
         self.in_row = true;
+        self.expecting_next_row = false;
         self.current_cell.clear();
         self.current_row.clear();
     }

@@ -160,6 +160,7 @@ impl RtfExtractor {
             // Handle list items
             else if let Some(level) = meta.list_level {
                 let new_list_id = meta.list_id;
+                let ordered = meta.ordered;
 
                 // Check if we need to start a new list or adjust nesting
                 if !in_list || list_id != new_list_id {
@@ -169,10 +170,10 @@ impl RtfExtractor {
                             builder.end_list();
                         }
                     }
-                    builder.push_list(false); // unordered by default
+                    builder.push_list(ordered);
                     // If starting at a level > 0, nest immediately
                     for _ in 0..level {
-                        builder.push_list(false);
+                        builder.push_list(ordered);
                     }
                     in_list = true;
                     list_id = new_list_id;
@@ -180,7 +181,7 @@ impl RtfExtractor {
                 } else if level > list_depth {
                     // Nest deeper
                     for _ in list_depth..level {
-                        builder.push_list(false);
+                        builder.push_list(ordered);
                     }
                     list_depth = level;
                 } else if level < list_depth {
@@ -191,7 +192,7 @@ impl RtfExtractor {
                     list_depth = level;
                 }
 
-                builder.push_list_item(trimmed, false, annotations, None, None);
+                builder.push_list_item(trimmed, ordered, annotations, None, None);
             }
             // Regular paragraph
             else {

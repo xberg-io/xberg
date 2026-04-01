@@ -11,7 +11,7 @@
 	},
 	"devDependencies": {
 		"@cloudflare/vitest-pool-workers": "^0.14.0",
-		"@cloudflare/workers-types": "^4.20260331.1",
+		"@cloudflare/workers-types": "^4.20260401.1",
 		"@kreuzberg/test-utils": "workspace:*",
 		"@kreuzberg/wasm": "workspace:*",
 		"@vitest/runner": "~4.1.2",

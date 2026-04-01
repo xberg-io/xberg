@@ -19,6 +19,9 @@ pub struct ParagraphMeta {
     pub list_id: Option<u16>,
     /// Whether this paragraph is a table placeholder (text is in tables vec).
     pub is_table: bool,
+    /// Whether this list item is ordered (numbered/lettered). Detected from
+    /// `\listtext` or `\pntext` content. `false` = unordered (bullet).
+    pub ordered: bool,
 }
 
 /// A formatting span tracked during RTF parsing.
@@ -124,12 +127,6 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
     let color_table = parse_rtf_color_table(content);
     let mut spans = Vec::new();
     let mut hyperlinks = Vec::new();
-    // Track formatting state
-    let mut bold = false;
-    let mut italic = false;
-    let mut underline = false;
-    let mut strikethrough = false;
-    let mut color_idx: u16 = 0;
     let mut text_offset: usize = 0;
     let mut span_start: usize = 0;
 
@@ -149,6 +146,26 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
     let mut fldrslt_depth: i32 = 0;
     let mut fldrslt_start: usize = 0;
     let mut pending_hyperlink_url: Option<String> = None;
+
+    // Formatting state stack: pushed on `{`, popped on `}` so that
+    // formatting set inside a group is properly scoped and does not
+    // bleed into subsequent groups.
+    #[derive(Clone)]
+    struct FmtState {
+        bold: bool,
+        italic: bool,
+        underline: bool,
+        strikethrough: bool,
+        color_idx: u16,
+    }
+    let mut fmt = FmtState {
+        bold: false,
+        italic: false,
+        underline: false,
+        strikethrough: false,
+        color_idx: 0,
+    };
+    let mut fmt_stack: Vec<FmtState> = Vec::new();
 
     let mut group_depth: i32 = 0;
     let mut skip_depth: i32 = 0;
@@ -187,16 +204,49 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
         "pict",
     ];
 
+    // Track whether each group produced text (mirrors extract_text_from_rtf)
+    let mut group_has_text: Vec<bool> = Vec::new();
+    let mut pending_boundary_space = false;
+
     while let Some(ch) = chars.next() {
         match ch {
             '{' => {
                 group_depth += 1;
                 expect_destination = true;
+                // Push current formatting state so it can be restored on `}`
+                fmt_stack.push(fmt.clone());
+                group_has_text.push(false);
+                pending_boundary_space = false;
             }
             '}' => {
                 group_depth -= 1;
                 expect_destination = false;
                 ignorable_pending = false;
+                // Restore formatting state from before this group opened.
+                // If formatting changed inside the group, close the span and
+                // revert to the parent state.
+                if let Some(parent) = fmt_stack.pop() {
+                    let changed = fmt.bold != parent.bold
+                        || fmt.italic != parent.italic
+                        || fmt.underline != parent.underline
+                        || fmt.strikethrough != parent.strikethrough
+                        || fmt.color_idx != parent.color_idx;
+                    if changed {
+                        if text_offset > span_start {
+                            spans.push(RtfFormattingSpan {
+                                start: span_start,
+                                end: text_offset,
+                                bold: fmt.bold,
+                                italic: fmt.italic,
+                                underline: fmt.underline,
+                                strikethrough: fmt.strikethrough,
+                                color_index: fmt.color_idx,
+                            });
+                        }
+                        span_start = text_offset;
+                        fmt = parent;
+                    }
+                }
                 if skip_depth > 0 && group_depth < skip_depth {
                     skip_depth = 0;
                 }
@@ -232,6 +282,11 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                         hyperlinks.push((fldrslt_start, text_offset, url));
                     }
                 }
+                // Mirror boundary-space logic from extract_text_from_rtf
+                let produced_text = group_has_text.pop().unwrap_or(false);
+                if produced_text && skip_depth == 0 {
+                    pending_boundary_space = true;
+                }
             }
             '\\' => {
                 if let Some(&next_ch) = chars.peek() {
@@ -246,7 +301,15 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                             if skip_depth > 0 {
                                 continue;
                             }
+                            // Flush deferred boundary space
+                            if pending_boundary_space && text_offset > 0 {
+                                text_offset += 1; // space
+                            }
+                            pending_boundary_space = false;
                             text_offset += next_ch.len_utf8();
+                            if let Some(flag) = group_has_text.last_mut() {
+                                *flag = true;
+                            }
                             if in_header {
                                 header_buf.push(next_ch);
                             }
@@ -262,8 +325,16 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                             if skip_depth > 0 {
                                 continue;
                             }
+                            // Flush deferred boundary space
+                            if pending_boundary_space && text_offset > 0 {
+                                text_offset += 1;
+                            }
+                            pending_boundary_space = false;
                             // Count 1 byte for the decoded char
                             text_offset += 1;
+                            if let Some(flag) = group_has_text.last_mut() {
+                                *flag = true;
+                            }
                         }
                         '*' => {
                             chars.next();
@@ -327,135 +398,73 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                                 continue;
                             }
 
+                            // Helper macro to close the current span and update
+                            // a single formatting field on `fmt`.
+                            macro_rules! update_fmt_field {
+                                ($field:ident, $new_val:expr) => {
+                                    let new_val = $new_val;
+                                    if new_val != fmt.$field {
+                                        if text_offset > span_start {
+                                            spans.push(RtfFormattingSpan {
+                                                start: span_start,
+                                                end: text_offset,
+                                                bold: fmt.bold,
+                                                italic: fmt.italic,
+                                                underline: fmt.underline,
+                                                strikethrough: fmt.strikethrough,
+                                                color_index: fmt.color_idx,
+                                            });
+                                        }
+                                        span_start = text_offset;
+                                        fmt.$field = new_val;
+                                    }
+                                };
+                            }
+
                             match word.as_str() {
                                 "b" => {
-                                    let new_bold = param.unwrap_or(1) != 0;
-                                    if new_bold != bold {
-                                        // Close previous span
-                                        if text_offset > span_start {
-                                            spans.push(RtfFormattingSpan {
-                                                start: span_start,
-                                                end: text_offset,
-                                                bold,
-                                                italic,
-                                                underline,
-                                                strikethrough,
-                                                color_index: color_idx,
-                                            });
-                                        }
-                                        span_start = text_offset;
-                                        bold = new_bold;
-                                    }
+                                    update_fmt_field!(bold, param.unwrap_or(1) != 0);
                                 }
                                 "i" => {
-                                    let new_italic = param.unwrap_or(1) != 0;
-                                    if new_italic != italic {
-                                        if text_offset > span_start {
-                                            spans.push(RtfFormattingSpan {
-                                                start: span_start,
-                                                end: text_offset,
-                                                bold,
-                                                italic,
-                                                underline,
-                                                strikethrough,
-                                                color_index: color_idx,
-                                            });
-                                        }
-                                        span_start = text_offset;
-                                        italic = new_italic;
-                                    }
+                                    update_fmt_field!(italic, param.unwrap_or(1) != 0);
                                 }
                                 "ul" => {
-                                    let new_ul = param.unwrap_or(1) != 0;
-                                    if new_ul != underline {
-                                        if text_offset > span_start {
-                                            spans.push(RtfFormattingSpan {
-                                                start: span_start,
-                                                end: text_offset,
-                                                bold,
-                                                italic,
-                                                underline,
-                                                strikethrough,
-                                                color_index: color_idx,
-                                            });
-                                        }
-                                        span_start = text_offset;
-                                        underline = new_ul;
-                                    }
+                                    update_fmt_field!(underline, param.unwrap_or(1) != 0);
                                 }
                                 "ulnone" => {
-                                    if underline {
-                                        if text_offset > span_start {
-                                            spans.push(RtfFormattingSpan {
-                                                start: span_start,
-                                                end: text_offset,
-                                                bold,
-                                                italic,
-                                                underline,
-                                                strikethrough,
-                                                color_index: color_idx,
-                                            });
-                                        }
-                                        span_start = text_offset;
-                                        underline = false;
-                                    }
+                                    update_fmt_field!(underline, false);
                                 }
                                 "strike" => {
-                                    let new_strike = param.unwrap_or(1) != 0;
-                                    if new_strike != strikethrough {
-                                        if text_offset > span_start {
-                                            spans.push(RtfFormattingSpan {
-                                                start: span_start,
-                                                end: text_offset,
-                                                bold,
-                                                italic,
-                                                underline,
-                                                strikethrough,
-                                                color_index: color_idx,
-                                            });
-                                        }
-                                        span_start = text_offset;
-                                        strikethrough = new_strike;
-                                    }
+                                    update_fmt_field!(strikethrough, param.unwrap_or(1) != 0);
                                 }
                                 "cf" => {
-                                    let new_idx = param.unwrap_or(0) as u16;
-                                    if new_idx != color_idx {
-                                        if text_offset > span_start {
-                                            spans.push(RtfFormattingSpan {
-                                                start: span_start,
-                                                end: text_offset,
-                                                bold,
-                                                italic,
-                                                underline,
-                                                strikethrough,
-                                                color_index: color_idx,
-                                            });
-                                        }
-                                        span_start = text_offset;
-                                        color_idx = new_idx;
-                                    }
+                                    update_fmt_field!(color_idx, param.unwrap_or(0) as u16);
                                 }
                                 "plain" => {
-                                    // Reset formatting
-                                    if bold || italic || underline || strikethrough || color_idx != 0 {
+                                    // Reset all formatting
+                                    if fmt.bold
+                                        || fmt.italic
+                                        || fmt.underline
+                                        || fmt.strikethrough
+                                        || fmt.color_idx != 0
+                                    {
                                         if text_offset > span_start {
                                             spans.push(RtfFormattingSpan {
                                                 start: span_start,
                                                 end: text_offset,
-                                                bold,
-                                                italic,
-                                                underline,
-                                                strikethrough,
-                                                color_index: color_idx,
+                                                bold: fmt.bold,
+                                                italic: fmt.italic,
+                                                underline: fmt.underline,
+                                                strikethrough: fmt.strikethrough,
+                                                color_index: fmt.color_idx,
                                             });
                                         }
                                         span_start = text_offset;
-                                        bold = false;
-                                        italic = false;
-                                        underline = false;
-                                        strikethrough = false;
-                                        color_idx = 0;
+                                        fmt.bold = false;
+                                        fmt.italic = false;
+                                        fmt.underline = false;
+                                        fmt.strikethrough = false;
+                                        fmt.color_idx = 0;
                                     }
                                 }
                                 "header" | "headerl" | "headerr" | "headerf" => {
@@ -474,6 +483,32 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                                     if in_footer {
                                         footer_buf.push('\n');
                                     }
+                                }
+                                // Text-producing control words: advance text_offset to
+                                // stay synchronised with extract_text_from_rtf.
+                                "tab" => {
+                                    text_offset += 1;
+                                }
+                                "bullet" => {
+                                    text_offset += '\u{2022}'.len_utf8();
+                                }
+                                "lquote" => {
+                                    text_offset += '\u{2018}'.len_utf8();
+                                }
+                                "rquote" => {
+                                    text_offset += '\u{2019}'.len_utf8();
+                                }
+                                "ldblquote" => {
+                                    text_offset += '\u{201C}'.len_utf8();
+                                }
+                                "rdblquote" => {
+                                    text_offset += '\u{201D}'.len_utf8();
+                                }
+                                "endash" => {
+                                    text_offset += '\u{2013}'.len_utf8();
+                                }
+                                "emdash" => {
+                                    text_offset += '\u{2014}'.len_utf8();
                                 }
                                 "u" => {
                                     // Unicode char
@@ -509,6 +544,27 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                 }
             }
             '\n' | '\r' => {}
+            ' ' | '\t' => {
+                if in_fldinst {
+                    fldinst_content.push(' ');
+                }
+                if skip_depth > 0 {
+                    continue;
+                }
+                // Mirror space-dedup from extract_text_from_rtf:
+                // only count a space if the previous output isn't already
+                // a space or newline.
+                if text_offset > 0 {
+                    // We approximate: always count 1 space since exact
+                    // dedup state isn't tracked here. The normalize_whitespace
+                    // pass collapses duplicates, so counting 1 per space char
+                    // is correct for non-adjacent spaces.
+                    text_offset += 1;
+                    if let Some(flag) = group_has_text.last_mut() {
+                        *flag = true;
+                    }
+                }
+            }
             _ => {
                 // Capture field instruction content for HYPERLINK parsing
                 if in_fldinst {
@@ -518,7 +574,15 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
                 if skip_depth > 0 {
                     continue;
                 }
+                // Flush deferred boundary space
+                if pending_boundary_space && text_offset > 0 {
+                    text_offset += 1;
+                }
+                pending_boundary_space = false;
                 text_offset += ch.len_utf8();
+                if let Some(flag) = group_has_text.last_mut() {
+                    *flag = true;
+                }
                 if in_header {
                     header_buf.push(ch);
                 }
@@ -530,15 +594,16 @@ pub fn extract_rtf_formatting(content: &str) -> RtfFormattingData {
     }
 
     // Close final span
-    if text_offset > span_start && (bold || italic || underline || strikethrough || color_idx != 0) {
+    if text_offset > span_start && (fmt.bold || fmt.italic || fmt.underline || fmt.strikethrough || fmt.color_idx != 0)
+    {
         spans.push(RtfFormattingSpan {
             start: span_start,
             end: text_offset,
-            bold,
-            italic,
-            underline,
-            strikethrough,
-            color_index: color_idx,
+            bold: fmt.bold,
+            italic: fmt.italic,
+            underline: fmt.underline,
+            strikethrough: fmt.strikethrough,
+            color_index: fmt.color_idx,
         });
     }
 
@@ -704,6 +769,10 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
     // Track \listtext destination to skip bullet/number prefix text
     let mut in_listtext = false;
     let mut listtext_depth: i32 = 0;
+    // Buffer to capture listtext content for ordered/unordered detection
+    let mut listtext_buf = String::new();
+    // Whether the current paragraph's list item is ordered (detected from listtext)
+    let mut cur_ordered = false;
     // Flag to prevent double-emitting metadata when \par and \pard both occur
     let mut para_meta_emitted = false;
 
@@ -795,9 +864,31 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 if skip_depth > 0 && group_depth < skip_depth {
                     skip_depth = 0;
                 }
-                // Exit listtext destination
+                // Exit listtext destination and detect ordered vs unordered
                 if in_listtext && group_depth < listtext_depth {
                     in_listtext = false;
+                    let lt = listtext_buf.trim();
+                    // Detect ordered prefixes: "1.", "1)", "a.", "a)", "i.", "i)", "A.", etc.
+                    // Also handles multi-digit numbers like "12." or Roman numerals "iv."
+                    let is_ordered = lt
+                        .strip_suffix('.')
+                        .or_else(|| lt.strip_suffix(')'))
+                        .is_some_and(|prefix| {
+                            let p = prefix.trim();
+                            // Numeric: "1", "12", etc.
+                            if p.chars().all(|c| c.is_ascii_digit()) && !p.is_empty() {
+                                return true;
+                            }
+                            // Alphabetic: "a", "b", "A", "B", "iv", "III", etc.
+                            if p.chars().all(|c| c.is_ascii_alphabetic()) && !p.is_empty() {
+                                return true;
+                            }
+                            false
+                        });
+                    if is_ordered {
+                        cur_ordered = true;
+                    }
+                    listtext_buf.clear();
                 }
                 // Handle \fldinst group closing — parse HYPERLINK URL
                 if in_fldinst && group_depth < fldinst_depth {
@@ -875,6 +966,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 &mut cur_heading_level,
                                 &mut cur_list_level,
                                 &mut cur_list_id,
+                                &mut cur_ordered,
                                 &mut para_metas,
                                 &mut para_meta_emitted,
                                 &mut uc_stack,
@@ -996,10 +1088,12 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                     }
                                 }
 
-                                // Skip \listtext destination (bullet/number prefix text)
-                                if control_word == "listtext" {
+                                // Capture \listtext destination content for ordered/unordered
+                                // detection, but skip output to result.
+                                if control_word == "listtext" || control_word == "pntext" {
                                     in_listtext = true;
                                     listtext_depth = group_depth;
+                                    listtext_buf.clear();
                                     if skip_depth == 0 {
                                         skip_depth = group_depth;
                                     }
@@ -1098,6 +1192,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                                 &mut cur_heading_level,
                                 &mut cur_list_level,
                                 &mut cur_list_id,
+                                &mut cur_ordered,
                                 &mut para_metas,
                                 &mut para_meta_emitted,
                                 &mut uc_stack,
@@ -1143,12 +1238,15 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
             }
             _ => {
                 expect_destination = false;
-                // Capture content in fldinst/footnote buffers even when skipping
+                // Capture content in fldinst/footnote/listtext buffers even when skipping
                 if in_fldinst {
                     fldinst_content.push(ch);
                 }
                 if in_footnote {
                     footnote_buf.push(ch);
+                }
+                if in_listtext {
+                    listtext_buf.push(ch);
                 }
                 if skip_depth > 0 {
                     continue;
@@ -1159,6 +1257,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 }
                 if let Some(state) = table_state.as_ref()
                     && !state.in_row
+                    && !state.expecting_next_row
                     && !state.rows.is_empty()
                 {
                     finalize_table(&mut table_state, &mut tables);
@@ -1202,6 +1301,7 @@ pub fn extract_text_from_rtf(content: &str, plain: bool) -> (String, Vec<Table>,
                 list_level: cur_list_level,
                 list_id: cur_list_id,
                 is_table: false,
+                ordered: cur_ordered,
             });
         }
     }
@@ -1239,6 +1339,7 @@ fn handle_control_word(
     cur_heading_level: &mut u8,
     cur_list_level: &mut Option<u8>,
     cur_list_id: &mut Option<u16>,
+    cur_ordered: &mut bool,
     para_metas: &mut Vec<ParagraphMeta>,
     para_meta_emitted: &mut bool,
     uc_stack: &mut Vec<u8>,
@@ -1272,6 +1373,7 @@ fn handle_control_word(
                         list_level: *cur_list_level,
                         list_id: *cur_list_id,
                         is_table: false,
+                        ordered: *cur_ordered,
                     });
                     result.push('\n');
                     result.push('\n');
@@ -1284,6 +1386,7 @@ fn handle_control_word(
             *cur_heading_level = 0;
             *cur_list_level = None;
             *cur_list_id = None;
+            *cur_ordered = false;
         }
         // Outline level: \outlinelevel0 = H1, \outlinelevel1 = H2, etc.
         "outlinelevel" => {
@@ -1417,7 +1520,11 @@ fn handle_control_word(
                     state.current_cell.push(' ');
                 }
             } else {
-                if table_state.is_some() {
+                // Only finalize the table when we're sure no more rows follow.
+                // If expecting_next_row is set, \par is just formatting between
+                // rows (e.g. from \pard resets), not end-of-table.
+                let still_in_table = table_state.as_ref().is_some_and(|s| s.expecting_next_row);
+                if table_state.is_some() && !still_in_table {
                     finalize_table(table_state, tables);
                 }
                 // Record metadata for this paragraph before emitting the break.
@@ -1429,6 +1536,7 @@ fn handle_control_word(
                             list_level: *cur_list_level,
                             list_id: *cur_list_id,
                             is_table: false,
+                            ordered: *cur_ordered,
                         });
                         *para_meta_emitted = true;
                     }
@@ -1532,6 +1640,15 @@ fn handle_control_word(
                 is_table: true,
                 ..Default::default()
             });
+        }
+        // \intbl marks a paragraph as inside a table. If we have a table state
+        // that just finished a row (expecting_next_row), ensure it stays alive.
+        "intbl" => {
+            ensure_table(table_state);
+            // Keep the table state expecting more rows
+            if let Some(state) = table_state.as_mut() {
+                state.expecting_next_row = true;
+            }
         }
         // \plain resets all character formatting including hidden text
         "plain" => {

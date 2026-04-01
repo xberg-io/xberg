@@ -1003,12 +1003,7 @@ impl RstExtractor {
                     i += 1;
                 }
                 if !code_content.is_empty() {
-                    b.push_code(
-                        code_content.trim_end(),
-                        highlight_lang.as_deref(),
-                        None,
-                        None,
-                    );
+                    b.push_code(code_content.trim_end(), highlight_lang.as_deref(), None, None);
                 }
                 continue;
             }

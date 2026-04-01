@@ -863,7 +863,11 @@ impl OrgModeExtractor {
             }
         }
         // Block delimiters
-        if trimmed.starts_with("#+BEGIN") || trimmed.starts_with("#+begin") || trimmed.starts_with("#+END") || trimmed.starts_with("#+end") {
+        if trimmed.starts_with("#+BEGIN")
+            || trimmed.starts_with("#+begin")
+            || trimmed.starts_with("#+END")
+            || trimmed.starts_with("#+end")
+        {
             return true;
         }
         // Metadata directives
