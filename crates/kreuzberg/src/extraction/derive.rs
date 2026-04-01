@@ -586,6 +586,7 @@ pub fn derive_extraction_result(
         crate::core::config::OutputFormat::Markdown => Some(crate::rendering::render_markdown(&doc)),
         crate::core::config::OutputFormat::Djot => Some(crate::rendering::render_djot(&doc)),
         crate::core::config::OutputFormat::Html => Some(crate::rendering::render_html(&doc)),
+        crate::core::config::OutputFormat::Json => Some(crate::rendering::render_json(&doc)),
         crate::core::config::OutputFormat::Structured => None,
         crate::core::config::OutputFormat::Custom(ref name) => {
             let registry = crate::plugins::registry::get_renderer_registry();

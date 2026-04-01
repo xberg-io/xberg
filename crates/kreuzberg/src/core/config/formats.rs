@@ -26,6 +26,8 @@ pub enum OutputFormat {
     Djot,
     /// HTML format
     Html,
+    /// JSON tree format with heading-driven sections.
+    Json,
     /// Structured JSON format with full OCR element metadata.
     Structured,
     /// Custom renderer registered via the RendererRegistry.
@@ -40,7 +42,7 @@ impl OutputFormat {
     /// (Plain, Structured, Toon — these are handled differently).
     pub fn renderer_name(&self) -> Option<&str> {
         match self {
-            OutputFormat::Plain | OutputFormat::Structured => None,
+            OutputFormat::Plain | OutputFormat::Json | OutputFormat::Structured => None,
             OutputFormat::Markdown => Some("markdown"),
             OutputFormat::Djot => Some("djot"),
             OutputFormat::Html => Some("html"),
@@ -56,6 +58,7 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Markdown => write!(f, "markdown"),
             OutputFormat::Djot => write!(f, "djot"),
             OutputFormat::Html => write!(f, "html"),
+            OutputFormat::Json => write!(f, "json"),
             OutputFormat::Structured => write!(f, "structured"),
             OutputFormat::Custom(name) => write!(f, "{}", name),
         }
@@ -71,7 +74,8 @@ impl FromStr for OutputFormat {
             "markdown" | "md" => Ok(OutputFormat::Markdown),
             "djot" => Ok(OutputFormat::Djot),
             "html" => Ok(OutputFormat::Html),
-            "structured" | "json" => Ok(OutputFormat::Structured),
+            "json" => Ok(OutputFormat::Json),
+            "structured" | "structured-ocr" => Ok(OutputFormat::Structured),
             other => Ok(OutputFormat::Custom(other.to_string())),
         }
     }
@@ -112,11 +116,23 @@ mod tests {
     }
 
     #[test]
+    fn test_output_format_from_str_json() {
+        assert_eq!("json".parse::<OutputFormat>().unwrap(), OutputFormat::Json);
+        assert_eq!("JSON".parse::<OutputFormat>().unwrap(), OutputFormat::Json);
+    }
+
+    #[test]
     fn test_output_format_from_str_structured() {
         assert_eq!("structured".parse::<OutputFormat>().unwrap(), OutputFormat::Structured);
         assert_eq!("STRUCTURED".parse::<OutputFormat>().unwrap(), OutputFormat::Structured);
-        assert_eq!("json".parse::<OutputFormat>().unwrap(), OutputFormat::Structured);
-        assert_eq!("JSON".parse::<OutputFormat>().unwrap(), OutputFormat::Structured);
+        assert_eq!(
+            "structured-ocr".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Structured
+        );
+        assert_eq!(
+            "STRUCTURED-OCR".parse::<OutputFormat>().unwrap(),
+            OutputFormat::Structured
+        );
     }
 
     #[test]
@@ -131,6 +147,7 @@ mod tests {
         assert_eq!(OutputFormat::Markdown.to_string(), "markdown");
         assert_eq!(OutputFormat::Djot.to_string(), "djot");
         assert_eq!(OutputFormat::Html.to_string(), "html");
+        assert_eq!(OutputFormat::Json.to_string(), "json");
         assert_eq!(OutputFormat::Structured.to_string(), "structured");
         assert_eq!(OutputFormat::Custom("docx".to_string()).to_string(), "docx");
     }
@@ -148,6 +165,7 @@ mod tests {
             OutputFormat::Markdown,
             OutputFormat::Djot,
             OutputFormat::Html,
+            OutputFormat::Json,
             OutputFormat::Structured,
         ] {
             let json = serde_json::to_string(&format).unwrap();
@@ -162,6 +180,7 @@ mod tests {
         assert_eq!(serde_json::to_string(&OutputFormat::Markdown).unwrap(), "\"markdown\"");
         assert_eq!(serde_json::to_string(&OutputFormat::Djot).unwrap(), "\"djot\"");
         assert_eq!(serde_json::to_string(&OutputFormat::Html).unwrap(), "\"html\"");
+        assert_eq!(serde_json::to_string(&OutputFormat::Json).unwrap(), "\"json\"");
         assert_eq!(
             serde_json::to_string(&OutputFormat::Structured).unwrap(),
             "\"structured\""
@@ -174,6 +193,7 @@ mod tests {
         assert_eq!(OutputFormat::Markdown.renderer_name(), Some("markdown"));
         assert_eq!(OutputFormat::Html.renderer_name(), Some("html"));
         assert_eq!(OutputFormat::Djot.renderer_name(), Some("djot"));
+        assert_eq!(OutputFormat::Json.renderer_name(), None);
         assert_eq!(OutputFormat::Structured.renderer_name(), None);
         assert_eq!(OutputFormat::Custom("docx".to_string()).renderer_name(), Some("docx"));
     }

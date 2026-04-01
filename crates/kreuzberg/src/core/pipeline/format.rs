@@ -32,6 +32,7 @@ pub fn apply_output_format(result: &mut ExtractionResult, output_format: OutputF
         OutputFormat::Markdown => "markdown",
         OutputFormat::Djot => "djot",
         OutputFormat::Html => "html",
+        OutputFormat::Json => "json",
         OutputFormat::Structured => "structured",
         OutputFormat::Custom(ref name) => name.as_str(),
     };
