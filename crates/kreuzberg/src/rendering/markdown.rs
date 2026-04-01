@@ -38,15 +38,24 @@ pub fn render_markdown(doc: &InternalDocument) -> String {
         output = output.replace("\\_", "_");
     }
 
-    // Un-escape stars and hashes: comrak escapes `*` as `\*` and `#` as `\#` to
-    // prevent false emphasis / ATX-heading interpretation.  Our AST already
-    // represents structure explicitly, so these escapes are unnecessary and
-    // corrupt the output (e.g. RST `* item` → `\* item`, `#. item` → `\#. item`).
-    if output.contains("\\*") {
-        output = output.replace("\\*", "*");
-    }
-    if output.contains("\\#") {
-        output = output.replace("\\#", "#");
+    // Un-escape stars and hashes at the START of lines only.
+    // comrak escapes `*` → `\*` and `#` → `\#` to prevent false emphasis / ATX-heading
+    // interpretation. We need to un-escape these for RST list markers (`\* item` → `* item`)
+    // and auto-numbered lists (`\#. item` → `#. item`), but NOT inside table cells where
+    // `\*\*text\*\*` should remain escaped as literal asterisks.
+    if output.contains("\\*") || output.contains("\\#") {
+        output = output
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("\\* ") || trimmed.starts_with("\\#.") || trimmed.starts_with("\\#\\.") {
+                    line.replacen("\\*", "*", 1).replacen("\\#", "#", 1)
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
     }
 
     // Trim trailing whitespace but keep single trailing newline

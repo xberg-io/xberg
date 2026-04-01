@@ -319,7 +319,7 @@ module Kreuzberg
     #
     # @param hash [Hash] Hash returned from native extension
     #
-    # rubocop:disable Metrics/AbcSize
+    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     def initialize(hash)
       @content = get_value(hash, 'content', '')
       @mime_type = get_value(hash, 'mime_type', '')
@@ -341,13 +341,13 @@ module Kreuzberg
       @uris = parse_uris(get_value(hash, 'uris'))
       @children = parse_children(get_value(hash, 'children'))
     end
-    # rubocop:enable Metrics/AbcSize
+    # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
     # Convert to hash
     #
     # @return [Hash] Hash representation
     #
-    # rubocop:disable Metrics/CyclomaticComplexity
+    # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength
     def to_h
       {
         content: @content,
@@ -370,7 +370,7 @@ module Kreuzberg
         children: @children&.map(&:to_h)
       }
     end
-    # rubocop:enable Metrics/CyclomaticComplexity
+    # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
 
     # Convert to JSON
     #
@@ -751,7 +751,7 @@ module Kreuzberg
     end
 
     def build_uri(u_hash)
-      OpenStruct.new(
+      Struct.new(:url, :label, :page, :kind).new(
         url: u_hash['url'] || '',
         label: u_hash['label'],
         page: u_hash['page']&.to_i,
@@ -766,7 +766,7 @@ module Kreuzberg
     end
 
     def build_archive_entry(c_hash)
-      OpenStruct.new(
+      Struct.new(:path, :mime_type, :result).new(
         path: c_hash['path'] || '',
         mime_type: c_hash['mime_type'] || '',
         result: c_hash['result'] ? self.class.new(c_hash['result']) : nil

@@ -664,6 +664,7 @@ impl RstExtractor {
         let mut b = InternalDocumentBuilder::new("rst");
         let lines: Vec<&str> = content.lines().collect();
         let mut heading_char_order: Vec<char> = Vec::new();
+        let mut has_overline_heading = false;
         let mut highlight_lang: Option<String> = None;
         let mut i = 0;
 
@@ -703,6 +704,7 @@ impl RstExtractor {
                 let underline_char = lines[i + 2].trim().chars().next().unwrap_or('=');
                 if overline_char == underline_char {
                     let title_text = lines[i + 1].trim();
+                    has_overline_heading = true;
                     b.push_heading(1, title_text, None, None);
                     i += 3;
                     continue;
@@ -717,11 +719,14 @@ impl RstExtractor {
                 if !heading_char_order.contains(&underline_char) {
                     heading_char_order.push(underline_char);
                 }
+                // When an overline heading already claimed H1, underline headings
+                // start at H2 (+2 offset).  Otherwise the first underline char is H1 (+1).
+                let base = if has_overline_heading { 2 } else { 1 };
                 let level = heading_char_order
                     .iter()
                     .position(|&c| c == underline_char)
-                    .map(|p| (p + 2) as u8) // +2: first char is H2, second is H3, etc.
-                    .unwrap_or(2);
+                    .map(|p| (p + base) as u8)
+                    .unwrap_or(base as u8);
                 b.push_heading(level, trimmed, None, None);
                 i += 2;
                 continue;

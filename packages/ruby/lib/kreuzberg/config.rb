@@ -974,8 +974,8 @@ module Kreuzberg
       #
       # Keys that are allowed in the Extraction config
       ALLOWED_KEYS = %i[
-        use_cache enable_quality_processing force_ocr disable_ocr force_ocr_pages include_document_structure ocr chunking
-        language_detection pdf_options image_extraction
+        use_cache enable_quality_processing force_ocr disable_ocr force_ocr_pages
+        include_document_structure ocr chunking language_detection pdf_options image_extraction
         postprocessor token_reduction keywords html_options pages
         max_concurrent_extractions output_format result_format
         security_limits layout concurrency cache_namespace cache_ttl_secs extraction_timeout_secs

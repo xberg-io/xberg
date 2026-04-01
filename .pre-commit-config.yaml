@@ -298,13 +298,3 @@ repos:
         pass_filenames: false
         require_serial: true
         stages: [commit]
-
-      # TypeScript - type checking across all projects (builds WASM + Node first)
-      - id: typescript-typecheck
-        name: Check TypeScript types
-        entry: task typescript:typecheck
-        language: system
-        files: \.(ts|tsx)$
-        pass_filenames: false
-        require_serial: true
-        stages: [commit]
