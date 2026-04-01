@@ -436,9 +436,7 @@ pub struct ExtractionResult {
     #[php(name = "mimeType")]
     pub mime_type: String,
 
-    /// Document metadata (stored as serialized JSON, accessed via getter)
-    #[php(prop)]
-    #[php(name = "metadata")]
+    /// Document metadata (stored as serialized JSON, accessed via __get getter)
     metadata_json: String,
 
     /// Extracted tables (accessed via getter property)
