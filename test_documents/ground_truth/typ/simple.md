@@ -11,16 +11,22 @@ Some **bold text** and *italic text* with `inline code`.
 This document demonstrates:
 
 - Lists
+
 - **Bold** formatting
+
 - *Italic* text
+
 - Tables
+
 - Links
 
 ## Lists
 
-1. First item
-2. Second item
-3. Third item
+1.  First item
+
+2.  Second item
+
+3.  Third item
 
 ## Code
 
@@ -28,8 +34,9 @@ This document demonstrates:
 
 ## Tables
 
-| Header 1 | Header 2 |
-|----------|----------|
+|              |              |
+|--------------|--------------|
+| Header 1     | Header 2     |
 | Row 1, Col 1 | Row 1, Col 2 |
 | Row 2, Col 1 | Row 2, Col 2 |
 

@@ -1,22 +1,3 @@
-# Fibonacci sequence
-
-The Fibonacci sequence is defined through the recurrence relation $`F_{n} = F_{n - 1} + F_{n - 2}`$. It can also be expressed in *closed form:*
-
-``` math
-F_{n} = \left\lfloor {\frac{1}{\sqrt{5}}\phi^{n}} \right\rceil,\quad\phi = \frac{1 + \sqrt{5}}{2}
-```
-
-The first 8 numbers of the sequence are:
-
-<div align="center">
-
-|           |           |           |           |           |           |           |           |
-|-----------|-----------|-----------|-----------|-----------|-----------|-----------|-----------|
-| $`F_{1}`$ | $`F_{2}`$ | $`F_{3}`$ | $`F_{4}`$ | $`F_{5}`$ | $`F_{6}`$ | $`F_{7}`$ | $`F_{8}`$ |
-| 1         | 1         | 2         | 3         | 5         | 8         | 13        | 21        |
-
-</div>
-
 <div class="columns-flow" count="2">
 
 <span align="center">[ **Typst Math for Undergrads** ](https://github.com/johanvx/typst-undergradmath)</span>
