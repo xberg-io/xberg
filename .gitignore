@@ -156,6 +156,9 @@ packages/csharp/test_html_debug.cs
 
 # AI Rules generated files
 .codex/
+
+# Git worktrees
+.worktrees/
 packages/php/tests.xml
 
 # Clippy fix temporary output

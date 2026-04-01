@@ -1,73 +1,10 @@
 # Docker Deployment <span class="version-badge">v4.0.0</span>
 
-Kreuzberg provides official Docker images built on a high-performance Rust core with Debian 13 (Trixie). Each image supports three execution modes through a flexible entrypoint pattern, enabling deployment as an API server, CLI tool, or MCP server.
-
-## Image Variants
-
-Kreuzberg offers two Docker image variants optimized for different use cases:
-
-### Core Image
-
-**Size:** ~1.0-1.3GB
-**Image:** `ghcr.io/kreuzberg-dev/kreuzberg:latest`
-
-**Included Features:**
-
-- Tesseract OCR with 12 language packs (eng, spa, fra, deu, ita, por, chi-sim, chi-tra, jpn, ara, rus, hin)
-- pdfium for PDF rendering
-- Full support for modern file formats
-
-**Supported Formats:**
-
-- PDF, DOCX, PPTX, XLSX (modern Office formats)
-- Images (PNG, JPG, TIFF, BMP, etc.)
-- HTML, XML, JSON, YAML, TOML
-- Email (EML, MSG)
-- Archives (ZIP, TAR, GZ)
-
-**Best For:**
-
-- Production deployments where image size matters
-- Cloud environments with size/bandwidth constraints
-- Kubernetes deployments with frequent pod scaling
-- Workflows that don't require legacy Office format support
-
-### Full Image
-
-**Size:** ~1.0-1.3GB
-**Image:** `ghcr.io/kreuzberg-dev/kreuzberg:latest`
-
-**Included Features:**
-
-- All Core image features
-- Native OLE/CFB parsing for legacy formats
-
-**Additional Formats:**
-
-- Legacy Word (.doc)
-- Legacy PowerPoint (.ppt)
-- Legacy Excel (.xls)
-
-**Best For:**
-
-- Complete document intelligence pipelines
-- Processing legacy MS Office files
-- Development and testing environments
-- When image size is not a constraint
+Official Docker images built on the Rust core with Debian 13 (Trixie). Each image supports three execution modes: API server (default), CLI tool, and MCP server.
 
 ## Quick Start
 
-### Pull Image
-
-=== "Core"
-
-    --8<-- "snippets/docker/core_pull.md"
-
-=== "Full"
-
-    --8<-- "snippets/docker/full_pull.md"
-
-### Basic Usage
+### Pull and Run
 
 === "API Server"
 
@@ -81,50 +18,57 @@ Kreuzberg offers two Docker image variants optimized for different use cases:
 
     --8<-- "snippets/docker/mcp_basic.md"
 
+### Pull Image
+
+=== "Core"
+
+    --8<-- "snippets/docker/core_pull.md"
+
+=== "Full"
+
+    --8<-- "snippets/docker/full_pull.md"
+
+## Image Variants
+
+| | **Core** | **Full** |
+|---|---|---|
+| **Image** | `ghcr.io/kreuzberg-dev/kreuzberg:latest` | `ghcr.io/kreuzberg-dev/kreuzberg:latest` |
+| **Size** | ~1.0–1.3 GB | ~1.5–2.1 GB |
+| **Tesseract OCR** | 12 languages | 12 languages |
+| **Modern Office** | DOCX, PPTX, XLSX | DOCX, PPTX, XLSX |
+| **Legacy Office** | DOC, PPT, XLS (native OLE/CFB) | DOC, PPT, XLS (native OLE/CFB) |
+| **Startup** | ~1s | ~1s |
+
+**Core** is optimized for production deployments where image size matters. **Full** adds legacy format support for complete document intelligence pipelines.
+
+Both images include: Tesseract OCR (eng, spa, fra, deu, ita, por, chi-sim, chi-tra, jpn, ara, rus, hin), pdfium, images, HTML, email, archives.
+
 ## Execution Modes
 
-Kreuzberg Docker images use a flexible `ENTRYPOINT` pattern that supports three execution modes:
-
-### 1. API Server Mode (Default)
-
-The default mode starts an HTTP REST API server.
-
-**Default Behavior:**
+### API Server (Default)
 
 ```bash title="Terminal"
 docker run -p 8000:8000 ghcr.io/kreuzberg-dev/kreuzberg:latest
-```
 
-**Custom Configuration:**
-
-```bash title="Terminal"
-# Change host and port
-docker run -p 9000:9000 ghcr.io/kreuzberg-dev/kreuzberg:latest \
+# Custom port and CORS
+docker run -p 9000:9000 \
+  -e KREUZBERG_CORS_ORIGINS="https://myapp.com" \
+  ghcr.io/kreuzberg-dev/kreuzberg:latest \
   serve --host 0.0.0.0 --port 9000
 
-# With environment variables
-docker run -p 8000:8000 \
-  -e KREUZBERG_CORS_ORIGINS="https://myapp.com" \
-  -e KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200 \
-  ghcr.io/kreuzberg-dev/kreuzberg:latest
-
-# With configuration file
+# With config file
 docker run -p 8000:8000 \
   -v $(pwd)/kreuzberg.toml:/config/kreuzberg.toml \
   ghcr.io/kreuzberg-dev/kreuzberg:latest \
   serve --config /config/kreuzberg.toml
 ```
 
-See [API Server Guide](api-server.md) for complete API documentation.
+See [API Server Guide](api-server.md) for endpoint documentation.
 
-### 2. CLI Mode
-
-Run Kreuzberg as a command-line tool for file processing.
-
-**Extract Files:**
+### CLI Mode
 
 ```bash title="Terminal"
-# Mount directory and extract file
+# Extract a file
 docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/document.pdf
 
@@ -132,128 +76,75 @@ docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
 docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   extract /data/scanned.pdf --ocr true
 
-# Output as JSON (CLI output format)
-docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
-  extract /data/document.pdf --format json > result.json
-```
-
-**Batch Processing:**
-
-```bash title="Terminal"
-# Process multiple files (default batch output is JSON)
+# Batch processing
 docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   batch /data/*.pdf --format json
-```
 
-**MIME Detection:**
-
-```bash title="Terminal"
+# MIME detection
 docker run -v $(pwd):/data ghcr.io/kreuzberg-dev/kreuzberg:latest \
   detect /data/unknown-file.bin
 ```
 
-**Cache Management:**
-
-```bash title="Terminal"
-# View cache statistics
-docker run ghcr.io/kreuzberg-dev/kreuzberg:latest cache stats
-
-# Clear cache
-docker run ghcr.io/kreuzberg-dev/kreuzberg:latest cache clear
-```
-
-See [CLI Usage Guide](../cli/usage.md) for complete CLI documentation.
-
-### 3. MCP Server Mode
-
-Run Kreuzberg as a Model Context Protocol server for AI agent integration.
-
-**Start MCP Server:**
+### MCP Server
 
 ```bash title="Terminal"
 docker run ghcr.io/kreuzberg-dev/kreuzberg:latest mcp
-```
 
-**With Configuration:**
-
-```bash title="Terminal"
+# With config
 docker run \
   -v $(pwd)/kreuzberg.toml:/config/kreuzberg.toml \
   ghcr.io/kreuzberg-dev/kreuzberg:latest \
   mcp --config /config/kreuzberg.toml
 ```
 
-See [API Server Guide - MCP Section](api-server.md#mcp-server) for integration examples.
+See [API Server Guide - MCP Section](api-server.md#mcp-server) for integration details.
 
-## Architecture
+## Environment Variables
 
-### Multi-Stage Build
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KREUZBERG_MAX_UPLOAD_SIZE_MB` | `100` | Max upload size in MB |
+| `KREUZBERG_CORS_ORIGINS` | `*` | Comma-separated allowed origins |
+| `RUST_LOG` | `info` | Log level: `error`, `warn`, `info`, `debug`, `trace` |
+| `KREUZBERG_CACHE_DIR` | `/app/.kreuzberg` | Cache directory |
+| `HF_HOME` | `/app/.kreuzberg/huggingface` | HuggingFace model cache |
 
-Kreuzberg Docker images use multi-stage builds for optimal size and security:
+Host and port are set via CLI args: `serve --host 0.0.0.0 --port 8000`.
 
-1. **Builder Stage:** Compiles Rust binary with all dependencies
-2. **Runtime Stage:** Minimal Debian Trixie slim base with only runtime dependencies
-
-**Benefits:**
-
-- No build tools or intermediate artifacts in final image
-- Smaller image size (builder stage not included)
-- Reduced attack surface
-
-### Rust Core
-
-Docker images use the **native Rust core** directly, providing:
-
-- **Memory efficiency** through streaming parsers for large files
-- **Async processing** with Tokio runtime
-- **Zero-copy operations** where possible
-
-### Multi-Architecture Support
-
-Images are built for multiple architectures:
-
-- `linux/amd64` (x86_64)
-- `linux/arm64` (aarch64)
-
-Architecture-specific binaries are automatically selected during build.
-
-### Security Features
-
-**Non-Root User:**
-
-```dockerfile title="Dockerfile"
-# Images run as unprivileged 'kreuzberg' user
-USER kreuzberg
-```
-
-**Security Options:**
+## Volume Mounts
 
 ```bash title="Terminal"
-# Run with additional security constraints
-docker run --security-opt no-new-privileges \
-  --read-only \
-  --tmpfs /tmp \
-  -p 8000:8000 \
+# Cache persistence (embedding models, OCR cache)
+docker run -p 8000:8000 \
+  -v kreuzberg-cache:/app/.kreuzberg \
   ghcr.io/kreuzberg-dev/kreuzberg:latest
+
+# Config file
+docker run -p 8000:8000 \
+  -v $(pwd)/kreuzberg.toml:/config/kreuzberg.toml \
+  ghcr.io/kreuzberg-dev/kreuzberg:latest \
+  serve --config /config/kreuzberg.toml
+
+# Documents (read-only)
+docker run -v $(pwd)/documents:/data:ro \
+  ghcr.io/kreuzberg-dev/kreuzberg:latest \
+  extract /data/document.pdf
 ```
 
-## Production Deployment
+!!! note "Model Downloads"
+    Embedding models download on first use (~90 MB – 1.2 GB depending on preset). Use a persistent volume for `/app/.kreuzberg` in production to avoid re-downloading on container restart.
 
-### Docker Compose
-
-**Basic Configuration:**
+## Docker Compose
 
 ```yaml title="docker-compose.yaml"
-version: "3.8"
-
 services:
   kreuzberg-api:
     image: ghcr.io/kreuzberg-dev/kreuzberg:latest
     ports:
       - "8000:8000"
     environment:
-      - KREUZBERG_CORS_ORIGINS=https://myapp.com,https://api.myapp.com
-      - KREUZBERG_MAX_MULTIPART_FIELD_BYTES=524288000
+      - KREUZBERG_CORS_ORIGINS=https://myapp.com
+      - KREUZBERG_MAX_UPLOAD_SIZE_MB=500
       - RUST_LOG=info
     volumes:
       - ./config:/config
@@ -271,207 +162,38 @@ volumes:
   cache-data:
 ```
 
-**With Full Features (Full Image):**
+## Security
 
-```yaml title="docker-compose.yaml"
-services:
-  kreuzberg-full:
-    image: ghcr.io/kreuzberg-dev/kreuzberg:latest
-    ports:
-      - "8000:8000"
-    environment:
-      - KREUZBERG_CORS_ORIGINS=https://myapp.com
-    volumes:
-      - cache-data:/app/.kreuzberg
-    restart: unless-stopped
-```
-
-**Start Services:**
+Images run as non-root user `kreuzberg` (UID 1000). For hardened deployments:
 
 ```bash title="Terminal"
-docker-compose up -d
-```
-
-### Kubernetes Deployment
-
-For complete Kubernetes deployment guidance including OCR configuration, permissions, and troubleshooting, see the [Kubernetes Deployment Guide](kubernetes.md).
-
-**Quick Deployment Example:**
-
-```yaml title="kubernetes-deployment.yaml"
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kreuzberg-api
-  labels:
-    app: kreuzberg
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: kreuzberg
-  template:
-    metadata:
-      labels:
-        app: kreuzberg
-    spec:
-      containers:
-        - name: kreuzberg
-          image: ghcr.io/kreuzberg-dev/kreuzberg:latest
-          ports:
-            - containerPort: 8000
-              name: http
-          env:
-            - name: KREUZBERG_CORS_ORIGINS
-              value: "https://myapp.com"
-            - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
-              value: "524288000"
-            - name: RUST_LOG
-              value: "info"
-            - name: TESSDATA_PREFIX
-              value: "/usr/share/tesseract-ocr/5/tessdata"
-          args: ["serve", "--host", "0.0.0.0", "--port", "8000"]
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 10
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          resources:
-            requests:
-              memory: "512Mi"
-              cpu: "500m"
-            limits:
-              memory: "2Gi"
-              cpu: "2000m"
-          volumeMounts:
-            - name: cache
-              mountPath: /app/.kreuzberg
-      volumes:
-        - name: cache
-          emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kreuzberg-api
-spec:
-  selector:
-    app: kreuzberg
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 8000
-  type: LoadBalancer
-```
-
-**Apply Configuration:**
-
-```bash title="Terminal"
-kubectl apply -f kreuzberg-deployment.yaml
-```
-
-!!! important "Kubernetes-Specific Configuration"
-This quick example includes the critical `TESSDATA_PREFIX` environment variable needed for OCR. The path `/usr/share/tesseract-ocr/5/tessdata` is for Tesseract 5.x (shipped with Debian Trixie). If using a different base image, verify your Tesseract version with `tesseract --version` and adjust the path accordingly. For production deployments with custom configurations, permissions handling, and health checks, refer to the [comprehensive Kubernetes guide](kubernetes.md).
-
-### Environment Variables
-
-Configure Docker containers via environment variables:
-
-**Upload Limits:**
-
-```bash title="Terminal"
-KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200  # Max multipart field size in bytes (default: 104857600)
-```
-
-**CORS Configuration:**
-
-```bash title="Terminal"
-# Comma-separated list of allowed origins
-KREUZBERG_CORS_ORIGINS="https://app.example.com,https://api.example.com"
-```
-
-**Logging:**
-
-```bash title="Terminal"
-RUST_LOG=info                    # Logging level (error, warn, info, debug, trace)
-```
-
-**Cache Configuration:**
-
-```bash title="Terminal"
-KREUZBERG_CACHE_DIR=/app/.kreuzberg    # Main cache directory
-HF_HOME=/app/.kreuzberg/huggingface    # HuggingFace/ONNX model cache
-```
-
-**Cache Directory Structure:**
-
-```text
-/app/.kreuzberg/
-├── huggingface/     # Embedding models (downloaded on first use, ~90MB-1.2GB)
-├── embeddings/      # ONNX runtime cache
-└── ocr/             # OCR result cache
-```
-
-!!! note "Model Downloads"
-Embedding models are downloaded on first use when embeddings features are enabled. The download size varies by preset (~90MB for small models, ~1.2GB for large models). For production deployments, consider using a persistent volume for the cache directory.
-
-**Note:** Server host and port are configured via CLI arguments (`serve --host 0.0.0.0 --port 8000`), not environment variables.
-
-### Volume Mounts
-
-**Cache Persistence:**
-
-```bash title="Terminal"
-# Mount cache directory for persistence
-docker run -p 8000:8000 \
-  -v kreuzberg-cache:/app/.kreuzberg \
+docker run --security-opt no-new-privileges \
+  --read-only \
+  --tmpfs /tmp \
+  -p 8000:8000 \
   ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 
-**Configuration Files:**
+Ensure mounted volumes have correct permissions:
 
 ```bash title="Terminal"
-# Mount configuration file
-docker run -p 8000:8000 \
-  -v $(pwd)/kreuzberg.toml:/config/kreuzberg.toml \
-  ghcr.io/kreuzberg-dev/kreuzberg:latest \
-  serve --config /config/kreuzberg.toml
+chown -R 1000:1000 /path/to/mounted/directory
 ```
 
-**File Processing:**
+## Resource Allocation
+
+| Workload | Memory | CPU | Notes |
+|----------|--------|-----|-------|
+| Light | 512 MB | 0.5 cores | Small documents, low concurrency |
+| Medium | 1 GB | 1 core | Typical documents, moderate concurrency |
+| Heavy | 2 GB+ | 2+ cores | Large documents, OCR, high concurrency |
 
 ```bash title="Terminal"
-# Mount documents directory (read-only)
-docker run -v $(pwd)/documents:/data:ro \
-  ghcr.io/kreuzberg-dev/kreuzberg:latest \
-  extract /data/document.pdf
+docker run -p 8000:8000 --memory=1g --cpus=1 \
+  ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
-
-## Image Comparison
-
-| Feature           | Core                      | Full                      | Difference  |
-| ----------------- | ------------------------- | ------------------------- | ----------- |
-| **Base Image**    | debian:trixie-slim        | debian:trixie-slim        | -           |
-| **Size**          | ~1.0-1.3GB                | ~1.5-2.1GB                | ~500-800MB  |
-| **Tesseract OCR** | ✅ 12 languages           | ✅ 12 languages           | -           |
-| **pdfium**        | ✅                        | ✅                        | -           |
-| **Modern Office** | ✅ DOCX, PPTX, XLSX       | ✅ DOCX, PPTX, XLSX       | -           |
-| **Legacy Office** | ✅ DOC, PPT, XLS (native) | ✅ DOC, PPT, XLS (native) | -           |
-| **Pull Time**     | ~30s                      | ~45s                      | ~15s slower |
-| **Startup Time**  | ~1s                       | ~1s                       | Negligible  |
 
 ## Building Custom Images
-
-### Building from Source
-
-Clone the repository and build:
 
 === "Core Image"
 
@@ -481,136 +203,35 @@ Clone the repository and build:
 
     --8<-- "snippets/docker/build_full.md"
 
-### Custom Dockerfiles
-
-Create a custom Dockerfile based on official images:
-
-```dockerfile title="Dockerfile"
+```dockerfile title="Custom Dockerfile"
 FROM ghcr.io/kreuzberg-dev/kreuzberg:latest
 
-# Install additional system dependencies
 USER root
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        your-package-here && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y --no-install-recommends your-package-here && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Switch back to non-root user
 USER kreuzberg
-
-# Custom configuration
 COPY kreuzberg.toml /app/kreuzberg.toml
-
-# Custom entrypoint
 CMD ["serve", "--config", "/app/kreuzberg.toml"]
 ```
 
-## Performance Tuning
-
-### Resource Allocation
-
-**Recommended Resources:**
-
-| Workload | Memory | CPU       | Notes                                   |
-| -------- | ------ | --------- | --------------------------------------- |
-| Light    | 512MB  | 0.5 cores | Small documents, low concurrency        |
-| Medium   | 1GB    | 1 core    | Typical documents, moderate concurrency |
-| Heavy    | 2GB+   | 2+ cores  | Large documents, OCR, high concurrency  |
-
-**Docker Run:**
-
-```bash title="Terminal"
-docker run -p 8000:8000 \
-  --memory=1g \
-  --cpus=1 \
-  ghcr.io/kreuzberg-dev/kreuzberg:latest
-```
-
-**Docker Compose:**
-
-```yaml title="docker-compose.yaml"
-services:
-  kreuzberg:
-    image: ghcr.io/kreuzberg-dev/kreuzberg:latest
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-          cpus: "1"
-        reservations:
-          memory: 512M
-          cpus: "0.5"
-```
-
-### Scaling
-
-**Horizontal Scaling:**
-
-```bash title="Terminal"
-# Scale to 5 replicas
-docker-compose up -d --scale kreuzberg-api=5
-
-# Kubernetes
-kubectl scale deployment kreuzberg-api --replicas=5
-```
-
-**Load Balancing:**
-
-- Use reverse proxy (Nginx, Caddy, Traefik)
-- Kubernetes Service with LoadBalancer type
-- Docker Swarm mode
-
 ## Troubleshooting
 
-### Container Won't Start
+??? question "Container won't start"
 
-**Check logs:**
+    Check logs with `docker logs <container-id>`. Common causes: port conflict (change `-p` mapping), insufficient memory (increase `--memory`), volume permission errors.
 
-```bash title="Terminal"
-docker logs <container-id>
-```
+??? question "Permission errors on mounted volumes"
 
-**Common Issues:**
+    Images run as UID 1000. Fix with: `chown -R 1000:1000 /path/to/mounted/directory`
 
-- Port already in use: Change `-p` mapping
-- Insufficient permissions: Ensure volume mounts have correct permissions
-- Memory limit too low: Increase `--memory` limit
+??? question "Large file processing fails"
 
-### Permission Errors
-
-Images run as non-root user `kreuzberg` (UID 1000). Ensure mounted volumes have correct permissions:
-
-```bash title="Terminal"
-# Fix permissions on mounted directory
-chown -R 1000:1000 /path/to/mounted/directory
-```
-
-### Large File Processing
-
-**Increase memory limit:**
-
-```bash title="Terminal"
-docker run -p 8000:8000 \
-  --memory=4g \
-  ghcr.io/kreuzberg-dev/kreuzberg:latest
-```
-
-**Increase upload size:**
-
-```bash title="Terminal"
-docker run -p 8000:8000 \
-  -e KREUZBERG_MAX_MULTIPART_FIELD_BYTES=1048576000 \
-  ghcr.io/kreuzberg-dev/kreuzberg:latest
-```
-
-!!! note "Legacy Office Format Support"
-Since Kreuzberg 4.3, legacy Office formats (.doc, .ppt, .xls) are extracted natively via OLE/CFB parsing without requiring external tools. Both Core and Full images support these formats.
+    Increase memory limit (`--memory=4g`) and upload size (`-e KREUZBERG_MAX_UPLOAD_SIZE_MB=1000`).
 
 ## Next Steps
 
-- [Kubernetes Deployment](kubernetes.md) - Production Kubernetes deployments with OCR configuration and troubleshooting
-- [API Server Guide](api-server.md) - Complete API documentation
-- [CLI Usage](../cli/usage.md) - Command-line interface
-- [Configuration](configuration.md) - Configuration options
-- [Advanced Features](advanced.md) - Chunking, language detection, token reduction
+- [Kubernetes Deployment](kubernetes.md) — production K8s with OCR config and health checks
+- [API Server Guide](api-server.md) — endpoint documentation
+- [Configuration](configuration.md) — all configuration options

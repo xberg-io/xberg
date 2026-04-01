@@ -1,13 +1,6 @@
 # Kubernetes Deployment <span class="version-badge new">v4.2.2</span>
 
-Deploy Kreuzberg to Kubernetes with proper OCR configuration, permissions, and observability.
-
-## Requirements
-
-- Tesseract OCR initialization via `TESSDATA_PREFIX`
-- Non-root container (UID 1000, GID 1000)
-- Persistent volumes for Tesseract data and cache
-- Health checks and resource limits
+Deploy Kreuzberg to Kubernetes with proper OCR configuration, permissions, and health checks.
 
 ## Quick Start
 
@@ -16,7 +9,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kreuzberg-api
-  namespace: default
 spec:
   replicas: 2
   selector:
@@ -51,22 +43,17 @@ spec:
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 5
           periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 2
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kreuzberg-api
-  namespace: default
 spec:
   selector:
     app: kreuzberg
@@ -77,26 +64,15 @@ spec:
   type: LoadBalancer
 ```
 
-Apply:
-
-```bash
+```bash title="Terminal"
 kubectl apply -f minimal-deployment.yaml
 ```
 
 ## Tesseract Configuration
 
-### Critical: TESSDATA_PREFIX
+### TESSDATA_PREFIX (Critical)
 
-Without correct `TESSDATA_PREFIX`, OCR will silently fail:
-
-```text
-Warning: Image-based extraction attempted but OCR backend not available
-Falling back to non-OCR extraction
-```
-
-### Built-In Tessdata (Recommended)
-
-Official images include tessdata at `/usr/share/tesseract-ocr/5/tessdata/`:
+Without `TESSDATA_PREFIX`, OCR silently falls back to non-OCR extraction. Official images ship Tesseract 5.x with tessdata at `/usr/share/tesseract-ocr/5/tessdata/`.
 
 ```yaml
 env:
@@ -110,23 +86,17 @@ env:
   value: "/app/.kreuzberg/huggingface"
 ```
 
-!!! note "Tesseract Version Path"
-    The path varies by Tesseract version. Debian Trixie ships Tesseract 5.x, so use `/usr/share/tesseract-ocr/5/tessdata`. If using a different base image, verify your Tesseract version with `tesseract --version` and adjust the path accordingly.
-
 **Pre-installed languages:** `eng`, `spa`, `fra`, `deu`, `ita`, `por`, `chi_sim`, `chi_tra`, `jpn`, `ara`, `rus`, `hin`
 
-!!! note "Model Persistence"
-    Embedding models are downloaded on first use (~90MB-1.2GB depending on preset). For production deployments with embeddings features, use a PersistentVolumeClaim for `/app/.kreuzberg` to avoid re-downloading models on pod restart.
+!!! note "Tesseract Version"
+    The path varies by version. Verify yours with `tesseract --version` inside the container if using a custom base image.
 
-### Custom Tessdata via ConfigMap
+### Custom Languages via ConfigMap
 
-For additional languages:
-
-```bash
+```bash title="Terminal"
 kubectl create configmap tessdata \
   --from-file=/path/to/eng.traineddata \
-  --from-file=/path/to/deu.traineddata \
-  -n default
+  --from-file=/path/to/deu.traineddata
 ```
 
 ```yaml
@@ -145,131 +115,54 @@ spec:
       name: tessdata
 ```
 
-### Custom Tessdata via PVC
-
-For large custom language sets:
-
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: tessdata-pvc
-spec:
-  accessModes:
-    - ReadOnlyMany
-  resources:
-    requests:
-      storage: 1Gi
----
-apiVersion: apps/v1
-kind: Deployment
-spec:
-  template:
-    spec:
-      containers:
-      - name: kreuzberg
-        env:
-        - name: TESSDATA_PREFIX
-          value: "/var/tessdata"
-        volumeMounts:
-        - name: tessdata-pvc
-          mountPath: /var/tessdata
-      volumes:
-      - name: tessdata-pvc
-        persistentVolumeClaim:
-          claimName: tessdata-pvc
-```
+For large custom language sets, use a PVC instead of a ConfigMap.
 
 ### Verify Tesseract
 
-```bash
-# Check installation
+```bash title="Terminal"
 kubectl exec -it deployment/kreuzberg-api -- tesseract --version
-
-# Verify TESSDATA_PREFIX
-kubectl exec -it deployment/kreuzberg-api -- printenv TESSDATA_PREFIX
-
-# List available languages
 kubectl exec -it deployment/kreuzberg-api -- tesseract --list-langs
-
-# Check logs for OCR errors
-kubectl logs deployment/kreuzberg-api | grep -i "ocr\|tessdata\|tesseract"
+kubectl exec -it deployment/kreuzberg-api -- printenv TESSDATA_PREFIX
 ```
 
 ## Permissions
 
-Kreuzberg runs as non-root user (UID 1000, GID 1000).
+Kreuzberg runs as non-root (UID 1000, GID 1000). Fix PVC permissions with either approach:
 
-### Fix PVC Permissions
+=== "Init Container"
 
-**Option 1: Init container**
+    ```yaml
+    spec:
+      initContainers:
+      - name: init-permissions
+        image: busybox:latest
+        command: ['sh', '-c', 'chown -R 1000:1000 /app/.kreuzberg']
+        volumeMounts:
+        - name: cache
+          mountPath: /app/.kreuzberg
+      containers:
+      - name: kreuzberg
+        volumeMounts:
+        - name: cache
+          mountPath: /app/.kreuzberg
+    ```
 
-```yaml
-spec:
-  initContainers:
-  - name: init-permissions
-    image: busybox:latest
-    command: ['sh', '-c', 'chown -R 1000:1000 /app/.kreuzberg']
-    volumeMounts:
-    - name: cache
-      mountPath: /app/.kreuzberg
-  containers:
-  - name: kreuzberg
-    volumeMounts:
-    - name: cache
-      mountPath: /app/.kreuzberg
-```
+=== "fsGroup"
 
-**Option 2: fsGroup**
-
-```yaml
-spec:
-  securityContext:
-    fsGroup: 1000
-  containers:
-  - name: kreuzberg
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-      allowPrivilegeEscalation: false
-      readOnlyRootFilesystem: true
-      capabilities:
-        drop: ["ALL"]
-```
-
-### Restricted Security Policy
-
-For strict Pod Security Standards:
-
-```yaml
-spec:
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 1000
-    runAsGroup: 1000
-    fsGroup: 1000
-    seccompProfile:
-      type: RuntimeDefault
-  containers:
-  - name: kreuzberg
-    securityContext:
-      runAsUser: 1000
-      runAsGroup: 1000
-      allowPrivilegeEscalation: false
-      readOnlyRootFilesystem: true
-      capabilities:
-        drop: ["ALL"]
-    volumeMounts:
-    - name: cache
-      mountPath: /app/.kreuzberg
-    - name: tmp
-      mountPath: /tmp
-  volumes:
-  - name: cache
-    emptyDir: {}
-  - name: tmp
-    emptyDir: {}
-```
+    ```yaml
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+      - name: kreuzberg
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+    ```
 
 ## Health Checks
 
@@ -284,7 +177,6 @@ containers:
     periodSeconds: 30
     timeoutSeconds: 5
     failureThreshold: 3
-
   readinessProbe:
     httpGet:
       path: /health
@@ -293,13 +185,12 @@ containers:
     periodSeconds: 10
     timeoutSeconds: 3
     failureThreshold: 2
-
   startupProbe:
     httpGet:
       path: /health
       port: 8000
     periodSeconds: 10
-    failureThreshold: 30  # Allow 300s to start
+    failureThreshold: 30
 ```
 
 ## Logging
@@ -310,153 +201,17 @@ env:
   value: "kreuzberg=debug,warn"
 ```
 
-**Log levels:** `trace`, `debug`, `info`, `warn`, `error`
+Levels: `trace`, `debug`, `info`, `warn`, `error`
 
-```bash
-# View logs
+```bash title="Terminal"
 kubectl logs deployment/kreuzberg-api --tail=50
-
-# Follow logs
 kubectl logs deployment/kreuzberg-api -f
-
-# Previous logs (if crashed)
 kubectl logs deployment/kreuzberg-api --previous
 ```
 
-## Common Errors
-
-### Plugin Initialization Failed
-
-**Symptom:**
-
-```text
-[ERROR] Plugin load failed: OcrBackend not initialized
-```
-
-**Fix:**
-
-1. Verify TESSDATA_PREFIX:
-
-```bash
-kubectl exec -it pod/kreuzberg-api-xxx -- printenv TESSDATA_PREFIX
-```
-
-2. Check tessdata files exist:
-
-```bash
-kubectl exec -it pod/kreuzberg-api-xxx -- ls -la /usr/share/tesseract-ocr/4.00/tessdata/
-```
-
-3. Ensure environment variable is set in manifest:
-
-```yaml
-env:
-- name: TESSDATA_PREFIX
-  value: "/usr/share/tesseract-ocr/4.00/tessdata"
-```
-
-### MissingDependencyError
-
-**Symptom:**
-
-```text
-[ERROR] MissingDependencyError: tesseract not found in PATH
-```
-
-**Fix:**
-
-Verify you're using the official image:
-
-```bash
-kubectl get deployment kreuzberg-api -o jsonpath='{.spec.template.spec.containers[0].image}'
-```
-
-Should be: `ghcr.io/kreuzberg-dev/kreuzberg:latest`
-
-### Language Not Found
-
-**Symptom:**
-
-```text
-[ERROR] Tesseract language not found: deu
-```
-
-**Fix:**
-
-Check available languages:
-
-```bash
-kubectl exec -it pod/kreuzberg-api-xxx -- tesseract --list-langs
-```
-
-Use pre-installed languages or mount custom tessdata via PVC.
-
-### Permission Denied
-
-**Symptom:**
-
-```text
-[ERROR] Failed to create cache directory: Permission denied
-```
-
-**Fix:**
-
-Use init container or fsGroup (see Permissions section).
-
-Verify permissions:
-
-```bash
-kubectl exec -it pod/kreuzberg-api-xxx -- ls -la /app/.kreuzberg
-# Should show files owned by 1000:1000
-```
-
-### Out of Memory
-
-**Symptom:**
-
-```text
-OOMKilled
-```
-
-**Fix:**
-
-Increase memory limits:
-
-```yaml
-resources:
-  limits:
-    memory: "4Gi"
-```
-
-Reduce OCR resource usage:
-
-```yaml
-env:
-- name: KREUZBERG_PDF_DPI
-  value: "150"
-- name: KREUZBERG_OCR_LANGUAGE
-  value: "eng"  # Single language
-```
-
-### Startup Probe Timeout
-
-**Symptom:**
-
-```text
-Startup probe failed 30 times, giving up
-```
-
-**Fix:**
-
-Increase timeout:
-
-```yaml
-startupProbe:
-  failureThreshold: 60  # 600s = 10 minutes
-  periodSeconds: 10
-```
-
 ## Production Deployment
+
+Full production manifest with namespace, PVC, security context, init container, PDB, and all probes:
 
 ```yaml title="production-deployment.yaml"
 apiVersion: v1
@@ -470,8 +225,7 @@ metadata:
   name: kreuzberg-cache
   namespace: kreuzberg
 spec:
-  accessModes:
-    - ReadWriteOnce
+  accessModes: [ReadWriteOnce]
   resources:
     requests:
       storage: 2Gi
@@ -498,7 +252,6 @@ spec:
         fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
-
       initContainers:
       - name: init-cache
         image: busybox:latest
@@ -506,7 +259,6 @@ spec:
         volumeMounts:
         - name: cache
           mountPath: /app/.kreuzberg
-
       containers:
       - name: kreuzberg
         image: ghcr.io/kreuzberg-dev/kreuzberg:latest
@@ -524,8 +276,8 @@ spec:
           value: "/app/.kreuzberg/huggingface"
         - name: KREUZBERG_CORS_ORIGINS
           value: "https://app.example.com"
-        - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
-          value: "524288000"
+        - name: KREUZBERG_MAX_UPLOAD_SIZE_MB
+          value: "500"
         args: ["serve", "--host", "0.0.0.0", "--port", "8000"]
         resources:
           requests:
@@ -540,16 +292,12 @@ spec:
             port: 8000
           initialDelaySeconds: 15
           periodSeconds: 30
-          timeoutSeconds: 5
-          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
-          timeoutSeconds: 3
-          failureThreshold: 2
         startupProbe:
           httpGet:
             path: /health
@@ -566,7 +314,6 @@ spec:
           mountPath: /app/.kreuzberg
         - name: tmp
           mountPath: /tmp
-
       volumes:
       - name: cache
         persistentVolumeClaim:
@@ -587,7 +334,6 @@ spec:
   - protocol: TCP
     port: 80
     targetPort: 8000
-    name: http
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -601,37 +347,18 @@ spec:
       app: kreuzberg
 ```
 
-Apply:
-
-```bash
+```bash title="Terminal"
 kubectl apply -f production-deployment.yaml
-kubectl get deployment -n kreuzberg
-kubectl get pods -n kreuzberg
-kubectl get svc -n kreuzberg
 ```
+
+!!! note "Model Persistence"
+    Embedding models download on first use (~90 MB – 1.2 GB). Use a PVC for `/app/.kreuzberg` to avoid re-downloading on pod restart.
 
 ## High Availability
 
-```yaml title="ha-deployment.yaml"
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kreuzberg-config
-  namespace: kreuzberg
-data:
-  kreuzberg.toml: |
-    [ocr]
-    backend = "tesseract"
-    language = "eng+deu"
+For HA deployments, add pod anti-affinity, rolling update strategy, and a ConfigMap for extraction settings:
 
-    [pdf]
-    dpi = 300
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kreuzberg-api
-  namespace: kreuzberg
+```yaml title="ha-additions.yaml"
 spec:
   replicas: 5
   strategy:
@@ -639,13 +366,7 @@ spec:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: kreuzberg
   template:
-    metadata:
-      labels:
-        app: kreuzberg
     spec:
       affinity:
         podAntiAffinity:
@@ -656,151 +377,50 @@ spec:
                 matchExpressions:
                 - key: app
                   operator: In
-                  values:
-                  - kreuzberg
+                  values: [kreuzberg]
               topologyKey: kubernetes.io/hostname
-
-      securityContext:
-        fsGroup: 1000
-
-      containers:
-      - name: kreuzberg
-        image: ghcr.io/kreuzberg-dev/kreuzberg:latest
-        ports:
-        - containerPort: 8000
-          name: http
-        env:
-        - name: RUST_LOG
-          value: "info"
-        - name: TESSDATA_PREFIX
-          value: "/usr/share/tesseract-ocr/5/tessdata"
-        - name: KREUZBERG_CACHE_DIR
-          value: "/app/.kreuzberg"
-        - name: HF_HOME
-          value: "/app/.kreuzberg/huggingface"
-        - name: KREUZBERG_CORS_ORIGINS
-          value: "https://app.example.com,https://api.example.com"
-        - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
-          value: "1048576000"
-        args: ["serve", "--host", "0.0.0.0", "--port", "8000", "--config", "/etc/kreuzberg/kreuzberg.toml"]
-        resources:
-          requests:
-            memory: "2Gi"
-            cpu: "2000m"
-          limits:
-            memory: "4Gi"
-            cpu: "4000m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 30
-          timeoutSeconds: 10
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 15
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 2
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          periodSeconds: 10
-          failureThreshold: 60
-        volumeMounts:
-        - name: config
-          mountPath: /etc/kreuzberg
-        - name: cache
-          mountPath: /app/.kreuzberg
-
-      volumes:
-      - name: config
-        configMap:
-          name: kreuzberg-config
-      - name: cache
-        emptyDir:
-          sizeLimit: 5Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kreuzberg-api
-  namespace: kreuzberg
-spec:
-  type: ClusterIP
-  clusterIP: None
-  selector:
-    app: kreuzberg
-  ports:
-  - protocol: TCP
-    port: 8000
-    targetPort: 8000
 ```
 
-## Troubleshooting Checklist
+## Troubleshooting
 
-Before reporting issues:
+??? question "OCR silently failing"
 
-1. **Verify TESSDATA_PREFIX:**
+    Verify `TESSDATA_PREFIX` is set and tessdata files exist:
 
-```bash
-kubectl exec -it pod/kreuzberg-api-xxx -- printenv TESSDATA_PREFIX
+    ```bash title="Terminal"
+    kubectl exec -it deployment/kreuzberg-api -- printenv TESSDATA_PREFIX
+    kubectl exec -it deployment/kreuzberg-api -- ls /usr/share/tesseract-ocr/5/tessdata/
+    ```
+
+??? question "Permission denied on cache directory"
+
+    Use an init container or `fsGroup` (see [Permissions](#permissions)).
+
+??? question "OOMKilled"
+
+    Increase memory limits. Reduce OCR resource usage with `KREUZBERG_PDF_DPI=150` and single-language OCR.
+
+??? question "Startup probe timeout"
+
+    Increase `failureThreshold` on the startup probe (e.g., `60` for 10-minute timeout).
+
+??? question "Language not found"
+
+    Check installed languages with `kubectl exec -it deployment/kreuzberg-api -- tesseract --list-langs`. Mount custom tessdata via ConfigMap or PVC.
+
+### Diagnostic Commands
+
+```bash title="Terminal"
+kubectl logs deployment/kreuzberg-api --tail=200
+kubectl describe deployment kreuzberg-api
+kubectl get events -n kreuzberg
+kubectl exec -it deployment/kreuzberg-api -- env | sort
+kubectl port-forward service/kreuzberg-api 8000:8000 && curl http://localhost:8000/health
 ```
 
-2. **Check Tesseract availability:**
+## Next Steps
 
-```bash
-kubectl exec -it pod/kreuzberg-api-xxx -- tesseract --list-langs
-```
-
-3. **Review logs:**
-
-```bash
-kubectl logs deployment/kreuzberg-api | grep -i "plugin\|ocr\|tessdata"
-```
-
-4. **Verify pod resources:**
-
-```bash
-kubectl describe pod deployment/kreuzberg-api
-```
-
-5. **Check volume permissions:**
-
-```bash
-kubectl exec -it pod/kreuzberg-api-xxx -- ls -la /app/.kreuzberg
-```
-
-6. **Test health endpoint:**
-
-```bash
-kubectl port-forward service/kreuzberg-api 8000:8000
-curl http://localhost:8000/health
-```
-
-### Collect Diagnostic Information
-
-```bash
-# Logs
-kubectl logs deployment/kreuzberg-api --tail=200 > logs.txt
-kubectl describe deployment kreuzberg-api >> logs.txt
-kubectl get events -n kreuzberg >> logs.txt
-
-# Deployment manifest (redact secrets)
-kubectl get deployment kreuzberg-api -o yaml > deployment.yaml
-
-# Environment variables
-kubectl exec -it pod/kreuzberg-api-xxx -- env | sort > env.txt
-```
-
-## Related Documentation
-
-- [Docker Deployment](docker.md) - Container configuration
-- [OCR Guide](ocr.md) - OCR backend details
-- [Configuration](configuration.md) - All configuration options
-- [Advanced Features](advanced.md) - Chunking, language detection
+- [Docker Deployment](docker.md) — container configuration and image variants
+- [API Server Guide](api-server.md) — endpoint documentation
+- [OCR Guide](ocr.md) — backend installation and language setup
+- [Configuration](configuration.md) — all configuration options

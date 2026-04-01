@@ -1,54 +1,18 @@
 # API Server <span class="version-badge">v4.0.0</span>
 
-Kreuzberg provides two server modes for programmatic access: an HTTP REST API server for general integration and a Model Context Protocol (MCP) server for AI agent integration.
-
-## Server Types
-
-### HTTP REST API Server
-
-A production-ready HTTP API server providing RESTful endpoints for document extraction, health checks, and cache management.
-
-**Best for:**
-
-- Web applications
-- Microservices integration
-- General HTTP clients
-- Load-balanced deployments
-
-### MCP Server
-
-A Model Context Protocol server that exposes Kreuzberg as tools for AI agents and assistants.
-
-**Best for:**
-
-- AI agent integration (Claude, GPT, etc.)
-- Agentic workflows
-- Tool use by language models
-- Stdio-based communication
+Kreuzberg runs as an HTTP REST API server (`kreuzberg serve`) or as an MCP server (`kreuzberg mcp`) for AI agent integration.
 
 ## HTTP REST API
 
-### Starting the Server
+### Start
 
 === "CLI"
 
     --8<-- "snippets/api_server/cli.md"
 
-=== "C#"
-
-    --8<-- "snippets/api_server/csharp.md"
-
 === "Docker"
 
     --8<-- "snippets/api_server/docker.md"
-
-=== "Go"
-
-    --8<-- "snippets/api_server/go.md"
-
-=== "Java"
-
-    --8<-- "snippets/api_server/java.md"
 
 === "Python"
 
@@ -58,73 +22,49 @@ A Model Context Protocol server that exposes Kreuzberg as tools for AI agents an
 
     --8<-- "snippets/api_server/rust.md"
 
-### API Endpoints
+=== "Go"
+
+    --8<-- "snippets/api_server/go.md"
+
+=== "Java"
+
+    --8<-- "snippets/api_server/java.md"
+
+=== "C#"
+
+    --8<-- "snippets/api_server/csharp.md"
+
+### Endpoints
 
 #### POST /extract
 
 Extract text from uploaded files via multipart form data.
 
-**Request Format:**
-
-- **Method:** POST
-- **Content-Type:** `multipart/form-data`
-- **Fields:**
-  - `files` (required, repeatable): Files to extract
-  - `config` (optional): JSON configuration overrides
-  - `output_format` (optional): Output format for extracted text - `plain`, `markdown`, `djot`, or `html` (default: `plain`)
-  - `format` (optional): Wire format for the response - `json` (default) or `toon`
-
-**Content Negotiation:**
-
-The response wire format can also be requested via the `Accept` header:
-
-- `Accept: application/json` (default)
-- `Accept: application/toon` (TOON wire format, ~30-50% fewer tokens than JSON)
-
-**Response:** JSON array of extraction results
-
-**Example:**
+| Field | Required | Description |
+|-------|----------|-------------|
+| `files` | Yes (repeatable) | Files to extract |
+| `config` | No | JSON config overrides |
+| `output_format` | No | `plain` (default), `markdown`, `djot`, or `html` |
 
 ```bash title="Terminal"
-# Extract a single file via HTTP POST
+# Single file
 curl -F "files=@document.pdf" http://localhost:8000/extract
 
-# Extract multiple files in a single request
-curl -F "files=@doc1.pdf" -F "files=@doc2.docx" \
-  http://localhost:8000/extract
+# Multiple files
+curl -F "files=@doc1.pdf" -F "files=@doc2.docx" http://localhost:8000/extract
 
-# Extract with custom OCR configuration override
+# With config overrides
 curl -F "files=@scanned.pdf" \
      -F 'config={"ocr":{"language":"eng"},"force_ocr":true}' \
-  http://localhost:8000/extract
-
-# Extract with markdown output format
-curl -F "files=@document.pdf" \
-     -F "output_format=markdown" \
-  http://localhost:8000/extract
-
-# Extract with TOON wire format via multipart field
-curl -F "files=@document.pdf" \
-     -F "format=toon" \
-  http://localhost:8000/extract
-
-# Extract with TOON wire format via Accept header
-curl -F "files=@document.pdf" \
-     -H "Accept: application/toon" \
-  http://localhost:8000/extract
+     http://localhost:8000/extract
 ```
-
-**Response Schema:**
 
 ```json title="Response"
 [
   {
-    "content": "Extracted text content...",
+    "content": "Extracted text...",
     "mime_type": "application/pdf",
-    "metadata": {
-      "page_count": 10,
-      "author": "John Doe"
-    },
+    "metadata": { "page_count": 10, "author": "John Doe" },
     "tables": [],
     "detected_languages": ["eng"],
     "chunks": null,
@@ -135,212 +75,54 @@ curl -F "files=@document.pdf" \
 
 #### POST /embed
 
-Generate embeddings for text strings without document extraction.
+Generate vector embeddings. Requires the `embeddings` feature.
 
-**Request Format:**
-
-- **Method:** POST
-- **Content-Type:** `application/json`
-- **Body:**
-  - `texts` (required): Array of strings to generate embeddings for
-  - `config` (optional): Embedding configuration overrides
-
-**Response:** JSON object containing embeddings, model info, dimensions, and count
-
-**Example:**
+| Field | Required | Description |
+|-------|----------|-------------|
+| `texts` | Yes | Array of strings |
+| `config` | No | Embedding config overrides |
 
 ```bash title="Terminal"
-# Generate embeddings for two text strings
 curl -X POST http://localhost:8000/embed \
   -H "Content-Type: application/json" \
   -d '{"texts":["Hello world","Second text"]}'
-
-# Generate embeddings with custom model configuration
-curl -X POST http://localhost:8000/embed \
-  -H "Content-Type: application/json" \
-  -d '{
-    "texts":["Test text"],
-    "config":{
-      "model":{"type":"preset","name":"fast"},
-      "batch_size":32
-    }
-  }'
 ```
 
-**Response Schema:**
-
-```json title="Response"
-{
-  "embeddings": [
-    [0.123, -0.456, 0.789, ...],  // 384 or 768 or 1024 dimensions
-    [-0.234, 0.567, -0.891, ...]
-  ],
-  "model": "balanced",
-  "dimensions": 768,
-  "count": 2
-}
-```
-
-**Available Embedding Presets:**
-
-| Preset         | Model              | Dimensions | Use Case                                  |
-| -------------- | ------------------ | ---------- | ----------------------------------------- |
-| `fast`         | AllMiniLML6V2Q     | 384        | Quick prototyping, development            |
-| `balanced`     | BGEBaseENV15       | 768        | General-purpose RAG, production (default) |
-| `quality`      | BGELargeENV15      | 1024       | Complex documents, maximum accuracy       |
-| `multilingual` | MultilingualE5Base | 768        | International documents, 100+ languages   |
-
-**Use Cases:**
-
-- Generate embeddings for semantic search
-- Create vector representations for RAG (Retrieval-Augmented Generation) pipelines
-- Embed text chunks without extracting from documents
-- Batch embed multiple texts efficiently
-
-**Note:** This endpoint requires the `embeddings` feature to be enabled (available in Docker images and most pre-built binaries). ONNX Runtime must be installed on the system.
+| Preset | Dimensions | Model |
+|--------|-----------|-------|
+| `fast` | 384 | AllMiniLML6V2Q |
+| `balanced` (default) | 768 | BGEBaseENV15 |
+| `quality` | 1024 | BGELargeENV15 |
+| `multilingual` | 768 | MultilingualE5Base |
 
 #### POST /chunk
 
-Chunk text into smaller pieces with configurable overlap for RAG (Retrieval-Augmented Generation) pipelines.
+Chunk text for RAG pipelines.
 
-**Request Format:**
-
-- **Method:** POST
-- **Content-Type:** `application/json`
-- **Body:**
-  - `text` (required): The text string to chunk
-  - `chunker_type` (optional): Type of chunker to use - `"text"` (default) or `"markdown"`
-  - `config` (optional): Chunking configuration object
-
-**Configuration Options:**
-
-| Field            | Type    | Default | Description                                     |
-| ---------------- | ------- | ------- | ----------------------------------------------- |
-| `max_characters` | integer | 2000    | Maximum characters per chunk                    |
-| `overlap`        | integer | 100     | Number of overlapping characters between chunks |
-| `trim`           | boolean | true    | Whether to trim whitespace from chunks          |
-
-**Example:**
+| Field | Required | Description |
+|-------|----------|-------------|
+| `text` | Yes | Text to chunk |
+| `chunker_type` | No | `"text"` (default) or `"markdown"` |
+| `config.max_characters` | No | Max chars per chunk (default: 2000) |
+| `config.overlap` | No | Overlap between chunks (default: 100) |
 
 ```bash title="Terminal"
-# Basic text chunking with defaults
 curl -X POST http://localhost:8000/chunk \
   -H "Content-Type: application/json" \
-  -d '{"text":"Your long text content here..."}'
-
-# Chunk with custom configuration
-curl -X POST http://localhost:8000/chunk \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text":"Your long text content here...",
-    "chunker_type":"text",
-    "config":{
-      "max_characters":1000,
-      "overlap":50,
-      "trim":true
-    }
-  }'
-
-# Markdown-aware chunking (preserves structure)
-curl -X POST http://localhost:8000/chunk \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text":"# Heading\n\nParagraph content...\n\n## Subheading\n\nMore content...",
-    "chunker_type":"markdown"
-  }'
+  -d '{"text":"Long text...","chunker_type":"text","config":{"max_characters":1000,"overlap":50}}'
 ```
 
-**Response Schema:**
+=== "Python"
 
-```json title="Response"
-{
-  "chunks": [
-    {
-      "content": "First chunk of text...",
-      "byte_start": 0,
-      "byte_end": 1000,
-      "chunk_index": 0,
-      "total_chunks": 3,
-      "first_page": null,
-      "last_page": null
-    },
-    {
-      "content": "Second chunk with overlap...",
-      "byte_start": 900,
-      "byte_end": 1900,
-      "chunk_index": 1,
-      "total_chunks": 3,
-      "first_page": null,
-      "last_page": null
-    }
-  ],
-  "chunk_count": 3,
-  "config": {
-    "max_characters": 1000,
-    "overlap": 100,
-    "trim": true,
-    "chunker_type": "text"
-  },
-  "input_size_bytes": 2500,
-  "chunker_type": "text"
-}
-```
+    --8<-- "snippets/python/api/client_chunk_text.md"
 
-**Response Fields:**
+=== "TypeScript"
 
-| Field                   | Type         | Description                           |
-| ----------------------- | ------------ | ------------------------------------- |
-| `chunks`                | array        | Array of chunk objects                |
-| `chunks[].content`      | string       | The text content of this chunk        |
-| `chunks[].byte_start`   | integer      | Starting byte offset in original text |
-| `chunks[].byte_end`     | integer      | Ending byte offset in original text   |
-| `chunks[].chunk_index`  | integer      | Zero-based index of this chunk        |
-| `chunks[].total_chunks` | integer      | Total number of chunks produced       |
-| `chunks[].first_page`   | integer/null | First page number (for PDF sources)   |
-| `chunks[].last_page`    | integer/null | Last page number (for PDF sources)    |
-| `chunk_count`           | integer      | Total number of chunks                |
-| `config`                | object       | Configuration used for chunking       |
-| `input_size_bytes`      | integer      | Size of input text in bytes           |
-| `chunker_type`          | string       | Type of chunker used                  |
+    --8<-- "snippets/typescript/api/client_chunk_text.md"
 
-**Use Cases:**
+=== "Rust"
 
-- Prepare text for vector database insertion
-- Split documents for embedding generation
-- Create overlapping chunks for semantic search
-- Preprocess content for RAG pipelines
-- Batch process text without full document extraction
-
-**Error Responses:**
-
-| Status | Error Type        | Description                        |
-| ------ | ----------------- | ---------------------------------- |
-| 400    | `ValidationError` | Empty text or invalid chunker_type |
-| 500    | Internal errors   | Server processing errors           |
-
-**Client Examples:**
-
-=== "C#"
-
-    --8<-- "snippets/csharp/client_chunk_text.md"
-
-=== "cURL"
-
-    ```bash title="Terminal"
-    # Basic chunking
-    curl -X POST http://localhost:8000/chunk \
-      -H "Content-Type: application/json" \
-      -d '{"text":"Your long text content here..."}' | jq .
-
-    # Chunking with custom configuration
-    curl -X POST http://localhost:8000/chunk \
-      -H "Content-Type: application/json" \
-      -d '{
-        "text":"Your long text content here...",
-        "chunker_type":"text",
-        "config":{"max_characters":1000,"overlap":50,"trim":true}
-      }' | jq .
-    ```
+    --8<-- "snippets/rust/api/client_chunk_text.md"
 
 === "Go"
 
@@ -350,362 +132,41 @@ curl -X POST http://localhost:8000/chunk \
 
     --8<-- "snippets/java/api/client_chunk_text.md"
 
-=== "Python"
+=== "C#"
 
-    --8<-- "snippets/python/api/client_chunk_text.md"
+    --8<-- "snippets/csharp/client_chunk_text.md"
 
 === "Ruby"
 
     --8<-- "snippets/ruby/api/client_chunk_text.md"
 
-=== "Rust"
-
-    --8<-- "snippets/rust/api/client_chunk_text.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/api/client_chunk_text.md"
-
-#### GET /version <span class="version-badge">v4.5.2</span>
-
-Get the current Kreuzberg version.
-
-**Example:**
-
-```bash title="Terminal"
-# Get the Kreuzberg library version
-curl http://localhost:8000/version
-```
-
-**Response:**
-
-```json title="Response"
-{
-  "version": "4.7.0"
-}
-```
-
-#### POST /detect <span class="version-badge">v4.5.2</span>
-
-Detect the MIME type of an uploaded file via multipart form data.
-
-**Request Format:**
-
-- **Method:** POST
-- **Content-Type:** `multipart/form-data`
-- **Fields:**
-  - `file` (required): File to detect (also accepts `files` as the field name)
-
-**Response:** JSON object with detected MIME type and filename
-
-**Example:**
-
-```bash title="Terminal"
-# Detect MIME type of a file
-curl -F "file=@document.pdf" http://localhost:8000/detect
-
-# Also works with the 'files' field name
-curl -F "files=@mystery-file.bin" http://localhost:8000/detect
-```
-
-**Response Schema:**
-
-```json title="Response"
-{
-  "mime_type": "application/pdf",
-  "filename": "document.pdf"
-}
-```
-
-**Error Responses:**
-
-| Status | Error Type        | Description             |
-| ------ | ----------------- | ----------------------- |
-| 400    | `ValidationError` | No file provided       |
-| 500    | Internal errors   | MIME detection failed   |
-
-#### GET /cache/manifest <span class="version-badge">v4.5.2</span>
-
-Get the model manifest listing all expected model files with checksums and sizes.
-
-**Example:**
-
-```bash title="Terminal"
-# Get model manifest with checksums and download URLs
-curl http://localhost:8000/cache/manifest
-```
-
-**Response Schema:**
-
-```json title="Response"
-{
-  "kreuzberg_version": "4.5.1",
-  "total_size_bytes": 123456789,
-  "model_count": 8,
-  "models": [
-    {
-      "relative_path": "paddle-ocr/det/model.onnx",
-      "sha256": "abc123...",
-      "size_bytes": 4567890,
-      "source_url": "https://huggingface.co/..."
-    }
-  ]
-}
-```
-
-**Response Fields:**
-
-| Field                       | Type    | Description                              |
-| --------------------------- | ------- | ---------------------------------------- |
-| `kreuzberg_version`         | string  | Kreuzberg version                        |
-| `total_size_bytes`          | integer | Total size of all models in bytes        |
-| `model_count`               | integer | Number of models in the manifest         |
-| `models`                    | array   | Array of model entry objects             |
-| `models[].relative_path`    | string  | Relative path within the cache directory |
-| `models[].sha256`           | string  | SHA256 checksum of the model file        |
-| `models[].size_bytes`       | integer | Expected file size in bytes              |
-| `models[].source_url`       | string  | HuggingFace source URL for downloading   |
-
-#### POST /cache/warm <span class="version-badge">v4.5.2</span>
-
-Eagerly download and cache model files for offline use. Optionally downloads embedding models.
-
-**Request Format:**
-
-- **Method:** POST
-- **Content-Type:** `application/json`
-- **Body:**
-  - `all_embeddings` (optional, boolean): Download all embedding model presets (default: false)
-  - `embedding_model` (optional, string): Specific embedding preset name to download (e.g., `"balanced"`, `"fast"`, `"quality"`)
-
-**Example:**
-
-```bash title="Terminal"
-# Download core models (OCR, layout detection)
-curl -X POST http://localhost:8000/cache/warm \
-  -H "Content-Type: application/json" \
-  -d '{}'
-
-# Download all embedding models
-curl -X POST http://localhost:8000/cache/warm \
-  -H "Content-Type: application/json" \
-  -d '{"all_embeddings": true}'
-
-# Download a specific embedding model
-curl -X POST http://localhost:8000/cache/warm \
-  -H "Content-Type: application/json" \
-  -d '{"embedding_model": "balanced"}'
-```
-
-**Response Schema:**
-
-```json title="Response"
-{
-  "cache_dir": "/path/to/.kreuzberg",
-  "downloaded": ["paddle-ocr v2 (server+mobile det, cls, doc_ori, unified+per-script rec)"],
-  "already_cached": ["layout (rtdetr, tatr)"]
-}
-```
-
-**Error Responses:**
-
-| Status | Error Type        | Description                         |
-| ------ | ----------------- | ----------------------------------- |
-| 400    | `ValidationError` | Unknown embedding preset name       |
-| 500    | Internal errors   | Model download failed               |
-
-**Note:** Embedding model warming requires the `embeddings` feature to be enabled.
-
-#### GET /health
-
-Health check endpoint for monitoring and load balancers.
-
-**Example:**
-
-```bash title="Terminal"
-# Check server health status
-curl http://localhost:8000/health
-```
-
-**Response:**
-
-```json title="Response"
-{
-  "status": "healthy",
-  "version": "4.7.0"
-}
-```
-
-**Extended Response (with plugins):**
-
-The response may optionally include a `plugins` object containing information about loaded plugins and backends:
-
-```json title="Response with Plugins"
-{
-  "status": "healthy",
-  "version": "4.7.0",
-  "plugins": {
-    "ocr_backends_count": 2,
-    "ocr_backends": ["tesseract"],
-    "extractors_count": 15,
-    "post_processors_count": 3
-  }
-}
-```
-
-**Plugin Object Fields:**
-
-- `ocr_backends_count`: Number of available OCR backends
-- `ocr_backends`: List of loaded OCR backend names
-- `extractors_count`: Number of available document extractors
-- `post_processors_count`: Number of active post-processors
-
-#### GET /info
-
-Server information and capabilities.
-
-**Example:**
-
-```bash title="Terminal"
-# Get server version and capabilities
-curl http://localhost:8000/info
-```
-
-**Response:**
-
-```json title="Response"
-{
-  "version": "4.7.0",
-  "rust_backend": true
-}
-```
-
-#### GET /openapi.json
-
-Returns the OpenAPI 3.0 schema for the API server.
-
-**Example:**
-
-```bash title="Terminal"
-curl http://localhost:8000/openapi.json
-```
-
-The response is a complete OpenAPI 3.0 specification document describing all available endpoints, request/response formats, and schemas.
-
-#### GET /cache/stats
-
-Get cache statistics.
-
-**Example:**
-
-```bash title="Terminal"
-# Retrieve cache statistics and storage usage
-curl http://localhost:8000/cache/stats
-```
-
-**Response:**
-
-```json title="Response"
-{
-  "directory": ".kreuzberg",
-  "total_files": 42,
-  "total_size_mb": 156.8,
-  "available_space_mb": 45123.5,
-  "oldest_file_age_days": 7.2,
-  "newest_file_age_days": 0.1
-}
-```
-
-#### DELETE /cache/clear
-
-Clear all cached files.
-
-**Example:**
-
-```bash title="Terminal"
-# Clear all cached extraction results
-curl -X DELETE http://localhost:8000/cache/clear
-```
-
-**Response:**
-
-```json title="Response"
-{
-  "directory": ".kreuzberg",
-  "removed_files": 42,
-  "freed_mb": 156.8
-}
-```
-
-### Configuration
-
-#### Configuration File Discovery
-
-The server uses the same configuration discovery as the CLI: it searches the current directory and parent directories for **`kreuzberg.toml`** only. If no file is found, default configuration is used. To use YAML or JSON, pass an explicit path with `--config path/to/config.yaml` (or `.json`).
-
-**Example kreuzberg.toml:**
-
-```toml title="Configure OCR backend and language settings"
-[ocr]
-backend = "tesseract"
-language = "eng"
-
-# Enable quality processing and caching
-enable_quality_processing = true
-use_cache = true
-
-# Configure token reduction for LLM optimization
-[token_reduction]
-enabled = true
-target_reduction = 0.3
-```
-
-See [Configuration Guide](configuration.md) for all options.
-
-#### Environment Variables
-
-**Upload Limits:**
-
-```bash title="Terminal"
-# Set maximum multipart field size in bytes
-KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200  # Max multipart field size in bytes (default: 104857600)
-```
-
-For detailed configuration options, memory considerations, and performance tuning for large files, see the [File Size Limits Reference](../reference/file-size-limits.md).
-
-**CORS Configuration:**
-
-```bash title="Terminal"
-# Configure allowed origins for cross-origin requests (production security)
-KREUZBERG_CORS_ORIGINS="https://app.example.com,https://api.example.com"
-```
-
-**Security Warning:** The default CORS configuration allows all origins for development convenience. This permits CSRF attacks. Always set `KREUZBERG_CORS_ORIGINS` in production.
-
-**Note:** Server host and port are configured via CLI flags (`-H` / `--host` and `-p` / `--port`), not environment variables.
+#### Other Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | `{"status":"healthy","version":"4.6.3"}` |
+| `/version` | GET | `{"version":"4.6.3"}` <span class="version-badge">v4.5.2</span> |
+| `/detect` | POST | MIME type detection (multipart) <span class="version-badge">v4.5.2</span> |
+| `/cache/stats` | GET | Cache statistics |
+| `/cache/warm` | POST | Pre-download models <span class="version-badge">v4.5.2</span> |
+| `/cache/manifest` | GET | Model manifest with checksums <span class="version-badge">v4.5.2</span> |
+| `/cache/clear` | DELETE | Clear all cached files |
+| `/info` | GET | `{"version":"...","rust_backend":true}` |
+| `/openapi.json` | GET | OpenAPI 3.0 schema |
 
 ### Client Examples
 
-=== "C#"
+=== "Python"
 
-    --8<-- "snippets/csharp/client_extract_single_file.md"
+    --8<-- "snippets/python/api/client_extract_single_file.md"
 
-=== "cURL"
+=== "TypeScript"
 
-    ```bash title="Terminal"
-    # Extract content from a single document
-    curl -F "files=@document.pdf" http://localhost:8000/extract | jq .
+    --8<-- "snippets/typescript/getting-started/client_extract_single_file.md"
 
-    # Extract with OCR enabled for scanned documents
-    curl -F "files=@scanned.pdf" \
-         -F 'config={"ocr":{"language":"eng"}}' \
-         http://localhost:8000/extract | jq .
+=== "Rust"
 
-    # Batch extract multiple files in parallel
-    curl -F "files=@doc1.pdf" \
-         -F "files=@doc2.docx" \
-         http://localhost:8000/extract | jq .
-    ```
+    --8<-- "snippets/rust/api/client_extract_single_file.md"
 
 === "Go"
 
@@ -715,48 +176,41 @@ KREUZBERG_CORS_ORIGINS="https://app.example.com,https://api.example.com"
 
     --8<-- "snippets/java/api/client_extract_single_file.md"
 
-=== "Python"
+=== "C#"
 
-    --8<-- "snippets/python/api/client_extract_single_file.md"
+    --8<-- "snippets/csharp/client_extract_single_file.md"
 
 === "Ruby"
 
     --8<-- "snippets/ruby/api/client_extract_single_file.md"
 
-=== "Rust"
-
-    --8<-- "snippets/rust/api/client_extract_single_file.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/getting-started/client_extract_single_file.md"
-
 ### Error Handling
 
-**Error Response Format:**
-
-```json title="Error Response"
+```json title="Error response"
 {
   "error_type": "ValidationError",
   "message": "Invalid file format",
-  "traceback": "...",
   "status_code": 400
 }
 ```
 
-**HTTP Status Codes:**
+| Status | Error type | Meaning |
+|--------|-----------|---------|
+| 400 | `ValidationError` | Invalid input |
+| 422 | `ParsingError`, `OcrError` | Processing failed |
+| 500 | Internal errors | Server errors |
 
-| Status Code | Error Type                 | Meaning                    |
-| ----------- | -------------------------- | -------------------------- |
-| 400         | `ValidationError`          | Invalid input parameters   |
-| 422         | `ParsingError`, `OcrError` | Document processing failed |
-| 500         | Internal errors            | Server errors              |
+=== "Python"
 
-**Example:**
+    --8<-- "snippets/python/utils/error_handling_extract.md"
 
-=== "C#"
+=== "TypeScript"
 
-    --8<-- "snippets/csharp/error_handling_extract.md"
+    --8<-- "snippets/typescript/api/error_handling_extract.md"
+
+=== "Rust"
+
+    --8<-- "snippets/rust/api/error_handling_extract.md"
 
 === "Go"
 
@@ -766,41 +220,50 @@ KREUZBERG_CORS_ORIGINS="https://app.example.com,https://api.example.com"
 
     --8<-- "snippets/java/api/error_handling_extract.md"
 
-=== "Python"
+=== "C#"
 
-    --8<-- "snippets/python/utils/error_handling_extract.md"
+    --8<-- "snippets/csharp/error_handling_extract.md"
 
 === "Ruby"
 
     --8<-- "snippets/ruby/api/error_handling_extract.md"
 
-=== "Rust"
+### Configuration
 
-    --8<-- "snippets/rust/api/error_handling_extract.md"
+The server discovers `kreuzberg.toml` in the current and parent directories. Pass `--config path/to/file` to use a different file.
 
-=== "TypeScript"
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KREUZBERG_MAX_UPLOAD_SIZE_MB` | `100` | Max upload size in MB |
+| `KREUZBERG_CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 
-    --8<-- "snippets/typescript/api/error_handling_extract.md"
+!!! warning
+    Default CORS allows all origins. Set `KREUZBERG_CORS_ORIGINS` explicitly in production.
+
+See [Configuration Guide](configuration.md) for all options.
+
+---
 
 ## MCP Server
 
-The Model Context Protocol (MCP) server exposes Kreuzberg as tools for AI agents and assistants.
+### Start
 
-### Starting the MCP Server
+```bash title="Terminal"
+kreuzberg mcp
+kreuzberg mcp --config kreuzberg.toml
+```
 
-=== "CLI"
+=== "Python"
 
-    ```bash title="Terminal"
-    # Start MCP server using stdio transport for AI agents
-    kreuzberg mcp
+    --8<-- "snippets/python/mcp/mcp_server_start.md"
 
-    # Start MCP server with custom configuration file
-    kreuzberg mcp --config kreuzberg.toml
-    ```
+=== "TypeScript"
 
-=== "C#"
+    --8<-- "snippets/typescript/mcp/mcp_server_start.md"
 
-    --8<-- "snippets/csharp/mcp_server_start.md"
+=== "Rust"
+
+    --8<-- "snippets/rust/mcp/mcp_server_start.md"
 
 === "Go"
 
@@ -810,297 +273,40 @@ The Model Context Protocol (MCP) server exposes Kreuzberg as tools for AI agents
 
     --8<-- "snippets/java/mcp/mcp_server_start.md"
 
-=== "Python"
+=== "C#"
 
-    --8<-- "snippets/python/mcp/mcp_server_start.md"
+    --8<-- "snippets/csharp/mcp_server_start.md"
 
 === "Ruby"
 
     --8<-- "snippets/ruby/mcp/mcp_server_start.md"
 
-=== "Rust"
-
-    --8<-- "snippets/rust/mcp/mcp_server_start.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/mcp/mcp_server_start.md"
-
-### MCP Tools
-
-The MCP server exposes 12 tools for AI agents:
-
-#### extract_file
-
-Extract content from a file path.
-
-**Parameters:**
-
-| Parameter      | Type   | Required | Description                                           |
-| -------------- | ------ | -------- | ----------------------------------------------------- |
-| `path`            | string | Yes      | File path to extract                                  |
-| `mime_type`       | string | No       | MIME type hint (auto-detected if not provided)        |
-| `config`          | object | No       | Extraction configuration (JSON object)                |
-| `pdf_password`    | string | No       | Password for encrypted PDFs                           |
-| `response_format` | string | No       | Response wire format: `"json"` (default) or `"toon"` |
-
-**Example MCP Request:**
-
-```json title="MCP Request"
-{
-  "method": "tools/call",
-  "params": {
-    "name": "extract_file",
-    "arguments": {
-      "path": "/path/to/document.pdf",
-      "config": {
-        "ocr": {"language": "eng"},
-        "force_ocr": true
-      }
-    }
-  }
-}
-```
-
-#### extract_bytes
-
-Extract content from base64-encoded file data.
-
-**Parameters:**
-
-| Parameter      | Type   | Required | Description                                    |
-| -------------- | ------ | -------- | ---------------------------------------------- |
-| `data`            | string | Yes      | Base64-encoded file content                    |
-| `mime_type`       | string | No       | MIME type hint (auto-detected if not provided) |
-| `config`          | object | No       | Extraction configuration (JSON object)         |
-| `pdf_password`    | string | No       | Password for encrypted PDFs                    |
-| `response_format` | string | No       | Response wire format: `"json"` (default) or `"toon"` |
-
-#### batch_extract_files
-
-Extract multiple files in parallel.
-
-**Parameters:**
-
-| Parameter      | Type                 | Required | Description                                                       |
-| -------------- | -------------------- | -------- | ----------------------------------------------------------------- |
-| `paths`           | array[string]        | Yes      | File paths to extract                                             |
-| `config`          | object               | No       | Extraction configuration (JSON object)                            |
-| `pdf_password`    | string               | No       | Password for encrypted PDFs                                       |
-| `file_configs`    | array[object \| null] | No      | Per-file configuration overrides (parallel array to `paths`)      |
-| `response_format` | string               | No       | Response wire format: `"json"` (default) or `"toon"`              |
-
-#### detect_mime_type
-
-Detect file format and return MIME type.
-
-**Parameters:**
-
-| Parameter     | Type    | Required | Description                             |
-| ------------- | ------- | -------- | --------------------------------------- |
-| `path`        | string  | Yes      | File path                               |
-| `use_content` | boolean | No       | Content-based detection (default: true) |
-
-#### list_formats <span class="version-badge">v4.5.2</span>
-
-List all supported document formats with their file extensions and MIME types.
-
-**Parameters:** None
-
-**Returns:** JSON array of supported formats with extensions and MIME types
-
-#### get_version <span class="version-badge">v4.5.2</span>
-
-Get the current Kreuzberg library version.
-
-**Parameters:** None
-
-**Example MCP Request:**
-
-```json title="MCP Request"
-{
-  "method": "tools/call",
-  "params": {
-    "name": "get_version",
-    "arguments": {}
-  }
-}
-```
-
-**Returns:** JSON object with version string
-
-```json title="Response"
-{
-  "version": "4.7.0"
-}
-```
-
-#### cache_stats
-
-Get cache statistics.
-
-**Parameters:** None
-
-**Returns:** Cache directory path, file count, size, available space, file ages
-
-#### cache_clear
-
-Clear all cached files.
-
-**Parameters:** None
-
-**Returns:** Number of files removed, space freed
-
-#### cache_manifest <span class="version-badge">v4.5.2</span>
-
-Get model manifest listing expected model files, sizes, and SHA256 checksums.
-
-**Parameters:** None
-
-**Example MCP Request:**
-
-```json title="MCP Request"
-{
-  "method": "tools/call",
-  "params": {
-    "name": "cache_manifest",
-    "arguments": {}
-  }
-}
-```
-
-**Returns:** JSON object with Kreuzberg version, total size, model count, and individual model entries (path, sha256, size, source URL)
-
-#### cache_warm <span class="version-badge">v4.5.2</span>
-
-Download and cache model files for offline use. Optionally download embedding models.
-
-**Parameters:**
-
-| Parameter         | Type    | Required | Description                                                                    |
-| ----------------- | ------- | -------- | ------------------------------------------------------------------------------ |
-| `all_embeddings`  | boolean | No       | Download all embedding model presets (default: false)                          |
-| `embedding_model` | string  | No       | Specific embedding preset name to download (e.g., `"balanced"`, `"quality"`)  |
-
-**Example MCP Request:**
-
-```json title="MCP Request"
-{
-  "method": "tools/call",
-  "params": {
-    "name": "cache_warm",
-    "arguments": {
-      "all_embeddings": true
-    }
-  }
-}
-```
-
-**Returns:** JSON object with cache directory, list of downloaded models, and list of already-cached models
-
-#### embed_text <span class="version-badge">v4.5.2</span>
-
-Generate vector embeddings for text strings.
-
-**Parameters:**
-
-| Parameter | Type          | Required | Description                                                               |
-| --------- | ------------- | -------- | ------------------------------------------------------------------------- |
-| `texts`   | array[string] | Yes      | List of text strings to generate embeddings for                          |
-| `preset`  | string        | No       | Embedding preset name (default: `"balanced"`). Available: `"speed"`, `"balanced"`, `"quality"` |
-
-**Example MCP Request:**
-
-```json title="MCP Request"
-{
-  "method": "tools/call",
-  "params": {
-    "name": "embed_text",
-    "arguments": {
-      "texts": ["Hello world", "Second text"],
-      "preset": "balanced"
-    }
-  }
-}
-```
-
-**Returns:** JSON object with embeddings array, model name, dimensions, and count
-
-```json title="Response"
-{
-  "embeddings": [
-    [0.123, -0.456, 0.789],
-    [-0.234, 0.567, -0.891]
-  ],
-  "model": "balanced",
-  "dimensions": 768,
-  "count": 2
-}
-```
-
-**Note:** Requires the `embeddings` feature to be enabled.
-
-#### chunk_text <span class="version-badge">v4.5.2</span>
-
-Split text into chunks with configurable size and overlap.
-
-**Parameters:**
-
-| Parameter        | Type    | Required | Description                                                        |
-| ---------------- | ------- | -------- | ------------------------------------------------------------------ |
-| `text`           | string  | Yes      | Text content to split into chunks                                  |
-| `max_characters` | integer | No       | Maximum characters per chunk (default: 2000)                       |
-| `overlap`        | integer | No       | Number of overlapping characters between chunks (default: 100)     |
-| `chunker_type`   | string  | No       | Chunker type: `"text"` or `"markdown"` (default: `"text"`)        |
-
-**Example MCP Request:**
-
-```json title="MCP Request"
-{
-  "method": "tools/call",
-  "params": {
-    "name": "chunk_text",
-    "arguments": {
-      "text": "Your long text content here...",
-      "max_characters": 1000,
-      "overlap": 50,
-      "chunker_type": "text"
-    }
-  }
-}
-```
-
-**Returns:** JSON object with chunks array, chunk count, input size, and configuration used
-
-### MCP Server Information
-
-**Server Metadata:**
-
-- **Name:** `kreuzberg-mcp`
-- **Title:** Kreuzberg Document Intelligence MCP Server
-- **Version:** Current package version
-- **Website:** <https://kreuzberg-dev.github.io/kreuzberg/>
-- **Protocol:** MCP (Model Context Protocol)
-- **Transport:** stdio (stdin/stdout)
-
-**Capabilities:**
-
-- Tool calling (12 tools exposed)
-- Async extraction
-- Base64-encoded file handling
-- Batch processing
-- MIME type detection
-- Model cache management (stats, clear, manifest, warm)
-- Embedding generation (feature-gated)
-- Text chunking
+### Tools
+
+| Tool | Required params | Description |
+|------|----------------|-------------|
+| `extract_file` | `path` | Extract from file path |
+| `extract_bytes` | `data` (base64) | Extract from encoded bytes |
+| `batch_extract_files` | `paths` | Extract multiple files |
+| `detect_mime_type` | `path` | Detect file format |
+| `list_formats` | — | List supported formats <span class="version-badge">v4.5.2</span> |
+| `get_version` | — | Library version <span class="version-badge">v4.5.2</span> |
+| `cache_stats` | — | Cache usage |
+| `cache_clear` | — | Remove cached files |
+| `cache_manifest` | — | Model checksums <span class="version-badge">v4.5.2</span> |
+| `cache_warm` | — | Pre-download models <span class="version-badge">v4.5.2</span> |
+| `embed_text` | `texts` | Generate embeddings <span class="version-badge">v4.5.2</span> |
+| `chunk_text` | `text` | Split text <span class="version-badge">v4.5.2</span> |
+
+All tools accept an optional `config` object. `extract_file` and `extract_bytes` also accept `pdf_password`.
 
 ### AI Agent Integration
 
 === "Claude Desktop"
 
-    Add to Claude Desktop configuration (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+    Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
-    ```json title="claude_desktop_config.json"
+    ```json
     {
       "mcpServers": {
         "kreuzberg": {
@@ -1111,11 +317,21 @@ Split text into chunks with configurable size and overlap.
     }
     ```
 
-    After adding the configuration, restart Claude Desktop to load the Kreuzberg MCP server.
+=== "Python"
 
-=== "C#"
+    --8<-- "snippets/python/mcp/mcp_custom_client.md"
 
-    --8<-- "snippets/csharp/mcp_custom_client.md"
+=== "LangChain"
+
+    --8<-- "snippets/python/mcp/mcp_langchain_integration.md"
+
+=== "TypeScript"
+
+    --8<-- "snippets/typescript/mcp/mcp_custom_client.md"
+
+=== "Rust"
+
+    --8<-- "snippets/rust/mcp/mcp_custom_client.md"
 
 === "Go"
 
@@ -1125,325 +341,14 @@ Split text into chunks with configurable size and overlap.
 
     --8<-- "snippets/java/mcp/mcp_client.md"
 
-=== "LangChain"
+=== "C#"
 
-    --8<-- "snippets/python/mcp/mcp_langchain_integration.md"
-
-=== "Python"
-
-    --8<-- "snippets/python/mcp/mcp_custom_client.md"
+    --8<-- "snippets/csharp/mcp_custom_client.md"
 
 === "Ruby"
 
     --8<-- "snippets/ruby/mcp/mcp_custom_client.md"
 
-=== "Rust"
-
-    --8<-- "snippets/rust/mcp/mcp_custom_client.md"
-
-=== "TypeScript"
-
-    --8<-- "snippets/typescript/mcp/mcp_custom_client.md"
-
-## Production Deployment
-
-### Docker Deployment
-
-**Docker Compose Example:**
-
-```yaml title="docker-compose.yaml"
-version: "3.8"
-
-services:
-  kreuzberg-api:
-    image: ghcr.io/kreuzberg-dev/kreuzberg:latest
-    ports:
-      - "8000:8000"
-    environment:
-      # Configure CORS for production security
-      - KREUZBERG_CORS_ORIGINS=https://myapp.com,https://api.myapp.com
-      # Set maximum multipart field size for large documents
-      - KREUZBERG_MAX_MULTIPART_FIELD_BYTES=524288000
-    volumes:
-      # Mount configuration and cache directories
-      - ./config:/config
-      - ./cache:/app/.kreuzberg
-    command:
-      [
-        "kreuzberg",
-        "serve",
-        "-H",
-        "0.0.0.0",
-        "-p",
-        "8000",
-        "--config",
-        "/config/kreuzberg.toml",
-      ]
-    restart: unless-stopped
-    healthcheck:
-      # Health check for container orchestration
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-```
-
-**Run:**
-
-```bash title="Terminal"
-# Start the Kreuzberg API server in detached mode
-docker-compose up -d
-```
-
-### Kubernetes Deployment
-
-**Deployment Manifest:**
-
-```yaml title="kubernetes-deployment.yaml"
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kreuzberg-api
-spec:
-  replicas: 3 # Deploy 3 replicas for high availability
-  selector:
-    matchLabels:
-      app: kreuzberg-api
-  template:
-    metadata:
-      labels:
-        app: kreuzberg-api
-    spec:
-      containers:
-        - name: kreuzberg
-          image: ghcr.io/kreuzberg-dev/kreuzberg:latest
-          ports:
-            - containerPort: 8000
-          env:
-            # Production environment configuration
-            - name: KREUZBERG_CORS_ORIGINS
-              value: "https://myapp.com"
-            - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
-              value: "524288000"
-          command: ["kreuzberg", "serve", "-H", "0.0.0.0", "-p", "8000"]
-          livenessProbe:
-            # Check if container is alive and healthy
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 10
-            periodSeconds: 30
-          readinessProbe:
-            # Check if container is ready to accept traffic
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          resources:
-            # Resource limits for optimal performance
-            requests:
-              memory: "512Mi"
-              cpu: "500m"
-            limits:
-              memory: "2Gi"
-              cpu: "2000m"
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  name: kreuzberg-api
-spec:
-  selector:
-    app: kreuzberg-api
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 8000
-  type: LoadBalancer # Expose service via load balancer
-```
 
-### Reverse Proxy Configuration
-
-**Nginx:**
-
-```nginx title="nginx.conf"
-# Load balance across multiple Kreuzberg instances
-upstream kreuzberg {
-    server 127.0.0.1:8000;
-    server 127.0.0.1:8001;
-    server 127.0.0.1:8002;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name api.example.com;
-
-    # SSL/TLS configuration
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    # Increase upload size limit for large documents
-    client_max_body_size 500M;
-
-    location / {
-        proxy_pass http://kreuzberg;
-        # Forward client headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Extended timeouts for large file processing
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
-    }
-
-    location /health {
-        proxy_pass http://kreuzberg;
-        access_log off;  # Disable logging for health checks
-    }
-}
-```
-
-**Caddy:**
-
-```caddy title="Caddyfile"
-api.example.com {
-    # Load balance with automatic health checks
-    reverse_proxy localhost:8000 localhost:8001 localhost:8002 {
-        lb_policy round_robin
-        health_uri /health
-        health_interval 10s
-    }
-
-    # Increase maximum upload size for large documents
-    request_body {
-        max_size 500MB
-    }
-}
-```
-
-### Production Checklist
-
-1. Set `KREUZBERG_CORS_ORIGINS` to explicit allowed origins
-2. Configure `KREUZBERG_MAX_MULTIPART_FIELD_BYTES` based on expected document sizes
-3. Use reverse proxy (Nginx/Caddy) for SSL/TLS termination
-4. Enable logging via `RUST_LOG=info` environment variable
-5. Set up health checks on `/health` endpoint
-6. Monitor cache size and set up periodic clearing
-7. Use `0.0.0.0` binding for containerized deployments
-8. Configure resource limits (CPU, memory) in container orchestration
-9. Test with large files to validate upload limits and timeouts
-10. Implement rate limiting at reverse proxy level
-11. Set up monitoring (Prometheus metrics, logs aggregation)
-12. Plan for horizontal scaling with load balancing
-
-### Monitoring
-
-**Health Check Endpoint:**
-
-```bash title="Terminal"
-# Simple health check for manual verification
-curl http://localhost:8000/health
-
-# Continuous monitoring script for production
-#!/bin/bash
-while true; do
-  if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-    echo "$(date): Server healthy"
-  else
-    echo "$(date): Server unhealthy"
-    # Send alert to monitoring system
-  fi
-  sleep 30
-done
-```
-
-**Cache Monitoring:**
-
-```bash title="Terminal"
-# Retrieve cache statistics and usage metrics
-curl http://localhost:8000/cache/stats | jq .
-
-# Automatic cache clearing when size exceeds threshold
-CACHE_SIZE=$(curl -s http://localhost:8000/cache/stats | jq .total_size_mb)
-if (( $(echo "$CACHE_SIZE > 1000" | bc -l) )); then
-  curl -X DELETE http://localhost:8000/cache/clear
-fi
-```
-
-**Logging:**
-
-```bash title="Terminal"
-# Run with debug logging for development and troubleshooting
-RUST_LOG=debug kreuzberg serve -H 0.0.0.0 -p 8000
-
-# Production logging with info level (recommended)
-RUST_LOG=info kreuzberg serve -H 0.0.0.0 -p 8000
-
-# JSON structured logging for log aggregation systems
-RUST_LOG=info RUST_LOG_FORMAT=json kreuzberg serve -H 0.0.0.0 -p 8000
-```
-
-## Performance Tuning
-
-### Upload Size Limits
-
-Configure based on expected document sizes:
-
-```bash title="Terminal"
-# Configuration for small documents (PDFs, images under 10 MB)
-export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=52428800
-
-# Configuration for typical business documents (under 50 MB)
-export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200
-
-# Configuration for large scans, archives, and high-resolution images
-export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=1048576000
-```
-
-See the [File Size Limits Reference](../reference/file-size-limits.md) for comprehensive documentation including:
-
-- Memory impact calculations
-- Reverse proxy configuration
-- Error handling and troubleshooting
-- Client-side validation examples
-- Best practices for large file processing
-
-### Concurrent Requests
-
-The server handles concurrent requests efficiently using Tokio's async runtime. For high-throughput scenarios:
-
-1. **Run multiple instances** behind a load balancer
-2. **Configure reverse proxy connection pooling**
-3. **Monitor CPU and memory usage** to determine optimal replica count
-
-### Cache Strategy
-
-Configure cache behavior via `kreuzberg.toml`:
-
-```toml title="Enable caching for faster repeated extractions"
-use_cache = true
-cache_dir = "/var/cache/kreuzberg"  # Custom cache location for production
-```
-
-**Cache clearing strategies:**
-
-```bash title="Terminal"
-# Periodic cache clearing via cron job (daily at 2 AM)
-0 2 * * * curl -X DELETE http://localhost:8000/cache/clear
-
-# Size-based cache clearing when threshold is exceeded
-CACHE_SIZE=$(curl -s http://localhost:8000/cache/stats | jq .total_size_mb)
-if [ "$CACHE_SIZE" -gt 1000 ]; then
-  curl -X DELETE http://localhost:8000/cache/clear
-fi
-```
-
-## Next Steps
-
-- [Configuration Guide](configuration.md) - Detailed configuration options
-- [CLI Usage](../cli/usage.md) - Command-line interface
-- [Advanced Features](advanced.md) - Chunking, language detection, token reduction
-- [Plugin Development](plugins.md) - Extend Kreuzberg functionality
+For Docker and Kubernetes deployment, see [Docker Guide](docker.md) and [Kubernetes Guide](kubernetes.md).

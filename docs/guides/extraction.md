@@ -1,34 +1,18 @@
 # Extraction Basics
 
-```mermaid
-flowchart LR
-    Input[Input] --> FileOrBytes{File or Bytes?}
-    FileOrBytes -->|File Path| FileFunctions[File Functions]
-    FileOrBytes -->|In-Memory Data| BytesFunctions[Bytes Functions]
+Kreuzberg provides 8 core extraction functions organized by input type (file path vs in-memory bytes), cardinality (single vs batch), and execution model (sync vs async). Pick the function that matches your situation — the extraction logic is identical across all variants.
 
-    FileFunctions --> SingleOrBatch{Single or Batch?}
-    BytesFunctions --> SingleOrBatch
+| Input | Single sync | Single async | Batch sync | Batch async |
+|-------|------------|-------------|------------|-------------|
+| **File path** | `extract_file_sync` | `extract_file` | `batch_extract_files_sync` | `batch_extract_files` |
+| **Bytes** | `extract_bytes_sync` | `extract_bytes` | `batch_extract_bytes_sync` | `batch_extract_bytes` |
 
-    SingleOrBatch -->|Single| SingleMode[Single Extraction]
-    SingleOrBatch -->|Multiple| BatchMode[Batch Processing]
-
-    SingleMode --> SyncAsync{Sync or Async?}
-    BatchMode --> SyncAsync
-
-    SyncAsync -->|Sync| SyncFuncs[extract_file_sync<br/>extract_bytes_sync<br/>batch_extract_file_sync<br/>batch_extract_bytes_sync]
-    SyncAsync -->|Async| AsyncFuncs[extract_file<br/>extract_bytes<br/>batch_extract_file<br/>batch_extract_bytes]
-
-    style FileFunctions fill:#87CEEB
-    style BytesFunctions fill:#FFD700
-    style SyncFuncs fill:#90EE90
-    style AsyncFuncs fill:#FFB6C1
-```
-
-Kreuzberg provides 8 core extraction functions organized into 4 categories: file extraction, bytes extraction, batch file extraction, and batch bytes extraction. Each has both sync and async variants.
+!!! tip "Sync vs Async"
+    Use async variants when you're already in an async context or processing multiple files concurrently. For scripts and simple pipelines, sync variants are simpler and just as fast for single files.
 
 ## Extract from Files
 
-Extract text, tables, and metadata from a file on disk.
+Pass a file path. Kreuzberg detects the MIME type from the extension and selects the right parser automatically.
 
 ### Synchronous
 
@@ -44,6 +28,18 @@ Extract text, tables, and metadata from a file on disk.
 
     --8<-- "snippets/rust/api/extract_file_sync.md"
 
+=== "Go"
+
+    --8<-- "snippets/go/api/extract_file_sync.md"
+
+=== "Java"
+
+    --8<-- "snippets/java/api/extract_file_sync.md"
+
+=== "C#"
+
+    --8<-- "snippets/csharp/extract_file_sync.md"
+
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_file_sync.md"
@@ -52,21 +48,9 @@ Extract text, tables, and metadata from a file on disk.
 
     --8<-- "snippets/r/api/extract_file_sync.md"
 
-=== "Java"
-
-    --8<-- "snippets/java/api/extract_file_sync.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/extract_file_sync.md"
-
 === "C"
 
     --8<-- "snippets/c/api/extract_file_sync.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/extract_file_sync.md"
 
 === "WASM"
 
@@ -86,6 +70,18 @@ Extract text, tables, and metadata from a file on disk.
 
     --8<-- "snippets/rust/api/extract_file_async.md"
 
+=== "Go"
+
+    --8<-- "snippets/go/api/extract_file_async.md"
+
+=== "Java"
+
+    --8<-- "snippets/java/api/extract_file_async.md"
+
+=== "C#"
+
+    --8<-- "snippets/csharp/extract_file_async.md"
+
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_file_async.md"
@@ -94,95 +90,17 @@ Extract text, tables, and metadata from a file on disk.
 
     --8<-- "snippets/r/api/extract_file_async.md"
 
-=== "Java"
-
-    --8<-- "snippets/java/api/extract_file_async.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/extract_file_async.md"
-
 === "C"
 
     --8<-- "snippets/c/api/extract_file_async.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/extract_file_async.md"
 
 === "WASM"
 
     --8<-- "snippets/wasm/api/extract_file_async.md"
 
-```mermaid
-flowchart TD
-    Start[Choose Sync or Async] --> Context{Already in<br/>Async Context?}
-
-    Context -->|Yes| UseAsync[Use Async Variants]
-    Context -->|No| CheckUse{Use Case}
-
-    CheckUse -->|Simple Script| UseSyncSimple[Use Sync<br/>Simpler, same speed]
-    CheckUse -->|Multiple Files| CheckConcurrency{Concurrent<br/>Processing?}
-    CheckUse -->|Single File| UseSyncSingle[Use Sync<br/>Easier to read]
-
-    CheckConcurrency -->|Yes| UseAsyncConcurrent[Use Async<br/>Better concurrency]
-    CheckConcurrency -->|No| UseSyncBatch[Use Sync<br/>Adequate]
-
-    UseAsync --> AsyncFunctions[extract_file<br/>extract_bytes<br/>batch_extract_file<br/>batch_extract_bytes]
-    UseSyncSimple --> SyncFunctions[extract_file_sync<br/>extract_bytes_sync<br/>batch_extract_file_sync<br/>batch_extract_bytes_sync]
-    UseSyncSingle --> SyncFunctions
-    UseAsyncConcurrent --> AsyncFunctions
-    UseSyncBatch --> SyncFunctions
-
-    style UseAsync fill:#FFB6C1
-    style UseAsyncConcurrent fill:#FFB6C1
-    style UseSyncSimple fill:#90EE90
-    style UseSyncSingle fill:#90EE90
-    style UseSyncBatch fill:#90EE90
-```
-
-## TypeScript / Node.js {#typescript-nodejs}
-
-All TypeScript/Node.js examples in this guide use the `@kreuzberg/node` package. Import synchronous APIs from the root module and asynchronous helpers from the same namespace. See the [TypeScript API Reference](../reference/api-typescript.md) for complete type definitions.
-
-```typescript title="basic_extraction.ts"
-import { extractFileSync, ExtractionConfig } from "@kreuzberg/node";
-
-// Extract a document using synchronous API
-const result = extractFileSync("document.pdf", null, new ExtractionConfig());
-console.log(result.content);
-```
-
-## Ruby {#ruby}
-
-Ruby bindings mirror the same function names (`extract_file_sync`, `extract_bytes`, `batch_extract_file`, etc.) under the `Kreuzberg` module. Configuration objects live under `Kreuzberg::Config`. See the [Ruby API Reference](../reference/api-ruby.md) for details.
-
-```ruby title="basic_extraction.rb"
-require 'kreuzberg'
-
-# Extract a document with OCR enabled
-config = Kreuzberg::Config::Extraction.new(force_ocr: true)
-result = Kreuzberg.extract_file_sync('document.pdf', config: config)
-puts result.content
-```
-
-## R {#r}
-
-R bindings provide the same function names (`extract_file_sync`, `extract_bytes`, etc.) via an S3 class-based result system. All functions return `kreuzberg_result` objects with `$content`, `$mime_type`, `$tables`, and other fields. See the [R API Reference](../reference/api-r.md) for details.
-
-```r title="basic_extraction.R"
-library(kreuzberg)
-
-result <- extract_file_sync("document.pdf")
-cat(result$content)
-```
-
-!!! tip "When to Use Async"
-Use async variants when you're already in an async context or processing multiple files concurrently. For simple scripts, sync variants are simpler and just as fast.
-
 ## Extract from Bytes
 
-Extract from data already loaded in memory.
+When the file is already loaded in memory (e.g., from an upload or network response), pass the byte array with its MIME type. Unlike file extraction, the MIME type is required since there's no file extension to infer it from.
 
 ### Synchronous
 
@@ -198,6 +116,18 @@ Extract from data already loaded in memory.
 
     --8<-- "snippets/rust/api/extract_bytes_sync.md"
 
+=== "Go"
+
+    --8<-- "snippets/go/api/extract_bytes_sync.md"
+
+=== "Java"
+
+    --8<-- "snippets/java/api/extract_bytes_sync.md"
+
+=== "C#"
+
+    --8<-- "snippets/csharp/extract_bytes_sync.md"
+
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_bytes_sync.md"
@@ -206,21 +136,9 @@ Extract from data already loaded in memory.
 
     --8<-- "snippets/r/api/extract_bytes_sync.md"
 
-=== "Java"
-
-    --8<-- "snippets/java/api/extract_bytes_sync.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/extract_bytes_sync.md"
-
 === "C"
 
     --8<-- "snippets/c/api/extract_bytes_sync.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/extract_bytes_sync.md"
 
 === "WASM"
 
@@ -240,6 +158,18 @@ Extract from data already loaded in memory.
 
     --8<-- "snippets/rust/api/extract_bytes_async.md"
 
+=== "Go"
+
+    --8<-- "snippets/go/api/extract_bytes_async.md"
+
+=== "Java"
+
+    --8<-- "snippets/java/api/extract_bytes_async.md"
+
+=== "C#"
+
+    --8<-- "snippets/csharp/extract_bytes_async.md"
+
 === "Ruby"
 
     --8<-- "snippets/ruby/api/extract_bytes_async.md"
@@ -248,32 +178,17 @@ Extract from data already loaded in memory.
 
     --8<-- "snippets/r/api/extract_bytes_async.md"
 
-=== "Java"
-
-    --8<-- "snippets/java/api/extract_bytes_async.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/extract_bytes_async.md"
-
 === "C"
 
     --8<-- "snippets/c/api/extract_bytes_async.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/extract_bytes_async.md"
 
 === "WASM"
 
     --8<-- "snippets/wasm/api/extract_bytes_async.md"
 
-!!! note "MIME Type Detection"
-Kreuzberg automatically detects MIME types from file extensions. When extracting from bytes, you must provide the MIME type explicitly.
-
 ## Batch Processing
 
-Process multiple files concurrently for better performance.
+Batch functions accept an array of file paths (or byte arrays) and process them concurrently. This is typically 2-5x faster than looping over single-file functions because Kreuzberg parallelizes internally.
 
 ### Batch Extract Files
 
@@ -289,6 +204,18 @@ Process multiple files concurrently for better performance.
 
     --8<-- "snippets/rust/api/batch_extract_files_sync.md"
 
+=== "Go"
+
+    --8<-- "snippets/go/api/batch_extract_files_sync.md"
+
+=== "Java"
+
+    --8<-- "snippets/java/api/batch_extract_files_sync.md"
+
+=== "C#"
+
+    --8<-- "snippets/csharp/batch_extract_files_sync.md"
+
 === "Ruby"
 
     --8<-- "snippets/ruby/api/batch_extract_files_sync.md"
@@ -297,21 +224,9 @@ Process multiple files concurrently for better performance.
 
     --8<-- "snippets/r/api/batch_extract_files_sync.md"
 
-=== "Java"
-
-    --8<-- "snippets/java/api/batch_extract_files_sync.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/batch_extract_files_sync.md"
-
 === "C"
 
     --8<-- "snippets/c/api/batch_extract_files_sync.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/batch_extract_files_sync.md"
 
 === "WASM"
 
@@ -331,6 +246,18 @@ Process multiple files concurrently for better performance.
 
     --8<-- "snippets/rust/api/batch_extract_bytes_sync.md"
 
+=== "Go"
+
+    --8<-- "snippets/go/api/batch_extract_bytes_sync.md"
+
+=== "Java"
+
+    --8<-- "snippets/java/api/batch_extract_bytes_sync.md"
+
+=== "C#"
+
+    --8<-- "snippets/csharp/batch_extract_bytes_sync.md"
+
 === "Ruby"
 
     --8<-- "snippets/ruby/api/batch_extract_bytes_sync.md"
@@ -339,67 +266,17 @@ Process multiple files concurrently for better performance.
 
     --8<-- "snippets/r/api/batch_extract_bytes_sync.md"
 
-=== "Java"
-
-    --8<-- "snippets/java/api/batch_extract_bytes_sync.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/batch_extract_bytes_sync.md"
-
 === "C"
 
     --8<-- "snippets/c/api/batch_extract_bytes_sync.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/batch_extract_bytes_sync.md"
 
 === "WASM"
 
     --8<-- "snippets/wasm/api/batch_extract_bytes_sync.md"
 
-```mermaid
-flowchart TD
-    Start[Multiple Files to Process] --> Method{Processing Method}
-
-    Method -->|Sequential| Sequential[Process One by One]
-    Method -->|Batch| Batch[Batch Processing]
-
-    Sequential --> Seq1[File 1: 1.0s]
-    Seq1 --> Seq2[File 2: 1.0s]
-    Seq2 --> Seq3[File 3: 1.0s]
-    Seq3 --> Seq4[File 4: 1.0s]
-    Seq4 --> SeqTotal[Total: 4.0s]
-
-    Batch --> Parallel[Automatic Parallelization]
-    Parallel --> Par1[File 1: 1.0s]
-    Parallel --> Par2[File 2: 1.0s]
-    Parallel --> Par3[File 3: 1.0s]
-    Parallel --> Par4[File 4: 1.0s]
-
-    Par1 --> ParTotal[Total: ~1.2s]
-    Par2 --> ParTotal
-    Par3 --> ParTotal
-    Par4 --> ParTotal
-
-    SeqTotal --> Result[Sequential: Slow]
-    ParTotal --> ResultFast[Batch: 2-5x Faster]
-
-    style Sequential fill:#FFB6C1
-    style Batch fill:#90EE90
-    style SeqTotal fill:#FF6B6B
-    style ResultFast fill:#4CAF50
-```
-
-!!! tip "Performance"
-Batch processing provides automatic parallelization. For large sets of files, this can be 2-5x faster than processing files sequentially.
-
 ### Per-File Configuration <span class="version-badge">v4.5.0</span>
 
-When processing a mixed batch of documents that require different extraction settings, use `FileExtractionConfig` to override specific options per file while sharing a common batch-level configuration.
-
-This is useful when a batch contains a mix of document types — for example, scanned images that need OCR alongside text-based PDFs that do not:
+When a batch contains a mix of document types that need different settings (e.g., scanned images needing OCR alongside text-based PDFs), use `FileExtractionConfig` to override options per file while sharing a common batch config.
 
 === "Python"
 
@@ -411,19 +288,16 @@ This is useful when a batch contains a mix of document types — for example, sc
         OcrConfig,
     )
 
-    # Shared batch config: markdown output, caching enabled
     config = ExtractionConfig(output_format="markdown")
 
     paths = ["report.pdf", "scan.tiff", "notes.html"]
     file_configs = [
-        None,  # text-based PDF, use defaults
+        None,
         FileExtractionConfig(
             force_ocr=True,
             ocr=OcrConfig(backend="tesseract", language="deu"),
         ),
-        FileExtractionConfig(
-            output_format="plain",  # override output format for HTML
-        ),
+        FileExtractionConfig(output_format="plain"),
     ]
 
     results = batch_extract_files_sync(paths, config, file_configs=file_configs)
@@ -489,55 +363,33 @@ Fields set to `None` in `FileExtractionConfig` inherit the batch default. Batch-
 
 ## Supported Formats
 
-Kreuzberg supports 75 file formats across 8 categories:
+Kreuzberg supports 75+ file formats across 8 categories:
 
-| Format            | Extensions                                               | Notes                               |
-| ----------------- | -------------------------------------------------------- | ----------------------------------- |
-| **PDF**           | `.pdf`                                                   | Native text + OCR for scanned pages |
-| **Images**        | `.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`, `.webp`        | Requires OCR backend                |
-| **Office**        | `.docx`, `.pptx`, `.xlsx`                                | Modern formats via native parsers   |
-| **Legacy Office** | `.doc`, `.ppt`                                           | Native OLE/CFB parsing              |
-| **Email**         | `.eml`, `.msg`                                           | Full support including attachments  |
-| **Web**           | `.html`, `.htm`                                          | Converted to Markdown with metadata |
-| **Text**          | `.md`, `.txt`, `.xml`, `.json`, `.yaml`, `.toml`, `.csv` | Direct extraction                   |
-| **Archives**      | `.zip`, `.tar`, `.tar.gz`, `.tar.bz2`                    | Recursive extraction                |
+| Category | Extensions | Notes |
+|----------|-----------|-------|
+| **PDF** | `.pdf` | Native text + OCR for scanned pages |
+| **Images** | `.png`, `.jpg`, `.jpeg`, `.tiff`, `.bmp`, `.webp` | Requires OCR backend |
+| **Office** | `.docx`, `.pptx`, `.xlsx` | Modern formats via native parsers |
+| **Legacy Office** | `.doc`, `.ppt` | Native OLE/CFB parsing |
+| **Email** | `.eml`, `.msg` | Full support including attachments |
+| **Web** | `.html`, `.htm` | Converted to Markdown with metadata |
+| **Text** | `.md`, `.txt`, `.xml`, `.json`, `.yaml`, `.toml`, `.csv` | Direct extraction |
+| **Archives** | `.zip`, `.tar`, `.tar.gz`, `.tar.bz2` | Recursive extraction |
 
 See the [installation guide](../getting-started/installation.md#system-dependencies) for optional dependencies (Tesseract).
 
-## Page Tracking and Boundaries
+## Page Tracking
 
-Kreuzberg can track page boundaries and extract per-page content for supported formats.
+Kreuzberg can track page boundaries and extract per-page content. Page tracking availability depends on the format:
 
-### When Page Tracking is Available
+- **PDF** — Full byte-accurate page tracking with O(1) lookup
+- **PPTX** — Slide boundary tracking (each slide = one page)
+- **DOCX** — Best-effort detection using explicit `<w:br type="page"/>` tags
+- **Other formats** — No page tracking
 
-Page tracking is format-specific:
+Enable page extraction with `PageConfig`:
 
-- **PDF**: Full byte-accurate page tracking with O(1) lookup performance
-- **PPTX**: Slide boundary tracking (each slide is a "page")
-- **DOCX**: Best-effort page break detection using explicit `<w:br type="page"/>` tags
-- **Other formats**: No page tracking (boundaries and pages are `None`/`null`)
-
-### Enabling Page Extraction
-
-To extract per-page content, enable `extract_pages`:
-
-```mermaid
-graph LR
-    A[Document] --> B[Extract with PageConfig]
-    B --> C[Combined content]
-    B --> D[Pages array]
-    D --> E[Page 1]
-    D --> F[Page 2]
-    D --> G[Page N]
-```
-
-See [PageConfig documentation](../reference/configuration.md#pageconfig) for configuration details.
-
-### Page Markers
-
-Optionally insert page markers into the combined content string:
-
-```python title="Python"
+```python title="page_tracking.py"
 config = ExtractionConfig(
     pages=PageConfig(
         insert_page_markers=True,
@@ -546,17 +398,13 @@ config = ExtractionConfig(
 )
 ```
 
-This adds markers like `<!-- PAGE 1 -->` at page boundaries in the `content` field, useful for LLMs to understand document structure.
+Page markers like `<!-- PAGE 1 -->` are inserted at boundaries in the `content` field — useful for LLMs that need to understand document layout. When both page tracking and chunking are enabled, chunks automatically include `first_page` and `last_page` metadata.
 
-### Relationship with Chunking
-
-When both page tracking and chunking are enabled, chunks automatically include `first_page` and `last_page` metadata showing which pages they span.
-
-See [Advanced Page Tracking](./advanced.md#page-tracking-patterns) for chunk-to-page mapping examples.
+See [PageConfig Reference](../reference/configuration.md#pageconfig) for all options and [Advanced Page Tracking](./advanced.md#page-tracking-patterns) for chunk-to-page mapping examples.
 
 ## Error Handling
 
-All extraction functions raise exceptions on failure:
+All extraction functions raise typed exceptions on failure. Catch specific exceptions to handle different failure modes:
 
 === "Python"
 
@@ -570,6 +418,18 @@ All extraction functions raise exceptions on failure:
 
     --8<-- "snippets/rust/api/error_handling.md"
 
+=== "Go"
+
+    --8<-- "snippets/go/api/error_handling.md"
+
+=== "Java"
+
+    --8<-- "snippets/java/api/error_handling.md"
+
+=== "C#"
+
+    --8<-- "snippets/csharp/error_handling.md"
+
 === "Ruby"
 
     --8<-- "snippets/ruby/api/error_handling.md"
@@ -578,32 +438,21 @@ All extraction functions raise exceptions on failure:
 
     --8<-- "snippets/r/api/error_handling.md"
 
-=== "Java"
-
-    --8<-- "snippets/java/api/error_handling.md"
-
-=== "Go"
-
-    --8<-- "snippets/go/api/error_handling.md"
-
 === "C"
 
     --8<-- "snippets/c/api/error_handling.md"
-
-=== "C#"
-
-    --8<-- "snippets/csharp/error_handling.md"
 
 === "WASM"
 
     --8<-- "snippets/wasm/api/error_handling_wasm.md"
 
 !!! warning "System Errors"
-`OSError` (Python), `IOException` (Rust), and system-level errors always bubble up to users. These indicate real system problems that need to be addressed (permissions, disk space, etc.).
+    `OSError` (Python), `IOException` (Rust), and system-level errors always propagate through. These indicate real system problems (permissions, disk space, etc.) that your application should handle.
 
 ## Next Steps
 
-- [Configuration](configuration.md) - Learn about all configuration options
-- [OCR Guide](ocr.md) - Set up optical character recognition
-- [Advanced Features](advanced.md) - Chunking, language detection, and more
-- [API Reference](../reference/api-python.md) - Detailed API documentation
+- [Configuration](configuration.md) — all configuration options and file formats
+- [OCR Guide](ocr.md) — set up optical character recognition
+- [Advanced Features](advanced.md) — chunking, language detection, embeddings
+- [Element-Based Output](element-based-output.md) — structured element arrays for RAG
+- [Document Structure](document-structure.md) — hierarchical tree output
