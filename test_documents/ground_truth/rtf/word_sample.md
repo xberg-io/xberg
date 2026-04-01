@@ -1,5 +1,3 @@
-Summer activities
-
 # Swimming in the lake
 
 Duck
@@ -16,17 +14,14 @@ To get started with swimming, first lay down in a water and try not to drown:
 - Paddle about
 - Enjoy summer warmth
 
-<!-- end list -->
 
 - Also, don't forget:
 
-<!-- end list -->
 
 1. Wear sunglasses
 2. Don't forget to drink water
 3. Use sun cream
 
-<!-- end list -->
 
 - Hmm, what else…
 
