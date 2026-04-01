@@ -1,4 +1,12 @@
-![](wasteland-cover.jpg)
+![Cover](image_0.jpeg)
+
+# The Waste Land
+
+T.S. Eliot
+
+"Nam Sibyllam quidem Cumis ego ipse oculis meis vidi in ampulla pendere, et cum illi pueri dicerent: Σίβυλλα τί ϴέλεις ; respondebat illa: άποϴαγεῖγ ϴέλϣ ."
+
+For Ezra Pound: il miglior fabbro
 
 ## I. THE BURIAL OF THE DEAD
 
@@ -40,13 +48,13 @@ I read, much of the night, and go south in the winter.
 
 What are the roots that clutch, what branches grow
 
-Out of this stony rubbish? Son of man,[^1]20
+Out of this stony rubbish? Son of man,[\*](#note-1)20
 
 You cannot say, or guess, for you know only
 
 A heap of broken images, where the sun beats,
 
-And the dead tree gives no shelter, the cricket no relief,[^2]
+And the dead tree gives no shelter, the cricket no relief,[\*](#note-2)
 
 And the dry stone no sound of water. Only
 
@@ -62,33 +70,13 @@ Or your shadow at evening rising to meet you;
 
 I will show you fear in a handful of dust.30
 
->
->
->
->
-> Frisch weht der Wind[^3]
->
->
->
->
->
-> Der Heimat zu
->
->
->
->
->
-> Mein Irisch Kind,
->
->
->
->
->
-> Wo weilest du?
->
->
->
->
+Frisch weht der Wind[\*](#note-3)
+
+Der Heimat zu
+
+Mein Irisch Kind,
+
+Wo weilest du?
 
 "You gave me hyacinths first a year ago;
 
@@ -104,7 +92,7 @@ Living nor dead, and I knew nothing,40
 
 Looking into the heart of light, the silence.
 
-*Od' und leer das Meer*.[^4]
+*Od' und leer das Meer*.[\*](#note-4)
 
 Madame Sosostris, famous clairvoyante,
 
@@ -112,7 +100,7 @@ Had a bad cold, nevertheless
 
 Is known to be the wisest woman in Europe,
 
-With a wicked pack of cards. Here, said she,[^5]
+With a wicked pack of cards. Here, said she,[\*](#note-5)
 
 Is your card, the drowned Phoenician Sailor,
 
@@ -140,15 +128,15 @@ Tell her I bring the horoscope myself:
 
 One must be so careful these days.
 
-Unreal City,[^6]60
+Unreal City,[\*](#note-6)60
 
 Under the brown fog of a winter dawn,
 
 A crowd flowed over London Bridge, so many,
 
-I had not thought death had undone so many.[^7]
+I had not thought death had undone so many.[\*](#note-7)
 
-Sighs, short and infrequent, were exhaled,[^8]
+Sighs, short and infrequent, were exhaled,[\*](#note-8)
 
 And each man fixed his eyes before his feet.
 
@@ -156,7 +144,7 @@ Flowed up the hill and down King William Street,
 
 To where Saint Mary Woolnoth kept the hours
 
-With a dead sound on the final stroke of nine.[^9]
+With a dead sound on the final stroke of nine.[\*](#note-9)
 
 There I saw one I knew, and stopped him, crying "Stetson!
 
@@ -168,15 +156,15 @@ There I saw one I knew, and stopped him, crying "Stetson!
 
 "Or has the sudden frost disturbed its bed?
 
-"Oh keep the Dog far hence, that's friend to men,[^10]
+"Oh keep the Dog far hence, that's friend to men,[\*](#note-10)
 
 "Or with his nails he'll dig it up again!
 
-"You! hypocrite lecteur! - mon semblable, - mon frere !"[^11]
+"You! hypocrite lecteur! - mon semblable, - mon frere !"[\*](#note-11)
 
 ## II. A GAME OF CHESS
 
-The Chair she sat in, like a burnished throne,[^12]
+The Chair she sat in, like a burnished throne,[\*](#note-12)
 
 Glowed on the marble, where the glass
 
@@ -206,7 +194,7 @@ That freshened from the window, these ascended90
 
 In fattening the prolonged candle-flames,
 
-Flung their smoke into the laquearia,[^13]
+Flung their smoke into the laquearia,[\*](#note-13)
 
 Stirring the pattern on the coffered ceiling.
 
@@ -218,11 +206,11 @@ In which sad light a carved dolphin swam.
 
 Above the antique mantel was displayed
 
-As though a window gave upon the sylvan scene[^14]
+As though a window gave upon the sylvan scene[\*](#note-14)
 
-The change of Philomel, by the barbarous king[^15]
+The change of Philomel, by the barbarous king[\*](#note-15)
 
-So rudely forced; yet there the nightingale[^16] 100
+So rudely forced; yet there the nightingale[\*](#note-16) 100
 
 Filled all the desert with inviolable voice
 
@@ -252,13 +240,13 @@ Glowed into words, then would be savagely still.110
 
 "I never know what you are thinking. Think."
 
-I think we are in rats' alley[^17]
+I think we are in rats' alley[\*](#note-17)
 
 Where the dead men lost their bones.
 
 "What is that noise?"
 
-The wind under the door.[^18]
+The wind under the door.[\*](#note-18)
 
 "What is that noise now? What is the wind doing?"
 
@@ -274,7 +262,7 @@ I remember
 
 Those are pearls that were his eyes.
 
-"Are you alive, or not? Is there nothing in your head?"[^19]
+"Are you alive, or not? Is there nothing in your head?"[\*](#note-19)
 
 But
 
@@ -298,7 +286,7 @@ And if it rains, a closed car at four.
 
 And we shall play a game of chess,
 
-Pressing lidless eyes and waiting for a knock upon the door.[^20]
+Pressing lidless eyes and waiting for a knock upon the door.[\*](#note-20)
 
 When Lil's husband got demobbed, I said -
 
@@ -378,58 +366,58 @@ Indeed, so deeply am I indebted, Miss Weston's book will elucidate the difficult
 
 ### II. A GAME OF CHESS
 
-[^1]: [Line 20.](#wasteland-content.xhtml_ln20) Cf. Ezekiel 2:1.
+[\*](#note-1): [Line 20.](#wasteland-content.xhtml_ln20) Cf. Ezekiel 2:1.
 
-[^2]: [23.](#wasteland-content.xhtml_ln23) Cf. Ecclesiastes 12:5.
+[\*](#note-2): [23.](#wasteland-content.xhtml_ln23) Cf. Ecclesiastes 12:5.
 
-[^3]: [31.](#wasteland-content.xhtml_ln31) V. Tristan und Isolde, i, verses 5-8.
+[\*](#note-3): [31.](#wasteland-content.xhtml_ln31) V. Tristan und Isolde, i, verses 5-8.
 
-[^4]: [42.](#wasteland-content.xhtml_ln42) Id. iii, verse 24.
+[\*](#note-4): [42.](#wasteland-content.xhtml_ln42) Id. iii, verse 24.
 
-[^5]: [46.](#wasteland-content.xhtml_ln46) I am not familiar with the exact constitution of the Tarot pack of cards, from which I have obviously departed to suit my own convenience. The Hanged Man, a member of the traditional pack, fits my purpose in two ways: because he is associated in my mind with the Hanged God of Frazer, and because I associate him with the hooded figure in the passage of the disciples to Emmaus in Part V. The Phoenician Sailor and the Merchant appear later; also the "crowds of people," and Death by Water is executed in Part IV. The Man with Three Staves (an authentic member of the Tarot pack) I associate, quite arbitrarily, with the Fisher King himself.
+[\*](#note-5): [46.](#wasteland-content.xhtml_ln46) I am not familiar with the exact constitution of the Tarot pack of cards, from which I have obviously departed to suit my own convenience. The Hanged Man, a member of the traditional pack, fits my purpose in two ways: because he is associated in my mind with the Hanged God of Frazer, and because I associate him with the hooded figure in the passage of the disciples to Emmaus in Part V. The Phoenician Sailor and the Merchant appear later; also the "crowds of people," and Death by Water is executed in Part IV. The Man with Three Staves (an authentic member of the Tarot pack) I associate, quite arbitrarily, with the Fisher King himself.
 
-[^6]: [60.](#wasteland-content.xhtml_ln60) Cf. Baudelaire:
+[\*](#note-6): [60.](#wasteland-content.xhtml_ln60) Cf. Baudelaire:
 
     > "Fourmillante cite;, cite; pleine de reves,\
     > Ou le spectre en plein jour raccroche le passant."
 
-[^7]: [63.](#wasteland-content.xhtml_ln63) Cf. Inferno, iii. 55-7.
+[\*](#note-7): [63.](#wasteland-content.xhtml_ln63) Cf. Inferno, iii. 55-7.
 
     > "si lunga tratta\
     > di gente, ch'io non avrei mai creduto\
     > che morte tanta n'avesse disfatta."
 
-[^8]: [64.](#wasteland-content.xhtml_ln64) Cf. Inferno, iv. 25-7:
+[\*](#note-8): [64.](#wasteland-content.xhtml_ln64) Cf. Inferno, iv. 25-7:
 
     > "Quivi, secondo che per ascoltahre,\
     > "non avea pianto, ma' che di sospiri,\
     > "che l'aura eterna facevan tremare."
 
-[^9]: [68.](#wasteland-content.xhtml_ln68) A phenomenon which I have often noticed.
+[\*](#note-9): [68.](#wasteland-content.xhtml_ln68) A phenomenon which I have often noticed.
 
-[^10]: [74.](#wasteland-content.xhtml_ln74) Cf. the Dirge in Webster's White Devil .
+[\*](#note-10): [74.](#wasteland-content.xhtml_ln74) Cf. the Dirge in Webster's White Devil .
 
-[^11]: [76.](#wasteland-content.xhtml_ln76) V. Baudelaire, Preface to Fleurs du Mal.
+[\*](#note-11): [76.](#wasteland-content.xhtml_ln76) V. Baudelaire, Preface to Fleurs du Mal.
 
-[^12]: [77.](#wasteland-content.xhtml_ln77) Cf. Antony and Cleopatra, II. ii., l. 190.
+[\*](#note-12): [77.](#wasteland-content.xhtml_ln77) Cf. Antony and Cleopatra, II. ii., l. 190.
 
-[^13]: [92.](#wasteland-content.xhtml_ln92) Laquearia. V. Aeneid, I. 726:
+[\*](#note-13): [92.](#wasteland-content.xhtml_ln92) Laquearia. V. Aeneid, I. 726:
 
     > dependent lychni laquearibus aureis incensi, et noctem flammis\
     > funalia vincunt.
 
-[^14]: [98.](#wasteland-content.xhtml_ln98) Sylvan scene. V. Milton, Paradise Lost, iv. 140.
+[\*](#note-14): [98.](#wasteland-content.xhtml_ln98) Sylvan scene. V. Milton, Paradise Lost, iv. 140.
 
-[^15]: [99.](#wasteland-content.xhtml_ln99) V. Ovid, Metamorphoses, vi, Philomela.
+[\*](#note-15): [99.](#wasteland-content.xhtml_ln99) V. Ovid, Metamorphoses, vi, Philomela.
 
-[^16]: [100.](#wasteland-content.xhtml_ln100) Cf. Part III, l. 204.
+[\*](#note-16): [100.](#wasteland-content.xhtml_ln100) Cf. Part III, l. 204.
 
-[^17]: [115.](#wasteland-content.xhtml_ln115) Cf. Part III, l. 195.
+[\*](#note-17): [115.](#wasteland-content.xhtml_ln115) Cf. Part III, l. 195.
 
-[^18]: [118.](#wasteland-content.xhtml_ln118) Cf. Webster:
+[\*](#note-18): [118.](#wasteland-content.xhtml_ln118) Cf. Webster:
 
     > "Is the wind in that door still?"
 
-[^19]: [126.](#wasteland-content.xhtml_ln126) Cf. Part I, l. 37, 48.
+[\*](#note-19): [126.](#wasteland-content.xhtml_ln126) Cf. Part I, l. 37, 48.
 
-[^20]: [138.](#wasteland-content.xhtml_ln138) Cf. the game of chess in Middleton's Women beware Women.
+[\*](#note-20): [138.](#wasteland-content.xhtml_ln138) Cf. the game of chess in Middleton's Women beware Women.

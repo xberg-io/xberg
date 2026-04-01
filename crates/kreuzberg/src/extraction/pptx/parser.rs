@@ -310,9 +310,7 @@ fn parse_list_properties(p_node: &Node) -> Result<(u32, bool, bool)> {
         // Check for any bullet marker: buAutoNum, buChar, or lvl attribute
         // (but NOT buNone which explicitly disables bullets)
         let has_bu_none = p_pr_node.children().any(|n| {
-            n.is_element()
-                && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE)
-                && n.tag_name().name() == "buNone"
+            n.is_element() && n.tag_name().namespace() == Some(DRAWINGML_NAMESPACE) && n.tag_name().name() == "buNone"
         });
         has_bullet = !has_bu_none
             && (is_ordered
