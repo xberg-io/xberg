@@ -162,26 +162,6 @@ fn test_from_file_no_extension() {
 }
 
 #[test]
-fn test_legacy_max_upload_mb_in_file() {
-    let dir = tempdir().unwrap();
-    let config_path = dir.path().join("server.toml");
-
-    fs::write(
-        &config_path,
-        r#"
-host = "127.0.0.1"
-port = 8000
-max_upload_mb = 50
-        "#,
-    )
-    .unwrap();
-
-    let config = ServerConfig::from_toml_file(&config_path).unwrap();
-    assert_eq!(config.max_upload_mb, Some(50));
-    assert_eq!(config.max_multipart_field_bytes, 50 * 1_048_576);
-}
-
-#[test]
 fn test_cors_origins_empty_in_toml() {
     let dir = tempdir().unwrap();
     let config_path = dir.path().join("server.toml");

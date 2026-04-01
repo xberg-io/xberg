@@ -78,7 +78,7 @@ public class SmokeTest {
 
   @Test
   public void smokeImagePng() throws Exception {
-    JsonNode config = null;
+    JsonNode config = MAPPER.readTree("{\"disable_ocr\":true}");
     E2EHelpers.runFixture(
         "smoke_image_png",
         "images/sample.png",

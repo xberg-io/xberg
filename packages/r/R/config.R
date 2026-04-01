@@ -38,7 +38,8 @@
 #' @param ... Additional configuration options passed as named list elements.
 #' @return A named list representing the extraction configuration.
 #' @export
-extraction_config <- function(force_ocr = FALSE, disable_ocr = FALSE, force_ocr_pages = NULL, ocr = NULL, chunking = NULL,
+extraction_config <- function(force_ocr = FALSE, disable_ocr = FALSE,
+                              force_ocr_pages = NULL, ocr = NULL, chunking = NULL,
                               output_format = NULL, result_format = NULL,
                               use_cache = NULL, include_document_structure = NULL,
                               enable_quality_processing = NULL,

@@ -83,7 +83,7 @@ defmodule E2E.SmokeTest do
       case E2E.Helpers.run_fixture(
              "smoke_image_png",
              "images/sample.png",
-             nil,
+             %{disable_ocr: true},
              requirements: [],
              notes: "Image extraction requires image processing dependencies",
              skip_if_missing: true

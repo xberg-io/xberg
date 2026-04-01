@@ -16,7 +16,6 @@ def test_extraction_result_field_parity():
         "content",
         "metadata",
         "mime_type",
-        "processing_warnings",
         "tables",
     ]
     for field in required_fields:

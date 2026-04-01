@@ -18,7 +18,6 @@ fn cleanup_env_vars() {
         std::env::remove_var("KREUZBERG_CORS_ORIGINS");
         std::env::remove_var("KREUZBERG_MAX_REQUEST_BODY_BYTES");
         std::env::remove_var("KREUZBERG_MAX_MULTIPART_FIELD_BYTES");
-        std::env::remove_var("KREUZBERG_MAX_UPLOAD_SIZE_MB");
     }
 }
 
@@ -164,7 +163,6 @@ fn test_default_configuration() {
     assert!(config.cors_origins.is_empty());
     assert_eq!(config.max_request_body_bytes, 104_857_600); // 100 MB
     assert_eq!(config.max_multipart_field_bytes, 104_857_600); // 100 MB
-    assert!(config.max_upload_mb.is_none());
     assert_eq!(config.listen_addr(), "127.0.0.1:8000");
 }
 
@@ -334,49 +332,6 @@ cors_origins = ["https://file.com"]
     assert_eq!(config.cors_origins.len(), 2);
     assert!(config.cors_origins.contains(&"https://env1.com".to_string()));
     assert!(config.cors_origins.contains(&"https://env2.com".to_string()));
-
-    cleanup_env_vars();
-    restore_env(saved);
-}
-
-// Test 12: Legacy max_upload_mb backward compatibility
-#[test]
-fn test_legacy_max_upload_mb_in_file() {
-    let dir = tempdir().expect("Operation failed");
-    let config_path = dir.path().join("config.toml");
-
-    fs::write(
-        &config_path,
-        r#"
-host = "127.0.0.1"
-port = 8000
-max_upload_mb = 50
-"#,
-    )
-    .expect("Operation failed");
-
-    let config = ServerConfig::from_file(&config_path).expect("Operation failed");
-
-    assert_eq!(config.max_upload_mb, Some(50));
-    // Should be converted to bytes
-    assert_eq!(config.max_multipart_field_bytes, 50 * 1_048_576);
-}
-
-// Test 13: Legacy max_upload_mb env override
-#[test]
-#[serial_test::serial]
-fn test_legacy_max_upload_mb_env_override() {
-    let saved = save_env(&["KREUZBERG_MAX_UPLOAD_SIZE_MB"]);
-
-    set_env("KREUZBERG_MAX_UPLOAD_SIZE_MB", "75");
-
-    let mut config = ServerConfig::default();
-    assert!(config.max_upload_mb.is_none());
-
-    config.apply_env_overrides().expect("Operation failed");
-
-    assert_eq!(config.max_upload_mb, Some(75));
-    assert_eq!(config.max_multipart_field_bytes, 75 * 1_048_576);
 
     cleanup_env_vars();
     restore_env(saved);

@@ -8,7 +8,9 @@
 		"media_type": "image/png"
 	},
 	"extraction": {
-		"config": {}
+		"config": {
+			"disable_ocr": true
+		}
 	},
 	"assertions": {
 		"expected_mime": "image/png",

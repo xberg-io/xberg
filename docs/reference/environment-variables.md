@@ -137,29 +137,6 @@ export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=524288000
 export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=1073741824
 ```
 
-### KREUZBERG_MAX_UPLOAD_SIZE_MB
-
-**Type**: `usize` (megabytes)
-**Default**: Not set (use bytes-based limits above)
-**Status**: Deprecated
-
-Legacy environment variable for backward compatibility. Converts to `KREUZBERG_MAX_MULTIPART_FIELD_BYTES` automatically.
-
-```bash title="Deprecated Upload Size Setting"
-# Deprecated: Use KREUZBERG_MAX_MULTIPART_FIELD_BYTES instead
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=100
-```
-
-**Migration**: If you're using this, switch to `KREUZBERG_MAX_MULTIPART_FIELD_BYTES`:
-
-```bash title="Migration to New Upload Size Setting"
-# Old (deprecated)
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=100
-
-# New (recommended)
-export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=$((100 * 1048576))  # 100 MB in bytes
-```
-
 ## Extraction Configuration
 
 These variables control document extraction behavior, including OCR, text chunking, and caching.

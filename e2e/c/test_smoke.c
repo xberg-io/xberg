@@ -31,7 +31,7 @@ static void test_smoke_smoke_html_basic(void) {
 }
 
 static void test_smoke_smoke_image_png(void) {
-    CExtractionResult *result = run_extraction("images/sample.png", NULL);
+    CExtractionResult *result = run_extraction("images/sample.png", "{\"disable_ocr\":true}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     /* metadata assertion: format */

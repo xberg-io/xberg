@@ -25,9 +25,6 @@ use crate::{ExtractionConfig, KreuzbergError, service::ExtractionRequest, types:
 /// # Modern approach (in bytes):
 /// export KREUZBERG_MAX_REQUEST_BODY_BYTES=104857600     # 100 MB
 /// export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=104857600  # 100 MB
-///
-/// # Legacy approach (in MB, applies to both limits):
-/// export KREUZBERG_MAX_UPLOAD_SIZE_MB=100  # 100 MB
 /// ```
 ///
 /// # Examples

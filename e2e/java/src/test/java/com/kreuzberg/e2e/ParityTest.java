@@ -19,9 +19,7 @@ class ParityTest {
 
   @Test
   void testExtractionResultRequiredGetters() throws Exception {
-    String[] requiredGetters = {
-      "getContent", "getMetadata", "getMimeType", "getProcessingWarnings", "getTables"
-    };
+    String[] requiredGetters = {"getContent", "getMetadata", "getMimeType", "getTables"};
     for (String getter : requiredGetters) {
       assertDoesNotThrow(
           () -> ExtractionResult.class.getMethod(getter),

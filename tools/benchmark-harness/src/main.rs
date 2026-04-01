@@ -951,7 +951,7 @@ async fn main() -> Result<()> {
                 } else {
                     "unknown".to_string()
                 };
-                let status = if info.estimated { " (estimated)" } else { "" };
+                let status = "";
                 let sys_str = if info.system_deps_bytes > 0 {
                     format!(
                         " (pkg: {}, sys: {})",

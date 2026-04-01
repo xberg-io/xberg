@@ -8,28 +8,6 @@ use crate::core::config::ExtractionConfig;
 use crate::types::{ExtractionResult, ProcessingWarning};
 use std::borrow::Cow;
 
-/// Push a warning and insert a matching metadata error entry in one call.
-///
-/// Avoids the repeated three-step pattern of converting the error to a `String`,
-/// pushing a `ProcessingWarning`, and inserting a `serde_json::Value::String` into
-/// `result.metadata.additional`.
-fn push_warning_and_meta(
-    result: &mut ExtractionResult,
-    source: &'static str,
-    meta_key: &'static str,
-    error: impl std::fmt::Display,
-) {
-    let error_msg = error.to_string();
-    result.processing_warnings.push(ProcessingWarning {
-        source: Cow::Borrowed(source),
-        message: Cow::Owned(error_msg.clone()),
-    });
-    result
-        .metadata
-        .additional
-        .insert(Cow::Borrowed(meta_key), serde_json::Value::String(error_msg));
-}
-
 /// Execute chunking if configured.
 pub(super) fn execute_chunking(result: &mut ExtractionResult, config: &ExtractionConfig) -> Result<()> {
     #[cfg(feature = "chunking")]
@@ -54,22 +32,13 @@ pub(super) fn execute_chunking(result: &mut ExtractionResult, config: &Extractio
                 #[cfg(feature = "embeddings")]
                 if let Some(ref embedding_config) = chunking_config.embedding
                     && let Some(ref mut chunks) = result.chunks
+                    && let Err(e) = crate::embeddings::generate_embeddings_for_chunks(chunks, embedding_config)
                 {
-                    match crate::embeddings::generate_embeddings_for_chunks(chunks, embedding_config) {
-                        Ok(()) => {
-                            // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                            // embeddings_generated is derivable from result.chunks having non-None embeddings.
-                            result
-                                .metadata
-                                .additional
-                                .insert(Cow::Borrowed("embeddings_generated"), serde_json::Value::Bool(true));
-                        }
-                        Err(e) => {
-                            tracing::warn!("Embedding generation failed: {e}. Check that ONNX Runtime is installed.");
-                            // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                            push_warning_and_meta(result, "embedding", "embedding_error", e);
-                        }
-                    }
+                    tracing::warn!("Embedding generation failed: {e}. Check that ONNX Runtime is installed.");
+                    result.processing_warnings.push(ProcessingWarning {
+                        source: Cow::Borrowed("embedding"),
+                        message: Cow::Owned(e.to_string()),
+                    });
                 }
 
                 #[cfg(not(feature = "embeddings"))]
@@ -77,21 +46,27 @@ pub(super) fn execute_chunking(result: &mut ExtractionResult, config: &Extractio
                     tracing::warn!(
                         "Embedding config provided but embeddings feature is not enabled. Recompile with --features embeddings."
                     );
-                    // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                    push_warning_and_meta(result, "embedding", "embedding_error", "Embeddings feature not enabled");
+                    result.processing_warnings.push(ProcessingWarning {
+                        source: Cow::Borrowed("embedding"),
+                        message: Cow::Borrowed("Embeddings feature not enabled"),
+                    });
                 }
             }
             Err(e) => {
-                // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                push_warning_and_meta(result, "chunking", "chunking_error", e);
+                result.processing_warnings.push(ProcessingWarning {
+                    source: Cow::Borrowed("chunking"),
+                    message: Cow::Owned(e.to_string()),
+                });
             }
         }
     }
 
     #[cfg(not(feature = "chunking"))]
     if config.chunking.is_some() {
-        // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-        push_warning_and_meta(result, "chunking", "chunking_error", "Chunking feature not enabled");
+        result.processing_warnings.push(ProcessingWarning {
+            source: Cow::Borrowed("chunking"),
+            message: Cow::Borrowed("Chunking feature not enabled"),
+        });
     }
 
     Ok(())
@@ -106,21 +81,20 @@ pub(super) fn execute_language_detection(result: &mut ExtractionResult, config: 
                 result.detected_languages = detected;
             }
             Err(e) => {
-                // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-                push_warning_and_meta(result, "language_detection", "language_detection_error", e);
+                result.processing_warnings.push(ProcessingWarning {
+                    source: Cow::Borrowed("language_detection"),
+                    message: Cow::Owned(e.to_string()),
+                });
             }
         }
     }
 
     #[cfg(not(feature = "language-detection"))]
     if config.language_detection.is_some() {
-        // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-        push_warning_and_meta(
-            result,
-            "language_detection",
-            "language_detection_error",
-            "Language detection feature not enabled",
-        );
+        result.processing_warnings.push(ProcessingWarning {
+            source: Cow::Borrowed("language_detection"),
+            message: Cow::Borrowed("Language detection feature not enabled"),
+        });
     }
 
     Ok(())
@@ -148,7 +122,10 @@ pub(super) fn execute_token_reduction(result: &mut ExtractionResult, config: &Ex
                     result.content = reduced;
                 }
                 Err(e) => {
-                    push_warning_and_meta(result, "token_reduction", "token_reduction_error", e);
+                    result.processing_warnings.push(ProcessingWarning {
+                        source: Cow::Borrowed("token_reduction"),
+                        message: Cow::Owned(e.to_string()),
+                    });
                 }
             }
         }
@@ -156,12 +133,10 @@ pub(super) fn execute_token_reduction(result: &mut ExtractionResult, config: &Ex
 
     #[cfg(not(feature = "quality"))]
     if config.token_reduction.is_some() {
-        push_warning_and_meta(
-            result,
-            "token_reduction",
-            "token_reduction_error",
-            "Token reduction requires the quality feature",
-        );
+        result.processing_warnings.push(ProcessingWarning {
+            source: Cow::Borrowed("token_reduction"),
+            message: Cow::Borrowed("Token reduction requires the quality feature"),
+        });
     }
 
     Ok(())

@@ -128,6 +128,7 @@ impl DocumentExtractor for PstExtractor {
         let (messages, _processing_warnings) = crate::extraction::pst::extract_pst_from_path(path)?;
 
         let mut doc = InternalDocument::new("pst");
+        doc.mime_type = std::borrow::Cow::Owned(mime_type.to_string());
 
         for msg in &messages {
             let msg_text = crate::extraction::email::build_email_text_output(msg);

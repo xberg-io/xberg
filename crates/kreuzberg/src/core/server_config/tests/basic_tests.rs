@@ -10,7 +10,6 @@ fn test_default_config() {
     assert!(config.cors_origins.is_empty());
     assert_eq!(config.max_request_body_bytes, 104_857_600);
     assert_eq!(config.max_multipart_field_bytes, 104_857_600);
-    assert!(config.max_upload_mb.is_none());
 }
 
 #[test]
@@ -79,46 +78,10 @@ fn test_max_bytes_to_mb_rounding() {
 }
 
 #[test]
-fn test_normalize_legacy_max_upload_mb() {
-    let mut config = ServerConfig {
-        max_upload_mb: Some(50),
-        ..Default::default()
-    };
-
-    config.normalize_legacy_fields();
-
-    assert_eq!(config.max_multipart_field_bytes, 50 * 1_048_576);
-}
-
-#[test]
-fn test_normalize_legacy_max_upload_mb_zero() {
-    let mut config = ServerConfig {
-        max_upload_mb: Some(0),
-        ..Default::default()
-    };
-
-    config.normalize_legacy_fields();
-
-    assert_eq!(config.max_multipart_field_bytes, 0);
-}
-
-#[test]
 fn test_serde_default_serialization() {
     let config = ServerConfig::default();
     let json = serde_json::to_string(&config).unwrap();
 
-    // Should serialize without the max_upload_mb field when None
-    assert!(!json.contains("max_upload_mb"));
-}
-
-#[test]
-fn test_serde_with_max_upload_mb_serialization() {
-    let config = ServerConfig {
-        max_upload_mb: Some(50),
-        ..Default::default()
-    };
-    let json = serde_json::to_string(&config).unwrap();
-
-    // Should serialize with max_upload_mb when Some
-    assert!(json.contains("max_upload_mb"));
+    assert!(json.contains("host"));
+    assert!(json.contains("port"));
 }

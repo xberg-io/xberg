@@ -58,7 +58,7 @@ namespace Kreuzberg.E2E.Smoke
             TestHelpers.SkipIfLegacyOfficeDisabled("images/sample.png");
             TestHelpers.SkipIfOfficeTestOnWindows("images/sample.png");
             var documentPath = TestHelpers.EnsureDocument("images/sample.png", true);
-            var config = TestHelpers.BuildConfig(null);
+            var config = TestHelpers.BuildConfig("{\"disable_ocr\":true}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "image/png" });

@@ -524,8 +524,8 @@ spec:
           value: "/app/.kreuzberg/huggingface"
         - name: KREUZBERG_CORS_ORIGINS
           value: "https://app.example.com"
-        - name: KREUZBERG_MAX_UPLOAD_SIZE_MB
-          value: "500"
+        - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
+          value: "524288000"
         args: ["serve", "--host", "0.0.0.0", "--port", "8000"]
         resources:
           requests:
@@ -680,8 +680,8 @@ spec:
           value: "/app/.kreuzberg/huggingface"
         - name: KREUZBERG_CORS_ORIGINS
           value: "https://app.example.com,https://api.example.com"
-        - name: KREUZBERG_MAX_UPLOAD_SIZE_MB
-          value: "1000"
+        - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
+          value: "1048576000"
         args: ["serve", "--host", "0.0.0.0", "--port", "8000", "--config", "/etc/kreuzberg/kreuzberg.toml"]
         resources:
           requests:

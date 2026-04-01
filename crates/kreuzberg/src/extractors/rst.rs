@@ -797,7 +797,7 @@ impl RstExtractor {
                 || trimmed.starts_with(".. tip::")
             {
                 let kind = trimmed.strip_prefix(".. ").unwrap_or("").trim_end_matches("::").trim();
-                b.push_admonition(kind, None, None);
+                let idx = b.push_admonition(kind, None, None);
                 i += 1;
                 let mut admonition_text = String::new();
                 while i < lines.len() && (lines[i].starts_with("   ") || lines[i].is_empty()) {
@@ -809,8 +809,10 @@ impl RstExtractor {
                     }
                     i += 1;
                 }
+                // Replace the kind-name text with the actual body text so the
+                // rendering layer puts the content inside the alert block.
                 if !admonition_text.is_empty() {
-                    b.push_paragraph(&admonition_text, vec![], None, None);
+                    b.set_text(idx, &admonition_text);
                 }
                 continue;
             }
