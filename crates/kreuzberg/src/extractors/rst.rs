@@ -114,6 +114,23 @@ impl RstExtractor {
                 continue;
             }
 
+            // Overline+underline heading (document title): skip the overline,
+            // emit the title text, skip the underline.
+            if Self::is_section_underline(line.trim())
+                && i + 2 < lines.len()
+                && !lines[i + 1].trim().is_empty()
+                && Self::is_section_underline(lines[i + 2])
+            {
+                let overline_char = line.trim().chars().next().unwrap_or('=');
+                let underline_char = lines[i + 2].trim().chars().next().unwrap_or('=');
+                if overline_char == underline_char {
+                    output.push_str(lines[i + 1].trim());
+                    output.push('\n');
+                    i += 3;
+                    continue;
+                }
+            }
+
             if i + 1 < lines.len() {
                 let next_line = lines[i + 1];
                 if Self::is_section_underline(next_line) && !line.trim().is_empty() {
@@ -647,6 +664,7 @@ impl RstExtractor {
         let mut b = InternalDocumentBuilder::new("rst");
         let lines: Vec<&str> = content.lines().collect();
         let mut heading_char_order: Vec<char> = Vec::new();
+        let mut highlight_lang: Option<String> = None;
         let mut i = 0;
 
         while i < lines.len() {
@@ -674,9 +692,26 @@ impl RstExtractor {
                 continue;
             }
 
+            // Overline+underline heading (document title): markup line, then text,
+            // then same markup line.  RST convention: this is the document title → H1.
+            if Self::is_section_underline(trimmed)
+                && i + 2 < lines.len()
+                && !lines[i + 1].trim().is_empty()
+                && Self::is_section_underline(lines[i + 2])
+            {
+                let overline_char = trimmed.chars().next().unwrap_or('=');
+                let underline_char = lines[i + 2].trim().chars().next().unwrap_or('=');
+                if overline_char == underline_char {
+                    let title_text = lines[i + 1].trim();
+                    b.push_heading(1, title_text, None, None);
+                    i += 3;
+                    continue;
+                }
+            }
+
             // Heading: text line followed by underline
-            // RST headings start at level 2 in the output because level 1 is
-            // reserved for the document title (which lives in metadata).
+            // Section headings (underline only) start at level 2; the first
+            // underline character seen is H2, the second is H3, etc.
             if i + 1 < lines.len() && !trimmed.is_empty() && Self::is_section_underline(lines[i + 1]) {
                 let underline_char = lines[i + 1].trim().chars().next().unwrap_or('=');
                 if !heading_char_order.contains(&underline_char) {
@@ -845,6 +880,18 @@ impl RstExtractor {
                 continue;
             }
 
+            // Highlight directive: sets the default language for subsequent :: blocks.
+            if trimmed.starts_with(".. highlight::") {
+                let lang = trimmed.strip_prefix(".. highlight::").unwrap_or("").trim();
+                highlight_lang = if lang.is_empty() { None } else { Some(lang.to_string()) };
+                i += 1;
+                // Skip any options block
+                while i < lines.len() && (lines[i].starts_with("   ") || lines[i].is_empty()) {
+                    i += 1;
+                }
+                continue;
+            }
+
             // Other directives - skip
             if trimmed.starts_with(".. ") || trimmed == ".." {
                 i += 1;
@@ -925,6 +972,44 @@ impl RstExtractor {
                     i += 1;
                 }
                 b.end_list();
+                continue;
+            }
+
+            // ``::`` literal block: a line ending with ``::`` introduces an
+            // indented code block.  The ``.. highlight::`` directive, if any,
+            // sets the default language.
+            if trimmed.ends_with("::") && !trimmed.starts_with(".. ") {
+                // Emit the introductory text (strip the trailing `::`)
+                if let Some(display_text) = trimmed.strip_suffix("::")
+                    && !display_text.is_empty()
+                {
+                    let (stripped, annotations) = Self::parse_inline_markup(display_text);
+                    b.push_paragraph(&stripped, annotations, None, None);
+                }
+                i += 1;
+                // Skip blank lines between intro and indented content
+                while i < lines.len() && lines[i].trim().is_empty() {
+                    i += 1;
+                }
+                // Collect indented content
+                let mut code_content = String::new();
+                while i < lines.len() && (lines[i].starts_with("   ") || lines[i].is_empty()) {
+                    if !code_content.is_empty() {
+                        code_content.push('\n');
+                    }
+                    if lines[i].starts_with("   ") {
+                        code_content.push_str(&lines[i][3..]);
+                    }
+                    i += 1;
+                }
+                if !code_content.is_empty() {
+                    b.push_code(
+                        code_content.trim_end(),
+                        highlight_lang.as_deref(),
+                        None,
+                        None,
+                    );
+                }
                 continue;
             }
 

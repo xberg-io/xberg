@@ -148,19 +148,35 @@ impl OrgModeExtractor {
     fn extract_org_tree(org: &Org, content: &mut String) {
         let heading = org.heading();
         if !heading.is_empty() {
+            let (stripped, _) = Self::parse_inline_markup(heading);
             content.push_str("# ");
-            content.push_str(heading);
+            content.push_str(&stripped);
             content.push('\n');
         }
 
         let lines = org.content_as_ref();
         if !lines.is_empty() {
+            // Join consecutive non-empty lines into paragraphs separated by blank lines
+            let mut paragraph_lines: Vec<&str> = Vec::new();
             for line in lines {
                 let trimmed = line.trim();
-                if !trimmed.is_empty() {
-                    content.push_str(trimmed);
-                    content.push('\n');
+                if trimmed.is_empty() {
+                    if !paragraph_lines.is_empty() {
+                        let joined = paragraph_lines.join(" ");
+                        let (stripped, _) = Self::parse_inline_markup(&joined);
+                        content.push_str(&stripped);
+                        content.push('\n');
+                        paragraph_lines.clear();
+                    }
+                } else {
+                    paragraph_lines.push(trimmed);
                 }
+            }
+            if !paragraph_lines.is_empty() {
+                let joined = paragraph_lines.join(" ");
+                let (stripped, _) = Self::parse_inline_markup(&joined);
+                content.push_str(&stripped);
+                content.push('\n');
             }
             content.push('\n');
         }
@@ -625,12 +641,37 @@ impl OrgModeExtractor {
                 b.push_list(is_ordered);
                 while i < lines.len() {
                     let t = lines[i].trim();
-                    if t.is_empty() || !Self::is_org_list_item(t) {
+                    if t.is_empty() {
                         break;
                     }
-                    let text = Self::strip_list_prefix(t);
-                    b.push_list_item(text, is_ordered, vec![], None, None);
-                    i += 1;
+                    if Self::is_org_list_item(t) {
+                        // New list item — collect its text plus any continuation lines
+                        let item_text = Self::strip_list_prefix(t);
+                        let mut item_parts: Vec<&str> = vec![item_text];
+                        i += 1;
+                        // Continuation lines: indented, not a new list item, not empty,
+                        // not a structural start
+                        while i < lines.len() {
+                            let raw_next = lines[i];
+                            let next_t = raw_next.trim();
+                            if next_t.is_empty() || Self::is_org_list_item(next_t) || Self::is_structural_start(next_t)
+                            {
+                                break;
+                            }
+                            // Must be indented (original line starts with whitespace) to be continuation
+                            if raw_next.starts_with(' ') || raw_next.starts_with('\t') {
+                                item_parts.push(next_t);
+                                i += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        let joined_item = item_parts.join(" ");
+                        b.push_list_item(&joined_item, is_ordered, vec![], None, None);
+                    } else {
+                        // Non-list-item, non-empty line that isn't indented continuation — stop the list
+                        break;
+                    }
                 }
                 b.end_list();
                 continue;
@@ -651,7 +692,8 @@ impl OrgModeExtractor {
                 continue;
             }
 
-            // Regular paragraph with inline markup and internal links
+            // Regular paragraph with inline markup and internal links.
+            // Collect continuation lines to form a single paragraph (Bug fix: join hard-wrapped lines).
             if !trimmed.is_empty() {
                 // Check if the line is a standalone image link
                 if let Some((url, display, consumed_to)) = Self::parse_org_link(trimmed, 0)
@@ -685,9 +727,31 @@ impl OrgModeExtractor {
                     continue;
                 }
 
+                // Collect all continuation lines for this paragraph.
+                // A continuation line is a non-empty line that doesn't start a structural element.
+                let mut para_raw_lines: Vec<&str> = vec![trimmed];
+                let mut next = i + 1;
+                while next < lines.len() {
+                    let next_trimmed = lines[next].trim();
+                    if next_trimmed.is_empty() || Self::is_structural_start(next_trimmed) {
+                        break;
+                    }
+                    // Also stop if it looks like a standalone image link
+                    if let Some((url, _, consumed_to)) = Self::parse_org_link(next_trimmed, 0)
+                        && consumed_to == next_trimmed.len()
+                        && Self::is_image_url(&url)
+                    {
+                        break;
+                    }
+                    para_raw_lines.push(next_trimmed);
+                    next += 1;
+                }
+
+                let joined_raw = para_raw_lines.join(" ");
+
                 // Check for footnote references [fn:name]
-                let footnote_refs = Self::find_footnote_references(trimmed);
-                let (stripped, annotations) = Self::parse_inline_markup(trimmed);
+                let footnote_refs = Self::find_footnote_references(&joined_raw);
+                let (stripped, annotations) = Self::parse_inline_markup(&joined_raw);
 
                 // Extract URIs from link annotations
                 for ann in &annotations {
@@ -724,7 +788,10 @@ impl OrgModeExtractor {
                 }
 
                 // Check for internal org links [[#anchor]] or [[*heading]]
-                Self::extract_internal_links(trimmed, idx, &mut b);
+                Self::extract_internal_links(&joined_raw, idx, &mut b);
+
+                i = next;
+                continue;
             }
 
             i += 1;
@@ -776,6 +843,50 @@ impl OrgModeExtractor {
                 break;
             }
         }
+    }
+
+    /// Check if a trimmed line starts a new structural element (heading, block, table, list, etc.).
+    /// Used to determine paragraph continuation boundaries.
+    fn is_structural_start(trimmed: &str) -> bool {
+        // Heading
+        if trimmed.starts_with('*') {
+            let mut level: u8 = 0;
+            for ch in trimmed.chars() {
+                if ch == '*' {
+                    level += 1;
+                } else {
+                    break;
+                }
+            }
+            if level > 0 && trimmed.len() > level as usize && trimmed.as_bytes()[level as usize] == b' ' {
+                return true;
+            }
+        }
+        // Block delimiters
+        if trimmed.starts_with("#+BEGIN") || trimmed.starts_with("#+begin") || trimmed.starts_with("#+END") || trimmed.starts_with("#+end") {
+            return true;
+        }
+        // Metadata directives
+        if trimmed.starts_with("#+") {
+            return true;
+        }
+        // Properties drawer
+        if trimmed == ":PROPERTIES:" || trimmed == ":END:" {
+            return true;
+        }
+        // Table
+        if trimmed.starts_with('|') && trimmed.ends_with('|') {
+            return true;
+        }
+        // List item
+        if Self::is_org_list_item(trimmed) {
+            return true;
+        }
+        // Footnote definition
+        if trimmed.starts_with("[fn:") {
+            return true;
+        }
+        false
     }
 
     /// Check if a line is an Org list item.
@@ -1180,9 +1291,10 @@ mod tests {
         let content = OrgModeExtractor::extract_content(&org);
 
         assert!(content.contains("AT&T"), "Description should be prioritized over URL");
+        // Inline markup is now stripped: [[url][desc]] → desc (not [desc])
         assert!(
-            content.contains("[AT&T]"),
-            "Link should be formatted as [description] when description exists"
+            !content.contains("[["),
+            "Raw org link syntax should be stripped by inline markup processing"
         );
     }
 

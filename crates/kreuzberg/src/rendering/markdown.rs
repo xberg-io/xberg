@@ -38,6 +38,17 @@ pub fn render_markdown(doc: &InternalDocument) -> String {
         output = output.replace("\\_", "_");
     }
 
+    // Un-escape stars and hashes: comrak escapes `*` as `\*` and `#` as `\#` to
+    // prevent false emphasis / ATX-heading interpretation.  Our AST already
+    // represents structure explicitly, so these escapes are unnecessary and
+    // corrupt the output (e.g. RST `* item` → `\* item`, `#. item` → `\#. item`).
+    if output.contains("\\*") {
+        output = output.replace("\\*", "*");
+    }
+    if output.contains("\\#") {
+        output = output.replace("\\#", "#");
+    }
+
     // Trim trailing whitespace but keep single trailing newline
     let trimmed_len = output.trim_end().len();
     if trimmed_len == 0 {
