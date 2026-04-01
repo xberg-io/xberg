@@ -1,0 +1,205 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://kreuzberg.dev/schemas/document-content.schema.json",
+	"title": "JsonDocument",
+	"description": "Kreuzberg structured JSON content output. A heading-driven tree where headings create nested sections.",
+	"type": "object",
+	"properties": {
+		"title": {
+			"type": "string",
+			"description": "Document title, if found."
+		},
+		"body": {
+			"type": "array",
+			"items": {
+				"$ref": "#/$defs/node"
+			},
+			"description": "Body content nodes."
+		}
+	},
+	"required": ["body"],
+	"additionalProperties": false,
+	"$defs": {
+		"node": {
+			"description": "A node in the JSON document tree, discriminated by the 'type' field.",
+			"oneOf": [
+				{ "$ref": "#/$defs/section" },
+				{ "$ref": "#/$defs/paragraph" },
+				{ "$ref": "#/$defs/table" },
+				{ "$ref": "#/$defs/code" },
+				{ "$ref": "#/$defs/formula" },
+				{ "$ref": "#/$defs/list" },
+				{ "$ref": "#/$defs/image" },
+				{ "$ref": "#/$defs/blockquote" }
+			]
+		},
+		"section": {
+			"type": "object",
+			"description": "A heading-delimited section containing nested content.",
+			"properties": {
+				"type": {
+					"const": "section"
+				},
+				"heading": {
+					"type": "string",
+					"description": "The heading text for this section."
+				},
+				"level": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 6,
+					"description": "Heading level (1-6)."
+				},
+				"body": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/node"
+					},
+					"description": "Child content nodes within this section."
+				}
+			},
+			"required": ["type", "heading", "level", "body"],
+			"additionalProperties": false
+		},
+		"paragraph": {
+			"type": "object",
+			"description": "A text paragraph.",
+			"properties": {
+				"type": {
+					"const": "paragraph"
+				},
+				"text": {
+					"type": "string",
+					"description": "The paragraph text content."
+				}
+			},
+			"required": ["type", "text"],
+			"additionalProperties": false
+		},
+		"table": {
+			"type": "object",
+			"description": "A table with headers and rows.",
+			"properties": {
+				"type": {
+					"const": "table"
+				},
+				"headers": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "Column header labels."
+				},
+				"rows": {
+					"type": "array",
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"description": "Table data rows (each row is an array of cell strings)."
+				},
+				"caption": {
+					"type": "string",
+					"description": "Optional table caption."
+				}
+			},
+			"required": ["type", "headers", "rows"],
+			"additionalProperties": false
+		},
+		"code": {
+			"type": "object",
+			"description": "A code block with optional language.",
+			"properties": {
+				"type": {
+					"const": "code"
+				},
+				"text": {
+					"type": "string",
+					"description": "The code content."
+				},
+				"language": {
+					"type": "string",
+					"description": "Programming language identifier."
+				}
+			},
+			"required": ["type", "text"],
+			"additionalProperties": false
+		},
+		"formula": {
+			"type": "object",
+			"description": "A mathematical formula.",
+			"properties": {
+				"type": {
+					"const": "formula"
+				},
+				"text": {
+					"type": "string",
+					"description": "The formula text (e.g. LaTeX notation)."
+				}
+			},
+			"required": ["type", "text"],
+			"additionalProperties": false
+		},
+		"list": {
+			"type": "object",
+			"description": "An ordered or unordered list.",
+			"properties": {
+				"type": {
+					"const": "list"
+				},
+				"ordered": {
+					"type": "boolean",
+					"description": "Whether the list is ordered (numbered) or unordered (bulleted)."
+				},
+				"items": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"description": "List item text content."
+				}
+			},
+			"required": ["type", "ordered", "items"],
+			"additionalProperties": false
+		},
+		"image": {
+			"type": "object",
+			"description": "An image reference.",
+			"properties": {
+				"type": {
+					"const": "image"
+				},
+				"alt": {
+					"type": "string",
+					"description": "Alternative text description of the image."
+				},
+				"src": {
+					"type": "string",
+					"description": "Image source path or generated filename."
+				}
+			},
+			"required": ["type"],
+			"additionalProperties": false
+		},
+		"blockquote": {
+			"type": "object",
+			"description": "A blockquote containing nested content.",
+			"properties": {
+				"type": {
+					"const": "blockquote"
+				},
+				"body": {
+					"type": "array",
+					"items": {
+						"$ref": "#/$defs/node"
+					},
+					"description": "Child content nodes within this blockquote."
+				}
+			},
+			"required": ["type", "body"],
+			"additionalProperties": false
+		}
+	}
+}

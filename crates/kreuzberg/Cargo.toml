@@ -396,6 +396,7 @@ anyhow = { workspace = true }
 criterion = { workspace = true }
 filetime = "0.2"
 image = { workspace = true, default-features = false, features = ["png"] }
+jsonschema = "0.45"
 serial_test = "3.4.0"
 tar = "0.4.45"
 tempfile = { workspace = true }
