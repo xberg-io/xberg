@@ -2,4 +2,4 @@
 
 This example tests FictionBook titles.
 
-## *Emphasized* **Strong** Title
+## Emphasized Strong Title

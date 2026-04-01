@@ -11,4 +11,4 @@ Pyout -----
     <b>HTML</b>
     """)
 
-Image ----- This image ![the moon](attachment:lalune.jpg) will be included as a cell attachment.
+Image ----- This image \!\[the moon\](attachment:lalune.jpg) will be included as a cell attachment.

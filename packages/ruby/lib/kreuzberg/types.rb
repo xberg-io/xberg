@@ -10,21 +10,24 @@ module Kreuzberg
   #
   # @example
   #   type = Kreuzberg::ElementType::TITLE
+  #   Kreuzberg::ElementType.values # => ["title", "narrative_text", ...]
   #
-  ElementType = T.type_alias do
-    T.any(
-      'title',
-      'narrative_text',
-      'heading',
-      'list_item',
-      'table',
-      'image',
-      'page_break',
-      'code_block',
-      'block_quote',
-      'footer',
-      'header'
-    )
+  module ElementType
+    TITLE = 'title'
+    NARRATIVE_TEXT = 'narrative_text'
+    HEADING = 'heading'
+    LIST_ITEM = 'list_item'
+    TABLE = 'table'
+    IMAGE = 'image'
+    PAGE_BREAK = 'page_break'
+    CODE_BLOCK = 'code_block'
+    BLOCK_QUOTE = 'block_quote'
+    FOOTER = 'footer'
+    HEADER = 'header'
+
+    def self.values
+      [TITLE, NARRATIVE_TEXT, HEADING, LIST_ITEM, TABLE, IMAGE, PAGE_BREAK, CODE_BLOCK, BLOCK_QUOTE, FOOTER, HEADER]
+    end
   end
 
   # Bounding box coordinates for element positioning.
@@ -430,5 +433,191 @@ module Kreuzberg
     const :content, T.nilable(String)
     const :page_number, T.nilable(Integer)
     const :bounding_box, T.nilable(PdfAnnotationBoundingBox)
+  end
+
+  # An entry within an archive (zip, tar, etc.) extraction result.
+  #
+  # @example
+  #   entry = Kreuzberg::ArchiveEntry.new(
+  #     path: "readme.txt",
+  #     mime_type: "text/plain",
+  #     result: extraction_result
+  #   )
+  #
+  class ArchiveEntry < T::Struct
+    extend T::Sig
+
+    const :path, String
+    const :mime_type, String
+    const :result, T.untyped
+  end
+
+  # Extracted keyword with relevance metadata.
+  #
+  # @example
+  #   kw = Kreuzberg::Keyword.new(
+  #     text: "machine learning",
+  #     score: 0.95,
+  #     algorithm: "yake",
+  #     positions: [42, 128]
+  #   )
+  #
+  class Keyword < T::Struct
+    extend T::Sig
+
+    const :text, String
+    const :score, Float
+    const :algorithm, String
+    const :positions, T.nilable(T::Array[Integer])
+  end
+
+  # A table extracted from a document.
+  #
+  # @example
+  #   table = Kreuzberg::Table.new(
+  #     cells: [["A", "B"], ["1", "2"]],
+  #     markdown: "| A | B |\n|---|---|\n| 1 | 2 |",
+  #     page_number: 1,
+  #     bounding_box: bbox
+  #   )
+  #
+  class Table < T::Struct
+    extend T::Sig
+
+    const :cells, T::Array[T::Array[String]]
+    const :markdown, String
+    const :page_number, Integer
+    const :bounding_box, T.nilable(BoundingBox)
+  end
+
+  # A URI extracted from a document.
+  #
+  # @example
+  #   uri = Kreuzberg::Uri.new(
+  #     url: "https://example.com",
+  #     kind: "hyperlink",
+  #     label: "Example",
+  #     page: 1
+  #   )
+  #
+  class Uri < T::Struct
+    extend T::Sig
+
+    const :url, String
+    const :kind, String
+    const :label, T.nilable(String)
+    const :page, T.nilable(Integer)
+  end
+
+  # Content layer classification for document nodes.
+  module ContentLayer
+    BODY = 'body'
+    HEADER = 'header'
+    FOOTER = 'footer'
+    FOOTNOTE = 'footnote'
+
+    def self.values
+      [BODY, HEADER, FOOTER, FOOTNOTE]
+    end
+  end
+
+  # Algorithm used for keyword extraction.
+  module KeywordAlgorithm
+    YAKE = 'yake'
+    RAKE = 'rake'
+
+    def self.values
+      [YAKE, RAKE]
+    end
+  end
+
+  # OCR element granularity level.
+  module OcrElementLevel
+    WORD = 'word'
+    LINE = 'line'
+    BLOCK = 'block'
+    PAGE = 'page'
+
+    def self.values
+      [WORD, LINE, BLOCK, PAGE]
+    end
+  end
+
+  # Output format for extraction results.
+  module OutputFormat
+    PLAIN = 'plain'
+    MARKDOWN = 'markdown'
+    DJOT = 'djot'
+    HTML = 'html'
+    STRUCTURED = 'structured'
+
+    def self.values
+      [PLAIN, MARKDOWN, DJOT, HTML, STRUCTURED]
+    end
+  end
+
+  # Page unit type classification.
+  module PageUnitType
+    PAGE = 'page'
+    SLIDE = 'slide'
+    SHEET = 'sheet'
+
+    def self.values
+      [PAGE, SLIDE, SHEET]
+    end
+  end
+
+  # PDF annotation type classification.
+  module PdfAnnotationType
+    TEXT = 'text'
+    HIGHLIGHT = 'highlight'
+    LINK = 'link'
+    STAMP = 'stamp'
+    UNDERLINE = 'underline'
+    STRIKE_OUT = 'strike_out'
+    OTHER = 'other'
+
+    def self.values
+      [TEXT, HIGHLIGHT, LINK, STAMP, UNDERLINE, STRIKE_OUT, OTHER]
+    end
+  end
+
+  # Relationship kind between document elements.
+  module RelationshipKind
+    FOOTNOTE_REFERENCE = 'footnote_reference'
+    CITATION_REFERENCE = 'citation_reference'
+    INTERNAL_LINK = 'internal_link'
+    CAPTION = 'caption'
+    LABEL = 'label'
+    TOC_ENTRY = 'toc_entry'
+    CROSS_REFERENCE = 'cross_reference'
+
+    def self.values
+      [FOOTNOTE_REFERENCE, CITATION_REFERENCE, INTERNAL_LINK, CAPTION, LABEL, TOC_ENTRY, CROSS_REFERENCE]
+    end
+  end
+
+  # Result format classification.
+  module ResultFormat
+    UNIFIED = 'unified'
+    ELEMENT_BASED = 'element_based'
+
+    def self.values
+      [UNIFIED, ELEMENT_BASED]
+    end
+  end
+
+  # URI kind classification.
+  module UriKind
+    HYPERLINK = 'hyperlink'
+    IMAGE = 'image'
+    ANCHOR = 'anchor'
+    CITATION = 'citation'
+    REFERENCE = 'reference'
+    EMAIL = 'email'
+
+    def self.values
+      [HYPERLINK, IMAGE, ANCHOR, CITATION, REFERENCE, EMAIL]
+    end
   end
 end

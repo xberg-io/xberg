@@ -199,22 +199,26 @@ async fn test_fictionbook_markdown_formatting_preservation() {
         .extract_file(&path, "application/x-fictionbook+xml", &config)
         .await
         .expect("Failed to extract FB2 file");
-    let result = derive_extraction_result(doc, false, kreuzberg::OutputFormat::Plain);
+    let result = derive_extraction_result(doc, false, kreuzberg::OutputFormat::Markdown);
 
+    let md = result
+        .formatted_content
+        .as_deref()
+        .expect("formatted_content should be set for Markdown output");
     assert!(
-        result.content.contains("**strong**"),
+        md.contains("**strong**"),
         "Strong text should be formatted as **bold** in markdown"
     );
     assert!(
-        result.content.contains("*emphasis*"),
+        md.contains("*emphasis*"),
         "Emphasis text should be formatted as *italic* in markdown"
     );
     assert!(
-        result.content.contains("~~deleted~~"),
+        md.contains("~~deleted~~"),
         "Strikethrough text should be formatted as ~~strikethrough~~ in markdown"
     );
     assert!(
-        result.content.contains("`code`"),
+        md.contains("`code`"),
         "Code text should be wrapped in backticks in markdown"
     );
 }
@@ -232,18 +236,22 @@ async fn test_fictionbook_formatting_in_body_paragraphs() {
         .extract_file(&path, "application/x-fictionbook+xml", &config)
         .await
         .expect("Failed to extract FB2 file");
-    let result = derive_extraction_result(doc, false, kreuzberg::OutputFormat::Plain);
+    let result = derive_extraction_result(doc, false, kreuzberg::OutputFormat::Markdown);
 
+    let md = result
+        .formatted_content
+        .as_deref()
+        .expect("formatted_content should be set for Markdown output");
     assert!(
-        result.content.contains("*emphasized*"),
+        md.contains("*emphasized*"),
         "Emphasis formatting should be preserved in body content"
     );
     assert!(
-        result.content.contains("**strong**"),
+        md.contains("**strong**"),
         "Strong formatting should be preserved in body content"
     );
     assert!(
-        result.content.contains("`verbatim`"),
+        md.contains("`verbatim`"),
         "Code formatting should be preserved in body content"
     );
 }

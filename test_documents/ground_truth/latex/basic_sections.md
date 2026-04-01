@@ -1,3 +1,9 @@
+**title**: Test Document
+
+**author**: John Doe
+
+**date**: 2025-12-07
+
 # Introduction
 
 This is the introduction paragraph with some basic text.

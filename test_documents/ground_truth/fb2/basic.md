@@ -4,19 +4,17 @@
 
 #### Subsection
 
-This *emphasized* **strong** `verbatim` markdown. See this [link](http://example.com/).
+This *emphasized* **strong** `verbatim` markdown. See this link .
 
 Ordered list:
 
-1. one
+1. one
 
-2. two
+2. two
 
-3. three
+3. three
 
 > Blockquote is for citatons.
-
-------------------------------------------------------------------------
 
 `Code`
 
@@ -28,10 +26,6 @@ Ordered list:
 
 `code.`
 
-------------------------------------------------------------------------
+~~Strikeout~~ is Pandoc’s extension. Superscript and subscripts too: H 2 O is a liquid \[1\] . 2 10 is 1024.
 
-~~Strikeout~~ is Pandoc's extension. Superscript and subscripts too: H~2~O is a liquid[^1]. 2^10^ is 1024.
-
-Math is another Pandoc extension: `E = m c^2`.
-
-[^1]: Sometimes.
+Math is another Pandoc extension: `E = m c^2` .

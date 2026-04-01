@@ -40,6 +40,8 @@ internal static partial class NativeMethods
         public IntPtr AnnotationsJson;
         /// <summary>JSON array of text chunks pointer.</summary>
         public IntPtr ChunksJson;
+        /// <summary>JSON array of archive children results pointer.</summary>
+        public IntPtr ChildrenJson;
         /// <summary>Extracted text content pointer.</summary>
         public IntPtr Content;
         /// <summary>Document date pointer.</summary>

@@ -2,17 +2,17 @@
 
 ## Simple Table
 
-| Name    | Age | Score |
-|:--------|:---:|------:|
-| Alice   | 30  |    95 |
-| Bob     | 25  |    87 |
-| Charlie | 35  |    92 |
+| Name | Age | Score |
+| --- | --- | --- |
+| Alice | 30 | 95 |
+| Bob | 25 | 87 |
+| Charlie | 35 | 92 |
 
 ## Table with Caption
 
 | Column 1 | Column 2 |
-|:--------:|:--------:|
-|  Data 1  |  Data 2  |
-|  Data 3  |  Data 4  |
+| --- | --- |
+| Data 1 | Data 2 |
+| Data 3 | Data 4 |
 
 Sample table with caption

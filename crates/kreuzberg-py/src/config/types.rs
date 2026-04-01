@@ -459,6 +459,16 @@ impl ExtractionConfig {
         self.inner.extraction_timeout_secs = value;
     }
 
+    #[getter]
+    fn max_archive_depth(&self) -> usize {
+        self.inner.max_archive_depth
+    }
+
+    #[setter]
+    fn set_max_archive_depth(&mut self, value: usize) {
+        self.inner.max_archive_depth = value;
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "ExtractionConfig(use_cache={}, enable_quality_processing={}, ocr={}, force_ocr={}, extraction_timeout_secs={:?}, force_ocr_pages={:?})",

@@ -119,7 +119,8 @@ public final class KreuzbergFFI {
 	public static final MethodHandle KREUZBERG_PDF_PAGE_ITERATOR_FREE_RESULT;
 	public static final StructLayout C_EXTRACTION_RESULT_LAYOUT = MemoryLayout.structLayout(
 			ValueLayout.ADDRESS.withName("annotations_json"), ValueLayout.ADDRESS.withName("chunks_json"),
-			ValueLayout.ADDRESS.withName("content"), ValueLayout.ADDRESS.withName("date"),
+			ValueLayout.ADDRESS.withName("children_json"), ValueLayout.ADDRESS.withName("content"),
+			ValueLayout.ADDRESS.withName("date"),
 			ValueLayout.ADDRESS.withName("detected_languages_json"), ValueLayout.ADDRESS.withName("djot_content_json"),
 			ValueLayout.ADDRESS.withName("document_json"), ValueLayout.ADDRESS.withName("elements_json"),
 			ValueLayout.ADDRESS.withName("extracted_keywords_json"), ValueLayout.ADDRESS.withName("images_json"),

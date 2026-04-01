@@ -1,1 +1,1 @@
-Hello World from LaTeX!
+Hello World from LaTeX\!

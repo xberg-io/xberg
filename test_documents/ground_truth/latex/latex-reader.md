@@ -6,7 +6,7 @@
 
 This is a set of tests for pandoc. Most of them are adapted from
 
-John Gruber's markdown test suite.
+John Gruber’s markdown test suite.
 
 \---
 
@@ -36,7 +36,7 @@ with no blank line
 
 # Paragraphs
 
-Here's a regular paragraph.
+Here’s a regular paragraph.
 
 In Markdown 1.0.0 and earlier. Version 8. This line turns into a
 
@@ -44,7 +44,7 @@ list item. Because a hard-wrapped line in the middle of a paragraph
 
 looked like a list item.
 
-Here's one with a bullet. \* criminey.
+Here’s one with a bullet. \* criminey.
 
 There should be a hard line break here.
 
@@ -57,20 +57,20 @@ E-mail style:
 > This is a block quote. It is pretty short.
 
 > Code in a block quote:
->
+> 
 >     sub status {
 >         print "working";
 >     }
->
+> 
 > A list:
->
+> 
 > 1. item one
 > 2. item two
->
+> 
 > Nested block quotes:
->
+> 
 > > nested
->
+> 
 > > nested
 
 This should not be a block quote: 2 \> 1.
@@ -78,7 +78,7 @@ This should not be a block quote: 2 \> 1.
 Box-style:
 
 > Example:
->
+> 
 >     sub status {
 >         print "working";
 >     }
@@ -86,11 +86,11 @@ Box-style:
 > 1. do laundry
 > 2. take out the trash
 
-Here's a nested one:
+Here’s a nested one:
 
 > Joe said:
->
-> > Don't quote me.
+> 
+> > Don’t quote me.
 
 And a following paragraph.
 
@@ -101,17 +101,17 @@ And a following paragraph.
 Code:
 
     ---- (should be four hyphens)
-
+    
     sub status {
         print "working";
     }
-
+    
     this code block is indented by one tab
 
 And:
 
     this code block is indented by two tabs
-
+    
     These should not be escaped:  \$ \\ \> \[ \{
 
 this has {two
@@ -198,7 +198,7 @@ Multiple paragraphs:
   - Tab
     - Tab
 
-Here's another:
+Here’s another:
 
 1. First
 2. Second:
@@ -296,7 +296,7 @@ This is *emphasized*
 
 And this is **strong**
 
-Here's a simple block:
+Here’s a simple block:
 
 foo
 
@@ -328,7 +328,7 @@ Code:
 
     <hr />
 
-Hr's:
+Hr’s:
 
 \---
 
@@ -372,17 +372,17 @@ c\\simd.
 
 # Smart quotes, ellipses, dashes
 
-"Hello," said the spider. " 'Shelob' is my name."
+“Hello,” said the spider. “ ‘Shelob’ is my name.”
 
-'A', 'B', and 'C' are letters.
+‘A’, ‘B’, and ‘C’ are letters.
 
-'Oak,' 'elm,' and 'beech' are names of trees. So is 'pine.'
+‘Oak,’ ‘elm,’ and ‘beech’ are names of trees. So is ‘pine.’
 
-'He said, "I want to go." ' Were you alive in the 70's?
+‘He said, “I want to go.” ’ Were you alive in the 70’s?
 
-Here is some quoted '`code`' and a
+Here is some quoted ‘`code`’ and a
 
-"[quoted link](http://example.com/?foo=1&bar=2)".
+“[quoted link](http://example.com/?foo=1&bar=2)”.
 
 Some dashes: one—two—three—four—five.
 
@@ -401,15 +401,15 @@ Ellipses…and…and….
 - $223$
 - $p$-Tree
 - $\\frac{d}{dx}f(x)=\\lim_{h\\to 0}\\frac{f(x+h)-f(x)}{h}$
-- Here's one that has a line break in it: $\\alpha + \\omega \\times x^2$.
+- Here’s one that has a line break in it: $\\alpha + \\omega \\times x^2$.
 
-These shouldn't be math:
+These shouldn’t be math:
 
 - To get the famous equation, write `$e = mc^2$`.
-- $22,000 is a *lot* of money. So is $34,000. (It worked if "lot" is emphasized.)
+- $22,000 is a *lot* of money. So is $34,000. (It worked if “lot” is emphasized.)
 - Escaped `$`: $73 *this should be emphasized* 23$.
 
-Here's a LaTeX table:
+Here’s a LaTeX table:
 
 | Animal | Number |
 | --- | --- |
@@ -446,7 +446,7 @@ This & that.
 
 Backslash: \\
 
-Backtick: '
+Backtick: ‘
 
 Asterisk: \*
 
@@ -528,17 +528,17 @@ Foo [biz](/url/).
 
 ## With ampersands
 
-Here's a
+Here’s a
 
 [link with an ampersand in the URL](http://example.com/?foo=1&bar=2).
 
-Here's a link with an amersand in the link text:
+Here’s a link with an amersand in the link text:
 
 [AT\&T](http://att.com/).
 
-Here's an [inline link](/script?foo=1&bar=2).
+Here’s an [inline link](/script?foo=1&bar=2).
 
-Here's an
+Here’s an
 
 [inline link in pointy braces](/script?foo=1&bar=2).
 
@@ -564,7 +564,7 @@ Auto-links should not occur here: `<http://example.com/>`
 
 # Images
 
-From "Voyage dans la Lune" by Georges Melies (1902):
+From “Voyage dans la Lune” by Georges Melies (1902):
 
 \[image: lalune.jpg\]
 
@@ -584,7 +584,7 @@ reference. It need not be placed at the end of the document.
 
 and
 
-another.{ Here's the long note. This one contains multiple blocks.
+another.{ Here’s the long note. This one contains multiple blocks.
 
 Subsequent blocks are indented to show that they belong to the
 
@@ -611,7 +611,7 @@ as well as \[bracketed text\].
 }
 
 > Notes can go in quotes.{ In quote.
->
+> 
 > }
 
 1. And in list items. In list.

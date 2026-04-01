@@ -1,4 +1,4 @@
-These are a few of my favorite things: Parrots Hockey
+These are a few of my favorite things: • Parrots • Hockey
 
 ## Analysis
 

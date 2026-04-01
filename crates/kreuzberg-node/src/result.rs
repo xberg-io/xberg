@@ -193,7 +193,8 @@ pub struct JsArchiveEntry {
     pub path: String,
     #[napi(js_name = "mimeType")]
     pub mime_type: String,
-    pub result: JsExtractionResult,
+    #[napi(ts_type = "JsExtractionResult")]
+    pub result: serde_json::Value,
 }
 
 #[napi(object)]
@@ -507,10 +508,11 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                     .into_iter()
                     .filter_map(|entry| {
                         let result = JsExtractionResult::try_from(*entry.result).ok()?;
+                        let result_json = serde_json::to_value(result).ok()?;
                         Some(JsArchiveEntry {
                             path: entry.path,
                             mime_type: entry.mime_type,
-                            result,
+                            result: result_json,
                         })
                     })
                     .collect()
@@ -914,7 +916,8 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
                     val.children
                         .into_iter()
                         .filter_map(|entry| {
-                            let result = RustExtractionResult::try_from(entry.result).ok()?;
+                            let js_result: JsExtractionResult = serde_json::from_value(entry.result).ok()?;
+                            let result = RustExtractionResult::try_from(js_result).ok()?;
                             Some(kreuzberg::ArchiveEntry {
                                 path: entry.path,
                                 mime_type: entry.mime_type,

@@ -10,7 +10,7 @@ Simple table indented two spaces:
 
 Multiline table with caption:
 
-*Here's the caption. It may span multiple lines.*
+*Here’s the caption. It may span multiple lines.*
 
 Multiline table without caption:
 

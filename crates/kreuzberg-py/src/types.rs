@@ -76,6 +76,10 @@ pub struct ExtractionResult {
     processing_warnings: Py<PyList>,
 
     annotations: Option<Py<PyList>>,
+
+    children: Option<Py<PyList>>,
+
+    uris: Option<Py<PyList>>,
 }
 
 #[pymethods]
@@ -144,6 +148,16 @@ impl ExtractionResult {
     #[getter]
     fn annotations<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyList>> {
         self.annotations.as_ref().map(|a| a.bind(py).clone())
+    }
+
+    #[getter]
+    fn children<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyList>> {
+        self.children.as_ref().map(|c| c.bind(py).clone())
+    }
+
+    #[getter]
+    fn uris<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyList>> {
+        self.uris.as_ref().map(|u| u.bind(py).clone())
     }
 
     fn __repr__(&self) -> String {
@@ -680,6 +694,40 @@ impl ExtractionResult {
             None
         };
 
+        let children = if let Some(entries) = result.children {
+            let entry_list = PyList::empty(py);
+            for entry in entries {
+                let entry_dict = PyDict::new(py);
+                entry_dict.set_item("path", &entry.path)?;
+                entry_dict.set_item("mime_type", &entry.mime_type)?;
+                let nested_result = Self::from_rust(*entry.result, py, output_format, result_format)?;
+                entry_dict.set_item("result", Py::new(py, nested_result)?)?;
+                entry_list.append(entry_dict)?;
+            }
+            Some(entry_list.unbind())
+        } else {
+            None
+        };
+
+        let uris = if let Some(uri_vec) = result.uris {
+            let uri_list = PyList::empty(py);
+            for uri in uri_vec {
+                let uri_dict = PyDict::new(py);
+                uri_dict.set_item("url", &uri.url)?;
+                uri_dict.set_item("label", uri.label.as_deref())?;
+                uri_dict.set_item("page", uri.page)?;
+                let kind_str = serde_json::to_value(uri.kind)
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+                    .unwrap_or_default();
+                uri_dict.set_item("kind", kind_str)?;
+                uri_list.append(uri_dict)?;
+            }
+            Some(uri_list.unbind())
+        } else {
+            None
+        };
+
         Ok(Self {
             content: result.content,
             mime_type: result.mime_type.to_string(),
@@ -700,6 +748,8 @@ impl ExtractionResult {
             formatted_content: result.formatted_content,
             processing_warnings,
             annotations,
+            children,
+            uris,
         })
     }
 }

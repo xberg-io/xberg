@@ -22,10 +22,10 @@ This section is like a Sect4.
 
 This section is like a Sect5.
 
-####### Would be like a Sect6
+###### Would be like a Sect6
 
 This section would be like a Sect6, if there was one.
 
-######## Would be like a Sect7
+###### Would be like a Sect7
 
 This section would be like a Sect7, if there was one.
