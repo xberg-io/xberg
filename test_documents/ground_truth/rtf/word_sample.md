@@ -33,13 +33,13 @@ After we had a good day of swimming in the lake, it's important to eat something
 
 Here are some interesting things a respectful duck could eat:
 
-Content table
-
 |  | Food | Calories per portion |
 | --- | --- | --- |
 | Leaves | Ash, Elm, Maple | 50 |
 | Berries | Blueberry, Strawberry, Cranberry | 150 |
 | Grain | Corn, Buckwheat, Barley | 200 |
+
+Content table
 
 And let's add another list in the end:
 
