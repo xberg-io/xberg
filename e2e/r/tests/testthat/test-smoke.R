@@ -49,7 +49,7 @@ test_that("smoke_image_png", {
   result <- run_fixture(
     "smoke_image_png",
     "images/sample.png",
-    NULL,
+    list(disable_ocr = TRUE),
     requirements = character(0),
     notes = "Image extraction requires image processing dependencies",
     skip_if_missing = TRUE

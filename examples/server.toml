@@ -26,6 +26,3 @@ max_request_body_bytes = 104857600
 
 # Maximum multipart field size in bytes (default: 104857600 = 100 MB)
 max_multipart_field_bytes = 104857600
-
-# Legacy field for backward compatibility (optional, use max_multipart_field_bytes instead)
-# max_upload_mb = 100

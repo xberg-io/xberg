@@ -13,7 +13,7 @@ RSpec.describe 'Parity' do
     end
 
     # Required fields
-    %w[content metadata mime_type processing_warnings tables].each do |field|
+    %w[content metadata mime_type tables].each do |field|
       it "has required field '#{field}'" do
         expect(result).to respond_to(field.to_sym)
       end

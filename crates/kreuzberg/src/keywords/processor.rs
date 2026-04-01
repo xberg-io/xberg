@@ -6,7 +6,6 @@
 use crate::plugins::{Plugin, PostProcessor, ProcessingStage};
 use crate::{ExtractionConfig, ExtractionResult, KreuzbergError, Result};
 use async_trait::async_trait;
-use std::borrow::Cow;
 
 /// Post-processor that extracts keywords from document content.
 ///
@@ -63,12 +62,7 @@ impl PostProcessor for KeywordExtractor {
         let keywords = super::extract_keywords(&result.content, keyword_config)
             .map_err(|e| KreuzbergError::Other(format!("Keyword extraction failed: {}", e)))?;
 
-        result.extracted_keywords = Some(keywords.clone());
-        // DEPRECATED: kept for backward compatibility; will be removed in next major version.
-        result
-            .metadata
-            .additional
-            .insert(Cow::Borrowed("keywords"), serde_json::to_value(&keywords)?);
+        result.extracted_keywords = Some(keywords);
 
         Ok(())
     }
@@ -92,6 +86,7 @@ mod tests {
     use super::*;
     use crate::keywords::KeywordConfig;
     use crate::types::Metadata;
+    use std::borrow::Cow;
 
     const TEST_TEXT: &str = r#"
 Machine learning is a branch of artificial intelligence that focuses on

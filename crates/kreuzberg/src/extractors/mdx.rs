@@ -968,8 +968,8 @@ Final paragraph.
         assert!(result.content.contains("Important message"));
         assert!(result.content.contains("Regular text"));
         // NOTE: JSX tags appear in content because they are stored as RawBlock elements
-        // in the InternalDocument and derive_content_string includes all element text.
-        // The tags are preserved as structural metadata in DocumentStructure RawBlock nodes.
+        // in the InternalDocument. The tags are preserved as structural metadata in
+        // DocumentStructure RawBlock nodes.
     }
 
     #[tokio::test]

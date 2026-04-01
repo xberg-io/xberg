@@ -85,7 +85,7 @@ Deno.test("smoke_html_basic", { permissions: { read: true, net: true } }, async 
 });
 
 Deno.test("smoke_image_png", { permissions: { read: true, net: true } }, async () => {
-	const config = buildConfig(undefined);
+	const config = buildConfig({ disable_ocr: true });
 	let result: ExtractionResult | null = null;
 	try {
 		const documentBytes = await resolveDocument("images/sample.png");

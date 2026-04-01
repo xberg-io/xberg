@@ -99,7 +99,12 @@ fn test_smoke_image_png() {
         );
         return;
     }
-    let config = ExtractionConfig::default();
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "disable_ocr": true
+}"#,
+    )
+    .expect("Fixture config should deserialize");
 
     let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
         Err(err) => panic!("Extraction failed for smoke_image_png: {err:?}"),

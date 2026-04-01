@@ -192,7 +192,6 @@ impl BenchmarkRunner {
                 if !sizes.is_empty() {
                     eprintln!("Measured disk sizes for {} frameworks", sizes.len());
                 }
-                // Convert FrameworkSize to DiskSizeInfo (drop deprecated `estimated` field)
                 sizes
                     .into_iter()
                     .map(|(name, fs)| {

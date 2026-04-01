@@ -43,7 +43,7 @@ pub fn from_file(path: impl AsRef<Path>) -> Result<ServerConfig> {
         ))
     })?;
 
-    let mut config = match extension.to_lowercase().as_str() {
+    let config = match extension.to_lowercase().as_str() {
         "toml" => from_toml_str(&content, path)?,
         "yaml" | "yml" => from_yaml_str(&content, path)?,
         "json" => from_json_str(&content, path)?,
@@ -54,9 +54,6 @@ pub fn from_file(path: impl AsRef<Path>) -> Result<ServerConfig> {
             )));
         }
     };
-
-    // Normalize legacy fields
-    config.normalize_legacy_fields();
 
     Ok(config)
 }
@@ -76,10 +73,8 @@ pub fn from_toml_file(path: impl AsRef<Path>) -> Result<ServerConfig> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
 
-    let mut config: ServerConfig = toml::from_str(&content)
+    let config: ServerConfig = toml::from_str(&content)
         .map_err(|e| KreuzbergError::validation(format!("Invalid TOML in {}: {}", path.display(), e)))?;
-
-    config.normalize_legacy_fields();
 
     Ok(config)
 }
@@ -99,10 +94,8 @@ pub fn from_yaml_file(path: impl AsRef<Path>) -> Result<ServerConfig> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
 
-    let mut config: ServerConfig = serde_yaml_ng::from_str(&content)
+    let config: ServerConfig = serde_yaml_ng::from_str(&content)
         .map_err(|e| KreuzbergError::validation(format!("Invalid YAML in {}: {}", path.display(), e)))?;
-
-    config.normalize_legacy_fields();
 
     Ok(config)
 }
@@ -122,10 +115,8 @@ pub fn from_json_file(path: impl AsRef<Path>) -> Result<ServerConfig> {
     let content = std::fs::read_to_string(path)
         .map_err(|e| KreuzbergError::validation(format!("Failed to read config file {}: {}", path.display(), e)))?;
 
-    let mut config: ServerConfig = serde_json::from_str(&content)
+    let config: ServerConfig = serde_json::from_str(&content)
         .map_err(|e| KreuzbergError::validation(format!("Invalid JSON in {}: {}", path.display(), e)))?;
-
-    config.normalize_legacy_fields();
 
     Ok(config)
 }

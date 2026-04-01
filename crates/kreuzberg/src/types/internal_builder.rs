@@ -475,6 +475,13 @@ impl InternalDocumentBuilder {
         }
     }
 
+    /// Set the text content of an already-pushed element.
+    pub fn set_text(&mut self, index: u32, text: &str) {
+        if let Some(elem) = self.doc.elements.get_mut(index as usize) {
+            elem.text = text.into();
+        }
+    }
+
     // ========================================================================
     // Raw Element Push
     // ========================================================================

@@ -105,7 +105,7 @@ docker run -p 9000:9000 ghcr.io/kreuzberg-dev/kreuzberg:latest \
 # With environment variables
 docker run -p 8000:8000 \
   -e KREUZBERG_CORS_ORIGINS="https://myapp.com" \
-  -e KREUZBERG_MAX_UPLOAD_SIZE_MB=200 \
+  -e KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200 \
   ghcr.io/kreuzberg-dev/kreuzberg:latest
 
 # With configuration file
@@ -253,7 +253,7 @@ services:
       - "8000:8000"
     environment:
       - KREUZBERG_CORS_ORIGINS=https://myapp.com,https://api.myapp.com
-      - KREUZBERG_MAX_UPLOAD_SIZE_MB=500
+      - KREUZBERG_MAX_MULTIPART_FIELD_BYTES=524288000
       - RUST_LOG=info
     volumes:
       - ./config:/config
@@ -324,8 +324,8 @@ spec:
           env:
             - name: KREUZBERG_CORS_ORIGINS
               value: "https://myapp.com"
-            - name: KREUZBERG_MAX_UPLOAD_SIZE_MB
-              value: "500"
+            - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
+              value: "524288000"
             - name: RUST_LOG
               value: "info"
             - name: TESSDATA_PREFIX
@@ -387,7 +387,7 @@ Configure Docker containers via environment variables:
 **Upload Limits:**
 
 ```bash title="Terminal"
-KREUZBERG_MAX_UPLOAD_SIZE_MB=200  # Max upload size in MB (default: 100 MB)
+KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200  # Max multipart field size in bytes (default: 104857600)
 ```
 
 **CORS Configuration:**
@@ -600,7 +600,7 @@ docker run -p 8000:8000 \
 
 ```bash title="Terminal"
 docker run -p 8000:8000 \
-  -e KREUZBERG_MAX_UPLOAD_SIZE_MB=1000 \
+  -e KREUZBERG_MAX_MULTIPART_FIELD_BYTES=1048576000 \
   ghcr.io/kreuzberg-dev/kreuzberg:latest
 ```
 

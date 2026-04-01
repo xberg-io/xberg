@@ -152,30 +152,6 @@ fn test_apply_env_max_multipart_field_bytes_override() {
 
 #[serial_test::serial]
 #[test]
-fn test_apply_env_legacy_max_upload_size_mb_override() {
-    let original = std::env::var("KREUZBERG_MAX_UPLOAD_SIZE_MB").ok();
-    unsafe {
-        std::env::set_var("KREUZBERG_MAX_UPLOAD_SIZE_MB", "75");
-    }
-
-    let mut config = ServerConfig::default();
-    config.apply_env_overrides().unwrap();
-
-    assert_eq!(config.max_upload_mb, Some(75));
-    assert_eq!(config.max_multipart_field_bytes, 75 * 1_048_576);
-
-    // Cleanup
-    unsafe {
-        if let Some(orig) = original {
-            std::env::set_var("KREUZBERG_MAX_UPLOAD_SIZE_MB", orig);
-        } else {
-            std::env::remove_var("KREUZBERG_MAX_UPLOAD_SIZE_MB");
-        }
-    }
-}
-
-#[serial_test::serial]
-#[test]
 fn test_apply_env_multiple_overrides() {
     let host_orig = std::env::var("KREUZBERG_HOST").ok();
     let port_orig = std::env::var("KREUZBERG_PORT").ok();

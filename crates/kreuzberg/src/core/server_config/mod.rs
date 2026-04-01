@@ -8,7 +8,6 @@
 //!
 //! - **Multi-format support**: Load configuration from TOML, YAML, or JSON files
 //! - **Environment overrides**: All settings can be overridden via environment variables
-//! - **Backward compatibility**: Supports legacy `max_upload_mb` field for smooth migrations
 //! - **Sensible defaults**: All fields have reasonable defaults matching current behavior
 //! - **Flexible CORS**: Support for all origins (default) or specific origin lists
 //!
@@ -66,7 +65,6 @@ const DEFAULT_MAX_MULTIPART_FIELD_BYTES: usize = 104_857_600;
 /// - `cors_origins`: empty vector (allows all origins)
 /// - `max_request_body_bytes`: 104_857_600 (100 MB)
 /// - `max_multipart_field_bytes`: 104_857_600 (100 MB)
-/// - `max_upload_mb`: None (legacy field, not used if other fields set)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ServerConfig {
@@ -93,14 +91,6 @@ pub struct ServerConfig {
     /// Maximum size of multipart fields in bytes (default: 100 MB)
     #[serde(default = "default_max_multipart_field_bytes")]
     pub max_multipart_field_bytes: usize,
-
-    /// Legacy upload size limit in MB (for backward compatibility).
-    ///
-    /// This field is deprecated and only used for backward compatibility.
-    /// If set, it will override `max_multipart_field_bytes` during normalization.
-    /// New configurations should use `max_multipart_field_bytes` directly.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub max_upload_mb: Option<usize>,
 }
 
 impl Default for ServerConfig {
@@ -111,7 +101,6 @@ impl Default for ServerConfig {
             cors_origins: Vec::new(),
             max_request_body_bytes: default_max_request_body_bytes(),
             max_multipart_field_bytes: default_max_multipart_field_bytes(),
-            max_upload_mb: None,
         }
     }
 }
@@ -227,17 +216,6 @@ impl ServerConfig {
         self.max_multipart_field_bytes.div_ceil(1_048_576)
     }
 
-    /// Normalize legacy field values for backward compatibility.
-    ///
-    /// If `max_upload_mb` is set, it will be converted to bytes and used to
-    /// override `max_multipart_field_bytes`. This allows old configurations
-    /// using the legacy field to continue working.
-    ///
-    /// This method is automatically called by `apply_env_overrides()`.
-    pub fn normalize_legacy_fields(&mut self) {
-        validation::normalize_legacy_fields(self.max_upload_mb, &mut self.max_multipart_field_bytes);
-    }
-
     /// Apply environment variable overrides to the configuration.
     ///
     /// Reads the following environment variables and overrides config values if set:
@@ -247,7 +225,6 @@ impl ServerConfig {
     /// - `KREUZBERG_CORS_ORIGINS` - Comma-separated list of allowed origins
     /// - `KREUZBERG_MAX_REQUEST_BODY_BYTES` - Max request body size in bytes
     /// - `KREUZBERG_MAX_MULTIPART_FIELD_BYTES` - Max multipart field size in bytes
-    /// - `KREUZBERG_MAX_UPLOAD_SIZE_MB` - Max upload size in MB (legacy)
     ///
     /// # Errors
     ///
@@ -255,7 +232,6 @@ impl ServerConfig {
     /// - `KREUZBERG_PORT` cannot be parsed as u16
     /// - `KREUZBERG_MAX_REQUEST_BODY_BYTES` cannot be parsed as usize
     /// - `KREUZBERG_MAX_MULTIPART_FIELD_BYTES` cannot be parsed as usize
-    /// - `KREUZBERG_MAX_UPLOAD_SIZE_MB` cannot be parsed as usize
     ///
     /// # Example
     ///
@@ -283,11 +259,7 @@ impl ServerConfig {
             &mut self.cors_origins,
             &mut self.max_request_body_bytes,
             &mut self.max_multipart_field_bytes,
-            &mut self.max_upload_mb,
         )?;
-
-        // Apply legacy field normalization
-        self.normalize_legacy_fields();
 
         Ok(())
     }

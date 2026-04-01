@@ -84,7 +84,7 @@ class SmokeTest extends TestCase
             $this->markTestSkipped('Skipping smoke_image_png: missing document at ' . $documentPath);
         }
 
-        $config = Helpers::buildConfig(null);
+        $config = Helpers::buildConfig(['disable_ocr' => true]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);

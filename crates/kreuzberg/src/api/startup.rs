@@ -59,9 +59,6 @@ use super::{config::load_server_config, router::create_router_with_limits_and_se
 /// export KREUZBERG_MAX_REQUEST_BODY_BYTES=104857600       # 100 MB
 /// export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=104857600    # 100 MB per file
 ///
-/// # Legacy approach (in MB, applies to both limits):
-/// export KREUZBERG_MAX_UPLOAD_SIZE_MB=100  # 100 MB
-///
 /// python -m kreuzberg.api
 /// ```
 pub async fn serve(host: impl AsRef<str>, port: u16) -> Result<()> {

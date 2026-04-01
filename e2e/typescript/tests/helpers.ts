@@ -415,8 +415,7 @@ export function buildConfig(raw: unknown): ExtractionConfig {
 
 	if (isPlainRecord(source.email)) {
 		const email = source.email as PlainRecord;
-		target.email =
-			typeof email.msg_fallback_codepage === "number" ? { msgFallbackCodepage: email.msg_fallback_codepage } : {};
+		target.email = (typeof email.msg_fallback_codepage === "number" ? { msgFallbackCodepage: email.msg_fallback_codepage } : {});
 	}
 
 	if (isPlainRecord(source.tree_sitter)) {

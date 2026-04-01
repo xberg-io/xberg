@@ -94,7 +94,7 @@ describe("smoke", () => {
 			return;
 		}
 
-		const config = buildConfig(undefined);
+		const config = buildConfig({ disable_ocr: true });
 		let result: ExtractionResult | null = null;
 		try {
 			result = await extractBytes(documentBytes, "image/png", config);

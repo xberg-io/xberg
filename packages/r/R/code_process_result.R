@@ -43,7 +43,7 @@
 #' @param x A named list from native tree-sitter processing.
 #' @return Object with class \code{kreuzberg_code_process_result}.
 #' @keywords internal
-as_kreuzberg_code_process_result <- function(x) {
+as_code_process_result <- function(x) {
   if (!inherits(x, "kreuzberg_code_process_result")) {
     class(x) <- c("kreuzberg_code_process_result", "list")
   }

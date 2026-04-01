@@ -8,7 +8,7 @@ import { resolveDocument } from "./helpers";
 describe("ExtractionResult field parity", () => {
 	it("has all required fields", async () => {
 		const result = await extractFileSync(resolveDocument("pdf/fake_memo.pdf"));
-		const requiredFields = ["content", "metadata", "mimeType", "processingWarnings", "tables"];
+		const requiredFields = ["content", "metadata", "mimeType", "tables"];
 		for (const field of requiredFields) {
 			expect(result).toHaveProperty(field);
 		}

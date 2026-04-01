@@ -14,7 +14,6 @@ use crate::{KreuzbergError, Result};
 /// - `KREUZBERG_CORS_ORIGINS` - Comma-separated list of allowed origins
 /// - `KREUZBERG_MAX_REQUEST_BODY_BYTES` - Max request body size in bytes
 /// - `KREUZBERG_MAX_MULTIPART_FIELD_BYTES` - Max multipart field size in bytes
-/// - `KREUZBERG_MAX_UPLOAD_SIZE_MB` - Max upload size in MB (legacy)
 ///
 /// # Errors
 ///
@@ -22,14 +21,12 @@ use crate::{KreuzbergError, Result};
 /// - `KREUZBERG_PORT` cannot be parsed as u16
 /// - `KREUZBERG_MAX_REQUEST_BODY_BYTES` cannot be parsed as usize
 /// - `KREUZBERG_MAX_MULTIPART_FIELD_BYTES` cannot be parsed as usize
-/// - `KREUZBERG_MAX_UPLOAD_SIZE_MB` cannot be parsed as usize
 pub fn apply_env_overrides(
     host: &mut String,
     port: &mut u16,
     cors_origins: &mut Vec<String>,
     max_request_body_bytes: &mut usize,
     max_multipart_field_bytes: &mut usize,
-    max_upload_mb: &mut Option<usize>,
 ) -> Result<()> {
     // Host override
     if let Ok(env_host) = std::env::var("KREUZBERG_HOST") {
@@ -73,17 +70,6 @@ pub fn apply_env_overrides(
                 bytes_str, e
             ))
         })?;
-    }
-
-    // Legacy max upload size override (in MB)
-    if let Ok(mb_str) = std::env::var("KREUZBERG_MAX_UPLOAD_SIZE_MB") {
-        let mb = mb_str.parse::<usize>().map_err(|e| {
-            KreuzbergError::validation(format!(
-                "KREUZBERG_MAX_UPLOAD_SIZE_MB must be a valid usize, got '{}': {}",
-                mb_str, e
-            ))
-        })?;
-        *max_upload_mb = Some(mb);
     }
 
     Ok(())

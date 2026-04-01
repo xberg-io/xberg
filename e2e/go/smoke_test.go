@@ -30,7 +30,9 @@ func TestSmokeSmokeHtmlBasic(t *testing.T) {
 }
 
 func TestSmokeSmokeImagePng(t *testing.T) {
-	result := runExtraction(t, "images/sample.png", nil)
+	result := runExtraction(t, "images/sample.png", []byte(`{
+"disable_ocr": true
+}`))
 	assertExpectedMime(t, result, []string{"image/png"})
 }
 

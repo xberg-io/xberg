@@ -67,7 +67,7 @@ def test_smoke_image_png() -> None:
     if not document_path.exists():
         pytest.skip(f"Skipping smoke_image_png: missing document at {document_path}")
 
-    config = helpers.build_config(None)
+    config = helpers.build_config({"disable_ocr": True})
 
     result = extract_file_sync(document_path, None, config)
 

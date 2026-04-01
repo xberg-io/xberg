@@ -33,11 +33,6 @@ pub struct FrameworkSize {
     pub method: String,
     /// Human-readable description
     pub description: String,
-    /// Whether this is from actual measurement or an estimate
-    /// NOTE: This field is deprecated and should always be false.
-    /// If we cannot measure a size, we return an error instead of an estimate.
-    #[serde(default)]
-    pub estimated: bool,
     /// Breakdown of system dependency sizes by package name.
     /// Populated when runtime measurement via dpkg-query succeeds.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
@@ -170,7 +165,6 @@ fn lookup_known_size(name: &str) -> Option<FrameworkSize> {
             model_bytes: *models,
             method: "known_size".to_string(),
             description: desc.to_string(),
-            estimated: false,
             system_deps_detail: HashMap::new(),
         })
 }
@@ -202,7 +196,6 @@ pub fn measure_framework_sizes() -> Result<FrameworkSizes> {
                         model_bytes: 0,
                         method: method.to_string(),
                         description: description.to_string(),
-                        estimated: false,
                         system_deps_detail: HashMap::new(),
                     },
                 );
@@ -246,7 +239,6 @@ pub fn measure_framework_sizes_strict() -> Result<FrameworkSizes> {
                         model_bytes: 0,
                         method: method.to_string(),
                         description: description.to_string(),
-                        estimated: false,
                         system_deps_detail: HashMap::new(),
                     },
                 );

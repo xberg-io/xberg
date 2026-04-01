@@ -11,7 +11,7 @@ File size limits protect your server from resource exhaustion and unexpected mem
 | **Request Body Limit** | Total size of all files in a single request | 100 MB |
 | **Multipart Field Limit** | Maximum size of an individual file | 100 MB |
 
-Both limits are configurable via environment variables (`KREUZBERG_MAX_REQUEST_BODY_BYTES`, `KREUZBERG_MAX_MULTIPART_FIELD_BYTES`, or legacy `KREUZBERG_MAX_UPLOAD_SIZE_MB`) or programmatically via the `ApiSizeLimits` type.
+Both limits are configurable via environment variables (`KREUZBERG_MAX_REQUEST_BODY_BYTES`, `KREUZBERG_MAX_MULTIPART_FIELD_BYTES`) or programmatically via the `ApiSizeLimits` type.
 
 ## Default Configuration
 
@@ -51,15 +51,15 @@ Decrease limits if:
 
 ### 1. Environment Variable (Simplest)
 
-Set the `KREUZBERG_MAX_UPLOAD_SIZE_MB` environment variable to specify limits in megabytes:
+Set the `KREUZBERG_MAX_MULTIPART_FIELD_BYTES` environment variable to specify the max multipart field size in bytes:
 
 ```bash title="Terminal"
 # Set to 200 MB
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=200
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200
 kreuzberg serve -H 0.0.0.0 -p 8000
 
 # Set to 500 MB for large documents
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=500
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=524288000
 kreuzberg serve -H 0.0.0.0 -p 8000
 ```
 
@@ -75,8 +75,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Set maximum upload size to 500 MB
-      KREUZBERG_MAX_UPLOAD_SIZE_MB: "500"
+      # Set maximum multipart field size to 500 MB
+      KREUZBERG_MAX_MULTIPART_FIELD_BYTES: "524288000"
       # Configure CORS for production
       KREUZBERG_CORS_ORIGINS: "https://myapp.com,https://api.myapp.com"
     volumes:
@@ -106,8 +106,8 @@ spec:
       - name: kreuzberg
         image: ghcr.io/kreuzberg-dev/kreuzberg:latest
         env:
-        - name: KREUZBERG_MAX_UPLOAD_SIZE_MB
-          value: "500"
+        - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
+          value: "524288000"
         - name: KREUZBERG_CORS_ORIGINS
           value: "https://myapp.com"
         resources:
@@ -256,7 +256,7 @@ kreuzberg serve -H 0.0.0.0 -p 8000
 For typical scanned document batches and office files up to 200 MB:
 
 ```bash title="Terminal"
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=200
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200
 kreuzberg serve -H 0.0.0.0 -p 8000
 ```
 
@@ -265,7 +265,7 @@ kreuzberg serve -H 0.0.0.0 -p 8000
 For high-resolution scans, video content, and large archives up to 1 GB:
 
 ```bash title="Terminal"
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=1000
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=1048576000
 kreuzberg serve -H 0.0.0.0 -p 8000
 ```
 
@@ -274,7 +274,7 @@ kreuzberg serve -H 0.0.0.0 -p 8000
 For development environments or memory-limited servers:
 
 ```bash title="Terminal"
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=50
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=52428800
 kreuzberg serve -H 0.0.0.0 -p 8000
 ```
 
@@ -315,7 +315,7 @@ services:
   kreuzberg-api:
     image: ghcr.io/kreuzberg-dev/kreuzberg:latest
     environment:
-      KREUZBERG_MAX_UPLOAD_SIZE_MB: "500"
+      KREUZBERG_MAX_MULTIPART_FIELD_BYTES: "524288000"
     deploy:
       resources:
         limits:
@@ -470,7 +470,7 @@ Validate file sizes before upload to provide better user experience:
 1. **Increase limit:**
 
    ```bash
-   export KREUZBERG_MAX_UPLOAD_SIZE_MB=500
+   export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=524288000
    ```
 
 2. **Check reverse proxy limits:**
@@ -505,7 +505,7 @@ Validate file sizes before upload to provide better user experience:
 2. **Reduce upload limit:**
 
    ```bash
-   export KREUZBERG_MAX_UPLOAD_SIZE_MB=200
+   export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200
    ```
 
 3. **Process files sequentially:**

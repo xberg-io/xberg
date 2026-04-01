@@ -66,7 +66,7 @@ RSpec.describe 'smoke fixtures' do
     E2ERuby.run_fixture(
       'smoke_image_png',
       'images/sample.png',
-      nil,
+      { disable_ocr: true },
       requirements: [],
       notes: 'Image extraction requires image processing dependencies',
       skip_if_missing: true

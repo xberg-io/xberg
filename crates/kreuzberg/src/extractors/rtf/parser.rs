@@ -1857,9 +1857,10 @@ fn handle_control_word(
         "intbl" => {
             ensure_table(table_state);
             if let Some(state) = table_state.as_mut()
-                && !state.in_row {
-                    state.start_row();
-                }
+                && !state.in_row
+            {
+                state.start_row();
+            }
         }
         // Formatting control words — tracked for annotation spans
         "b" => {

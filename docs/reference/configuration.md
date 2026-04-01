@@ -38,7 +38,6 @@ ServerConfig is used to customize the Kreuzberg API server behavior when running
 | `cors_origins`              | `Vec<String>`   | empty         | CORS allowed origins. Empty list allows all origins.                                                     |
 | `max_request_body_bytes`    | `usize`         | `104857600`   | Maximum request body size in bytes (100 MB default)                                                      |
 | `max_multipart_field_bytes` | `usize`         | `104857600`   | Maximum multipart field size in bytes (100 MB default)                                                   |
-| `max_upload_mb`             | `Option<usize>` | `None`        | **Legacy**: Use `max_multipart_field_bytes` instead. Automatically converted for backward compatibility. |
 
 ### Configuration Precedence
 
@@ -147,9 +146,6 @@ export KREUZBERG_CORS_ORIGINS="https://app1.com, https://app2.com"
 export KREUZBERG_MAX_REQUEST_BODY_BYTES="209715200"      # 200 MB
 export KREUZBERG_MAX_MULTIPART_FIELD_BYTES="209715200"   # 200 MB
 
-# Legacy field (in MB)
-export KREUZBERG_MAX_UPLOAD_SIZE_MB="200"
-
 kreuzberg serve
 ```
 
@@ -209,7 +205,7 @@ FROM kreuzberg:latest
 ENV KREUZBERG_HOST="0.0.0.0"
 ENV KREUZBERG_PORT="8000"
 ENV KREUZBERG_CORS_ORIGINS="https://yourdomain.com"
-ENV KREUZBERG_MAX_UPLOAD_SIZE_MB="500"
+ENV KREUZBERG_MAX_MULTIPART_FIELD_BYTES="524288000"
 
 EXPOSE 8000
 
@@ -3885,8 +3881,8 @@ Size limits protect your server from resource exhaustion and memory spikes. Both
 **Environment Variable Configuration:**
 
 ```bash title="Terminal"
-# Set both limits to 200 MB via environment variable
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=200
+# Set multipart field limit to 200 MB via environment variable
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200
 kreuzberg serve -H 0.0.0.0 -p 8000
 ```
 

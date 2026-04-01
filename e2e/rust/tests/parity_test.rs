@@ -98,7 +98,7 @@ fn test_extraction_config_field_parity() {
 #[test]
 fn test_extraction_result_field_parity() {
     // Verify ExtractionResult has the expected fields via serde serialization
-    let required_fields: &[&str] = &["content", "metadata", "mime_type", "processing_warnings", "tables"];
+    let required_fields: &[&str] = &["content", "metadata", "mime_type", "tables"];
     let all_known_fields: &[&str] = &[
         "annotations",
         "children",

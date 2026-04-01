@@ -625,7 +625,10 @@ async fn test_odt_comprehensive_table_extraction() {
         return;
     }
 
-    let config = ExtractionConfig::default();
+    let config = ExtractionConfig {
+        output_format: kreuzberg::core::config::OutputFormat::Markdown,
+        ..Default::default()
+    };
     let result = extract_file(&test_file, None, &config)
         .await
         .expect("Should extract comprehensive table document successfully");

@@ -667,8 +667,8 @@ See [Configuration Guide](configuration.md) for all options.
 **Upload Limits:**
 
 ```bash title="Terminal"
-# Set maximum file upload size in megabytes
-KREUZBERG_MAX_UPLOAD_SIZE_MB=200  # Max upload size in MB (default: 100)
+# Set maximum multipart field size in bytes
+KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200  # Max multipart field size in bytes (default: 104857600)
 ```
 
 For detailed configuration options, memory considerations, and performance tuning for large files, see the [File Size Limits Reference](../reference/file-size-limits.md).
@@ -1162,8 +1162,8 @@ services:
     environment:
       # Configure CORS for production security
       - KREUZBERG_CORS_ORIGINS=https://myapp.com,https://api.myapp.com
-      # Set maximum upload size for large documents
-      - KREUZBERG_MAX_UPLOAD_SIZE_MB=500
+      # Set maximum multipart field size for large documents
+      - KREUZBERG_MAX_MULTIPART_FIELD_BYTES=524288000
     volumes:
       # Mount configuration and cache directories
       - ./config:/config
@@ -1223,8 +1223,8 @@ spec:
             # Production environment configuration
             - name: KREUZBERG_CORS_ORIGINS
               value: "https://myapp.com"
-            - name: KREUZBERG_MAX_UPLOAD_SIZE_MB
-              value: "500"
+            - name: KREUZBERG_MAX_MULTIPART_FIELD_BYTES
+              value: "524288000"
           command: ["kreuzberg", "serve", "-H", "0.0.0.0", "-p", "8000"]
           livenessProbe:
             # Check if container is alive and healthy
@@ -1327,7 +1327,7 @@ api.example.com {
 ### Production Checklist
 
 1. Set `KREUZBERG_CORS_ORIGINS` to explicit allowed origins
-2. Configure `KREUZBERG_MAX_UPLOAD_SIZE_MB` based on expected document sizes
+2. Configure `KREUZBERG_MAX_MULTIPART_FIELD_BYTES` based on expected document sizes
 3. Use reverse proxy (Nginx/Caddy) for SSL/TLS termination
 4. Enable logging via `RUST_LOG=info` environment variable
 5. Set up health checks on `/health` endpoint
@@ -1394,13 +1394,13 @@ Configure based on expected document sizes:
 
 ```bash title="Terminal"
 # Configuration for small documents (PDFs, images under 10 MB)
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=50
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=52428800
 
 # Configuration for typical business documents (under 50 MB)
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=200
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=209715200
 
 # Configuration for large scans, archives, and high-resolution images
-export KREUZBERG_MAX_UPLOAD_SIZE_MB=1000
+export KREUZBERG_MAX_MULTIPART_FIELD_BYTES=1048576000
 ```
 
 See the [File Size Limits Reference](../reference/file-size-limits.md) for comprehensive documentation including:
