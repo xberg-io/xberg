@@ -17,31 +17,54 @@ Goto Page 4: Tool for Rectangle, Square and Rounded Corner
 Goto Page 5: Tool for Circle, Ellipse, Arc, Pie
 Goto Page 6: Tool for Basic Shapes
 Goto Page 7: Tool for Curves
+
 Online Help
+
 Here are the tools to change line width, style, arrow style and colors
+
 <!-- image -->
+
 Line Width and Color
+
 <!-- image -->
+
 Arrow Style and Size
+
 <!-- image -->
+
 Point Snapping and Hold SHIFT Key
+
 <!-- image -->
+
 Six Arrow Styles:
+
 <!-- image -->
+
 9 Arrow Sizes for Each Style:
+
 <!-- image -->
 No Arrow
 Arrow
 Open Arrow Stealth
 Arrow Diamond
 Arrow Oval Arrow
+
 Mixed Arrow Styles, Sizes, Color, Dashed Style
+
 <!-- image -->
+
 Create Rectangle, Square; Add a Corner Radius
+
 <!-- image -->
+
 Create Circle, Ellipse, Arc, Pie
+
 <!-- image -->
+
 Create Basic Shapes
+
 <!-- image -->
+
 Drawing Curves
+
 <!-- image -->

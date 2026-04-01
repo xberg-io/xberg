@@ -55,6 +55,7 @@ Points Earned: 821
 Total Points: 3,247
 Next Reward: $50 gift card
 at 5,000 pts (1,753 to go)
+
 RETURN POLICY
 Returns within 30 days
 Receipt required

@@ -7,6 +7,9 @@ John Doe
 This is a test document to verify metadata extraction.
 
 ## Section 1
+
 Some content here.
+
 ## Section 2
+
 More content here.

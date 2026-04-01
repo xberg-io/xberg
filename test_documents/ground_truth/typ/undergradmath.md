@@ -9,17 +9,25 @@ This is a Typst port of *<span class="box">L A <span class="box">T E X</
 |  |  |
 |:---|:---|
 | <span class="box">2023-05-22 ❌</span> | This is unavailable. Last check date is 2023-05-22. |
+
 <span id="unavailable"></span>
+
 |  |  |
 |:---|:---|
 | <span class="box">💦</span> | Get this in a tricky way. Need a simpler method. |
+
 <span id="tricky"></span>
+
 |                                     |                             |
 |:------------------------------------|:----------------------------|
 | <span class="box">No idea 😕</span> | Don’t know how to get this. |
+
 <span id="noidea"></span>
+
 **Rule One  **Any mathematics at all, even a single character, gets a mathematical setting. Thus, for “the value of $`x`$ is $`7`$” enter `the value of $x$ is $7$`.
+
 **Template  **Your document should contain at least this.
+
 <table>
 <tbody>
 <tr>
@@ -28,20 +36,30 @@ This is a Typst port of *<span class="box">L A <span class="box">T E X</
 </tr>
 </tbody>
 </table>
+
 **Common constructs  **
+
 <div align="center">
+
 |  |  |
 |:---|:---|
 | <span class="box">$`x^{2}`$ `x^2`</span> | <span class="box">$`\sqrt{2}`$, $`\sqrt[n]{3}`$ `sqrt(2)`, `root(n, 3)`</span> |
 | <span class="box">$`x_{i,j}`$ `x_(i, j)`</span> | <span class="box">$`\frac{2}{3}`$, $`2/3`$ `2 / 3`, `2 \/ 3` or `2 slash 3`</span> |
+
 </div>
+
 **Calligraphic letters  **Use as in `$cal(A)$`.
+
 ``` math
 \mathcal{ABCDEFGHIJKLMNOPQRSTUVWXYZ}
 ```
+
 Getting script letters is <a href="#unavailable" class="ref">[unavailable]</a>.
+
 **Greek  **
+
 <div align="center">
+
 |  |  |
 |:---|:---|
 | <span class="box">$`\alpha`$ `alpha`</span> | <span class="box">$`\xi`$, $`\Xi`$ `xi`, `Xi`</span> |
@@ -59,9 +77,13 @@ Getting script letters is <a href="#unavailable" class="ref">[unavailable]</a>.
 | <span class="box">$`\lambda`$, $`\Lambda`$ `lambda`, `Lambda`</span> | <span class="box">$`\chi`$ `chi`</span> |
 | <span class="box">$`\mu`$ `mu`</span> | <span class="box">$`\psi`$, $`\Psi`$ `psi`, `Psi`</span> |
 | <span class="box">$`\nu`$ `nu`</span> | <span class="box">$`\omega`$, $`\Omega`$ `omega`, `Omega`</span> |
+
 </div>
+
 **Sets and logic  **
+
 <div align="center">
+
 |  |  |  |
 |:---|:---|:---|
 | <span class="box">$`\cup`$ `union`</span> | <span class="box">$`\mathbb{R}`$ `RR`, `bb(R)`</span> | <span class="box">$`\forall`$ `forall`</span> |
@@ -72,24 +94,38 @@ Getting script letters is <a href="#unavailable" class="ref">[unavailable]</a>.
 | <span class="box">$`\supseteq`$ `supset.eq`</span> | <span class="box">$`\varnothing`$ `diameter`</span> | <span class="box">$`\vdash`$ `tack.r`</span> |
 | <span class="box">$`\in`$ `in`</span> | <span class="box">$`\varnothing`$ `nothing`</span> | <span class="box">$`\models`$ `models`</span> |
 | <span class="box">$`\notin`$ `in.not`</span> | <span class="box">$`א`$ `alef`</span> | <span class="box">$`\smallsetminus`$ `without`</span> |
+
 </div>
+
 Negate an operator, as in $`⊄`$, with `subset.not`. Get the set complement $`A^{\mathsf{c}}`$ with `A^(sans(c))` (or $`A^{\complement}`$ with `A^(complement)`, or $`\overline{A}`$ with `overline(A)`).
+
 Remark  
 Using `diameter` for `\varnothing` may cause some confusion. However, <span class="box">L A <span class="box">T E X</span></span> also uses $`\varnothing`$ (`\u{2300}`) instead of $`\varnothing`$ (`\u{2205}`), see <u>[newcm $`§`$<!-- -->13.3](https://mirrors.sustech.edu.cn/CTAN/fonts/newcomputermodern/doc/newcm-doc.pdf)</u>. Another solution is to use `text(font: "Fira Sans", nothing)`, but the resultant glyph $`\varnothing`$ is subtly different from the widely used one. Ultimately, the choice is always **your decision**.
+
 **Decorations  **
+
 <div align="center">
+
 |  |  |  |
 |:---|:---|:---|
 | <span class="box">$`f'`$ `f'`, `f prime`</span> | <span class="box">$`\dot{a}`$ `dot(a)`</span> | <span class="box">$`\widetilde{a}`$ `tilde(a)`</span> |
 | <span class="box">$`f''`$ `f prime.double`</span> | <span class="box">$`\ddot{a}`$ `diaer(a)`</span> | <span class="box">$`\overline{a}`$ `macron(a)`</span> |
 | <span class="box">$`\Sigma^{\ast}`$ `Sigma^*`</span> | <span class="box">$`\hat{a}`$ `hat(a)`</span> | <span class="box">$`\overset{\rightarrow}{a}`$ `arrow(a)`</span> |
+
 </div>
+
 If the decorated letter is $`i`$ or $`j`$ then some decorations need `\u{1D6A4}` <a href="#tricky" class="ref">[tricky]</a> and `\u{1D6A5}` <a href="#tricky" class="ref">[tricky]</a>, as in $`\overset{\rightarrow}{\imath}`$ with `arrow(\u{1D6A4})`. Some authors use boldface for vectors: `bold(x)`.
+
 Entering `overline(x + y)` produces $`\overline{x + y}`$, and `hat(x + y)` gives $`\hat{x + y}`$. Comment on an expression as here (there is also `overbrace(..)`).
+
 <span align="center"><span class="box">$`\underset{|A|}{\underbrace{x + y}}`$ `underbrace(x + y, |A|)`</span></span>
+
 **Dots  **Use low dots in a list $`\left\{ 0,1,2,\ldots \right\}`$, entered as `{0, 1, 2, ...}`. Use centered dots in a sum or product $`1 + \cdots + 100`$, entered as `1 + dots.h.c + 100`. You can also get vertical dots `dots.v`, diagonal dots `dots.down` and anti-diagonal dots `dots.up`.
+
 **Roman names  **Just type them!
+
 <div align="center">
+
 |  |  |  |
 |:---|:---|:---|
 | <span class="box">$`\sin`$ `sin`</span> | <span class="box">$`\sinh`$ `sinh`</span> | <span class="box">$`\arcsin`$ `arcsin`</span> |
@@ -102,9 +138,13 @@ Entering `overline(x + y)` produces $`\overline{x + y}`$, and `hat(x + y)` gives
 | <span class="box">$`\log`$ `log`</span> | <span class="box">$`\deg`$ `deg`</span> | <span class="box">$`\liminf`$ `liminf`</span> |
 | <span class="box">$`\ln`$ `ln`</span> | <span class="box">$`\arg`$ `arg`</span> | <span class="box">$`\limsup`$ `limsup`</span> |
 | <span class="box">$`\lg`$ `lg`</span> | <span class="box">$`\gcd`$ `gcd`</span> | <span class="box">$`\lim`$ `lim`</span> |
+
 </div>
+
 **Other symbols  **
+
 <div align="center">
+
 |  |  |  |
 |:---|:---|:---|
 | <span class="box">$`<`$ `<`, `lt`</span> | <span class="box">$`\angle`$ `angle`</span> | <span class="box">$`\cdot`$ `dot`</span> |
@@ -123,10 +163,15 @@ Entering `overline(x + y)` produces $`\overline{x + y}`$, and `hat(x + y)` gives
 | <span class="box">$`\succeq`$ `succ.eq`</span> | <span class="box">$`\otimes`$ `times.circle`</span> | <span class="box">$`\star`$ `star`</span> |
 | <span class="box">$`\propto`$ `prop`</span> | <span class="box">$`\oslash`$ `\u{2298}` <a href="#tricky" class="ref">[tricky]</a></span> | <span class="box">$`\sqrt{}`$ `sqrt("")`</span> |
 | <span class="box">$`\doteq`$ `\u{2250}` <a href="#tricky" class="ref">[tricky]</a></span> | <span class="box">$`\upharpoonright`$ `harpoon.tr`</span> | <span class="box">$`✓`$ `checkmark`</span> |
+
 </div>
+
 Use `a divides b` for the divides relation, $`a \mid b`$, and `a divides.not b` for the negation, $`a \nmid b`$. Use `|` to get set builder notation $`\left\{ a \in S~|~a\text{ is odd} \right\}`$ with `{a in S | a "is odd"}`.
+
 **Arrows  **
+
 <div align="center">
+
 |  |  |
 |:---|:---|
 | <span class="box">$`\rightarrow`$ `->`, `arrow.r`</span> | <span class="box">$`\mapsto`$ `|->`, `arrow.r.bar`</span> |
@@ -136,29 +181,44 @@ Use `a divides b` for the divides relation, $`a \mid b`$, and `a divides.not b` 
 | <span class="box">$`\nRightarrow`$ `arrow.r.double.not`</span> | <span class="box">$`\downarrow`$ `arrow.b`</span> |
 | <span class="box">$`\Longrightarrow`$ `arrow.r.double.long`</span> | <span class="box">$`\uparrow`$ `arrow.t`</span> |
 | <span class="box">$`\rightsquigarrow`$ `arrow.squiggly`</span> | <span class="box">$`\updownarrow`$ `arrow.t.b`</span> |
+
 </div>
+
 The right arrows in the first column have matching left arrows, such as `arrow.l.not`, and there are some other matches for down arrows, etc.
+
 **Variable-sized operators  **The summation $`\sum_{j = 0}^{3}j^{2}`$ `sum_(j = 0)^3 j^2` and the integral $`\int_{x = 0}^{3}x^{2}dx`$ `integral_(x = 0)^3 x^2 dif x` expand when displayed.
+
 ``` math
 \sum_{j = 0}^{3}j^{2}\qquad\int_{x = 0}^{3}x^{2}dx
 ```
+
 These do the same.
+
 <div align="center">
+
 |  |  |  |
 |:---|:---|:---|
 | <span class="box">$`\int`$ `integral`</span> | <span class="box">$`\iiint`$ `integral.triple`</span> | <span class="box">$`\bigcup`$ `union.big`</span> |
 | <span class="box">$`\iint`$ `integral.double`</span> | <span class="box">$`\oint`$ `integral.cont`</span> | <span class="box">$`\bigcap`$ `sect.big`</span> |
+
 </div>
+
 **Fences  **
+
 <div align="center">
+
 |  |  |  |
 |:---|:---|:---|
 | <span class="box">$`()`$ `()`</span> | <span class="box">$`\langle\rangle`$ `angle.l angle.r`</span> | <span class="box">$`\left| {} \right|`$ `abs("")`</span> |
 | <span class="box">$`\lbrack\rbrack`$ `[]`</span> | <span class="box">$`\left\lfloor {} \right\rfloor`$ `floor("")`</span> | <span class="box">$`\left\| {} \right\|`$ `norm("")`</span> |
 | <span class="box">$`\left\{ \right\}`$ `{}`</span> | <span class="box">$`\left\lceil {} \right\rceil`$ `ceil("")`</span> |  |
+
 </div>
+
 Fix the size with the `lr` function.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -167,9 +227,13 @@ Fix the size with the `lr` function.
 </tr>
 </tbody>
 </table>
+
 </div>
+
 To have them grow with the enclosed formula, also use the `lr` function.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -178,9 +242,13 @@ To have them grow with the enclosed formula, also use the `lr` function.
 </tr>
 </tbody>
 </table>
+
 </div>
+
 Fences scale by default if entered directly as codepoints, and don’t scale automatically if entered as symbol notation.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -193,9 +261,13 @@ Fences scale by default if entered directly as codepoints, and don’t scale aut
 </tr>
 </tbody>
 </table>
+
 </div>
+
 The `lr` function also allows to scale unmatched delimiters and one-side fences.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -204,9 +276,13 @@ The `lr` function also allows to scale unmatched delimiters and one-side fences.
 </tr>
 </tbody>
 </table>
+
 </div>
+
 **Arrays, Matrices  **Get a matrix with the `mat` function. You can pass an array to it.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -218,11 +294,17 @@ c &amp; d
 </tr>
 </tbody>
 </table>
+
 </div>
+
 In Typst, <u>[array](https://typst.app/docs/reference/typst/array)</u> is a sequence of values, while in <span class="box">L A <span class="box">T E X</span></span>, array is a matrix without fences, which is `$mat(delim: #none, ..)$` in Typst.
+
 For the determinant use `|A|`, text operator $`\det`$ `det` or `mat(delim: "|", ..)`.
+
 Definition by cases can be easily obtained with the `cases` function.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -237,10 +319,15 @@ r \cdot f_{n - 1} &amp; \text{else }
 </tr>
 </tbody>
 </table>
+
 </div>
+
 **Spacing in mathematics  **Improve $`\sqrt{2}x`$ to $`\sqrt{2}\, x`$ with a thin space, as in `sqrt(2) thin x`. Slightly wider are `medium` and `thick` (the three are in ratio $`3:4:5`$). Bigger space is `quad` for $`\rightarrow \quad \leftarrow`$, which is useful between parts of a display. Get arbitrary space with the `h` function. For example, use `#h(2em)` for `\qquad` in <span class="box">L A <span class="box">T E X</span></span> and `#h(-0.1667em)` for `\!`.
+
 **Displayed equations  **Display equations in a block level using `$ ... $` with at least one space separating the math content and the `$`.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -249,9 +336,13 @@ r \cdot f_{n - 1} &amp; \text{else }
 </tr>
 </tbody>
 </table>
+
 </div>
+
 You can break into multiple lines.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -264,9 +355,13 @@ You can break into multiple lines.
 </tr>
 </tbody>
 </table>
+
 </div>
+
 Align equations using `&`
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -279,10 +374,15 @@ Align equations using `&`
 </tr>
 </tbody>
 </table>
+
 </div>
+
 (the left or right side of an alignment can be empty). Get a numbered version by `#set math.equation(numbering: ..)`.
+
 **Calculus examples  **The last three here are display style.
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -307,12 +407,19 @@ Align equations using `&`
 </tr>
 </tbody>
 </table>
+
 </div>
+
 **Discrete mathematics examples  **For modulo, there is a symbol $`\equiv`$ from `equiv` and a text operator $`\operatorname{mod}`$ from `mod`.
+
 For combinations the binomial symbol $`\binom{n}{k}`$ is from `binom(n, k)`. This resizes to be bigger in a display.
+
 For permutations use $`n^{\underline{r}}`$ from `n^(underline(r))` (some authors use $`P(n,r)`$, or $`{}_{n}P_{r}`$ from `""_n P_r`).
+
 **Statistics examples  **
+
 <div align="center">
+
 <table>
 <tbody>
 <tr>
@@ -325,12 +432,17 @@ For permutations use $`n^{\underline{r}}`$ from `n^(underline(r))` (some authors
 </tr>
 </tbody>
 </table>
+
 </div>
+
 The probability density of the normal distribution
+
 ``` math
 \frac{1}{\sqrt{2\sigma^{2}\pi}}e^{- \frac{(x - \mu)^{2}}{2\sigma^{2}}}
 ```
+
 comes from this.
+
 <table>
 <tbody>
 <tr>
@@ -340,7 +452,11 @@ comes from this.
 </tr>
 </tbody>
 </table>
+
 **For more  **See also the Typst Documentation at <u><https://typst.app/docs></u>.
+
 ------------------------------------------------------------------------
+
 johanvx (<u><https://github.com/johanvx></u>)    2023-05-22
+
 </div>

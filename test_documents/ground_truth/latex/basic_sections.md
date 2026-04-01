@@ -7,8 +7,13 @@ This is the introduction paragraph with some basic text.
 This subsection provides background information.
 
 ### Historical Context
+
 This is a deeper level of organization.
+
 # Methods
+
 This section describes the methods used.
+
 # Results
+
 The results are presented here.

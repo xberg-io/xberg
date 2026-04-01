@@ -7,12 +7,15 @@ Steffen Klassert
 secunet Security Networks AG
 
 Dresden
+
 Linux IPsec Workshop, Dresden, March 26, 2018
+
 Discussion topics, Linux IPsec Workshop
 Future of PFKEY in the kernel
 Configurable system policy default (allow/drop)
 Crypto layer problems
 Hardware GRO
+
 Discussion topics, Linux IPsec Workshop
 Future of PFKEY in the kernel
 Future of PFKEY in the kernel
@@ -25,6 +28,7 @@ What do we need to do to be able to remove PKKEY from
 the kernel?
 How do we handle the PFKEY bug reports until we can
 remove it?
+
 Discussion topics, Linux IPsec Workshop
 Configurable system policy default (allow/drop)
 Configurable system policy default (allow/drop)
@@ -36,6 +40,7 @@ Each direction can be configured sepatately
 When default is block, we need allow policies for all packet
 flows we accept
 Would this be usefull for the userspace?
+
 Discussion topics, Linux IPsec Workshop
 Crypto layer problems
 Crypto layer problems
@@ -47,6 +52,7 @@ Might be worth to do some performance optimizations in the
 crypto layer
 IPsec performance optimizations are 'eaten up' in the crypto
 layer
+
 Discussion topics, Linux IPsec Workshop
 Hardware GRO
 Hardware GRO

@@ -142,8 +142,11 @@
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Bucephala-albeola-010.jpg/220px-Bucephala-albeola-010.jpg)
 
 \!\[Edit this classification\](//upload.wikimedia.org/wikipedia/commons/thumb/8/8a/OOjs_UI_icon_edit-ltr.svg/15px-OOjs_UI_icon_edit-ltr.svg.png)
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Bucephala-albeola-010.jpg/220px-Bucephala-albeola-010.jpg)
+
 \!\[Edit this classification\](//upload.wikimedia.org/wikipedia/commons/thumb/8/8a/OOjs_UI_icon_edit-ltr.svg/15px-OOjs_UI_icon_edit-ltr.svg.png)
+
 | Duck |  |
 | --- | --- |
 | \[\!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Bucephala-albeola-010.jpg/220px-Bucephala-albeola-010.jpg)\](/wiki/File:Bucephala-albeola-010.jpg) |  |
@@ -158,73 +161,136 @@
 | Family: | \[Anatidae\](/wiki/Anatidae "Anatidae") |
 | Subfamilies |  |
 | See text |  |
+
 \*\*Duck\*\* is the common name for numerous species of \[waterfowl\](/wiki/Waterfowl "Waterfowl") in the \[family\](/wiki/Family_(biology) "Family (biology)") \[Anatidae\](/wiki/Anatidae "Anatidae"). Ducks are generally smaller and shorter-necked than \[swans\](/wiki/Swan "Swan") and \[geese\](/wiki/Goose "Goose"), which are members of the same family. Divided among several subfamilies, they are a \[form taxon\](/wiki/Form_taxon "Form taxon"); they do not represent a \[monophyletic group\](/wiki/Monophyletic_group "Monophyletic group") (the group of all descendants of a single common ancestral species), since swans and geese are not considered ducks. Ducks are mostly \[aquatic birds\](/wiki/Aquatic_bird "Aquatic bird"), and may be found in both fresh water and sea water.
+
 Ducks are sometimes confused with several types of unrelated water birds with similar forms, such as \[loons\](/wiki/Loon "Loon") or divers, \[grebes\](/wiki/Grebe "Grebe"), \[gallinules\](/wiki/Gallinule "Gallinule") and \[coots\](/wiki/Coot "Coot").
+
 ## Etymology
+
 The word \*duck\* comes from \[Old English\](/wiki/Old_English "Old English") \*dūce\* 'diver', a derivative of the verb \*\*dūcan\* 'to duck, bend down low as if to get under something, or dive', because of the way many species in the \[dabbling duck\](/wiki/Dabbling_duck "Dabbling duck") group feed by upending; compare with \[Dutch\](/wiki/Dutch_language "Dutch language") \*duiken\* and \[German\](/wiki/German_language "German language") \*tauchen\* 'to dive'.
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/8/82/Pacific_Black_Ducks_on_pond_ducking.jpg/220px-Pacific_Black_Ducks_on_pond_ducking.jpg)
+
 This word replaced Old English \*ened\* /\*ænid\* 'duck', possibly to avoid confusion with other words, such as \*ende\* 'end' with similar forms. Other Germanic languages still have similar words for \*duck\*, for example, Dutch \*eend\*, German \*Ente\* and \[Norwegian\](/wiki/Norwegian_language "Norwegian language") \*and\*. The word \*ened\* /\*ænid\* was inherited from \[Proto-Indo-European\](/wiki/Proto-Indo-European_language "Proto-Indo-European language"); \[cf.\](/wiki/Cf. "Cf.") \[Latin\](/wiki/Latin "Latin") \*anas\* "duck", \[Lithuanian\](/wiki/Lithuanian_language "Lithuanian language") \*ántis\* 'duck', \[Ancient Greek\](/wiki/Ancient_Greek_language "Ancient Greek language") νῆσσα /νῆττα (\*nēssa\* /\*nētta\*) 'duck', and \[Sanskrit\](/wiki/Sanskrit "Sanskrit") \*ātí\* 'water bird', among others.
+
 A duckling is a young duck in downy plumage\[\[1\]\](\#cite_note-1) or baby duck,\[\[2\]\](\#cite_note-2) but in the food trade a young domestic duck which has just reached adult size and bulk and its meat is still fully tender, is sometimes labelled as a duckling.
+
 A male is called a \[drake\](https://en.wiktionary.org/wiki/drake "wikt:drake") and the female is called a duck, or in \[ornithology\](/wiki/Ornithology "Ornithology") a hen.\[\[3\]\](\#cite_note-3)\[\[4\]\](\#cite_note-4)
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/7/78/Mallard-drake-chicago-march-2024.jpg/220px-Mallard-drake-chicago-march-2024.jpg)
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/7/7d/Wood-ducks-male-female-chicago-march-2024.jpg/220px-Wood-ducks-male-female-chicago-march-2024.jpg)
+
 ## Taxonomy
+
 All ducks belong to the \[biological order\](/wiki/Order_(biology) "Order (biology)") \[Anseriformes\](/wiki/Anseriformes "Anseriformes"), a group that contains the ducks, geese and swans, as well as the \[screamers\](/wiki/Screamer "Screamer"), and the \[magpie goose\](/wiki/Magpie_goose "Magpie goose").\[\[5\]\](\#cite_note-FOOTNOTECarboneras1992536-5) All except the screamers belong to the \[biological family\](/wiki/Family_(biology) "Family (biology)") \[Anatidae\](/wiki/Anatidae "Anatidae").\[\[5\]\](\#cite_note-FOOTNOTECarboneras1992536-5) Within the family, ducks are split into a variety of subfamilies and 'tribes'. The number and composition of these subfamilies and tribes is the cause of considerable disagreement among taxonomists.\[\[5\]\](\#cite_note-FOOTNOTECarboneras1992536-5) Some base their decisions on \[morphological characteristics\](/wiki/Morphology_(biology) "Morphology (biology)"), others on shared behaviours or genetic studies.\[\[6\]\](\#cite_note-FOOTNOTELivezey1986737–738-6)\[\[7\]\](\#cite_note-FOOTNOTEMadsenMcHughde_Kloet1988452-7) The number of suggested subfamilies containing ducks ranges from two to five.\[\[8\]\](\#cite_note-FOOTNOTEDonne-GousséLaudetHänni2002353–354-8)\[\[9\]\](\#cite_note-FOOTNOTECarboneras1992540-9) The significant level of \[hybridisation\](/wiki/Hybrid_(biology) "Hybrid (biology)") that occurs among wild ducks complicates efforts to tease apart the relationships between various species.\[\[9\]\](\#cite_note-FOOTNOTECarboneras1992540-9)
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/5/54/Mallard_drake_.02.jpg/220px-Mallard_drake_.02.jpg)
+
 In most modern classifications, the so-called 'true ducks' belong to the subfamily Anatinae, which is further split into a varying number of tribes.\[\[10\]\](\#cite_note-FOOTNOTEElphickDunningSibley2001191-10) The largest of these, the Anatini, contains the 'dabbling' or 'river' ducks – named for their method of feeding primarily at the surface of fresh water.\[\[11\]\](\#cite_note-FOOTNOTEKear2005448-11) The 'diving ducks', also named for their primary feeding method, make up the tribe Aythyini.\[\[12\]\](\#cite_note-FOOTNOTEKear2005622–623-12) The 'sea ducks' of the tribe Mergini are diving ducks which specialise on fish and shellfish and spend a majority of their lives in saltwater.\[\[13\]\](\#cite_note-FOOTNOTEKear2005686-13) The tribe Oxyurini contains the 'stifftails', diving ducks notable for their small size and stiff, upright tails.\[\[14\]\](\#cite_note-FOOTNOTEElphickDunningSibley2001193-14)
+
 A number of other species called ducks are not considered to be 'true ducks', and are typically placed in other subfamilies or tribes. The \[whistling ducks\](/wiki/Whistling_duck "Whistling duck") are assigned either to a tribe (Dendrocygnini) in the subfamily Anatinae or the subfamily Anserinae,\[\[15\]\](\#cite_note-FOOTNOTECarboneras1992537-15) or to their own subfamily (Dendrocygninae) or family (Dendrocyganidae).\[\[9\]\](\#cite_note-FOOTNOTECarboneras1992540-9)\[\[16\]\](\#cite_note-FOOTNOTEAmerican_Ornithologists'_Union1998xix-16) The \[freckled duck\](/wiki/Freckled_duck "Freckled duck") of Australia is either the sole member of the tribe Stictonettini in the subfamily Anserinae,\[\[15\]\](\#cite_note-FOOTNOTECarboneras1992537-15) or in its own family, the Stictonettinae.\[\[9\]\](\#cite_note-FOOTNOTECarboneras1992540-9) The \[shelducks\](/wiki/Shelduck "Shelduck") make up the tribe Tadornini in the family Anserinae in some classifications,\[\[15\]\](\#cite_note-FOOTNOTECarboneras1992537-15) and their own subfamily, Tadorninae, in others,\[\[17\]\](\#cite_note-FOOTNOTEAmerican_Ornithologists'_Union1998-17) while the \[steamer ducks\](/wiki/Steamer_duck "Steamer duck") are either placed in the family Anserinae in the tribe Tachyerini\[\[15\]\](\#cite_note-FOOTNOTECarboneras1992537-15) or lumped with the shelducks in the tribe Tadorini.\[\[9\]\](\#cite_note-FOOTNOTECarboneras1992540-9) The \[perching ducks\](/wiki/Perching_duck "Perching duck") make up in the tribe Cairinini in the subfamily Anserinae in some classifications, while that tribe is eliminated in other classifications and its members assigned to the tribe Anatini.\[\[9\]\](\#cite_note-FOOTNOTECarboneras1992540-9) The \[torrent duck\](/wiki/Torrent_duck "Torrent duck") is generally included in the subfamily Anserinae in the monotypic tribe Merganettini,\[\[15\]\](\#cite_note-FOOTNOTECarboneras1992537-15) but is sometimes included in the tribe Tadornini.\[\[18\]\](\#cite_note-FOOTNOTECarboneras1992538-18) The \[pink-eared duck\](/wiki/Pink-eared_duck "Pink-eared duck") is sometimes included as a true duck either in the tribe Anatini\[\[15\]\](\#cite_note-FOOTNOTECarboneras1992537-15) or the tribe Malacorhynchini,\[\[19\]\](\#cite_note-FOOTNOTEChristidisBoles200862-19) and other times is included with the shelducks in the tribe Tadornini.\[\[15\]\](\#cite_note-FOOTNOTECarboneras1992537-15)
+
 ## Morphology
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/5/51/Mandarin.duck.arp.jpg/220px-Mandarin.duck.arp.jpg)
+
 The overall \[body plan\](/wiki/Body_plan "Body plan") of ducks is elongated and broad, and they are also relatively long-necked, albeit not as long-necked as the geese and swans. The body shape of diving ducks varies somewhat from this in being more rounded. The \[bill\](/wiki/Beak "Beak") is usually broad and contains serrated \[pectens\](/wiki/Pecten_(biology) "Pecten (biology)"), which are particularly well defined in the filter-feeding species. In the case of some fishing species the bill is long and strongly serrated. The scaled legs are strong and well developed, and generally set far back on the body, more so in the highly aquatic species. The wings are very strong and are generally short and pointed, and the \[flight\](/wiki/Bird_flight "Bird flight") of ducks requires fast continuous strokes, requiring in turn strong wing muscles. Three species of \[steamer duck\](/wiki/Steamer_duck "Steamer duck") are almost flightless, however. Many species of duck are temporarily flightless while \[moulting\](/wiki/Moult "Moult"); they seek out protected habitat with good food supplies during this period. This moult typically precedes \[migration\](/wiki/Bird_migration "Bird migration").
+
 The drakes of northern species often have extravagant \[plumage\](/wiki/Plumage "Plumage"), but that is \[moulted\](/wiki/Moult "Moult") in summer to give a more female-like appearance, the "eclipse" plumage. Southern resident species typically show less \[sexual dimorphism\](/wiki/Sexual_dimorphism "Sexual dimorphism"), although there are exceptions such as the \[paradise shelduck\](/wiki/Paradise_shelduck "Paradise shelduck") of \[New Zealand\](/wiki/New_Zealand "New Zealand"), which is both strikingly sexually dimorphic and in which the female's plumage is brighter than that of the male. The plumage of juvenile birds generally resembles that of the female. Female ducks have evolved to have a corkscrew shaped vagina to prevent rape.
+
 ## Distribution and habitat
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Last_day_in_Ushuaia%2C_Argentina.Flying_Steamer-Ducks_%28Tachyeres_patachonicus%29_in_various_artistic_settings.Harbour_silhouettes._%2825921897721%29.jpg/220px-Last_day_in_Ushuaia%2C_Argentina.Flying_Steamer-Ducks_%28Tachyeres_patachonicus%29_in_various_artistic_settings.Harbour_silhouettes._%2825921897721%29.jpg)
+
 Ducks have a \[cosmopolitan distribution\](/wiki/Cosmopolitan_distribution "Cosmopolitan distribution"), and are found on every continent except Antarctica.\[\[5\]\](\#cite_note-FOOTNOTECarboneras1992536-5) Several species manage to live on subantarctic islands, including \[South Georgia\](/wiki/South_Georgia_and_the_South_Sandwich_Islands "South Georgia and the South Sandwich Islands") and the \[Auckland Islands\](/wiki/Auckland_Islands "Auckland Islands").\[\[20\]\](\#cite_note-FOOTNOTEShirihai2008239,_245-20) Ducks have reached a number of isolated oceanic islands, including the \[Hawaiian Islands\](/wiki/Hawaiian_Islands "Hawaiian Islands"), \[Micronesia\](/wiki/Micronesia "Micronesia") and the \[Galápagos Islands\](/wiki/Gal%C3%A1pagos_Islands "Galápagos Islands"), where they are often \*\[vagrants\](/wiki/Glossary_of_bird_terms\#vagrants "Glossary of bird terms")\* and less often \*\[residents\](/wiki/Glossary_of_bird_terms\#residents "Glossary of bird terms")\*.\[\[21\]\](\#cite_note-FOOTNOTEPrattBrunerBerrett198798–107-21)\[\[22\]\](\#cite_note-FOOTNOTEFitterFitterHosking200052–3-22) A handful are \[endemic\](/wiki/Endemic "Endemic") to such far-flung islands.\[\[21\]\](\#cite_note-FOOTNOTEPrattBrunerBerrett198798–107-21)
+
 \!\[A brown duck in a fast-flowing stream\](//upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Female_Mallard_at_Menacuddle_Well.jpg/220px-Female_Mallard_at_Menacuddle_Well.jpg)
+
 Some duck species, mainly those breeding in the temperate and Arctic Northern Hemisphere, are migratory; those in the tropics are generally not. Some ducks, particularly in Australia where rainfall is erratic, are nomadic, seeking out the temporary lakes and pools that form after localised heavy rain.\[\[23\]\](\#cite_note-23)
+
 ## Behaviour
+
 ### Feeding
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/6/65/Duck_1_filter_teeth_edit.jpg/220px-Duck_1_filter_teeth_edit.jpg)
+
 Ducks eat food sources such as \[grasses\](/wiki/Poaceae "Poaceae"), aquatic plants, fish, insects, small amphibians, worms, and small \[molluscs\](/wiki/Mollusc "Mollusc").
+
 \[Dabbling ducks\](/wiki/Dabbling_duck "Dabbling duck") feed on the surface of water or on land, or as deep as they can reach by up-ending without completely submerging.\[\[24\]\](\#cite_note-24) Along the edge of the bill, there is a comb-like structure called a \[pecten\](/wiki/Pecten_(biology) "Pecten (biology)"). This strains the water squirting from the side of the bill and traps any food. The pecten is also used to preen feathers and to hold slippery food items.
+
 \[Diving ducks\](/wiki/Diving_duck "Diving duck") and \[sea ducks\](/wiki/Sea_duck "Sea duck") forage deep underwater. To be able to submerge more easily, the diving ducks are heavier than dabbling ducks, and therefore have more difficulty taking off to fly.
+
 A few specialized species such as the \[mergansers\](/wiki/Merganser "Merganser") are adapted to catch and swallow large fish.
+
 The others have the characteristic wide flat bill adapted to \[dredging\](/wiki/Dredging "Dredging")-type jobs such as pulling up waterweed, pulling worms and small molluscs out of mud, searching for insect larvae, and bulk jobs such as dredging out, holding, turning head first, and swallowing a squirming frog. To avoid injury when digging into sediment it has no \[cere\](/wiki/Cere "Cere"), but the nostrils come out through hard horn.
+
 \*\[The Guardian\](/wiki/The_Guardian "The Guardian")\* published an article advising that ducks should not be fed with bread because it \[damages the health of the ducks\](/wiki/Angel_wing "Angel wing") and pollutes waterways.\[\[25\]\](\#cite_note-25)
+
 ### Breeding
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/a/a6/Parrulo_-Muscovy_duckling.jpg/220px-Parrulo_-Muscovy_duckling.jpg)
+
 Ducks generally \[only have one partner at a time\](/wiki/Monogamy_in_animals "Monogamy in animals"), although the partnership usually only lasts one year.\[\[26\]\](\#cite_note-26) Larger species and the more sedentary species (like fast-river specialists) tend to have pair-bonds that last numerous years.\[\[27\]\](\#cite_note-27) Most duck species breed once a year, choosing to do so in favourable conditions (\[spring\](/wiki/Spring_(season) "Spring (season)")/summer or wet seasons). Ducks also tend to make a \[nest\](/wiki/Bird_nest "Bird nest") before breeding, and, after hatching, lead their ducklings to water. Mother ducks are very caring and protective of their young, but may abandon some of their ducklings if they are physically stuck in an area they cannot get out of (such as nesting in an enclosed \[courtyard\](/wiki/Courtyard "Courtyard")) or are not prospering due to genetic defects or sickness brought about by hypothermia, starvation, or disease. Ducklings can also be orphaned by inconsistent late hatching where a few eggs hatch after the mother has abandoned the nest and led her ducklings to water.\[\[28\]\](\#cite_note-28)
+
 ### Communication
+
 Female \[mallard\](/wiki/Mallard "Mallard") ducks (as well as several other species in the genus \*Anas\*, such as the \[American\](/wiki/American_black_duck "American black duck") and \[Pacific black ducks\](/wiki/Pacific_black_duck "Pacific black duck"), \[spot-billed duck\](/wiki/Spot-billed_duck "Spot-billed duck"), \[northern pintail\](/wiki/Northern_pintail "Northern pintail") and \[common teal\](/wiki/Common_teal "Common teal")) make the classic "quack" sound while males make a similar but raspier sound that is sometimes written as "breeeeze",\[\[29\]\](\#cite_note-29)\[\*\[self-published source?\](/wiki/Wikipedia:Verifiability\#Self-published_sources "Wikipedia:Verifiability")\*\] but, despite widespread misconceptions, most species of duck do not "quack".\[\[30\]\](\#cite_note-30) In general, ducks make a range of \[calls\](/wiki/Bird_vocalisation "Bird vocalisation"), including whistles, cooing, yodels and grunts. For example, the \[scaup\](/wiki/Scaup "Scaup") – which are \[diving ducks\](/wiki/Diving_duck "Diving duck") – make a noise like "scaup" (hence their name). Calls may be loud displaying calls or quieter contact calls.
+
 A common \[urban legend\](/wiki/Urban_legend "Urban legend") claims that duck quacks do not echo; however, this has been proven to be false. This myth was first debunked by the Acoustics Research Centre at the \[University of Salford\](/wiki/University_of_Salford "University of Salford") in 2003 as part of the \[British Association\](/wiki/British_Association "British Association")'s Festival of Science.\[\[31\]\](\#cite_note-31) It was also debunked in \[one of the earlier episodes\](/wiki/MythBusters_(2003_season)\#Does_a_Duck's_Quack_Echo? "MythBusters (2003 season)") of the popular Discovery Channel television show \*\[MythBusters\](/wiki/MythBusters "MythBusters")\*.\[\[32\]\](\#cite_note-32)
+
 ### Predators
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/f/f4/Ringedteal.PNG/220px-Ringedteal.PNG)
+
 Ducks have many predators. Ducklings are particularly vulnerable, since their inability to fly makes them easy prey not only for predatory birds but also for large fish like \[pike\](/wiki/Esox "Esox"), \[crocodilians\](/wiki/Crocodilia "Crocodilia"), predatory \[testudines\](/wiki/Testudines "Testudines") such as the \[alligator snapping turtle\](/wiki/Alligator_snapping_turtle "Alligator snapping turtle"), and other aquatic hunters, including fish-eating birds such as \[herons\](/wiki/Heron "Heron"). Ducks' nests are raided by land-based predators, and brooding females may be caught unaware on the nest by mammals, such as \[foxes\](/wiki/Fox "Fox"), or large birds, such as \[hawks\](/wiki/Hawk "Hawk") or \[owls\](/wiki/Owl "Owl").
+
 Adult ducks are fast fliers, but may be caught on the water by large aquatic predators including big fish such as the North American \[muskie\](/wiki/Muskellunge "Muskellunge") and the European \[pike\](/wiki/Esox "Esox"). In flight, ducks are safe from all but a few predators such as humans and the \[peregrine falcon\](/wiki/Peregrine_falcon "Peregrine falcon"), which uses its speed and strength to catch ducks.
+
 ## Relationship with humans
+
 ### Hunting
+
 Humans have hunted ducks since prehistoric times. Excavations of \[middens\](/wiki/Midden "Midden") in California dating to 7800 – 6400 \[BP\](/wiki/Before_present "Before present") have turned up bones of ducks, including at least one now-extinct flightless species.\[\[33\]\](\#cite_note-FOOTNOTEErlandson1994171-33) Ducks were captured in "significant numbers" by \[Holocene\](/wiki/Holocene "Holocene") inhabitants of the lower \[Ohio River\](/wiki/Ohio_River "Ohio River") valley, suggesting they took advantage of the seasonal bounty provided by migrating waterfowl.\[\[34\]\](\#cite_note-FOOTNOTEJeffries2008168,_243-34) Neolithic hunters in locations as far apart as the Caribbean,\[\[35\]\](\#cite_note-FOOTNOTESued-Badillo200365-35) Scandinavia,\[\[36\]\](\#cite_note-FOOTNOTEThorpe199668-36) Egypt,\[\[37\]\](\#cite_note-FOOTNOTEMaisels199942-37) Switzerland,\[\[38\]\](\#cite_note-FOOTNOTERau1876133-38) and China relied on ducks as a source of protein for some or all of the year.\[\[39\]\](\#cite_note-FOOTNOTEHigman201223-39) Archeological evidence shows that \[Māori people\](/wiki/M%C4%81ori_people "Māori people") in New Zealand hunted the flightless \[Finsch's duck\](/wiki/Finsch%27s_duck "Finsch's duck"), possibly to extinction, though rat predation may also have contributed to its fate.\[\[40\]\](\#cite_note-FOOTNOTEHume201253-40) A similar end awaited the \[Chatham duck\](/wiki/Chatham_duck "Chatham duck"), a species with reduced flying capabilities which went extinct shortly after its island was colonised by Polynesian settlers.\[\[41\]\](\#cite_note-FOOTNOTEHume201252-41) It is probable that duck eggs were gathered by Neolithic hunter-gathers as well, though hard evidence of this is uncommon.\[\[35\]\](\#cite_note-FOOTNOTESued-Badillo200365-35)\[\[42\]\](\#cite_note-FOOTNOTEFieldhouse2002167-42)
+
 In many areas, wild ducks (including ducks farmed and released into the wild) are hunted for food or sport,\[\[43\]\](\#cite_note-43) by shooting, or by being trapped using \[duck decoys\](/wiki/Duck_decoy_(structure) "Duck decoy (structure)"). Because an idle floating duck or a duck squatting on land cannot react to fly or move quickly, "a sitting duck" has come to mean "an easy target". These ducks may be \[contaminated by pollutants\](/wiki/Duck_(food)\#Pollution "Duck (food)") such as \[PCBs\](/wiki/Polychlorinated_biphenyl "Polychlorinated biphenyl").\[\[44\]\](\#cite_note-44)
+
 ### Domestication
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Tunnel_of_ducks.jpg/220px-Tunnel_of_ducks.jpg)
+
 Ducks have many economic uses, being farmed for their meat, eggs, and feathers (particularly their \[down\](/wiki/Down_feather "Down feather")). Approximately 3 billion ducks are slaughtered each year for meat worldwide.\[\[45\]\](\#cite_note-45) They are also kept and bred by aviculturists and often displayed in zoos. Almost all the varieties of domestic ducks are descended from the \[mallard\](/wiki/Mallard "Mallard") (\*Anas platyrhynchos\*), apart from the \[Muscovy duck\](/wiki/Muscovy_duck "Muscovy duck") (\*Cairina moschata\*).\[\[46\]\](\#cite_note-46)\[\[47\]\](\#cite_note-47) The \[Call duck\](/wiki/Call_duck "Call duck") is another example of a domestic duck breed. Its name comes from its original use established by hunters, as a decoy to attract wild mallards from the sky, into traps set for them on the ground. The call duck is the world's smallest domestic duck breed, as it weighs less than 1 kg (2.2 lb).\[\[48\]\](\#cite_note-48)
+
 ### Heraldry
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/0/04/Maaninka.vaakuna.svg/130px-Maaninka.vaakuna.svg.png)
+
 Ducks appear on several \[coats of arms\](/wiki/Coats_of_arms "Coats of arms"), including the coat of arms of \[Lubāna\](/wiki/Lub%C4%81na "Lubāna") (\[Latvia\](/wiki/Latvia "Latvia"))\[\[50\]\](\#cite_note-50) and the coat of arms of \[Föglö\](/wiki/F%C3%B6gl%C3%B6 "Föglö") (\[Åland\](/wiki/%C3%85land "Åland")).\[\[51\]\](\#cite_note-51)
+
 ### Cultural references
+
 In 2002, psychologist \[Richard Wiseman\](/wiki/Richard_Wiseman "Richard Wiseman") and colleagues at the \[University of Hertfordshire\](/wiki/University_of_Hertfordshire "University of Hertfordshire"), \[UK\](/wiki/UK "UK"), finished a year-long \[LaughLab\](/wiki/LaughLab "LaughLab") experiment, concluding that of all animals, ducks attract the most humor and silliness; he said, "If you're going to tell a joke involving an animal, make it a duck."\[\[52\]\](\#cite_note-52) The word "duck" may have become an \[inherently funny word\](/wiki/Inherently_funny_word "Inherently funny word") in many languages, possibly because ducks are seen as silly in their looks or behavior. Of the many \[ducks in fiction\](/wiki/List_of_fictional_ducks "List of fictional ducks"), many are cartoon characters, such as \[Walt Disney\](/wiki/The_Walt_Disney_Company "The Walt Disney Company")'s \[Donald Duck\](/wiki/Donald_Duck "Donald Duck"), and \[Warner Bros.\](/wiki/Warner_Bros. "Warner Bros.")' \[Daffy Duck\](/wiki/Daffy_Duck "Daffy Duck"). \[Howard the Duck\](/wiki/Howard_the_Duck "Howard the Duck") started as a comic book character in 1973\[\[53\]\](\#cite_note-53)\[\[54\]\](\#cite_note-54) and was made into a \[movie\](/wiki/Howard_the_Duck_(film) "Howard the Duck (film)") in 1986.
+
 The 1992 Disney film \*\[The Mighty Ducks\](/wiki/The_Mighty_Ducks_(film) "The Mighty Ducks (film)")\*, starring \[Emilio Estevez\](/wiki/Emilio_Estevez "Emilio Estevez"), chose the duck as the mascot for the fictional youth hockey team who are protagonists of the movie, based on the duck being described as a fierce fighter. This led to the duck becoming the nickname and mascot for the eventual \[National Hockey League\](/wiki/National_Hockey_League "National Hockey League") professional team of the \[Anaheim Ducks\](/wiki/Anaheim_Ducks "Anaheim Ducks"), who were founded with the name the Mighty Ducks of Anaheim.\[\*\[citation needed\](/wiki/Wikipedia:Citation_needed "Wikipedia:Citation needed")\*\] The duck is also the nickname of the \[University of Oregon\](/wiki/University_of_Oregon "University of Oregon") sports teams as well as the \[Long Island Ducks\](/wiki/Long_Island_Ducks "Long Island Ducks") minor league \[baseball\](/wiki/Baseball "Baseball") team.\[\[55\]\](\#cite_note-55)
+
 ## See also
+
 - \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Eagle_01.svg/23px-Eagle_01.svg.png)\[Birds portal\](/wiki/Portal:Birds "Portal:Birds")
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Eagle_01.svg/23px-Eagle_01.svg.png)
+
 - \[Domestic duck\](/wiki/Domestic_duck "Domestic duck")
 - \[Duck as food\](/wiki/Duck_as_food "Duck as food")
 - \[Duck test\](/wiki/Duck_test "Duck test")
 - \[Duck breeds\](/wiki/List_of_duck_breeds "List of duck breeds")
 - \[Fictional ducks\](/wiki/List_of_fictional_ducks "List of fictional ducks")
 - \[Rubber duck\](/wiki/Rubber_duck "Rubber duck")
+
 ## Notes
+
 ### Citations
+
 1. \*\*\[^\](\#cite_ref-1)\*\* \["Duckling"\](http://dictionary.reference.com/browse/duckling). \*The American Heritage Dictionary of the English Language, Fourth Edition\*. Houghton Mifflin Company. 2006. Retrieved 2015-05-22.
 2. \*\*\[^\](\#cite_ref-2)\*\* \["Duckling"\](http://dictionary.reference.com/browse/duckling). \*Kernerman English Multilingual Dictionary (Beta Version)\*. K. Dictionaries Ltd. 2000–2006. Retrieved 2015-05-22.
 3. \*\*\[^\](\#cite_ref-3)\*\* Dohner, Janet Vorwald (2001). \[\*The Encyclopedia of Historic and Endangered Livestock and Poultry Breeds\*\](https://books.google.com/books?id=WJCTL_mC5w4C\&q=male+duck+is+called+a+drake+and+the+female+is+called+a+duck\&pg=PA457). Yale University Press. \[ISBN\](/wiki/ISBN_(identifier) "ISBN (identifier)") \[978-0300138139\](/wiki/Special:BookSources/978-0300138139 "Special:BookSources/978-0300138139").
@@ -280,7 +346,9 @@ The 1992 Disney film \*\[The Mighty Ducks\](/wiki/The_Mighty_Ducks_(film) "The M
 53. \*\*\[^\](\#cite_ref-53)\*\* \["Howard the Duck (character)"\](http://www.comics.org/character/name/Howard%20the%20Duck/sort/chrono/). \*\[Grand Comics Database\](/wiki/Grand_Comics_Database "Grand Comics Database")\*.
 54. \*\*\[^\](\#cite_ref-54)\*\* \[Sanderson, Peter\](/wiki/Peter_Sanderson "Peter Sanderson"); Gilbert, Laura (2008). "1970s". \*Marvel Chronicle A Year by Year History\*. London, United Kingdom: \[Dorling Kindersley\](/wiki/Dorling_Kindersley "Dorling Kindersley"). p. 161. \[ISBN\](/wiki/ISBN_(identifier) "ISBN (identifier)") \[978-0756641238\](/wiki/Special:BookSources/978-0756641238 "Special:BookSources/978-0756641238"). "December saw the debut of the cigar-smoking Howard the Duck. In this story by writer Steve Gerber and artist Val Mayerik, various beings from different realities had begun turning up in the Man-Thing's Florida swamp, including this bad-tempered talking duck."
 55. \*\*\[^\](\#cite_ref-55)\*\* \["The Duck"\](https://goducks.com/sports/2003/8/28/153778.aspx). \*University of Oregon Athletics\*. Retrieved 2022-01-20.
+
 ### Sources
+
 - American Ornithologists' Union (1998). \[\*Checklist of North American Birds\*\](https://americanornithology.org/wp-content/uploads/2019/07/AOSChecklistTin-Falcon.pdf) (PDF). Washington, DC: American Ornithologists' Union. \[ISBN\](/wiki/ISBN_(identifier) "ISBN (identifier)") \[978-1-891276-00-2\](/wiki/Special:BookSources/978-1-891276-00-2 "Special:BookSources/978-1-891276-00-2"). \[Archived\](https://ghostarchive.org/archive/20221009/https://americanornithology.org/wp-content/uploads/2019/07/AOSChecklistTin-Falcon.pdf) (PDF) from the original on 2022-10-09.
 - Carboneras, Carlos (1992). del Hoyo, Josep; Elliott, Andrew; Sargatal, Jordi (eds.). \*Handbook of the Birds of the World\*. Vol. 1: Ostrich to Ducks. Barcelona: Lynx Edicions. \[ISBN\](/wiki/ISBN_(identifier) "ISBN (identifier)") \[978-84-87334-10-8\](/wiki/Special:BookSources/978-84-87334-10-8 "Special:BookSources/978-84-87334-10-8").
 - Christidis, Les; Boles, Walter E., eds. (2008). \*Systematics and Taxonomy of Australian Birds\*. Collingwood, VIC: Csiro Publishing. \[ISBN\](/wiki/ISBN_(identifier) "ISBN (identifier)") \[978-0-643-06511-6\](/wiki/Special:BookSources/978-0-643-06511-6 "Special:BookSources/978-0-643-06511-6").
@@ -301,32 +369,48 @@ The 1992 Disney film \*\[The Mighty Ducks\](/wiki/The_Mighty_Ducks_(film) "The M
 - Shirihai, Hadoram (2008). \*A Complete Guide to Antarctic Wildlife\*. Princeton, NJ, US: Princeton University Press. \[ISBN\](/wiki/ISBN_(identifier) "ISBN (identifier)") \[978-0-691-13666-0\](/wiki/Special:BookSources/978-0-691-13666-0 "Special:BookSources/978-0-691-13666-0").
 - Sued-Badillo, Jalil (2003). \[\*Autochthonous Societies\*\](https://books.google.com/books?id=zexcW7q-4LgC\&pg=PA65). General History of the Caribbean. Paris: UNESCO. \[ISBN\](/wiki/ISBN_(identifier) "ISBN (identifier)") \[978-92-3-103832-7\](/wiki/Special:BookSources/978-92-3-103832-7 "Special:BookSources/978-92-3-103832-7").
 - Thorpe, I. J. (1996). \[\*The Origins of Agriculture in Europe\*\](https://books.google.com/books?id=YA-EAgAAQBAJ\&pg=PA68). New York: Routledge. \[ISBN\](/wiki/ISBN_(identifier) "ISBN (identifier)") \[978-0-415-08009-5\](/wiki/Special:BookSources/978-0-415-08009-5 "Special:BookSources/978-0-415-08009-5").
+
 ## External links
+
 - \!\[\](//upload.wikimedia.org/wikipedia/en/thumb/0/06/Wiktionary-logo-v2.svg/27px-Wiktionary-logo-v2.svg.png)\[Definitions\](https://en.wiktionary.org/wiki/duck "wikt:duck") from Wiktionary
 - \!\[\](//upload.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/20px-Commons-logo.svg.png)\[Media\](https://commons.wikimedia.org/wiki/Anatidae "c:Anatidae") from Commons
 - \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/23px-Wikiquote-logo.svg.png)\[Quotations\](https://en.wikiquote.org/wiki/Birds "q:Birds") from Wikiquote
 - \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/27px-Wikibooks-logo.svg.png)\[Recipes\](https://en.wikibooks.org/wiki/Cookbook:Duck "b:Cookbook:Duck") from Wikibooks
 - \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/d/df/Wikispecies-logo.svg/23px-Wikispecies-logo.svg.png)\[Taxa\](https://species.wikimedia.org/wiki/Anatidae "species:Anatidae") from Wikispecies
 - \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/27px-Wikidata-logo.svg.png)\[Data\](https://www.wikidata.org/wiki/Q3736439 "d:Q3736439") from Wikidata
+
 \!\[\](//upload.wikimedia.org/wikipedia/en/thumb/0/06/Wiktionary-logo-v2.svg/27px-Wiktionary-logo-v2.svg.png)
+
 \!\[\](//upload.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/20px-Commons-logo.svg.png)
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/23px-Wikiquote-logo.svg.png)
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/27px-Wikibooks-logo.svg.png)
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/d/df/Wikispecies-logo.svg/23px-Wikispecies-logo.svg.png)
+
 \!\[\](//upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/27px-Wikidata-logo.svg.png)
+
 - \[list of books\](https://web.archive.org/web/20060613210555/http://seaducks.org/subjects/MIGRATION%20AND%20FLIGHT.htm) (useful looking abstracts)
 - \[Ducks on postage stamps\](http://www.stampsbook.org/subject/Duck.html) \[Archived\](https://web.archive.org/web/20130513022903/http://www.stampsbook.org/subject/Duck.html) 2013-05-13 at the \[Wayback Machine\](/wiki/Wayback_Machine "Wayback Machine")
 - \*\[Ducks at a Distance, by Rob Hines\](https://gutenberg.org/ebooks/18884)\* at \[Project Gutenberg\](/wiki/Project_Gutenberg "Project Gutenberg") - A modern illustrated guide to identification of US waterfowl
+
 \!\[Edit this at Wikidata\](//upload.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/10px-OOjs_UI_icon_edit-ltr-progressive.svg.png)
+
 \!\[Edit this at Wikidata\](//upload.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/10px-OOjs_UI_icon_edit-ltr-progressive.svg.png)
+
 | \[Authority control databases\](/wiki/Help:Authority_control "Help:Authority control") \[\!\[Edit this at Wikidata\](//upload.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/10px-OOjs_UI_icon_edit-ltr-progressive.svg.png)\](https://www.wikidata.org/wiki/Q3736439\#identifiers "Edit this at Wikidata") |  |
 | --- | --- |
 | National | \[United States\](https://id.loc.gov/authorities/sh85039879)\[France\](https://catalogue.bnf.fr/ark:/12148/cb119761481)\[BnF data\](https://data.bnf.fr/ark:/12148/cb119761481)\[Japan\](https://id.ndl.go.jp/auth/ndlna/00564819)\[Latvia\](https://kopkatalogs.lv/F?func=direct\&local_base=lnc10\&doc_number=000090751\&P_CON_LNG=ENG)\[Israel\](http://olduli.nli.org.il/F/?func=find-b\&local_base=NLX10\&find_code=UID\&request=987007565486205171) |
 | Other | \[IdRef\](https://www.idref.fr/027796124) |
+
 \!\[\](https://login.wikimedia.org/wiki/Special:CentralAutoLogin/start?type=1x1)
+
 - \[Ducks\](/wiki/Category:Ducks "Category:Ducks")
 - \[Game birds\](/wiki/Category:Game_birds "Category:Game birds")
 - \[Bird common names\](/wiki/Category:Bird_common_names "Category:Bird common names")
+
+
 - \[All accuracy disputes\](/wiki/Category:All_accuracy_disputes "Category:All accuracy disputes")
 - \[Accuracy disputes from February 2020\](/wiki/Category:Accuracy_disputes_from_February_2020 "Category:Accuracy disputes from February 2020")
 - \[CS1 Finnish-language sources (fi)\](/wiki/Category:CS1_Finnish-language_sources_(fi) "Category:CS1 Finnish-language sources (fi)")
@@ -352,8 +436,12 @@ The 1992 Disney film \*\[The Mighty Ducks\](/wiki/The_Mighty_Ducks_(film) "The M
 - \[Webarchive template wayback links\](/wiki/Category:Webarchive_template_wayback_links "Category:Webarchive template wayback links")
 - \[Articles with Project Gutenberg links\](/wiki/Category:Articles_with_Project_Gutenberg_links "Category:Articles with Project Gutenberg links")
 - \[Articles containing video clips\](/wiki/Category:Articles_containing_video_clips "Category:Articles containing video clips")
+
+
 - This page was last edited on 21 September 2024, at 12:11 (UTC).
 - Text is available under the \[Creative Commons Attribution-ShareAlike License 4.0\](//en.wikipedia.org/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License)\[\](//en.wikipedia.org/wiki/Wikipedia:Text_of_the_Creative_Commons_Attribution-ShareAlike_4.0_International_License); additional terms may apply. By using this site, you agree to the \[Terms of Use\](//foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Terms_of_Use) and \[Privacy Policy\](//foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy). Wikipedia® is a registered trademark of the \[Wikimedia Foundation, Inc.\](//wikimediafoundation.org/), a non-profit organization.
+
+
 - \[Privacy policy\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Privacy_policy)
 - \[About Wikipedia\](/wiki/Wikipedia:About)
 - \[Disclaimers\](/wiki/Wikipedia:General_disclaimer)
@@ -363,7 +451,11 @@ The 1992 Disney film \*\[The Mighty Ducks\](/wiki/The_Mighty_Ducks_(film) "The M
 - \[Statistics\](https://stats.wikimedia.org/\#/en.wikipedia.org)
 - \[Cookie statement\](https://foundation.wikimedia.org/wiki/Special:MyLanguage/Policy:Cookie_statement)
 - \[Mobile view\](//en.m.wikipedia.org/w/index.php?title=Duck\&mobileaction=toggle_view_mobile)
+
+
 - \[\!\[Wikimedia Foundation\](/static/images/footer/wikimedia-button.svg)\](https://wikimediafoundation.org/)
 - \[\!\[Powered by MediaWiki\](/w/resources/assets/poweredby_mediawiki.svg)\](https://www.mediawiki.org/)
+
 \!\[Wikimedia Foundation\](/static/images/footer/wikimedia-button.svg)
+
 \!\[Powered by MediaWiki\](/w/resources/assets/poweredby_mediawiki.svg)

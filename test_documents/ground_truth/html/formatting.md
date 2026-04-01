@@ -7,5 +7,7 @@ Here is an *italic (i)* word and an *emphasis (em)* example. Sometimes we combin
 Now let's look at text that appears crossed out: ~~strikethrough with s~~ and ~~deleted with del~~. You can also mix them: ~~~~double strikethrough (s + del)~~~~.
 
 To highlight insertions or underlines: underlined with u, inserted with ins. A combination could be: underline + insertion together.
+
 Subscript and superscript examples: Water is written as H2O using sub. The mathematical expression x2 + y3 uses sup. They can also be combined: CO2\*.
+
 Mixing several: This sentence has ***strong + emphasis***, some **bold + underline**, and a formula like a2 + b3.

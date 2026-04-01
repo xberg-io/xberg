@@ -12,22 +12,38 @@ x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}
 ```
 
 Inline math also works: $`E = mc^2`$.
+
 # Lists and Formatting
+
 ## Enumerated List
+
 1.  First item
+
 2.  Second item with **bold text**
+
 3.  Third item with *italic text*
+
 ## Itemized List
+
 - Bullet point one
+
 - Bullet point two
+
 - Nested items:
+
   - Sub-item A
+
   - Sub-item B
+
 # Tables
+
 | Left | Center | Right |
 |:-----|:------:|------:|
 | A1   |   B1   |    C1 |
 | A2   |   B2   |    C2 |
+
 Sample Table
+
 # Conclusion
+
 This document demonstrates LaTeX features for pandoc extraction testing.

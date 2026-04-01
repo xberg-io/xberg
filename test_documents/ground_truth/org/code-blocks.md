@@ -10,11 +10,14 @@ def hello():
 ```
 
 # Bash Code
+
 ```bash
 echo "Testing bash"
 ls -la
 ```
+
 # JavaScript Code
+
 ```javascript
 function greet(name) {
     return `Hello, ${name}!`;

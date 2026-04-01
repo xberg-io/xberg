@@ -57,9 +57,11 @@ maternal health and wellbeing support prioritised in future initiatives. Ultimat
 to see better building blocks enabled to optimise the physical and mental health and
 wellbeing throughout the lives of Tasmanian children.
 With thanks,
+
 Dr Kristine Barnden MBBS FRANZCOG DDU
 Obstetrician
 Royal Hobart Hospital
+
 Dr Michelle Kilpatrick BA Hons (Psych) PhD
 Research Fellow
 Menzies Institute for Medical Research

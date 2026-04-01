@@ -22,10 +22,12 @@ Awake my soul and sing
 Sing His praise aloud sing His praise aloud
 Oh awake my soul and sing
 Sing His praise aloud sing His praise aloud
+
 There is a sound that changes things
 The sound of His people on their knees
 Oh wake up you slumbering
 It's time to worship Him
+
 Chorus
 And when He moves and when we pray
 Where stood a wall now stands a way
@@ -33,41 +35,50 @@ Where every promise is amen
 And when He moves make no mistake
 The bowels of hell begin to shake
 All hail the Lord all hail the King
+
 Hey oh
 Oh let the King of glory enter in
 Hey oh
 Fall down on your knees and worship Him
 Hey oh
 Let His praise rise up don't hold it in
+
 Chorus
 "Awake My Soul”, words and music by Brooke Ligertwood
 ©2019 Hillsong Music Publishing Australia (Admin. by Capitol CMG Publishing)
 Used by permission. CCLI License #670831.
+
 "This Is Amazing Grace"
 Who breaks the power of sin and darkness
 Whose love is mighty and so much stronger
 The King of Glory the King above all kings
+
 Who shakes the whole earth with holy thunder
 Who leaves us breathless in awe and wonder
 The King of Glory the King above all kings
+
 This is amazing grace this is unfailing love
 That You would take my place
 That You would bear my cross
 You would lay down Your life
 That I would be set free
 Jesus I sing for all that You've done for me
+
 Who brings our chaos back into order
 Who makes the orphan a son and daughter
 The King of Glory the King of Glory
+
 Who rules the nations with truth and justice
 Shines like the sun in all of its brilliance
 The King of Glory the King above all kings
+
 This is amazing grace this is unfailing love
 That You would take my place
 That You would bear my cross
 You laid down Your life
 That I would be set free
 Jesus I sing for all that You've done for me
+
 Worthy is the Lamb who was slain
 Worthy is the King who conquered the grave
 Worthy is the Lamb who was slain
@@ -76,6 +87,7 @@ Worthy is the Lamb who was slain
 Worthy is the King who conquers the grave
 Worthy is the Lamb who was slain
 Worthy worthy worthy
+
 This is amazing grace this is unfailing love
 That You would take my place
 That You would bear my cross
@@ -87,18 +99,26 @@ All that you've done for me
 ©2012 Bethel Music (Admin. by Bethel Music Publishing, Phil Wickham Music | Seems Like Music | Sing My Songs
 (Admin. by Music Services, Inc.), Warner Chappell Music (Admin. by Unaffiliated Admin (UA))
 Used by permission. CCLI License #670831.
+
 THE INVOCATION
 (Gathering for worship in the name of God)
 **Pastor:** In the name of the Father, and of the + Son and of the Holy Spirit.
+
 **Congregation:** He is risen indeed! Alleluia!
+
 **Pastor:** Glory and honor, dominion and power be to God forever and ever.
+
 **Congregation:** Christ is risen! Alleluia! Amen.
+
 THE CONFESSION OF SIN AND THE GOOD NEWS OF FORGIVENESS
 **Pastor:** If we say we have no sin, we deceive ourselves, and the truth is not in us.
+
 **Congregation:** But if we confess our sins, God, who is faithful and just, will forgive our sins
 and cleanse us from all unrighteousness.
+
 (Silence for reflection on God's Word and for self-examination)
 **Pastor:** Let us then confess our sins to God our Father.
+
 **Congregation:** Most merciful God, we confess that we are by nature sinful and unclean. We
 have sinned against You in thought, word, and deed, by what we have done
 and by what we have left undone. We have not loved You with our whole heart;
@@ -106,12 +126,15 @@ we have not loved our neighbors as ourselves. We justly deserve Your
 present and eternal punishment. For the sake of Your Son, Jesus Christ, have
 mercy on us. Forgive us, renew us, and lead us, so that we may delight in
 Your will and walk in Your ways to the glory of Your holy name. Amen.
+
 **Pastor:** In the mercy of almighty God, Jesus Christ was given to die for us, and for His sake
 God forgives us all our sins. To those who believe in Jesus Christ He gives the
 power to become the children of God and bestows on them the Holy Spirit. May the
 Lord, who has begun this good work in us, bring it to completion in the day of our
 Lord Jesus Christ.
+
 **Congregation:** Amen.
+
 THE EPISTLE LESSON
 1 John 3:1-7
 1 How great is the love the Father has lavished on us, that we should be called children of God! And
@@ -123,6 +146,7 @@ lawlessness. 5 But you know that he appeared so that he might take away our sins
 sin. 6 No one who lives in him keeps on sinning. No one who continues to sin has either seen him or
 known him. 7 Dear children, do not let anyone lead you astray. He who does what is right is righteous,
 just as he is righteous. (NIV)
+
 THE GOSPEL LESSON
 Luke 24:36-49
 36 While they were still talking about this, Jesus himself stood among them and said to them, "Peace
@@ -138,12 +162,16 @@ He told them, "This is what is written: The Christ will suffer and rise from the
 and repentance and forgiveness of sins will be preached in his name to all nations, beginning at
 Jerusalem. 48 You are witnesses of these things. 49 I am going to send you what my Father has
 promised; but stay in the city until you have been clothed with power from on high." (NIV)
+
 THE CHILDREN'S MESSAGE
+
 THE SERMON
 The Proclaimer of the Message today is the Rev. Dr. Jon Salminen.
+
 THE APOSTLES' CREED
 I believe in God, the Father Almighty,
 maker of heaven and earth.
+
 And in Jesus Christ, his only Son, our Lord,
 who was conceived by the Holy Spirit,
 born of the virgin Mary,
@@ -154,13 +182,16 @@ The third day he rose again from the dead.
 He ascended into heaven
 and sits at the right hand of God the Father Almighty.
 From thence he will come to judge the living and the dead.
+
 I believe in the Holy Spirit,
 the holy Christian Church,
 the communion of saints,
 the forgiveness of sins,
 the resurrection of the body,
 and the life everlasting. Amen.
+
 THE PRAYERS
+
 **All:**
 THE LORD'S PRAYER
 Our Father who art in heaven,
@@ -177,16 +208,22 @@ but deliver us from evil.
 For thine is the kingdom
 and the power and the glory
 forever and ever. Amen.
+
 THE ANNOUNCEMENTS
+
 THE BLESSING
 **Pastor:** The Lord bless you and keep you.
 The Lord make his face shine on you
 and be gracious to you.
 The Lord look upon you with favor and
 give you peace.
+
 **Congregation:** Amen.
+
 **Pastor:** Christ is risen!
+
 **Congregation:** He is risen indeed! Alleluia!
+
 THE CLOSING SONG
 "No Longer Slaves”
 You unravel me with a melody
@@ -198,11 +235,13 @@ I'm no longer a slave to fear
 I am a child of God
 I'm no longer a slave to fear
 I am a child of God
+
 From my Mother's womb
 You have chosen me
 Love has called my name
 I've been born again into Your family
 Your blood flows through my veins
+
 Chorus 2X
 You split the sea so I could walk right through it
 My fears were drowned in perfect love

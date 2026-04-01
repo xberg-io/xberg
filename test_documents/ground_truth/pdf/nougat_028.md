@@ -7,6 +7,7 @@ PROPERTY
 A remarkable Hutchison property development is changing the way Londoners think about their own city
 
 By Andrea Li
+
 THE FACE OF LONDON is changing.
 The banks of the River Thames, neglect-
 ed for decades as they drifted into indus-
@@ -58,8 +59,11 @@ holds of Belgravia, Knightsbridge and
 Kensington north of the river. The
 Albion Riverside development won the
 Best Apartment Building award at the
+
 <!-- image -->
+
 ## ALBION RIVERSIDE FAct File
+
 **Address:** 8 Hester Road, Battersea,
 London, SW11 4AP.
 **Number of units:** 196 apartments,
@@ -70,6 +74,7 @@ including 13 penthouses.
 **Amenities:** Gym, swimming pool,
 underground car park, 24-hour concierge
 service, private podium garden.
+
 Mail on Sunday Design Awards 2005.
 Suddenly, the South Bank is very
 much in fashion. Boosted by opulent
@@ -112,10 +117,12 @@ ensure the kitchen and designs are what
 he wants," Dr Ho said. "I
 hope the deal will be
 announced very soon."
+
 **The building
 has set a new
 standard for
 urban living**
+
 Inside, a massive en-
 trance hall leads visitors to
 a majestic staircase that
@@ -177,7 +184,9 @@ to London, the company is also
 looking at other big cities in the UK
 as well as seeking out properties in
 other countries."
+
 <!-- image -->
+
 afford such luxury will remain under the
 Lord Foster spell long after they have gone
 home and shut the front door. Everything,
@@ -189,7 +198,9 @@ The strong aesthetics aside, every
 home is also equipped with smart tech-
 nology, which makes available a whole
 new world of cutting-edge remote con-
+
 <!-- image -->
+
 **The lap of luxury:** interior
 shots of the award-winning
 Albion Riverside;

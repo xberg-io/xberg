@@ -7,7 +7,11 @@ The metadata should contain:
 - Title: “Metadata Example Document”
 
 - Author: “John Doe”
+
 - Subject: “Testing Document Metadata”
+
 - Keywords: “metadata”, “testing”, “extraction”
+
 ## Details
+
 Additional content follows.

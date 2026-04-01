@@ -13,8 +13,11 @@ and shorts to help protect clients' capital.
 | Average Net Exposure | 97.5%   | 73.4%           |                |
 
 Growth of $10,000
+
 <!-- image -->
+
 Top 5 Stock Holdings
+
 | Top 5 Stock Holdings | Current | Monthly Move |
 | -------------------- | ------- | ------------ |
 | BHP Group Ltd        | 8.9%    | +0.8%        |
@@ -22,7 +25,9 @@ Top 5 Stock Holdings
 | RIO Tinto Ltd        | 7.3%    | +0.3%        |
 | Seven Group Holdings Ltd | 7.1%    | -0.2%        |
 | Medibank Private Ltd   | 6.0%    | +0.6%        |
+
 Commentary
+
 The K2 Australian Fund returned -1.0% for the month and is +21.6% this
 financial year to be +5.5% ahead of the benchmark (BM). Since the lows
 of the March correction the fund is up +68.5% outperforming the BM by
@@ -31,6 +36,7 @@ early in the recovery have contributed to the strong performance vs
 benchmark since the severe March correction. Importantly, the fund has
 delivered a consistent 10% p.a. return over 21 years without excess
 market volatility.
+
 Equity markets around the world endured a bout of selling pressure
 during the last few days of the month. Some selective over-crowed short
 positions were squeezed during the month and this led to concerns over
@@ -51,6 +57,7 @@ peer nations this year as should profits from ASX listed companies. The
 Reserve Bank of Australia (RBA) is effectively underwriting this backdrop
 with a strong commitment to hold interest rates at minimal levels for the
 foreseeable future.
+
 The best performing holdings for the Fund this month were Kina
 Securities (KSL), Healthia (HLA) and Westpac Bank (WBC) which rose
 13%, 31% and 9% respectively. KSL is PNG's leading financial services
@@ -62,6 +69,7 @@ priced at 11x. WBC has been plagued with a series of operational
 missteps and has subsequently become the cheapest of the major banks.
 WBC's PE discount to the Banking sector hit a 15 year low last month
 and the stock price finally found some support.
+
 | Month End Exposures | Current | Monthly Move |
 | -------------------- | ------- | ------------ |
 | Consumer             | 6.7%    | -2.5%        |
@@ -70,12 +78,14 @@ and the stock price finally found some support.
 | Industrials          | 9.4%    | -3.3%        |
 | Materials            | 25.9%   | +2.6%        |
 | Real Estate          | 2.1%    | -1.2%        |
+
 The Fund's net exposure for the month averaged 97.5%. The median
 holding for the Fund has attractive characteristics; using consensus
 forecasts for the year ahead the PE is 15.3x, ROE is 10.6%, and the
 dividend yield is 3.7%. The market capitalisation of the median holding for
 the Fund is $7.5 billion and EPS growth is expected to be +13.1% over
 the next 12 months.
+
 | Fund Characteristics |                |
 | -------------------- | -------------- |
 | FUM                  | AUD $21m       |
@@ -89,9 +99,11 @@ the next 12 months.
 | Management Fee       | 1.31%          |
 | Buy/Sell             | Daily Application/Redemption |
 | Performance Fee      | 15.38% pa of the amount by which the NAV per unit exceeds the High Water Mark once the fund achieves its hurdle |
+
 George Boubouras
 Head of Research
 invest@k2am.com.au
+
 | Year    | Jul   | Aug   | Sep   | Oct   | Nov   | Dec   | Jan   | Feb   | Mar   | Apr   | May   | Jun   | Fin YTD | Fin YTD Index (1) | Average Cash | Average Short |
 | ------- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ----- | ------- | --------------- | ------------ | ------------- |
 | 1999/00 |       |       |       | 1.6   | 2.0   | 9.5   | -3.9  | -2.6  | 5.6   | -4.0  | -1.9  | 2.4   | 8.5     | 16.0            | 52.0%        | -12.8%        |
@@ -120,6 +132,7 @@ invest@k2am.com.au
 |         |       |       |       |       |       |       |       |       |       |       |       |       | 654.7   |                 |              |               |
 |         |       |       |       |       |       |       |       |       |       |       |       |       | Incept  |                 |              |               |
 |         |       |       |       |       |       |       |       |       |       |       |       |       | 9.9%pa  | 8.4%pa          | 26.5%        | -5.0%         |
+
 DISCLAIMER: Returns are shown after fees (including performance fees) and expenses have been deducted and assume the reinvestment of income distributions. Please note that past performance is
 not a reliable indicator of future performance. The information contained in this document is produced by K2 Asset Management Ltd ("K2") in good faith, but does not constitute any representation or
 offer by K2. It is subject to change without notice, and is intended as general information only and is not complete or definitive. K2 does not accept any responsibility, and disclaims any liability

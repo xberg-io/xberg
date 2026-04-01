@@ -46,6 +46,7 @@ weight gain. We are hoping these skills will enable staff to make brief but effe
 interventions as part of their routine care for pregnant women. This seems like the very
 least we can do to support women and their families in this crucially important window of
 the first 1000 days of a child's life.
+
 How many more lives could be improved from the very beginning, during pregnancy, if
 there was adequate resourcing across all Tasmanian publicly funded antenatal care clinics
 for dietetic, psychological and healthy lifestyle support to be embedded within the clinics
@@ -56,10 +57,13 @@ that exists in the first 1000 days of many Tasmanian children's lives. We hope t
 maternal health and wellbeing support prioritised in future initiatives. Ultimately, we wish
 to see better building blocks enabled to optimise the physical and mental health and
 wellbeing throughout the lives of Tasmanian children.
+
 With thanks,
+
 Dr Kristine Barnden MBBS FRANZCOG DDU
 Obstetrician
 Royal Hobart Hospital
+
 Dr Michelle Kilpatrick BA Hons (Psych) PhD
 Research Fellow
 Menzies Institute for Medical Research

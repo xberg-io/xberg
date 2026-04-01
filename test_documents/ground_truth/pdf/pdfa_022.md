@@ -25,15 +25,18 @@ After a series of commercial failures in Scotland's nascent
 marine power industry, including the collapse of two wave
 power firms, Nova Innovation's determination to
 commercialize tidal devices did not change.
+
 They succeeded in 2014 by successfully deploying and
 generating tidal electricity to the grid, with their Nova 30 tidal
 turbine (the previous model of the turbine) in the first tidal
 community energy project.
+
 The Shetland Array is located in the North of Shetland,
 between the islands of Yell and Unst. The project is one of the
 world's first in-sea tidal arrays. The tidal array will consist of
 five 100 kW tidal turbines, each of which will export electricity
 to the shore via a dedicated sub-sea cable.
+
 www.grebeproject.eu
 September 2017
 2
@@ -83,6 +86,7 @@ specific project data, a template was established with following subsections:
 - Project results
   - Benefits & lessons learnt
   - Post- project benefits
+
 www.grebeproject.eu
 September 2017
 3
@@ -91,6 +95,7 @@ Each tidal turbine consist of a cylindrical nacelle component, rotor and gravity
 bed (no seabed drilling or extra site works are needed). The negatively buoyant nacelle is securely
 linked to the base by the means of a latching system. The five Nova M100 devices are bottom
 mounted, gravity anchored, non-yawing, horizontal axis tidal turbines.
+
 The turbine has a rotor diameter of 10 m, and a hub height of 9 m, making the total height 14 m from
 the bottom of the feet to the tip of the blades. In the Bluemull Array the devices will be mounted in
 water depths greater than 30 m, so clearance will be more than 15 m below mean tide. The footprint
@@ -98,16 +103,20 @@ of the device is 13.5 x 12.2 m, and the weight in water is 80 tonnes. The device
 sustained tidal speed of 2.6 m/s and is attached to the seabed at a position that guarantees throughout
 operation. All parts of the turbine are at least 15 m below lowest astronomical tide, to permit sufficient
 draft clearance for shipping.
+
 Figure 1. Nova Innovation Tidal Device
+
 TRL and Technology Scale
 The technology is considered TRL 9, as it is proven and patented tidal energy technology. There is also
 evidence on operation on a commercial basis.
+
 Cooperation partners and networks
 The Nova Innovation Tidal Array project has both private and public partners:
 - ELSA - Belgian renewable energy leader is partner developer to the project, providing project
   management expertise and operational input, as well as financial support.
 - Scottish Enterprise and the Renewable Energy Investment Fund (REIF)
 - Shetland Composites – Manufacturer of the blades.
+
 www.grebeproject.eu
 September 2017
 4
@@ -117,12 +126,15 @@ Natural habitats47, and Construction Phase Emergency Response Cooperation Plan. 
 shared between the developers and investors.
 The public sector has participated through the financial supports, and shared some economic risks of
 the new technology demonstration and deployment.
+
 Scottish Enterprise and the Renewable Energy Investment Fund (REIF) – provided funding – £1.9 million
 grant.
+
 In the autumn 2016, Nova Innovation received a Horizon 2020's SME Instrument grant of € 2.25 million
 to develop a commercial demonstrator of Nova's innovative direct drive tidal turbine technology
 (Phase 2 of Shetland Array) to develop a commercial demonstrator of Nova's innovative direct drive
 tidal turbine technology.
+
 Drivers and barriers
 The main drivers for this technology are related to the resource and its place-based potential by
 building on the previous development projects and lessons learnt:
@@ -137,6 +149,7 @@ building on the previous development projects and lessons learnt:
 - An acknowledged barrier associated with the technology is connected with tidal cycles and
   turbine efficiency. The load factor of a conventional tidal barrage is around 25%, which leads to
   high cost of energy.
+
 Conditions for the technology transfer, adaptation and new market
 deployment
 The technology transfers are considered to benefit of following factors:
@@ -148,6 +161,7 @@ The technology transfers are considered to benefit of following factors:
   driver of economic regeneration for coastal communities. Harnessing the wave potential and
   ensuring a share of these economic benefits accrue to local communities could contribute to
   local economic development by exploiting synergies with other sectors.
+
 www.grebeproject.eu
 September 2017
 There are also several identified barriers for the technology transfers, as follows:
@@ -165,6 +179,7 @@ There are also several identified barriers for the technology transfers, as foll
 - Technical risks in design, construction, installation and operation, lead to high costs. Costs need
   to be brought down to at least 50%, in order to be equivalent to offshore-wind energy
   generation costs.
+
 From a market development perspective, The Nova M100 (10 kW tidal turbine) has the following
 benefits:
 - Safe and reliable deployment and maintenance.
@@ -173,37 +188,46 @@ benefits:
   transport, laydown and maintenance.
 - Ease of transport - Nova's modular system means tidal power plants can be transported and
   installed around the world using standard containers and lorries.
+
 Project Results
 Benefits
 This is the deployment of the world's first operational, grid-connected offshore tidal array in Shetland,
 sending electricity on a commercial basis into Shetland's local grid.
+
 The project has 100% EU content and with over 80% Scottish supply chain content, demonstrating
 Nova's commitment to local supply chain engagement.
+
 Lessons Learnt
 Drawing on past lessons from the wind power sector, Nova Innovation aimed at demonstrating
 commercial devices at a small (sub-megawatt) scale, then scale up in size “think big, start small".
+
 The Nova M100 tidal turbine is the next generation device, which builds on the successful design,
 manufacture, testing and deployment of the 30 kW Nova 30 device. Although the device is three times
+
 www.grebeproject.eu
 September 2017
 6
 more powerful than the Nova 30, it is only twice the cost. It is expected to have lower operating costs,
 improved reliability and increased energy output.
+
 Post Project Benefits
 Nova Innovation has received an agreement for lease from The Crown Estate to explore the potential
 of Bardsey Sound for tidal power generation, which enables them to start fully exploring the project's
 potential through site surveys and studies to inform the technical feasibility. They teamed up with
 regional renewable energy organisation YnNi Llŷn, to develop a tidal energy project at Bardsey Sound
 off the Llyn Peninsula in north Wales.
+
 Nova Innovation is keen to explore ways in which local businesses can be involved in the project, using
 the expertise and experience in the local area to provide services to support the development,
 verifying the company's strong commitment to local supply chain sourcing.
+
 Contact Information
 Nova Innovation Ltd
 Clockhouse, Bonnington Mill, 60-72 Newhaven Road, Leith, Edinburgh, EH6 5QG
 **Tel:** +44 (0)131 554 2242
 **Email:** info@novainnovation.com
 **Website:** www.novainnovation.com
+
 www.grebeproject.eu
 September 2017
 7
@@ -230,6 +254,7 @@ GREBE will be operated by eight partner organisations across six regions:
   INSTITUTE FINLAND
 - Karelia
 - FORSKNINGSPARKEN I NARVIK
+
 Follow the GREBE Project on social media
 - @ GREBE_NPA
 - f GREBEProject

@@ -21,29 +21,39 @@ area where you can do diving or snorkling.
 This area offers a variety of activities where you can explore the mountains, enjoy water sports or just relax by
 the pool. Caniço de Baixo has also a variety of restaurants where you can enjoy the Portuguese and
 international cuisine, have fresh fish from the Atlantic waters and all delicious types of food.
+
 No car is required, excellent bus services to Funchal City only a few minutes walk from the villa.
+
 Airport transfers and sight seeing tours can be organised.
+
 **Location of the property**
 By the sea
+
 **Distances**
 Restaurant - 1kmm
 Bus stop - 1kmm
 Swimming Pool - 5mm
 Shops - 2kmm
 Rocky beach - 2kmm
+
 **Exterior**
 Parking
 Private pool
+
 **Interior**
 Non smokers
+
 **Equipment**
 Outdoor furniture
+
 **Bathroom**
 Bath with Shower
 Toilet
 Hairdryer
+
 **Bedroom**
 King Size Bed - 2
+
 **Living Room**
 Dining Table and Chairs
 Wi-Fi Internet
@@ -52,6 +62,7 @@ Cable TV
 Internet
 TV
 SatelitteTV
+
 **Kitchen**
 Dishwasher
 Washing Machine
@@ -70,10 +81,13 @@ Cooker
 Page 2 of 3
 Country:
 Portugal
+
 Region:
 Madeira
+
 City:
 Caniço
+
 Coordinates:
 Latitude 32.641931617298546
 Longitude -16.834424044936895

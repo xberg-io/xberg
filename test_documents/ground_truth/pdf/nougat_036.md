@@ -46,16 +46,19 @@ associated with non-conformity to outdated published material, including that
 obtained from CVL's website. Website listings and specification sheets are merely
 indicative of what we offer for sale. This does not necessarily mean that all
 items are carried in stock.
+
 ## Lamps, Tubes and Mounting Hardware
 Lamps, LED tubes, mounting hardware and accessories are not included
 in pricing unless specifically listed as included on specification sheet in effect at
 time of order, or indicated on quotation and accepted purchase order.
+
 ## Hold Orders
 Parts for orders marked "Hold for Release" or "Hold for Shipping Date" will not
 be manufactured or components purchased until firm release date is provided.
 We reserve the right to renegotiate pricing at time of release if the
 release extends beyond the stipulated time on our quotation and/or
 acknowledgement.
+
 ## Cancellations
 As most items are built to order, cancellations will only be accepted if parts
 have not been specifically purchased or produced. Cancellation charges, vendor
@@ -65,6 +68,7 @@ assess fees to cover work completed and costs to dismantle and restock the
 parts. If an order is canceled after shipment or refused at destination, restocking
 charges of up to 100% of warehousing fees, delivery and return costs will be
 charged to the customer.
+
 ## Lead Times
 Lead times are estimates based on material availability and production
 schedule at time of quotation and are subject to change between
@@ -73,6 +77,7 @@ to meet estimated due dates or quoted lead times, many components come
 from global sources and domestic vendors and delays occasionally occur.
 CVL will not be liable for any consequential damages, penalties or express
 freight charges due to delays.
+
 ## Terms of Payment
 If CVL extends credit to Buyer, payment terms shall be net thirty (30) days from
 date of invoice, unless otherwise stated on quotation. CVL may change or
@@ -98,9 +103,11 @@ of the STATE OF NEW YORK shall be applicable to all suits arising between CVL
 and the Buyer, and in the event of litigation, the venue will be Suffolk County, New
 York.
 CVL does not allow discounts on credit card payments.
+
 ## Advance Deposit Payments
 Any advance payments for orders shipped in installments will be applied to
 the final shipment(s) only.
+
 ## Freight
 All prices F.O.B. factory Central Islip, New York unless otherwise stated
 on CVL issued order quotation or acknowledgement. Any orders quoted
@@ -133,6 +140,7 @@ charges which may be invoiced after receipt. At times, carriers may
 repack or restack pallets for better space utilization. CVL cannot
 assume responsibility for damage in shipping based on improper carrier
 handling.
+
 ## Inspection Upon Receipt
 For shipments using prepaid freight from CVL: Title to the material transfers
 to the destination recipient upon carrier pickup. Every palletized shipment
@@ -186,6 +194,7 @@ proofread. We assume no responsibility if an error or an omission does
 occur. In the event that a style is changed, or it becomes necessary to use
 parts or materials other than shown on the respective catalog data sheet,
 we reserve the right to ship the item closest to the original designation.
+
 ## Field Service and Repair
 Our standard warranty terms specifically exclude any and all charges for labor.
 However, if we elect to provide field inspection or repair, it will be done strictly
@@ -201,6 +210,7 @@ labor as necessary to provide any warranty related repairs. CVL will not be
 responsible for any costs incurred in providing access to the lighting equipment.
 Our performance of any services is in no way an extension of our liability beyond
 our Terms and Conditions of Sale and Limited Warranty contained herein.
+
 ## Return Goods
 No merchandise may be returned without prior authorization and will be refused
 at loading dock if the Return Goods Authorization (RGA) Number is not clearly
@@ -219,7 +229,9 @@ These terms and warranty may be modified at any time without
 notice and such modification will only be effective to any products
 purchased after the modification effective date. CVL LED assumes
 no responsibility for misapplication of fixtures.
+
 ## Limited Warranty
+
 ### LED
 CVL warrants its commercial lighting fixtures containing light emitting diodes
 (LED) to be free from defects in materials and workmanship for a period of five
@@ -291,6 +303,7 @@ purchased after the modification effective date. CVL LED assumes
 no responsibility for misapplication of fixtures.
 All lighting products are intended to be installed by qualified licensed
 electricians.
+
 ### Fluorescent
 All fluorescent equipment is warranted for a period of one year.
 The warranty specifically excludes the following: Any defects or failures caused
@@ -349,6 +362,7 @@ inconvenience arising out of any failure or breach of the warranty or obligation
 such warranty. CVL makes no claims or warranty with regard to minimum useful life
 or performance of any material or product past the product's stated limited
 warranty.
+
 ### Driver and Ballast Warranty
 The ballasts and drivers used by our Company are those of recognized
 manufacturers and are warranted by their respective manufacturer only. Orders

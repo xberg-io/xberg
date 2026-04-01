@@ -59,14 +59,17 @@ Sponsored Content significantly outperformed benchmarks across all key media met
 | ----------- | ----------- | ----------- |
 | US FinServ | BlackRock | Benchmark Campaign |
 | Click through rate |  |  |
+
 |        | 2.21% | 35.20% |
 | ----------- | ----------- | ----------- |
 | US FinServ | BlackRock | Benchmark Campaign |
 | Engagement rate |  |  |
+
 |        | 8.55% | 33.19% |
 | ----------- | ----------- | ----------- |
 | US FinServ | BlackRock | Benchmark Campaign |
 | Lead form completion rate |  |  |
+
 ### Demand generation performance
 <!-- image -->
 Nielsen brand study results:
@@ -76,23 +79,30 @@ increase in aided brand awareness
 increase in consideration
 +10%
 increase in recommendation
+
 |        | $263 | $69 |
 | ----------- | ----------- | ----------- |
 | US FinServ | BlackRock | Benchmark Campaign |
 | Cost per lead |  |  |
+
 |        | 56.96% |  |
 | ----------- | ----------- | ----------- |
 | US FinServ | BlackRock | Benchmark Campaign |
 | Video view rate |  |  |
+
 ## Key insights lead to a successful campaign
 <!-- image -->
 ### Know where your audience is:
 BlackRock clearly defined its audience upfront, allowing them to leverage a combination of advanced targeting tactics to successfully reach institutional investors.
+
 ### Plan your journey:
 BlackRock planned a full-funnel multi-format content strategy that not only raised awareness of its alternative investing platform but provided real value to its audiences.
+
 ### Monitor and adapt:
 Testing a variety of audiences, creatives, and ad types enabled BlackRock to learn about top-performing tactics in real-time and make strategic optimizations throughout the campaign.
+
 ## Resources
 - Start planning your next Sponsored Content campaign here.
 - Discover more marketing insights and tips at our Financial Services marketing hub.
+
 ¹https://business.linkedin.com/marketing-solutions/cx/19/03/investing-in-the-digital-age?lr=1

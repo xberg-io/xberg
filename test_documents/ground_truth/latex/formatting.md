@@ -7,6 +7,9 @@ This is normal text.
 *This is italic text.*
 
 <u>This is underlined text.</u>
+
 *This is emphasized text.*
+
 `This is monospace text.`
+
 You can also combine formatting: ***bold and italic***.

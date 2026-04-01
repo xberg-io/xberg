@@ -31,6 +31,7 @@ For Hand Delivery/Street Address: 1400 Tenth Street, Sacramento, CA 95814
 **Airports:**
 **Railways:**
 **Schools:**
+
 **Document Type:**
 **CEQA:**
 - [ ] NOP
@@ -50,6 +51,7 @@ For Hand Delivery/Street Address: 1400 Tenth Street, Sacramento, CA 95814
 - [ ] Joint Document
 - [ ] Final Document
 - [ ] Other:
+
 **Local Action Type:**
 - [ ] General Plan Update
 - [ ] General Plan Amendment
@@ -67,6 +69,7 @@ For Hand Delivery/Street Address: 1400 Tenth Street, Sacramento, CA 95814
 - [ ] Redevelopment
 - [x] Coastal Permit
 - [ ] Other: Design Approval
+
 **Development Type:**
 - [x] Residential: Units 1
 - [ ] Office: Sq.ft.
@@ -89,6 +92,7 @@ For Hand Delivery/Street Address: 1400 Tenth Street, Sacramento, CA 95814
 - [ ] Waste Treatment: Type MGD
 - [ ] Hazardous Waste: Type
 - [ ] Other:
+
 **Project Issues Discussed in Document:**
 - [x] Aesthetic/Visual
 - [ ] Agricultural Land
@@ -122,8 +126,10 @@ For Hand Delivery/Street Address: 1400 Tenth Street, Sacramento, CA 95814
 - [x] Land Use
 - [ ] Cumulative Effects
 - [ ] Other:
+
 **Present Land Use/Zoning/General Plan Designation:**
 Residential - Medium Density
+
 **Project Description:** (please use a separate page if necessary)
 The proposed project would require a Combined Development Permit consisting of:
 1) Coastal Administrative Permit and Design Approval to allow construction of a 4,208 sf two-story residence with attached
@@ -131,11 +137,15 @@ The proposed project would require a Combined Development Permit consisting of:
 2) Coastal Development Permit to allow development on slopes in excess of 30%;
 3) Coastal Development Permit to allow removal of 18 trees (Monterey pine); and
 4) Coastal Development Permit to allow development within 100 feet of environmentally sensitive habitat area.
+
 Note: The State Clearinghouse will assign identification numbers for all new projects. If a SCH number already exists for a project (e.g. Notice of Preparation or
 previous draft document) please fill in.
+
 ## Reviewing Agencies Checklist
+
 Lead Agencies may recommend State Clearinghouse distribution by marking agencies below with and "X".
 If you have already sent your document to the agency please denote that with an "S".
+
 - [ ] Air Resources Board
 - [ ] Boating & Waterways, Department of
 - [ ] California Emergency Management Agency
@@ -180,9 +190,11 @@ If you have already sent your document to the agency please denote that with an 
 - [ ] Water Resources, Department of
 - [ ] Other:
 - [ ] Other:
+
 **Local Public Review Period (to be filled in by lead agency)**
 **Starting Date:** October 8, 2020
 **Ending Date:** November 9, 2020
+
 **Lead Agency (Complete if applicable):**
 **Consulting Firm:**
 **Address:**
@@ -193,7 +205,10 @@ If you have already sent your document to the agency please denote that with an 
 **Address:** 998 N TEMPERANCE AVE
 **City/State/Zip:** CLOVIS CA 93611
 **Phone:** (559) 323-9595
+
 <!-- image -->
+
 **Signature of Lead Agency Representative:**
 **Date:** 10/7/20
+
 **Authority cited:** Section 21083, Public Resources Code, **Reference:** Section 21161, Public Resources Code.

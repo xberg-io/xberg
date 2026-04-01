@@ -7,61 +7,119 @@
 ### California
 
 ### Hawaii
+
 ### \*\*Nevada\*\*
+
 #### Reno
+
 #### Las Vegas
+
 #### Ely
+
 #### Gerlach
+
 ### Oregon
+
 ### Washington
+
 ## Great Plains
+
 ### Kansas
+
 ### Nebraska
+
 ### North Dakota
+
 ### Oklahoma
+
 ### South Dakota
+
 ## Mid-Atlantic
+
 ### Delaware
+
 ### Maryland
+
 ### New Jersey
+
 ### New York
+
 ### Pennsylvania
+
 ## Midwest
+
 ### Illinois
+
 ### Indiana
+
 ### Iowa
+
 ### Kentucky
+
 ### Michigan
+
 ### Minnesota
+
 ### Missouri
+
 ### Ohio
+
 ### West Virginia
+
 ### Wisconsin
+
 ## Mountains
+
 ### Colorado
+
 ### Idaho
+
 ### Montana
+
 ### Utah
+
 ### Wyoming
+
 ## New England
+
 ### Connecticut
+
 ### Maine
+
 ### Massachusetts
+
 ### New Hampshire
+
 ### Rhode Island
+
 ### Vermont
+
 ## South
+
 ### Alabama
+
 ### Arkansas
+
 ### Florida
+
 ### Georgia
+
 ### Louisiana
+
 ### Mississippi
+
 ### North Carolina
+
 ### South Carolina
+
 ### Tennessee
+
 ### Virginia
+
 ## Southwest
+
 ### Arizona
+
 ### New Mexico
+
 ### Texas

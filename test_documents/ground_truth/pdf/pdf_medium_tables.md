@@ -15,15 +15,19 @@ mutations on response kinetics and treatment outcome was explored in Caucasian p
 ribavirin in a previous Swedish clinical trial with genotype 1 infection were sequenced. The alleles at rs12979860, a
 single nucleotide polymorphism (SNP), were assessed in order to identify any co-association with this strong
 response predictor.
+
 **Results:** No association between treatment response and substitutions of core residue 91 was found. In contrast,
 substitutions of core residue 70 were observed in 6/21 (29%) non-responders, but only in one of 29 responders (p =
 0.03), and were more common in subgenotype 1b (R70Q in 6 of 13 strains) than in 1a (R70P in 1 of 37 strains, p =
 0.004). The rs12979860 SNP upstream of the IL28B gene was overall the strongest response predictor (p = 0.0001).
 Core 70 substitutions were associated with poorer response kinetics in patients carrying the CT genotype at
 rs12979860.
+
 **Conclusions:** The results indicate that substitutions of core residue 70 are related to treatment response in
 Caucasian patients with HCV-1b infection, but are of less importance than IL28B polymorphism.
+
 **Background**
+
 Hepatitis C virus (HCV) infection is a major cause of
 cirrhosis and hepatocellular cancer affecting approxi-
 mately 170 million persons worldwide [1]. Combination
@@ -45,6 +49,7 @@ variability or mutations are controversial. In 1995 it was
 reported from Japan that mutations in a part of the
 NS5A region were associated with treatment response
 in genotype 1b patients. The association between
+
 mutations in this segment of NS5A, denoted the inter-
 feron sensitivity determining region (ISDR) [7] was veri-
 fied in subsequent Japanese, but not in European studies
@@ -74,8 +79,11 @@ treatment with peginterferon-alpha2a and ribavirin for
 sequencing of the core region and part of NS5A (including
 ISDR). The outcome of treatment was related to the core
 substitutions as well as to IL28B variation.
+
 **Methods**
+
 **Samples**
+
 Pre-treatment serum samples from patients who were
 treated with peginterferon-alpha2a and ribavirin for
 chronic infection with hepatitis C virus genotype 1 in a
@@ -88,7 +96,9 @@ the patients are shown in Table 1. The regional ethics
 committee in Gothenburg approved the study protocol,
 and a written informed consent was obtained from each
 patient.
+
 **HCV genotyping and sequencing**
+
 The genotype 1 subtype was assessed by phylogenetic ana-
 lysis of the core region. The HCV-1b classification (13
 patients) was further supported by sequencing of NS5A
@@ -119,7 +129,9 @@ ware were used for editing and phylogenetic analysis.
 The genotype of the sequences was established by com-
 parison with GenBank sequences representative for all
 HCV genotypes.
+
 **Single Nucleotide Polymorphisms**
+
 Alleles of rs12979860 were assessed by first running a
 two-step PCR (15 s at 95°C; 60 s at 60°C) on an ABI
 7300 instrument using primers rs12979860_F, GTGCCT
@@ -130,17 +142,24 @@ and rs12979860-T_P, VIC-CCTGGTTCACGCCT-MGB
 (SNP position underlined). Allelic discrimination was
 obtained by post-PCR read of fluorescence intensity
 from each of the fluorophores.
+
 **Statistical analysis**
+
 Statistical significance was evaluated by Fisher's exact
 test for group correlations, Mann-Whitney U test, Krus-
 kal-Wallis test, student's t-test, logistic or linear regres-
 sion analysis, as appropriate, using the SPSS software
 package (version 18, SPSS Inc, Chicago, Illinois).
+
 **Nucleotide sequence accession numbers**
+
 The nucleotide sequences will be available in GenBank
 with the accession numbers HQ729711 to HQ729773.
+
 **Results**
+
 **Baseline characteristics**
+
 Table 2 shows the baseline status of patients achieving
 and not achieving SVR. The mean age of all patients
 was 46.7 years. There was no significant difference in
@@ -149,6 +168,7 @@ did not (45.2 vs. 48.8 years, p = 0.09). Baseline HCV
 RNA below 5.6 log IU/mL was significantly associated
 with SVR. Neither subgenotype (1a vs. 1b) nor gender
 was associated with SVR.
+
 | Patient no | Genotype | Viral load (10⁶ IU/ml) | Sex | Age (years) | 70 | 91 | rs12979860 | End of treatment response |
 | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- |
 | R1 | 1a | 4.36 | M | 52.6 | R | C | CC | SVR |
@@ -201,7 +221,9 @@ was associated with SVR.
 | N17 | 1b | 7.37 | M | 48.9 | Q | L | CT | non-SVR |
 | N18 | 1b | 6.69 | M | 62.8 | Q | L | CT | non-SVR |
 | N19 | 1b | 6.70 | F | 54.2 | Q | M | CT | non-SVR |
+
 ª SVR, sustained virologic response; non-SVR, no sustained virologic response
+
 |  | SVR n = 29 | non-SVR n = 21 | Univariate p value |
 | ----------- | ----------- | ----------- | ----------- |
 | Age (mean) | 45.2 | 48.8 | 0.09ª |
@@ -214,12 +236,19 @@ was associated with SVR.
 | Core aa 70 | 28 R/1 Q | 15 R/5Q & 1 P | 0.03b |
 | Core aa 91 | 21C/6M/2L | 16 C/3M/2L | 0.82° |
 | rs 12979860 | 16 CC/13 CT/0 TT | 2 CC/11 CT/8 TT | 0.0001b |
+
 ª Mann-Whitney U test.
+
 b Fisher's exact test.
+
 Fibrosis was scored according to Ludwig and Batts, and was available for 34 patients.
+
 d Logistic regression.
+
 • Chi square test.
+
 **Subgenotypes, core mutations and treatment response**
+
 The virologic response was not associated with substitu-
 tions at residue 91. However, a poor response was asso-
 ciated with substitutions of core residue 70: One of the
@@ -239,6 +268,7 @@ sequences from the HCV Database Project (http://hcv.
 lanl.gov/), showing a predominance (≥93%) of R70 in
 genotypes 1a, 2, 3 and 4, and high rates of Q70 in 1b, 5
 and 6 (Table 3). In the 13 patients carrying subtype 1b
+
 | Genotype |  | Amino acid 70 |  |  |  |  | Amino acid 91 |  |  |  | Total |
 | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- | ----------- |
 |  | Q | R | P | H | C | M | L | C |  |  |  |  |
@@ -249,16 +279,20 @@ and 6 (Table 3). In the 13 patients carrying subtype 1b
 | 4 |  | 5% |  | 95% |  |  |  | 100% |  |  |  | 19 |
 | 5 | 86% | 14% |  |  |  |  |  | 100% |  |  |  | 14 |
 | 6 | 60% | 13% | 13% | 15% |  |  |  | 100% |  |  |  | 55 |
+
 A total of 3317 sequences found on 31st of March 2010 in the The Hepatitis C
 Virus (HCV) Database Project (http://hcv.lanl.gov/) were analysed. Values less
 than 1% not shown.
+
 strains, the correlation was strong: 7 of 8 responders
 had arginine (R70) and 5 non-responders had glutamine
 (Q70) at residue 70 (p = 0.005). In contrast, in the 37
 patients with la infection, all the 21 patients with SVR
 carried HCV with R70, while 15 of the 16 non-SVR car-
 ried strains with R70.
+
 **Phylogenetic analysis of NS5A and ISDR substitutions**
+
 In order to find out if the variability at positions 70 and
 91 was linked to subgroups of HCV-1b phylogenetic
 analysis of NS5A was performed, including the 13
@@ -273,7 +307,9 @@ subgenotype 1b strains (7 H2218R, 2 H2218N), and 2
 substitutions (H2219Y and D2225E) were seen in one
 strain. There was no association between ISDR substitu-
 tion and treatment response.
+
 **IL28B SNP**
+
 The rs12979860 T allele frequency was 40% as com-
 pared with 46% in 163 health subjects without HCV
 infection. The CC genotype, which has been associated
@@ -287,18 +323,23 @@ to explore whether core variation might have an impact
 on response irrespective of rs12979860, the viral kinetics
 in patients carrying the CT SNP genotype and different
 HCV core variants was compared. As shown in Figure 1
+
 <!-- image -->
+
 **Figure 1** HCV RNA declines during treatment in 24 patients
 carrying the rs12979860 CT genotype (heterozygotes) and HCV
 strains without (R, arginine) or with (P, proline or Q,
 glutamine) substitution at core residue 70.
+
 the HCV RNA level after 4 and 8 weeks were signifi-
 cantly lower in the patients with CTrs12979860 carrying
 HCV with core R70 as compared with those with Q70
 or P70. This impact also tended to influence the SVR
 rate which was higher (p = 0.06) in patients with R70
 (67%; 12/18) than in those with Q70 and P70 (17%; 1/6).
+
 **Discussion**
+
 Substitutions of core amino acids 70 and 91 have been
 associated with outcome of peginterferon/ribavirin treat-
 ment for chronic hepatitis C in Japanese patients
@@ -375,6 +416,7 @@ types are frequent. However, we did not find any
 significant association between rs12979860 and core aa
 70 and an impact of core variation at residue 70 on
 response was observed also within the group that
+
 carried CT at rs12979860: the decline in HCV RNA was
 steeper in patients infected with HCV with R70 as com-
 pared with Q70. This finding indicates that the effect of
@@ -384,7 +426,9 @@ marily in patients with the CTrs12979860 genotype. Multi-
 variate analysis was not performed, as the number of
 samples in the study is low, with the risk of generating
 false positive results in the subgroups.
+
 **Conclusions**
+
 In conclusion, the results support that substitutions at
 position 70 but not at position 91 in the core protein of
 HCV-1b are associated with treatment response in Cau-
@@ -392,28 +436,39 @@ casian patients with chronic hepatitis C. The observation
 needs to be confirmed in studies with larger number of
 patients with HCV-1b infection taking ethnicity and
 IL28B polymorphisms into consideration.
+
 **Competing interests**
+
 The authors declare that they have no competing
 interests.
+
 **Authors' contributions**
+
 EA and MLI designed the study, contributed to acquisi-
 tion, analysis and interpretation of data and were
 responsible for drafting the manuscript. BA, AE, ML,
 SN, GN, TW, RW, JW made substantial contributions
 to the acquisition of data, critically revised the manu-
 script and gave approval of the final version.
+
 **Acknowledgements**
+
 The authors thank Ann-Sofi Tylö for skilful technical assistance. The study
 was financially supported by funding from Rådman och fru Ernst Collianders
 stiftelse and Sven och Dagmar Saléns stiftelse.
+
 **Author details**
+
 ¹Department of Infection and Virology, University of Gothenburg,
 Gothenburg, Sweden. ²Infectious Diseases Clinic, Borås Hospital, Borås,
 Sweden. ³Chalmers University of Technology, Department of Mathematical
 Statistics, Gothenburg, Sweden. ⁴Infectious Diseases Clinic, Central Hospital,
 Skövde, Sweden.
+
 **Published:** 12 May 2011
+
 **References**
+
 1. WHO: Hepatitis C-global prevalence (update). Wkly Epidemiol Rec 1999,
 74:425-427.
 2. Fried MW, Shiffman ML, Reddy KR, Smith C, Marinos G, Goncales FL Jr,

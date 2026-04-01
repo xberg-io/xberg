@@ -13,18 +13,23 @@ Overweight and obese women drinking Celsius prior to moderate
 exercise resulted in increased fat loss, increased muscle mass,
 increased endurance performance with significant improvements to
 blood lipid profiles when compared to exercise alone.
+
 Participants' results included:
 46% greater fat loss
 27% greater muscle mass
 35% greater endurance performance.
+
 Drinking Celsius with or without exercise showed a significant drop in
 total cholesterol (5 to 13%) and bad LDL cholesterol (12-18%).
 Exercise alone had no impact on blood lipid levels.
+
 University of Oklahoma 2009
+
 LOW-CALORIE THERMOGENIC BEVERAGE AND EXERCISE IMPROVES BODY COMPOSITION AND LIPID PROFILE IN OVERWEIGHT
 AND OBESE WOMEN
 Abbie E. Smith, Jordan R. Moon, Christopher M. Lockwood, Kristina L. Kendall, Jennifer L. Graef, David H. Fukuda, Joel T.
 Cramer, Jeffrey R. Stout. Department of Health and Exercise Science, University Of Oklahoma, Norman, OK
+
 The purpose of this study was to evaluate the combined effects of a 10-week exercise program with chronic ingestion of a
 thermogenic energy drink on body composition, cardiovascular fitness, strength, and safety in overweight and obese women.
 In a double-blind placebo-controlled approach overweight and obese women (n=27) were randomly assigned to groups that
@@ -48,12 +53,14 @@ PL: +3.0 ± 12.8%, NEX-PL: +0.3 ± 8.9%). The current data suggest that the ACSM
 effective measure for improving cardiovascular fitness, strength and modifying body composition. Individual data demonstrate
 support for implementing a single serving thermogenic drink prior to exercise, to improve muscle mass, decrease fat mass and
 improve lipid profiles of overweight women, compared to exercise alone.
+
 Abstract 63
 THE EFFECT OF PLATE SIZE ON ENERGY INTAKE
 IN NORMAL AND OVERWEIGHT/OBESE SUBJECTS
 Schroeder Bª, Winn Wª, Shah Mab, Adams-Huet Bb. Dept.
 of Kinesiology, TCU, Fort Worth, TX & Dept. of Clinical
 Sciences, UT Southwestern Medical Center, Dallas, TX.
+
 Only one study has examined the role of plate size on
 energy intake and there is no data on the effect by weight
 status. This study determined if plate size affects energy
@@ -80,6 +87,7 @@ size (LP: 309+98 kcal; SP: 319±134 kcal; p=0.60), or weight
 status (NW: 325 kcal; OW: 303 kcal; p=0.67) on energy
 intake. Plate size did not affect energy intake and the
 response was not different in NW and OW subjects.
+
 Abstract 64
 LOW-CALORIE THERMOGENIC BEVERAGE AND EXERCISE
 IMPROVES BODY COMPOSITION AND LIPID PROFILE IN
@@ -124,12 +132,14 @@ body composition. Individual data demonstrate support for implementing a single
 serving thermogenic drink prior to exercise, to improve muscle mass, decrease fat
 mass and improve lipid profiles of overweight women, compared to exercise
 alone.
+
 Abstract 65
 FOLLOW UP INVESTIGATION OF EARLIER OBESE
 SCHOOLCHILDREN WITH INSULIN RESISTANCE
 TREATED BY LIFESTYLE MODIFICATION
 Szamosi T. 2nd Pediatric Dept. of Med/Fac,
 Semmelweis University, Budapest, Hungary.
+
 Long time effect of lifestyle modification (LM) advised
 against insulin resistance syndrome (IRS) is not
 established, therefore repeated investigation of our
@@ -149,6 +159,7 @@ frequency differences. No pathologic serum lipid
 parameters were observed. The effect of LM on
 different IRS risk factors seems to be due to the
 compliance time and the factor,s nature.
+
 Abstract 66
 SIGNIFICANT IMPROVEMENTS IN VIGOR, MOOD STATE
 AND HORMONE PROFILE ASSOCIATED WITH LIFESTYLE
@@ -180,12 +191,14 @@ intervention. Significant changes (all, p<0.05) were found for C:T (-15-
 These data indicate that factors that are typically disrupted during chronic
 stress (hormone profile and psychological mood state) may be positively
 and significantly
+
 Low-calorie Thermogenic Beverage and Exercise Improves Composition and
 Lipid Profile in Overweight and Obese Women
 Abbie E. Smith, Jordan R. Moon, Chris M. Lockwood,, Kristina L. Kendall, David H.
 Fukuda, Joel T. Cramer and Jeffrey R. Stout.
 Department of Health and Exercise Science – The University of Oklahoma - Norman,
 Oklahoma; abbiesmith@ou.edu
+
 Abstract
 The purpose of this study was to evaluate the combined effects of a 10-week
 exercise program with chronic ingestion of a thermogenic energy drink on body
@@ -223,6 +236,7 @@ composition. Individual data demonstrate support for implementing a single
 serving thermogenic drink prior to exercise, to improve muscle mass, decrease fat
 mass and improve lipid profiles of overweight women, compared to exercise alone.
 Acknowledgements : This study was funded by Celsius®, Inc., Delray Beach, FL
+
 INTRODUCTION
 Weight loss supplements are widely available and superfluously marketed, while
 lacking substantial efficacy and safety data. Many supplements are marketed as
@@ -250,6 +264,7 @@ healthy men Therefore, the purpose of this study was to evaluate the combined
 effects of a 10-week exercise program with chronic ingestion of a thermogenic
 energy drink on body composition, cardiovascular fitness, strength, and safety in
 overweight and obese women.
+
 EXPERIMENTAL DESIGN
 This study implemented a randomized, double-blind placebo-controlled design
 examining the combined effects of a 10-week pre-exercise intervention with a low-
@@ -264,6 +279,7 @@ compartment model (4) at Baseline and after 12 weeks of exercise and
 supplementation. Cardiovascular and strength testing were conducted within 24
 hours of baseline and post-testing, and blood safety measures were also assessed
 after a 12-h fast.
+
 | GROUP   |   Age (yrs) |   Height (cm) |   Body Mass (kg) |   % BF (%) |
 |:----------|------------:|--------------:|-----------------:|-----------:|
 | EX-Act    | 31.17±8.23  | 164.22±11.10  |     78.60±9.54  | 39.59±2.78 |
@@ -271,6 +287,7 @@ after a 12-h fast.
 | NEX-Act   | 27.86±9.21  | 163.47±4.31   |    68.62±12.90  | 37.56±2.56 |
 | NEX-PL    | 28.40 ± 10.16 | 169.26 ±13.12  |    79.25 ± 11.68 | 36.22±1.52 |
 | N=27      | 27.26±8.60  | 164.67±8.13   |    74.29 ± 11.33 | 38.07±2.87 |
+
 BODY COMPOSITION (4C-MODEL)
 All body composition measurements were performed on the same day following a
 12-hour fast (water intake was allowed up to one hour prior to testing). Hydration
@@ -280,11 +297,13 @@ Kirkland, WA) to assure proper hydration from PRE (1.022 ± 0.007) to POST (1.02
 ± 0.007) measurements. Fat mass (FM), percent body fat (%FAT) and fat-free mass
 (FFM) were estimated using the four-compartment (4-C) model described by Wang
 et al.(4)
+
 FM (kg) = 2.748(BV)-0.699(TBW) + 1.129(Mo)- 2.051(BM)
 %FAT = (FM/BM) x 100
 FFM (kg) = BM-FM
 Where BV is total body volume, TBW is total body water, MO is total body bone
 mineral, and BM is body mass.
+
 Dual-energy X-ray absorptiometry (DXA) (software version 10.50.086, Lunar
 Prodigy Advanced, Madison, WI) was used to estimate total bone mineral content
 and total body muscle mass (MM). Bone mineral content (BMC) was converted to
@@ -292,6 +311,7 @@ Mo using the following equation: Mo = total body BMC x 1.0436. In addition, the
 sum of lean soft tissue for both arms and legs (ALST), as measured by CXA, was used
 to estimate MM from the validated equation of Kim et al.(5). MM = (1.13 x ALST) -
 (0.02 x age) + [0.61 x sex (m = 0, f = 1)] + 0.97.
+
 Body volume (BD) was assessed from HW with correction for residual volume (RV).
 Residual volume was determined with the subject in a seated position using the
 oxygen dilution method of Wilmore (6) via a metabolic cart with residual volume
@@ -300,6 +320,7 @@ measured to the nearest 0.025kg in a submersion tank in which a PVC swing seat
 was suspended from a calibrated Chatillon® 15-kg scale (Model # 1315DD-H, Largo,
 FL.). Previous test retest measurements of eleven men and women measured 24-48
 hours apart for HW produced a SEM of 0.
+
 A deuterium oxide (D2O) tracer was used as the criterion method to estimate TBW.
 Prior to D20 ingestion, urine samples were collected from all subjects. After voiding
 the bladder completely, subjects ingested ≈ 11 grams of D2O along with a 100 ml
@@ -314,14 +335,17 @@ Wong et al. (7) TBW was then calculated from the dilution of isotopic water and
 corrected for the exchange of deuterium with non-aqueous tissue (7). Reliability
 measurements from 11 men and women for D20 in one urine sample measured in
 triplicate resulted in a SEM value of 0.33L.
+
 BODY COMPOSITION CALCULATION
 Body fat was estimated using the four-compartment model (4C) of Wang et al. (4)
 using the following equation:
+
 FM (kg) = 2.748(BV)-0.699(TBW) + 1.129(Mo)- 2.051(BM)
 %FAT = (FM/BM) x 100
 FFM (kg) = BM-FM
 Where BV is total body volume, TBW is total body water, MO is total body bone
 mineral, and BM is body mass.
+
 CARDIOVASCULAR TESTING
 Described by Rossiter et al. (8), using a Corival 906900 (Lode B.V. Medical
 Technology, Groningen, The Netherlands) upright cycle ergometer participants
@@ -336,9 +360,11 @@ software (True One 2400®, Parvo-Medics, Inc., Provo, UT). The data were average
 over 15-second intervals, with the highest 15-second VO2 value recorded as the
 peak oxygen uptake (VO2peak). Prior to testing, flow rate, O2 and CO2 analyzers
 were calibrated following the manufacturer's recommendations.
+
 EXERCISE PROTOCOL
 The exercise program was designed using the American College of Sports Medicine
 (ACSM) recommended guidelines for apparently healthy adults; all participants
+
 were supervised by a certified trainer. Progressive endurance training, on cycle
 ergometers, was performed three days per week (Table 2). Resistance training was
 performed two days per week, providing at least 24 hours recovery between
@@ -347,7 +373,9 @@ joint and multi-joint exercises. Each exercise was performed once per session, w
 participants completing 8-12 repetitions per exercise, until volitional fatigue.
 Weight was increased when participants performed >10 repetitions, at the same
 resistance, during two consecutive lifting sessions.
+
 Table 2
+
 | Week   |   Duration (min) |   %HRR |
 |:-------|-----------------:|-------:|
 | 1      |            15-20  |  40-50 |
@@ -360,7 +388,9 @@ Table 2
 | 8      |            30-35  |  60-70 |
 | 9      |            30-35  |  60-70 |
 | 10     |            30-35  |  60-70 |
+
 HRR = Heart rate reserve
+
 THERMOGENIC DRINK PROTOCOL
 All participants were instructed to consume one drink per day, for a total of
 70 consecutive days (10 weeks). During exercise days, participants reported to the
@@ -373,9 +403,11 @@ placebo beverage that yielded an identical supplement facts profile, minus the
 "Celsius® Thermogenic Blend” (taurine, guarana seed extract, green tea leaf extract
 standardized to 10% EGCG, caffeine as caffeine anhydrous, glucuronolactone and
 ginger root extract).
+
 Supplement Facts
 Serving Size 12 fl. oz
 Servings per Container 1
+
 | Amount per serving                  |   %DV+ |
 |:------------------------------------|-------:|
 | Calories                            |     10 |
@@ -399,13 +431,17 @@ Servings per Container 1
 | Caffeine (as caffeine anhydrous)    |        |
 | Glucuronolactone                    |        |
 | Ginger extract (root)               |        |
+
 +Percent Daily Values are based on a 2,000 calorie diet.
 **Daily Value (DV) not established.
+
 Other Ingredients: Filtered Water, Natural Colors,
 Natural Flavors, Citric Acid, Sucralose
 Contains: 200 mg total caffeine per serving
+
 Not recommended for people that are caffeine sensitive,
 children under 12, or women pregnant or nursing.
+
 <!-- image -->
 <!-- image -->
 <!-- image -->
@@ -414,6 +450,7 @@ children under 12, or women pregnant or nursing.
 <!-- image -->
 <!-- image -->
 Changes in fasting lipid concentrations from PRE to POST
+
 |                                  | PRE             | POST            |
 |:---------------------------------|:----------------|:----------------|
 | Total Cholesterol (mg/dL)        |                 |                 |

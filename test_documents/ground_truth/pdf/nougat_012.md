@@ -33,21 +33,27 @@ Present at Tonight's Meeting:
 **Citizens:**
 Ron Parenti
 Victoria Selesnik
+
 The meeting was called to order at 7:00 PM on Monday, June 14, 2021 by Mr. Barry Rosen.
+
 A. Comments from Citizens
 There were no comments from citizens.
+
 B. Approve Minutes from Meeting of 5/24
 Mr. Stuntz motioned to approve the minutes of June 14, 2021. Ms. Amir-Lin seconded the motion, and it was
 unanimously approved by a roll call vote:
 Ms. Amir-Lin, yes
 Mr. Stuntz, yes
 Mr. Rosen, yes
+
 C. Appoint One Commissioner to Approve Warrants While Conducting Meetings Virtually
+
 Mr. Rosen motioned to appoint Ms. Amir-Lin as the Commissioner to approve warrants while conducting
 meetings virtually. Mr. Stuntz seconded the motion, and it was unanimously approved by a roll call vote:
 Ms. Amir-Lin, yes
 Mr. Stuntz, yes
 Mr. Rosen, yes
+
 D. OLD BUSINESS:
 1. Update on Per- and Poly-Fluoroalkyl Substances (PFAS).
 Mr. Allen informed the Board that the District has received a Notice of Non Compliance from MA DEP for
@@ -61,6 +67,7 @@ alternate supply, including bottle filling stations, rebates to those in the sen
 of bottled water, and temporary treatment for the North Acton treatment plant. Ms. Selesnick asked if there
 were considering rebates for treatment for residents. Mr. Allen indicated that currently that is not being
 discussed.
+
 2. Update on the proposed solar arrays off Lawsbrook Road & Knox Trail
 Mr. Allen provided an update on the solar projects. EDF will be mobilizing to the Lawsbrook Road site
 within the next 2 weeks. Construction is expected to be completed by the end of 2021, with commissioning
@@ -69,6 +76,7 @@ conceptual design phase. The Lawsbrook Road site will be completed first and the
 Knox Trail. The PILOT for Knox Trail still needs to be negotiated with the Town of Acton. It will be a
 direct municipal benefit for the Knox Trail site, as the District will take all of the power generated. This
 should simplify the PILOT negotiation.
+
 E. NEW BUSINESS:
 1. Annual Consumer Confidence Report(CCR) for 2020
 Mr. Allen informed the Board that the CCR has been published and all customers were notified that it is
@@ -81,11 +89,13 @@ for violators, usually in the early morning hours. Customer are warned, then fin
 escalating to $200. There are also a number of private irrigation wells in town. Mr. Mostoller reminded the
 Board that with the Water Management Act Permit up for renewal this year, the irrigation program may be
 impacted.
+
 2.Meeting Schedule for July – December 2021
 Mr. Allen presented the schedule for the remainder of 2021. The schedule currently lists 2 meetings a month
 for the summer, due to the ongoing PFAS issues.
 The Commonwealth of Massachusetts has extended the option of virtual meetings through April 2022. The
 Board will continue with remote meetings until that time.
+
 Mr. Stuntz motioned to adjourn the open meeting at 7:55 pm. Ms. Amir-Lin seconded the motion and it was
 unanimously approved by a roll call vote:
 Ms. Amir-Lin, yes

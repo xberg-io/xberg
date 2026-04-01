@@ -73,13 +73,8 @@ def sanitize(text: str) -> str:
         if stripped == "<!-- end list -->" or stripped == "<!-- -->":
             continue
 
-        # === Collapse 5+ consecutive blank lines to 3 ===
-        # Very conservative — blank lines are structural in markdown.
-        # Only collapse truly excessive runs (5+) which are pandoc artifacts.
-        if stripped == "":
-            blank_count = sum(1 for r in reversed(result) if r.strip() == "")
-            if blank_count >= 4:
-                continue
+        # Do NOT collapse blank lines — they are structural in markdown.
+        # Blank lines separate paragraphs, tables, lists, etc.
 
         result.append(line)
 

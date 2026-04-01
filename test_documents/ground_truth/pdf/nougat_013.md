@@ -28,10 +28,13 @@ What attendees will learn
 Themes
 Innovation, Strategy, Creativity, Thought Sketching, Ideation, Co-creation, Alignment,
 Collaboration, Leadership, Team Engagement.
+
 Audience
 C-suite executives, Business Leaders, Strategists, Facilitators, Entrepreneurs, Founders,
 Innovators, Startup Creators, Team Leaders, Inventors.
+
 Format
 In-person or virtual.
 Speaking engagement of 15 to 60 minutes, available in English or French.
+
 Copyright MetaHelm, 2021

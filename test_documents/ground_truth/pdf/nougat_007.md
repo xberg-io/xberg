@@ -13,6 +13,7 @@ Racquet Club
 play on
 
 ## RULES AND REGULATIONS
+
 Children ages 10 - 14:
 - Must have a **2021** Child Consent Form at the Front Desk
 - Must have paid the **2021** Child Consent fee of **$75 per child.**
@@ -32,6 +33,7 @@ areas.
 without adult supervision. Two bathrooms, two showers and the changing room located on the
 25 yard pool deck are available for their use.
 - Are **not allowed** to play around the tennis courts or indoor tennis center.
+
 Children ages 12 - 14
 - May serve as hosts to guests who are at least 12 years old. Child hosts may only bring up to two guests at
 one time. Guests 12 to 14 years of age must have a Guest Child Form on file at the club in order to gain
@@ -40,9 +42,12 @@ week when unaccompanied by a parent/guardian host, regardless of different hosti
 week runs Monday-Sunday.) All guests between the ages of 12 and 14 are required to wear club issued
 wristbands during their entire stay. Guests must be accompanied by their hosts at all times while on club
 premises.
+
 Unsafe or inappropriate behavior may result in suspension from using the club for the remainder of the
 day, the week or possibly the summer.
+
 <!-- image -->
+
 ## PARTICIPANT'S INFORMATION
 **Name:**
 **Child's cell number (if applicable):**
@@ -50,6 +55,7 @@ day, the week or possibly the summer.
 **Street address:**
 **Mother's phone:**
 **Email:**
+
 ## MEDICAL INFORMATION
 **Person to contact in case of emergency if parents cannot be reached:**
 **Phone(s):**
@@ -66,8 +72,10 @@ day, the week or possibly the summer.
 **Father's phone:**
 **Relationship to child:**
 **Phone number:**
+
 **Allergies, medications, special conditions including but not limited to asthma, diabetes, sun sensitivity, seizures or fainting spells (please
 provide specifics):**
+
 ## PAYMENT INFORMATION
 **Person responsible for payment:**
 **Responsible party's address:**
@@ -77,8 +85,10 @@ provide specifics):**
 **Email address:**
 **State:**
 **Zip:**
+
 **Method of Payment (Indicate your choice by completing the appropriate information below):**
 For security reasons, your payment information will be encrypted by our computer software and this information will be shredded.
+
 **LRRC/LRAC club account option (for members only/account must be current)**
 **Name of member to be charged:**
 **Credit/debit card option (Visa, MasterCard, Discover, American Express)**
@@ -86,14 +96,19 @@ For security reasons, your payment information will be encrypted by our computer
 **Credit card number:**
 **Expiration date:**
 **CCV number:**
+
 NOW SIGN THE WAIVER
 ON THE BACK
+
 ## RELEASE OF LIABILITY & ASSUMPTION OF RISK AGREEMENT
+
 I understand and acknowledge that this is an agreement between myself and the auspices of the Little Rock Athletic Centers, LLC, dba Little Rock
 Athletic Club, Little Rock Racquet Club, North Little Rock Athletic Club and Downtown Athletic Club (collectively referred to as LRAC). I further
 acknowledge that I have the ability to read and have been provided the opportunity to read this agreement before signing.
+
 I understand and agree that being allowed to participate and utilize the equipment, programs, supplies, services, staff and facilities at LRAC is good
 and valuable consideration for this agreement.
+
 I understand that the nature of LRAC's facilities and equipment contemplate that other members, guests and staff will have access to the equipment,
 supplies and services available at LRAC. While LRAC takes reasonable steps to insure the safety and sanitization of the equipment, programs,
 supplies, services and facilities, it cannot and does not guarantee that the equipment, programs, supplies, services and facilities are germ / virus free
@@ -102,6 +117,7 @@ related to such issues should I or my children choose to participate and/or util
 acknowledge the individual responsibility regarding the fact that other members, guests or staff may be present and may have medical conditions
 and/or infections wholly independent of LRAC. I hereby waive any and all claims related to such issues should I or my children choose to participate
 and/or utilize the equipment, programs, supplies, services and facilities while other members, guests or staff are present.
+
 RELEASE AND AGREEMENT NOT TO SUE: I understand, acknowledge and agree that the equipment, programs, supplies, services and facilities at
 LRAC are voluntary and that they involve inherent risks. The risk of injury includes the risk of use and the risk of misuse. The possible injuries include
 the potential for permanent paralysis and death. I knowingly and freely assume all such risks, both known and unknown and assume full responsibility
@@ -109,15 +125,18 @@ for my participation and that of my children. I knowingly and freely agree to wa
 (including its managers, officers, officials and/or employees) whether or not the claim for injury was caused by the negligence of LRAC, its managers,
 officers, officials and/or employees. I further agree to indemnify and hold harmless LRAC against any and all damage, loss, cost and expense related
 to any injury or harm I or my children might sustain.
+
 Photography and/or Video - I understand that LRAC periodically takes facility and group photographs and videos and uses the resulting content for
 lawful purposes including, publicity, illustration, advertising and web content. I grant to LRAC and all its subsidiaries the right to take photographs
 and/or videos of myself or my children. I authorize LRAC, its assigns and transferees to copyright, use and publish the same in print and/or
 electronically. I agree that LRAC may edit and use such photographs and/or videos for any lawful purpose..
+
 Text and Email Communication - By opting in to receiving text and email messages from LRAC, I agree to allow LRAC and all its subsidiaries, agents
 and service providers to contact me with promotional and informational texts and emails at the phone number(s) and/or email address(es) provided.
 I acknowledge that providing these phone numbers and email addresses is not a condition of receiving any property, goods or services. By listing
 this information, I certify that it is accurate and that I own the rights to use it and give consent for it/their use. Additionally, I understand that I may
 unsubscribe at any time to these communications.
+
 ## PARICIPANT AGREEMENT
 MY SIGNATURE CONVEYS:
 - I have read all of the above, fully understand its meaning and that I have given up substantial rights and granted specific permissions which I do
@@ -127,6 +146,7 @@ physician or surgeon in the case of an emergency when a parent or guardian canno
 his/her duly appointed representative to transport my child for emergency medical treatment in said situation;
 - I authorize the LRAC to draft the Child Consent fee;
 - I understand the Rules and Regulations explained herein and my child agrees to abide by them.
+
 **Print Parent's/Guardian's Name:**
 **Parent's/Guardian's Signature:**
 **Print Child's Name:**

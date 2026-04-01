@@ -7,5 +7,7 @@
 # Ungrouped images
 
 There are 2 pictures ungrouped, each wrapped “In line with text” in different paragraphs
+
 ![Docling](media/image7.png)
+
 ![Docling](media/image8.png)

@@ -9,15 +9,22 @@
 
 
 ## Table with nested table
+
 Before table
+
 | Column A | Column B |
 | --- | --- |
 | Simple cell upper left | Simple cell with \*\*bold\*\* and \*italic\* text |
 | A B C \*Cell 1\* \<u\>Cell 2\</u\> \*\*Cell 3\*\* | Rich cell A nested table A B C ~~Cell 1~~ \*\*\*Cell 2\*\*\* \<u\>Cell 3\</u\> |
+
 After table with **bold**, __underline__, ~~strikethrough~~, and *italic* formatting
+
 ## Table with pictures
+
 ![Owner avatar](media/image1.png)
+
 ![Owner avatar](media/image1.png)
+
 | Column A | Column B |
 | --- | --- |
 | Only text |  |

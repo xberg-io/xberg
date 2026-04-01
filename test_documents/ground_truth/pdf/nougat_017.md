@@ -16,6 +16,7 @@ both locally in Orkney and in the
 mainland events switching from
 portable diesel generators to
 green hydrogen"
+
 What is the project about?
 - The Orkney Island archipelago has abundant wind and marine resources and currently produces
 more electricity than it consumes. Orkney has also become a UK leader in the adoption of
@@ -25,6 +26,7 @@ the lack of transport mechanisms for moving hydrogen from the Island to the main
 - The project is a feasibility study aiming to identify a safe and viable transport logistic solution
 for the transportation of green hydrogen gas produced on Orkney to the mainland with the aim
 of replacing diesel fuelled generators with a zero carbon and zero pollution alternative.
+
 How will the EU Islands Facility NESOI support the project?
 - Assessment of local green hydrogen production potential
 - Identification of suitable technological options for green hydrogen storage in Orkney and
@@ -35,10 +37,14 @@ transportation
 chain in Orkney
 - Identification of financing/funding options
 - Action plan for the roll-out of a green hydrogen value chain in Orkney
+
 NESOI contact: Stefano Barberis, RINA Consulting, stefano.barberis@rina.org
+
 <!-- image -->
+
 Wind turbines on the isle of Sanday, Orkney archipelago
 (Photograph: Michael Roper/Alamy Stock Photo)
+
 <!-- image -->
 NESOI has received funding from the European Union's Horizon 2020
 research and innovation programme under grant agreement N°864266

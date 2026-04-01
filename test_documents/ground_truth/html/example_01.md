@@ -7,9 +7,14 @@ This is the first paragraph of the introduction.
 Some background information here.
 
 \!\[Example image\](example_image_01.png)
+
 - First item in unordered list
 - Second item in unordered list
+
+
 1. First item in ordered list
 2. Second item in ordered list
+
+
 1. First item in ordered list with start
 2. Second item in ordered list with start

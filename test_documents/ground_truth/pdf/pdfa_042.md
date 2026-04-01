@@ -8,29 +8,45 @@ The results set forth herein are provided by SGS North America Inc.
 Providence Engineering
 
 Valero-CAMS, Baton Rouge, LA
+
 **712-001**
+
 **SGS Job Number:** JD3794
+
 **Sampling Date:** 02/20/20
+
 ## Report to:
+
 Providence Engineering
+
 kevincalhoun@providenceeng.com
+
 **ATTN:** Kevin Calhoun
+
 03/30/20
 e-Hardcopy 2.0
 Automated Report
+
 **Total number of pages in report:** 11
+
 <!-- image -->
+
 Test results contained within this data package meet the requirements
 of the National Environmental Laboratory Accreditation Program
 and/or state specific certification programs as applicable.
+
 <!-- image -->
 Laura Degenhardt
 General Manager
+
 **Client Service contact:** Victoria Pushkova 732-329-0200
+
 **Certifications:** NJ(12129), NY(10983), CA, CT, FL, IL, IN, KS, KY, LA, MA, MD, ME, MN, NC,
 OH VAP (CL0056), AK (UST-103), AZ (AZ0786), PA, RI, SC, TX, UT, VA, WV, DoD ELAP (ANAB L2248)
+
 This report shall not be reproduced, except in its entirety, without the written approval of SGS.
 Test results relate only to samples analyzed.
+
 SGS North America Inc.. 2235 Route 130 Dayton, NJ 08810 tel: 732-329-0200 fax: 732-329-3499
 SGS is the sole authority for authorizing edits or modifications to this document.
 Unauthorized modification of this report is strictly prohibited.
@@ -38,29 +54,41 @@ Review standard terms at: http://www.sgs.com/en/terms-and-conditions
 Please share your ideas about
 how we can serve you better at:
 EHS.US.CustomerCare@sgs.com
+
 # Table of Contents
+
 -1-
+
 ### Section 1: Sample Summary 3
 ### Section 2: Sample Results 4
 #### 2.1: JD3794-1: CAMS 519 5
 ### Section 3: Misc. Forms 8
 #### 3.1: Chain of Custody 9
 #### 3.2: Summa Canister and Flow Controller Log 11
+
 SGS LabLink@1069213 13:40 30-Mar-2020
+
 ## Sample Summary
+
 **Providence Engineering**
+
 **Valero-CAMS, Baton Rouge, LA**
 **Project No:** 712-001
 **Job No:** JD3794
+
 | Sample Number | Collected Date | Time | By | Received | Matrix Code Type | Client Sample ID |
 | - | - | - | - | - | - | - |
 | This report contains results reported as ND = Not detected. The following applies: Organics ND = Not detected above the MDL |
 | JD3794-1 | 02/20/20 | 10:40 | BK | 02/27/20 | AIR Ambient Air Comp. | CAMS 519 |
+
 ## Sample Results
+
 Report of Analysis
+
 SGS LabLink@1069213 13:40 30-Mar-2020
 Report of Analysis
 Page 1 of 3
+
 **Client Sample ID:** CAMS 519
 **Lab Sample ID:** JD3794-1
 **Matrix:** AIR - Ambient Air Comp. Summa ID: A990
@@ -69,7 +97,9 @@ Page 1 of 3
 **Date Sampled:** 02/20/20
 **Date Received:** 02/27/20
 **Percent Solids:** n/a
+
 VOA TO15 List
+
 | CAS No. | MW | Compound | Result | RL | MDL | Units | Q | Result | RL | MDL | Units |
 | - | - | - | - | - | - | - | - | - | - | - | - |
 | 67-64-1 | 58.08 | Acetone | 10.1 | 0.20 | 0.11 | ppbv |  | 24.0 | 0.48 | 0.26 | ug/m3 |
@@ -104,6 +134,7 @@ VOA TO15 List
 | 95-50-1 | 147 | o-Dichlorobenzene | ND | 0.20 | 0.022 | ppbv |  | ND | 1.2 | 0.13 | ug/m3 |
 | 106-46-7 | 147 | p-Dichlorobenzene | ND | 0.20 | 0.018 | ppbv |  | ND | 1.2 | 0.11 | ug/m3 |
 | 10061-02-6 | 111 | trans-1,3-Dichloropropene | ND | 0.20 | 0.020 | ppbv |  | ND | 0.91 | 0.091 | ug/m3 |
+
 **ND** = Not detected
 **MDL** = Method Detection Limit
 **RL** = Reporting Limit
@@ -111,9 +142,11 @@ VOA TO15 List
 **J** = Indicates an estimated value
 **B** = Indicates analyte found in associated method blank
 **N** = Indicates presumptive evidence of a compound
+
 SGS LabLink@1069213 13:40 30-Mar-2020
 Report of Analysis
 Page 2 of 3
+
 **Client Sample ID:** CAMS 519
 **Lab Sample ID:** JD3794-1
 **Matrix:** AIR - Ambient Air Comp. Summa ID: A990
@@ -122,7 +155,9 @@ Page 2 of 3
 **Date Sampled:** 02/20/20
 **Date Received:** 02/27/20
 **Percent Solids:** n/a
+
 VOA TO15 List
+
 | CAS No. | MW | Compound | Result | RL | MDL | Units | Q | Result | RL | MDL | Units |
 | - | - | - | - | - | - | - | - | - | - | - | - |
 | 64-17-5 | 46.07 | Ethanol | 4.1 | 0.50 | 0.22 | ppbv |  | 7.7 | 0.94 | 0.41 | ug/m3 |
@@ -161,9 +196,11 @@ VOA TO15 List
 |  | 106.2 | m,p-Xylene | 0.36 | 0.20 | 0.034 | ppbv |  | 1.6 | 0.87 | 0.15 | ug/m3 |
 | 95-47-6 | 106.2 | o-Xylene | 0.17 | 0.20 | 0.017 | ppbv | J | 0.74 | 0.87 | 0.074 | ug/m3 |
 | 1330-20-7 | 106.2 | Xylenes (total) | 0.53 | 0.20 | 0.017 | ppbv |  | 2.3 | 0.87 | 0.074 | ug/m3 |
+
 | CAS No. | Surrogate Recoveries | Run# 1 | Run# 2 | Limits |
 | - | - | - | - | - |
 | 460-00-4 | 4-Bromofluorobenzene | 96% | 90% | 65-128% |
+
 **ND** = Not detected
 **MDL** = Method Detection Limit
 **RL** = Reporting Limit
@@ -171,9 +208,11 @@ VOA TO15 List
 **J** = Indicates an estimated value
 **B** = Indicates analyte found in associated method blank
 **N** = Indicates presumptive evidence of a compound
+
 SGS LabLink@1069213 13:40 30-Mar-2020
 Report of Analysis
 Page 3 of 3
+
 **Client Sample ID:** CAMS 519
 **Lab Sample ID:** JD3794-1
 **Matrix:** AIR - Ambient Air Comp. Summa ID: A990
@@ -182,10 +221,13 @@ Page 3 of 3
 **Date Sampled:** 02/20/20
 **Date Received:** 02/27/20
 **Percent Solids:** n/a
+
 VOA TO15 List
+
 | CAS No. | MW | Compound | Result | RL | MDL | Units | Q | Result | RL | MDL | Units |
 | - | - | - | - | - | - | - | - | - | - | - | - |
 | (a) Result is from Run# 2 |
+
 **ND** = Not detected
 **MDL** = Method Detection Limit
 **RL** = Reporting Limit
@@ -193,15 +235,23 @@ VOA TO15 List
 **J** = Indicates an estimated value
 **B** = Indicates analyte found in associated method blank
 **N** = Indicates presumptive evidence of a compound
+
 ## Misc. Forms
+
 Custody Documents and Other Forms
+
 Includes the following where applicable:
+
 - Chain of Custody
 - Summa Canister and Flow Controller Log
+
 <!-- image -->
+
 JD3794: Chain of Custody
 Page 1 of 2
+
 <!-- image -->
+
 **Job Number:** JD3794
 SGS Sample Receipt Summary
 **Client:** PROVIDENCE ENG
@@ -211,6 +261,7 @@ SGS Sample Receipt Summary
 **Delivery Method:**
 **Project:** PROVIDENCE - CAMS
 **Airbill #'s:**
+
 | Cooler Security | Y or N |  |  |  | Sample Integrity - Documentation | Y or N |  |
 | - | - | - | - | - | - | - | - |
 | 1. Custody Seals Present: | ☑ |  | 3. COC Present: | ☑ |  | 1. Sample labels present on bottles: | ☑ |  |
@@ -229,22 +280,30 @@ SGS Sample Receipt Summary
 | Test Strip Lot #s: |  |  |  |  | Other: (Specify) |  |  |
 | pH 1-12: | 229517 |  | pH 12+: | 208717 |  |  |  |
 | Comments |  |  |  |  |  |  |  |
+
 SM089-03
 Rev. Date 12/7/17
+
 JD3794: Chain of Custody
 Page 2 of 2
+
 ## Summa Canister and Flow Controller Log
+
 **Job Number:** JD3794
 **Account:** PROVLABR Providence Engineering
 **Project:** Valero-CAMS, Baton Rouge, LA
 **Received:** 02/27/20
 Page 1 of 1
+
 SUMMA CANISTERS
+
 | Shipping Summa ID | L | Vac Date "Hg Out | By | SCC Batch | SCC FileID | Receiving Sample Number | Date In | By | Vac "Hg | Pres psig | Final psig | Dil Fact |
 | - | - | - | - | - | - | - | - | - | - | - | - | - |
 | A990 | 6 | 29.4 01/27/20 | JT | CP106623W71339.D | JD3794-1 | 03/02/20 | EH | 2 |  |  |  | 1 |
+
 SGS Bottle Order(s):
 VP-012420-47
+
 | Prep Date | Room Temp(F) | Bar Pres "Hg |
 | - | - | - |
 | 01/27/20 | 70 | 29.92 |

@@ -146,6 +146,7 @@ Location: WRAC
 | 1:24.84S | F # 9C | Female 11-11 100 Free | RAUWN-WN | 30 |  | -0.63 |
 | 1:33.34S | F # 24C | Female 11-11 100 Back | RAUWN-WN | 24 |  | -3.46 |
 | 45.77S | F # 31C | Female 11-11 50 Fly | RAUWN-WN | 21 |  | 1.76 |
+
 | Time | F/P/S | Event | Place | Points | Improv |
 |---|---|---|---|---|---|
 | Woodley, Cole (11) M |  |  |  |  |  |

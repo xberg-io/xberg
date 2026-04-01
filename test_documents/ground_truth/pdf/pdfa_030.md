@@ -16,12 +16,16 @@ THE SIGNS OF WITHDRAWL
 Symptoms of alcohol withdrawal include:
 irritability, anxiety, agitation, being unable to sleep,
 upset stomach and vomiting.
+
 Severe symptoms of alcohol withdrawal include: insomnia
 (being unable to sleep), hallucinations (seeing, hearing or feeling
 things that are not there), sweating, rapid heart rate, tremors
 (the shakes), seizures, delirium (being disoriented) and anxiety.
+
 PREPARING FOR ISOLATION IN YOUR COMMUNITY
+
 <!-- image -->
+
 1.  Reach out to your family doctor or nursing station
     if you experience any symptoms of alcohol withdrawal as listed
     above.
@@ -29,10 +33,13 @@ PREPARING FOR ISOLATION IN YOUR COMMUNITY
     alcohol intake over the upcoming days and weeks.
 3.  Seek treatment from your family doctor or addictions
     specialist to undergo monitored, medically-assisted alcohol detox.
+
 HOME BREW: KEEPING SAFE
+
 Home brew can have a high alcohol content and since you can't
 really know the percentage of how strong it is, it's important to
 start with a smaller amount. This can decrease the chance of an
 overdose. If you mix alcohol with other drugs, make sure you
 pick up a Naloxone kit at your nursing station.
+
 slfnha.com/covid19 | facebook.com/SLFNHA

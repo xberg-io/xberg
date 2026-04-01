@@ -17,16 +17,23 @@ rules.
 ## DEPARTMENT OF TRANSPORTATION
 
 ### Federal Aviation Administration
+
 #### 14 CFR Part 39
+
 [Docket No. FAA-2020-0686; Product
 Identifier 2019-NM-035-AD]
+
 RIN 2120-AA64
+
 #### Airworthiness Directives; The Boeing
 Company Airplanes
+
 **AGENCY:** Federal Aviation
 Administration (FAA), DOT.
+
 **ACTION:** Notice of proposed rulemaking
 (NPRM).
+
 **SUMMARY:** The FAA proposes to
 supersede Airworthiness Directive (AD)
 2018-23-51, which applies to all The
@@ -56,9 +63,11 @@ operator's existing FAA-approved
 minimum equipment list (MEL). The
 FAA is proposing this AD to address the
 unsafe condition on these products.
+
 **DATES:** The FAA must receive comments
 on this proposed AD by September 21,
 2020.
+
 **ADDRESSES:** You may send comments,
 using the procedures found in 14 CFR
 11.43 and 11.45, by any of the following
@@ -76,6 +85,7 @@ Washington, DC 20590.
 address above between 9 a.m. and 5
 p.m., Monday through Friday, except
 Federal holidays.
+
 For Boeing service information
 identified in this NPRM, contact Boeing
 Commercial Airplanes, Attention:
@@ -96,7 +106,9 @@ found on the internet at https://
 www.regulations.gov by searching for
 and locating Docket No. FAA-2020-
 0686.
+
 #### Examining the AD Docket
+
 You may examine the AD docket on
 the internet at https://
 www.regulations.gov by searching for
@@ -110,14 +122,18 @@ information. The street address for
 Docket Operations is listed above.
 Comments will be available in the AD
 docket shortly after receipt.
+
 **FOR FURTHER INFORMATION CONTACT:** Ian
 Won, Manager, Seattle ACO Branch,
 FAA, 2200 South 216th St., Des Moines,
 WA 98198; phone and fax: 206-231-
 3500; email: 9-FAA-SACO-AD-Inquiry@
 faa.gov.
+
 **SUPPLEMENTARY INFORMATION:**
+
 #### Comments Invited
+
 The FAA invites you to participate in
 this rulemaking by submitting written
 comments, data, or views about this
@@ -137,6 +153,7 @@ ADDRESSES section. Include "Docket No.
 FAA-2020-0686; Product Identifier
 2019-NM-035-AD" at the beginning of
 your comments.
+
 Except for Confidential Business
 Information (CBI) as described in the
 following paragraph, and other
@@ -154,7 +171,9 @@ comment period has closed if it is
 possible to do so without incurring
 expense or delay. The FAA may change
 this NPRM because of those comments.
+
 #### Confidential Business Information (CBI)
+
 CBI is commercial or financial
 information that is both customarily and
 actually treated as private by its owner.
@@ -182,7 +201,9 @@ the FAA receives which is not
 specifically designated as CBI will be
 placed in the public docket for this
 rulemaking.
+
 #### Background
+
 On October 29, 2018, a Boeing Model
 737-8 airplane operated by Lion Air
 (Lion Air Flight 610) was involved in an

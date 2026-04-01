@@ -7,5 +7,7 @@ Raster in emf:
 Vector in emf:
 
 ![](media/image2.emf)
+
 Raster in webp:
+
 ![A cartoon duck holding a paper Description automatically generated](media/image3.png)

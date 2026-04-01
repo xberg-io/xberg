@@ -31,6 +31,7 @@ Mill Rd and follow it to the RIGHT turn into the Rod and Gun Parking Lot. The Pa
 building down the hill.
 
 <!-- image -->
+
 From the intersection of Rt. 128 and Mass Pike
 Take Route 20 East toward Waltham. Turn LEFT at the lights at Stow Street, at the traffic lights on Rt 117 Turn
 LEFT. Follow RT-117 West for 9 ½ miles till you see St. Johns Lutheran Church and turn RIGHT on to North Rd. (North RD,
@@ -38,4 +39,5 @@ Sudbury becomes Waltham Street, Maynard when you cross the town line). Old Mill 
 the street on your RIGHT. (Look for the orange and black Maynard Rod and Gun Club Sign on the telephone Pole at the
 corner of Old Mill Rd and Waltham St.) Old Mill Rd is a narrow street, play nice. Turn RIGHT on to Old Mill Road and
 follow to the RIGHT into the Rod and Gun Parking Lot. The Pavilion will be the large building down the hill.
+
 <!-- image -->

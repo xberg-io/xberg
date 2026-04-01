@@ -16,5 +16,7 @@ provides, and how it operates today
 - Share our learnings on DOS modernization stakeholder feedback
 - Present and discuss the AESO's DOS modernization recommendation for the purpose of seeking
 takeholder feedback on the recommendation
+
 ## II. Session agenda
+
 | Time      | Agenda Item

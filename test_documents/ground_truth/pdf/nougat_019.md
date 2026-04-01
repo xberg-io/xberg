@@ -19,6 +19,7 @@ amended by 2014 PA 52, and by adding sections 301a, 306, 308, 309b,
 311, 312, 314, 321, 362, 504, and 602.
 
 THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
+
 1.  Sec. 102. As used in this act:
 2.  (a) "Access service" means access to a local exchange network
 3.  for the purpose of enabling a provider to originate or terminate
@@ -45,6 +46,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 24. interaction for the selection of video programming or other
 25. programming services.
 26. (e) "Commission" means the Michigan public service commission.
+
 1 (f) "Contested case" or "case" means a proceeding contested
 2 *case as that term* is defined in section 3 of the administrative
 3 procedures act of 1969, 1969 ΡΑ 306, MCL 24.203.
@@ -74,6 +76,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 (k) "Information services" or "enhanced services" means the
 28 offering of a capability for generating, acquiring, storing,
 29 transforming, processing, retrieving, utilizing, or making
+
 1 available information, including energy management services, that
 2 is conveyed by telecommunications. Information services or enhanced
 3 services do not include the use of that capability for the
@@ -103,6 +106,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 includes automatic or live assistance to a person to arrange for
 28 completion and billing of a telephone call originating within this
 29 state that is specified by the caller through a method other than 1
+
 1 of the following:
 2 (i) Automatic completion with billing to the telephone from
 3 which the call originated.
@@ -132,6 +136,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 (v) A lung disease from which the individual's expiratory
 28 volume for 1 second, when measured by spirometry, is less than 1
 29 liter, or from which the individual's arterial oxygen tension is
+
 1 less than 60 mm/hg of room air at rest.
 2 (vi) A cardiovascular disease from which the individual
 3 measures between 3 and 4 on the New York heart Heart Association
@@ -161,6 +166,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 telecommunication service within the exchange, including the use of
 28 local private lines.
 29 (cc) "State institution of higher education" means an
+
 1 institution of higher education described in sections 4, 5, and 6
 2 of article VIII of the state constitution of 1963.
 3 (dd) "Telecommunications act of 1996" means Public Law 104-
@@ -190,6 +196,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 provider were to initially offer the service, group of services, or
 28 basic network component.
 29 (ii) "Wide area telecommunications service" or "WATS" means
+
 1 the transmission of 2-way interactive switched communication over a
 2 dedicated access line.
 3 Sec. 103. (1) Except as otherwise provided in this act, this
@@ -219,6 +226,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 regulate all providers of broadband service.
 28 (3) The commission shall exercise its jurisdiction and
 29 authority consistent with this act and all federal
+
 1 telecommunications laws, rules, orders, and regulations.
 2 Sec. 202. (1) In addition to the other powers and duties
 3 prescribed by this act, the commission shall do all of the
@@ -248,6 +256,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 (ii) The provision of unbundled network elements and local
 28 interconnection services to providers that are used in the
 29 provision of basic local exchange service.
+
 1 (iii) The timely and complete transfer of an end user from 1
 2 provider of basic local exchange service to another provider.
 3 (iv) Providers of basic local exchange service that cease to
@@ -277,6 +286,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 promulgate new rules under subsection (1)(c)(iii) at any time. Any
 28 service quality rules promulgated by the commission under
 29 subsection (1)(c)(i) and any retail service quality rules
+
 1 promulgated before January 1, 2006 shall expire on June 30, 2011.
 2 (3) The commission shall permit the electronic filing of any
 3 pleadings, tariffs, or any other document required or allowed to be
@@ -306,6 +316,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 providers are trade secrets or commercial or financial information
 28 protected under subsection (1). The burden of removing the
 29 presumption under this subsection is with the party seeking to have
+
 1 the information disclosed.
 2 (4) Information regarding settlement, including a recommended
 3 settlement issued by a mediator in a proceeding, shall be disclosed
@@ -335,6 +346,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 of the Michigan administrative code.
 28 Sec. 301a. A provider licensed under this act shall offer
 29 primary basic local exchange service to each residential customer
+
 1 within the provider's service area where the provider is offering
 2 *residential basic local exchange service.*
 3 Sec. 303. (1) The sale or transfer of shares of stock of a
@@ -364,6 +376,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 exchange service that must be just and reasonable and is subject to
 28 commission review.
 29 (2) A provider may alter its rates for primary basic local
+
 1 exchange services by 1 or more of the following:
 2 (a) Filing with the commission a notice of a reduction in a
 3 primary basic local exchange rate. A rate alteration under this
@@ -393,6 +406,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 (i) That the rate alteration is just and reasonable.
 28 (ii) That a filing under section 203 is necessary to review the
 29 rate alteration.
+
 1 (3) Notice to customers of a rate alteration is required for a
 2 rate alteration under subsection (2)(c) or (d) and must be included
 3 in or on the bill of each affected customer of the provider at
@@ -422,6 +436,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 if relevant to the rate alteration as specified by the provider:
 28 (a) Total service long run incremental cost of basic local
 29 exchange services.
+
 1 (b) Comparison of the proposed rate to the rates charged by
 2 other providers in this state for the same service.
 3 (c) Whether a new function, feature, or capability is being
@@ -451,6 +466,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 component of the package, combination, or bundle is available for
 28 purchase on a stand-alone basis.
 29 (11) A provider shall offer its unregulated calling features
+
 1 on a stand-alone basis to its primary basic local exchange service
 2 customers. The purchase of a calling feature under this subsection
 3 does not affect the regulated rate of the primary basic local
@@ -480,6 +496,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 (15) A provider shall file with the commission for review and
 28 approval of a tariff for the rates and charges for calls made that
 29 exceed the 100-call limit of primary basic local exchange service.
+
 1 Sec. 305. A provider of basic local exchange service shall not
 2 do any of the following:
 3 (a) Discriminate against another provider by refusing or
@@ -509,6 +526,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 directory listing information and related services to persons
 28 purchasing telephone directory listing information to the same
 29 extent and in the same quality as provided to the provider,
+
 1 affiliates of the provider, or any other listing information
 2 purchaser.
 3 (j) Refuse or delay access service by any person to another
@@ -538,6 +556,7 @@ THE PEOPLE OF THE STATE OF MICHIGAN ENACT:
 27 information.
 28 (b) For forwarded calls, transmit the telephone number of the
 29 party originating the call, to the extent that information has been
+
 1 provided by the originating carrier, .The telephone number shall
 2 be transmitted without alteration in the network signaling
 3 information.

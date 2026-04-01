@@ -12,8 +12,10 @@ Go forth the na- tions to prepare To greet the King of glo - ry.
 
 Re - joice, ye liv - ing and ye dead! Re - joice, for your sal va - tion
 We shout ho san na, shout a - gain, Till all cre - a tion blend - ing
+
 Be - gins a new this happy morn Of fi nal dis - pen sa - tion.
 Shall join in one great, grand a - men Of an - thems nev - er - end - ing.
+
 Text and music: Evan Stephens, 1854–1930
 Joseph Smith-History 1:17
 Doctrine and Covenants 128:19, 22-23

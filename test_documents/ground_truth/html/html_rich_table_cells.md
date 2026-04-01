@@ -22,13 +22,17 @@
 | --- | --- |
 | Short | “quak” |
 | Long | “quaaaaaack” |
+
 | Action |  |
 | --- | --- |
 | \*\*Swim\*\* | Gracefully glide on H2O surfaces. |
 | \*Fly\* |  |
 | Quack | \| Type \| Sound \| \| --- \| --- \| \| Short \| “quak” \| \| Long \| “quaaaaaack” \| |
+
 \!\[White-headed duck thumbnail\](https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Witkopeend_-_white-headed_duck_-_Oxyura_leucocephala_3.tif/lossy-page1-250px-Witkopeend_-_white-headed_duck_-_Oxyura_leucocephala_3.tif.jpg)
+
 \!\[White-headed duck thumbnail\](https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/Witkopeend_-_white-headed_duck_-_Oxyura_leucocephala_3.tif/lossy-page1-250px-Witkopeend_-_white-headed_duck_-_Oxyura_leucocephala_3.tif.jpg)
+
 | Name | Description | Image |
 | --- | --- | --- |
 | Donald Duck | Cartoon character. | \[View PNG\](https://en.wikipedia.org/wiki/Donald_Duck\#/media/File:Donald_Duck_angry_transparent_background.png) |

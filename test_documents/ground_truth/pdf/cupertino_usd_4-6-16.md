@@ -36,6 +36,7 @@ ensure that all members of the public feel free to voice their opinions and conc
 3. CLOSED SESSION
 By law, closed sessions are not open to the public. Anyone wishing to address the Board of
 Education on closed session matters may do so during Agenda Item 2 – Public Comments
+
 2.  1 Public Employee Performance Evaluation – Pursuant to Government Code
 Section 54957
 District Representatives: Board President Josephine Lucey and

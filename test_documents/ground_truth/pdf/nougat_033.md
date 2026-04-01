@@ -26,29 +26,36 @@ raw materials can be completely traced back.
 
 Adhesive
 Solvent polyacrylate, permanent, removable by heat
+
 Area of use:
 ORALITE® reflective films series 5600 FLEET ENGINEER GRADE were especially developed for high
 quality car wrappings to produce lettering, markings and decorations which may be applied within contour
 markings in accordance with ECE 104. They are suitable for use on cutting plotters and provide good
 adaptability including to corrugations and rivets.
+
 Printing method
 Inkjet printing with solvent based inks, UV- or Latex inks;
 Screen printing
+
 Recommended laminating films
 ORAGUARD® 290F, ORAGUARD® 293F
+
 ORALITE®
 5600 E
 FLEET MARKING GRADE
 Technical Data Sheet
 2011/22
 page 2 of 3
+
 Technical Data
 Maximum values for the coefficient of retroreflection (according to ECE 104, material class E)
+
 | Observation angle (°) | Specific coefficient of retroreflection Rʻ in cd·lx-¹·m² |
 | --- | --- |
 |  | 0,33 |
 | Lighting angle (°) | 5 | 30 | 40 | 60 |
 | every colour | 50 | 21,66 | 12,33 | 1,66 |
+
 Colours
 ORALITE reflective films series 5600 FLEET ENGINEER GRADE are available in 15 different colours
 - 5600E-010 white
@@ -66,12 +73,14 @@ ORALITE reflective films series 5600 FLEET ENGINEER GRADE are available in 15 di
 - 5600E-091 gold
 - 5600E-213 lemon
 - 5600E - 364 ruby
+
 ORALITE®
 5600 E
 FLEET MARKING GRADE
 Technical Data Sheet
 2011/22
 page 3 of 3
+
 | **Thickness\*** (without protective paper and adhesive) | 90 to 140 micron |
 | --- | --- |
 | **Temperature resistance\*\*\*** | adhered to aluminium, -50°C to +95°C |
@@ -86,7 +95,9 @@ page 3 of 3
 | **Service life by specialist application** |  |
 | under vertical outdoor exposure (standard | 7 years |
 | central European climate) |  |
+
 \* average \*\* in original packaging, at 20°C and 50% relative humidity \*\*\* standard central European climate
+
 Note
 Surfaces to which the material will be applied must be thoroughly cleaned from dust, grease or any contamination
 which could affect the adhesion of the material. Freshly lacquered or painted surfaces should be completely cured. The

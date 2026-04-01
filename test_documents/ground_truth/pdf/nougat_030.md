@@ -21,6 +21,7 @@ series ended in 2003. In 2004 the collector trout stamp was replaced by a collec
 fishing stamp and in 2005 the turkey and white-winged dove collector stamps were replaced
 by a collector upland game bird stamp. Finally, in 2015 the last collector booklet pane of six
 stamps was printed and all the stamp series ended.
+
 | Series | Duration | # of Issues |
 |---|---|---|
 | White-winged dove hunting | 1971-2004 | 34 |
@@ -42,18 +43,23 @@ stamps was printed and all the stamp series ended.
 | Coastal Conservation Ass'n | 1983-2004 | 22 |
 | **Total society items** |  | 46 |
 | **Total collectable items** |  | 304 |
+
 Muzzleloader Hunting Stamps
 The Texas Muzzleloader Hunting Stamp series began in 1994 but only the
 first two stamps were required to validate licenses. As described above, in
 1996 all license stamp series were replaced by collector stamps that were
 neither required nor valid for hunting.
+
 Muzzleloader License Stamps
+
 |  |  |
 |---|---|
 | 1994-95 | 1995-96 |
 | <!-- image --> | <!-- image --> |
 | **Rob Fleming** | **Rob Fleming** |
+
 Muzzleloader Collector Stamps
+
 |  |  |  |
 |---|---|---|
 | 1996 | 1997 | 1998 |
@@ -62,11 +68,13 @@ Muzzleloader Collector Stamps
 | 1999 | 2000 | 2001 |
 | <!-- image --> | <!-- image --> | <!-- image --> |
 | **Clemente Guzman** | **Rob Fleming** | **Clemente Guzman** |
+
 Waterfowl Collector Stamps
 As noted previously, Texas ended all mandatory license stamp series in 1995 and replaced
 them with collector stamps printed se-tenant in a single booklet pane. Throughout the series,
 the waterfowl collector stamps always occupied the top right position in the pane, so they all
 have straight edges at the top and right side of the stamp.
+
 |  |  |  |
 |---|---|---|
 | 1996 | 1997 | 1998 |
@@ -81,6 +89,7 @@ have straight edges at the top and right side of the stamp.
 | 2005 | 2006 | 2007 |
 | <!-- image --> | <!-- image --> | <!-- image --> |
 | **Herb Booth** | **David A. Maass** | **Bruce Miller** |
+
 Catalog Listings
 Archery
 2004 $3, Coaching [Clemente Guzman] 2.50
@@ -201,6 +210,7 @@ Successor to Turkey Stamp series. All are collector
 2001 $3, Flintlock [Clemente Guzman] 2.50
 stamps with no hunting validity. Black serial numbers.
 2002 $3, Pack train [Rob Fleming] 2.50
+
 Artist Cross Reference
 Abbett, Robert, 43
 Agnew, Al, 23, 30, 41
@@ -276,12 +286,14 @@ Sussino, Mark, 28, 30, 31, 36, 38
 Wells, Linda, 8, 11, 21, 22, 27, 33, 34
 Wells, Ronnie, 31, 44
 Wilson, Greg, 25
+
 Order Form for Collector Handbooks
 PaperQuest Press
 3685 Pleasant Springs Drive
 Naples, FL 34119
 iwcotton@centurylink.net
 402-871-4015
+
 | Quantity | Price | Total |
 |---|---|---|
 | **No. 1 – California Pictorial Hunting & Fishing Licenses (2007)** |  |  |

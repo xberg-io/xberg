@@ -39,6 +39,7 @@ confrontation line, particularly after Israeli shellfire killed one of them in h
 people are, to borrow a term popular in the First Intifada of the late 1980s that Ehrenreich does
 not use, samoud, steadfast. They endure prison and torture. They come home. They are
 beaten. They get up. A wall goes up to keep them in or out, and they find ways around it.
+
 Ehrenreich's introduction to Palestine came with two journalistic assignments, from Harper's
 in 2011 and the New York Times Magazine a year later. Rather than let the story go, as most
 journalists do when they find another one, he went to live in Ramallah. This nominal capital of a
@@ -52,6 +53,7 @@ population and the few hundred Israeli settlers who have turned the West Bank's 
 into what he calls "Planet Hebron": It's our planet. We made it what it is. And by we I
 mean all of us those who acted, and those who do not act. Hebron's realities are the same
 as those in the rest of Palestine, only boiled down under tremendous pressure until they have
+
 been reduced to a thick and noxious paste. And Palestine's realities are not different from our
 own.
 In a footnote, he explained, "As I write this, demonstrators are shutting
@@ -59,6 +61,7 @@ down freeways to protest the killings of Eric Garner and Michael Brown by police
 and in Ferguson, Missouri." The connection is closer than he realizes, as Jeff Halper
 demonstrated in War Against the People: Israel trained police from both New York and
 Ferguson in crowd-control tactics honed on the West Bank.
+
 An Israeli soldier named
 Eran attempted to build a bridge to Palestinian children near his checkpoint by offering them a
 Cheez Doodle-like snack called Bamba. One boy accepted. Eran, who had been troubled by the
@@ -72,21 +75,25 @@ and had begun sketching when he realized there was someone in the bed. A young b
 out from under the covers. He was naked. Startled, Eran raised his gun, aiming at the child. It
 was the kid from the checkpoint that afternoon. "He started peeing himself," Eran said, "and we
 were just shaking, both of us."
+
 When the boy's father tried to protect him, the
 officer arrested the father and made him sit in the snow. Then the officer told Eran to forget
 about the map, which was not important. At this point in another book, Eran might have joined,
 like many other young Israelis, Combatants for Peace and denounced the occupation. The truth
 for Eran was, "I didn't stop doing the things I did, I just stopped thinking."
+
 If the
 Palestinians endure such treatment, it is because they have no option. And yet, writes
 Ehrenreich: It wasn't all sadness. People laughed a lot. Or perhaps I should say that
 sadness has many faces, and laughter is one of them, though that's not quite right either. It's
 just that grief was not something special. There were greater and lesser sorrows, but sorrow
 was a given.
+
 The early 20th-century Colombian writer JosMar◆ Vargas Vila
 wrote in La Muerte del Cdor, "When life is torture, suicide is a duty." Yet for these people of
 whom Ehrenreich writes so elegantly, the duty is to remain. The Palestinian poet Tawfiq Ziad
 wrote: we shall remain,guard the shade of the figand olive trees,
 ferment rebellion in our childrenas yeast in the dough.
+
 Review first
 published in The Intecept June 2016 [http://us2.campaign-archive1.com/?u=349f815120864d73f22786e0f&id=3359d6d9bc&e=243f87c329](http://us2.campaign-archive1.com/?u=349f815120864d73f22786e0f&id=3359d6d9bc&e=243f87c329)

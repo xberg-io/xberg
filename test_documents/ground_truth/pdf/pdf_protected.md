@@ -40,16 +40,21 @@ The library is publicly available at https://layout-parser.github.io.
 
 **Keywords:** Document Image Analysis · Deep Learning · Layout Analysis
 · Character Recognition · Open Source library · Toolkit.
+
 ## 1 Introduction
+
 Deep Learning(DL)-based approaches are the state-of-the-art for a wide range of
 document image analysis (DIA) tasks including document image classification 11,
+
 2
 Z. Shen et al.
+
 37, layout detection [38, 22], table detection [26], and scene text detection [4.
 A generalized learning-based framework dramatically reduces the need for the
 manual specification of complicated rules, which is the status quo with traditional
 methods. DL has the potential to transform DIA pipelines and benefit a broad
 spectrum of large-scale document digitization projects.
+
 However, there are several practical difficulties for taking advantages of re-
 cent advances in DL-based methods: 1) DL models are notoriously convoluted
 for reuse and extension. Existing models are developed using distinct frame-
@@ -68,9 +73,11 @@ and these pipelines are not documented in any central location (and often not
 documented at all). This makes it difficult for research teams to learn about how
 full pipelines are implemented and leads them to invest significant resources in
 reinventing the DIA wheel.
+
 LayoutParser provides a unified toolkit to support DL-based document image
 analysis and processing. To address the aforementioned challenges, LayoutParser
 is built with the following components:
+
 1.  An off-the-shelf toolkit for applying DL models for layout detection, character
     recognition, and other DIA tasks (Section 3)
 2.  A rich repository of pre-trained neural network models (Model Zoo) that
@@ -80,12 +87,14 @@ is built with the following components:
 4.  A DL model hub and community platform for the easy sharing, distribu-
     tion, and discussion of DIA models and pipelines, to promote reusability,
     reproducibility, and extensibility (Section 4)
+
 The library implements simple and intuitive Python APIs without sacrificing
 generalizability and versatility, and can be easily installed via pip. Its convenient
 functions for handling document image data can be seamlessly integrated with
 existing DIA pipelines. With detailed documentations and carefully curated
 tutorials, we hope this tool will benefit a variety of end-users, and will lead to
 advances in applications in both industry and academic research.
+
 LayoutParser is well aligned with recent efforts for improving DL model
 reusability in other disciplines like natural language processing [8, 34 and com-
 puter vision 35, but with a focus on unique challenges in DIA. We show
