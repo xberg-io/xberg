@@ -1,12 +1,18 @@
 {
-	"document": "../../../../test_documents/user_reports/mp_axmp_rec_en.pdf",
-	"file_type": "pdf",
-	"file_size": 408211,
-	"expected_frameworks": ["kreuzberg"],
-	"metadata": {
-		"description": "EU health document with STX (U+0002) characters where hyphens should be. PDF font encoding issue. Community report 2026-03-25.",
-		"source": "user_report",
-		"size_category": "small"
-	},
-	"ground_truth": null
+  "document": "../../../../test_documents/user_reports/mp_axmp_rec_en.pdf",
+  "file_type": "pdf",
+  "file_size": 408211,
+  "expected_frameworks": [
+    "kreuzberg"
+  ],
+  "metadata": {
+    "description": "EU health document with STX (U+0002) characters where hyphens should be. PDF font encoding issue. Community report 2026-03-25.",
+    "source": "user_report",
+    "size_category": "small"
+  },
+  "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/pdf/mp_axmp_rec_en.txt",
+    "markdown_file": "../../../../test_documents/ground_truth/pdf/mp_axmp_rec_en.md",
+    "source": "mistral-pixtral"
+  }
 }
