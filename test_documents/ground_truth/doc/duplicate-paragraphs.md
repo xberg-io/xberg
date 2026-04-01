@@ -1,13 +1,3 @@
-# This document contains duplicates
+This document contains duplicates some text some text some text
 
-some text
-
-some text
-
-some text
-
-some text
-
-some text
-
-some text
+some text some text some text

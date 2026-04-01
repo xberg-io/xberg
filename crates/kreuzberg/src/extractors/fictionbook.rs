@@ -711,7 +711,14 @@ impl FictionBookExtractor {
                     } else if tag == "title" && in_body {
                         match Self::extract_text_content(&mut reader) {
                             Ok(text) if !text.is_empty() => {
-                                let level = std::cmp::min(section_depth.max(1), 6);
+                                // Body title (section_depth=0) -> H1
+                                // Top-level section title (section_depth=1) -> H2
+                                // Nested section titles -> H3, H4, etc.
+                                let level: u8 = if section_depth == 0 {
+                                    1
+                                } else {
+                                    std::cmp::min(section_depth + 1, 6)
+                                };
                                 builder.push_heading(level, &text, None, None);
                             }
                             _ => {}
@@ -720,6 +727,37 @@ impl FictionBookExtractor {
                         match Self::extract_paragraph_with_annotations(&mut reader) {
                             Ok((text, annotations)) if !text.is_empty() => {
                                 builder.push_paragraph(&text, annotations, None, None);
+                            }
+                            _ => {}
+                        }
+                    } else if tag == "v" && in_body && !is_notes_body {
+                        // FB2 verse line inside <poem><stanza>
+                        match Self::extract_paragraph_with_annotations(&mut reader) {
+                            Ok((text, annotations)) if !text.is_empty() => {
+                                builder.push_paragraph(&text, annotations, None, None);
+                            }
+                            _ => {}
+                        }
+                    } else if tag == "subtitle" && in_body && !is_notes_body {
+                        match Self::extract_text_content(&mut reader) {
+                            Ok(text) if !text.is_empty() => {
+                                // Subtitle is one level deeper than the section heading
+                                let level: u8 = std::cmp::min(section_depth.saturating_add(2), 6);
+                                builder.push_heading(level, &text, None, None);
+                            }
+                            _ => {}
+                        }
+                    } else if tag == "text-author" && in_body && !is_notes_body {
+                        match Self::extract_text_content(&mut reader) {
+                            Ok(text) if !text.is_empty() => {
+                                builder.push_paragraph(&text, vec![], None, None);
+                            }
+                            _ => {}
+                        }
+                    } else if tag == "date" && in_body && !is_notes_body {
+                        match Self::extract_text_content(&mut reader) {
+                            Ok(text) if !text.is_empty() => {
+                                builder.push_paragraph(&text, vec![], None, None);
                             }
                             _ => {}
                         }
@@ -799,7 +837,7 @@ impl FictionBookExtractor {
                 Ok(Event::End(e)) => {
                     let name = e.name();
                     let tag = crate::utils::xml_tag_name(name.as_ref());
-                    if tag == "p" && depth <= 1 {
+                    if (tag == "p" || tag == "v") && depth <= 1 {
                         break;
                     }
                     match tag.as_ref() {

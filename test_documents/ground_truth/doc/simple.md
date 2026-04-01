@@ -1,19 +1,5 @@
-# These are a few of my favorite things:
+These are a few of my favorite things: Parrots Hockey
 
-• Parrots
+## Analysis
 
-•
-
-- Hockey
-
-- 
-
-Analysis
-
-This is my first thought. This is my second thought.
-
-This is my third thought.
-
-2023
-
-DOYLESTOWN, PA 18901
+This is my first thought. This is my second thought. This is my third thought. 2023 DOYLESTOWN, PA 18901

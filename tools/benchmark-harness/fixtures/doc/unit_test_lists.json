@@ -11,6 +11,7 @@
     "size_category": "small"
   },
   "ground_truth": {
+    "text_file": "../../../../test_documents/ground_truth/doc/unit_test_lists.txt",
     "markdown_file": "../../../../test_documents/ground_truth/doc/unit_test_lists.md",
     "source": "pandoc"
   }

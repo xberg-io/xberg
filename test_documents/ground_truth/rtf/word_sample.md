@@ -1,8 +1,6 @@
-# Swimming in the lake
+**Swimming in the lake**
 
 Duck
-
-![A cartoon duck holding a paper Description automatically generated](media/image1.png)
 
 Figure 1: This is a cute duckling
 
@@ -10,26 +8,27 @@ Figure 1: This is a cute duckling
 
 To get started with swimming, first lay down in a water and try not to drown:
 
-- You can relax and look around
-- Paddle about
-- Enjoy summer warmth
+• You can relax and look around
 
+• Paddle about
 
-- Also, don't forget:
+• Enjoy summer warmth
 
+Also, don't forget:
 
-1. Wear sunglasses
-2. Don't forget to drink water
-3. Use sun cream
+1\. Wear sunglasses
 
+2\. Don't forget to drink water
 
-- Hmm, what else…
+3\. Use sun cream
+
+Hmm, what else…
 
 ## Let's eat
 
 After we had a good day of swimming in the lake, it's important to eat something nice
 
-> I like to eat leaves
+I like to eat leaves
 
 Here are some interesting things a respectful duck could eat:
 
@@ -43,6 +42,10 @@ Content table
 
 And let's add another list in the end:
 
-1. Leaves
-2. Berries
-3. Grain
+1\. Leaves
+
+2\. Berries
+
+3\. Grain
+
+![image](image_0.png)

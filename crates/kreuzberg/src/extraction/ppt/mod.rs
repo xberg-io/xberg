@@ -228,11 +228,20 @@ fn clean_ppt_text(text: &str) -> String {
     }
 
     // Trim trailing whitespace from each line
-    result
+    let cleaned = result
         .lines()
         .map(|line| line.trim_end())
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n");
+
+    // Filter out placeholder bullet text from slide masters/layouts.
+    // These appear as lines containing only bullet-like characters (*, -, etc.)
+    let trimmed = cleaned.trim();
+    if trimmed.chars().all(|c| c == '*' || c == '\n' || c.is_whitespace()) {
+        return String::new();
+    }
+
+    cleaned
 }
 
 /// Convert CP1252 byte to Unicode char.

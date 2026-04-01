@@ -83,9 +83,57 @@ type DocBookParseResult = (
     Option<String>,
 );
 
+/// Wrap DocBook content in a synthetic root element if it lacks one.
+///
+/// Some DocBook fragments (e.g. tables-only files) have multiple sibling
+/// top-level elements without a single root. XML parsers require a single root,
+/// so we wrap the content in `<_root>...</_root>` when needed.
+fn ensure_root_element(content: &str) -> std::borrow::Cow<'_, str> {
+    let trimmed = content.trim_start();
+    // Skip XML declaration and DOCTYPE if present
+    let body = if trimmed.starts_with("<?xml") {
+        // Find the end of the XML declaration
+        trimmed
+            .find("?>")
+            .map(|pos| trimmed[pos + 2..].trim_start())
+            .unwrap_or(trimmed)
+    } else {
+        trimmed
+    };
+    // Skip DOCTYPE
+    let body = if body.starts_with("<!DOCTYPE") {
+        body.find('>').map(|pos| body[pos + 1..].trim_start()).unwrap_or(body)
+    } else {
+        body
+    };
+    // Check if the remaining content starts with a known DocBook root element
+    let has_root = body.starts_with("<article")
+        || body.starts_with("<book")
+        || body.starts_with("<chapter")
+        || body.starts_with("<section")
+        || body.starts_with("<part")
+        || body.starts_with("<set")
+        || body.starts_with("<reference")
+        || body.starts_with("<preface")
+        || body.starts_with("<appendix")
+        || body.starts_with("<glossary")
+        || body.starts_with("<bibliography")
+        || body.starts_with("<index")
+        || body.starts_with("<colophon")
+        || body.starts_with("<dedication")
+        || body.starts_with("<acknowledgements")
+        || body.starts_with("<_root");
+    if has_root {
+        std::borrow::Cow::Borrowed(content)
+    } else {
+        std::borrow::Cow::Owned(format!("<_root>{}</_root>", content))
+    }
+}
+
 /// Build an `InternalDocument` from DocBook XML content.
 fn build_docbook_internal_document(content: &str) -> Result<InternalDocument> {
-    let mut reader = Reader::from_str(content);
+    let wrapped = ensure_root_element(content);
+    let mut reader = Reader::from_str(&wrapped);
     let mut builder = InternalDocumentBuilder::new("docbook");
 
     let mut title_extracted = false;
@@ -289,7 +337,8 @@ fn build_docbook_internal_document(content: &str) -> Result<InternalDocument> {
 /// Single-pass DocBook parser that extracts all content in one document traversal.
 /// Returns: (content, title, author, date, tables, publisher, copyright)
 fn parse_docbook_single_pass(content: &str, plain: bool) -> Result<DocBookParseResult> {
-    let mut reader = Reader::from_str(content);
+    let wrapped = ensure_root_element(content);
+    let mut reader = Reader::from_str(&wrapped);
     let mut output = String::new();
     let mut title = String::new();
     let mut author = Option::None;

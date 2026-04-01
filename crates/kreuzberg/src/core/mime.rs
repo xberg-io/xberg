@@ -485,7 +485,7 @@ static FORMATS: &[FormatEntry] = &[
         aliases: &["application/x-opml+xml", "text/x-opml"],
     },
     FormatEntry {
-        extensions: &["dbk", "docbook"],
+        extensions: &["dbk", "docbook", "docbook4", "docbook5"],
         mime_type: "application/docbook+xml",
         aliases: &["text/docbook"],
     },
