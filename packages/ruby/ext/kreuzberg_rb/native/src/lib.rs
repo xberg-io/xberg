@@ -6,6 +6,7 @@
 //! Provides extraction, OCR, chunking, and language detection for 30+ file formats.
 
 // Module declarations
+mod embedding;
 mod error_handling;
 mod gc_guarded_value;
 mod helpers;
@@ -456,6 +457,10 @@ fn init(ruby: &Ruby) -> Result<(), Error> {
     module.define_module_function("extract_bytes", function!(extract_bytes, -1))?;
     module.define_module_function("batch_extract_files", function!(batch_extract_files, -1))?;
     module.define_module_function("batch_extract_bytes", function!(batch_extract_bytes, -1))?;
+
+    // Embedding functions
+    module.define_module_function("embed_sync", function!(embedding::embed_sync, -1))?;
+    module.define_module_function("embed", function!(embedding::embed, -1))?;
 
     // PDF page iterator
     module.define_module_function("native_render_pdf_pages_iter", function!(render_pdf_pages_iter, 2))?;

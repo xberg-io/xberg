@@ -94,6 +94,10 @@ module Kreuzberg
   module_function :validate_mime_type
 
   module_function :get_extensions_for_mime
+
+  module_function :embed_sync
+
+  module_function :embed
 end
 
 require_relative 'kreuzberg/cache_api'
