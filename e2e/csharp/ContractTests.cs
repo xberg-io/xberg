@@ -234,7 +234,7 @@ namespace Kreuzberg.E2E.Contract
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 10);
-        TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
+            TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
         }
 
         [SkippableFact]
@@ -248,7 +248,7 @@ namespace Kreuzberg.E2E.Contract
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertMinContentLength(result, 10);
-        TestHelpers.AssertChunks(result, 2, null, true, null, true, null, null);
+            TestHelpers.AssertChunks(result, 2, null, true, null, true, null, null);
         }
 
         [SkippableFact]
@@ -263,7 +263,7 @@ namespace Kreuzberg.E2E.Contract
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 10);
-        TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
+            TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
         }
 
         [SkippableFact]
@@ -277,7 +277,7 @@ namespace Kreuzberg.E2E.Contract
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertMinContentLength(result, 10);
-        TestHelpers.AssertChunks(result, 2, null, true, null, false, null, null);
+            TestHelpers.AssertChunks(result, 2, null, true, null, false, null, null);
         }
 
         [SkippableFact]
@@ -291,7 +291,7 @@ namespace Kreuzberg.E2E.Contract
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertMinContentLength(result, 10);
-        TestHelpers.AssertChunks(result, 2, null, true, null, true, null, true);
+            TestHelpers.AssertChunks(result, 2, null, true, null, true, null, true);
         }
 
         [SkippableFact]
@@ -306,7 +306,7 @@ namespace Kreuzberg.E2E.Contract
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 10);
-        TestHelpers.AssertChunks(result, 2, null, true, null, null, null, null);
+            TestHelpers.AssertChunks(result, 2, null, true, null, null, null, null);
         }
 
         [SkippableFact]
@@ -320,7 +320,7 @@ namespace Kreuzberg.E2E.Contract
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 10);
-        TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
+            TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
         }
 
         [SkippableFact]
@@ -334,7 +334,7 @@ namespace Kreuzberg.E2E.Contract
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertMinContentLength(result, 10);
-        TestHelpers.AssertChunks(result, 2, null, true, null, null, null, null);
+            TestHelpers.AssertChunks(result, 2, null, true, null, null, null, null);
         }
 
         [SkippableFact]

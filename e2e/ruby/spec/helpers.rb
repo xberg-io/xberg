@@ -252,10 +252,10 @@ module E2ERuby
         chunks.each { |chunk| expect(chunk.metadata&.heading_context).to be_nil }
       end
       if each_has_chunk_type == true
-        chunks.each { |chunk|
+        chunks.each do |chunk|
           expect(chunk.chunk_type).not_to be_nil
-          expect(chunk.chunk_type).not_to eq("unknown")
-        }
+          expect(chunk.chunk_type).not_to eq('unknown')
+        end
       end
       return unless content_starts_with_heading == true
 

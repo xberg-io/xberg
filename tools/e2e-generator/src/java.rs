@@ -1700,7 +1700,13 @@ fn render_assertions(assertions: &Assertions) -> String {
             .unwrap_or_else(|| "null".into());
         buffer.push_str(&format!(
             "                E2EHelpers.Assertions.assertChunks(result, {}, {}, {}, {}, {}, {}, {});\n",
-            min_literal, max_literal, each_has_content, each_has_embedding, each_has_heading_context, each_has_chunk_type, content_starts_with_heading
+            min_literal,
+            max_literal,
+            each_has_content,
+            each_has_embedding,
+            each_has_heading_context,
+            each_has_chunk_type,
+            content_starts_with_heading
         ));
     }
 

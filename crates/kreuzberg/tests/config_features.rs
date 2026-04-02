@@ -596,16 +596,14 @@ A brief summary of the document.
     }
 
     // At least one chunk should be classified as something other than Unknown
-    let has_classified = chunks
-        .iter()
-        .any(|c| !matches!(c.chunk_type, ChunkType::Unknown));
-    assert!(has_classified, "At least one chunk should have a non-Unknown chunk_type");
+    let has_classified = chunks.iter().any(|c| !matches!(c.chunk_type, ChunkType::Unknown));
+    assert!(
+        has_classified,
+        "At least one chunk should have a non-Unknown chunk_type"
+    );
 
     // Heading chunks should be classified as Heading
-    let heading_chunks: Vec<_> = chunks
-        .iter()
-        .filter(|c| c.content.starts_with('#'))
-        .collect();
+    let heading_chunks: Vec<_> = chunks.iter().filter(|c| c.content.starts_with('#')).collect();
     for chunk in &heading_chunks {
         assert!(
             matches!(chunk.chunk_type, ChunkType::Heading),
