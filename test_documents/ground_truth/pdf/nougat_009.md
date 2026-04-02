@@ -1,70 +1,75 @@
-Small Business
+## Case Study: From Brand To Demand, Serve The Right Audience
 
-# Case Study
+How it worked: BlackRock turned to LinkedIn knowing their institutional investor audience was active and engaged on the platform. According to Investing in the Digital Age research, LinkedIn is considered the best place for in-depth learning among the institutional investor audience.1
 
-From Bread for Damson's
-Sewer The Right Audience
+## 63% of institutional investors
 
-![img-0.jpeg](img-0.jpeg)
+## use social media as their
 
-In the world's largest sewer coverage, our three sewers are the most common and most common in the nation. We are a number of different sewers in the world. We are a number of different sewers in the world. A lot of people in the world are a part of a business. To accomplish this, there is a lot of research to understand how to find a sewer. We are a number of different sewers in the world.
+key research source1 To reach them, BlackRock used a combination of targeting tactics, including
+
+- company targeting
+- industry targeting
+- job title targeting
+- skills targeting
 
 # Targeting with precision: BlackRock and LinkedIn
 
-The success of running this whole campaign through LinkedIn are attributable to the combination of the gold lines and time spent on target sizing, the dedicated contentive effort, and developing the right content for the right audience at the right time.
+" The success of running this whole campaign through LinkedIn was attributable to the combination of thoughtfulness and time spent on target sizing, the dedicated content-led effort, and developing the right content for the right audience at the right time.
 
-- 1 year
-- 2 months
-- 3 months
-- 4 months
-- 5 months
+### Laura Tyrholm Global Head of Alternatives Marketing
 
-# How it worked
+As the world's largest asset manager, you'd be hard-pressed to find an investment professional who is unaware of BlackRock. But as a provider of alternative investments – of which BlackRock is in the top 5 globally – the firm had an opportunity to increase awareness. To accomplish this, their marketing team set out to raise awareness and generate demand for BlackRock alternative investments on LinkedIn.
 
-BlackRock consists in black trouners that facilitate our sales to start and engage in the platform. As a whole, the marketing of the Digital Age research, a leader in the development of the company, and a leader in the development of the company are not the right members. The company is a member of the organization and has a strong leadership in the development of the company.
+## From interest to action with quality content
 
-![img-1.jpeg](img-1.jpeg)
+BlackRock designed its content to achieve two primary objectives: raise awareness and generate leads. For awareness, they used timely market commentary and brand-driven assets. For lead generation, they leveraged value-add thought leadership. The result was a rich framework of content that appealed to the interests and needs of BlackRock's professional investor audiences. To promote this content, BlackRock used a combination of Sponsored Content, Video, Conversation Ads, and Lead Gen Forms. This multi-format approach proved a key component of the campaign's success, with audience members exposed to several touchpoints driving higher CTRs and lead form completion rates. Members exposed to both Sponsored Content and Conversation Ads had higher engagement than those that weren't:
 
-# From Interest to action with quality content
+" Even when you're targeting a professional audience, the types of content that resonate best are those with a human element and conversational tone.
 
-BlackRock designed the world to achieve the primary objectives, also a success up to the end of the 2010s. The company is a member of the organization and has a strong leadership in the development of the company. The company is a member of the organization and has a strong leadership in the development of the company.
+**Jackie Teller Global Head of Social Media at BlackRock**
 
-![img-2.jpeg](img-2.jpeg)
+## Campaign results
 
-# Plant and/or service with audience
+higher CTR 31%
 
-The company is a member of the organization and has a strong leadership in the development of the company.
+higher lead form completion rate 68%
 
-![img-3.jpeg](img-3.jpeg)
+Sponsored Content significantly outperformed benchmarks across all key media metrics
 
-# Plant and/or service with audience
+| | US FinServ Benchmark | BlackRock Campaign |
+|---|---|---|
+| Click through rate | 0.86% | 2.21% |
+| Engagement rate | 0.92% | 56.96% |
+| Video view rate | 0.43% | 35.20% |
 
-The company is a member of the organization and has a strong leadership in the development of the company.
+**Demand generation performance**
 
-![img-4.jpeg](img-4.jpeg)
+| | US FinServ Benchmark | BlackRock Campaign |
+|---|---|---|
+| Lead form completion rate | 33.19% | 8.55% |
+| Cost per lead | $263 | $69 |
 
-# Campaign results
+Nielsen brand study results:
 
-![img-5.jpeg](img-5.jpeg)
++5% increase in aided brand awareness
 
-![img-6.jpeg](img-6.jpeg)
++7% increase in consideration
 
-![img-7.jpeg](img-7.jpeg)
++10% increase in recommendation
 
-# Key insights lead to a successful campaign
+## Key insights lead to a successful campaign
 
-![img-8.jpeg](img-8.jpeg)
+**Know where your audience is:** BlackRock clearly defined its audience upfront, allowing them to leverage a combination of advanced targeting tactics to successfully reach institutional investors.
 
-# How much help works
+**Plan your journey:** BlackRock planned a full-funnel multi-format content strategy that not only raised awareness of its alternative investing platform but provided real value to its audiences.
 
-![img-9.jpeg](img-9.jpeg)
+**Monitor and adapt:** Testing a variety of audiences, creatives, and ad types enabled BlackRock to learn about top-performing tactics in real-time and make strategic optimizations throughout the campaign.
 
-# Key insights lead to a successful campaign
+## Resources
 
-1
+Start planning your next Sponsored Content campaign here.
 
-1
+Discover more marketing insights and tips at our Financial Services marketing hub.
 
-1
-
-1
+1 https://business.linkedin.com/marketing-solutions/cx/19/03/investing-in-the-digital-age?lr=1

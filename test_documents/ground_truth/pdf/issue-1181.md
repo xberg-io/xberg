@@ -3,9 +3,9 @@ FooCol2
 FooCol3
 Foo4
 Foo5
-Fo06
+Foo6
 Foo7
-Fo08
+Foo8
 Foo9
 Foo10
 Foo11

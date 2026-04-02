@@ -5,7 +5,6 @@
 #
 # Tests for keywords fixtures.
 
-# rubocop:disable Metrics/BlockLength
 require_relative 'spec_helper'
 
 RSpec.describe 'keywords fixtures' do

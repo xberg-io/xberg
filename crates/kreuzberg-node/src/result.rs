@@ -764,8 +764,7 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
 
                 rust_chunks.push(RustChunk {
                     content: chunk.content,
-                    chunk_type: serde_json::from_value(serde_json::Value::String(chunk.chunk_type))
-                        .unwrap_or_default(),
+                    chunk_type: serde_json::from_value(serde_json::Value::String(chunk.chunk_type)).unwrap_or_default(),
                     embedding,
                     metadata: RustChunkMetadata {
                         byte_start: chunk.metadata.byte_start as usize,

@@ -1,8 +1,15 @@
 Simple
+
 Duplicated
+
 Font
+
 Size
+
 Italic
+
 Weight
-Horizzontaalsstifft
+
+Horizontal shift
+
 Vertical shift

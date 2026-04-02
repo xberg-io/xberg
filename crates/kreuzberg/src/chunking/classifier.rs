@@ -161,7 +161,9 @@ fn is_formula(content: &str) -> bool {
     }
     // LaTeX-style patterns
     let lower = content.to_lowercase();
-    let latex_patterns = [r"\frac", r"\sum", r"\int", r"\sqrt", r"\alpha", r"\beta", r"\delta", r"$$", r"\["];
+    let latex_patterns = [
+        r"\frac", r"\sum", r"\int", r"\sqrt", r"\alpha", r"\beta", r"\delta", r"$$", r"\[",
+    ];
     if latex_patterns.iter().any(|p| lower.contains(p)) {
         return true;
     }
@@ -187,16 +189,22 @@ fn is_schedule(content: &str, ctx: Option<&HeadingContext>) -> bool {
         return true;
     }
     // Content-level: strong keyword presence (e.g. "Schedule 1 –" or "Annex A:")
-    let schedule_re = KEYWORDS.iter().any(|k| {
+
+    KEYWORDS.iter().any(|k| {
         if let Some(idx) = lower.find(k) {
             // Must be followed by a space + alphanumeric (e.g. "Schedule 1", "Annex A")
             let rest = &lower[idx + k.len()..];
-            rest.starts_with(' ') && rest.trim_start().chars().next().map(|c| c.is_alphanumeric()).unwrap_or(false)
+            rest.starts_with(' ')
+                && rest
+                    .trim_start()
+                    .chars()
+                    .next()
+                    .map(|c| c.is_alphanumeric())
+                    .unwrap_or(false)
         } else {
             false
         }
-    });
-    schedule_re
+    })
 }
 
 fn is_definitions(content: &str) -> bool {
@@ -217,7 +225,16 @@ fn is_definitions(content: &str) -> bool {
 
 fn is_signature_block(content: &str) -> bool {
     let lower = content.to_lowercase();
-    let keywords = ["signature", "signed by", "witnessed by", "date:", "in witness whereof", "authorized signatory", "duly authorized", "____"];
+    let keywords = [
+        "signature",
+        "signed by",
+        "witnessed by",
+        "date:",
+        "in witness whereof",
+        "authorized signatory",
+        "duly authorized",
+        "____",
+    ];
     let hits = keywords.iter().filter(|k| lower.contains(*k)).count();
     hits >= 2
 }
@@ -226,10 +243,28 @@ fn is_operative_clause(content: &str) -> bool {
     let lower = content.to_lowercase();
     // Action verbs commonly found in operative legal clauses
     let verbs = [
-        "shall ", "agree ", "agrees ", "transfer", "grant ", "grants ",
-        "undertake", "obligat", "covenant", "warrant", "represent",
-        "indemnif", "assign ", "assigns ", "license ", "licenses ",
-        "purchase", "sell ", "sells ", "pay ", "pays ", "deliver",
+        "shall ",
+        "agree ",
+        "agrees ",
+        "transfer",
+        "grant ",
+        "grants ",
+        "undertake",
+        "obligat",
+        "covenant",
+        "warrant",
+        "represent",
+        "indemnif",
+        "assign ",
+        "assigns ",
+        "license ",
+        "licenses ",
+        "purchase",
+        "sell ",
+        "sells ",
+        "pay ",
+        "pays ",
+        "deliver",
     ];
     let hits = verbs.iter().filter(|v| lower.contains(*v)).count();
     hits >= 3
@@ -238,11 +273,7 @@ fn is_operative_clause(content: &str) -> bool {
 fn is_party_list(content: &str) -> bool {
     // Party lists tend to have multiple short lines with Title Case names,
     // often mixed with addresses (contain digits) or role labels.
-    let lines: Vec<&str> = content
-        .lines()
-        .map(|l| l.trim())
-        .filter(|l| !l.is_empty())
-        .collect();
+    let lines: Vec<&str> = content.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
 
     if lines.len() < 3 {
         return false;
@@ -270,9 +301,19 @@ fn is_party_line(line: &str) -> bool {
     let has_digit = line.chars().any(|c| c.is_ascii_digit());
     let has_comma = line.contains(',');
     let lower = line.to_lowercase();
-    let has_role = ["investor", "company", "borrower", "lender", "seller", "buyer", "party", "subscriber", "guarantor"]
-        .iter()
-        .any(|r| lower.contains(r));
+    let has_role = [
+        "investor",
+        "company",
+        "borrower",
+        "lender",
+        "seller",
+        "buyer",
+        "party",
+        "subscriber",
+        "guarantor",
+    ]
+    .iter()
+    .any(|r| lower.contains(r));
     has_digit || has_comma || has_role
 }
 
@@ -352,7 +393,10 @@ mod tests {
 
     #[test]
     fn test_schedule_first_line() {
-        assert_eq!(classify("Schedule 1 – Definitions\n\nThis schedule sets out..."), ChunkType::Schedule);
+        assert_eq!(
+            classify("Schedule 1 – Definitions\n\nThis schedule sets out..."),
+            ChunkType::Schedule
+        );
         assert_eq!(classify("annex A: Technical Specifications"), ChunkType::Schedule);
     }
 
@@ -360,13 +404,22 @@ mod tests {
 
     #[test]
     fn test_definitions_means() {
-        assert_eq!(classify("\"Agreement\" means this Investment and Subscription Agreement."), ChunkType::Definitions);
-        assert_eq!(classify("\"Closing Date\" shall mean the date on which..."), ChunkType::Definitions);
+        assert_eq!(
+            classify("\"Agreement\" means this Investment and Subscription Agreement."),
+            ChunkType::Definitions
+        );
+        assert_eq!(
+            classify("\"Closing Date\" shall mean the date on which..."),
+            ChunkType::Definitions
+        );
     }
 
     #[test]
     fn test_definitions_is_defined_as() {
-        assert_eq!(classify("The term 'Net Revenue' is defined as all revenue..."), ChunkType::Definitions);
+        assert_eq!(
+            classify("The term 'Net Revenue' is defined as all revenue..."),
+            ChunkType::Definitions
+        );
     }
 
     // ── Signature block ───────────────────────────────────────────────────────
@@ -409,7 +462,10 @@ mod tests {
 
     #[test]
     fn test_unknown_plain_text() {
-        assert_eq!(classify("This document contains general information."), ChunkType::Unknown);
+        assert_eq!(
+            classify("This document contains general information."),
+            ChunkType::Unknown
+        );
     }
 
     #[test]
@@ -423,7 +479,10 @@ mod tests {
     fn test_heading_context_schedule() {
         use crate::types::{HeadingContext, HeadingLevel};
         let ctx = HeadingContext {
-            headings: vec![HeadingLevel { level: 1, text: "Schedule 1 – Definitions".to_string() }],
+            headings: vec![HeadingLevel {
+                level: 1,
+                text: "Schedule 1 – Definitions".to_string(),
+            }],
         };
         // Content under a Schedule heading should be classified as Schedule
         let result = classify_chunk("This schedule sets out the defined terms.", Some(&ctx));

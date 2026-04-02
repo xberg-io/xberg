@@ -886,8 +886,7 @@ pub fn generate(fixtures: &[Fixture], output_dir: &Utf8Path) -> Result<()> {
         let mut sorted: Vec<_> = render_fixtures.clone();
         sorted.sort_by(|a, b| a.id.cmp(&b.id));
         let content = render_render_category_php(&sorted)?;
-        fs::write(tests_pkg_dir.join("RenderTest.php"), content)
-            .context("Failed to write PHP render test file")?;
+        fs::write(tests_pkg_dir.join("RenderTest.php"), content).context("Failed to write PHP render test file")?;
     }
 
     Ok(())
