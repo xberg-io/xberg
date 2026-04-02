@@ -40,6 +40,7 @@ export type {
 } from "./config.js";
 export {
 	CacheError,
+	EmbeddingError,
 	ErrorCode,
 	ImageProcessingError,
 	KreuzbergError,

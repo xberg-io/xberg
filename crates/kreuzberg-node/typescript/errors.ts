@@ -72,6 +72,10 @@ export enum ErrorCode {
 	 * Required system dependency is missing
 	 */
 	MissingDependency = 7,
+	/**
+	 * Error during embedding generation
+	 */
+	Embedding = 8,
 }
 
 /**
@@ -403,5 +407,35 @@ export class MissingDependencyError extends KreuzbergError {
 		super(message, panicContext);
 		this.name = "MissingDependencyError";
 		Object.setPrototypeOf(this, MissingDependencyError.prototype);
+	}
+}
+
+/**
+ * Error thrown when text embedding generation fails.
+ *
+ * Embedding errors occur during vector generation, such as:
+ * - Model loading failures
+ * - Inference engine errors
+ * - Invalid input text for the selected model
+ * - Resource exhaustion during batch processing
+ *
+ * @example
+ * ```typescript
+ * import { embed, EmbeddingError } from '@kreuzberg/node';
+ *
+ * try {
+ *   const result = await embed(['hello world']);
+ * } catch (error) {
+ *   if (error instanceof EmbeddingError) {
+ *     console.error('Embedding generation failed:', error.message);
+ *   }
+ * }
+ * ```
+ */
+export class EmbeddingError extends KreuzbergError {
+	constructor(message: string, panicContext?: PanicContext | null) {
+		super(message, panicContext);
+		this.name = "EmbeddingError";
+		Object.setPrototypeOf(this, EmbeddingError.prototype);
 	}
 }

@@ -173,7 +173,10 @@ unsafe extern "C" {
     /// Get the internal error code constant (7)
     pub fn kreuzberg_error_code_internal() -> u32;
 
-    /// Get the total count of valid error codes (8)
+    /// Get the embedding error code constant (8)
+    pub fn kreuzberg_error_code_embedding() -> u32;
+
+    /// Get the total count of valid error codes (9)
     pub fn kreuzberg_error_code_count() -> u32;
 }
 

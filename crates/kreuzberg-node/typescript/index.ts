@@ -105,6 +105,7 @@ export {
 export type { PanicContext } from "./errors.js";
 export {
 	CacheError,
+	EmbeddingError,
 	ErrorCode,
 	ImageProcessingError,
 	KreuzbergError,

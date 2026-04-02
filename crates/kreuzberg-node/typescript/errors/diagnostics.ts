@@ -17,6 +17,7 @@ import type { ErrorClassification } from "../types.js";
  * - 5: ParsingError
  * - 6: OcrError
  * - 7: MissingDependency
+ * - 8: Embedding
  *
  * @returns The integer error code
  *
@@ -75,8 +76,8 @@ export function getLastPanicContext(): PanicContext | null {
  * Maps numeric error codes to their string names, providing a consistent way
  * to get error code names across all platforms.
  *
- * @param code - The numeric error code (0-7)
- * @returns The error code name as a string (e.g., "validation", "ocr", "unknown")
+ * @param code - The numeric error code (0-8)
+ * @returns The error code name as a string (e.g., "validation", "ocr", "embedding")
  *
  * @example
  * ```typescript
@@ -97,7 +98,7 @@ export function getErrorCodeName(code: number): string {
  *
  * Retrieves user-friendly descriptions of error types from the FFI layer.
  *
- * @param code - The numeric error code (0-7)
+ * @param code - The numeric error code (0-8)
  * @returns A brief description of the error type
  *
  * @example
@@ -128,8 +129,9 @@ export function getErrorCodeDescription(code: number): string {
  * - **MissingDependency (3)**: Keywords like "not found", "missing", "dependency"
  * - **Io (4)**: Keywords like "file", "disk", "read", "write", "permission"
  * - **Plugin (5)**: Keywords like "plugin", "register", "extension"
- * - **UnsupportedFormat (6)**: Keywords like "unsupported", "format", "mime"
- * - **Internal (7)**: Keywords like "internal", "bug", "panic"
+ * - **UnsupportedFormat (6)**: Keywords: unsupported, format, mime
+ * - **Internal (7)**: Keywords: internal, bug, panic
+ * - **Embedding (8)**: Keywords: embed, embedding, vector, inference
  *
  * @param errorMessage - The error message string to classify
  * @returns An object with the classification details

@@ -79,6 +79,10 @@ pub(crate) fn convert_error(err: kreuzberg::KreuzbergError) -> napi::Error {
             format!("Extraction timed out after {}ms (limit: {}ms)", elapsed_ms, limit_ms),
         ),
 
+        KreuzbergError::Embedding { message, .. } => {
+            Error::new(Status::GenericFailure, format!("Embedding error: {}", message))
+        }
+
         KreuzbergError::Other(msg) => Error::new(Status::GenericFailure, msg),
     }
 }
@@ -173,6 +177,7 @@ pub fn get_error_code_description(code: u32) -> String {
 /// - **Plugin (5)**: Keywords: plugin, register, extension, handler, processor
 /// - **UnsupportedFormat (6)**: Keywords: unsupported, format, mime, type, codec
 /// - **Internal (7)**: Keywords: internal, bug, panic, unexpected, invariant
+/// - **Embedding (8)**: Keywords: embed, embedding, vector, inference, model
 ///
 /// # Examples
 ///
@@ -261,6 +266,13 @@ pub fn classify_error(error_message: String) -> ErrorClassification {
         || lower.contains("invariant")
     {
         (7u32, 0.86)
+    } else if lower.contains("embed")
+        || lower.contains("embedding")
+        || lower.contains("vector")
+        || lower.contains("inference")
+        || lower.contains("model")
+    {
+        (8u32, 0.89)
     } else {
         (7u32, 0.1)
     };
