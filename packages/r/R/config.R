@@ -382,3 +382,28 @@ from_file <- function(path) {
   }
   jsonlite::fromJSON(json, simplifyVector = FALSE)
 }
+
+#' Create an embedding configuration
+#'
+#' @param model Embedding model name or preset (e.g., "fast", "balanced", "quality", "multilingual").
+#' @param normalize Logical. Normalize embedding vectors to unit length. Default TRUE.
+#' @param batch_size Integer or NULL. Batch size for embedding generation. Default NULL.
+#' @return A named list representing the embedding configuration.
+#' @export
+embedding_config <- function(model = "balanced", normalize = TRUE, batch_size = NULL) {
+  stopifnot(is.character(model), length(model) == 1L)
+  stopifnot(is.logical(normalize), length(normalize) == 1L)
+
+  config <- list(
+    model = list(type = "preset", name = model),
+    normalize = normalize
+  )
+
+  if (!is.null(batch_size)) {
+    batch_size <- as.integer(batch_size)
+    if (batch_size <= 0L) stop("batch_size must be a positive integer", call. = FALSE)
+    config$batch_size <- batch_size
+  }
+
+  config
+}

@@ -31,6 +31,8 @@ public enum KreuzbergErrorKind
     UnsupportedFormat,
     /// <summary>Runtime error (lock poisoning, unsupported operation, etc.).</summary>
     Runtime,
+    /// <summary>Error during text embedding generation.</summary>
+    Embedding,
 }
 
 /// <summary>
@@ -254,7 +256,7 @@ public class KreuzbergIOException : IOException, IKreuzbergError
 public class KreuzbergRuntimeException : Exception, IKreuzbergError
 {
     /// <summary>Gets the error kind for runtime errors.</summary>
-    public KreuzbergErrorKind Kind => KreuzbergErrorKind.Runtime;
+    public KreuzbergErrorKind Kind => KreuzbergErrorKind.Io;
 
     /// <summary>
     /// Initializes a new instance of the KreuzbergRuntimeException class.
@@ -263,6 +265,22 @@ public class KreuzbergRuntimeException : Exception, IKreuzbergError
     /// <param name="inner">The inner exception that caused this runtime error, if any.</param>
     public KreuzbergRuntimeException(string message, Exception? inner = null)
         : base(ErrorMapper.PrefixMessage(message, "Runtime error"), inner)
+    {
+    }
+}
+
+/// <summary>
+/// Exception thrown when text embedding generation fails.
+/// </summary>
+public class KreuzbergEmbeddingException : KreuzbergException
+{
+    /// <summary>
+    /// Initializes a new instance of the KreuzbergEmbeddingException class.
+    /// </summary>
+    /// <param name="message">The embedding error message.</param>
+    /// <param name="inner">The inner exception that caused this error, if any.</param>
+    public KreuzbergEmbeddingException(string message, Exception? inner = null)
+        : base(KreuzbergErrorKind.Embedding, ErrorMapper.PrefixMessage(message, "Embedding error"), inner)
     {
     }
 }
@@ -350,6 +368,11 @@ internal static class ErrorMapper
             trimmed.StartsWith("Unsupported operation:", StringComparison.OrdinalIgnoreCase))
         {
             return new KreuzbergRuntimeException(trimmed);
+        }
+
+        if (trimmed.StartsWith("Embedding error:", StringComparison.OrdinalIgnoreCase))
+        {
+            return new KreuzbergEmbeddingException(trimmed);
         }
 
         return new KreuzbergRuntimeException(trimmed);

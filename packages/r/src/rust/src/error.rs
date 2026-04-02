@@ -39,6 +39,9 @@ pub fn kreuzberg_error(err: KreuzbergError) -> extendr_api::Error {
         KreuzbergError::Serialization { message, .. } => {
             extendr_api::Error::Other(format!("[SerializationError] {}", message))
         }
+        KreuzbergError::Embedding { message, .. } => {
+            extendr_api::Error::Other(format!("[EmbeddingError] {}", message))
+        }
         other => extendr_api::Error::Other(other.to_string()),
     }
 }

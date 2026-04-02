@@ -5,6 +5,7 @@
 mod batch;
 mod cache;
 mod config;
+mod embeddings;
 mod error;
 mod extraction;
 mod helpers;
@@ -72,6 +73,12 @@ fn batch_extract_bytes_sync_native(data_list: List, mime_types: Strings, config_
 #[extendr]
 fn batch_extract_bytes_native(data_list: List, mime_types: Strings, config_json: Nullable<&str>) -> extendr_api::Result<List> {
     batch::batch_extract_bytes_impl(data_list, mime_types, Nullable::Null, config_json)
+}
+
+// Embedding functions
+#[extendr]
+fn embed_native(texts: Strings, config_json: Nullable<&str>) -> extendr_api::Result<List> {
+    embeddings::embed_impl(texts, config_json)
 }
 
 // PDF rendering
@@ -219,6 +226,8 @@ extendr_module! {
     fn batch_extract_files_native;
     fn batch_extract_bytes_sync_native;
     fn batch_extract_bytes_native;
+
+    fn embed_native;
 
     fn render_pdf_page_native;
 

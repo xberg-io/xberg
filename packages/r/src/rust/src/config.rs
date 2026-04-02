@@ -15,6 +15,18 @@ pub fn parse_config(config_json: Nullable<&str>) -> extendr_api::Result<kreuzber
     }
 }
 
+/// Parse a JSON config string into an EmbeddingConfig
+pub fn parse_config_embedding(config_json: Nullable<&str>) -> extendr_api::Result<kreuzberg::EmbeddingConfig> {
+    match config_json {
+        Nullable::NotNull(json_str) => {
+            let config: kreuzberg::EmbeddingConfig =
+                serde_json::from_str(json_str).map_err(to_r_error)?;
+            Ok(config)
+        }
+        Nullable::Null => Ok(kreuzberg::EmbeddingConfig::default()),
+    }
+}
+
 /// Load an ExtractionConfig from a file (TOML, YAML, or JSON)
 pub fn from_file_impl(path: &str) -> extendr_api::Result<Nullable<String>> {
     let config = kreuzberg::ExtractionConfig::from_file(path).map_err(kreuzberg_error)?;

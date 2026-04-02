@@ -31,6 +31,7 @@ const (
 	ErrorKindPlugin            ErrorKind = "plugin"
 	ErrorKindUnsupportedFormat ErrorKind = "unsupported_format"
 	ErrorKindRuntime           ErrorKind = "runtime"
+	ErrorKindEmbedding         ErrorKind = "embedding"
 )
 
 // ErrorCode represents FFI error codes from kreuzberg-ffi.
@@ -46,6 +47,7 @@ const (
 	ErrorCodePlugin            ErrorCode = 5
 	ErrorCodeUnsupportedFormat ErrorCode = 6
 	ErrorCodeInternal          ErrorCode = 7
+	ErrorCodeEmbedding         ErrorCode = 8
 )
 
 // String returns the string representation of an ErrorCode.
@@ -166,6 +168,10 @@ type RuntimeError struct {
 	baseError
 }
 
+type EmbeddingError struct {
+	baseError
+}
+
 func makeBaseError(kind ErrorKind, message string, cause error, code ErrorCode, panicCtx *PanicContext) baseError {
 	var msg string
 	if panicCtx != nil {
@@ -235,6 +241,10 @@ func newRuntimeErrorWithContext(message string, cause error, code ErrorCode, pan
 	return &RuntimeError{baseError: makeBaseError(ErrorKindRuntime, message, cause, code, panicCtx)}
 }
 
+func newEmbeddingErrorWithContext(message string, cause error, code ErrorCode, panicCtx *PanicContext) *EmbeddingError {
+	return &EmbeddingError{baseError: makeBaseError(ErrorKindEmbedding, message, cause, code, panicCtx)}
+}
+
 func messageWithFallback(message string, fallback string) string {
 	trimmed := strings.TrimSpace(message)
 	if trimmed != "" {
@@ -290,6 +300,8 @@ func classifyNativeError(message string, code ErrorCode, panicCtx *PanicContext)
 		return newUnsupportedFormatErrorWithContext(format, trimmed, nil, code, panicCtx)
 	case ErrorCodeInternal:
 		return newRuntimeErrorWithContext(trimmed, nil, code, panicCtx)
+	case ErrorCodeEmbedding:
+		return newEmbeddingErrorWithContext(trimmed, nil, code, panicCtx)
 	default:
 		return newRuntimeErrorWithContext(trimmed, nil, code, panicCtx)
 	}
