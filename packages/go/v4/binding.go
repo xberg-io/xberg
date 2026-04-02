@@ -26,6 +26,7 @@ char *kreuzberg_validate_mime_type(const char *mime_type);
 char *kreuzberg_load_extraction_config_from_file(const char *path);
 char *kreuzberg_list_embedding_presets(void);
 char *kreuzberg_get_embedding_preset(const char *name);
+char *kreuzberg_embed(const char *texts_json, const char *config_json);
 
 // PDF rendering and iterator function declarations
 CPageImage *kreuzberg_render_pdf_page(const char *file_path, uintptr_t page_index, int32_t dpi);
@@ -1013,6 +1014,66 @@ func GetEmbeddingPreset(name string) (*EmbeddingPreset, error) {
 		return nil, newSerializationErrorWithContext("failed to decode embedding preset", err, ErrorCodeValidation, nil)
 	}
 	return &preset, nil
+}
+
+// EmbedTexts generates vector embeddings for the given texts synchronously.
+//
+// Requires the embeddings feature to be enabled (ONNX Runtime must be available).
+// Returns one float32 slice per input text. An empty input returns an empty slice.
+func EmbedTexts(texts []string, config *EmbeddingConfig) ([][]float32, error) {
+	textsJSON, err := json.Marshal(texts)
+	if err != nil {
+		return nil, newSerializationErrorWithContext("failed to serialize texts", err, ErrorCodeValidation, nil)
+	}
+	cTexts := C.CString(string(textsJSON))
+	defer C.free(unsafe.Pointer(cTexts))
+
+	var cConfig *C.char
+	if config != nil {
+		configJSON, err := json.Marshal(config)
+		if err != nil {
+			return nil, newSerializationErrorWithContext("failed to serialize embedding config", err, ErrorCodeValidation, nil)
+		}
+		cConfig = C.CString(string(configJSON))
+		defer C.free(unsafe.Pointer(cConfig))
+	}
+
+	ffiMutex.Lock()
+	ptr := C.kreuzberg_embed(cTexts, cConfig)
+	ffiMutex.Unlock()
+
+	if ptr == nil {
+		return nil, lastError()
+	}
+	defer C.kreuzberg_free_string(ptr)
+
+	var embeddings [][]float32
+	if err := json.Unmarshal([]byte(C.GoString(ptr)), &embeddings); err != nil {
+		return nil, newSerializationErrorWithContext("failed to decode embeddings", err, ErrorCodeValidation, nil)
+	}
+	return embeddings, nil
+}
+
+// EmbedTextsAsync generates vector embeddings for the given texts asynchronously.
+//
+// The embedding generation is offloaded to a goroutine; the call blocks until
+// the embeddings are ready or the context is cancelled.
+func EmbedTextsAsync(ctx context.Context, texts []string, config *EmbeddingConfig) ([][]float32, error) {
+	type embedResult struct {
+		embeddings [][]float32
+		err        error
+	}
+	ch := make(chan embedResult, 1)
+	go func() {
+		embeddings, err := EmbedTexts(texts, config)
+		ch <- embedResult{embeddings, err}
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case r := <-ch:
+		return r.embeddings, r.err
+	}
 }
 
 // validateChunkingConfig validates chunking configuration parameters.

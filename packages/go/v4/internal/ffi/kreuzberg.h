@@ -893,6 +893,27 @@ KREUZBERG_EXPORT char *kreuzberg_list_embedding_presets(void);
 KREUZBERG_EXPORT char *kreuzberg_get_embedding_preset(const char *name);
 
 /**
+ * Generate embeddings for a list of texts.
+ *
+ * # Arguments
+ *
+ * * `texts_json` - JSON array of strings, e.g. `["hello","world"]`. Must not be NULL.
+ * * `config_json` - JSON EmbeddingConfig object, or NULL for default config.
+ *
+ * # Returns
+ *
+ * JSON array of float arrays (one per input text), e.g. `[[0.1,0.2,...],[0.3,...]]`.
+ * Caller must free with `kreuzberg_free_string`. Returns NULL on error.
+ *
+ * # Safety
+ *
+ * - `texts_json` must be a valid null-terminated UTF-8 C string (not NULL)
+ * - `config_json` must be a valid null-terminated UTF-8 C string, or NULL
+ * - The returned pointer must be freed with `kreuzberg_free_string`
+ */
+KREUZBERG_EXPORT char *kreuzberg_embed(const char *texts_json, const char *config_json);
+
+/**
  * Create a new config builder.
  *
  * Returns an opaque pointer to ConfigBuilder. Must be freed with
