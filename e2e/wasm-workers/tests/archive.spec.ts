@@ -9,100 +9,99 @@ import { assertions, buildConfig, getFixture, shouldSkipFixture } from "./helper
 import type { ExtractionResult } from "@kreuzberg/wasm";
 
 describe("archive", () => {
-    it("archive_gz_basic", async () => {
-        const documentBytes = getFixture("archives/book_war_and_peace_1p.txt.gz");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("archive_gz_basic", async () => {
+		const documentBytes = getFixture("archives/book_war_and_peace_1p.txt.gz");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "application/gzip", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "archive_gz_basic", [], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["application/gzip", "application/x-gzip"]);
-        assertions.assertMinContentLength(result, 10);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/gzip", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "archive_gz_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/gzip", "application/x-gzip"]);
+		assertions.assertMinContentLength(result, 10);
+	});
 
-    it("archive_sevenz_basic", async () => {
-        const documentBytes = getFixture("archives/documents.7z");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("archive_sevenz_basic", async () => {
+		const documentBytes = getFixture("archives/documents.7z");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "application/x-7z-compressed", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "archive_sevenz_basic", [], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["application/x-7z-compressed"]);
-        assertions.assertMinContentLength(result, 10);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/x-7z-compressed", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "archive_sevenz_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/x-7z-compressed"]);
+		assertions.assertMinContentLength(result, 10);
+	});
 
-    it("archive_tar_basic", async () => {
-        const documentBytes = getFixture("archives/documents.tar");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("archive_tar_basic", async () => {
+		const documentBytes = getFixture("archives/documents.tar");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "application/x-tar", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "archive_tar_basic", [], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["application/x-tar", "application/tar"]);
-        assertions.assertMinContentLength(result, 10);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/x-tar", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "archive_tar_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/x-tar", "application/tar"]);
+		assertions.assertMinContentLength(result, 10);
+	});
 
-    it("archive_zip_basic", async () => {
-        const documentBytes = getFixture("archives/documents.zip");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("archive_zip_basic", async () => {
+		const documentBytes = getFixture("archives/documents.zip");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "application/zip", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "archive_zip_basic", [], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["application/zip", "application/x-zip-compressed"]);
-        assertions.assertMinContentLength(result, 10);
-    });
-
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "application/zip", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "archive_zip_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["application/zip", "application/x-zip-compressed"]);
+		assertions.assertMinContentLength(result, 10);
+	});
 });

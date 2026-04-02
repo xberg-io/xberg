@@ -9,244 +9,243 @@ import { assertions, buildConfig, getFixture, shouldSkipFixture } from "./helper
 import type { ExtractionResult } from "@kreuzberg/wasm";
 
 describe("image", () => {
-    it("image_bmp_basic", async () => {
-        const documentBytes = getFixture("images/bmp_24.bmp");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_bmp_basic", async () => {
+		const documentBytes = getFixture("images/bmp_24.bmp");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/bmp", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_bmp_basic", ["tesseract"], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/bmp"]);
-        assertions.assertContentNotEmpty(result);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/bmp", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_bmp_basic", ["tesseract"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/bmp"]);
+		assertions.assertContentNotEmpty(result);
+	});
 
-    it("image_gif_basic", async () => {
-        const documentBytes = getFixture("images_extra/ocr_image.gif");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_gif_basic", async () => {
+		const documentBytes = getFixture("images_extra/ocr_image.gif");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/gif", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_gif_basic", ["tesseract"], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/gif"]);
-        assertions.assertContentNotEmpty(result);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/gif", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_gif_basic", ["tesseract"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/gif"]);
+		assertions.assertContentNotEmpty(result);
+	});
 
-    it("image_jp2_basic", async () => {
-        const documentBytes = getFixture("images_extra/ocr_image.jp2");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_jp2_basic", async () => {
+		const documentBytes = getFixture("images_extra/ocr_image.jp2");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/jp2", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_jp2_basic", ["tesseract"], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/jp2", "image/jpeg2000"]);
-        assertions.assertContentNotEmpty(result);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/jp2", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_jp2_basic", ["tesseract"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/jp2", "image/jpeg2000"]);
+		assertions.assertContentNotEmpty(result);
+	});
 
-    it("image_metadata_only", async () => {
-        const documentBytes = getFixture("images/example.jpg");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_metadata_only", async () => {
+		const documentBytes = getFixture("images/example.jpg");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig({"ocr":null});
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/jpeg", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_metadata_only", [], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/jpeg"]);
-        assertions.assertMaxContentLength(result, 200);
-    });
+		const config = buildConfig({ ocr: null });
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/jpeg", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_metadata_only", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/jpeg"]);
+		assertions.assertMaxContentLength(result, 200);
+	});
 
-    it("image_pbm_basic", async () => {
-        const documentBytes = getFixture("images_extra/ocr_image.pbm");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_pbm_basic", async () => {
+		const documentBytes = getFixture("images_extra/ocr_image.pbm");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/x-portable-bitmap", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_pbm_basic", ["tesseract"], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/x-portable-bitmap", "image/x-pbm"]);
-        assertions.assertContentNotEmpty(result);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/x-portable-bitmap", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_pbm_basic", ["tesseract"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/x-portable-bitmap", "image/x-pbm"]);
+		assertions.assertContentNotEmpty(result);
+	});
 
-    it("image_pgm_basic", async () => {
-        const documentBytes = getFixture("images_extra/ocr_image.pgm");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_pgm_basic", async () => {
+		const documentBytes = getFixture("images_extra/ocr_image.pgm");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/x-portable-graymap", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_pgm_basic", ["tesseract"], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/x-portable-graymap", "image/x-pgm"]);
-        assertions.assertContentNotEmpty(result);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/x-portable-graymap", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_pgm_basic", ["tesseract"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/x-portable-graymap", "image/x-pgm"]);
+		assertions.assertContentNotEmpty(result);
+	});
 
-    it("image_ppm_basic", async () => {
-        const documentBytes = getFixture("images_extra/ocr_image.ppm");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_ppm_basic", async () => {
+		const documentBytes = getFixture("images_extra/ocr_image.ppm");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/x-portable-pixmap", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_ppm_basic", ["tesseract"], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/x-portable-pixmap", "image/x-ppm"]);
-        assertions.assertContentNotEmpty(result);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/x-portable-pixmap", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_ppm_basic", ["tesseract"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/x-portable-pixmap", "image/x-ppm"]);
+		assertions.assertContentNotEmpty(result);
+	});
 
-    it("image_svg_basic", async () => {
-        const documentBytes = getFixture("xml/simple_svg.svg");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_svg_basic", async () => {
+		const documentBytes = getFixture("xml/simple_svg.svg");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/svg+xml", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_svg_basic", [], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/svg+xml"]);
-        assertions.assertMinContentLength(result, 5);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/svg+xml", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_svg_basic", [], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/svg+xml"]);
+		assertions.assertMinContentLength(result, 5);
+	});
 
-    it("image_tiff_basic", async () => {
-        const documentBytes = getFixture("images_extra/ocr_image.tif");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_tiff_basic", async () => {
+		const documentBytes = getFixture("images_extra/ocr_image.tif");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/tiff", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_tiff_basic", ["tesseract"], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/tiff"]);
-        assertions.assertContentNotEmpty(result);
-    });
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/tiff", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_tiff_basic", ["tesseract"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/tiff"]);
+		assertions.assertContentNotEmpty(result);
+	});
 
-    it("image_webp_basic", async () => {
-        const documentBytes = getFixture("images_extra/ocr_image.webp");
-        if (documentBytes === null) {
-            console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
-            return;
-        }
+	it("image_webp_basic", async () => {
+		const documentBytes = getFixture("images_extra/ocr_image.webp");
+		if (documentBytes === null) {
+			console.warn("[SKIP] Test skipped: fixture not available in Cloudflare Workers environment");
+			return;
+		}
 
-        const config = buildConfig(undefined);
-        let result: ExtractionResult | null = null;
-        try {
-            result = await extractBytes(documentBytes, "image/webp", config);
-        } catch (error) {
-            if (shouldSkipFixture(error, "image_webp_basic", ["tesseract"], undefined)) {
-                return;
-            }
-            throw error;
-        }
-        if (result === null) {
-            return;
-        }
-        assertions.assertExpectedMime(result, ["image/webp"]);
-        assertions.assertContentNotEmpty(result);
-    });
-
+		const config = buildConfig(undefined);
+		let result: ExtractionResult | null = null;
+		try {
+			result = await extractBytes(documentBytes, "image/webp", config);
+		} catch (error) {
+			if (shouldSkipFixture(error, "image_webp_basic", ["tesseract"], undefined)) {
+				return;
+			}
+			throw error;
+		}
+		if (result === null) {
+			return;
+		}
+		assertions.assertExpectedMime(result, ["image/webp"]);
+		assertions.assertContentNotEmpty(result);
+	});
 });

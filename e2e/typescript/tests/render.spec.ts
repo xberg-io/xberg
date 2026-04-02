@@ -9,35 +9,34 @@ import { renderPdfPageSync, PdfPageIterator } from "@kreuzberg/node";
 import { assertions, resolveDocument } from "./helpers.js";
 
 describe("render", () => {
-    it("render_custom_dpi", () => {
-        const documentPath = resolveDocument("pdf/tiny.pdf");
-        if (!existsSync(documentPath)) return;
-        const pngData = renderPdfPageSync(documentPath, 0, { dpi: 72 });
-        assertions.assertIsPng(pngData);
-        assertions.assertMinByteLength(pngData, 50);
-    });
+	it("render_custom_dpi", () => {
+		const documentPath = resolveDocument("pdf/tiny.pdf");
+		if (!existsSync(documentPath)) return;
+		const pngData = renderPdfPageSync(documentPath, 0, { dpi: 72 });
+		assertions.assertIsPng(pngData);
+		assertions.assertMinByteLength(pngData, 50);
+	});
 
-    it("render_iterator", () => {
-        const documentPath = resolveDocument("pdf/tiny.pdf");
-        if (!existsSync(documentPath)) return;
-        const pages: Buffer[] = [];
-        const iter = new PdfPageIterator(documentPath, { dpi: 150 });
-        let result = iter.next();
-        while (result !== null) {
-            assertions.assertIsPng(result.data);
-            pages.push(result.data);
-            result = iter.next();
-        }
-        iter.close();
-        expect(pages.length).toBeGreaterThanOrEqual(1);
-    });
+	it("render_iterator", () => {
+		const documentPath = resolveDocument("pdf/tiny.pdf");
+		if (!existsSync(documentPath)) return;
+		const pages: Buffer[] = [];
+		const iter = new PdfPageIterator(documentPath, { dpi: 150 });
+		let result = iter.next();
+		while (result !== null) {
+			assertions.assertIsPng(result.data);
+			pages.push(result.data);
+			result = iter.next();
+		}
+		iter.close();
+		expect(pages.length).toBeGreaterThanOrEqual(1);
+	});
 
-    it("render_single_page", () => {
-        const documentPath = resolveDocument("pdf/tiny.pdf");
-        if (!existsSync(documentPath)) return;
-        const pngData = renderPdfPageSync(documentPath, 0, { dpi: 150 });
-        assertions.assertIsPng(pngData);
-        assertions.assertMinByteLength(pngData, 100);
-    });
-
+	it("render_single_page", () => {
+		const documentPath = resolveDocument("pdf/tiny.pdf");
+		if (!existsSync(documentPath)) return;
+		const pngData = renderPdfPageSync(documentPath, 0, { dpi: 150 });
+		assertions.assertIsPng(pngData);
+		assertions.assertMinByteLength(pngData, 100);
+	});
 });

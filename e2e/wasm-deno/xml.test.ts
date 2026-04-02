@@ -3,7 +3,15 @@
 
 // Tests for xml fixtures. Run with: deno test --allow-read
 
-import { assertions, buildConfig, enableOcr, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.ts";
+import {
+	assertions,
+	buildConfig,
+	enableOcr,
+	extractBytes,
+	initWasm,
+	resolveDocument,
+	shouldSkipFixture,
+} from "./helpers.ts";
 import type { ExtractionResult } from "./helpers.ts";
 
 // Initialize WASM module and enable OCR once at module load time
@@ -11,21 +19,21 @@ await initWasm();
 await enableOcr();
 
 Deno.test("xml_plant_catalog", { permissions: { read: true, net: true } }, async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = await resolveDocument("xml/plant_catalog.xml");
-      // Sync file extraction - WASM uses extractBytes with pre-read bytes
-      result = await extractBytes(documentBytes, "application/xml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "xml_plant_catalog", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/xml"]);
-    assertions.assertMinContentLength(result, 100);
+	const config = buildConfig(undefined);
+	let result: ExtractionResult | null = null;
+	try {
+		const documentBytes = await resolveDocument("xml/plant_catalog.xml");
+		// Sync file extraction - WASM uses extractBytes with pre-read bytes
+		result = await extractBytes(documentBytes, "application/xml", config);
+	} catch (error) {
+		if (shouldSkipFixture(error, "xml_plant_catalog", [], undefined)) {
+			return;
+		}
+		throw error;
+	}
+	if (result === null) {
+		return;
+	}
+	assertions.assertExpectedMime(result, ["application/xml"]);
+	assertions.assertMinContentLength(result, 100);
 });
