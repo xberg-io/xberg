@@ -1281,6 +1281,31 @@ KREUZBERG_EXPORT ExtractionConfig *kreuzberg_config_builder_build(struct ConfigB
 KREUZBERG_EXPORT void kreuzberg_config_builder_free(struct ConfigBuilder *builder);
 
 /**
+ * Generate embeddings for a list of texts.
+ *
+ * # Arguments
+ *
+ * * `texts_json` - Null-terminated C string containing a JSON array of strings,
+ *   e.g. `["hello","world"]`. Must not be NULL.
+ * * `config_json` - Null-terminated C string containing a JSON object with
+ *   `EmbeddingConfig` fields, e.g. `{"model":{"type":"preset","name":"balanced"}}`.
+ *   May be NULL to use default config.
+ *
+ * # Returns
+ *
+ * A JSON string representing an array of float arrays (one per input text),
+ * e.g. `[[0.1,0.2,...],[0.3,0.4,...]]`. Caller **must** free with `kreuzberg_free_string`.
+ * Returns NULL on error — check `kreuzberg_last_error` for the message.
+ *
+ * # Safety
+ *
+ * * `texts_json` must be a valid null-terminated UTF-8 C string (not NULL).
+ * * `config_json` must be a valid null-terminated UTF-8 C string, or NULL.
+ * * The returned pointer must be freed with `kreuzberg_free_string`.
+ */
+KREUZBERG_EXPORT char *kreuzberg_embed(const char *texts_json, const char *config_json);
+
+/**
  * Returns the validation error code (0).
  *
  * # C Signature

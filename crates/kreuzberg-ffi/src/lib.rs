@@ -6,6 +6,7 @@
 mod batch_streaming;
 mod config;
 mod config_builder;
+mod embedding;
 mod error;
 mod extraction;
 mod helpers;
@@ -27,6 +28,8 @@ mod validation;
 pub use batch_streaming::{
     ErrorCallback, ResultCallback, kreuzberg_extract_batch_parallel, kreuzberg_extract_batch_streaming,
 };
+pub use embedding::kreuzberg_embed;
+
 pub use config::{
     kreuzberg_config_discover, kreuzberg_config_free, kreuzberg_config_from_file, kreuzberg_config_from_json,
     kreuzberg_config_get_field, kreuzberg_config_is_valid, kreuzberg_config_merge, kreuzberg_config_to_json,
