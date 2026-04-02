@@ -39,7 +39,10 @@ public enum ErrorCode {
 	OCR_ERROR(6),
 
 	/** Required dependency is missing (7). */
-	MISSING_DEPENDENCY(7);
+	MISSING_DEPENDENCY(7),
+
+	/** Error during embedding generation (8). */
+	EMBEDDING(8);
 
 	private final int code;
 
@@ -63,6 +66,7 @@ public enum ErrorCode {
 	private static final int CODE_PARSING_ERROR = 5;
 	private static final int CODE_OCR_ERROR = 6;
 	private static final int CODE_MISSING_DEPENDENCY = 7;
+	private static final int CODE_EMBEDDING = 8;
 
 	/**
 	 * Returns the ErrorCode for the given numeric code.
@@ -80,6 +84,7 @@ public enum ErrorCode {
 			case CODE_PARSING_ERROR -> PARSING_ERROR;
 			case CODE_OCR_ERROR -> OCR_ERROR;
 			case CODE_MISSING_DEPENDENCY -> MISSING_DEPENDENCY;
+			case CODE_EMBEDDING -> EMBEDDING;
 			default -> SUCCESS;
 		};
 	}
@@ -137,6 +142,12 @@ public enum ErrorCode {
 		// Check for validation/invalid argument errors
 		if (lower.contains("invalid") || lower.contains("validation") || lower.contains("parameter")) {
 			return INVALID_ARGUMENT;
+		}
+
+		// Check for embedding errors
+		if (lower.contains("embedding") || lower.contains("vector") || lower.contains("inference")
+				|| lower.contains("model")) {
+			return EMBEDDING;
 		}
 
 		return GENERIC_ERROR;

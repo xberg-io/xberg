@@ -448,6 +448,60 @@ public final class Kreuzberg {
 		return future;
 	}
 
+	private static MemorySegment encodeEmbeddingConfig(Arena arena, dev.kreuzberg.config.EmbeddingConfig config) throws KreuzbergException {
+		try {
+			String json = ResultParser.toJsonValue(config.toMap());
+			return KreuzbergFFI.allocateCString(arena, json);
+		} catch (Throwable e) {
+			throw new KreuzbergException("Failed to serialize embedding config", e);
+		}
+	}
+
+	public static float[][] embed(List<String> texts, dev.kreuzberg.config.EmbeddingConfig config) throws KreuzbergException {
+		Objects.requireNonNull(texts, "texts must not be null");
+		if (texts.isEmpty()) {
+			return new float[0][0];
+		}
+
+		FFI_LOCK.lock();
+		try (Arena arena = Arena.ofConfined()) {
+			String textsJson = ResultParser.toJsonValue(texts);
+			MemorySegment textsSegment = KreuzbergFFI.allocateCString(arena, textsJson);
+			MemorySegment configSegment = config == null ? MemorySegment.NULL : encodeEmbeddingConfig(arena, config);
+
+			MemorySegment resultPtr = (MemorySegment) KreuzbergFFI.KREUZBERG_EMBED.invoke(textsSegment, configSegment);
+			if (resultPtr == null || resultPtr.address() == 0) {
+				throw KreuzbergFFI.createTypedException("Embedding failed");
+			}
+
+			try {
+				String json = KreuzbergFFI.readCString(resultPtr);
+				return ResultParser.parseFloatArrays(json);
+			} finally {
+				KreuzbergFFI.KREUZBERG_FREE_STRING.invoke(resultPtr);
+			}
+		} catch (KreuzbergException e) {
+			throw e;
+		} catch (Throwable e) {
+			throw new KreuzbergException("Unexpected error during embeddings generation", e);
+		} finally {
+			FFI_LOCK.unlock();
+		}
+	}
+
+	public static CompletableFuture<float[][]> embedAsync(List<String> texts, dev.kreuzberg.config.EmbeddingConfig config) {
+		CompletableFuture<float[][]> future = new CompletableFuture<>();
+		CompletableFuture.runAsync(() -> {
+			try {
+				float[][] results = embed(texts, config);
+				future.complete(results);
+			} catch (Throwable e) {
+				future.completeExceptionally(e);
+			}
+		});
+		return future;
+	}
+
 	public static String detectMimeType(String path) throws KreuzbergException {
 		return detectMimeType(path, true);
 	}

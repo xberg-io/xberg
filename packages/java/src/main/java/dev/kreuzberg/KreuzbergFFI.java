@@ -117,6 +117,7 @@ public final class KreuzbergFFI {
 	public static final MethodHandle KREUZBERG_PDF_PAGE_ITERATOR_PAGE_COUNT;
 	public static final MethodHandle KREUZBERG_PDF_PAGE_ITERATOR_FREE;
 	public static final MethodHandle KREUZBERG_PDF_PAGE_ITERATOR_FREE_RESULT;
+	public static final MethodHandle KREUZBERG_EMBED;
 	public static final StructLayout C_EXTRACTION_RESULT_LAYOUT = MemoryLayout.structLayout(
 			ValueLayout.ADDRESS.withName("annotations_json"), ValueLayout.ADDRESS.withName("chunks_json"),
 			ValueLayout.ADDRESS.withName("children_json"), ValueLayout.ADDRESS.withName("content"),
@@ -437,6 +438,9 @@ public final class KreuzbergFFI {
 			KREUZBERG_PDF_PAGE_ITERATOR_FREE_RESULT = linkFunction(
 					"kreuzberg_pdf_page_iterator_free_result",
 					FunctionDescriptor.ofVoid(ValueLayout.ADDRESS));
+
+			KREUZBERG_EMBED = linkFunction("kreuzberg_embed",
+					FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
 
 		} catch (Exception e) {
 			throw new ExceptionInInitializerError(e);
@@ -978,6 +982,8 @@ public final class KreuzbergFFI {
 				return new MissingDependencyException(message);
 			case INVALID_ARGUMENT :
 				return new ValidationException(message);
+			case EMBEDDING :
+				return new EmbeddingException(message);
 			case PANIC :
 				return new KreuzbergException(message, code, panicContext);
 			case IO_ERROR :
