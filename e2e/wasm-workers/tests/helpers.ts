@@ -428,7 +428,7 @@ export const assertions = {
 		}
 		if (eachHasChunkType === true) {
 			for (const chunk of chunks) {
-				const chunkType = (chunk as PlainRecord).chunkType ?? (chunk as PlainRecord).chunk_type;
+				const chunkType = (chunk as unknown as PlainRecord).chunkType ?? (chunk as unknown as PlainRecord).chunk_type;
 				expect(chunkType).toBeDefined();
 				expect(chunkType).not.toBe("unknown");
 			}
