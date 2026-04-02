@@ -2,7 +2,7 @@
 
 use crate::pdf::structure::text_repair::repair_broken_word_spacing;
 use crate::pdf::structure::types::{LayoutHint, LayoutHintClass};
-use crate::pdf::table_reconstruct::{post_process_table, reconstruct_table, table_to_markdown};
+use crate::pdf::table_reconstruct::{is_well_formed_table, post_process_table, reconstruct_table, table_to_markdown};
 use crate::types::Table;
 
 use super::table_recognition::word_hint_iow;
@@ -167,6 +167,18 @@ pub(in crate::pdf::structure) fn extract_tables_from_layout_hints(
                 );
                 continue;
             }
+        }
+
+        // Table quality validation: reject tables that are actually multi-column
+        // prose, repeated page elements, or low-vocabulary repetitive content.
+        if !is_well_formed_table(&table_cells) {
+            tracing::trace!(
+                page = page_index,
+                rows = table_cells.len(),
+                cols = table_cells.first().map_or(0, |r| r.len()),
+                "table failed quality validation — skipping as prose"
+            );
+            continue;
         }
 
         // Repair broken word spacing per-cell before rendering to markdown

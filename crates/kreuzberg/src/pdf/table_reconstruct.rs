@@ -552,6 +552,152 @@ fn post_process_table_inner(
     Some(processed)
 }
 
+/// Validate whether a reconstructed table grid represents a well-formed table
+/// rather than multi-column prose or a repeated page element.
+///
+/// Returns `true` if the grid looks like a real table, `false` if it should be
+/// rejected and its content emitted as paragraph text instead.
+///
+/// The checks catch cases the layout model misidentifies as tables:
+/// - Multi-column prose split into a grid (detected via row coherence and column uniformity)
+/// - Repeated page elements (headers/footers detected as tables on every page)
+/// - Low-vocabulary repetitive content (same few words in every row)
+pub fn is_well_formed_table(grid: &[Vec<String>]) -> bool {
+    if grid.len() < 2 {
+        return false;
+    }
+    let num_cols = grid[0].len();
+    if num_cols < 2 {
+        return false;
+    }
+
+    // --- Check 1: Row coherence (prose detection) ---
+    // For each data row, concatenate all cells left-to-right. If the result
+    // reads like a coherent sentence fragment (>30 chars, last cell ends without
+    // punctuation and next row's first cell starts lowercase), the grid is
+    // likely prose laid out in columns.
+    let data_rows = &grid[1..];
+    if data_rows.len() >= 3 && num_cols >= 2 {
+        let mut prose_like_rows = 0usize;
+        let mut eligible_rows = 0usize;
+
+        for row in data_rows {
+            let concatenated: String = row
+                .iter()
+                .map(|c| c.trim())
+                .filter(|c| !c.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+            if concatenated.len() < 30 {
+                continue;
+            }
+            eligible_rows += 1;
+
+            // Check if the row reads like prose: mostly alphabetic, few abrupt
+            // breaks, and doesn't look like structured data (numbers, codes).
+            let alpha_ratio = {
+                let alpha = concatenated
+                    .chars()
+                    .filter(|c| c.is_alphabetic() || c.is_whitespace())
+                    .count();
+                alpha as f64 / concatenated.len() as f64
+            };
+            // Prose has high alpha ratio (>0.8) — structured data has numbers, symbols
+            if alpha_ratio > 0.8 {
+                prose_like_rows += 1;
+            }
+        }
+
+        if eligible_rows >= 3 && prose_like_rows * 2 > eligible_rows {
+            return false;
+        }
+    }
+
+    // --- Check 2: Column semantic uniformity ---
+    // In real tables, columns have different character: a narrow ID column, a wide
+    // description column, a numeric column. In multi-column prose, all columns
+    // carry similar-length text. Check if cell lengths within each column have
+    // low variance AND all columns have similar average length.
+    if num_cols >= 3 && data_rows.len() >= 4 {
+        let col_stats: Vec<(f64, f64)> = (0..num_cols)
+            .map(|c| {
+                let lengths: Vec<f64> = data_rows
+                    .iter()
+                    .filter_map(|row| {
+                        let cell = row.get(c).map(|s| s.trim()).unwrap_or("");
+                        if cell.is_empty() { None } else { Some(cell.len() as f64) }
+                    })
+                    .collect();
+                if lengths.is_empty() {
+                    return (0.0, 0.0);
+                }
+                let mean = lengths.iter().sum::<f64>() / lengths.len() as f64;
+                let variance = lengths.iter().map(|l| (l - mean).powi(2)).sum::<f64>() / lengths.len() as f64;
+                let stddev = variance.sqrt();
+                (mean, stddev)
+            })
+            .collect();
+
+        // Filter to columns with meaningful content (mean > 3 chars)
+        let meaningful: Vec<(f64, f64)> = col_stats.iter().copied().filter(|(m, _)| *m > 3.0).collect();
+
+        if meaningful.len() >= 3 {
+            let means: Vec<f64> = meaningful.iter().map(|(m, _)| *m).collect();
+            let min_mean = means.iter().copied().fold(f64::INFINITY, f64::min);
+            let max_mean = means.iter().copied().fold(0.0_f64, f64::max);
+
+            // All columns within 2x of each other in avg length
+            let columns_uniform = min_mean > 0.0 && max_mean <= min_mean * 2.0;
+
+            // Low coefficient of variation within each column (cells ±30% of mean)
+            let low_variance = meaningful
+                .iter()
+                .all(|(mean, stddev)| *mean > 0.0 && *stddev / *mean < 0.3);
+
+            if columns_uniform && low_variance {
+                return false;
+            }
+        }
+    }
+
+    // --- Check 3: Minimum meaningful content (repetitive vocabulary) ---
+    // If the table has ≥3 columns but total unique words across all cells is
+    // < 2× the number of rows, the same few words are repeated in every row
+    // (e.g., "Bookmark | File PDF | Year 4" repeated 83 times).
+    if num_cols >= 3 {
+        let mut unique_words: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for row in data_rows {
+            for cell in row {
+                for word in cell.split_whitespace() {
+                    unique_words.insert(word);
+                }
+            }
+        }
+        let row_count = data_rows.len();
+        if row_count >= 3 && unique_words.len() < row_count * 2 {
+            return false;
+        }
+    }
+
+    // --- Check 4: Repeated header detection ---
+    // If the header row (first row) appears identically as a data row multiple
+    // times, the layout model is detecting a repeating page element (running
+    // header/footer) as a table.
+    if !grid.is_empty() {
+        let header = &grid[0];
+        let header_matches = data_rows
+            .iter()
+            .filter(|row| row.len() == header.len() && row.iter().zip(header.iter()).all(|(a, b)| a.trim() == b.trim()))
+            .count();
+        // If header appears 2+ times in data rows, it's a repeating element
+        if header_matches >= 2 {
+            return false;
+        }
+    }
+
+    true
+}
+
 fn merge_header_only_column(table: &mut [Vec<String>], col: usize, header_text: String) {
     if table.is_empty() || table[0].is_empty() {
         return;
@@ -1137,5 +1283,130 @@ mod tests {
         ];
         let result = post_process_table(table, false, false);
         assert!(result.is_some(), "Table with varied column widths should be accepted");
+    }
+
+    // --- Tests for is_well_formed_table ---
+
+    #[test]
+    fn test_well_formed_rejects_single_row() {
+        let grid = vec![vec!["Header".into(), "Value".into()]];
+        assert!(!is_well_formed_table(&grid), "Single-row grid should be rejected");
+    }
+
+    #[test]
+    fn test_well_formed_rejects_single_column() {
+        let grid = vec![vec!["Header".into()], vec!["Row 1".into()], vec!["Row 2".into()]];
+        assert!(!is_well_formed_table(&grid), "Single-column grid should be rejected");
+    }
+
+    #[test]
+    fn test_well_formed_accepts_real_table() {
+        let grid = vec![
+            vec!["Name".into(), "Department".into(), "Salary".into()],
+            vec!["John Smith".into(), "Engineering".into(), "$95,000".into()],
+            vec!["Jane Doe".into(), "Marketing".into(), "$88,500".into()],
+            vec!["Bob Johnson".into(), "Sales".into(), "$92,000".into()],
+            vec!["Alice Williams".into(), "HR".into(), "$85,000".into()],
+        ];
+        assert!(
+            is_well_formed_table(&grid),
+            "Real table with varied columns should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_well_formed_rejects_repetitive_content() {
+        // Same few words repeated in every row — like "Bookmark | File PDF | Year 4"
+        let grid = vec![
+            vec!["Bookmark".into(), "File PDF".into(), "Year 4".into()],
+            vec!["Bookmark".into(), "File PDF".into(), "Year 4".into()],
+            vec!["Bookmark".into(), "File PDF".into(), "Year 4".into()],
+            vec!["Bookmark".into(), "File PDF".into(), "Year 4".into()],
+            vec!["Bookmark".into(), "File PDF".into(), "Year 4".into()],
+        ];
+        assert!(
+            !is_well_formed_table(&grid),
+            "Repetitive content (same words every row) should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_well_formed_rejects_repeated_header_in_data() {
+        // Header appears identically in 3 data rows — repeated page element
+        let grid = vec![
+            vec!["Title".into(), "Author".into(), "Page".into()],
+            vec!["Chapter 1".into(), "Smith".into(), "10".into()],
+            vec!["Title".into(), "Author".into(), "Page".into()],
+            vec!["Chapter 2".into(), "Doe".into(), "25".into()],
+            vec!["Title".into(), "Author".into(), "Page".into()],
+        ];
+        assert!(
+            !is_well_formed_table(&grid),
+            "Table with header repeated in data rows should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_well_formed_rejects_prose_rows() {
+        // Multi-column prose: each row concatenates to a coherent sentence
+        let grid = vec![
+            vec!["Column A".into(), "Column B".into(), "Column C".into()],
+            vec![
+                "The experiment was conducted over".into(),
+                "several weeks and the results clearly".into(),
+                "demonstrate that the proposed method is".into(),
+            ],
+            vec![
+                "superior to existing approaches because".into(),
+                "it leverages novel techniques developed".into(),
+                "in our laboratory during the past decade".into(),
+            ],
+            vec![
+                "of intensive research on machine learning".into(),
+                "systems and their applications to natural".into(),
+                "language processing and text extraction".into(),
+            ],
+            vec![
+                "from documents in various formats including".into(),
+                "portable document format and hypertext markup".into(),
+                "language as well as office document formats".into(),
+            ],
+        ];
+        assert!(
+            !is_well_formed_table(&grid),
+            "Multi-column prose should be rejected by row coherence check"
+        );
+    }
+
+    #[test]
+    fn test_well_formed_rejects_uniform_columns() {
+        // All 3 columns have similar average cell length and low variance — prose signal
+        let grid = vec![
+            vec!["Col A".into(), "Col B".into(), "Col C".into()],
+            vec!["twelve chars".into(), "twelve char2".into(), "twelve char3".into()],
+            vec!["twelve char4".into(), "twelve char5".into(), "twelve char6".into()],
+            vec!["twelve char7".into(), "twelve char8".into(), "twelve char9".into()],
+            vec!["twelve charA".into(), "twelve charB".into(), "twelve charC".into()],
+        ];
+        assert!(
+            !is_well_formed_table(&grid),
+            "Table with uniform column widths and low variance should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_well_formed_accepts_varied_columns() {
+        // Columns have clearly different character: ID (short), name (medium), amount (numeric)
+        let grid = vec![
+            vec!["ID".into(), "Product Name".into(), "Price".into()],
+            vec!["1".into(), "Widget Alpha Premium".into(), "$29.99".into()],
+            vec!["2".into(), "Gadget Beta Standard".into(), "$149.50".into()],
+            vec!["3".into(), "Tool Gamma Deluxe Ed".into(), "$7.25".into()],
+            vec!["4".into(), "Part Delta Industrial".into(), "$1,299.00".into()],
+        ];
+        assert!(
+            is_well_formed_table(&grid),
+            "Table with varied column types should be accepted"
+        );
     }
 }
