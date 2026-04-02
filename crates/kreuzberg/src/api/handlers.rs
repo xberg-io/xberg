@@ -418,8 +418,6 @@ pub async fn cache_clear_handler() -> Result<Json<CacheClearResponse>, ApiError>
     )
 )]
 pub async fn embed_handler(JsonApi(request): JsonApi<EmbedRequest>) -> Result<Json<EmbedResponse>, ApiError> {
-    use crate::types::{Chunk, ChunkMetadata};
-
     if request.texts.is_empty() {
         return Err(ApiError::validation(crate::error::KreuzbergError::validation(
             "No texts provided for embedding generation",
@@ -448,42 +446,10 @@ pub async fn embed_handler(JsonApi(request): JsonApi<EmbedRequest>) -> Result<Js
         ))));
     }
 
-    // Create chunks from input texts
-    let mut chunks: Vec<Chunk> = request
-        .texts
-        .iter()
-        .enumerate()
-        .map(|(idx, text)| Chunk {
-            content: text.clone(),
-            chunk_type: Default::default(),
-            embedding: None,
-            metadata: ChunkMetadata {
-                byte_start: 0,
-                byte_end: text.len(),
-                token_count: None,
-                chunk_index: idx,
-                total_chunks: request.texts.len(),
-                first_page: None,
-                last_page: None,
-                heading_context: None,
-            },
-        })
-        .collect();
-
-    // Generate embeddings
-    crate::embeddings::generate_embeddings_for_chunks(&mut chunks, &config).map_err(ApiError::internal)?;
-
-    // Extract embeddings from chunks
-    let embeddings: Vec<Vec<f32>> = chunks
-        .into_iter()
-        .map(|chunk| {
-            chunk.embedding.ok_or_else(|| {
-                ApiError::internal(crate::error::KreuzbergError::Other(
-                    "Failed to generate embedding for text".to_string(),
-                ))
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    // Generate embeddings directly
+    let embeddings = crate::embed_texts_async(request.texts.clone(), &config)
+        .await
+        .map_err(ApiError::internal)?;
 
     let dimensions = embeddings.first().map(|e| e.len()).unwrap_or(0);
 
