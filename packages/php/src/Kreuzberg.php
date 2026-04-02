@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kreuzberg;
 
 use Kreuzberg\Config\ExtractionConfig;
+use Kreuzberg\Config\EmbeddingConfig;
 use Kreuzberg\Exceptions\KreuzbergException;
 use Kreuzberg\Types\DeferredResult;
 use Kreuzberg\Types\ExtractionResult;
@@ -40,6 +41,7 @@ final readonly class Kreuzberg
 
     public function __construct(
         private ?ExtractionConfig $defaultConfig = null,
+        private ?EmbeddingConfig $defaultEmbeddingConfig = null,
     ) {
     }
 
@@ -194,6 +196,40 @@ final readonly class Kreuzberg
     }
 
     /**
+     * Generate text embeddings for a list of strings.
+     *
+     * @param array<string> $texts List of strings to embed
+     * @param EmbeddingConfig|null $config Embedding configuration (uses constructor config if null)
+     * @return array<array<float>> List of embedding vectors (one per input string)
+     * @throws KreuzbergException If generation fails
+     */
+    public function embed(
+        array $texts,
+        ?EmbeddingConfig $config = null,
+    ): array {
+        $config ??= $this->defaultEmbeddingConfig ?? new EmbeddingConfig();
+
+        return embed($texts, $config);
+    }
+
+    /**
+     * Generate text embeddings asynchronously.
+     *
+     * @param array<string> $texts List of strings to embed
+     * @param EmbeddingConfig|null $config Embedding configuration (uses constructor config if null)
+     * @return DeferredResult Deferred result that can be polled or waited on
+     * @throws KreuzbergException If generation fails
+     */
+    public function embedAsync(
+        array $texts,
+        ?EmbeddingConfig $config = null,
+    ): DeferredResult {
+        $config ??= $this->defaultEmbeddingConfig ?? new EmbeddingConfig();
+
+        return embed_async($texts, $config);
+    }
+
+    /**
      * Extract content from a file (static synchronous method).
      *
      * @param string $filePath Path to the file to extract
@@ -339,6 +375,36 @@ final readonly class Kreuzberg
         $config ??= new ExtractionConfig();
 
         return batch_extract_bytes_async($dataList, $mimeTypes, $config);
+    }
+
+    /**
+     * Generate text embeddings for a list of strings (static).
+     *
+     * @param array<string> $texts List of strings to embed
+     * @param EmbeddingConfig|null $config Embedding configuration (uses defaults if null)
+     * @return array<array<float>> List of embedding vectors (one per input string)
+     * @throws KreuzbergException If generation fails
+     */
+    public static function embedStatic(
+        array $texts,
+        ?EmbeddingConfig $config = null,
+    ): array {
+        return embed($texts, $config);
+    }
+
+    /**
+     * Generate text embeddings asynchronously (static).
+     *
+     * @param array<string> $texts List of strings to embed
+     * @param EmbeddingConfig|null $config Embedding configuration (uses defaults if null)
+     * @return DeferredResult Deferred result that can be polled or waited on
+     * @throws KreuzbergException If generation fails
+     */
+    public static function embedAsyncStatic(
+        array $texts,
+        ?EmbeddingConfig $config = null,
+    ): DeferredResult {
+        return embed_async($texts, $config);
     }
 
     /**

@@ -92,4 +92,12 @@ class KreuzbergException extends Exception
     {
         return new self("Unsupported format: {$message}", 7);
     }
+
+    /**
+     * Create exception for embedding errors.
+     */
+    public static function embedding(string $message): self
+    {
+        return new self("Embedding error: {$message}", 8);
+    }
 }

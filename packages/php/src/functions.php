@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kreuzberg;
 
 use Kreuzberg\Config\ExtractionConfig;
+use Kreuzberg\Config\EmbeddingConfig;
 use Kreuzberg\Exceptions\KreuzbergException;
 use Kreuzberg\Types\DeferredResult;
 use Kreuzberg\Types\ExtractionResult;
@@ -81,6 +82,14 @@ function convertToKreuzbergException(\Exception $e): KreuzbergException
         str_contains($message, 'permission') ||
         str_contains($message, 'Permission denied')) {
         return KreuzbergException::io($message);
+    }
+
+    // Check for embedding errors
+    if (str_contains($message, 'embedding') ||
+        str_contains($message, 'vector') ||
+        str_contains($message, 'inference') ||
+        str_contains($message, 'model')) {
+        return KreuzbergException::embedding($message);
     }
 
     // Generic error
@@ -316,6 +325,65 @@ function detect_mime_type_from_path(string $path): string
         $result = \kreuzberg_detect_mime_type_from_path($path);
 
         return $result;
+    } catch (\Exception $e) {
+        if ($e instanceof KreuzbergException) {
+            throw $e;
+        }
+        throw convertToKreuzbergException($e);
+    }
+}
+
+/**
+ * Generate text embeddings for a list of strings (procedural API).
+ *
+ * @param array<string> $texts List of strings to embed
+ * @param EmbeddingConfig|null $config Embedding configuration (uses defaults if null)
+ * @return array<array<float>> List of embedding vectors (one per input string)
+ * @throws KreuzbergException If generation fails
+ *
+ * @example
+ * ```php
+ * use Kreuzberg\embed;
+ *
+ * $embeddings = embed(["hello", "world"]);
+ * ```
+ */
+function embed(
+    array $texts,
+    ?EmbeddingConfig $config = null,
+): array {
+    try {
+        return \kreuzberg_embed($texts, $config?->toJson());
+    } catch (\Exception $e) {
+        if ($e instanceof KreuzbergException) {
+            throw $e;
+        }
+        throw convertToKreuzbergException($e);
+    }
+}
+
+/**
+ * Generate text embeddings asynchronously (procedural API).
+ *
+ * @param array<string> $texts List of strings to embed
+ * @param EmbeddingConfig|null $config Embedding configuration (uses defaults if null)
+ * @return DeferredResult Deferred result that can be polled or waited on
+ * @throws KreuzbergException If generation fails
+ *
+ * @example
+ * ```php
+ * use Kreuzberg\embed_async;
+ *
+ * $deferred = embed_async(["hello"]);
+ * $embeddings = $deferred->getResults();
+ * ```
+ */
+function embed_async(
+    array $texts,
+    ?EmbeddingConfig $config = null,
+): DeferredResult {
+    try {
+        return \kreuzberg_embed_async($texts, $config?->toJson());
     } catch (\Exception $e) {
         if ($e instanceof KreuzbergException) {
             throw $e;
