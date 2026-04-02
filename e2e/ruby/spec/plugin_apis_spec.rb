@@ -42,7 +42,7 @@ RSpec.describe 'Plugin APIs' do
         [chunking]
         max_chars = 100
         max_overlap = 20
-        
+
         [language_detection]
         enabled = false
       TOML

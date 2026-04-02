@@ -12,53 +12,59 @@ import type { ExtractionResult } from "@kreuzberg/node";
 const TEST_TIMEOUT_MS = 60_000;
 
 describe("keywords fixtures", () => {
-  it("keywords_rake", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping keywords_rake: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"keywords":{"algorithm":"rake","max_keywords":10}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "keywords_rake", ["keywords-rake"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertKeywords(result, true, 1, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"keywords_rake",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping keywords_rake: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ keywords: { algorithm: "rake", max_keywords: 10 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "keywords_rake", ["keywords-rake"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertKeywords(result, true, 1, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("keywords_yake", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping keywords_yake: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"keywords":{"algorithm":"yake","max_keywords":10}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "keywords_yake", ["keywords-yake"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertKeywords(result, true, 1, 10);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"keywords_yake",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping keywords_yake: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ keywords: { algorithm: "yake", max_keywords: 10 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "keywords_yake", ["keywords-yake"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertKeywords(result, true, 1, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

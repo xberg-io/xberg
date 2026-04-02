@@ -12,236 +12,274 @@ import type { ExtractionResult } from "@kreuzberg/node";
 const TEST_TIMEOUT_MS = 60_000;
 
 describe("structured fixtures", () => {
-  it("structured_csv_basic", () => {
-    const documentPath = resolveDocument("csv/stanley_cups.csv");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_csv_basic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_csv_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/csv"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_csv_basic",
+		() => {
+			const documentPath = resolveDocument("csv/stanley_cups.csv");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_csv_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_csv_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/csv"]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_enw_basic", () => {
-    const documentPath = resolveDocument("data_formats/sample.enw");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_enw_basic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_enw_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_enw_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/sample.enw");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_enw_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_enw_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_json_basic", () => {
-    const documentPath = resolveDocument("json/sample_document.json");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_json_basic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_json_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/json"]);
-    assertions.assertMinContentLength(result, 20);
-    assertions.assertContentContainsAny(result, ["Sample Document", "Test Author"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_json_basic",
+		() => {
+			const documentPath = resolveDocument("json/sample_document.json");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_json_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_json_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/json"]);
+			assertions.assertMinContentLength(result, 20);
+			assertions.assertContentContainsAny(result, ["Sample Document", "Test Author"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_json_simple", () => {
-    const documentPath = resolveDocument("json/simple.json");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_json_simple: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_json_simple", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/json"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["{", "name"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_json_simple",
+		() => {
+			const documentPath = resolveDocument("json/simple.json");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_json_simple: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_json_simple", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/json"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["{", "name"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_nbib_basic", () => {
-    const documentPath = resolveDocument("data_formats/sample.nbib");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_nbib_basic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_nbib_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/nbib", "application/x-pubmed", "text/plain"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_nbib_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/sample.nbib");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_nbib_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_nbib_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/nbib", "application/x-pubmed", "text/plain"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_ris_basic", () => {
-    const documentPath = resolveDocument("data_formats/sample.ris");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_ris_basic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_ris_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-research-info-systems", "text/plain"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_ris_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/sample.ris");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_ris_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_ris_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-research-info-systems", "text/plain"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_toml_basic", () => {
-    const documentPath = resolveDocument("data_formats/cargo.toml");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_toml_basic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_toml_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/toml", "text/toml"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_toml_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/cargo.toml");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_toml_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_toml_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/toml", "text/toml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_tsv_basic", () => {
-    const documentPath = resolveDocument("data_formats/employees.tsv");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_tsv_basic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_tsv_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/tab-separated-values", "text/plain"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_tsv_basic",
+		() => {
+			const documentPath = resolveDocument("data_formats/employees.tsv");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_tsv_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_tsv_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/tab-separated-values", "text/plain"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_yaml_basic", () => {
-    const documentPath = resolveDocument("yaml/simple.yaml");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_yaml_basic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_yaml_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_yaml_basic",
+		() => {
+			const documentPath = resolveDocument("yaml/simple.yaml");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_yaml_basic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_yaml_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_yaml_simple", () => {
-    const documentPath = resolveDocument("yaml/simple.yaml");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping structured_yaml_simple: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_yaml_simple", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-yaml"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"structured_yaml_simple",
+		() => {
+			const documentPath = resolveDocument("yaml/simple.yaml");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping structured_yaml_simple: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_yaml_simple", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-yaml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

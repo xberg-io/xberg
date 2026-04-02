@@ -129,13 +129,13 @@ from kreuzberg._internal_bindings import (
     detect_mime_type_from_path as _detect_mime_type_from_path_impl,
 )
 from kreuzberg._internal_bindings import (
-    error_code_name as _error_code_name_impl,
-)
-from kreuzberg._internal_bindings import (
     embed as _embed_impl,
 )
 from kreuzberg._internal_bindings import (
     embed_sync as _embed_sync_impl,
+)
+from kreuzberg._internal_bindings import (
+    error_code_name as _error_code_name_impl,
 )
 from kreuzberg._internal_bindings import (
     extract_bytes as extract_bytes_impl,

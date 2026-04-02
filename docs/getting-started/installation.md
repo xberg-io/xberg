@@ -59,9 +59,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
 
 <div class="grid cards install-cards" markdown>
 
--   :fontawesome-brands-python:{ .lg .middle } **Python**
+- :fontawesome-brands-python:{ .lg .middle } **Python**
 
-    ---
+---
 
     ```bash
     pip install kreuzberg
@@ -70,9 +70,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-python.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](quickstart.md){ .install-btn .install-btn--solid }
 
--   :fontawesome-brands-node-js:{ .lg .middle } **TypeScript (Node.js / Bun)**
+- :fontawesome-brands-node-js:{ .lg .middle } **TypeScript (Node.js / Bun)**
 
-    ---
+---
 
     ```bash
     npm install @kreuzberg/node
@@ -81,9 +81,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-typescript.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](#typescript){ .install-btn .install-btn--solid }
 
--   :fontawesome-brands-js:{ .lg .middle } **TypeScript (Browser / Edge)**
+- :fontawesome-brands-js:{ .lg .middle } **TypeScript (Browser / Edge)**
 
-    ---
+---
 
     ```bash
     npm install @kreuzberg/wasm
@@ -92,9 +92,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-wasm.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](#typescript){ .install-btn .install-btn--solid }
 
--   :fontawesome-brands-rust:{ .lg .middle } **Rust**
+- :fontawesome-brands-rust:{ .lg .middle } **Rust**
 
-    ---
+---
 
     ```bash
     cargo add kreuzberg
@@ -103,9 +103,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-rust.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](quickstart.md){ .install-btn .install-btn--solid }
 
--   :fontawesome-brands-golang:{ .lg .middle } **Go**
+- :fontawesome-brands-golang:{ .lg .middle } **Go**
 
-    ---
+---
 
     ```bash
     go get github.com/kreuzberg-dev/kreuzberg/packages/go/v4@latest
@@ -114,9 +114,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-go.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](quickstart.md){ .install-btn .install-btn--solid }
 
--   :fontawesome-brands-java:{ .lg .middle } **Java**
+- :fontawesome-brands-java:{ .lg .middle } **Java**
 
-    ---
+---
 
     ```gradle
     implementation 'dev.kreuzberg:kreuzberg:4.7.4'
@@ -125,9 +125,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-java.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](#java){ .install-btn .install-btn--solid }
 
--   :material-language-ruby:{ .lg .middle } **Ruby**
+- :material-language-ruby:{ .lg .middle } **Ruby**
 
-    ---
+---
 
     ```bash
     gem install kreuzberg
@@ -136,9 +136,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-ruby.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](quickstart.md){ .install-btn .install-btn--solid }
 
--   :material-language-csharp:{ .lg .middle } **C# / .NET**
+- :material-language-csharp:{ .lg .middle } **C# / .NET**
 
-    ---
+---
 
     ```bash
     dotnet add package Kreuzberg
@@ -147,9 +147,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-csharp.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](../guides/csharp.md){ .install-btn .install-btn--solid }
 
--   :fontawesome-brands-php:{ .lg .middle } **PHP**
+- :fontawesome-brands-php:{ .lg .middle } **PHP**
 
-    ---
+---
 
     ```bash
     composer require kreuzberg/kreuzberg
@@ -158,9 +158,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-php.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](quickstart.md){ .install-btn .install-btn--solid }
 
--   :simple-elixir:{ .lg .middle } **Elixir**
+- :simple-elixir:{ .lg .middle } **Elixir**
 
-    ---
+---
 
     ```elixir
     {:kreuzberg, "~> 4.0"}
@@ -169,9 +169,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-elixir.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](#elixir){ .install-btn .install-btn--solid }
 
--   :simple-r:{ .lg .middle } **R**
+- :simple-r:{ .lg .middle } **R**
 
-    ---
+---
 
     ```r
     install.packages("kreuzberg",
@@ -181,9 +181,9 @@ The fastest way to try Kreuzberg - no SDK, no code, just your terminal.
     [API Reference](../reference/api-r.md){ .install-btn .install-btn--ghost }
     [:material-lightning-bolt: Quick Start](quickstart.md){ .install-btn .install-btn--solid }
 
--   :simple-cplusplus:{ .lg .middle } **C / C++**
+- :simple-cplusplus:{ .lg .middle } **C / C++**
 
-    ---
+---
 
     ```bash
     cargo build -p kreuzberg-ffi

@@ -11,66 +11,94 @@ import type { EmbeddingConfig } from "@kreuzberg/node";
 const TEST_TIMEOUT_MS = 60_000;
 
 describe("standalone embed fixtures", () => {
-    it("test_embed_async", async () => {
-        // Standalone embedding via async API path with balanced preset
-        if (process.arch === "x64" && process.platform === "win32") { return; }
-        const config: EmbeddingConfig = {
-            model: { type: "preset", name: "balanced" },
-            normalize: true,
-        };
+	it(
+		"test_embed_async",
+		async () => {
+			// Standalone embedding via async API path with balanced preset
+			if (process.arch === "x64" && process.platform === "win32") {
+				return;
+			}
+			const config: EmbeddingConfig = {
+				model: { type: "preset", name: "balanced" },
+				normalize: true,
+			};
 
-        const result = await embed(["Async embedding test"], config);
-        assertEmbedResult(result, 1, 768, true, true, true, false);
-    }, TEST_TIMEOUT_MS);
+			const result = await embed(["Async embedding test"], config);
+			assertEmbedResult(result, 1, 768, true, true, true, false);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-    it("test_embed_batch_texts", () => {
-        // Standalone embedding of a batch of 3 texts with fast preset
-        if (process.arch === "x64" && process.platform === "win32") { return; }
-        const config: EmbeddingConfig = {
-            model: { type: "preset", name: "fast" },
-            normalize: true,
-            batchSize: 32,
-        };
+	it(
+		"test_embed_batch_texts",
+		() => {
+			// Standalone embedding of a batch of 3 texts with fast preset
+			if (process.arch === "x64" && process.platform === "win32") {
+				return;
+			}
+			const config: EmbeddingConfig = {
+				model: { type: "preset", name: "fast" },
+				normalize: true,
+				batchSize: 32,
+			};
 
-        const result = embedSync(["Text one", "Text two", "Text three"], config);
-        assertEmbedResult(result, 3, 384, true, true, true, true);
-    }, TEST_TIMEOUT_MS);
+			const result = embedSync(["Text one", "Text two", "Text three"], config);
+			assertEmbedResult(result, 3, 384, true, true, true, true);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-    it("test_embed_empty_input", () => {
-        // Standalone embedding with empty text list returns empty result without error
-        if (process.arch === "x64" && process.platform === "win32") { return; }
-        const config: EmbeddingConfig = {
-            model: { type: "preset", name: "balanced" },
-            normalize: false,
-        };
+	it(
+		"test_embed_empty_input",
+		() => {
+			// Standalone embedding with empty text list returns empty result without error
+			if (process.arch === "x64" && process.platform === "win32") {
+				return;
+			}
+			const config: EmbeddingConfig = {
+				model: { type: "preset", name: "balanced" },
+				normalize: false,
+			};
 
-        const result = embedSync([], config);
-        assertEmbedResult(result, 0, undefined, true, true, false, false);
-    }, TEST_TIMEOUT_MS);
+			const result = embedSync([], config);
+			assertEmbedResult(result, 0, undefined, true, true, false, false);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-    it("test_embed_multilingual", () => {
-        // Standalone embedding with multilingual preset for non-English text
-        if (process.arch === "x64" && process.platform === "win32") { return; }
-        const config: EmbeddingConfig = {
-            model: { type: "preset", name: "multilingual" },
-            normalize: true,
-        };
+	it(
+		"test_embed_multilingual",
+		() => {
+			// Standalone embedding with multilingual preset for non-English text
+			if (process.arch === "x64" && process.platform === "win32") {
+				return;
+			}
+			const config: EmbeddingConfig = {
+				model: { type: "preset", name: "multilingual" },
+				normalize: true,
+			};
 
-        const result = embedSync(["Bonjour le monde", "Hallo Welt", "¡Hola Mundo!"], config);
-        assertEmbedResult(result, 3, 768, true, true, true, false);
-    }, TEST_TIMEOUT_MS);
+			const result = embedSync(["Bonjour le monde", "Hallo Welt", "¡Hola Mundo!"], config);
+			assertEmbedResult(result, 3, 768, true, true, true, false);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-    it("test_embed_single_text", () => {
-        // Standalone embedding of a single text with balanced preset
-        if (process.arch === "x64" && process.platform === "win32") { return; }
-        const config: EmbeddingConfig = {
-            model: { type: "preset", name: "balanced" },
-            normalize: true,
-        };
+	it(
+		"test_embed_single_text",
+		() => {
+			// Standalone embedding of a single text with balanced preset
+			if (process.arch === "x64" && process.platform === "win32") {
+				return;
+			}
+			const config: EmbeddingConfig = {
+				model: { type: "preset", name: "balanced" },
+				normalize: true,
+			};
 
-        const result = embedSync(["Hello, Kreuzberg!"], config);
-        assertEmbedResult(result, 1, 768, true, true, true, true);
-    }, TEST_TIMEOUT_MS);
-
+			const result = embedSync(["Hello, Kreuzberg!"], config);
+			assertEmbedResult(result, 1, 768, true, true, true, true);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-
