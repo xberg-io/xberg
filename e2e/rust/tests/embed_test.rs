@@ -5,7 +5,6 @@
 #![allow(clippy::too_many_lines)]
 use e2e_rust::assertions;
 use kreuzberg::core::config::{EmbeddingConfig, EmbeddingModelType};
-use std::sync::Arc;
 
 #[tokio::test]
 async fn test_embed_async() {
@@ -14,7 +13,9 @@ async fn test_embed_async() {
     return;
     #[cfg(any(all(target_os = "windows", target_env = "msvc")))]
     return;
-    let model = EmbeddingModelType::Preset("balanced".to_string());
+    let model = EmbeddingModelType::Preset {
+        name: "balanced".to_string(),
+    };
     let config = EmbeddingConfig {
         model,
         normalize: true,
@@ -22,7 +23,7 @@ async fn test_embed_async() {
     };
 
     let texts = vec!["Async embedding test"];
-    let result_res = kreuzberg::embeddings::embed_texts_async(&texts, Arc::new(config)).await;
+    let result_res = kreuzberg::embed_texts_async(texts, &config).await;
     let result = result_res.expect("Embedding failed");
     assertions::assert_embed_result(&result, Some(1), Some(768), true, true, true, false);
 }
@@ -34,15 +35,18 @@ fn test_embed_batch_texts() {
     return;
     #[cfg(any(all(target_os = "windows", target_env = "msvc")))]
     return;
-    let model = EmbeddingModelType::Preset("fast".to_string());
+    let model = EmbeddingModelType::Preset {
+        name: "fast".to_string(),
+    };
     let config = EmbeddingConfig {
         model,
         normalize: true,
         batch_size: 32,
+        ..Default::default()
     };
 
     let texts = vec!["Text one", "Text two", "Text three"];
-    let result_res = kreuzberg::embeddings::embed_texts(&texts, &config);
+    let result_res = kreuzberg::embed_texts(&texts, &config);
     let result = result_res.expect("Embedding failed");
     assertions::assert_embed_result(&result, Some(3), Some(384), true, true, true, true);
 }
@@ -54,15 +58,17 @@ fn test_embed_empty_input() {
     return;
     #[cfg(any(all(target_os = "windows", target_env = "msvc")))]
     return;
-    let model = EmbeddingModelType::Preset("balanced".to_string());
+    let model = EmbeddingModelType::Preset {
+        name: "balanced".to_string(),
+    };
     let config = EmbeddingConfig {
         model,
         normalize: false,
         ..Default::default()
     };
 
-    let texts = vec![];
-    let result_res = kreuzberg::embeddings::embed_texts(&texts, &config);
+    let texts: Vec<&str> = vec![];
+    let result_res = kreuzberg::embed_texts(&texts, &config);
     let result = result_res.expect("Embedding failed");
     assertions::assert_embed_result(&result, Some(0), None, true, true, false, false);
 }
@@ -74,7 +80,9 @@ fn test_embed_multilingual() {
     return;
     #[cfg(any(all(target_os = "windows", target_env = "msvc")))]
     return;
-    let model = EmbeddingModelType::Preset("multilingual".to_string());
+    let model = EmbeddingModelType::Preset {
+        name: "multilingual".to_string(),
+    };
     let config = EmbeddingConfig {
         model,
         normalize: true,
@@ -82,7 +90,7 @@ fn test_embed_multilingual() {
     };
 
     let texts = vec!["Bonjour le monde", "Hallo Welt", "¡Hola Mundo!"];
-    let result_res = kreuzberg::embeddings::embed_texts(&texts, &config);
+    let result_res = kreuzberg::embed_texts(&texts, &config);
     let result = result_res.expect("Embedding failed");
     assertions::assert_embed_result(&result, Some(3), Some(768), true, true, true, false);
 }
@@ -94,7 +102,9 @@ fn test_embed_single_text() {
     return;
     #[cfg(any(all(target_os = "windows", target_env = "msvc")))]
     return;
-    let model = EmbeddingModelType::Preset("balanced".to_string());
+    let model = EmbeddingModelType::Preset {
+        name: "balanced".to_string(),
+    };
     let config = EmbeddingConfig {
         model,
         normalize: true,
@@ -102,7 +112,7 @@ fn test_embed_single_text() {
     };
 
     let texts = vec!["Hello, Kreuzberg!"];
-    let result_res = kreuzberg::embeddings::embed_texts(&texts, &config);
+    let result_res = kreuzberg::embed_texts(&texts, &config);
     let result = result_res.expect("Embedding failed");
     assertions::assert_embed_result(&result, Some(1), Some(768), true, true, true, true);
 }
