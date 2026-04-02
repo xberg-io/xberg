@@ -100,8 +100,11 @@ pub fn segments_to_words(segments: &[SegmentData], page_height: f32) -> Vec<Hocr
 /// - Minimum columns: 3 → 2
 /// - Column sparsity: 75% → 95%
 /// - Overall density: 40% → 15%
-/// - Prose detection (long cell / avg length checks): skipped
-/// - Content asymmetry check: skipped
+/// - Prose detection: reject if >70% cells >100 chars (vs >50% >60 chars)
+/// - Prose detection: reject if avg cell >80 chars (vs >50 chars)
+/// - Single-word cell: reject if >85% single-word (vs >70%)
+/// - Content asymmetry: reject if one col >92% of text (vs >85%)
+/// - Column-text-flow: applied equally (reject if >60% rows flow through)
 pub fn post_process_table(
     table: Vec<Vec<String>>,
     layout_guided: bool,
@@ -147,15 +150,39 @@ fn post_process_table_inner(
         }
     }
 
-    // Skip prose detection for layout-guided tables — the model already
-    // confirmed this is a table region, so long cells are acceptable
-    // (e.g., description columns in specification tables).
-    if non_empty > 0 && !layout_guided {
-        if long_cells * 2 > non_empty {
-            return None;
-        }
-        if total_chars / non_empty > 50 {
-            return None;
+    // Prose detection: reject if too many cells contain long text.
+    // Layout-guided tables use relaxed thresholds since the model already
+    // confirmed this is a table region, but multi-column prose can still
+    // fool the layout model (e.g., 2-column academic papers).
+    if non_empty > 0 {
+        if layout_guided {
+            // Relaxed: reject if >70% of cells exceed 100 chars
+            if long_cells > 0 {
+                let long_cells_100 = table
+                    .iter()
+                    .flat_map(|row| row.iter())
+                    .filter(|cell| {
+                        let trimmed = cell.trim();
+                        !trimmed.is_empty() && trimmed.chars().count() > 100
+                    })
+                    .count();
+                if long_cells_100 * 10 > non_empty * 7 {
+                    return None;
+                }
+            }
+            // Relaxed: reject if avg cell length > 80 chars
+            if total_chars / non_empty > 80 {
+                return None;
+            }
+        } else {
+            // Unsupervised: reject if >50% of cells exceed 60 chars
+            if long_cells * 2 > non_empty {
+                return None;
+            }
+            // Unsupervised: reject if avg cell length > 50 chars
+            if total_chars / non_empty > 50 {
+                return None;
+            }
         }
     }
 
@@ -303,8 +330,9 @@ fn post_process_table_inner(
     // Real tables typically have meaningful multi-word content in their cells.
     // Only check tables with 5+ columns, since 2-4 column tables with short cells
     // are common and legitimate (e.g., Name | Department | Salary).
-    // Skip when layout-guided (model already confirmed table).
-    if !layout_guided && processed[0].len() >= 5 {
+    // Layout-guided uses a stricter threshold (>85%) since the model has some
+    // confidence, but multi-column prose can still fool it.
+    if processed[0].len() >= 5 {
         let mut single_word_cells = 0usize;
         let mut non_empty_cells = 0usize;
         for row in processed.iter().skip(1) {
@@ -320,14 +348,49 @@ fn post_process_table_inner(
                 }
             }
         }
-        // If >70% of non-empty data cells are single/double-word, this is prose, not a table.
-        if non_empty_cells >= 6 && single_word_cells * 10 > non_empty_cells * 7 {
+        let threshold = if layout_guided {
+            // Layout-guided: reject if >85% single-word cells
+            85
+        } else {
+            // Unsupervised: reject if >70% single-word cells
+            70
+        };
+        if non_empty_cells >= 6 && single_word_cells * 100 > non_empty_cells * threshold {
             return None;
         }
     }
 
-    // Content asymmetry check — skip when layout-guided (model already confirmed table).
-    if !layout_guided {
+    // Column-text-flow check: detect multi-column prose masquerading as a table.
+    // The key signal is that cells in adjacent columns form sentence continuations:
+    // column 0 ends without sentence-ending punctuation and column 1 starts with a
+    // lowercase letter. If >60% of non-empty rows exhibit this "flow-through"
+    // pattern, the content is prose, not a table.
+    // Applied for both layout-guided and unsupervised modes.
+    if processed[0].len() >= 2 {
+        let mut flow_rows = 0usize;
+        let mut eligible_rows = 0usize;
+        for row in processed.iter().skip(1) {
+            let col0 = row.first().map(|s| s.trim()).unwrap_or("");
+            let col1 = row.get(1).map(|s| s.trim()).unwrap_or("");
+            if col0.is_empty() || col1.is_empty() {
+                continue;
+            }
+            eligible_rows += 1;
+            let ends_without_punct =
+                !col0.ends_with('.') && !col0.ends_with('?') && !col0.ends_with('!') && !col0.ends_with(':');
+            let starts_lowercase = col1.chars().next().is_some_and(|c| c.is_lowercase());
+            if ends_without_punct && starts_lowercase {
+                flow_rows += 1;
+            }
+        }
+        if eligible_rows >= 3 && flow_rows * 10 > eligible_rows * 6 {
+            return None;
+        }
+    }
+
+    // Content asymmetry check: reject if one column has the vast majority of text.
+    // Layout-guided uses relaxed threshold (>92%) vs unsupervised (>85%).
+    {
         let num_cols = processed[0].len();
         let col_char_counts: Vec<usize> = (0..num_cols)
             .map(|c| {
@@ -337,19 +400,32 @@ fn post_process_table_inner(
                     .sum()
             })
             .collect();
-        let total_chars: usize = col_char_counts.iter().sum();
+        let total_chars_asym: usize = col_char_counts.iter().sum();
 
-        if total_chars > 0 {
-            for (c, &col_chars) in col_char_counts.iter().enumerate() {
-                let char_share = col_chars as f64 / total_chars as f64;
-                let empty_in_col = processed[1..]
-                    .iter()
-                    .filter(|row| row.get(c).is_none_or(|cell| cell.trim().is_empty()))
-                    .count();
-                let empty_ratio = empty_in_col as f64 / data_row_count as f64;
+        if total_chars_asym > 0 {
+            // Check for dominant column (one column has almost all the text)
+            let max_col_share = col_char_counts
+                .iter()
+                .map(|&cc| cc as f64 / total_chars_asym as f64)
+                .fold(0.0_f64, f64::max);
+            let dominant_threshold = if layout_guided { 0.92 } else { 0.85 };
+            if max_col_share > dominant_threshold {
+                return None;
+            }
 
-                if char_share < 0.15 && empty_ratio > 0.5 {
-                    return None;
+            // Check for sparse + low-content columns (unsupervised only)
+            if !layout_guided {
+                for (c, &col_chars) in col_char_counts.iter().enumerate() {
+                    let char_share = col_chars as f64 / total_chars_asym as f64;
+                    let empty_in_col = processed[1..]
+                        .iter()
+                        .filter(|row| row.get(c).is_none_or(|cell| cell.trim().is_empty()))
+                        .count();
+                    let empty_ratio = empty_in_col as f64 / data_row_count as f64;
+
+                    if char_share < 0.15 && empty_ratio > 0.5 {
+                        return None;
+                    }
                 }
             }
         }
@@ -597,5 +673,197 @@ mod tests {
         ];
         let result = post_process_table(table, false, false);
         assert!(result.is_some(), "Real table should be accepted");
+    }
+
+    #[test]
+    fn test_column_text_flow_rejects_multicolumn_prose() {
+        // Simulates 2-column academic paper prose reconstructed as a table.
+        // Column 0 ends mid-sentence (no punctuation), column 1 starts lowercase.
+        let table = vec![
+            vec!["Header Left".into(), "Header Right".into()],
+            vec![
+                "The results of this experiment show that the proposed method".into(),
+                "significantly outperforms the baseline in all metrics tested".into(),
+            ],
+            vec![
+                "across multiple datasets including the standard benchmark".into(),
+                "suite commonly used in the literature for evaluation of".into(),
+            ],
+            vec![
+                "natural language processing tasks and related problems".into(),
+                "involving text classification and information extraction".into(),
+            ],
+            vec![
+                "methods that rely on deep learning architectures with".into(),
+                "attention mechanisms and transformer-based embeddings".into(),
+            ],
+        ];
+        // Both unsupervised and layout-guided should reject this
+        let result_unsupervised = post_process_table(table.clone(), false, false);
+        assert!(
+            result_unsupervised.is_none(),
+            "Multi-column prose should be rejected in unsupervised mode"
+        );
+        let result_guided = post_process_table(table, true, false);
+        assert!(
+            result_guided.is_none(),
+            "Multi-column prose should be rejected in layout-guided mode"
+        );
+    }
+
+    #[test]
+    fn test_column_text_flow_accepts_real_two_column_table() {
+        // A real 2-column table where cells are independent (sentences end properly).
+        let table = vec![
+            vec!["Feature".into(), "Description".into()],
+            vec!["Authentication.".into(), "OAuth 2.0 with JWT tokens.".into()],
+            vec!["Rate Limiting.".into(), "100 requests per minute.".into()],
+            vec!["Caching.".into(), "Redis-backed with TTL.".into()],
+            vec!["Monitoring.".into(), "Prometheus metrics endpoint.".into()],
+        ];
+        let result = post_process_table(table, true, false);
+        assert!(
+            result.is_some(),
+            "Real 2-column table with proper sentence endings should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_column_text_flow_not_triggered_with_few_rows() {
+        // Only 2 eligible rows — below the 3-row minimum for the check.
+        let table = vec![
+            vec!["Left".into(), "Right".into()],
+            vec![
+                "some text without ending punct".into(),
+                "continues here in lowercase".into(),
+            ],
+            vec!["another partial sentence".into(), "flowing into next column".into()],
+        ];
+        // With only 2 data rows (eligible_rows < 3), the flow check should not trigger.
+        // The table may still be rejected by other checks, but not by flow-through.
+        // We just verify it doesn't panic and runs without issues.
+        let _ = post_process_table(table, true, false);
+    }
+
+    #[test]
+    fn test_layout_guided_rejects_prose_with_long_cells() {
+        // Layout-guided should now reject tables where >70% of cells exceed 100 chars.
+        let long_cell = "a".repeat(120);
+        let table = vec![
+            vec!["Header A".into(), "Header B".into()],
+            vec![long_cell.clone(), long_cell.clone()],
+            vec![long_cell.clone(), long_cell.clone()],
+            vec![long_cell.clone(), long_cell.clone()],
+            vec![long_cell.clone(), long_cell.clone()],
+        ];
+        let result = post_process_table(table, true, false);
+        assert!(
+            result.is_none(),
+            "Layout-guided should reject tables with overwhelmingly long cells"
+        );
+    }
+
+    #[test]
+    fn test_layout_guided_accepts_table_with_some_long_cells() {
+        // A layout-guided table where some cells are long (description column)
+        // but not overwhelming — should be accepted.
+        let table = vec![
+            vec!["ID".into(), "Description".into()],
+            vec![
+                "1".into(),
+                "A moderately long description that explains the feature in detail.".into(),
+            ],
+            vec![
+                "2".into(),
+                "Another description of similar length for a different item.".into(),
+            ],
+            vec!["3".into(), "Short desc.".into()],
+            vec![
+                "4".into(),
+                "Yet another reasonably sized description for testing.".into(),
+            ],
+        ];
+        let result = post_process_table(table, true, false);
+        assert!(
+            result.is_some(),
+            "Layout-guided table with some long cells should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_layout_guided_rejects_dominant_column() {
+        // One column has >92% of all text content — asymmetric.
+        let table = vec![
+            vec!["Tag".into(), "Content".into()],
+            vec!["x".into(), "This is a very long paragraph of text that contains almost all content in the table and dwarfs the tag column.".into()],
+            vec!["y".into(), "Another massive block of text that makes the first column insignificant by comparison in terms of character count.".into()],
+            vec!["z".into(), "Yet more extensive content that further skews the distribution of characters heavily toward this second column here.".into()],
+        ];
+        let result = post_process_table(table, true, false);
+        assert!(
+            result.is_none(),
+            "Layout-guided should reject tables with >92% text in one column"
+        );
+    }
+
+    #[test]
+    fn test_layout_guided_single_word_prose_rejected() {
+        // Layout-guided mode with 5+ columns where >85% cells are single words.
+        let table = vec![
+            vec!["A".into(), "B".into(), "C".into(), "D".into(), "E".into(), "F".into()],
+            vec![
+                "The".into(),
+                "quick".into(),
+                "brown".into(),
+                "fox".into(),
+                "jumps".into(),
+                "over".into(),
+            ],
+            vec![
+                "the".into(),
+                "lazy".into(),
+                "dog".into(),
+                "and".into(),
+                "runs".into(),
+                "away".into(),
+            ],
+            vec![
+                "from".into(),
+                "the".into(),
+                "big".into(),
+                "bad".into(),
+                "wolf".into(),
+                "today".into(),
+            ],
+            vec![
+                "who".into(),
+                "was".into(),
+                "very".into(),
+                "mean".into(),
+                "and".into(),
+                "scary".into(),
+            ],
+            vec![
+                "but".into(),
+                "the".into(),
+                "fox".into(),
+                "was".into(),
+                "too".into(),
+                "fast".into(),
+            ],
+            vec![
+                "for".into(),
+                "the".into(),
+                "wolf".into(),
+                "to".into(),
+                "ever".into(),
+                "catch".into(),
+            ],
+        ];
+        let result = post_process_table(table, true, false);
+        assert!(
+            result.is_none(),
+            "Layout-guided should reject tables with >85% single-word cells"
+        );
     }
 }

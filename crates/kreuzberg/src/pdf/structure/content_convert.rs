@@ -399,13 +399,21 @@ fn build_paragraph_from_lines(line_groups: &[&Vec<usize>], elements: &[ContentEl
             let mut is_list = matches!(elem.semantic_role, Some(SemanticRole::ListItem));
 
             // Detect list items from text content when not tagged.
+            // Check the first few tokens (up to 3) to catch multi-token list prefixes
+            // like "(1)" or "[iv]" that may be split across segments.
             if !is_list {
-                let first_word = pdf_lines
+                let leading_text: String = pdf_lines
                     .first()
-                    .and_then(|l| l.segments.first())
-                    .map(|s| s.text.as_str())
-                    .unwrap_or("");
-                is_list = super::paragraphs::is_list_prefix(first_word);
+                    .map(|l| {
+                        l.segments
+                            .iter()
+                            .take(3)
+                            .map(|s| s.text.as_str())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    })
+                    .unwrap_or_default();
+                is_list = super::paragraphs::is_list_prefix_multi_token(&leading_text);
             }
 
             let heading_level = match elem.semantic_role {
@@ -492,9 +500,9 @@ fn element_to_paragraph(elem: &ContentElement) -> Option<PdfParagraph> {
     let is_page_furniture = false;
 
     // Detect list items from text content when not tagged.
+    // Use multi-token check to catch patterns like "(1)" or "[iv]" split across words.
     if !is_list_item {
-        let first_word = full_text.split_whitespace().next().unwrap_or("");
-        is_list_item = super::paragraphs::is_list_prefix(first_word);
+        is_list_item = super::paragraphs::is_list_prefix_multi_token(&full_text);
     }
 
     // Map heading level from semantic role, with word-count guard.

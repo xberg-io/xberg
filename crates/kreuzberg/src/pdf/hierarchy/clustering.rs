@@ -219,11 +219,14 @@ pub fn assign_heading_levels_smart(
         return vec![(clusters[0].centroid, None)];
     }
 
-    // Find the cluster with the most members (this is body text)
+    // Find the cluster with the most total text content (this is body text).
+    // Using total character count rather than member count avoids misidentifying
+    // a small repeated header/footer font as the body cluster in documents
+    // where headers appear on every page (many members, but little text each).
     let body_idx = clusters
         .iter()
         .enumerate()
-        .max_by_key(|(_, c)| c.members.len())
+        .max_by_key(|(_, c)| c.members.iter().map(|block| block.text.len()).sum::<usize>())
         .map(|(i, _)| i)
         .unwrap_or(0);
 
@@ -342,4 +345,71 @@ fn assign_blocks_to_centroids(blocks: &[TextBlock], centroids: &[f32]) -> Vec<Ve
     }
 
     clusters
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pdf::hierarchy::bounding_box::BoundingBox;
+
+    fn make_block(text: &str, font_size: f32) -> TextBlock {
+        TextBlock {
+            text: text.to_string(),
+            bbox: BoundingBox {
+                left: 0.0,
+                top: 0.0,
+                right: 100.0,
+                bottom: font_size,
+            },
+            font_size,
+        }
+    }
+
+    #[test]
+    fn test_body_cluster_by_text_content_not_member_count() {
+        // Scenario: 10 short header blocks (8pt) vs 3 long body blocks (12pt).
+        // By member count, the 8pt cluster would win. By text content, the 12pt
+        // cluster should win because body text contains more characters.
+        let mut blocks = Vec::new();
+        for i in 0..10 {
+            blocks.push(make_block(&format!("Hdr{i}"), 8.0)); // 4 chars each = 40 total
+        }
+        for _ in 0..3 {
+            // Each body block has ~50 chars = 150 total
+            blocks.push(make_block("This is a longer body text paragraph with content.", 12.0));
+        }
+
+        let clusters = cluster_font_sizes(&blocks, 2).unwrap();
+        let levels = assign_heading_levels_smart(&clusters, 1.15, 1.5);
+
+        // The 12pt cluster (body text) should be identified as body (None),
+        // and the 8pt cluster should NOT be body.
+        let body_centroid = levels.iter().find(|(_, l)| l.is_none()).map(|(c, _)| *c);
+        assert!(body_centroid.is_some(), "should have a body cluster");
+        // Body centroid should be near 12pt, not 8pt
+        let bc = body_centroid.unwrap();
+        assert!((bc - 12.0).abs() < 1.0, "body centroid should be near 12pt, got {bc}");
+    }
+
+    #[test]
+    fn test_body_cluster_equal_members_picks_more_content() {
+        // Same number of members but different text lengths
+        let blocks = vec![
+            make_block("AB", 18.0),
+            make_block("CD", 18.0),
+            make_block("This is much longer body text content here.", 12.0),
+            make_block("Another long paragraph of body text for the doc.", 12.0),
+        ];
+
+        let clusters = cluster_font_sizes(&blocks, 2).unwrap();
+        let levels = assign_heading_levels_smart(&clusters, 1.15, 1.5);
+
+        let body_centroid = levels.iter().find(|(_, l)| l.is_none()).map(|(c, _)| *c);
+        assert!(body_centroid.is_some());
+        let bc = body_centroid.unwrap();
+        assert!(
+            (bc - 12.0).abs() < 1.0,
+            "body should be 12pt cluster (more text), got {bc}"
+        );
+    }
 }

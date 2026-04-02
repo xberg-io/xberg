@@ -157,8 +157,45 @@ fn text_to_paragraph(text: &str, font_size: f32, is_bold: bool, is_list_item: bo
     }
 }
 
-/// Check if text looks like a list item prefix.
-pub(super) fn is_list_prefix(text: &str) -> bool {
+/// Check if the first few whitespace-separated tokens of a paragraph form a list prefix.
+///
+/// This extends `is_list_prefix` by looking at the first 3 tokens, which catches
+/// multi-token patterns like `(1)`, `[iv]`, `(a)` that may be split across segments.
+pub(super) fn is_list_prefix_multi_token(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+
+    // Check the first 3 whitespace-separated tokens
+    let tokens: Vec<&str> = trimmed.split_whitespace().take(3).collect();
+    for token in &tokens {
+        if is_single_token_list_prefix(token) {
+            return true;
+        }
+    }
+
+    // Check multi-token patterns: "(X)" or "[X]" may be split as "(X", ")" or "(", "X)"
+    // Try joining first 2 tokens
+    if tokens.len() >= 2 {
+        let joined = format!("{}{}", tokens[0], tokens[1]);
+        if is_single_token_list_prefix(&joined) {
+            return true;
+        }
+    }
+    // Try joining first 3 tokens
+    if tokens.len() >= 3 {
+        let joined = format!("{}{}{}", tokens[0], tokens[1], tokens[2]);
+        if is_single_token_list_prefix(&joined) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Check if a single token looks like a list item prefix.
+fn is_single_token_list_prefix(text: &str) -> bool {
     let trimmed = text.trim();
     // Bullet characters: hyphen, asterisk, bullet, en dash, em dash, triangular bullet, white bullet
     if matches!(
@@ -188,7 +225,7 @@ pub(super) fn is_list_prefix(text: &str) -> bool {
             return true;
         }
     }
-    // Parenthesized numbers/letters: (1) (a) (i) (A)
+    // Parenthesized numbers/letters: (1) (a) (i) (A) — also handles multi-digit: (12), (iv)
     // Use char-based slicing to avoid panicking on multi-byte UTF-8 boundaries.
     if bytes.len() >= 3 && bytes[0] == b'(' && bytes[bytes.len() - 1] == b')' {
         let char_count = trimmed.chars().count();
@@ -202,7 +239,7 @@ pub(super) fn is_list_prefix(text: &str) -> bool {
             }
         }
     }
-    // Bracketed numbers/letters: [1] [a]
+    // Bracketed numbers/letters: [1] [a] [iv] [12]
     // Use char-based slicing to avoid panicking on multi-byte UTF-8 boundaries.
     if bytes.len() >= 3 && bytes[0] == b'[' && bytes[bytes.len() - 1] == b']' {
         let char_count = trimmed.chars().count();
@@ -210,6 +247,7 @@ pub(super) fn is_list_prefix(text: &str) -> bool {
             let inner: String = trimmed.chars().skip(1).take(char_count - 2).collect();
             if inner.chars().all(|c| c.is_ascii_digit())
                 || (inner.len() == 1 && inner.chars().next().is_some_and(|c| c.is_ascii_alphabetic()))
+                || is_roman_numeral(&inner)
             {
                 return true;
             }
@@ -239,4 +277,101 @@ fn is_roman_numeral(s: &str) -> bool {
         lower.as_str(),
         "i" | "ii" | "iii" | "iv" | "v" | "vi" | "vii" | "viii" | "ix" | "x" | "xi" | "xii"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- is_single_token_list_prefix tests --
+
+    #[test]
+    fn test_single_token_list_prefix_bullet_chars() {
+        assert!(is_single_token_list_prefix("-"));
+        assert!(is_single_token_list_prefix("*"));
+        assert!(is_single_token_list_prefix("\u{2022}")); // •
+        assert!(is_single_token_list_prefix("\u{2013}")); // –
+    }
+
+    #[test]
+    fn test_single_token_list_prefix_numbered() {
+        assert!(is_single_token_list_prefix("1."));
+        assert!(is_single_token_list_prefix("2)"));
+        assert!(is_single_token_list_prefix("10."));
+        assert!(is_single_token_list_prefix("3:"));
+    }
+
+    #[test]
+    fn test_single_token_list_prefix_parenthesized() {
+        assert!(is_single_token_list_prefix("(1)"));
+        assert!(is_single_token_list_prefix("(a)"));
+        assert!(is_single_token_list_prefix("(A)"));
+        assert!(is_single_token_list_prefix("(iv)"));
+        assert!(is_single_token_list_prefix("(12)"));
+    }
+
+    #[test]
+    fn test_single_token_list_prefix_bracketed() {
+        assert!(is_single_token_list_prefix("[1]"));
+        assert!(is_single_token_list_prefix("[a]"));
+        assert!(is_single_token_list_prefix("[12]"));
+        assert!(is_single_token_list_prefix("[iv]"));
+    }
+
+    #[test]
+    fn test_single_token_list_prefix_alphabetic() {
+        assert!(is_single_token_list_prefix("a."));
+        assert!(is_single_token_list_prefix("b)"));
+        assert!(is_single_token_list_prefix("A."));
+    }
+
+    #[test]
+    fn test_single_token_list_prefix_roman() {
+        assert!(is_single_token_list_prefix("i."));
+        assert!(is_single_token_list_prefix("ii."));
+        assert!(is_single_token_list_prefix("IV."));
+        assert!(is_single_token_list_prefix("iii)"));
+    }
+
+    #[test]
+    fn test_single_token_list_prefix_not_regular_text() {
+        assert!(!is_single_token_list_prefix("Hello"));
+        assert!(!is_single_token_list_prefix("The"));
+        assert!(!is_single_token_list_prefix(""));
+    }
+
+    // -- is_list_prefix_multi_token tests --
+
+    #[test]
+    fn test_multi_token_first_token_bullet() {
+        assert!(is_list_prefix_multi_token("- item text"));
+        assert!(is_list_prefix_multi_token("1. first item"));
+        assert!(is_list_prefix_multi_token("(a) first item"));
+    }
+
+    #[test]
+    fn test_multi_token_parenthesized_split() {
+        // "(1)" split as two tokens: "(1" and ")" — joining should match
+        assert!(is_list_prefix_multi_token("(1 ) rest of text"));
+    }
+
+    #[test]
+    fn test_multi_token_bracketed_split() {
+        // "[iv]" as a single token in position 2
+        assert!(is_list_prefix_multi_token("  [iv] text here"));
+    }
+
+    #[test]
+    fn test_multi_token_not_list() {
+        assert!(!is_list_prefix_multi_token("This is regular text"));
+        assert!(!is_list_prefix_multi_token("The quick brown fox"));
+        assert!(!is_list_prefix_multi_token(""));
+    }
+
+    #[test]
+    fn test_multi_token_leading_whitespace() {
+        // Leading whitespace should be trimmed, then tokens checked
+        assert!(is_list_prefix_multi_token("   1. indented item"));
+        assert!(is_list_prefix_multi_token("\t(a) tabbed item"));
+    }
 }

@@ -152,6 +152,53 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
         if para.is_code_block {
             para.heading_level = None;
         }
+
+        // Pass 3.5: heuristic formula detection.
+        // Short paragraphs with high density of math characters (Greek letters,
+        // math operators, set theory symbols) are likely formulas.
+        if para.heading_level.is_none()
+            && !para.is_list_item
+            && !para.is_code_block
+            && !para.is_formula
+            && word_count <= 30
+        {
+            let math_char_count = para_text.chars().filter(|c| is_math_character(*c)).count();
+            let total_chars = para_text.chars().count();
+            if total_chars > 0 && (math_char_count >= 3 || (math_char_count as f64 / total_chars as f64) >= 0.15) {
+                para.is_formula = true;
+                para.heading_level = None;
+            }
+        }
+
+        // Pass 4: rescue pass — promote short, large-font paragraphs to headings.
+        // Catches headings that were missed by Passes 1-2.5 (e.g., non-bold headings
+        // at a font size that didn't form its own cluster but is clearly larger than body).
+        if para.heading_level.is_none()
+            && !para.is_list_item
+            && !para.is_code_block
+            && !para.is_page_furniture
+            && body_font_size > 0.0
+            && para.dominant_font_size >= body_font_size + 0.5
+        {
+            let rescue_text = para_text.trim();
+            let rescue_wc = rescue_text.split_whitespace().count();
+            if (1..=8).contains(&rescue_wc)
+                && !rescue_text.ends_with('.')
+                && !rescue_text.ends_with(':')
+                && !looks_like_figure_label(rescue_text)
+                && !super::layout_classify::is_separator_text(rescue_text)
+            {
+                let ratio = para.dominant_font_size / body_font_size;
+                let rescue_level = if ratio > 1.4 {
+                    1
+                } else if ratio > 1.2 {
+                    2
+                } else {
+                    3
+                };
+                para.heading_level = Some(rescue_level);
+            }
+        }
     }
 }
 
@@ -224,6 +271,29 @@ pub(super) fn refine_heading_hierarchy(all_pages: &mut [Vec<PdfParagraph>]) {
             .any(|p| p.heading_level.is_some());
         if has_any_heading {
             promote_title_heading(all_pages);
+        }
+
+        // Additional title promotion: if still no H1 exists, check if the first
+        // paragraph on page 0 has the largest font size on that page AND is short
+        // (<=10 words). This catches unclassified title paragraphs at the top of
+        // documents that were missed by font-size clustering and bold heuristics.
+        let still_no_h1 = !all_pages
+            .iter()
+            .flat_map(|page| page.iter())
+            .any(|p| p.heading_level == Some(1));
+        if still_no_h1 && !all_pages.is_empty() && !all_pages[0].is_empty() {
+            let page0 = &all_pages[0];
+            let max_font_on_page = page0.iter().map(|p| p.dominant_font_size).fold(0.0f32, f32::max);
+            let first = &page0[0];
+            let first_text = paragraph_plain_text(first);
+            let first_wc = first_text.split_whitespace().count();
+            if first.dominant_font_size >= max_font_on_page
+                && first_wc <= 10
+                && first_wc > 0
+                && !first.is_page_furniture
+            {
+                all_pages[0][0].heading_level = Some(1);
+            }
         }
     }
 
@@ -753,6 +823,54 @@ pub(super) fn mark_cross_page_repeating_text(all_pages: &mut [Vec<PdfParagraph>]
     }
 }
 
+/// Check if a character is a math/formula character.
+///
+/// Includes common math operators, Greek letters, set theory symbols,
+/// and other characters commonly found in mathematical formulas.
+fn is_math_character(c: char) -> bool {
+    matches!(
+        c,
+        // Math operators and symbols
+        '\u{2200}' // ∀
+        | '\u{2203}' // ∃
+        | '\u{2208}' // ∈
+        | '\u{2209}' // ∉
+        | '\u{2282}' // ⊂
+        | '\u{2283}' // ⊃
+        | '\u{222A}' // ∪
+        | '\u{2229}' // ∩
+        | '\u{2211}' // ∑
+        | '\u{222B}' // ∫
+        | '\u{220F}' // ∏
+        | '\u{2202}' // ∂
+        | '\u{2207}' // ∇
+        | '\u{2264}' // ≤
+        | '\u{2265}' // ≥
+        | '\u{2260}' // ≠
+        | '\u{2248}' // ≈
+        | '\u{00B1}' // ±
+        | '\u{221E}' // ∞
+        | '\u{221A}' // √
+        | '\u{2192}' // →
+        | '\u{2190}' // ←
+        | '\u{2194}' // ↔
+        | '\u{21D2}' // ⇒
+        | '\u{21D0}' // ⇐
+        | '\u{27E8}' // ⟨
+        | '\u{27E9}' // ⟩
+        | '\u{00D7}' // ×
+        | '\u{00F7}' // ÷
+    ) || is_greek_letter(c)
+}
+
+/// Check if a character is a Greek letter (lowercase α-ω or uppercase Α-Ω).
+fn is_greek_letter(c: char) -> bool {
+    // Greek and Coptic block: U+0370–U+03FF
+    // Lowercase: α (U+03B1) to ω (U+03C9)
+    // Uppercase: Α (U+0391) to Ω (U+03A9)
+    matches!(c, '\u{0391}'..='\u{03A9}' | '\u{03B1}'..='\u{03C9}')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1234,5 +1352,171 @@ mod tests {
         let mut paragraphs = vec![make_text_paragraph(18.0, "Title", true)];
         classify_paragraphs(&mut paragraphs, &heading_map);
         assert_eq!(paragraphs[0].heading_level, Some(1));
+    }
+
+    #[test]
+    fn test_formula_detection_math_symbols() {
+        // Paragraph with several math characters should be detected as formula
+        let heading_map = vec![(12.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(12.0, "∑ x∈S f(x) ≤ ∞", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        assert!(paragraphs[0].is_formula, "should detect formula with math symbols");
+        assert_eq!(paragraphs[0].heading_level, None);
+    }
+
+    #[test]
+    fn test_formula_detection_greek_letters() {
+        // Paragraph with Greek letters at high density
+        let heading_map = vec![(12.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(12.0, "α + β = γ", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        assert!(paragraphs[0].is_formula, "should detect formula with Greek letters");
+    }
+
+    #[test]
+    fn test_formula_detection_not_regular_text() {
+        // Regular paragraph text should NOT be marked as formula
+        let heading_map = vec![(12.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(
+            12.0,
+            "This is a normal paragraph with regular text.",
+            false,
+        )];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        assert!(!paragraphs[0].is_formula, "normal text should not be a formula");
+    }
+
+    #[test]
+    fn test_formula_detection_skips_headings() {
+        // A heading with math characters should stay a heading, not become formula
+        let heading_map = vec![(18.0, Some(1)), (12.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(18.0, "∑ Results", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        // Should be heading, not formula (heading takes precedence)
+        assert_eq!(paragraphs[0].heading_level, Some(1));
+    }
+
+    #[test]
+    fn test_formula_detection_high_density() {
+        // Even with fewer than 3 math chars, 15%+ density triggers formula
+        let heading_map = vec![(12.0, None)];
+        // "x→y" has 3 chars total, 1 math char → 33% > 15%
+        let mut paragraphs = vec![make_text_paragraph(12.0, "x→y", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        assert!(
+            paragraphs[0].is_formula,
+            "high density of math chars should trigger formula"
+        );
+    }
+
+    #[test]
+    fn test_is_math_character() {
+        assert!(is_math_character('∑'));
+        assert!(is_math_character('∫'));
+        assert!(is_math_character('α'));
+        assert!(is_math_character('Ω'));
+        assert!(is_math_character('≤'));
+        assert!(is_math_character('∞'));
+        assert!(!is_math_character('a'));
+        assert!(!is_math_character('1'));
+        assert!(!is_math_character('+'));
+    }
+
+    #[test]
+    fn test_is_greek_letter() {
+        assert!(is_greek_letter('α'));
+        assert!(is_greek_letter('ω'));
+        assert!(is_greek_letter('Α'));
+        assert!(is_greek_letter('Ω'));
+        assert!(!is_greek_letter('a'));
+        assert!(!is_greek_letter('Z'));
+    }
+
+    // ── Pass 4: rescue pass tests ──
+
+    #[test]
+    fn test_rescue_pass_promotes_large_font_short_paragraph() {
+        // Non-bold, non-heading-cluster paragraph at 15pt (body=12pt) with 3 words
+        // should be rescued as a heading via Pass 4.
+        let heading_map = vec![(12.0, None)]; // only body cluster
+        let mut paragraphs = vec![make_text_paragraph(15.0, "Results and Discussion", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        // 15/12 = 1.25 > 1.2 -> H2
+        assert_eq!(paragraphs[0].heading_level, Some(2));
+    }
+
+    #[test]
+    fn test_rescue_pass_h1_for_very_large_font() {
+        // Font size > 1.4x body -> H1
+        let heading_map = vec![(10.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(15.0, "Document Title", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        // 15/10 = 1.5 > 1.4 -> H1
+        assert_eq!(paragraphs[0].heading_level, Some(1));
+    }
+
+    #[test]
+    fn test_rescue_pass_h3_for_slightly_larger_font() {
+        // Font slightly larger than body -> H3
+        let heading_map = vec![(12.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(13.0, "Methods", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        // 13/12 = 1.083, > 1.0 but <= 1.2 -> H3
+        assert_eq!(paragraphs[0].heading_level, Some(3));
+    }
+
+    #[test]
+    fn test_rescue_pass_skips_long_paragraphs() {
+        // Paragraph with >8 words should NOT be rescued
+        let heading_map = vec![(12.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(
+            15.0,
+            "This is a very long paragraph that has way too many words",
+            false,
+        )];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        assert_eq!(paragraphs[0].heading_level, None);
+    }
+
+    #[test]
+    fn test_rescue_pass_skips_period_ending() {
+        // Paragraph ending with period should NOT be rescued
+        let heading_map = vec![(12.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(15.0, "Some text here.", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        assert_eq!(paragraphs[0].heading_level, None);
+    }
+
+    #[test]
+    fn test_rescue_pass_skips_list_items() {
+        let heading_map = vec![(12.0, None)];
+        let mut para = make_text_paragraph(15.0, "Item One", false);
+        para.is_list_item = true;
+        let mut paragraphs = vec![para];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        assert_eq!(paragraphs[0].heading_level, None);
+    }
+
+    #[test]
+    fn test_rescue_pass_skips_body_font_size() {
+        // Font at body size should NOT be rescued (needs > body + 0.5)
+        let heading_map = vec![(12.0, None)];
+        let mut paragraphs = vec![make_text_paragraph(12.0, "Methods", false)];
+        classify_paragraphs(&mut paragraphs, &heading_map);
+        assert_eq!(paragraphs[0].heading_level, None);
+    }
+
+    // ── refine_heading_hierarchy: enhanced title promotion tests ──
+
+    #[test]
+    fn test_refine_promotes_first_largest_font_paragraph_to_h1() {
+        // First paragraph on page 0 has the largest font, short text, no heading level
+        let mut pages = vec![vec![
+            make_text_paragraph(18.0, "Annual Report", false),
+            make_text_paragraph(12.0, "Some body text here for the document", false),
+        ]];
+        // No headings at all initially -- refine should promote the first paragraph
+        refine_heading_hierarchy(&mut pages);
+        assert_eq!(pages[0][0].heading_level, Some(1));
     }
 }

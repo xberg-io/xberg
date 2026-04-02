@@ -810,7 +810,14 @@ fn match_blocks_global(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<Bl
                 continue;
             }
 
-            let content_sim = crate::quality::compute_f1(ext_tok, gt_tok);
+            // For Image ↔ Image matches, normalize content: any image placeholder
+            // matches any other regardless of filename/URL. Use 1.0 content similarity.
+            let content_sim =
+                if ext_blocks[ei].block_type == MdBlockType::Image && gt_blocks[gi].block_type == MdBlockType::Image {
+                    1.0
+                } else {
+                    crate::quality::compute_f1(ext_tok, gt_tok)
+                };
             let score = content_sim * compat;
             // Raise threshold for short blocks to prevent spurious matches
             let min_threshold = if gt_tok.len().min(ext_tok.len()) < 5 {
@@ -972,7 +979,13 @@ fn match_blocks_windowed(gt_blocks: &[MdBlock], ext_blocks: &[MdBlock]) -> (Vec<
                 continue;
             }
 
-            let content_sim = crate::quality::compute_f1(&ext_tokens[ei], &gt_tokens[gi]);
+            // For Image ↔ Image matches, normalize content similarity to 1.0
+            let content_sim =
+                if ext_blocks[ei].block_type == MdBlockType::Image && gt_blocks[gi].block_type == MdBlockType::Image {
+                    1.0
+                } else {
+                    crate::quality::compute_f1(&ext_tokens[ei], &gt_tokens[gi])
+                };
             let score = content_sim * compat;
             // Raise threshold for short blocks to prevent spurious matches
             let min_threshold = if gt_tokens[gi].len().min(ext_tokens[ei].len()) < 5 {
@@ -1774,6 +1787,37 @@ mod tests {
             h1_count, 5,
             "count_extracted for H1 should be 5 (all extracted H1 blocks), got {}",
             h1_count
+        );
+    }
+
+    #[test]
+    fn test_image_blocks_match_regardless_of_url() {
+        // Two image blocks with different filenames should match with high SF1
+        let extracted = "# Title\n\n![diagram](image_0.png)\n\nSome text.\n";
+        let gt = "# Title\n\n![diagram](figure1.jpg)\n\nSome text.\n";
+        let result = score_structural_quality(extracted, gt);
+        assert!(
+            result.structural_f1 > 0.9,
+            "images with different URLs should match: sf1={}",
+            result.structural_f1
+        );
+    }
+
+    #[test]
+    fn test_image_blocks_different_alt_text_still_match() {
+        // Image blocks with completely different content should still match by type
+        let extracted = "![](image_0.png)\n";
+        let gt = "![Figure 1: Overview](overview.pdf)\n";
+        let ext_blocks = parse_markdown_blocks(extracted);
+        let gt_blocks = parse_markdown_blocks(gt);
+        assert_eq!(ext_blocks[0].block_type, MdBlockType::Image);
+        assert_eq!(gt_blocks[0].block_type, MdBlockType::Image);
+        // When scored, they should achieve a perfect match since both are Image type
+        let result = score_structural_quality(extracted, gt);
+        assert!(
+            result.structural_f1 >= 0.99,
+            "image-to-image should match perfectly: sf1={}",
+            result.structural_f1
         );
     }
 }

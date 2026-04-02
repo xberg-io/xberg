@@ -328,12 +328,20 @@ pub(super) fn apply_hint_to_paragraph(para: &mut PdfParagraph, hint: &LayoutHint
                     // body-1.5pt to body+0.5pt). The layout model often misclassifies
                     // bold body text as SectionHeader. Headings well below body size
                     // (e.g., 8pt headings in 12pt body) pass through.
+                    //
+                    // Exception: when the layout model has high confidence (>=0.7) AND
+                    // the paragraph is bold, the near-body guard is relaxed — bold
+                    // formatting at body size is a legitimate heading style. Only block
+                    // if the text looks like a full sentence (ends with period AND >8 words).
                     let near_body = body_font_size
                         .is_some_and(|body| body > 0.0
                             && para.dominant_font_size >= body - 1.5
                             && para.dominant_font_size <= body + 0.5);
                     let is_unnumbered = text_level == 2;
-                    let body_size_guard = near_body && is_unnumbered;
+                    let high_confidence_bold = hint.confidence >= 0.7 && para.is_bold;
+                    let looks_like_sentence = trimmed.ends_with('.') && word_count > 8;
+                    let body_size_guard = near_body && is_unnumbered
+                        && !(high_confidence_bold && !looks_like_sentence);
                     if !too_long && !ends_period && !ends_colon && !is_figure && !is_monospace && !body_size_guard {
                         para.heading_level = Some(text_level);
                     }
