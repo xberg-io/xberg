@@ -193,9 +193,9 @@ pub(super) fn classify_paragraphs(paragraphs: &mut [PdfParagraph], heading_map: 
                 && !starts_with_lowercase_or_continuation(rescue_text)
             {
                 let ratio = para.dominant_font_size / body_font_size;
-                let rescue_level = if ratio > 1.4 {
+                let rescue_level = if ratio > 1.6 {
                     1
-                } else if ratio > 1.2 {
+                } else if ratio > 1.3 {
                     2
                 } else {
                     3
@@ -1617,17 +1617,17 @@ mod tests {
         let heading_map = vec![(12.0, None)]; // only body cluster
         let mut paragraphs = vec![make_text_paragraph(15.0, "Results and Discussion", false)];
         classify_paragraphs(&mut paragraphs, &heading_map);
-        // 15/12 = 1.25 > 1.2 -> H2
-        assert_eq!(paragraphs[0].heading_level, Some(2));
+        // 15/12 = 1.25, > 1.0 but <= 1.3 -> H3
+        assert_eq!(paragraphs[0].heading_level, Some(3));
     }
 
     #[test]
     fn test_rescue_pass_h1_for_very_large_font() {
-        // Font size > 1.4x body -> H1
+        // Font size > 1.6x body -> H1
         let heading_map = vec![(10.0, None)];
-        let mut paragraphs = vec![make_text_paragraph(15.0, "Document Title", false)];
+        let mut paragraphs = vec![make_text_paragraph(17.0, "Document Title", false)];
         classify_paragraphs(&mut paragraphs, &heading_map);
-        // 15/10 = 1.5 > 1.4 -> H1
+        // 17/10 = 1.7 > 1.6 -> H1
         assert_eq!(paragraphs[0].heading_level, Some(1));
     }
 
@@ -1725,9 +1725,10 @@ mod tests {
         let heading_map = vec![(12.0, None)];
         let mut paragraphs = vec![make_text_paragraph(15.0, "Results and Discussion", false)];
         classify_paragraphs(&mut paragraphs, &heading_map);
+        // 15/12 = 1.25, > 1.0 but <= 1.3 -> H3
         assert_eq!(
             paragraphs[0].heading_level,
-            Some(2),
+            Some(3),
             "proper heading should still be promoted"
         );
     }
@@ -1757,9 +1758,10 @@ mod tests {
             make_text_paragraph(15.0, "Safety Procedures", false),
         ];
         classify_paragraphs(&mut paragraphs, &heading_map);
+        // 15/12 = 1.25, > 1.0 but <= 1.3 -> H3
         assert_eq!(
             paragraphs[1].heading_level,
-            Some(2),
+            Some(3),
             "heading after terminated paragraph should stay"
         );
     }
