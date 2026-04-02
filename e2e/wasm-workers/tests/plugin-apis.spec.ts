@@ -6,6 +6,7 @@
  * To regenerate: cargo run -p kreuzberg-e2e-generator -- generate --lang wasm-workers
  */
 
+import { describe, it, expect } from "vitest";
 import {
 	clearOcrBackends,
 	clearPostProcessors,
@@ -15,7 +16,6 @@ import {
 	listValidators,
 	unregisterOcrBackend,
 } from "@kreuzberg/wasm";
-import { describe, expect, it } from "vitest";
 
 describe("Configuration", () => {
 	it.skip("Discover configuration from current or parent directories (not available in WASM)", () => {});

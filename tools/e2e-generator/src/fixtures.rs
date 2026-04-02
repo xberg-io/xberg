@@ -271,6 +271,8 @@ pub struct ChunkAssertion {
     #[serde(default)]
     pub each_has_heading_context: Option<bool>,
     #[serde(default)]
+    pub each_has_chunk_type: Option<bool>,
+    #[serde(default)]
     pub content_starts_with_heading: Option<bool>,
 }
 

@@ -215,65 +215,49 @@ class Helpers
     }
 
     public static function assertChunks(
-        ExtractionResult $result,
-        ?int $minCount,
-        ?int $maxCount,
-        ?bool $eachHasContent,
-        ?bool $eachHasEmbedding,
+        $result,
+        ?int $minCount = null,
+        ?int $maxCount = null,
+        ?bool $eachHasContent = null,
+        ?bool $eachHasEmbedding = null,
         ?bool $eachHasHeadingContext = null,
+        ?bool $eachHasChunkType = null,
         ?bool $contentStartsWithHeading = null
     ): void {
-        $chunks = $result->chunks ?? [];
+        $chunks = $result->chunks ?? null;
+        if ($chunks === null) {
+            throw new \Exception("Expected chunks but field is null");
+        }
+
         $count = count($chunks);
-
-        if ($minCount !== null) {
-            Assert::assertGreaterThanOrEqual(
-                $minCount,
-                $count,
-                sprintf("Expected at least %d chunks, found %d", $minCount, $count)
-            );
+        if ($minCount !== null && $count < $minCount) {
+            throw new \Exception("Expected at least $minCount chunks, found $count");
+        }
+        if ($maxCount !== null && $count > $maxCount) {
+            throw new \Exception("Expected at most $maxCount chunks, found $count");
         }
 
-        if ($maxCount !== null) {
-            Assert::assertLessThanOrEqual(
-                $maxCount,
-                $count,
-                sprintf("Expected at most %d chunks, found %d", $maxCount, $count)
-            );
-        }
-
-        if ($eachHasContent === true) {
-            foreach ($chunks as $i => $chunk) {
-                Assert::assertNotEmpty(
-                    $chunk->content ?? '',
-                    sprintf("Chunk %d should have content", $i)
-                );
+        foreach ($chunks as $i => $chunk) {
+            if ($eachHasContent && empty($chunk->content)) {
+                throw new \Exception("Chunk $i has no content");
             }
-        }
-
-        if ($eachHasEmbedding === true) {
-            foreach ($chunks as $i => $chunk) {
-                Assert::assertNotNull(
-                    $chunk->embedding ?? null,
-                    sprintf("Chunk %d should have embedding", $i)
-                );
+            if ($eachHasEmbedding && (empty($chunk->embedding))) {
+                throw new \Exception("Chunk $i has no embedding");
             }
-        }
-
-        if ($eachHasHeadingContext === true) {
-            foreach ($chunks as $i => $chunk) {
-                Assert::assertNotNull(
-                    $chunk->metadata->heading_context ?? null,
-                    sprintf("Chunk %d should have heading_context", $i)
-                );
+            if ($eachHasHeadingContext !== null) {
+                $hc = $chunk->metadata->headingContext ?? null;
+                if ($eachHasHeadingContext && $hc === null) {
+                    throw new \Exception("Chunk $i has no headingContext");
+                }
+                if (!$eachHasHeadingContext && $hc !== null) {
+                    throw new \Exception("Chunk $i should have no headingContext");
+                }
             }
-        }
-        if ($eachHasHeadingContext === false) {
-            foreach ($chunks as $i => $chunk) {
-                Assert::assertNull(
-                    $chunk->metadata->heading_context ?? null,
-                    sprintf("Chunk %d should have no heading_context", $i)
-                );
+            if ($eachHasChunkType === true) {
+                $type = $chunk->chunkType ?? $chunk->chunk_type ?? null;
+                if ($type === null || $type === "unknown") {
+                    throw new \Exception("Chunk $i has no specific chunkType, got " . var_export($type, true));
+                }
             }
         }
         if ($contentStartsWithHeading === true) {
@@ -861,46 +845,49 @@ class Helpers
         Assert::assertGreaterThanOrEqual($minLength, strlen($data),
             sprintf('Expected at least %d bytes, got %d', $minLength, strlen($data)));
     }
+
+    }
 }
 "#;
 
-pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path) -> Result<()> {
-    let php_root = output_root.join("php");
-    let tests_dir = php_root.join("tests");
-
+pub fn generate(fixtures: &[Fixture], output_dir: &Utf8Path) -> Result<()> {
+    let tests_dir = output_dir.join("e2e").join("php").join("tests");
     fs::create_dir_all(&tests_dir).context("Failed to create PHP tests directory")?;
-
     clean_tests(&tests_dir)?;
     write_helpers(&tests_dir)?;
 
-    let doc_fixtures: Vec<_> = fixtures.iter().filter(|f| f.is_document_extraction()).collect();
-    let api_fixtures: Vec<_> = fixtures.iter().filter(|f| f.is_plugin_api()).collect();
+    let tests_pkg_dir = tests_dir.join("E2EPhp").join("Tests");
+    fs::create_dir_all(&tests_pkg_dir).context("Failed to create PHP test package directory")?;
 
-    let mut grouped = doc_fixtures
-        .into_iter()
-        .into_group_map_by(|fixture| fixture.category().to_string())
-        .into_iter()
-        .collect::<Vec<_>>();
-    grouped.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut categories = BTreeMap::new();
+    for fixture in fixtures {
+        if fixture.is_document_extraction() {
+            categories
+                .entry(fixture.category().to_string())
+                .or_insert_with(Vec::new)
+                .push(fixture);
+        }
+    }
 
-    for (category, mut fixtures) in grouped {
-        fixtures.sort_by(|a, b| a.id.cmp(&b.id));
-        let filename = format!("{}Test.php", capitalize(&category));
-        let content = render_category(&category, &fixtures)?;
-        fs::write(tests_dir.join(&filename), content)
+    for (category, fixtures) in &categories {
+        let filename = format!("{}Test.php", capitalize(category));
+        let content = render_category(category, fixtures)?;
+        fs::write(tests_pkg_dir.join(&filename), content)
             .with_context(|| format!("Failed to write PHP test file {filename}"))?;
     }
 
+    let api_fixtures: Vec<_> = fixtures.iter().filter(|f| f.is_plugin_api()).collect();
     if !api_fixtures.is_empty() {
-        generate_plugin_api_tests(&api_fixtures, &tests_dir)?;
+        generate_plugin_api_tests(&api_fixtures, &tests_pkg_dir)?;
     }
 
     let render_fixtures: Vec<_> = fixtures.iter().filter(|f| f.is_render()).collect();
     if !render_fixtures.is_empty() {
-        let mut sorted = render_fixtures;
+        let mut sorted: Vec<_> = render_fixtures.clone();
         sorted.sort_by(|a, b| a.id.cmp(&b.id));
         let content = render_render_category_php(&sorted)?;
-        fs::write(tests_dir.join("RenderTest.php"), content).context("Failed to write PHP render test file")?;
+        fs::write(tests_pkg_dir.join("RenderTest.php"), content)
+            .context("Failed to write PHP render test file")?;
     }
 
     Ok(())

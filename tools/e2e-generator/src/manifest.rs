@@ -256,6 +256,7 @@ fn sample_extraction_result() -> Value {
 
     let chunk = kreuzberg::types::extraction::Chunk {
         content: "chunk text".to_string(),
+        chunk_type: Default::default(),
         embedding: Some(vec![0.1, 0.2]),
         metadata: kreuzberg::types::extraction::ChunkMetadata {
             byte_start: 0,

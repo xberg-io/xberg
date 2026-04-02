@@ -181,6 +181,14 @@
 						"each_has_heading_context": {
 							"type": "boolean",
 							"description": "Assert each chunk has heading_context populated (markdown chunker only)."
+						},
+						"each_has_chunk_type": {
+							"type": "boolean",
+							"description": "Assert each chunk has a specific (non-Unknown) chunk_type classification."
+						},
+						"content_starts_with_heading": {
+							"type": "boolean",
+							"description": "Assert each chunk's content starts with a Markdown heading (#)."
 						}
 					},
 					"additionalProperties": false

@@ -5,6 +5,7 @@
 #
 # Tests for image fixtures.
 
+# rubocop:disable Metrics/BlockLength
 require_relative 'spec_helper'
 
 RSpec.describe 'image fixtures' do
@@ -186,3 +187,4 @@ RSpec.describe 'image fixtures' do
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

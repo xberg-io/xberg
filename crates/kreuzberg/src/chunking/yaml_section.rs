@@ -164,6 +164,7 @@ fn build_chunks_from_sections(sections: &[Section], config: &ChunkingConfig) -> 
         if config.max_characters == 0 || content.len() <= config.max_characters {
             chunks.push(Chunk {
                 content,
+                chunk_type: Default::default(),
                 embedding: None,
                 metadata: ChunkMetadata {
                     byte_start: section.byte_start,
@@ -188,6 +189,7 @@ fn build_chunks_from_sections(sections: &[Section], config: &ChunkingConfig) -> 
             for sub_chunk in sub_result.chunks {
                 chunks.push(Chunk {
                     content: format!("{}\n\n{}", prefix, sub_chunk.content),
+                    chunk_type: Default::default(),
                     embedding: None,
                     metadata: ChunkMetadata {
                         byte_start: section.byte_start + sub_chunk.metadata.byte_start,

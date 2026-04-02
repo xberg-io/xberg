@@ -87,7 +87,7 @@ public class TokenReductionTest {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
           E2EHelpers.Assertions.assertMinContentLength(result, 5);
           E2EHelpers.Assertions.assertMaxContentLength(result, 200);
-          E2EHelpers.Assertions.assertChunks(result, 1, null, true, null, null, null);
+          E2EHelpers.Assertions.assertChunks(result, 1, null, true, null, null, null, null);
           E2EHelpers.Assertions.assertContentNotEmpty(result);
         });
   }

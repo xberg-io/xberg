@@ -335,6 +335,7 @@ mod tests {
             detected_languages: None,
             chunks: Some(vec![crate::Chunk {
                 content: "Chunk 1".to_string(),
+                chunk_type: Default::default(),
                 embedding: None,
                 metadata: crate::ChunkMetadata {
                     byte_start: 0,

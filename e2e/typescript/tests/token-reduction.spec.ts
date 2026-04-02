@@ -125,7 +125,7 @@ describe("token_reduction fixtures", () => {
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 5);
 			assertions.assertMaxContentLength(result, 200);
-			chunkAssertions.assertChunks(result, 1, null, true, null, null, null);
+			chunkAssertions.assertChunks(result, 1, null, true, null, null, null, null);
 			assertions.assertContentNotEmpty(result);
 		},
 		TEST_TIMEOUT_MS,

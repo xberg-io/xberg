@@ -472,6 +472,10 @@ impl ExtractionResult {
 
                 let py_chunk = PyChunk {
                     content: chunk.content,
+                    chunk_type: serde_json::to_value(chunk.chunk_type)
+                        .ok()
+                        .and_then(|v| v.as_str().map(String::from))
+                        .unwrap_or_else(|| "unknown".to_string()),
                     embedding,
                     metadata: chunk_metadata_dict.unbind(),
                 };
@@ -868,6 +872,9 @@ mod tests {
 pub struct PyChunk {
     #[pyo3(get)]
     pub content: String,
+
+    #[pyo3(get)]
+    pub chunk_type: String,
 
     #[pyo3(get)]
     pub embedding: Option<Py<PyList>>,

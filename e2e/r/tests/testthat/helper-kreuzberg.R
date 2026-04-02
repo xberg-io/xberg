@@ -10,21 +10,15 @@ find_workspace_root <- function() {
   if (!is.null(ofile)) {
     # From tests/testthat/helper-kreuzberg.R, go up 4 levels to repo root
     candidate <- normalizePath(file.path(dirname(ofile), "..", "..", "..", ".."), mustWork = FALSE)
-    if (dir.exists(file.path(candidate, "test_documents"))) {
-      return(candidate)
-    }
+    if (dir.exists(file.path(candidate, "test_documents"))) return(candidate)
   }
   # Fallback: testthat sets working dir to package root (e2e/r/)
   candidate <- normalizePath(file.path(getwd(), "..", ".."), mustWork = FALSE)
-  if (dir.exists(file.path(candidate, "test_documents"))) {
-    return(candidate)
-  }
+  if (dir.exists(file.path(candidate, "test_documents"))) return(candidate)
   # Last resort: walk up from current dir
   d <- getwd()
   for (i in seq_len(10)) {
-    if (dir.exists(file.path(d, "test_documents"))) {
-      return(d)
-    }
+    if (dir.exists(file.path(d, "test_documents"))) return(d)
     d <- dirname(d)
   }
   stop("Could not find workspace root (test_documents directory)")
@@ -37,16 +31,12 @@ resolve_document <- function(relative) {
 }
 
 build_config <- function(raw) {
-  if (is.null(raw) || length(raw) == 0) {
-    return(NULL)
-  }
+  if (is.null(raw) || length(raw) == 0) return(NULL)
   raw
 }
 
 build_extraction_config <- function(raw) {
-  if (is.null(raw) || length(raw) == 0) {
-    return(NULL)
-  }
+  if (is.null(raw) || length(raw) == 0) return(NULL)
   # Convert the raw config map into extraction_config() call
   do.call(extraction_config, raw)
 }
@@ -58,9 +48,7 @@ skip_reason_for <- function(error, fixture_id, requirements, notes = NULL) {
   missing_dependency <- grepl("missing dependency", downcased, fixed = TRUE)
   unsupported_format <- grepl("unsupported format", downcased, fixed = TRUE)
 
-  if (!missing_dependency && !unsupported_format && !requirement_hit) {
-    return(NULL)
-  }
+  if (!missing_dependency && !unsupported_format && !requirement_hit) return(NULL)
 
   reason <- if (missing_dependency) {
     "missing dependency"
@@ -88,12 +76,11 @@ skip_if_feature_unavailable <- function(feature) {
 
 run_fixture <- function(fixture_id, relative_path, config_hash, requirements, notes, skip_if_missing = TRUE) {
   run_fixture_with_method(fixture_id, relative_path, config_hash, "sync", "file",
-    requirements = requirements, notes = notes, skip_if_missing = skip_if_missing
-  )
+                          requirements = requirements, notes = notes, skip_if_missing = skip_if_missing)
 }
 
 run_fixture_with_method <- function(fixture_id, relative_path, config_hash, method, input_type,
-                                    requirements, notes, skip_if_missing = TRUE) {
+                                     requirements, notes, skip_if_missing = TRUE) {
   document_path <- resolve_document(relative_path)
 
   if (skip_if_missing && !file.exists(document_path)) {
@@ -149,9 +136,7 @@ perform_extraction <- function(document_path, config, method, input_type) {
 
 # Assertion helpers
 assert_expected_mime <- function(result, expected) {
-  if (length(expected) == 0) {
-    return(invisible(NULL))
-  }
+  if (length(expected) == 0) return(invisible(NULL))
   testthat::expect_true(any(vapply(expected, function(token) grepl(token, result$mime_type, fixed = TRUE), logical(1))))
 }
 
@@ -164,17 +149,13 @@ assert_max_content_length <- function(result, maximum) {
 }
 
 assert_content_contains_any <- function(result, snippets) {
-  if (length(snippets) == 0) {
-    return(invisible(NULL))
-  }
+  if (length(snippets) == 0) return(invisible(NULL))
   lowered <- tolower(result$content)
   testthat::expect_true(any(vapply(snippets, function(s) grepl(tolower(s), lowered, fixed = TRUE), logical(1))))
 }
 
 assert_content_contains_all <- function(result, snippets) {
-  if (length(snippets) == 0) {
-    return(invisible(NULL))
-  }
+  if (length(snippets) == 0) return(invisible(NULL))
   lowered <- tolower(result$content)
   testthat::expect_true(all(vapply(snippets, function(s) grepl(tolower(s), lowered, fixed = TRUE), logical(1))))
 }
@@ -186,9 +167,7 @@ assert_table_count <- function(result, minimum = NULL, maximum = NULL) {
 }
 
 assert_detected_languages <- function(result, expected, min_confidence = NULL) {
-  if (length(expected) == 0) {
-    return(invisible(NULL))
-  }
+  if (length(expected) == 0) return(invisible(NULL))
   languages <- result$detected_languages
   testthat::expect_false(is.null(languages))
   testthat::expect_true(all(expected %in% languages))
@@ -237,6 +216,7 @@ assert_metadata_expectation <- function(result, path, expectation) {
 assert_chunks <- function(result, min_count = NULL, max_count = NULL,
                           each_has_content = NULL, each_has_embedding = NULL,
                           each_has_heading_context = NULL,
+                          each_has_chunk_type = NULL,
                           content_starts_with_heading = NULL) {
   chunks <- if (is.null(result$chunks)) list() else result$chunks
   if (!is.null(min_count)) testthat::expect_gte(length(chunks), min_count)
@@ -252,6 +232,14 @@ assert_chunks <- function(result, min_count = NULL, max_count = NULL,
   }
   if (isFALSE(each_has_heading_context)) {
     for (chunk in chunks) testthat::expect_true(is.null(chunk$metadata$heading_context))
+  }
+  if (isTRUE(each_has_chunk_type)) {
+    for (chunk in chunks) {
+      chunk_type <- chunk[["chunk_type"]]
+      if (is.null(chunk_type) || chunk_type == "unknown") {
+        testthat::fail(paste0("Expected specific chunk_type, got: ", chunk_type))
+      }
+    }
   }
   if (isTRUE(content_starts_with_heading)) {
     heading_char <- rawToChar(as.raw(35))
@@ -292,15 +280,13 @@ assert_elements <- function(result, min_count = NULL, types_include = NULL) {
 }
 
 assert_ocr_elements <- function(result, has_elements = NULL, elements_have_geometry = NULL,
-                                elements_have_confidence = NULL, min_count = NULL) {
+                                 elements_have_confidence = NULL, min_count = NULL) {
   ocr_elements <- result$ocr_elements
   if (isTRUE(has_elements)) {
     testthat::expect_false(is.null(ocr_elements))
     testthat::expect_gt(length(ocr_elements), 0)
   }
-  if (!is.list(ocr_elements)) {
-    return(invisible(NULL))
-  }
+  if (!is.list(ocr_elements)) return(invisible(NULL))
   if (!is.null(min_count)) testthat::expect_gte(length(ocr_elements), min_count)
   if (isTRUE(elements_have_geometry)) {
     for (el in ocr_elements) {
@@ -317,7 +303,7 @@ assert_ocr_elements <- function(result, has_elements = NULL, elements_have_geome
 }
 
 assert_document <- function(result, has_document = FALSE, min_node_count = NULL,
-                            node_types_include = NULL, has_groups = NULL) {
+                             node_types_include = NULL, has_groups = NULL) {
   document <- result$document
   if (has_document) {
     testthat::expect_false(is.null(document))
@@ -378,9 +364,7 @@ assert_table_bounding_boxes <- function(result) {
 }
 
 assert_table_content_contains_any <- function(result, snippets) {
-  if (length(snippets) == 0) {
-    return(invisible(NULL))
-  }
+  if (length(snippets) == 0) return(invisible(NULL))
   tables <- if (is.null(result$tables)) list() else result$tables
   all_content <- tolower(paste(vapply(tables, function(t) t$content %||% "", character(1)), collapse = " "))
   testthat::expect_true(any(vapply(snippets, function(s) grepl(tolower(s), all_content, fixed = TRUE), logical(1))))
@@ -435,13 +419,9 @@ assert_annotations <- function(result, has_annotations = FALSE, min_count = NULL
 # Internal helpers
 fetch_metadata_value <- function(metadata, path) {
   value <- lookup_metadata_path(metadata, path)
-  if (!is.null(value)) {
-    return(value)
-  }
+  if (!is.null(value)) return(value)
   format_data <- metadata$format
-  if (is.list(format_data)) {
-    return(lookup_metadata_path(format_data, path))
-  }
+  if (is.list(format_data)) return(lookup_metadata_path(format_data, path))
   NULL
 }
 
@@ -449,24 +429,16 @@ lookup_metadata_path <- function(metadata, path) {
   current <- metadata
   segments <- strsplit(path, ".", fixed = TRUE)[[1]]
   for (segment in segments) {
-    if (!is.list(current)) {
-      return(NULL)
-    }
+    if (!is.list(current)) return(NULL)
     current <- current[[segment]]
-    if (is.null(current)) {
-      return(NULL)
-    }
+    if (is.null(current)) return(NULL)
   }
   current
 }
 
 values_equal <- function(lhs, rhs) {
-  if (is.character(lhs) && is.character(rhs)) {
-    return(identical(lhs, rhs))
-  }
-  if (is.numeric(lhs) && is.numeric(rhs)) {
-    return(as.numeric(lhs) == as.numeric(rhs))
-  }
+  if (is.character(lhs) && is.character(rhs)) return(identical(lhs, rhs))
+  if (is.numeric(lhs) && is.numeric(rhs)) return(as.numeric(lhs) == as.numeric(rhs))
   identical(lhs, rhs)
 }
 

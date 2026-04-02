@@ -3,10 +3,10 @@
 
 // Tests for archive fixtures. Cloudflare Workers with Vitest + Miniflare
 
-import type { ExtractionResult } from "@kreuzberg/wasm";
-import { extractBytes } from "@kreuzberg/wasm";
 import { describe, it } from "vitest";
+import { extractBytes } from "@kreuzberg/wasm";
 import { assertions, buildConfig, getFixture, shouldSkipFixture } from "./helpers.js";
+import type { ExtractionResult } from "@kreuzberg/wasm";
 
 describe("archive", () => {
 	it("archive_gz_basic", async () => {

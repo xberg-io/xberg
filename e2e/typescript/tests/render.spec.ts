@@ -3,9 +3,9 @@
 
 // Tests for render fixtures.
 
+import { describe, it, expect } from "vitest";
 import { existsSync } from "node:fs";
-import { PdfPageIterator, renderPdfPageSync } from "@kreuzberg/node";
-import { describe, expect, it } from "vitest";
+import { renderPdfPageSync, PdfPageIterator } from "@kreuzberg/node";
 import { assertions, resolveDocument } from "./helpers.js";
 
 describe("render", () => {

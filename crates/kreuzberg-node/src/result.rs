@@ -94,6 +94,7 @@ pub struct JsChunkMetadata {
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct JsChunk {
     pub content: String,
+    pub chunk_type: String,
     #[napi(ts_type = "number[] | undefined")]
     pub embedding: Option<Vec<f64>>,
     pub metadata: JsChunkMetadata,
@@ -587,6 +588,10 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
 
                     js_chunks.push(JsChunk {
                         content: chunk.content,
+                        chunk_type: serde_json::to_value(chunk.chunk_type)
+                            .ok()
+                            .and_then(|v| v.as_str().map(String::from))
+                            .unwrap_or_else(|| "unknown".to_string()),
                         embedding,
                         metadata,
                     });
@@ -759,6 +764,8 @@ impl TryFrom<JsExtractionResult> for RustExtractionResult {
 
                 rust_chunks.push(RustChunk {
                     content: chunk.content,
+                    chunk_type: serde_json::from_value(serde_json::Value::String(chunk.chunk_type))
+                        .unwrap_or_default(),
                     embedding,
                     metadata: RustChunkMetadata {
                         byte_start: chunk.metadata.byte_start as usize,

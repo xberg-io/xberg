@@ -44,6 +44,7 @@ fn create_test_result(content_size: usize, chunk_count: usize) -> ExtractionResu
                     };
                     Chunk {
                         content: content[start..end].to_string(),
+                        chunk_type: Default::default(),
                         embedding: None,
                         metadata: ChunkMetadata {
                             byte_start: start,

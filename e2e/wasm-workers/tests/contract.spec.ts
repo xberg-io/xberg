@@ -400,7 +400,7 @@ describe("contract", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 1, null, true, null, null, null);
+		assertions.assertChunks(result, 1, null, true, null, null, null, null);
 	});
 
 	it("config_chunking_heading_context", async () => {
@@ -424,7 +424,7 @@ describe("contract", () => {
 			return;
 		}
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 2, null, true, null, true, null);
+		assertions.assertChunks(result, 2, null, true, null, true, null, null);
 	});
 
 	it("config_chunking_markdown", async () => {
@@ -449,7 +449,7 @@ describe("contract", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 1, null, true, null, null, null);
+		assertions.assertChunks(result, 1, null, true, null, null, null, null);
 	});
 
 	it("config_chunking_no_headings", async () => {
@@ -473,7 +473,7 @@ describe("contract", () => {
 			return;
 		}
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 2, null, true, null, false, null);
+		assertions.assertChunks(result, 2, null, true, null, false, null, null);
 	});
 
 	it("config_chunking_prepend_heading_context", async () => {
@@ -499,7 +499,7 @@ describe("contract", () => {
 			return;
 		}
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 2, null, true, null, true, true);
+		assertions.assertChunks(result, 2, null, true, null, true, null, true);
 	});
 
 	it("config_chunking_small", async () => {
@@ -524,7 +524,7 @@ describe("contract", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 2, null, true, null, null, null);
+		assertions.assertChunks(result, 2, null, true, null, null, null, null);
 	});
 
 	it("config_chunking_text", async () => {
@@ -549,7 +549,7 @@ describe("contract", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 1, null, true, null, null, null);
+		assertions.assertChunks(result, 1, null, true, null, null, null, null);
 	});
 
 	it("config_disable_ocr", async () => {

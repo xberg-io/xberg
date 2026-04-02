@@ -292,7 +292,7 @@ static void test_contract_config_chunking(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 1, 0, 0);
+    assert_chunks(result, 1, 1, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -301,7 +301,7 @@ static void test_contract_config_chunking_heading_context(void) {
     CExtractionResult *result = run_extraction("markdown/extraction_test.md", "{\"chunking\":{\"chunker_type\":\"markdown\",\"max_chars\":300,\"max_overlap\":50}}");
     if (!result) return; /* skipped */
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 2, 0, 0);
+    assert_chunks(result, 1, 2, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -311,7 +311,7 @@ static void test_contract_config_chunking_markdown(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 1, 0, 0);
+    assert_chunks(result, 1, 1, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -320,7 +320,7 @@ static void test_contract_config_chunking_no_headings(void) {
     CExtractionResult *result = run_extraction("text/book_war_and_peace_1p.txt", "{\"chunking\":{\"chunker_type\":\"markdown\",\"max_chars\":300,\"max_overlap\":50}}");
     if (!result) return; /* skipped */
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 2, 0, 0);
+    assert_chunks(result, 1, 2, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -329,7 +329,7 @@ static void test_contract_config_chunking_prepend_heading_context(void) {
     CExtractionResult *result = run_extraction("markdown/extraction_test.md", "{\"chunking\":{\"chunker_type\":\"markdown\",\"max_chars\":300,\"max_overlap\":50,\"prepend_heading_context\":true}}");
     if (!result) return; /* skipped */
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 2, 0, 0);
+    assert_chunks(result, 1, 2, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -339,7 +339,7 @@ static void test_contract_config_chunking_small(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 2, 0, 0);
+    assert_chunks(result, 1, 2, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -348,7 +348,7 @@ static void test_contract_config_chunking_text(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 1, 0, 0);
+    assert_chunks(result, 1, 1, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 
@@ -357,7 +357,7 @@ static void test_contract_config_chunking_tokenizer(void) {
     CExtractionResult *result = run_extraction("markdown/comprehensive.md", "{\"chunking\":{\"max_chars\":200,\"max_overlap\":40,\"sizing\":{\"type\":\"tokenizer\",\"model\":\"Xenova/gpt-4o\"}}}");
     if (!result) return; /* skipped */
     assert_min_content_length(result, 10);
-    assert_chunks(result, 1, 2, 0, 0);
+    assert_chunks(result, 1, 2, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 

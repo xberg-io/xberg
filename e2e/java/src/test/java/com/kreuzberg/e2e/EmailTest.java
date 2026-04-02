@@ -4,10 +4,20 @@ package com.kreuzberg.e2e;
 // CHECKSTYLE.OFF: LineLength - generated code
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Arrays;
-import java.util.Collections;
+import dev.kreuzberg.BytesWithMime;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.config.ExtractionConfig;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 // CHECKSTYLE.ON: UnusedImports
 // CHECKSTYLE.ON: LineLength
 
@@ -16,104 +26,108 @@ import org.junit.jupiter.api.Test;
 
 /** Tests for email fixtures. */
 public class EmailTest {
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Test
-  public void emailEmlHtmlBody() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "email_eml_html_body",
-        "email/html_only.eml",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("message/rfc822"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-        });
-  }
+    @Test
+    public void emailEmlHtmlBody() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "email_eml_html_body",
+            "email/html_only.eml",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("message/rfc822"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+            }
+        );
+    }
 
-  @Test
-  public void emailEmlMultipart() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "email_eml_multipart",
-        "email/html_email_multipart.eml",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("message/rfc822"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-        });
-  }
+    @Test
+    public void emailEmlMultipart() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "email_eml_multipart",
+            "email/html_email_multipart.eml",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("message/rfc822"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+            }
+        );
+    }
 
-  @Test
-  public void emailEmlUtf16() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "email_eml_utf16",
-        "vendored/unstructured/eml/fake-email-utf-16.eml",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("message/rfc822"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 50);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("Test Email", "Roses are red"));
-        });
-  }
+    @Test
+    public void emailEmlUtf16() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "email_eml_utf16",
+            "vendored/unstructured/eml/fake-email-utf-16.eml",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("message/rfc822"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 50);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("Test Email", "Roses are red"));
+            }
+        );
+    }
 
-  @Test
-  public void emailMsgBasic() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "email_msg_basic",
-        "email/fake_email.msg",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(
-              result, Arrays.asList("application/vnd.ms-outlook"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10);
-        });
-  }
+    @Test
+    public void emailMsgBasic() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "email_msg_basic",
+            "email/fake_email.msg",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/vnd.ms-outlook"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10);
+            }
+        );
+    }
 
-  @Test
-  public void emailPstEmpty() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "email_pst_empty",
-        "email/empty.pst",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(
-              result, Arrays.asList("application/vnd.ms-outlook-pst"));
-        });
-  }
+    @Test
+    public void emailPstEmpty() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "email_pst_empty",
+            "email/empty.pst",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/vnd.ms-outlook-pst"));
+            }
+        );
+    }
 
-  @Test
-  public void emailSampleEml() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "email_sample_eml",
-        "email/sample_email.eml",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("message/rfc822"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 20);
-        });
-  }
+    @Test
+    public void emailSampleEml() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "email_sample_eml",
+            "email/sample_email.eml",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("message/rfc822"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 20);
+            }
+        );
+    }
+
 }

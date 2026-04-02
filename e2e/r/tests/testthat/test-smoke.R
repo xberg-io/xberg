@@ -13,8 +13,8 @@ test_that("smoke_cache_namespace", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/plain"))
-  assert_min_content_length(result, 5L)
+      assert_expected_mime(result, c("text/plain"))
+      assert_min_content_length(result, 5L)
 })
 
 test_that("smoke_docx_basic", {
@@ -26,9 +26,9 @@ test_that("smoke_docx_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-  assert_min_content_length(result, 20L)
-  assert_content_contains_any(result, c("Lorem", "ipsum", "document", "text"))
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+      assert_min_content_length(result, 20L)
+      assert_content_contains_any(result, c("Lorem", "ipsum", "document", "text"))
 })
 
 test_that("smoke_html_basic", {
@@ -40,9 +40,9 @@ test_that("smoke_html_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/html"))
-  assert_min_content_length(result, 10L)
-  assert_content_contains_any(result, c("Sample Data Table", "Laptop", "Electronics", "Product"))
+      assert_expected_mime(result, c("text/html"))
+      assert_min_content_length(result, 10L)
+      assert_content_contains_any(result, c("Sample Data Table", "Laptop", "Electronics", "Product"))
 })
 
 test_that("smoke_image_png", {
@@ -54,8 +54,8 @@ test_that("smoke_image_png", {
     notes = "Image extraction requires image processing dependencies",
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("image/png"))
-  assert_metadata_expectation(result, "format", "PNG")
+      assert_expected_mime(result, c("image/png"))
+      assert_metadata_expectation(result, "format", "PNG")
 })
 
 test_that("smoke_json_basic", {
@@ -67,8 +67,8 @@ test_that("smoke_json_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/json"))
-  assert_min_content_length(result, 5L)
+      assert_expected_mime(result, c("application/json"))
+      assert_min_content_length(result, 5L)
 })
 
 test_that("smoke_pdf_basic", {
@@ -80,9 +80,9 @@ test_that("smoke_pdf_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/pdf"))
-  assert_min_content_length(result, 50L)
-  assert_content_contains_any(result, c("May 5, 2023", "To Whom it May Concern"))
+      assert_expected_mime(result, c("application/pdf"))
+      assert_min_content_length(result, 50L)
+      assert_content_contains_any(result, c("May 5, 2023", "To Whom it May Concern"))
 })
 
 test_that("smoke_txt_basic", {
@@ -94,8 +94,8 @@ test_that("smoke_txt_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("text/plain"))
-  assert_min_content_length(result, 5L)
+      assert_expected_mime(result, c("text/plain"))
+      assert_min_content_length(result, 5L)
 })
 
 test_that("smoke_xlsx_basic", {
@@ -107,11 +107,11 @@ test_that("smoke_xlsx_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-  assert_min_content_length(result, 100L)
-  assert_content_contains_all(result, c("Team", "Location", "Stanley Cups", "Blues", "Flyers", "Maple Leafs", "STL", "PHI", "TOR"))
-  assert_table_count(result, minimum = 1L, maximum = NULL)
-  assert_metadata_expectation(result, "sheet_count", list(gte = 2L))
-  assert_metadata_expectation(result, "sheet_names", list(contains = c("Stanley Cups")))
+      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+      assert_min_content_length(result, 100L)
+      assert_content_contains_all(result, c("Team", "Location", "Stanley Cups", "Blues", "Flyers", "Maple Leafs", "STL", "PHI", "TOR"))
+      assert_table_count(result, minimum = 1L, maximum = NULL)
+      assert_metadata_expectation(result, "sheet_count", list(gte = 2L))
+      assert_metadata_expectation(result, "sheet_names", list(contains = c("Stanley Cups")))
 })
 # nolint end

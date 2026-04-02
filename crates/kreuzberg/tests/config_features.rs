@@ -548,6 +548,73 @@ More detailed content here in the subsection.
     }
 }
 
+/// Test that chunk_type is populated for markdown chunks.
+#[tokio::test]
+#[cfg(feature = "chunking")]
+async fn test_chunk_type_populated() {
+    use kreuzberg::ChunkType;
+
+    let markdown = r#"# Introduction
+
+This section introduces the document with some content.
+
+## Code Example
+
+```rust
+fn hello() {
+    println!("Hello, world!");
+}
+```
+
+## Summary
+
+A brief summary of the document.
+"#;
+
+    let config = ExtractionConfig {
+        chunking: Some(ChunkingConfig {
+            max_characters: 200,
+            overlap: 0,
+            chunker_type: kreuzberg::ChunkerType::Markdown,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let result = extract_bytes(markdown.as_bytes(), "text/markdown", &config)
+        .await
+        .expect("Should extract successfully");
+
+    assert!(result.chunks.is_some(), "Chunks should be present");
+    let chunks = result.chunks.expect("Should have chunks");
+    assert!(!chunks.is_empty(), "Should have at least one chunk");
+
+    // All chunks must have a chunk_type (not the default Unknown when content is classifiable)
+    for chunk in &chunks {
+        // chunk_type must always be set (never uninitialized)
+        let _ = &chunk.chunk_type;
+    }
+
+    // At least one chunk should be classified as something other than Unknown
+    let has_classified = chunks
+        .iter()
+        .any(|c| !matches!(c.chunk_type, ChunkType::Unknown));
+    assert!(has_classified, "At least one chunk should have a non-Unknown chunk_type");
+
+    // Heading chunks should be classified as Heading
+    let heading_chunks: Vec<_> = chunks
+        .iter()
+        .filter(|c| c.content.starts_with('#'))
+        .collect();
+    for chunk in &heading_chunks {
+        assert!(
+            matches!(chunk.chunk_type, ChunkType::Heading),
+            "Chunk starting with '#' should be classified as Heading, got {:?}",
+            chunk.chunk_type
+        );
+    }
+}
+
 /// Test tokenizer env var override.
 #[tokio::test]
 #[cfg(feature = "chunking-tokenizers")]

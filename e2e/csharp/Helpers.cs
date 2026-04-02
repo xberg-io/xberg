@@ -464,6 +464,7 @@ public static class TestHelpers
         bool? eachHasContent,
         bool? eachHasEmbedding,
         bool? eachHasHeadingContext = null,
+        bool? eachHasChunkType = null,
         bool? contentStartsWithHeading = null)
     {
         var chunks = result.Chunks;
@@ -517,6 +518,17 @@ public static class TestHelpers
                 if (chunks[i].Metadata?.HeadingContext is not null)
                 {
                     throw new XunitException($"Chunk {i} should have no heading_context");
+                }
+            }
+        }
+        if (eachHasChunkType == true)
+        {
+            for (var i = 0; i < chunks.Count; i++)
+            {
+                var type = chunks[i].ChunkType;
+                if (string.IsNullOrEmpty(type) || type == "unknown")
+                {
+                    throw new XunitException($"Chunk {i} has no specific chunk_type, got {type}");
                 }
             }
         }

@@ -445,6 +445,7 @@ export const assertions = {
 		eachHasContent?: boolean | null,
 		eachHasEmbedding?: boolean | null,
 		eachHasHeadingContext?: boolean | null,
+		eachHasChunkType?: boolean | null,
 		contentStartsWithHeading?: boolean | null,
 	): void {
 		const chunks = (result as unknown as PlainRecord).chunks as unknown[] | undefined;
@@ -480,6 +481,13 @@ export const assertions = {
 					null,
 					"Chunk should have no heading_context",
 				);
+			}
+		}
+		if (eachHasChunkType === true) {
+			for (const chunk of chunks) {
+				const chunkType = (chunk as PlainRecord).chunkType ?? (chunk as PlainRecord).chunk_type;
+				assertExists(chunkType, "Chunk missing chunk_type");
+				assertEquals(chunkType !== "unknown", true, "Chunk chunk_type should not be 'unknown'");
 			}
 		}
 		if (contentStartsWithHeading === true) {

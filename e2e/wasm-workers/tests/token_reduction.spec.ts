@@ -112,7 +112,7 @@ describe("token_reduction", () => {
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 5);
 		assertions.assertMaxContentLength(result, 200);
-		assertions.assertChunks(result, 1, null, true, null, null, null);
+		assertions.assertChunks(result, 1, null, true, null, null, null, null);
 		assertions.assertContentNotEmpty(result);
 	});
 });

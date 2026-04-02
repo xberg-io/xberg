@@ -365,6 +365,13 @@ def _assert_chunks_heading_context(chunks: Any, expected: bool) -> None:
             pytest.fail(f"Chunk {i} should have no heading_context")
 
 
+def _assert_chunks_chunk_type(chunks: Any) -> None:
+    for i, chunk in enumerate(chunks):
+        chunk_type = getattr(chunk, "chunk_type", None)
+        if chunk_type is None or str(chunk_type) == "unknown":
+            pytest.fail(f"Chunk {i} has no specific chunk_type, got {chunk_type}")
+
+
 def _assert_chunks_heading_prefix(chunks: Any) -> None:
     for i, chunk in enumerate(chunks):
         meta = getattr(chunk, "metadata", None)
@@ -383,6 +390,7 @@ def assert_chunks(
     each_has_content: bool | None = None,
     each_has_embedding: bool | None = None,
     each_has_heading_context: bool | None = None,
+    each_has_chunk_type: bool | None = None,
     content_starts_with_heading: bool | None = None,
 ) -> None:
     chunks = getattr(result, "chunks", None)
@@ -399,6 +407,8 @@ def assert_chunks(
         _assert_chunks_embedding(chunks)
     if each_has_heading_context is not None:
         _assert_chunks_heading_context(chunks, each_has_heading_context)
+    if each_has_chunk_type:
+        _assert_chunks_chunk_type(chunks)
     if content_starts_with_heading:
         _assert_chunks_heading_prefix(chunks)
 
@@ -1065,6 +1075,12 @@ fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!(
                 "each_has_heading_context={}",
                 if has_heading_context { "True" } else { "False" }
+            ));
+        }
+        if let Some(has_chunk_type) = chunks.each_has_chunk_type {
+            args.push(format!(
+                "each_has_chunk_type={}",
+                if has_chunk_type { "True" } else { "False" }
             ));
         }
         if let Some(starts_with_heading) = chunks.content_starts_with_heading {

@@ -8,6 +8,7 @@ use crate::types::{Chunk, ChunkMetadata, PageBoundary};
 use text_splitter::{Characters, ChunkCapacity, ChunkConfig};
 
 use super::boundaries::calculate_page_range;
+use super::classifier::classify_chunk;
 
 /// Build a ChunkConfig from chunking parameters.
 ///
@@ -78,6 +79,7 @@ where
 
         chunks.push(Chunk {
             content: chunk_text.to_string(),
+            chunk_type: classify_chunk(chunk_text, None),
             embedding: None,
             metadata: ChunkMetadata {
                 byte_start,

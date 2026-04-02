@@ -43,6 +43,7 @@ pub fn embed_command(texts: Vec<String>, preset: &str, format: WireFormat) -> Re
         .enumerate()
         .map(|(idx, text)| Chunk {
             content: text.clone(),
+            chunk_type: Default::default(),
             embedding: None,
             metadata: ChunkMetadata {
                 byte_start: 0,

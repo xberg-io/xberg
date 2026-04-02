@@ -765,6 +765,7 @@ export const chunkAssertions = {
         eachHasContent?: boolean | null,
         eachHasEmbedding?: boolean | null,
         eachHasHeadingContext?: boolean | null,
+        eachHasChunkType?: boolean | null,
         contentStartsWithHeading?: boolean | null,
     ): void {
         const chunks = (result as unknown as PlainRecord).chunks as unknown[] | undefined;
@@ -796,6 +797,13 @@ export const chunkAssertions = {
         if (eachHasHeadingContext === false) {
             for (const chunk of chunks) {
                 expect(((chunk as PlainRecord).metadata as PlainRecord)?.headingContext ?? null).toBeNull();
+            }
+        }
+        if (eachHasChunkType === true) {
+            for (const chunk of chunks) {
+                const chunkType = (chunk as PlainRecord).chunkType ?? (chunk as PlainRecord).chunk_type;
+                expect(chunkType).toBeDefined();
+                expect(chunkType).not.toBe("unknown");
             }
         }
         if (contentStartsWithHeading === true) {
@@ -1361,26 +1369,30 @@ fn render_assertions(assertions: &Assertions) -> String {
     }
 
     if let Some(chunks) = assertions.chunks.as_ref() {
-        let min = chunks.min_count.map(|v| v.to_string()).unwrap_or_else(|| "null".into());
-        let max = chunks.max_count.map(|v| v.to_string()).unwrap_or_else(|| "null".into());
-        let has_content = chunks
+        let min_count = chunks.min_count.map(|v| v.to_string()).unwrap_or_else(|| "null".into());
+        let max_count = chunks.max_count.map(|v| v.to_string()).unwrap_or_else(|| "null".into());
+        let each_has_content = chunks
             .each_has_content
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".into());
-        let has_embedding = chunks
+        let each_has_embedding = chunks
             .each_has_embedding
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".into());
-        let has_heading_context = chunks
+        let each_has_heading_context = chunks
             .each_has_heading_context
             .map(|v| v.to_string())
-            .unwrap_or_else(|| "null".into());
+            .unwrap_or_else(|| "undefined".into());
+        let each_has_chunk_type = chunks
+            .each_has_chunk_type
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "undefined".into());
         let content_starts_with_heading = chunks
             .content_starts_with_heading
             .map(|v| v.to_string())
-            .unwrap_or_else(|| "null".into());
+            .unwrap_or_else(|| "undefined".into());
         buffer.push_str(&format!(
-            "    chunkAssertions.assertChunks(result, {min}, {max}, {has_content}, {has_embedding}, {has_heading_context}, {content_starts_with_heading});\n"
+            "    chunkAssertions.assertChunks(result, {min_count}, {max_count}, {each_has_content}, {each_has_embedding}, {each_has_heading_context}, {each_has_chunk_type}, {content_starts_with_heading});\n"
         ));
     }
 

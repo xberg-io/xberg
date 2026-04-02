@@ -28,13 +28,11 @@ defmodule E2E.RenderTest do
     else
       stream = Kreuzberg.render_pdf_pages_stream(document_path, dpi: 150)
       pages = Enum.to_list(stream)
-
       Enum.each(pages, fn {_page_index, png_data} ->
         assert_is_png(png_data)
       end)
-
       assert length(pages) >= 1,
-             "Expected at least 1 pages, got #{length(pages)}"
+        "Expected at least 1 pages, got #{length(pages)}"
     end
   end
 
@@ -50,4 +48,5 @@ defmodule E2E.RenderTest do
       assert_min_byte_length(png_data, 100)
     end
   end
+
 end

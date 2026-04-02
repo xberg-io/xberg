@@ -497,6 +497,7 @@ public static class TestHelpers
         bool? eachHasContent,
         bool? eachHasEmbedding,
         bool? eachHasHeadingContext = null,
+        bool? eachHasChunkType = null,
         bool? contentStartsWithHeading = null)
     {
         var chunks = result.Chunks;
@@ -550,6 +551,17 @@ public static class TestHelpers
                 if (chunks[i].Metadata?.HeadingContext is not null)
                 {
                     throw new XunitException($"Chunk {i} should have no heading_context");
+                }
+            }
+        }
+        if (eachHasChunkType == true)
+        {
+            for (var i = 0; i < chunks.Count; i++)
+            {
+                var type = chunks[i].ChunkType;
+                if (string.IsNullOrEmpty(type) || type == "unknown")
+                {
+                    throw new XunitException($"Chunk {i} has no specific chunk_type, got {type}");
                 }
             }
         }
@@ -1323,20 +1335,17 @@ fn render_assertions(buffer: &mut String, assertions: &Assertions) -> Result<()>
             .each_has_heading_context
             .map(|v| if v { "true" } else { "false" }.to_string())
             .unwrap_or_else(|| "null".to_string());
-        let content_starts_with_heading = chunks
-            .content_starts_with_heading
+        let each_has_chunk_type = chunks
+            .each_has_chunk_type
             .map(|v| if v { "true" } else { "false" }.to_string())
             .unwrap_or_else(|| "null".to_string());
-        writeln!(
-            buffer,
-            "            TestHelpers.AssertChunks(result, {}, {}, {}, {}, {}, {});",
-            min_count,
-            max_count,
-            each_has_content,
-            each_has_embedding,
-            each_has_heading_context,
-            content_starts_with_heading
-        )?;
+        let content_starts_with_heading = chunks
+            .content_starts_with_heading
+            .map(|v| v.to_string().to_lowercase())
+            .unwrap_or_else(|| "null".into());
+        buffer.push_str(&format!(
+            "        TestHelpers.AssertChunks(result, {min_count}, {max_count}, {each_has_content}, {each_has_embedding}, {each_has_heading_context}, {each_has_chunk_type}, {content_starts_with_heading});\n"
+        ));
     }
 
     if let Some(images) = assertions.images.as_ref() {

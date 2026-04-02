@@ -95,7 +95,7 @@ class Token_reductionTest extends TestCase
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 5);
         Helpers::assertMaxContentLength($result, 200);
-        Helpers::assertChunks($result, 1, null, true, null, null, null);
+        Helpers::assertChunks($result, 1, null, true, null, null, null, null);
         Helpers::assertContentNotEmpty($result);
     }
 

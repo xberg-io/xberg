@@ -102,6 +102,6 @@ Deno.test("token_reduction_with_chunking", { permissions: { read: true, net: tru
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 5);
 	assertions.assertMaxContentLength(result, 200);
-	assertions.assertChunks(result, 1, null, true, null, null, null);
+	assertions.assertChunks(result, 1, null, true, null, null, null, null);
 	assertions.assertContentNotEmpty(result);
 });

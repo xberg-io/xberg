@@ -48,10 +48,26 @@ export interface ChunkMetadata {
 	headingContext?: HeadingContext | null;
 }
 
+export type ChunkType =
+	| "heading"
+	| "party_list"
+	| "definitions"
+	| "operative_clause"
+	| "signature_block"
+	| "schedule"
+	| "table_like"
+	| "formula"
+	| "code_block"
+	| "image"
+	| "org_chart"
+	| "diagram"
+	| "unknown";
+
 export interface Chunk {
 	content: string;
 	embedding?: number[] | null;
 	metadata: ChunkMetadata;
+	chunkType: ChunkType;
 }
 
 export interface ExtractedImage {

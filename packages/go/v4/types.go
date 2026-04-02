@@ -190,6 +190,7 @@ type Chunk struct {
 	Content   string        `json:"content"`
 	Embedding []float32     `json:"embedding,omitempty"`
 	Metadata  ChunkMetadata `json:"metadata"`
+	ChunkType string        `json:"chunk_type,omitempty"`
 }
 
 // ChunkMetadata provides positional information for a chunk.

@@ -453,7 +453,7 @@ describe("contract fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, null, null, null);
+			chunkAssertions.assertChunks(result, 1, null, true, null, null, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -480,7 +480,7 @@ describe("contract fixtures", () => {
 				return;
 			}
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 2, null, true, null, true, null);
+			chunkAssertions.assertChunks(result, 2, null, true, null, true, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -508,7 +508,7 @@ describe("contract fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, null, null, null);
+			chunkAssertions.assertChunks(result, 1, null, true, null, null, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -535,7 +535,7 @@ describe("contract fixtures", () => {
 				return;
 			}
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 2, null, true, null, false, null);
+			chunkAssertions.assertChunks(result, 2, null, true, null, false, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -564,7 +564,7 @@ describe("contract fixtures", () => {
 				return;
 			}
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 2, null, true, null, true, true);
+			chunkAssertions.assertChunks(result, 2, null, true, null, true, null, true);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -592,7 +592,7 @@ describe("contract fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 2, null, true, null, null, null);
+			chunkAssertions.assertChunks(result, 2, null, true, null, null, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -620,7 +620,7 @@ describe("contract fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 1, null, true, null, null, null);
+			chunkAssertions.assertChunks(result, 1, null, true, null, null, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -657,7 +657,7 @@ describe("contract fixtures", () => {
 				return;
 			}
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertChunks(result, 2, null, true, null, null, null);
+			chunkAssertions.assertChunks(result, 2, null, true, null, null, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);

@@ -216,6 +216,7 @@ assert_metadata_expectation <- function(result, path, expectation) {
 assert_chunks <- function(result, min_count = NULL, max_count = NULL,
                           each_has_content = NULL, each_has_embedding = NULL,
                           each_has_heading_context = NULL,
+                          each_has_chunk_type = NULL,
                           content_starts_with_heading = NULL) {
   chunks <- if (is.null(result$chunks)) list() else result$chunks
   if (!is.null(min_count)) testthat::expect_gte(length(chunks), min_count)
@@ -231,6 +232,14 @@ assert_chunks <- function(result, min_count = NULL, max_count = NULL,
   }
   if (isFALSE(each_has_heading_context)) {
     for (chunk in chunks) testthat::expect_true(is.null(chunk$metadata$heading_context))
+  }
+  if (isTRUE(each_has_chunk_type)) {
+    for (chunk in chunks) {
+      chunk_type <- chunk[["chunk_type"]]
+      if (is.null(chunk_type) || chunk_type == "unknown") {
+        testthat::fail(paste0("Expected specific chunk_type, got: ", chunk_type))
+      }
+    }
   }
   if (isTRUE(content_starts_with_heading)) {
     heading_char <- rawToChar(as.raw(35))

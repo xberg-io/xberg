@@ -382,6 +382,7 @@ public final class E2EHelpers {
                 Boolean eachHasContent,
                 Boolean eachHasEmbedding,
                 Boolean eachHasHeadingContext,
+                Boolean eachHasChunkType,
                 Boolean contentStartsWithHeading
         ) {
             var chunks = result.getChunks();
@@ -417,6 +418,13 @@ public final class E2EHelpers {
                 for (var chunk : chunks) {
                     assertTrue(chunk.getMetadata().getHeadingContext().isEmpty(),
                             "Expected each chunk to have no heading_context");
+                }
+            }
+            if (chunks != null && eachHasChunkType != null && eachHasChunkType) {
+                for (var chunk : chunks) {
+                    String type = chunk.getChunkType();
+                    assertTrue(type != null && !"unknown".equals(type),
+                            "Expected each chunk to have a specific chunk_type");
                 }
             }
             if (chunks != null && contentStartsWithHeading != null && contentStartsWithHeading) {
@@ -1670,25 +1678,29 @@ fn render_assertions(assertions: &Assertions) -> String {
             .max_count
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".to_string());
-        let has_content = chunks
+        let each_has_content = chunks
             .each_has_content
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".to_string());
-        let has_embedding = chunks
+        let each_has_embedding = chunks
             .each_has_embedding
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".to_string());
-        let has_heading_context = chunks
+        let each_has_heading_context = chunks
             .each_has_heading_context
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let each_has_chunk_type = chunks
+            .each_has_chunk_type
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".into());
         let content_starts_with_heading = chunks
             .content_starts_with_heading
             .map(|v| v.to_string())
-            .unwrap_or_else(|| "null".to_string());
+            .unwrap_or_else(|| "null".into());
         buffer.push_str(&format!(
-            "                E2EHelpers.Assertions.assertChunks(result, {}, {}, {}, {}, {}, {});\n",
-            min_literal, max_literal, has_content, has_embedding, has_heading_context, content_starts_with_heading
+            "                E2EHelpers.Assertions.assertChunks(result, {}, {}, {}, {}, {}, {}, {});\n",
+            min_literal, max_literal, each_has_content, each_has_embedding, each_has_heading_context, each_has_chunk_type, content_starts_with_heading
         ));
     }
 

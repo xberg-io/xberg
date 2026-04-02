@@ -3,10 +3,10 @@
 
 // Tests for embeddings fixtures. Cloudflare Workers with Vitest + Miniflare
 
-import type { ExtractionResult } from "@kreuzberg/wasm";
-import { extractBytes } from "@kreuzberg/wasm";
 import { describe, it } from "vitest";
+import { extractBytes } from "@kreuzberg/wasm";
 import { assertions, buildConfig, getFixture, shouldSkipFixture } from "./helpers.js";
+import type { ExtractionResult } from "@kreuzberg/wasm";
 
 describe("embeddings", () => {
 	it("embedding_disabled", async () => {
@@ -31,6 +31,6 @@ describe("embeddings", () => {
 		}
 		assertions.assertExpectedMime(result, ["application/pdf"]);
 		assertions.assertMinContentLength(result, 10);
-		assertions.assertChunks(result, 1, null, true, false, null, null);
+		assertions.assertChunks(result, 1, null, true, false, null, null, null);
 	});
 });

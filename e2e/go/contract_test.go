@@ -150,7 +150,7 @@ func TestContractConfigChunking(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil, nil)
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil, nil, nil)
 }
 
 func TestContractConfigChunkingHeadingContext(t *testing.T) {
@@ -163,7 +163,7 @@ func TestContractConfigChunkingHeadingContext(t *testing.T) {
 }
 }`))
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, boolPtr(true), nil)
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, boolPtr(true), nil, nil)
 }
 
 func TestContractConfigChunkingMarkdown(t *testing.T) {
@@ -177,7 +177,7 @@ func TestContractConfigChunkingMarkdown(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil, nil)
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil, nil, nil)
 }
 
 func TestContractConfigChunkingNoHeadings(t *testing.T) {
@@ -190,7 +190,7 @@ func TestContractConfigChunkingNoHeadings(t *testing.T) {
 }
 }`))
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, boolPtr(false), nil)
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, boolPtr(false), nil, nil)
 }
 
 func TestContractConfigChunkingPrependHeadingContext(t *testing.T) {
@@ -204,7 +204,7 @@ func TestContractConfigChunkingPrependHeadingContext(t *testing.T) {
 }
 }`))
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, boolPtr(true), boolPtr(true))
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, boolPtr(true), nil, boolPtr(true))
 }
 
 func TestContractConfigChunkingSmall(t *testing.T) {
@@ -217,7 +217,7 @@ func TestContractConfigChunkingSmall(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, nil, nil)
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, nil, nil, nil)
 }
 
 func TestContractConfigChunkingText(t *testing.T) {
@@ -230,7 +230,7 @@ func TestContractConfigChunkingText(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil, nil)
+	assertChunks(t, result, intPtr(1), nil, boolPtr(true), nil, nil, nil, nil)
 }
 
 func TestContractConfigChunkingTokenizer(t *testing.T) {
@@ -246,7 +246,7 @@ func TestContractConfigChunkingTokenizer(t *testing.T) {
 }
 }`))
 	assertMinContentLength(t, result, 10)
-	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, nil, nil)
+	assertChunks(t, result, intPtr(2), nil, boolPtr(true), nil, nil, nil, nil)
 }
 
 func TestContractConfigDisableOcr(t *testing.T) {

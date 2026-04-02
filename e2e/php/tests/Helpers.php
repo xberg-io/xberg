@@ -209,6 +209,7 @@ class Helpers
         ?bool $eachHasContent,
         ?bool $eachHasEmbedding,
         ?bool $eachHasHeadingContext = null,
+        ?bool $eachHasChunkType = null,
         ?bool $contentStartsWithHeading = null
     ): void {
         $chunks = $result->chunks ?? [];
@@ -262,6 +263,13 @@ class Helpers
                     $chunk->metadata->heading_context ?? null,
                     sprintf("Chunk %d should have no heading_context", $i)
                 );
+            }
+        }
+        if ($eachHasChunkType === true) {
+            foreach ($chunks as $i => $chunk) {
+                $type = $chunk->chunk_type ?? null;
+                Assert::assertNotNull($type, sprintf("Chunk %d should have chunk_type", $i));
+                Assert::assertNotSame('unknown', $type, sprintf("Chunk %d should have specific chunk_type, got 'unknown'", $i));
             }
         }
         if ($contentStartsWithHeading === true) {

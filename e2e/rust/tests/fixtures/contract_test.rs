@@ -402,7 +402,7 @@ fn test_config_chunking() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None, None);
+    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None, None, None);
 }
 
 #[test]
@@ -452,7 +452,7 @@ fn test_config_chunking_heading_context() {
     };
 
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(2), None, Some(true), None, Some(true), None);
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, Some(true), None, None);
 }
 
 #[test]
@@ -500,7 +500,7 @@ fn test_config_chunking_markdown() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None, None);
+    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None, None, None);
 }
 
 #[test]
@@ -550,7 +550,7 @@ fn test_config_chunking_no_headings() {
     };
 
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(2), None, Some(true), None, Some(false), None);
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, Some(false), None, None);
 }
 
 #[test]
@@ -601,7 +601,7 @@ fn test_config_chunking_prepend_heading_context() {
     };
 
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(2), None, Some(true), None, Some(true), Some(true));
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, Some(true), None, Some(true));
 }
 
 #[test]
@@ -648,7 +648,7 @@ fn test_config_chunking_small() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(2), None, Some(true), None, None, None);
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, None, None, None);
 }
 
 #[test]
@@ -681,7 +681,7 @@ fn test_config_chunking_text() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None, None);
+    assertions::assert_chunks(&result, Some(1), None, Some(true), None, None, None, None);
 }
 
 #[test]
@@ -734,7 +734,7 @@ fn test_config_chunking_tokenizer() {
     };
 
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_chunks(&result, Some(2), None, Some(true), None, None, None);
+    assertions::assert_chunks(&result, Some(2), None, Some(true), None, None, None, None);
 }
 
 #[test]

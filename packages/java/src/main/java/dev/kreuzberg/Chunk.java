@@ -16,10 +16,11 @@ public final class Chunk {
 	private final String content;
 	private final List<Float> embedding;
 	private final ChunkMetadata metadata;
+	private final String chunkType;
 
 	@JsonCreator
 	public Chunk(@JsonProperty("content") String content, @JsonProperty("embedding") List<Float> embedding,
-			@JsonProperty("metadata") ChunkMetadata metadata) {
+			@JsonProperty("metadata") ChunkMetadata metadata, @JsonProperty("chunk_type") String chunkType) {
 		this.content = Objects.requireNonNull(content, "content must not be null");
 		this.metadata = Objects.requireNonNull(metadata, "metadata must not be null");
 		if (embedding != null) {
@@ -27,6 +28,7 @@ public final class Chunk {
 		} else {
 			this.embedding = null;
 		}
+		this.chunkType = chunkType != null ? chunkType : "unknown";
 	}
 
 	public String getContent() {
@@ -41,6 +43,10 @@ public final class Chunk {
 		return metadata;
 	}
 
+	public String getChunkType() {
+		return chunkType;
+	}
+
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj) {
@@ -51,17 +57,17 @@ public final class Chunk {
 		}
 		Chunk other = (Chunk) obj;
 		return Objects.equals(content, other.content) && Objects.equals(embedding, other.embedding)
-				&& Objects.equals(metadata, other.metadata);
+				&& Objects.equals(metadata, other.metadata) && Objects.equals(chunkType, other.chunkType);
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(content, embedding, metadata);
+		return Objects.hash(content, embedding, metadata, chunkType);
 	}
 
 	@Override
 	public String toString() {
 		return "Chunk{" + "contentLength=" + content.length() + ", embeddingDimensions="
-				+ (embedding == null ? 0 : embedding.size()) + ", metadata=" + metadata + '}';
+				+ (embedding == null ? 0 : embedding.size()) + ", metadata=" + metadata + ", chunkType=" + chunkType + '}';
 	}
 }

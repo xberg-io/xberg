@@ -334,7 +334,7 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, null, null, null);
+        Helpers::assertChunks($result, 1, null, true, null, null, null, null);
     }
 
     /**
@@ -355,7 +355,7 @@ class ContractTest extends TestCase
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 2, null, true, null, true, null);
+        Helpers::assertChunks($result, 2, null, true, null, true, null, null);
     }
 
     /**
@@ -377,7 +377,7 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, null, null, null);
+        Helpers::assertChunks($result, 1, null, true, null, null, null, null);
     }
 
     /**
@@ -398,7 +398,7 @@ class ContractTest extends TestCase
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 2, null, true, null, false, null);
+        Helpers::assertChunks($result, 2, null, true, null, false, null, null);
     }
 
     /**
@@ -419,7 +419,7 @@ class ContractTest extends TestCase
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 2, null, true, null, true, true);
+        Helpers::assertChunks($result, 2, null, true, null, true, null, true);
     }
 
     /**
@@ -441,7 +441,7 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 2, null, true, null, null, null);
+        Helpers::assertChunks($result, 2, null, true, null, null, null, null);
     }
 
     /**
@@ -461,7 +461,7 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, null, null, null);
+        Helpers::assertChunks($result, 1, null, true, null, null, null, null);
     }
 
     /**
@@ -482,7 +482,7 @@ class ContractTest extends TestCase
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 2, null, true, null, null, null);
+        Helpers::assertChunks($result, 2, null, true, null, null, null, null);
     }
 
     /**

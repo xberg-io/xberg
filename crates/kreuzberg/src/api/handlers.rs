@@ -469,6 +469,7 @@ pub async fn embed_handler(JsonApi(request): JsonApi<EmbedRequest>) -> Result<Js
         .enumerate()
         .map(|(idx, text)| Chunk {
             content: text.clone(),
+            chunk_type: Default::default(),
             embedding: None,
             metadata: ChunkMetadata {
                 byte_start: 0,

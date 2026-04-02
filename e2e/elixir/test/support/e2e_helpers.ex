@@ -17,7 +17,6 @@ defmodule E2E.Helpers do
 
   def build_config(nil), do: nil
   def build_config(raw) when is_map(raw) and map_size(raw) == 0, do: nil
-
   def build_config(raw) when is_map(raw) do
     atomize_keys(raw)
   end
@@ -38,12 +37,9 @@ defmodule E2E.Helpers do
   def skip_reason_for(error, fixture_id, requirements, notes \\ nil) do
     message = Exception.message(error)
     downcased = String.downcase(message)
-
-    requirement_hit =
-      Enum.any?(requirements, fn req ->
-        String.contains?(downcased, String.downcase(req))
-      end)
-
+    requirement_hit = Enum.any?(requirements, fn req ->
+      String.contains?(downcased, String.downcase(req))
+    end)
     missing_dependency = String.contains?(downcased, "missing dependency")
     unsupported_format = String.contains?(downcased, "unsupported format")
 
@@ -78,11 +74,8 @@ defmodule E2E.Helpers do
     requirements = Keyword.get(opts, :requirements, [])
     notes = Keyword.get(opts, :notes, nil)
     skip_if_missing = Keyword.get(opts, :skip_if_missing, true)
-
     run_fixture_with_method(fixture_id, relative_path, config_hash, :sync, :file,
-      requirements: requirements,
-      notes: notes,
-      skip_if_missing: skip_if_missing
+      requirements: requirements, notes: notes, skip_if_missing: skip_if_missing
     )
   end
 
@@ -195,7 +188,6 @@ defmodule E2E.Helpers do
       result
     else
       mime = result.mime_type || ""
-
       if Enum.any?(expected, fn token -> String.contains?(mime, token) end) do
         result
       else
@@ -206,7 +198,6 @@ defmodule E2E.Helpers do
 
   def assert_min_content_length(result, minimum) do
     content_len = String.length(result.content || "")
-
     if content_len >= minimum do
       result
     else
@@ -216,7 +207,6 @@ defmodule E2E.Helpers do
 
   def assert_max_content_length(result, maximum) do
     content_len = String.length(result.content || "")
-
     if content_len <= maximum do
       result
     else
@@ -229,7 +219,6 @@ defmodule E2E.Helpers do
       result
     else
       lowered = String.downcase(result.content || "")
-
       if Enum.any?(snippets, fn snippet -> String.contains?(lowered, String.downcase(snippet)) end) do
         result
       else
@@ -243,7 +232,6 @@ defmodule E2E.Helpers do
       result
     else
       lowered = String.downcase(result.content || "")
-
       if Enum.all?(snippets, fn snippet -> String.contains?(lowered, String.downcase(snippet)) end) do
         result
       else
@@ -302,7 +290,6 @@ defmodule E2E.Helpers do
       expectation when is_map(expectation) ->
         if Map.has_key?(expectation, :eq) do
           expected_val = Map.get(expectation, :eq)
-
           if !values_equal?(value, expected_val) do
             flunk("Metadata path '#{path}' value #{inspect(value)} != #{inspect(expected_val)}")
           end
@@ -310,7 +297,6 @@ defmodule E2E.Helpers do
 
         if Map.has_key?(expectation, :gte) do
           expected_val = Map.get(expectation, :gte)
-
           if convert_numeric(value) < convert_numeric(expected_val) do
             flunk("Metadata path '#{path}' value #{inspect(value)} < #{inspect(expected_val)}")
           end
@@ -318,7 +304,6 @@ defmodule E2E.Helpers do
 
         if Map.has_key?(expectation, :lte) do
           expected_val = Map.get(expectation, :lte)
-
           if convert_numeric(value) > convert_numeric(expected_val) do
             flunk("Metadata path '#{path}' value #{inspect(value)} > #{inspect(expected_val)}")
           end
@@ -390,6 +375,12 @@ defmodule E2E.Helpers do
     if opts[:each_has_heading_context] == false do
       if !Enum.all?(chunks, fn chunk -> is_nil(chunk.metadata) || is_nil(chunk.metadata.heading_context) end) do
         flunk("Not all chunks have no heading_context")
+      end
+    end
+
+    if opts[:each_has_chunk_type] == true do
+      if !Enum.all?(chunks, fn chunk -> chunk.chunk_type && chunk.chunk_type != "unknown" end) do
+        flunk("Not all chunks have a specific chunk_type")
       end
     end
 
@@ -486,18 +477,13 @@ defmodule E2E.Helpers do
           nodes
           |> Enum.map(fn node ->
             content = Map.get(node, :content) || Map.get(node, "content")
-
-            if content,
-              do: Map.get(content, :node_type) || Map.get(content, "node_type"),
-              else: Map.get(node, :node_type) || Map.get(node, "node_type")
+            if content, do: Map.get(content, :node_type) || Map.get(content, "node_type"), else: Map.get(node, :node_type) || Map.get(node, "node_type")
           end)
           |> Enum.reject(&is_nil/1)
           |> Enum.uniq()
 
         if !Enum.all?(opts[:node_types_include], fn t -> Enum.member?(found_types, t) end) do
-          flunk(
-            "Document node types #{inspect(found_types)} do not include all of #{inspect(opts[:node_types_include])}"
-          )
+          flunk("Document node types #{inspect(found_types)} do not include all of #{inspect(opts[:node_types_include])}")
         end
       end
 
@@ -508,7 +494,7 @@ defmodule E2E.Helpers do
 
             node_type =
               if content do
-                if(is_struct(content), do: Map.get(content, :node_type), else: nil) ||
+                (if is_struct(content), do: Map.get(content, :node_type), else: nil) ||
                   Map.get(content, :node_type) || Map.get(content, "node_type")
               else
                 Map.get(node, :node_type) || Map.get(node, "node_type")
@@ -567,7 +553,6 @@ defmodule E2E.Helpers do
 
   def assert_content_not_empty(result) do
     content_len = String.length(result.content || "")
-
     if content_len > 0 do
       result
     else
@@ -768,22 +753,18 @@ defmodule E2E.Helpers do
   defp lookup_metadata_path(_, _), do: nil
 
   defp values_equal?(lhs, rhs) when is_binary(lhs) and is_binary(rhs), do: lhs == rhs
-
   defp values_equal?(lhs, rhs) when is_number(lhs) and is_number(rhs) do
     convert_numeric(lhs) == convert_numeric(rhs)
   end
-
   defp values_equal?(lhs, rhs), do: lhs == rhs
 
   defp convert_numeric(value) when is_number(value), do: value
-
   defp convert_numeric(value) when is_binary(value) do
     case Float.parse(value) do
       {num, ""} -> num
       _ -> 0.0
     end
   end
-
   defp convert_numeric(_), do: 0.0
 
   def assert_is_png(data) do
@@ -794,6 +775,6 @@ defmodule E2E.Helpers do
 
   def assert_min_byte_length(data, min_length) do
     assert byte_size(data) >= min_length,
-           "Expected at least #{min_length} bytes, got #{byte_size(data)}"
+      "Expected at least #{min_length} bytes, got #{byte_size(data)}"
   end
 end

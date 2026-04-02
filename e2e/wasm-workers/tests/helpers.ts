@@ -396,6 +396,7 @@ export const assertions = {
 		eachHasContent: boolean | null,
 		eachHasEmbedding: boolean | null,
 		eachHasHeadingContext: boolean | null,
+		eachHasChunkType: boolean | null,
 		contentStartsWithHeading: boolean | null,
 	): void {
 		const chunks = Array.isArray(result.chunks) ? result.chunks : [];
@@ -423,6 +424,13 @@ export const assertions = {
 		if (eachHasHeadingContext === false) {
 			for (const chunk of chunks) {
 				expect(chunk.metadata?.headingContext ?? null).toBeNull();
+			}
+		}
+		if (eachHasChunkType === true) {
+			for (const chunk of chunks) {
+				const chunkType = (chunk as unknown as PlainRecord).chunkType ?? (chunk as unknown as PlainRecord).chunk_type;
+				expect(chunkType).toBeDefined();
+				expect(chunkType).not.toBe("unknown");
 			}
 		}
 		if (contentStartsWithHeading === true) {

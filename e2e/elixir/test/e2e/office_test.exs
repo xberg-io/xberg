@@ -11,13 +11,13 @@ defmodule E2E.OfficeTest do
   describe "office fixtures" do
     test "office_bibtex_basic" do
       case E2E.Helpers.run_fixture(
-             "office_bibtex_basic",
-             "bibtex/comprehensive.bib",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_bibtex_basic",
+        "bibtex/comprehensive.bib",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-bibtex", "text/x-bibtex"])
@@ -33,13 +33,13 @@ defmodule E2E.OfficeTest do
 
     test "office_commonmark_basic" do
       case E2E.Helpers.run_fixture(
-             "office_commonmark_basic",
-             "markdown/sample.commonmark",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_commonmark_basic",
+        "markdown/sample.commonmark",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/markdown", "text/plain", "text/x-commonmark"])
@@ -55,13 +55,13 @@ defmodule E2E.OfficeTest do
 
     test "office_dbf_basic" do
       case E2E.Helpers.run_fixture(
-             "office_dbf_basic",
-             "dbf/stations.dbf",
-             nil,
-             requirements: ["office"],
-             notes: "Requires the office feature.",
-             skip_if_missing: true
-           ) do
+        "office_dbf_basic",
+        "dbf/stations.dbf",
+        nil,
+        requirements: ["office"],
+        notes: "Requires the office feature.",
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-dbf"])
@@ -78,13 +78,13 @@ defmodule E2E.OfficeTest do
 
     test "office_djot_basic" do
       case E2E.Helpers.run_fixture(
-             "office_djot_basic",
-             "markdown/tables.djot",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_djot_basic",
+        "markdown/tables.djot",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-djot", "text/djot"])
@@ -100,13 +100,13 @@ defmodule E2E.OfficeTest do
 
     test "office_doc_legacy" do
       case E2E.Helpers.run_fixture(
-             "office_doc_legacy",
-             "doc/unit_test_lists.doc",
-             nil,
-             requirements: ["office"],
-             notes: "Requires the office feature.",
-             skip_if_missing: true
-           ) do
+        "office_doc_legacy",
+        "doc/unit_test_lists.doc",
+        nil,
+        requirements: ["office"],
+        notes: "Requires the office feature.",
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/msword"])
@@ -122,13 +122,13 @@ defmodule E2E.OfficeTest do
 
     test "office_docbook_basic" do
       case E2E.Helpers.run_fixture(
-             "office_docbook_basic",
-             "docbook/docbook-reader.docbook",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_docbook_basic",
+        "docbook/docbook-reader.docbook",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/docbook+xml", "text/docbook"])
@@ -144,18 +144,16 @@ defmodule E2E.OfficeTest do
 
     test "office_docx_basic" do
       case E2E.Helpers.run_fixture(
-             "office_docx_basic",
-             "docx/sample_document.docx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_docx_basic",
+        "docx/sample_document.docx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
           |> E2E.Helpers.assert_min_content_length(10)
 
         {:skipped, reason} ->
@@ -168,18 +166,16 @@ defmodule E2E.OfficeTest do
 
     test "office_docx_equations" do
       case E2E.Helpers.run_fixture(
-             "office_docx_equations",
-             "docx/equations.docx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_docx_equations",
+        "docx/equations.docx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
           |> E2E.Helpers.assert_min_content_length(20)
 
         {:skipped, reason} ->
@@ -192,18 +188,16 @@ defmodule E2E.OfficeTest do
 
     test "office_docx_fake" do
       case E2E.Helpers.run_fixture(
-             "office_docx_fake",
-             "docx/fake.docx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_docx_fake",
+        "docx/fake.docx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
           |> E2E.Helpers.assert_min_content_length(20)
 
         {:skipped, reason} ->
@@ -216,18 +210,16 @@ defmodule E2E.OfficeTest do
 
     test "office_docx_formatting" do
       case E2E.Helpers.run_fixture(
-             "office_docx_formatting",
-             "docx/unit_test_formatting.docx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_docx_formatting",
+        "docx/unit_test_formatting.docx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
           |> E2E.Helpers.assert_min_content_length(20)
 
         {:skipped, reason} ->
@@ -240,18 +232,16 @@ defmodule E2E.OfficeTest do
 
     test "office_docx_headers" do
       case E2E.Helpers.run_fixture(
-             "office_docx_headers",
-             "docx/unit_test_headers.docx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_docx_headers",
+        "docx/unit_test_headers.docx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
           |> E2E.Helpers.assert_min_content_length(20)
 
         {:skipped, reason} ->
@@ -264,18 +254,16 @@ defmodule E2E.OfficeTest do
 
     test "office_docx_lists" do
       case E2E.Helpers.run_fixture(
-             "office_docx_lists",
-             "docx/unit_test_lists.docx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_docx_lists",
+        "docx/unit_test_lists.docx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
           |> E2E.Helpers.assert_min_content_length(20)
 
         {:skipped, reason} ->
@@ -288,25 +276,18 @@ defmodule E2E.OfficeTest do
 
     test "office_docx_tables" do
       case E2E.Helpers.run_fixture(
-             "office_docx_tables",
-             "docx/docx_tables.docx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_docx_tables",
+        "docx/docx_tables.docx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.wordprocessingml.document"])
           |> E2E.Helpers.assert_min_content_length(50)
-          |> E2E.Helpers.assert_content_contains_all([
-            "Simple uniform table",
-            "Nested Table",
-            "merged cells",
-            "Header Col"
-          ])
+          |> E2E.Helpers.assert_content_contains_all(["Simple uniform table", "Nested Table", "merged cells", "Header Col"])
           |> E2E.Helpers.assert_table_count(1, nil)
 
         {:skipped, reason} ->
@@ -319,13 +300,13 @@ defmodule E2E.OfficeTest do
 
     test "office_epub_basic" do
       case E2E.Helpers.run_fixture(
-             "office_epub_basic",
-             "epub/features.epub",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_epub_basic",
+        "epub/features.epub",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/epub+zip"])
@@ -341,13 +322,13 @@ defmodule E2E.OfficeTest do
 
     test "office_fb2_basic" do
       case E2E.Helpers.run_fixture(
-             "office_fb2_basic",
-             "fictionbook/basic.fb2",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_fb2_basic",
+        "fictionbook/basic.fb2",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-fictionbook+xml"])
@@ -363,13 +344,13 @@ defmodule E2E.OfficeTest do
 
     test "office_fictionbook_basic" do
       case E2E.Helpers.run_fixture(
-             "office_fictionbook_basic",
-             "fictionbook/basic.fb2",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_fictionbook_basic",
+        "fictionbook/basic.fb2",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-fictionbook+xml", "application/x-fictionbook"])
@@ -385,13 +366,13 @@ defmodule E2E.OfficeTest do
 
     test "office_hwp_basic" do
       case E2E.Helpers.run_fixture(
-             "office_hwp_basic",
-             "hwp/converted_output.hwp",
-             nil,
-             requirements: ["office"],
-             notes: "Requires the office feature.",
-             skip_if_missing: true
-           ) do
+        "office_hwp_basic",
+        "hwp/converted_output.hwp",
+        nil,
+        requirements: ["office"],
+        notes: "Requires the office feature.",
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-hwp"])
@@ -407,14 +388,13 @@ defmodule E2E.OfficeTest do
 
     test "office_hwp_styled" do
       case E2E.Helpers.run_fixture(
-             "office_hwp_styled",
-             "hwp/styled_document.hwp",
-             nil,
-             requirements: ["hwp"],
-             notes:
-               "HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux.",
-             skip_if_missing: true
-           ) do
+        "office_hwp_styled",
+        "hwp/styled_document.hwp",
+        nil,
+        requirements: ["hwp"],
+        notes: "HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux.",
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-hwp"])
@@ -429,13 +409,13 @@ defmodule E2E.OfficeTest do
 
     test "office_jats_basic" do
       case E2E.Helpers.run_fixture(
-             "office_jats_basic",
-             "jats/sample_article.jats",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_jats_basic",
+        "jats/sample_article.jats",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-jats+xml", "text/jats"])
@@ -451,13 +431,13 @@ defmodule E2E.OfficeTest do
 
     test "office_jupyter_basic" do
       case E2E.Helpers.run_fixture(
-             "office_jupyter_basic",
-             "jupyter/rank.ipynb",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_jupyter_basic",
+        "jupyter/rank.ipynb",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-ipynb+json"])
@@ -473,13 +453,13 @@ defmodule E2E.OfficeTest do
 
     test "office_keynote_basic" do
       case E2E.Helpers.run_fixture(
-             "office_keynote_basic",
-             "iwork/test.key",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_keynote_basic",
+        "iwork/test.key",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-iwork-keynote-sffkey"])
@@ -495,13 +475,13 @@ defmodule E2E.OfficeTest do
 
     test "office_latex_basic" do
       case E2E.Helpers.run_fixture(
-             "office_latex_basic",
-             "latex/basic_sections.tex",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_latex_basic",
+        "latex/basic_sections.tex",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-latex", "text/x-latex"])
@@ -517,13 +497,13 @@ defmodule E2E.OfficeTest do
 
     test "office_markdown_basic" do
       case E2E.Helpers.run_fixture(
-             "office_markdown_basic",
-             "markdown/comprehensive.md",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_markdown_basic",
+        "markdown/comprehensive.md",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/markdown"])
@@ -539,13 +519,13 @@ defmodule E2E.OfficeTest do
 
     test "office_mdx_basic" do
       case E2E.Helpers.run_fixture(
-             "office_mdx_basic",
-             "markdown/sample.mdx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_mdx_basic",
+        "markdown/sample.mdx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/mdx", "text/x-mdx"])
@@ -561,13 +541,13 @@ defmodule E2E.OfficeTest do
 
     test "office_mdx_getting_started" do
       case E2E.Helpers.run_fixture(
-             "office_mdx_getting_started",
-             "markdown/mdx_getting_started.mdx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_mdx_getting_started",
+        "markdown/mdx_getting_started.mdx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/mdx", "text/x-mdx"])
@@ -583,13 +563,13 @@ defmodule E2E.OfficeTest do
 
     test "office_mdx_troubleshooting" do
       case E2E.Helpers.run_fixture(
-             "office_mdx_troubleshooting",
-             "markdown/mdx_troubleshooting.mdx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_mdx_troubleshooting",
+        "markdown/mdx_troubleshooting.mdx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/mdx", "text/x-mdx"])
@@ -605,13 +585,13 @@ defmodule E2E.OfficeTest do
 
     test "office_mdx_using_mdx" do
       case E2E.Helpers.run_fixture(
-             "office_mdx_using_mdx",
-             "markdown/mdx_using_mdx.mdx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_mdx_using_mdx",
+        "markdown/mdx_using_mdx.mdx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/mdx", "text/x-mdx"])
@@ -627,13 +607,13 @@ defmodule E2E.OfficeTest do
 
     test "office_numbers_basic" do
       case E2E.Helpers.run_fixture(
-             "office_numbers_basic",
-             "iwork/test.numbers",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_numbers_basic",
+        "iwork/test.numbers",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-iwork-numbers-sffnumbers"])
@@ -649,13 +629,13 @@ defmodule E2E.OfficeTest do
 
     test "office_ods_basic" do
       case E2E.Helpers.run_fixture(
-             "office_ods_basic",
-             "data_formats/test_01.ods",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_ods_basic",
+        "data_formats/test_01.ods",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.oasis.opendocument.spreadsheet"])
@@ -671,13 +651,13 @@ defmodule E2E.OfficeTest do
 
     test "office_odt_bold" do
       case E2E.Helpers.run_fixture(
-             "office_odt_bold",
-             "odt/bold.odt",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_odt_bold",
+        "odt/bold.odt",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.oasis.opendocument.text"])
@@ -693,13 +673,13 @@ defmodule E2E.OfficeTest do
 
     test "office_odt_list" do
       case E2E.Helpers.run_fixture(
-             "office_odt_list",
-             "odt/unorderedList.odt",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_odt_list",
+        "odt/unorderedList.odt",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.oasis.opendocument.text"])
@@ -716,13 +696,13 @@ defmodule E2E.OfficeTest do
 
     test "office_odt_simple" do
       case E2E.Helpers.run_fixture(
-             "office_odt_simple",
-             "odt/simple.odt",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_odt_simple",
+        "odt/simple.odt",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.oasis.opendocument.text"])
@@ -739,13 +719,13 @@ defmodule E2E.OfficeTest do
 
     test "office_odt_table" do
       case E2E.Helpers.run_fixture(
-             "office_odt_table",
-             "odt/table.odt",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_odt_table",
+        "odt/table.odt",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.oasis.opendocument.text"])
@@ -762,13 +742,13 @@ defmodule E2E.OfficeTest do
 
     test "office_opml_basic" do
       case E2E.Helpers.run_fixture(
-             "office_opml_basic",
-             "opml/outline.opml",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_opml_basic",
+        "opml/outline.opml",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/xml+opml", "text/x-opml", "application/x-opml+xml"])
@@ -784,13 +764,13 @@ defmodule E2E.OfficeTest do
 
     test "office_org_basic" do
       case E2E.Helpers.run_fixture(
-             "office_org_basic",
-             "org/comprehensive.org",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_org_basic",
+        "org/comprehensive.org",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-org", "text/org"])
@@ -806,13 +786,13 @@ defmodule E2E.OfficeTest do
 
     test "office_pages_basic" do
       case E2E.Helpers.run_fixture(
-             "office_pages_basic",
-             "iwork/test.pages",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_pages_basic",
+        "iwork/test.pages",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-iwork-pages-sffpages"])
@@ -828,18 +808,16 @@ defmodule E2E.OfficeTest do
 
     test "office_ppsx_slideshow" do
       case E2E.Helpers.run_fixture(
-             "office_ppsx_slideshow",
-             "pptx/sample.ppsx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_ppsx_slideshow",
+        "pptx/sample.ppsx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.presentationml.slideshow"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.presentationml.slideshow"])
           |> E2E.Helpers.assert_min_content_length(10)
 
         {:skipped, reason} ->
@@ -852,13 +830,13 @@ defmodule E2E.OfficeTest do
 
     test "office_ppt_legacy" do
       case E2E.Helpers.run_fixture(
-             "office_ppt_legacy",
-             "ppt/simple.ppt",
-             nil,
-             requirements: ["office"],
-             notes: "Requires the office feature.",
-             skip_if_missing: true
-           ) do
+        "office_ppt_legacy",
+        "ppt/simple.ppt",
+        nil,
+        requirements: ["office"],
+        notes: "Requires the office feature.",
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.ms-powerpoint"])
@@ -874,19 +852,16 @@ defmodule E2E.OfficeTest do
 
     test "office_pptm_basic" do
       case E2E.Helpers.run_fixture(
-             "office_pptm_basic",
-             "pptx/powerpoint_with_image.pptm",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_pptm_basic",
+        "pptx/powerpoint_with_image.pptm",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation"])
           |> E2E.Helpers.assert_content_not_empty()
 
         {:skipped, reason} ->
@@ -899,18 +874,16 @@ defmodule E2E.OfficeTest do
 
     test "office_pptx_basic" do
       case E2E.Helpers.run_fixture(
-             "office_pptx_basic",
-             "pptx/simple.pptx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_pptx_basic",
+        "pptx/simple.pptx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.presentationml.presentation"])
           |> E2E.Helpers.assert_min_content_length(50)
 
         {:skipped, reason} ->
@@ -923,18 +896,16 @@ defmodule E2E.OfficeTest do
 
     test "office_pptx_images" do
       case E2E.Helpers.run_fixture(
-             "office_pptx_images",
-             "pptx/powerpoint_with_image.pptx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_pptx_images",
+        "pptx/powerpoint_with_image.pptx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.presentationml.presentation"])
           |> E2E.Helpers.assert_min_content_length(15)
 
         {:skipped, reason} ->
@@ -947,18 +918,16 @@ defmodule E2E.OfficeTest do
 
     test "office_pptx_pitch_deck" do
       case E2E.Helpers.run_fixture(
-             "office_pptx_pitch_deck",
-             "pptx/pitch_deck_presentation.pptx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_pptx_pitch_deck",
+        "pptx/pitch_deck_presentation.pptx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.presentationml.presentation"])
           |> E2E.Helpers.assert_min_content_length(100)
 
         {:skipped, reason} ->
@@ -971,13 +940,13 @@ defmodule E2E.OfficeTest do
 
     test "office_rst_basic" do
       case E2E.Helpers.run_fixture(
-             "office_rst_basic",
-             "rst/restructured_text.rst",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_rst_basic",
+        "rst/restructured_text.rst",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-rst", "text/prs.fallenstein.rst"])
@@ -993,13 +962,13 @@ defmodule E2E.OfficeTest do
 
     test "office_rtf_basic" do
       case E2E.Helpers.run_fixture(
-             "office_rtf_basic",
-             "rtf/extraction_test.rtf",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_rtf_basic",
+        "rtf/extraction_test.rtf",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/rtf", "text/rtf"])
@@ -1015,13 +984,13 @@ defmodule E2E.OfficeTest do
 
     test "office_typst_basic" do
       case E2E.Helpers.run_fixture(
-             "office_typst_basic",
-             "typst/headings.typ",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_typst_basic",
+        "typst/headings.typ",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-typst", "text/x-typst"])
@@ -1037,13 +1006,13 @@ defmodule E2E.OfficeTest do
 
     test "office_xls_legacy" do
       case E2E.Helpers.run_fixture(
-             "office_xls_legacy",
-             "xls/test_excel.xls",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_xls_legacy",
+        "xls/test_excel.xls",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.ms-excel"])
@@ -1059,19 +1028,16 @@ defmodule E2E.OfficeTest do
 
     test "office_xlsb_basic" do
       case E2E.Helpers.run_fixture(
-             "office_xlsb_basic",
-             "xlsx/test_xlsb.xlsb",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_xlsb_basic",
+        "xlsx/test_xlsb.xlsb",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])
           |> E2E.Helpers.assert_content_not_empty()
 
         {:skipped, reason} ->
@@ -1084,19 +1050,16 @@ defmodule E2E.OfficeTest do
 
     test "office_xlsm_basic" do
       case E2E.Helpers.run_fixture(
-             "office_xlsm_basic",
-             "xlsx/test_01.xlsm",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_xlsm_basic",
+        "xlsx/test_01.xlsm",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime([
-            "application/vnd.ms-excel.sheet.macroEnabled.12",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          ])
+          |> E2E.Helpers.assert_expected_mime(["application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])
           |> E2E.Helpers.assert_content_not_empty()
 
         {:skipped, reason} ->
@@ -1109,13 +1072,13 @@ defmodule E2E.OfficeTest do
 
     test "office_xlsx_basic" do
       case E2E.Helpers.run_fixture(
-             "office_xlsx_basic",
-             "xlsx/stanley_cups.xlsx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_xlsx_basic",
+        "xlsx/stanley_cups.xlsx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])
@@ -1135,13 +1098,13 @@ defmodule E2E.OfficeTest do
 
     test "office_xlsx_multi_sheet" do
       case E2E.Helpers.run_fixture(
-             "office_xlsx_multi_sheet",
-             "xlsx/excel_multi_sheet.xlsx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_xlsx_multi_sheet",
+        "xlsx/excel_multi_sheet.xlsx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])
@@ -1158,13 +1121,13 @@ defmodule E2E.OfficeTest do
 
     test "office_xlsx_office_example" do
       case E2E.Helpers.run_fixture(
-             "office_xlsx_office_example",
-             "xlsx/test_01.xlsx",
-             nil,
-             requirements: [],
-             notes: nil,
-             skip_if_missing: true
-           ) do
+        "office_xlsx_office_example",
+        "xlsx/test_01.xlsx",
+        nil,
+        requirements: [],
+        notes: nil,
+        skip_if_missing: true
+      ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])

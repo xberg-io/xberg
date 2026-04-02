@@ -52,6 +52,7 @@ module Kreuzberg
       :total_chunks,
       :first_page,
       :last_page,
+      :chunk_type,
       :embedding
     ) do
       def to_h
@@ -64,6 +65,7 @@ module Kreuzberg
           total_chunks: total_chunks,
           first_page: first_page,
           last_page: last_page,
+          chunk_type: chunk_type,
           embedding: embedding
         }
       end
@@ -525,6 +527,7 @@ module Kreuzberg
           total_chunks: chunk_hash['total_chunks'],
           first_page: chunk_hash['first_page'],
           last_page: chunk_hash['last_page'],
+          chunk_type: chunk_hash['chunk_type'],
           embedding: chunk_hash['embedding']
         )
       end

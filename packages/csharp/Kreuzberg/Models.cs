@@ -794,6 +794,12 @@ public sealed class Chunk
     /// </summary>
     [JsonPropertyName("metadata")]
     public ChunkMetadata Metadata { get; set; } = new();
+
+    /// <summary>
+    /// Semantic type classification of this chunk.
+    /// </summary>
+    [JsonPropertyName("chunk_type")]
+    public string ChunkType { get; set; } = "unknown";
 }
 
 /// <summary>

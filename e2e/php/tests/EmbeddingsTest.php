@@ -35,7 +35,7 @@ class EmbeddingsTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, true, null, null);
+        Helpers::assertChunks($result, 1, null, true, true, null, null, null);
     }
 
     /**
@@ -57,7 +57,7 @@ class EmbeddingsTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, true, null, null);
+        Helpers::assertChunks($result, 1, null, true, true, null, null, null);
     }
 
     /**
@@ -77,7 +77,7 @@ class EmbeddingsTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, false, null, null);
+        Helpers::assertChunks($result, 1, null, true, false, null, null, null);
     }
 
     /**
@@ -99,7 +99,7 @@ class EmbeddingsTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertChunks($result, 1, null, true, true, null, null);
+        Helpers::assertChunks($result, 1, null, true, true, null, null, null);
     }
 
 }

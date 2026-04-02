@@ -40,7 +40,7 @@ static void test_token_reduction_token_reduction_with_chunking(void) {
     assert_min_content_length(result, 5);
     assert_max_content_length(result, 200);
     assert_content_not_empty(result);
-    assert_chunks(result, 1, 1, 0, 0);
+    assert_chunks(result, 1, 1, 0, 0, 0);
     kreuzberg_free_result(result);
 }
 

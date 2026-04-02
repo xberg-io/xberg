@@ -114,6 +114,12 @@ pub fn render_assertions(assertions: &Assertions) -> String {
                 if has_heading_context { "TRUE" } else { "FALSE" }
             ));
         }
+        if let Some(has_chunk_type) = chunks.each_has_chunk_type {
+            args.push(format!(
+                "each_has_chunk_type = {}",
+                if has_chunk_type { "TRUE" } else { "FALSE" }
+            ));
+        }
         if let Some(starts_with_heading) = chunks.content_starts_with_heading {
             args.push(format!(
                 "content_starts_with_heading = {}",

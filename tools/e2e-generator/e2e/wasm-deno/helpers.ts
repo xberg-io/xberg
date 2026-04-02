@@ -402,6 +402,8 @@ export const assertions = {
 		eachHasContent?: boolean | null,
 		eachHasEmbedding?: boolean | null,
 		eachHasHeadingContext?: boolean | null,
+		eachHasChunkType?: boolean | null,
+		contentStartsWithHeading?: boolean | null,
 	): void {
 		const chunks = (result as unknown as PlainRecord).chunks as unknown[] | undefined;
 		assertExists(chunks, "Expected chunks to be defined");
@@ -435,6 +437,23 @@ export const assertions = {
 					((chunk as PlainRecord).metadata as PlainRecord)?.headingContext ?? null,
 					null,
 					"Chunk should have no heading_context",
+				);
+			}
+		}
+		if (eachHasChunkType === true) {
+			for (const chunk of chunks) {
+				const chunkType = (chunk as PlainRecord).chunkType ?? (chunk as PlainRecord).chunk_type;
+				assertExists(chunkType, "Chunk missing chunk_type");
+				assertEquals(chunkType !== "unknown", true, "Chunk chunk_type should not be 'unknown'");
+			}
+		}
+		if (contentStartsWithHeading === true) {
+			for (const chunk of chunks) {
+				const content = (chunk as PlainRecord).content;
+				assertEquals(
+					typeof content === "string" && (content as string).charCodeAt(0) === 35,
+					true,
+					"Chunk content should start with heading",
 				);
 			}
 		}

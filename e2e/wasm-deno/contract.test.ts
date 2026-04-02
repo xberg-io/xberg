@@ -334,7 +334,7 @@ Deno.test("config_chunking", { permissions: { read: true, net: true } }, async (
 	}
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 1, null, true, null, null, null);
+	assertions.assertChunks(result, 1, null, true, null, null, null, null);
 });
 
 Deno.test("config_chunking_heading_context", { permissions: { read: true, net: true } }, async () => {
@@ -354,7 +354,7 @@ Deno.test("config_chunking_heading_context", { permissions: { read: true, net: t
 		return;
 	}
 	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 2, null, true, null, true, null);
+	assertions.assertChunks(result, 2, null, true, null, true, null, null);
 });
 
 Deno.test("config_chunking_markdown", { permissions: { read: true, net: true } }, async () => {
@@ -375,7 +375,7 @@ Deno.test("config_chunking_markdown", { permissions: { read: true, net: true } }
 	}
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 1, null, true, null, null, null);
+	assertions.assertChunks(result, 1, null, true, null, null, null, null);
 });
 
 Deno.test("config_chunking_no_headings", { permissions: { read: true, net: true } }, async () => {
@@ -395,7 +395,7 @@ Deno.test("config_chunking_no_headings", { permissions: { read: true, net: true 
 		return;
 	}
 	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 2, null, true, null, false, null);
+	assertions.assertChunks(result, 2, null, true, null, false, null, null);
 });
 
 Deno.test("config_chunking_prepend_heading_context", { permissions: { read: true, net: true } }, async () => {
@@ -417,7 +417,7 @@ Deno.test("config_chunking_prepend_heading_context", { permissions: { read: true
 		return;
 	}
 	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 2, null, true, null, true, true);
+	assertions.assertChunks(result, 2, null, true, null, true, null, true);
 });
 
 Deno.test("config_chunking_small", { permissions: { read: true, net: true } }, async () => {
@@ -438,7 +438,7 @@ Deno.test("config_chunking_small", { permissions: { read: true, net: true } }, a
 	}
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 2, null, true, null, null, null);
+	assertions.assertChunks(result, 2, null, true, null, null, null, null);
 });
 
 Deno.test("config_chunking_text", { permissions: { read: true, net: true } }, async () => {
@@ -459,7 +459,7 @@ Deno.test("config_chunking_text", { permissions: { read: true, net: true } }, as
 	}
 	assertions.assertExpectedMime(result, ["application/pdf"]);
 	assertions.assertMinContentLength(result, 10);
-	assertions.assertChunks(result, 1, null, true, null, null, null);
+	assertions.assertChunks(result, 1, null, true, null, null, null, null);
 });
 
 Deno.test("config_disable_ocr", { permissions: { read: true, net: true } }, async () => {
