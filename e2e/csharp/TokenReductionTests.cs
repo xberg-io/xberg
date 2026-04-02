@@ -7,7 +7,8 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.TokenReduction {
+namespace Kreuzberg.E2E.TokenReduction
+{
     public class TokenReductionTests
     {
         [SkippableFact]

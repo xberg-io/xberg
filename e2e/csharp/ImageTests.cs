@@ -7,7 +7,8 @@ using Kreuzberg;
 using Xunit;
 using Kreuzberg.E2E;
 
-namespace Kreuzberg.E2E.Image {
+namespace Kreuzberg.E2E.Image
+{
     public class ImageTests
     {
         [SkippableFact]

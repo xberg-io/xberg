@@ -1031,7 +1031,8 @@ fn render_category(category: &str, fixtures: &[&Fixture]) -> Result<String> {
     writeln!(buffer, "using Kreuzberg.E2E;\n")?;
 
     let namespace = format!("Kreuzberg.E2E.{}", sanitize_typename(category));
-    writeln!(buffer, "namespace {namespace} {{")?;
+    writeln!(buffer, "namespace {namespace}")?;
+    writeln!(buffer, "{{")?;
     writeln!(buffer, "    public class {}Tests", sanitize_typename(category))?;
     writeln!(buffer, "    {{")?;
 
@@ -2033,7 +2034,8 @@ fn render_render_category_csharp(fixtures: &[&Fixture]) -> Result<String> {
     writeln!(buffer, "using Kreuzberg;")?;
     writeln!(buffer, "using Xunit;")?;
     writeln!(buffer, "using Kreuzberg.E2E;\n")?;
-    writeln!(buffer, "namespace Kreuzberg.E2E.Render {{")?;
+    writeln!(buffer, "namespace Kreuzberg.E2E.Render")?;
+    writeln!(buffer, "{{")?;
     writeln!(buffer, "    public class RenderTests")?;
     writeln!(buffer, "    {{")?;
 
