@@ -62,6 +62,7 @@ pub fn convert_error(err: KreuzbergError) -> JsValue {
             "TimeoutError",
             format!("Extraction timed out after {}ms (limit: {}ms)", elapsed_ms, limit_ms),
         ),
+        KreuzbergError::Embedding { message, .. } => ("EmbeddingError", format!("Embedding error: {}", message)),
 
         KreuzbergError::Other(msg) => ("Error", msg),
     };
