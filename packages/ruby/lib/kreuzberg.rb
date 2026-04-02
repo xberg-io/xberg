@@ -59,10 +59,13 @@ module Kreuzberg
     alias native_batch_extract_bytes batch_extract_bytes
     alias native_clear_cache clear_cache
     alias native_cache_stats cache_stats
+    alias native_embed_sync embed_sync
+    alias native_embed embed
 
     private :native_extract_file_sync, :native_extract_bytes_sync, :native_batch_extract_files_sync
     private :native_extract_file, :native_extract_bytes, :native_batch_extract_files
     private :native_batch_extract_bytes_sync, :native_batch_extract_bytes
+    private :native_embed_sync, :native_embed
   end
 
   module_function :register_post_processor

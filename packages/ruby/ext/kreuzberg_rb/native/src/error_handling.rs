@@ -101,6 +101,13 @@ pub fn kreuzberg_error(err: KreuzbergError) -> Error {
                 )
             }
         }
+        KreuzbergError::Embedding { message, .. } => {
+            if let Some(class) = fetch_error_class("EmbeddingError") {
+                Error::new(class, message)
+            } else {
+                Error::new(ruby.exception_runtime_error(), format!("EmbeddingError: {}", message))
+            }
+        }
         other => Error::new(ruby.exception_runtime_error(), other.to_string()),
     }
 }

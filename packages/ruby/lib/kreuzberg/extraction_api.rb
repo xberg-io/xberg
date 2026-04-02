@@ -236,6 +236,41 @@ module Kreuzberg
       results
     end
 
+    # Asynchronously generate embeddings for multiple texts.
+    #
+    # Non-blocking embedding generation from a list of strings.
+    #
+    # @param texts [Array<String>] List of strings to embed.
+    # @param config [Config::Embedding, Hash, nil] Embedding configuration.
+    #
+    # @return [Array<Array<Float>>] Array of embedding vectors.
+    #
+    # @raise [Errors::EmbeddingError] If embedding generation fails.
+    #
+    # @example Generate embeddings asynchronously
+    #   texts = ["Hello, world!", "Kreuzberg is awesome."]
+    #   embeddings = Kreuzberg.embed(texts: texts)
+    #   puts embeddings.first.length # 384
+    def embed(texts:, config: nil)
+      opts = normalize_config(config)
+      native_embed(texts: texts.map(&:to_s), config: opts)
+    end
+
+    # Synchronously generate embeddings for multiple texts.
+    #
+    # Blocking embedding generation from a list of strings.
+    #
+    # @param texts [Array<String>] List of strings to embed.
+    # @param config [Config::Embedding, Hash, nil] Embedding configuration.
+    #
+    # @return [Array<Array<Float>>] Array of embedding vectors.
+    #
+    # @raise [Errors::EmbeddingError] If embedding generation fails.
+    def embed_sync(texts:, config: nil)
+      opts = normalize_config(config)
+      native_embed_sync(texts: texts.map(&:to_s), config: opts)
+    end
+
     # Synchronously extract content from multiple byte data sources.
     #
     # Processes multiple in-memory binary documents in a single batch operation. Results

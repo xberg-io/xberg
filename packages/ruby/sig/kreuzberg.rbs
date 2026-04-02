@@ -12,6 +12,7 @@ module Kreuzberg
   ERROR_CODE_PARSING: Integer
   ERROR_CODE_OCR: Integer
   ERROR_CODE_MISSING_DEPENDENCY: Integer
+  ERROR_CODE_EMBEDDING: Integer
 
   # Semantic element type classification (T.type_alias)
   type element_type = 'title' | 'narrative_text' | 'heading' | 'list_item' | 'table' | 'image' | 'page_break' | 'code_block' | 'block_quote' | 'footer' | 'header'
@@ -1725,6 +1726,9 @@ module Kreuzberg
     end
 
     class UnsupportedFormatError < Error
+    end
+
+    class EmbeddingError < Error
     end
   end
 

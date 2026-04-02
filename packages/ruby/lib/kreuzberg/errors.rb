@@ -11,6 +11,7 @@ module Kreuzberg
   ERROR_CODE_PARSING = 5
   ERROR_CODE_OCR = 6
   ERROR_CODE_MISSING_DEPENDENCY = 7
+  ERROR_CODE_EMBEDDING = 8
 
   module Errors
     class PanicContext
@@ -112,5 +113,8 @@ module Kreuzberg
 
     # Raised when an unsupported file format or MIME type is encountered
     class UnsupportedFormatError < Error; end
+
+    # Raised when embedding fails
+    class EmbeddingError < Error; end
   end
 end
