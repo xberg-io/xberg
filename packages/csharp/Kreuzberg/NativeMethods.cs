@@ -431,6 +431,15 @@ internal static partial class NativeMethods
     internal static extern IntPtr GetEmbeddingPreset(IntPtr name);
 
     /// <summary>
+    /// Embeds a list of texts using the given embedding config.
+    /// </summary>
+    /// <param name="textsJson">Pointer to JSON array of strings, e.g. ["hello","world"].</param>
+    /// <param name="configJson">Pointer to JSON EmbeddingConfig object, or IntPtr.Zero for defaults.</param>
+    /// <returns>Pointer to JSON array of float arrays. Must be freed with FreeString. Null on error.</returns>
+    [DllImport(LibraryName, EntryPoint = "kreuzberg_embed", CallingConvention = CallingConvention.Cdecl)]
+    internal static extern IntPtr Embed(IntPtr textsJson, IntPtr configJson);
+
+    /// <summary>
     /// C-compatible struct for a single rendered page image (PNG bytes).
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]

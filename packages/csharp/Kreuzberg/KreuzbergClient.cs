@@ -1269,6 +1269,69 @@ public static class KreuzbergClient
         }
     }
 
+    /// <summary>
+    /// Generates vector embeddings for the given texts synchronously.
+    /// </summary>
+    /// <param name="texts">Texts to embed.</param>
+    /// <param name="config">Optional embedding configuration. Null uses the default config.</param>
+    /// <returns>One float array per input text.</returns>
+    /// <exception cref="KreuzbergMissingDependencyException">Thrown when ONNX Runtime is not available.</exception>
+    /// <exception cref="KreuzbergException">Thrown on other embedding failures.</exception>
+    /// <example>
+    /// <code>
+    /// var embeddings = KreuzbergClient.EmbedSync(new[] { "Hello, world!" });
+    /// Console.WriteLine($"Dimensions: {embeddings.First().Length}");
+    /// </code>
+    /// </example>
+    public static IEnumerable<float[]> EmbedSync(IEnumerable<string> texts, EmbeddingConfig? config = null)
+    {
+        var textsJson = JsonSerializer.Serialize(texts.ToArray(), Serialization.Options);
+        var textsPtr = InteropUtilities.AllocUtf8(textsJson);
+
+        var configPtr = IntPtr.Zero;
+        if (config != null)
+        {
+            var configJson = JsonSerializer.Serialize(config, Serialization.Options);
+            configPtr = InteropUtilities.AllocUtf8(configJson);
+        }
+
+        try
+        {
+            var resultPtr = NativeMethods.Embed(textsPtr, configPtr);
+            if (resultPtr == IntPtr.Zero)
+                ThrowLastError();
+
+            var json = InteropUtilities.ReadUtf8(resultPtr) ?? "[]";
+            NativeMethods.FreeString(resultPtr);
+            return JsonSerializer.Deserialize<float[][]>(json, Serialization.Options) ?? Array.Empty<float[]>();
+        }
+        finally
+        {
+            InteropUtilities.FreeUtf8(textsPtr);
+            if (configPtr != IntPtr.Zero)
+                InteropUtilities.FreeUtf8(configPtr);
+        }
+    }
+
+    /// <summary>
+    /// Generates vector embeddings for the given texts asynchronously.
+    /// </summary>
+    /// <param name="texts">Texts to embed.</param>
+    /// <param name="config">Optional embedding configuration. Null uses the default config.</param>
+    /// <returns>Task that resolves to one float array per input text.</returns>
+    /// <exception cref="KreuzbergMissingDependencyException">Thrown when ONNX Runtime is not available.</exception>
+    /// <exception cref="KreuzbergException">Thrown on other embedding failures.</exception>
+    /// <example>
+    /// <code>
+    /// var embeddings = await KreuzbergClient.EmbedAsync(new[] { "Hello, world!" });
+    /// Console.WriteLine($"Dimensions: {embeddings.First().Length}");
+    /// </code>
+    /// </example>
+    public static Task<IEnumerable<float[]>> EmbedAsync(IEnumerable<string> texts, EmbeddingConfig? config = null)
+    {
+        return Task.Run(() => EmbedSync(texts, config));
+    }
+
     private static unsafe ReadOnlySpan<byte> ConvertOcrInput(IntPtr bytesPtr, UIntPtr length)
     {
         if (bytesPtr == IntPtr.Zero || length == UIntPtr.Zero)
