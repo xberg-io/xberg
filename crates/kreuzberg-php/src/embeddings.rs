@@ -2,7 +2,9 @@
 //!
 //! Provides functions to list and retrieve embedding model presets.
 
+use crate::error::Result;
 use ext_php_rs::prelude::*;
+use kreuzberg::{EmbeddingConfig, embed_texts, embed_texts_async};
 
 /// Embedding preset configuration.
 ///
@@ -112,10 +114,88 @@ pub fn kreuzberg_get_embedding_preset(name: String) -> Option<EmbeddingPreset> {
     })
 }
 
+/// Generate text embeddings for a list of strings.
+///
+/// Returns a 2D array (list of lists) of floating point numbers representing
+/// the embedding vectors for each input string.
+///
+/// # Parameters
+///
+/// - `texts` (array<string>): List of strings to embed
+/// - `config_json` (string|null): Optional JSON-encoded EmbeddingConfig
+///
+/// # Returns
+///
+/// Array of float arrays (2D array)
+///
+/// # Throws
+///
+/// KreuzbergException if generation fails
+///
+/// # Example
+///
+/// ```php
+/// $embeddings = kreuzberg_embed(["hello", "world"], null);
+/// foreach ($embeddings as $vector) {
+///     echo "Dimensions: " . count($vector) . "\n";
+/// }
+/// ```
+#[php_function]
+pub fn kreuzberg_embed(texts: Vec<String>, config_json: Option<String>) -> Result<Vec<Vec<f32>>> {
+    let config = match config_json {
+        Some(json) => serde_json::from_str(&json).map_err(|e| format!("Failed to parse config: {e}"))?,
+        None => EmbeddingConfig::default(),
+    };
+
+    let result = embed_texts(&texts, &config).map_err(|e| format!("Embedding failed: {e}"))?;
+    Ok(result)
+}
+
+/// Generate text embeddings asynchronously.
+///
+/// Returns a DeferredResult that will eventually resolve to a 2D array of floats.
+///
+/// # Parameters
+///
+/// - `texts` (array<string>): List of strings to embed
+/// - `config_json` (string|null): Optional JSON-encoded EmbeddingConfig
+///
+/// # Returns
+///
+/// DeferredResult object
+///
+/// # Example
+///
+/// ```php
+/// $deferred = kreuzberg_embed_async(["test"], null);
+/// $embeddings = $deferred->wait();
+/// ```
+#[php_function]
+pub fn kreuzberg_embed_async(
+    texts: Vec<String>,
+    config_json: Option<String>,
+) -> Result<crate::deferred::DeferredResult> {
+    let config = match config_json {
+        Some(json) => serde_json::from_str(&json).map_err(|e| format!("Failed to parse config: {e}"))?,
+        None => EmbeddingConfig::default(),
+    };
+
+    let future = async move {
+        let result = embed_texts_async(texts, &config)
+            .await
+            .map_err(|e| format!("Embedding failed: {e}"))?;
+        Ok(serde_json::to_value(result).map_err(|e| format!("Serialization failed: {e}"))?)
+    };
+
+    Ok(crate::deferred::DeferredResult::spawn(future))
+}
+
 /// Returns all function builders for the embeddings module.
 pub fn get_function_builders() -> Vec<ext_php_rs::builders::FunctionBuilder<'static>> {
     vec![
         wrap_function!(kreuzberg_list_embedding_presets),
         wrap_function!(kreuzberg_get_embedding_preset),
+        wrap_function!(kreuzberg_embed),
+        wrap_function!(kreuzberg_embed_async),
     ]
 }

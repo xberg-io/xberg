@@ -114,6 +114,7 @@ pub use plugins::{
 };
 
 pub use config::*;
+pub use embeddings::*;
 pub use errors::*;
 pub use extraction::*;
 pub use mime::*;
