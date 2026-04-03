@@ -12,7 +12,7 @@
 		"@kreuzberg/wasm": "workspace:*"
 	},
 	"devDependencies": {
-		"@types/node": "^25.5.1",
+		"@types/node": "^25.5.2",
 		"@vitest/ui": "^4.1.2",
 		"typescript": "^6.0.2",
 		"vitest": "^4.1.2"
