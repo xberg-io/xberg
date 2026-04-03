@@ -19,6 +19,7 @@ mod atoms;
 pub mod batch;
 pub(crate) mod config;
 pub(crate) mod conversion;
+pub mod embeddings;
 pub mod extraction;
 pub mod plugins;
 pub(crate) mod safe;

@@ -54,6 +54,7 @@ defmodule Kreuzberg.Native do
   # Embedding operations
   def list_embedding_presets, do: :erlang.nif_error(:nif_not_loaded)
   def get_embedding_preset(_preset_name), do: :erlang.nif_error(:nif_not_loaded)
+  def embed(_texts, _config), do: :erlang.nif_error(:nif_not_loaded)
 
   # Validation functions
   def validate_chunking_params(_chunk_size, _overlap), do: :erlang.nif_error(:nif_not_loaded)
