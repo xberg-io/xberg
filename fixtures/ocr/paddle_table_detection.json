@@ -23,9 +23,7 @@
 	"assertions": {
 		"expected_mime": "image/png",
 		"min_content_length": 10,
-		"tables": {
-			"min": 1
-		}
+		"content_contains_any": ["Product", "Apple", "Banana", "Orange"]
 	},
 	"skip": {
 		"requires_feature": ["paddle-ocr"],

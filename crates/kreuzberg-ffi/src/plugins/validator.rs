@@ -171,8 +171,9 @@ pub unsafe extern "C" fn kreuzberg_register_validator(
             return false;
         }
 
-        // SAFETY: C callers may pass NULL for the callback function pointer.
-        if (callback as usize) == 0 {
+        // SAFETY: C callers may pass NULL for function pointer parameters.
+        // `black_box` prevents the compiler from optimizing away the null check.
+        if core::hint::black_box(callback as usize) == 0 {
             set_last_error("Validator callback cannot be NULL".to_string());
             return false;
         }

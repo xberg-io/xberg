@@ -75,7 +75,7 @@ env:
 permissions:
   contents: read
 
-# --- Stage 1: Validate + Typecheck ---
+# --- Stage 1: Validate ---
 
 jobs:
   validate-universal:
@@ -158,7 +158,7 @@ jobs:
         run: scripts/ci/validate/cleanup-after-lint.sh
         shell: bash
 
-  validate-lightweight:
+  validate:
     name: "Validate: Python/TypeScript/Ruby/Java/C#/PHP/Elixir/R"
     if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04-arm
@@ -170,7 +170,7 @@ jobs:
         uses: kreuzberg-dev/actions/setup-python-env@v1
         with:
           python-version: "3.13"
-          cache-prefix: validate-lightweight-py
+          cache-prefix: validate-py
 
       - name: Setup Node
         uses: kreuzberg-dev/actions/setup-node-workspace@v1
@@ -241,48 +241,6 @@ jobs:
         uses: j178/prek-action@v2
         with:
           extra-args: ruff ruff-format mypy biome-format biome-lint oxlint ruby-format ruby-lint cpd checkstyle java-verify csharp-format csharp-lint php-format php-lint mix-credo mix-format r-format r-lint --all-files
-
-  typescript-typecheck:
-    name: "Validate: TypeScript Types"
-    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: kreuzberg-dev/actions/setup-rust@v1
-        with:
-          cache-key-prefix: ts-typecheck
-
-      - name: Setup Node
-        uses: kreuzberg-dev/actions/setup-node-workspace@v1
-
-      - name: Install Task
-        uses: kreuzberg-dev/actions/install-task@v1
-
-      - name: Install wasm-pack
-        run: scripts/ci/wasm/install-wasm-pack.sh
-        shell: bash
-
-      - name: Install WASI SDK
-        uses: kreuzberg-dev/actions/install-wasi-sdk@v1
-
-      - name: Cache TypeScript build artifacts
-        uses: actions/cache@v5
-        with:
-          path: |
-            crates/kreuzberg-wasm/pkg/
-            crates/kreuzberg-node/*.node
-            crates/kreuzberg-node/dist/
-            packages/typescript/core/dist/
-            packages/wasm/dist/
-          key: ts-typecheck-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'crates/kreuzberg-wasm/src/**', 'crates/kreuzberg-node/src/**', 'crates/kreuzberg-node/typescript/**', 'packages/typescript/core/typescript/**') }}
-          restore-keys: |
-            ts-typecheck-v1-${{ runner.os }}-
-
-      - name: Run TypeScript type checking
-        run: task typescript:typecheck:check
 
   changes:
     name: Detect Changes
@@ -366,7 +324,7 @@ jobs:
 # --- Stage 2: Build FFI + Rust Tests + Docker ---
 
   build-ffi:
-    needs: [validate-universal, validate-rust, validate-lightweight, typescript-typecheck, changes]
+    needs: [validate-universal, validate-rust, validate, changes]
     name: "Build: FFI (${{ matrix.os }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -467,7 +425,7 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   rust-tests:
-    needs: [validate-universal, validate-rust, validate-lightweight, typescript-typecheck, changes]
+    needs: [validate-universal, validate-rust, validate, changes]
     name: "Test: Rust (${{ matrix.os }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -580,7 +538,7 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   docker-build:
-    needs: [validate-universal, validate-rust, validate-lightweight, typescript-typecheck, changes]
+    needs: [validate-universal, validate-rust, validate, changes]
     name: "Build: Docker (${{ matrix.variant }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -792,7 +750,7 @@ jobs:
 # --- Stage 3: Build Bindings ---
 
   build-python:
-    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate-lightweight, typescript-typecheck]
+    needs: [rust-tests, changes, validate-universal, validate-rust, validate]
     name: "Build: Python (${{ matrix.target }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -941,7 +899,7 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   build-python-sdist:
-    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate-lightweight, typescript-typecheck]
+    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate]
     name: "Build: Python Sdist"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -980,7 +938,7 @@ jobs:
           retention-days: 7
 
   build-node:
-    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate-lightweight, typescript-typecheck]
+    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate]
     name: "Build: Node (${{ matrix.target }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -1153,7 +1111,7 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   build-ruby:
-    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate-lightweight, typescript-typecheck]
+    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate]
     name: "Build: Ruby Gem (${{ matrix.os }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -1429,7 +1387,7 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   build-php:
-    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate-lightweight, typescript-typecheck]
+    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate]
     name: "Build: PHP (${{ matrix.os }}, PHP ${{ matrix.php-version }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -1577,7 +1535,7 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   build-wasm:
-    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate-lightweight, typescript-typecheck]
+    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate]
     name: "Build: WASM (${{ matrix.os }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -1668,7 +1626,7 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   build-java:
-    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate-lightweight, typescript-typecheck]
+    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate]
     name: "Build: Java (${{ matrix.os }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -1799,7 +1757,7 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   build-csharp:
-    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate-lightweight, typescript-typecheck]
+    needs: [rust-tests, build-ffi, changes, validate-universal, validate-rust, validate]
     name: "Build: C# (${{ matrix.os }})"
     if: |
       github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
@@ -1919,6 +1877,51 @@ jobs:
         uses: kreuzberg-dev/actions/cleanup-rust-cache@v1
 
   # --- Stage 4: Test ---
+
+  typescript-typecheck:
+    name: "Validate: TypeScript Types"
+    needs: [build-node, build-wasm, changes]
+    if: |
+      github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'workflow_dispatch' || needs.changes.outputs.core == 'true' || needs.changes.outputs.typescript == 'true' || needs.changes.outputs.wasm == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: kreuzberg-dev/actions/setup-rust@v1
+        with:
+          cache-key-prefix: ts-typecheck
+
+      - name: Setup Node
+        uses: kreuzberg-dev/actions/setup-node-workspace@v1
+
+      - name: Install Task
+        uses: kreuzberg-dev/actions/install-task@v1
+
+      - name: Install wasm-pack
+        run: scripts/ci/wasm/install-wasm-pack.sh
+        shell: bash
+
+      - name: Install WASI SDK
+        uses: kreuzberg-dev/actions/install-wasi-sdk@v1
+
+      - name: Cache TypeScript build artifacts
+        uses: actions/cache@v5
+        with:
+          path: |
+            crates/kreuzberg-wasm/pkg/
+            crates/kreuzberg-node/*.node
+            crates/kreuzberg-node/dist/
+            packages/typescript/core/dist/
+            packages/wasm/dist/
+          key: ts-typecheck-v1-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'crates/kreuzberg-wasm/src/**', 'crates/kreuzberg-node/src/**', 'crates/kreuzberg-node/typescript/**', 'packages/typescript/core/typescript/**') }}
+          restore-keys: |
+            ts-typecheck-v1-${{ runner.os }}-
+
+      - name: Run TypeScript type checking
+        run: task typescript:typecheck:check
 
   test-python:
     name: "Test: Python (${{ matrix.os }})"

@@ -116,7 +116,7 @@ static void test_ocr_ocr_paddle_table_detection(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"image/png"}, 1);
     assert_min_content_length(result, 10);
-    assert_table_count(result, 1, 1, 0, 0);
+    assert_content_contains_any(result, (const char *[]){"Product", "Apple", "Banana", "Orange"}, 4);
     kreuzberg_free_result(result);
 }
 

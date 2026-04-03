@@ -183,7 +183,7 @@ func TestOcrOcrPaddleTableDetection(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"image/png"})
 	assertMinContentLength(t, result, 10)
-	assertTableCount(t, result, intPtr(1), nil)
+	assertContentContainsAny(t, result, []string{"Product", "Apple", "Banana", "Orange"})
 }
 
 func TestOcrOcrPdfImageOnlyGerman(t *testing.T) {

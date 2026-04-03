@@ -1178,6 +1178,11 @@ fn apply_layout_to_ocr_document(
     use crate::types::internal::ElementKind;
 
     const MIN_CONFIDENCE: f32 = 0.3;
+    // Headings require higher confidence — false headings hurt SF1 more than
+    // missing them (a missed heading is still a paragraph, which scores OK).
+    const HEADING_MIN_CONFIDENCE: f32 = 0.7;
+    const HEADING_MAX_LINES: usize = 3;
+    const HEADING_MAX_WORDS: usize = 20;
 
     let detections: Vec<_> = detection
         .detections
@@ -1231,11 +1236,24 @@ fn apply_layout_to_ocr_document(
             continue;
         };
 
+        // Check if the element looks like a heading (short, few lines).
+        let is_heading_candidate = det.confidence >= HEADING_MIN_CONFIDENCE
+            && elem.text.lines().count() <= HEADING_MAX_LINES
+            && elem.text.split_whitespace().count() <= HEADING_MAX_WORDS;
+
+        tracing::trace!(
+            class = ?det.class,
+            confidence = det.confidence,
+            is_heading_candidate,
+            text_preview = &elem.text[..elem.text.len().min(60)],
+            "layout classification for OCR element"
+        );
+
         match det.class {
-            LayoutClass::Title => {
+            LayoutClass::Title if is_heading_candidate => {
                 elem.kind = ElementKind::Heading { level: 1 };
             }
-            LayoutClass::SectionHeader => {
+            LayoutClass::SectionHeader if is_heading_candidate => {
                 elem.kind = ElementKind::Heading { level: 2 };
             }
             LayoutClass::Code => {
@@ -1250,11 +1268,11 @@ fn apply_layout_to_ocr_document(
             LayoutClass::Footnote => {
                 elem.kind = ElementKind::FootnoteDefinition;
             }
-            LayoutClass::PageHeader => {
+            LayoutClass::PageHeader if det.confidence >= HEADING_MIN_CONFIDENCE => {
                 elem.layer = ContentLayer::Header;
                 elem.kind = ElementKind::Paragraph;
             }
-            LayoutClass::PageFooter => {
+            LayoutClass::PageFooter if det.confidence >= HEADING_MIN_CONFIDENCE => {
                 elem.layer = ContentLayer::Footer;
                 elem.kind = ElementKind::Paragraph;
             }

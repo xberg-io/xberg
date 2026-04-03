@@ -263,9 +263,11 @@ pub unsafe extern "C" fn kreuzberg_register_document_extractor(
             return false;
         }
 
-        // SAFETY: C callers may pass NULL for the callback function pointer.
-        // We detect this by comparing the transmuted pointer address to zero.
-        if (callback as usize) == 0 {
+        // SAFETY: C callers may pass NULL for function pointer parameters.
+        // Bare fn types in Rust are guaranteed non-null, so the compiler may
+        // optimize away a direct `== 0` check. `black_box` prevents this by
+        // hiding the value from the optimizer.
+        if core::hint::black_box(callback as usize) == 0 {
             set_last_error("DocumentExtractor callback cannot be NULL".to_string());
             return false;
         }

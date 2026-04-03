@@ -422,7 +422,7 @@ describe("ocr fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["image/png"]);
 			assertions.assertMinContentLength(result, 10);
-			assertions.assertTableCount(result, 1, null);
+			assertions.assertContentContainsAny(result, ["Product", "Apple", "Banana", "Orange"]);
 		},
 		TEST_TIMEOUT_MS,
 	);

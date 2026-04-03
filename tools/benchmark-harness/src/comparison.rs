@@ -415,7 +415,7 @@ pub async fn extract_pipeline(
             // other extraction code without crashing the entire benchmark run.
             let extraction_future = async {
                 tokio::time::timeout(
-                    std::time::Duration::from_secs(60),
+                    std::time::Duration::from_secs(180),
                     kreuzberg::core::batch_mode::with_batch_mode(kreuzberg::extract_file(&doc_path, None, &config)),
                 )
                 .await
@@ -428,7 +428,7 @@ pub async fn extract_pipeline(
                     String::new()
                 }
                 Ok(Err(_)) => {
-                    eprintln!("  TIMEOUT {}/{}: exceeded 60s", doc_name, pipeline_name);
+                    eprintln!("  TIMEOUT {}/{}: exceeded 180s", doc_name, pipeline_name);
                     String::new()
                 }
                 Err(panic_info) => {

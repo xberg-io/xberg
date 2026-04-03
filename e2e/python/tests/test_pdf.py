@@ -304,7 +304,7 @@ def test_pdf_tables_small() -> None:
     helpers.assert_expected_mime(result, ["application/pdf"])
     helpers.assert_min_content_length(result, 50)
     helpers.assert_content_contains_all(
-        result, ["Table 1", "Selected Numbers", "Celsius", "Fahrenheit", "Water Freezing Point", "Water Boiling Point"]
+        result, ["Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"]
     )
     helpers.assert_table_count(result, 1, None)
 

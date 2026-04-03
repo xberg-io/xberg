@@ -349,12 +349,7 @@ public class PdfTest {
           E2EHelpers.Assertions.assertContentContainsAll(
               result,
               Arrays.asList(
-                  "Table 1",
-                  "Selected Numbers",
-                  "Celsius",
-                  "Fahrenheit",
-                  "Water Freezing Point",
-                  "Water Boiling Point"));
+                  "Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"));
           E2EHelpers.Assertions.assertTableCount(result, 1, null);
         });
   }

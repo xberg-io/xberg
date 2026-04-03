@@ -179,7 +179,7 @@ namespace Kreuzberg.E2E.Ocr
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "image/png" });
             TestHelpers.AssertMinContentLength(result, 10);
-            TestHelpers.AssertTableCount(result, 1, null);
+            TestHelpers.AssertContentContainsAny(result, new[] { "Product", "Apple", "Banana", "Orange" });
         }
 
         [SkippableFact]

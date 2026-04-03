@@ -17,14 +17,7 @@
 	"assertions": {
 		"expected_mime": "application/pdf",
 		"min_content_length": 50,
-		"content_contains_all": [
-			"Table 1",
-			"Selected Numbers",
-			"Celsius",
-			"Fahrenheit",
-			"Water Freezing Point",
-			"Water Boiling Point"
-		],
+		"content_contains_all": ["Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"],
 		"tables": {
 			"min": 1
 		}

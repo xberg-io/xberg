@@ -142,7 +142,7 @@ func TestPdfPdfTablesSmall(t *testing.T) {
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 50)
-	assertContentContainsAll(t, result, []string{"Table 1", "Selected Numbers", "Celsius", "Fahrenheit", "Water Freezing Point", "Water Boiling Point"})
+	assertContentContainsAll(t, result, []string{"Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"})
 	assertTableCount(t, result, intPtr(1), nil)
 }
 

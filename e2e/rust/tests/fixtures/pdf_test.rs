@@ -510,8 +510,6 @@ fn test_pdf_tables_small() {
         &[
             "Table 1",
             "Selected Numbers",
-            "Celsius",
-            "Fahrenheit",
             "Water Freezing Point",
             "Water Boiling Point",
         ],

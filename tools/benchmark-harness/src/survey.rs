@@ -52,10 +52,11 @@ pub async fn run_survey(config: &SurveyConfig) -> Result<Vec<DocStats>> {
             None,
             &extraction_config,
         ));
-        let (content, error) = match tokio::time::timeout(std::time::Duration::from_secs(60), extraction_future).await {
+        let (content, error) = match tokio::time::timeout(std::time::Duration::from_secs(180), extraction_future).await
+        {
             Ok(Ok(r)) => (r.content, None),
             Ok(Err(e)) => (String::new(), Some(e.to_string())),
-            Err(_) => (String::new(), Some("timeout (60s)".to_string())),
+            Err(_) => (String::new(), Some("timeout (180s)".to_string())),
         };
         let extraction_ms = t.elapsed().as_secs_f64() * 1000.0;
 

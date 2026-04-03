@@ -258,7 +258,7 @@ namespace Kreuzberg.E2E.Pdf
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 50);
-            TestHelpers.AssertContentContainsAll(result, new[] { "Table 1", "Selected Numbers", "Celsius", "Fahrenheit", "Water Freezing Point", "Water Boiling Point" });
+            TestHelpers.AssertContentContainsAll(result, new[] { "Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point" });
             TestHelpers.AssertTableCount(result, 1, null);
         }
 

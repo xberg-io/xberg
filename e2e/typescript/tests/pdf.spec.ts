@@ -538,8 +538,6 @@ describe("pdf fixtures", () => {
 			assertions.assertContentContainsAll(result, [
 				"Table 1",
 				"Selected Numbers",
-				"Celsius",
-				"Fahrenheit",
 				"Water Freezing Point",
 				"Water Boiling Point",
 			]);

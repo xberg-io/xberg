@@ -311,7 +311,7 @@ mod tests {
             PathBuf::from("/tmp/results"),
             4,
             3,
-            Duration::from_secs(60),
+            Duration::from_secs(180),
             BenchmarkMode::Batch,
         );
         assert!(config.is_ok());
@@ -323,7 +323,7 @@ mod tests {
             PathBuf::from("/tmp/results"),
             1,
             3,
-            Duration::from_secs(60),
+            Duration::from_secs(180),
             BenchmarkMode::SingleFile,
         );
         assert!(config.is_ok());
@@ -349,7 +349,7 @@ mod tests {
             PathBuf::from("/tmp/results"),
             0,
             3,
-            Duration::from_secs(60),
+            Duration::from_secs(180),
             BenchmarkMode::Batch,
         );
         assert!(config.is_err());
@@ -363,7 +363,7 @@ mod tests {
             PathBuf::from("/tmp/results"),
             4,
             0,
-            Duration::from_secs(60),
+            Duration::from_secs(180),
             BenchmarkMode::Batch,
         );
         assert!(config.is_err());
@@ -377,7 +377,7 @@ mod tests {
             PathBuf::from("/tmp/results"),
             4, // not 1
             3,
-            Duration::from_secs(60),
+            Duration::from_secs(180),
             BenchmarkMode::SingleFile,
         );
         assert!(config.is_err());

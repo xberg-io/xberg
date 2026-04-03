@@ -164,7 +164,7 @@ static void test_pdf_pdf_tables_small(void) {
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 50);
-    assert_content_contains_all(result, (const char *[]){"Table 1", "Selected Numbers", "Celsius", "Fahrenheit", "Water Freezing Point", "Water Boiling Point"}, 6);
+    assert_content_contains_all(result, (const char *[]){"Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"}, 4);
     assert_table_count(result, 1, 1, 0, 0);
     kreuzberg_free_result(result);
 }

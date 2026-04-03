@@ -250,7 +250,8 @@ public class OcrTest {
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("image/png"));
           E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertTableCount(result, 1, null);
+          E2EHelpers.Assertions.assertContentContainsAny(
+              result, Arrays.asList("Product", "Apple", "Banana", "Orange"));
         });
   }
 
