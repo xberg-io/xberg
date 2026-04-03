@@ -124,7 +124,7 @@ fn consolidate_paragraphs(elements: &[InternalElement]) -> Vec<ConsolidatedEleme
                 text_len = elem.text.len(),
                 annotation_count = elem.annotations.len(),
                 uniform_kind = ?uniform,
-                text_preview = &elem.text[..elem.text.len().min(60)],
+                text_preview = elem.text.chars().take(60).collect::<String>(),
                 "paragraph consolidation candidate"
             );
         }

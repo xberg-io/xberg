@@ -59,7 +59,7 @@ fn extract_structure_tree_pages(
                         page = i,
                         block_index = bi,
                         role = ?block.role,
-                        text_preview = &block.text[..block.text.len().min(60)],
+                        text_preview = block.text.chars().take(60).collect::<String>(),
                         font_size = ?block.font_size,
                         is_bold = block.is_bold,
                         child_count = block.children.len(),

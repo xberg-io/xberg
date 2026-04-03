@@ -307,7 +307,7 @@ fn finalize_paragraph(
         is_list_item,
         is_code_block,
         is_page_furniture,
-        text_preview = %&trimmed[..trimmed.len().min(60)],
+        text_preview = %&trimmed.chars().take(60).collect::<String>(),
         "classified paragraph"
     );
 
