@@ -625,8 +625,7 @@ fn embed_text_impl(params: super::params::EmbedTextParams) -> Result<CallToolRes
         ..Default::default()
     };
 
-    let embeddings = crate::embed_texts(&params.texts, &config)
-        .map_err(super::errors::map_kreuzberg_error_to_mcp)?;
+    let embeddings = crate::embed_texts(&params.texts, &config).map_err(super::errors::map_kreuzberg_error_to_mcp)?;
 
     let dimensions = embeddings.first().map(|e| e.len()).unwrap_or(0);
 

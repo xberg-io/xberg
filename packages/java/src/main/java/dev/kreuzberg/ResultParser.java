@@ -47,6 +47,8 @@ final class ResultParser {
 	};
 	private static final TypeReference<DocumentStructure> DOCUMENT_STRUCTURE = new TypeReference<>() {
 	};
+	private static final TypeReference<float[][]> FLOAT_ARRAYS = new TypeReference<>() {
+	};
 
 	private ResultParser() {
 	}
@@ -290,6 +292,13 @@ final class ResultParser {
 
 	static List<String> parseStringList(String json) throws Exception {
 		return MAPPER.readValue(json, STRING_LIST);
+	}
+
+	static float[][] parseFloatArrays(String json) throws Exception {
+		if (json == null || json.isBlank()) {
+			return new float[0][0];
+		}
+		return MAPPER.readValue(json, FLOAT_ARRAYS);
 	}
 
 	private static final class WireExtractionResult {
