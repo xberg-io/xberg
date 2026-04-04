@@ -11,127 +11,149 @@ const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("email fixtures", () => {
-  it("email_eml_html_body", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("email/html_only.eml"));
-      result = await extractBytes(documentBytes, "message/rfc822", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "email_eml_html_body", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["message/rfc822"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"email_eml_html_body",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("email/html_only.eml"));
+				result = await extractBytes(documentBytes, "message/rfc822", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "email_eml_html_body", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["message/rfc822"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("email_eml_multipart", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("email/html_email_multipart.eml"));
-      result = await extractBytes(documentBytes, "message/rfc822", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "email_eml_multipart", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["message/rfc822"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"email_eml_multipart",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("email/html_email_multipart.eml"));
+				result = await extractBytes(documentBytes, "message/rfc822", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "email_eml_multipart", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["message/rfc822"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("email_eml_utf16", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("vendored/unstructured/eml/fake-email-utf-16.eml"));
-      result = await extractBytes(documentBytes, "message/rfc822", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "email_eml_utf16", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["message/rfc822"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAny(result, ["Test Email", "Roses are red"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"email_eml_utf16",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("vendored/unstructured/eml/fake-email-utf-16.eml"));
+				result = await extractBytes(documentBytes, "message/rfc822", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "email_eml_utf16", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["message/rfc822"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAny(result, ["Test Email", "Roses are red"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("email_msg_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("email/fake_email.msg"));
-      result = await extractBytes(documentBytes, "application/vnd.ms-outlook", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "email_msg_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-outlook"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"email_msg_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("email/fake_email.msg"));
+				result = await extractBytes(documentBytes, "application/vnd.ms-outlook", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "email_msg_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.ms-outlook"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("email_pst_empty", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("email/empty.pst"));
-      result = await extractBytes(documentBytes, "application/vnd.ms-outlook-pst", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "email_pst_empty", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-outlook-pst"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"email_pst_empty",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("email/empty.pst"));
+				result = await extractBytes(documentBytes, "application/vnd.ms-outlook-pst", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "email_pst_empty", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.ms-outlook-pst"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("email_sample_eml", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("email/sample_email.eml"));
-      result = await extractBytes(documentBytes, "message/rfc822", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "email_sample_eml", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["message/rfc822"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"email_sample_eml",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("email/sample_email.eml"));
+				result = await extractBytes(documentBytes, "message/rfc822", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "email_sample_eml", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["message/rfc822"]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

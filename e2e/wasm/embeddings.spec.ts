@@ -11,33 +11,35 @@ const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("embeddings fixtures", () => {
-  it("embedding_disabled", async () => {
-    const config = buildConfig({"chunking":{"max_chars":500,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "embedding_disabled", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertChunks(result, 1, null, true, false, null, null, null);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"embedding_disabled",
+		async () => {
+			const config = buildConfig({ chunking: { max_chars: 500, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "embedding_disabled", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertChunks(result, 1, null, true, false, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

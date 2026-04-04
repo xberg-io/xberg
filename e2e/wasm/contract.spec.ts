@@ -11,1275 +11,1582 @@ const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("contract fixtures", () => {
-  it("api_batch_bytes_async", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch async extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_bytes_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_bytes_sync", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch sync extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_bytes_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_bytes_with_configs_async", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch async extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_bytes_with_configs_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_bytes_with_configs_sync", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch sync extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_bytes_with_configs_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_async", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch async extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_sync", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch sync extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_with_configs_async", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch async extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_with_configs_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_with_configs_sync", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch sync extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_with_configs_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_with_timeout_sync", async () => {
-    const config = buildConfig({"extraction_timeout_secs":300});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      // Batch sync extraction - WASM simulates with single extraction
-      const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_with_timeout_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_extract_bytes_async", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_extract_bytes_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_extract_bytes_sync", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_extract_bytes_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_extract_file_async", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_extract_file_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_extract_file_sync", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_extract_file_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_acceleration_cpu_provider", async () => {
-    const config = buildConfig({"acceleration":{"provider":"cpu","device_id":0}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_acceleration_cpu_provider", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "To Whom it May Concern"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking", async () => {
-    const config = buildConfig({"chunking":{"max_chars":500,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertChunks(result, 1, null, true, null, null, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_heading_context", async () => {
-    const config = buildConfig({"chunking":{"chunker_type":"markdown","max_chars":300,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/extraction_test.md"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_heading_context", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertChunks(result, 2, null, true, null, true, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_markdown", async () => {
-    const config = buildConfig({"chunking":{"chunker_type":"markdown","max_chars":500,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_markdown", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertChunks(result, 1, null, true, null, null, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_no_headings", async () => {
-    const config = buildConfig({"chunking":{"chunker_type":"markdown","max_chars":300,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("text/book_war_and_peace_1p.txt"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_no_headings", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertChunks(result, 2, null, true, null, false, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_prepend_heading_context", async () => {
-    const config = buildConfig({"chunking":{"chunker_type":"markdown","max_chars":300,"max_overlap":50,"prepend_heading_context":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/extraction_test.md"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_prepend_heading_context", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertChunks(result, 2, null, true, null, true, null, true);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_small", async () => {
-    const config = buildConfig({"chunking":{"max_chars":100,"max_overlap":20}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_small", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertChunks(result, 2, null, true, null, null, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_text", async () => {
-    const config = buildConfig({"chunking":{"chunker_type":"text","max_chars":500,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_text", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertChunks(result, 1, null, true, null, null, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_disable_ocr", async () => {
-    const config = buildConfig({"disable_ocr":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images/test_hello_world.png"));
-      result = await extractBytes(documentBytes, "image/png", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_disable_ocr", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/png"]);
-    assertions.assertMaxContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_djot_content", async () => {
-    const config = buildConfig({"output_format":"djot"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_djot_content", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure", async () => {
-    const config = buildConfig({"include_document_structure":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertDocument(result, true, 1, ["paragraph"], null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure_disabled", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure_disabled", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertDocument(result, false, null, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure_groups", async () => {
-    const config = buildConfig({"include_document_structure":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_headers.docx"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure_groups", ["office"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertDocument(result, true, null, null, true);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure_headings", async () => {
-    const config = buildConfig({"include_document_structure":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_headers.docx"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure_headings", ["office"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertDocument(result, true, 1, ["heading", "paragraph"], null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure_with_headings", async () => {
-    const config = buildConfig({"include_document_structure":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/fake.docx"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure_with_headings", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertDocument(result, true, 1, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_element_types", async () => {
-    const config = buildConfig({"result_format":"element_based"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_headers.docx"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_element_types", ["office"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertElements(result, 1, ["narrative_text"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_email_msg_fallback_codepage", async () => {
-    const config = buildConfig({"email":{"msg_fallback_codepage":1251}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("email/fake_email.msg"));
-      result = await extractBytes(documentBytes, "application/vnd.ms-outlook", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_email_msg_fallback_codepage", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-outlook"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_extraction_timeout", async () => {
-    const config = buildConfig({"extraction_timeout_secs":300});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_extraction_timeout", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_force_ocr", async () => {
-    const config = buildConfig({"force_ocr":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_force_ocr", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_force_ocr_pages", async () => {
-    const config = buildConfig({"force_ocr_pages":[1],"ocr":{"backend":"tesseract","language":"eng"}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_force_ocr_pages", ["ocr"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 1);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_html_options", async () => {
-    const config = buildConfig({"html_options":{"extractMetadata":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("html/complex_table.html"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_html_options", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/html"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_images", async () => {
-    const config = buildConfig({"images":{"extract_images":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/embedded_images_tables.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_images", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertImages(result, 1, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_images_with_formats", async () => {
-    const config = buildConfig({"images":{"extract_images":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pptx/powerpoint_with_image.pptx"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_images_with_formats", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
-    assertions.assertImages(result, 1, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_language_detection", async () => {
-    const config = buildConfig({"language_detection":{"enabled":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_language_detection", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertDetectedLanguages(result, ["eng"], 0.5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_language_detection_multi", async () => {
-    const config = buildConfig({"language_detection":{"enabled":true,"detect_multiple":true,"min_confidence":0.3}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_language_detection_multi", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertDetectedLanguages(result, ["eng"], null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_language_multi", async () => {
-    const config = buildConfig({"language_detection":{"enabled":true,"detect_multiple":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_language_multi", ["language-detection"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertDetectedLanguages(result, ["eng"], null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pages", async () => {
-    const config = buildConfig({"pages":{"extract_pages":true,"insert_page_markers":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pages", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["PAGE"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pages_exact_count", async () => {
-    const config = buildConfig({"pages":{"extract_pages":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/multi_page.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pages_exact_count", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertPages(result, null, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pages_extract", async () => {
-    const config = buildConfig({"pages":{"extract_pages":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pages_extract", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertPages(result, 1, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pages_markers", async () => {
-    const config = buildConfig({"pages":{"insert_page_markers":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pages_markers", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["PAGE"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pdf_annotations_count", async () => {
-    const config = buildConfig({"pdf_options":{"extract_annotations":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("vendored/pdfplumber/pdf/annotations.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pdf_annotations_count", ["pdf"], "PDFium ARM Linux binary does not support annotation extraction")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertAnnotations(result, true, 3);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pdf_hierarchy", async () => {
-    const config = buildConfig({"pdf_options":{"hierarchy":{"enabled":true,"include_bbox":true}},"pages":{"extract_pages":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pdf_hierarchy", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pdf_margins", async () => {
-    const config = buildConfig({"pdf_options":{"top_margin_fraction":0.1,"bottom_margin_fraction":0.1}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pdf_margins", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_postprocessor", async () => {
-    const config = buildConfig({"postprocessor":{"enabled":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_postprocessor", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_processing_warnings_empty", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_processing_warnings_empty", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertProcessingWarnings(result, null, true);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_quality_disabled", async () => {
-    const config = buildConfig({"enable_quality_processing":false});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_quality_disabled", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_quality_enabled", async () => {
-    const config = buildConfig({"enable_quality_processing":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_quality_enabled", ["quality"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertQualityScore(result, true, 0, 1);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_quality_score_range", async () => {
-    const config = buildConfig({"enable_quality_processing":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_quality_score_range", ["quality"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertQualityScore(result, true, 0.1, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_security_limits", async () => {
-    const config = buildConfig({"security_limits":{"max_archive_size":104857600,"max_compression_ratio":50,"max_files_in_archive":100}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("archives/documents.zip"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_security_limits", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/zip", "application/x-zip-compressed"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_structured_output", async () => {
-    const config = buildConfig({"output_format":"structured"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_structured_output", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_tables_content", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/docx_tables.docx"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_tables_content", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    // Table and bounding box assertions require OCR feature for PDF table extraction
-    if (result.tables.length > 0) {
-      assertions.assertTableCount(result, 1, null);
-    }
-  }, TEST_TIMEOUT_MS);
-
-  it("config_tree_sitter", async () => {
-    const config = buildConfig({"tree_sitter":{"languages":["python","rust"],"groups":["web"],"process":{"structure":true,"imports":true,"exports":true,"comments":false,"docstrings":false,"symbols":false,"diagnostics":false}}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("code/hello.py"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_tree_sitter", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_tree_sitter_process", async () => {
-    const config = buildConfig({"tree_sitter":{"process":{"structure":true,"imports":true,"exports":true,"comments":true,"docstrings":true,"symbols":true,"diagnostics":true,"chunk_max_size":2000}}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("code/hello.py"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_tree_sitter_process", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_use_cache_false", async () => {
-    const config = buildConfig({"use_cache":false});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_use_cache_false", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_bytes_markdown", async () => {
-    const config = buildConfig({"output_format":"markdown"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_bytes_markdown", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_djot", async () => {
-    const config = buildConfig({"output_format":"djot"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_djot", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_html", async () => {
-    const config = buildConfig({"output_format":"html"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_html", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_markdown", async () => {
-    const config = buildConfig({"output_format":"markdown"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_markdown", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_plain", async () => {
-    const config = buildConfig({"output_format":"plain"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_plain", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("result_format_element_based", async () => {
-    const config = buildConfig({"result_format":"element_based"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "result_format_element_based", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertElements(result, 1, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("result_format_unified", async () => {
-    const config = buildConfig({"result_format":"unified"});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "result_format_unified", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"api_batch_bytes_async",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch async extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_bytes_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_bytes_sync",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch sync extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_bytes_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_bytes_with_configs_async",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch async extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_bytes_with_configs_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_bytes_with_configs_sync",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch sync extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_bytes_with_configs_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_async",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch async extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_sync",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch sync extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_with_configs_async",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch async extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_with_configs_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_with_configs_sync",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch sync extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_with_configs_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_with_timeout_sync",
+		async () => {
+			const config = buildConfig({ extraction_timeout_secs: 300 });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				// Batch sync extraction - WASM simulates with single extraction
+				const results = [await extractBytes(documentBytes, "application/octet-stream", config)];
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_with_timeout_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_extract_bytes_async",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_extract_bytes_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_extract_bytes_sync",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_extract_bytes_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_extract_file_async",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_extract_file_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_extract_file_sync",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_extract_file_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_acceleration_cpu_provider",
+		async () => {
+			const config = buildConfig({ acceleration: { provider: "cpu", device_id: 0 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_acceleration_cpu_provider", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "To Whom it May Concern"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking",
+		async () => {
+			const config = buildConfig({ chunking: { max_chars: 500, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertChunks(result, 1, null, true, null, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_heading_context",
+		async () => {
+			const config = buildConfig({ chunking: { chunker_type: "markdown", max_chars: 300, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/extraction_test.md"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_heading_context", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertChunks(result, 2, null, true, null, true, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_markdown",
+		async () => {
+			const config = buildConfig({ chunking: { chunker_type: "markdown", max_chars: 500, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_markdown", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertChunks(result, 1, null, true, null, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_no_headings",
+		async () => {
+			const config = buildConfig({ chunking: { chunker_type: "markdown", max_chars: 300, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("text/book_war_and_peace_1p.txt"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_no_headings", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertChunks(result, 2, null, true, null, false, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_prepend_heading_context",
+		async () => {
+			const config = buildConfig({
+				chunking: { chunker_type: "markdown", max_chars: 300, max_overlap: 50, prepend_heading_context: true },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/extraction_test.md"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_prepend_heading_context", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertChunks(result, 2, null, true, null, true, null, true);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_small",
+		async () => {
+			const config = buildConfig({ chunking: { max_chars: 100, max_overlap: 20 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_small", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertChunks(result, 2, null, true, null, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_text",
+		async () => {
+			const config = buildConfig({ chunking: { chunker_type: "text", max_chars: 500, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_text", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertChunks(result, 1, null, true, null, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_disable_ocr",
+		async () => {
+			const config = buildConfig({ disable_ocr: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images/test_hello_world.png"));
+				result = await extractBytes(documentBytes, "image/png", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_disable_ocr", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/png"]);
+			assertions.assertMaxContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_djot_content",
+		async () => {
+			const config = buildConfig({ output_format: "djot" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_djot_content", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure",
+		async () => {
+			const config = buildConfig({ include_document_structure: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertDocument(result, true, 1, ["paragraph"], null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure_disabled",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure_disabled", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertDocument(result, false, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure_groups",
+		async () => {
+			const config = buildConfig({ include_document_structure: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_headers.docx"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure_groups", ["office"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertDocument(result, true, null, null, true);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure_headings",
+		async () => {
+			const config = buildConfig({ include_document_structure: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_headers.docx"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure_headings", ["office"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertDocument(result, true, 1, ["heading", "paragraph"], null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure_with_headings",
+		async () => {
+			const config = buildConfig({ include_document_structure: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/fake.docx"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure_with_headings", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertDocument(result, true, 1, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_element_types",
+		async () => {
+			const config = buildConfig({ result_format: "element_based" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_headers.docx"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_element_types", ["office"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertElements(result, 1, ["narrative_text"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_email_msg_fallback_codepage",
+		async () => {
+			const config = buildConfig({ email: { msg_fallback_codepage: 1251 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("email/fake_email.msg"));
+				result = await extractBytes(documentBytes, "application/vnd.ms-outlook", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_email_msg_fallback_codepage", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.ms-outlook"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_extraction_timeout",
+		async () => {
+			const config = buildConfig({ extraction_timeout_secs: 300 });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_extraction_timeout", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_force_ocr",
+		async () => {
+			const config = buildConfig({ force_ocr: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_force_ocr", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_force_ocr_pages",
+		async () => {
+			const config = buildConfig({ force_ocr_pages: [1], ocr: { backend: "tesseract", language: "eng" } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_force_ocr_pages", ["ocr"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 1);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_html_options",
+		async () => {
+			const config = buildConfig({ html_options: { extractMetadata: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("html/complex_table.html"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_html_options", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/html"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_images",
+		async () => {
+			const config = buildConfig({ images: { extract_images: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/embedded_images_tables.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_images", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertImages(result, 1, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_images_with_formats",
+		async () => {
+			const config = buildConfig({ images: { extract_images: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pptx/powerpoint_with_image.pptx"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_images_with_formats", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			]);
+			assertions.assertImages(result, 1, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_language_detection",
+		async () => {
+			const config = buildConfig({ language_detection: { enabled: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_language_detection", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertDetectedLanguages(result, ["eng"], 0.5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_language_detection_multi",
+		async () => {
+			const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true, min_confidence: 0.3 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_language_detection_multi", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertDetectedLanguages(result, ["eng"], null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_language_multi",
+		async () => {
+			const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_language_multi", ["language-detection"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertDetectedLanguages(result, ["eng"], null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pages",
+		async () => {
+			const config = buildConfig({ pages: { extract_pages: true, insert_page_markers: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pages", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["PAGE"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pages_exact_count",
+		async () => {
+			const config = buildConfig({ pages: { extract_pages: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/multi_page.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pages_exact_count", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertPages(result, null, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pages_extract",
+		async () => {
+			const config = buildConfig({ pages: { extract_pages: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pages_extract", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertPages(result, 1, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pages_markers",
+		async () => {
+			const config = buildConfig({ pages: { insert_page_markers: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pages_markers", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["PAGE"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pdf_annotations_count",
+		async () => {
+			const config = buildConfig({ pdf_options: { extract_annotations: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("vendored/pdfplumber/pdf/annotations.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"config_pdf_annotations_count",
+						["pdf"],
+						"PDFium ARM Linux binary does not support annotation extraction",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertAnnotations(result, true, 3);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pdf_hierarchy",
+		async () => {
+			const config = buildConfig({
+				pdf_options: { hierarchy: { enabled: true, include_bbox: true } },
+				pages: { extract_pages: true },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pdf_hierarchy", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pdf_margins",
+		async () => {
+			const config = buildConfig({ pdf_options: { top_margin_fraction: 0.1, bottom_margin_fraction: 0.1 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pdf_margins", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_postprocessor",
+		async () => {
+			const config = buildConfig({ postprocessor: { enabled: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_postprocessor", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_processing_warnings_empty",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_processing_warnings_empty", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertProcessingWarnings(result, null, true);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_quality_disabled",
+		async () => {
+			const config = buildConfig({ enable_quality_processing: false });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_quality_disabled", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_quality_enabled",
+		async () => {
+			const config = buildConfig({ enable_quality_processing: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_quality_enabled", ["quality"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertQualityScore(result, true, 0, 1);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_quality_score_range",
+		async () => {
+			const config = buildConfig({ enable_quality_processing: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_quality_score_range", ["quality"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertQualityScore(result, true, 0.1, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_security_limits",
+		async () => {
+			const config = buildConfig({
+				security_limits: { max_archive_size: 104857600, max_compression_ratio: 50, max_files_in_archive: 100 },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("archives/documents.zip"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_security_limits", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/zip", "application/x-zip-compressed"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_structured_output",
+		async () => {
+			const config = buildConfig({ output_format: "structured" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_structured_output", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_tables_content",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/docx_tables.docx"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_tables_content", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			// Table and bounding box assertions require OCR feature for PDF table extraction
+			if (result.tables.length > 0) {
+				assertions.assertTableCount(result, 1, null);
+			}
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_tree_sitter",
+		async () => {
+			const config = buildConfig({
+				tree_sitter: {
+					languages: ["python", "rust"],
+					groups: ["web"],
+					process: {
+						structure: true,
+						imports: true,
+						exports: true,
+						comments: false,
+						docstrings: false,
+						symbols: false,
+						diagnostics: false,
+					},
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("code/hello.py"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_tree_sitter", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_tree_sitter_process",
+		async () => {
+			const config = buildConfig({
+				tree_sitter: {
+					process: {
+						structure: true,
+						imports: true,
+						exports: true,
+						comments: true,
+						docstrings: true,
+						symbols: true,
+						diagnostics: true,
+						chunk_max_size: 2000,
+					},
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("code/hello.py"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_tree_sitter_process", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_use_cache_false",
+		async () => {
+			const config = buildConfig({ use_cache: false });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_use_cache_false", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_bytes_markdown",
+		async () => {
+			const config = buildConfig({ output_format: "markdown" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_bytes_markdown", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_djot",
+		async () => {
+			const config = buildConfig({ output_format: "djot" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_djot", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_html",
+		async () => {
+			const config = buildConfig({ output_format: "html" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_html", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_markdown",
+		async () => {
+			const config = buildConfig({ output_format: "markdown" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_markdown", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_plain",
+		async () => {
+			const config = buildConfig({ output_format: "plain" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_plain", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"result_format_element_based",
+		async () => {
+			const config = buildConfig({ result_format: "element_based" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "result_format_element_based", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertElements(result, 1, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"result_format_unified",
+		async () => {
+			const config = buildConfig({ result_format: "unified" });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "result_format_unified", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

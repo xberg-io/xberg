@@ -11,33 +11,43 @@ const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("html fixtures", () => {
-  it("html_simple_table", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("html/simple_table.html"));
-      result = await extractBytes(documentBytes, "text/html", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "html_simple_table", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/html"]);
-    assertions.assertMinContentLength(result, 100);
-    assertions.assertContentContainsAll(result, ["Product", "Category", "Price", "Stock", "Laptop", "Electronics", "Sample Data Table"]);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"html_simple_table",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("html/simple_table.html"));
+				result = await extractBytes(documentBytes, "text/html", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "html_simple_table", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/html"]);
+			assertions.assertMinContentLength(result, 100);
+			assertions.assertContentContainsAll(result, [
+				"Product",
+				"Category",
+				"Price",
+				"Stock",
+				"Laptop",
+				"Electronics",
+				"Sample Data Table",
+			]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

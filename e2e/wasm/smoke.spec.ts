@@ -11,175 +11,227 @@ const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("smoke fixtures", () => {
-  it("smoke_cache_namespace", async () => {
-    const config = buildConfig({"cache_namespace":"test_tenant","cache_ttl_secs":3600,"use_cache":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("text/report.txt"));
-      result = await extractBytes(documentBytes, "text/plain", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "smoke_cache_namespace", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/plain"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"smoke_cache_namespace",
+		async () => {
+			const config = buildConfig({ cache_namespace: "test_tenant", cache_ttl_secs: 3600, use_cache: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("text/report.txt"));
+				result = await extractBytes(documentBytes, "text/plain", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "smoke_cache_namespace", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("smoke_docx_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/fake.docx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "smoke_docx_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertMinContentLength(result, 20);
-    assertions.assertContentContainsAny(result, ["Lorem", "ipsum", "document", "text"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"smoke_docx_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/fake.docx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "smoke_docx_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertMinContentLength(result, 20);
+			assertions.assertContentContainsAny(result, ["Lorem", "ipsum", "document", "text"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("smoke_html_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("html/simple_table.html"));
-      result = await extractBytes(documentBytes, "text/html", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "smoke_html_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/html"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["Sample Data Table", "Laptop", "Electronics", "Product"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"smoke_html_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("html/simple_table.html"));
+				result = await extractBytes(documentBytes, "text/html", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "smoke_html_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/html"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["Sample Data Table", "Laptop", "Electronics", "Product"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("smoke_image_png", async () => {
-    const config = buildConfig({"disable_ocr":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images/sample.png"));
-      result = await extractBytes(documentBytes, "image/png", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "smoke_image_png", [], "Image extraction requires image processing dependencies")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/png"]);
-    assertions.assertMetadataExpectation(result, "format", { eq: "PNG" });
-  }, TEST_TIMEOUT_MS);
+	it(
+		"smoke_image_png",
+		async () => {
+			const config = buildConfig({ disable_ocr: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images/sample.png"));
+				result = await extractBytes(documentBytes, "image/png", config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(error, "smoke_image_png", [], "Image extraction requires image processing dependencies")
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/png"]);
+			assertions.assertMetadataExpectation(result, "format", { eq: "PNG" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("smoke_json_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("json/simple.json"));
-      result = await extractBytes(documentBytes, "application/json", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "smoke_json_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/json"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"smoke_json_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("json/simple.json"));
+				result = await extractBytes(documentBytes, "application/json", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "smoke_json_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/json"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("smoke_pdf_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "smoke_pdf_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "To Whom it May Concern"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"smoke_pdf_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "smoke_pdf_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "To Whom it May Concern"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("smoke_txt_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("text/report.txt"));
-      result = await extractBytes(documentBytes, "text/plain", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "smoke_txt_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/plain"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"smoke_txt_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("text/report.txt"));
+				result = await extractBytes(documentBytes, "text/plain", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "smoke_txt_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("smoke_xlsx_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("xlsx/stanley_cups.xlsx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "smoke_xlsx_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
-    assertions.assertMinContentLength(result, 100);
-    assertions.assertContentContainsAll(result, ["Team", "Location", "Stanley Cups", "Blues", "Flyers", "Maple Leafs", "STL", "PHI", "TOR"]);
-    // Table and bounding box assertions require OCR feature for PDF table extraction
-    if (result.tables.length > 0) {
-      assertions.assertTableCount(result, 1, null);
-    }
-    assertions.assertMetadataExpectation(result, "sheetCount", {"gte":2});
-    assertions.assertMetadataExpectation(result, "sheetNames", {"contains":["Stanley Cups"]});
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"smoke_xlsx_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("xlsx/stanley_cups.xlsx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "smoke_xlsx_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+			assertions.assertMinContentLength(result, 100);
+			assertions.assertContentContainsAll(result, [
+				"Team",
+				"Location",
+				"Stanley Cups",
+				"Blues",
+				"Flyers",
+				"Maple Leafs",
+				"STL",
+				"PHI",
+				"TOR",
+			]);
+			// Table and bounding box assertions require OCR feature for PDF table extraction
+			if (result.tables.length > 0) {
+				assertions.assertTableCount(result, 1, null);
+			}
+			assertions.assertMetadataExpectation(result, "sheetCount", { gte: 2 });
+			assertions.assertMetadataExpectation(result, "sheetNames", { contains: ["Stanley Cups"] });
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

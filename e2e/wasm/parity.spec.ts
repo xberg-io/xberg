@@ -5,22 +5,17 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { extractBytes, initWasm } from "./helpers.js";
 
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("ExtractionResult field parity", () => {
 	it("has all required fields", async () => {
 		const result = await extractBytes(new TextEncoder().encode("hello"), "text/plain");
-		const requiredFields = [
-			"content",
-			"metadata",
-			"mimeType",
-			"tables",
-		];
+		const requiredFields = ["content", "metadata", "mimeType", "tables"];
 		for (const field of requiredFields) {
 			expect(field in result).toBe(true);
 		}
@@ -63,4 +58,3 @@ describe("ExtractionConfig field parity", () => {
 		expect(expectedFields.length).toBeGreaterThan(0);
 	});
 });
-
