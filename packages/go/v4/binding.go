@@ -1057,7 +1057,7 @@ func EmbedTexts(texts []string, config *EmbeddingConfig) ([][]float32, error) {
 // EmbedTextsAsync generates vector embeddings for the given texts asynchronously.
 //
 // The embedding generation is offloaded to a goroutine; the call blocks until
-// the embeddings are ready or the context is cancelled.
+// the embeddings are ready or the context is canceled.
 func EmbedTextsAsync(ctx context.Context, texts []string, config *EmbeddingConfig) ([][]float32, error) {
 	type embedResult struct {
 		embeddings [][]float32
