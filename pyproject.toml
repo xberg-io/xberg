@@ -50,7 +50,7 @@ cache-keys = [
 target-version = "py310"
 line-length = 120
 src = [ "kreuzberg/packages/python/*" ]
-extend-exclude = [ "benchmarks", "kreuzberg/crates", "docs/snippets", "kreuzberg/scripts", "test_documents" ]
+extend-exclude = [ "benchmarks", "docs/snippets", "kreuzberg/crates", "kreuzberg/scripts", "test_documents" ]
 format.docstring-code-line-length = 120
 format.docstring-code-format = true
 lint.select = [ "ALL" ]
@@ -140,6 +140,7 @@ lint.per-file-ignores."kreuzberg/scripts/**/*.py" = [
   "PLW2901",
   "SIM105",
 ]
+lint.per-file-ignores."kreuzberg/tools/benchmark-harness/scripts/*.py" = [ "BLE001", "D103", "T201" ]
 lint.per-file-ignores."test_documents/cross_language_serialization_test.py" = [
   "B905",
   "E721",
@@ -148,7 +149,6 @@ lint.per-file-ignores."test_documents/cross_language_serialization_test.py" = [
   "PLW1510",
   "SIM108",
 ]
-lint.per-file-ignores."kreuzberg/tools/benchmark-harness/scripts/*.py" = [ "BLE001", "D103", "T201" ]
 lint.isort.known-first-party = [ "kreuzberg" ]
 lint.mccabe.max-complexity = 15
 lint.pydocstyle.convention = "google"
@@ -159,6 +159,43 @@ lint.pylint.max-returns = 10
 [tool.pyproject-fmt]
 keep_full_version = true
 max_supported_python = "3.14"
+
+[tool.pytest]
+ini_options.timeout = 300
+ini_options.testpaths = [ "kreuzberg/packages/python/tests" ]
+ini_options.norecursedirs = [ "dist", "build", "*.egg" ]
+ini_options.markers = [
+  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+  "integration: marks tests as integration tests (requires running services)",
+]
+ini_options.asyncio_mode = "auto"
+ini_options.asyncio_default_fixture_loop_scope = "function"
+ini_options.filterwarnings = [
+  "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
+  "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
+  "ignore:ast.Num is deprecated and will be removed in Python 3.14:DeprecationWarning",
+  "ignore:datetime.datetime.utcfromtimestamp() is deprecated:DeprecationWarning",
+  "ignore:Deprecated call to `pkg_resources.declare_namespace('google')`:DeprecationWarning",
+]
+
+[tool.coverage]
+run.branch = true
+run.omit = [ "benchmarks/*", "kreuzberg/packages/python/tests/*", "kreuzberg/scripts/*" ]
+run.plugins = [ "covdefaults" ]
+run.source = [ "kreuzberg/packages/python/kreuzberg" ]
+report.exclude_lines = [
+  "@(abc\\.)?abstractmethod",
+  "class .*\\bProtocol\\):",
+  "def __repr__",
+  "except ImportError:",
+  "if __name__ == .__main__.:",
+  "if sys.version_info",
+  "if TYPE_CHECKING:",
+  "pragma: no cover",
+  "raise NotImplementedError",
+]
+report.fail_under = 90
+report.omit = [ "kreuzberg/packages/python/kreuzberg/ocr/easyocr.py" ]
 
 [tool.mypy]
 packages = [ "kreuzberg" ]
@@ -198,40 +235,3 @@ follow_imports = "skip"
 module = [ "examples.python.*" ]
 ignore_errors = true
 follow_imports = "skip"
-
-[tool.pytest]
-ini_options.timeout = 300
-ini_options.testpaths = [ "kreuzberg/packages/python/tests" ]
-ini_options.norecursedirs = [ "dist", "build", "*.egg" ]
-ini_options.markers = [
-  "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-  "integration: marks tests as integration tests (requires running services)",
-]
-ini_options.asyncio_mode = "auto"
-ini_options.asyncio_default_fixture_loop_scope = "function"
-ini_options.filterwarnings = [
-  "ignore:Exception ignored in:pytest.PytestUnraisableExceptionWarning",
-  "ignore:pkg_resources is deprecated as an API:DeprecationWarning",
-  "ignore:ast.Num is deprecated and will be removed in Python 3.14:DeprecationWarning",
-  "ignore:datetime.datetime.utcfromtimestamp() is deprecated:DeprecationWarning",
-  "ignore:Deprecated call to `pkg_resources.declare_namespace('google')`:DeprecationWarning",
-]
-
-[tool.coverage]
-run.branch = true
-run.omit = [ "benchmarks/*", "kreuzberg/packages/python/tests/*", "kreuzberg/scripts/*" ]
-run.plugins = [ "covdefaults" ]
-run.source = [ "kreuzberg/packages/python/kreuzberg" ]
-report.exclude_lines = [
-  "@(abc\\.)?abstractmethod",
-  "class .*\\bProtocol\\):",
-  "def __repr__",
-  "except ImportError:",
-  "if __name__ == .__main__.:",
-  "if sys.version_info",
-  "if TYPE_CHECKING:",
-  "pragma: no cover",
-  "raise NotImplementedError",
-]
-report.fail_under = 90
-report.omit = [ "kreuzberg/packages/python/kreuzberg/ocr/easyocr.py" ]
