@@ -11,15 +11,12 @@ use super::types::{LayoutHintClass, PdfLine, PdfParagraph};
 use crate::pdf::hierarchy::SegmentData;
 
 /// Minimum gap between columns as fraction of estimated page width.
-#[allow(dead_code)] // Used by reorder_elements_reading_order (OCR path)
 const MIN_COLUMN_GAP_FRACTION: f32 = 0.10;
 
 /// Minimum fraction of total Y range that each column side must span.
-#[allow(dead_code)] // Used by reorder_elements_reading_order (OCR path)
 const MIN_COLUMN_Y_SPAN_FRACTION: f32 = 0.30;
 
 /// Minimum number of elements required on each side of a column split.
-#[allow(dead_code)] // Used by reorder_elements_reading_order (OCR path)
 const MIN_ELEMENTS_PER_COLUMN: usize = 2;
 
 /// Y-proximity tolerance as a fraction of median element height, for line grouping.

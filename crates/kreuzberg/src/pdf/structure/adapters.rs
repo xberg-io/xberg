@@ -450,4 +450,114 @@ mod tests {
         assert_eq!(p.layout_class, None);
         assert_eq!(p.caption_for, None);
     }
+
+    #[cfg(feature = "layout-detection")]
+    #[test]
+    fn test_ocr_doc_to_paragraphs_with_layout_overrides() {
+        use crate::pdf::structure::layout_classify::apply_layout_overrides;
+        use crate::pdf::structure::types::{LayoutHint, LayoutHintClass};
+
+        // Build an InternalDocument with 3 OcrText elements
+        let mut doc = crate::types::internal::InternalDocument::new("pdf");
+        // Title at top of page
+        doc.push_element(make_ocr_element("Document Title", 1, 100.0, 50.0, 500.0, 100.0));
+        // Paragraph in the middle
+        doc.push_element(make_ocr_element(
+            "Body paragraph text here.",
+            1,
+            100.0,
+            150.0,
+            500.0,
+            200.0,
+        ));
+        // List item lower on the page
+        doc.push_element(make_ocr_element("- First list item", 1, 100.0, 250.0, 500.0, 300.0));
+
+        let page_height: u32 = 1000;
+        let mut paragraphs = ocr_doc_to_paragraphs(&doc, page_height);
+        assert_eq!(paragraphs.len(), 3);
+
+        // Create LayoutHints matching the PDF-space bboxes.
+        // Image coords (y=0 top) are flipped in ocr_doc_to_paragraphs:
+        //   Title: image (100,50)-(500,100) → PDF bbox (100, 900, 500, 950)
+        //   Body:  image (100,150)-(500,200) → PDF bbox (100, 800, 500, 850)
+        //   List:  image (100,250)-(500,300) → PDF bbox (100, 700, 500, 750)
+        let hints = vec![
+            LayoutHint {
+                class: LayoutHintClass::Title,
+                confidence: 0.95,
+                left: 90.0,
+                bottom: 895.0,
+                right: 510.0,
+                top: 955.0,
+            },
+            LayoutHint {
+                class: LayoutHintClass::Text,
+                confidence: 0.90,
+                left: 90.0,
+                bottom: 795.0,
+                right: 510.0,
+                top: 855.0,
+            },
+            LayoutHint {
+                class: LayoutHintClass::ListItem,
+                confidence: 0.88,
+                left: 90.0,
+                bottom: 695.0,
+                right: 510.0,
+                top: 755.0,
+            },
+        ];
+
+        apply_layout_overrides(&mut paragraphs, &hints, 0.5, 0.5, None);
+
+        // Title gets heading_level = Some(1)
+        assert_eq!(
+            paragraphs[0].heading_level,
+            Some(1),
+            "Title layout hint should set heading_level to 1"
+        );
+
+        // List item gets is_list_item = true
+        assert!(
+            paragraphs[2].is_list_item,
+            "ListItem layout hint should set is_list_item"
+        );
+
+        // Body paragraph stays as-is (Text class does not set heading or list)
+        assert_eq!(
+            paragraphs[1].heading_level, None,
+            "Text layout hint should not set heading_level"
+        );
+        assert!(
+            !paragraphs[1].is_list_item,
+            "Text layout hint should not set is_list_item"
+        );
+    }
+
+    #[test]
+    fn test_ocr_doc_to_paragraphs_coordinate_conversion_accuracy() {
+        // Test precise coordinate conversion from image space to PDF space.
+        // Page height: 3508 pixels (A4 at 300 DPI).
+        // Element at image coords: top-left (100, 200), bottom-right (500, 300).
+        // In image space: x0=100, y0=200 (top), x1=500, y1=300 (bottom).
+        // Expected PDF bbox (left, bottom, right, top):
+        //   left   = 100
+        //   bottom = page_height - y1 = 3508 - 300 = 3208
+        //   right  = 500
+        //   top    = page_height - y0 = 3508 - 200 = 3308
+        let mut doc = crate::types::internal::InternalDocument::new("pdf");
+        doc.push_element(make_ocr_element("Test text", 1, 100.0, 200.0, 500.0, 300.0));
+
+        let paragraphs = ocr_doc_to_paragraphs(&doc, 3508);
+        assert_eq!(paragraphs.len(), 1);
+
+        let bbox = paragraphs[0].block_bbox.expect("Paragraph should have block_bbox");
+
+        // block_bbox format: (left, bottom, right, top)
+        assert_eq!(bbox.0, 100.0, "left should be 100");
+        assert_eq!(bbox.1, 3208.0, "bottom should be page_height - y1 = 3508 - 300 = 3208");
+        assert_eq!(bbox.2, 500.0, "right should be 500");
+        assert_eq!(bbox.3, 3308.0, "top should be page_height - y0 = 3508 - 200 = 3308");
+    }
 }

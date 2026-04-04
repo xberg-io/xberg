@@ -795,24 +795,8 @@ pub(crate) async fn extract_with_ocr(
                 // Convert hOCR structure to PdfParagraphs, then apply layout overrides.
                 // This mirrors the pdfium path: structure → layout classify → assemble.
                 if let Some(ref ocr_doc) = ocr_result.ocr_internal_document {
-                    let ocr_text_count = ocr_doc
-                        .elements
-                        .iter()
-                        .filter(|e| matches!(e.kind, crate::types::internal::ElementKind::OcrText { .. }))
-                        .count();
-                    tracing::debug!(
-                        page = page_idx + 1,
-                        total_elements = ocr_doc.elements.len(),
-                        ocr_text_elements = ocr_text_count,
-                        "hOCR InternalDocument for page"
-                    );
                     let mut paragraphs =
                         crate::pdf::structure::adapters::ocr_doc_to_paragraphs(ocr_doc, ocr_render_height);
-                    tracing::debug!(
-                        page = page_idx + 1,
-                        paragraph_count = paragraphs.len(),
-                        "hOCR → PdfParagraph conversion"
-                    );
 
                     if let Some(ref scaled_det) = scaled_detection {
                         let hints = detection_to_layout_hints(scaled_det, ocr_render_height as f32);

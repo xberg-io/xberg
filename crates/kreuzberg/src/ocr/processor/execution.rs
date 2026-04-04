@@ -253,7 +253,7 @@ where
         .map(|d| d.as_secs_f64())
         .unwrap_or(0.0);
 
-    tracing::debug!("[ci-debug][ocr::processor::{stage}] {timestamp:.3}s {}", details());
+    tracing::debug!(stage, timestamp = format!("{timestamp:.3}"), "{}", details());
 }
 
 /// Build content with OCR tables inlined at their correct vertical positions.

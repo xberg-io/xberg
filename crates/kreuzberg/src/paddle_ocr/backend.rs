@@ -637,4 +637,124 @@ mod tests {
         let result = backend.process_image(&[], &config).await;
         assert!(result.is_err(), "Should error on empty image");
     }
+
+    #[test]
+    fn test_internal_document_from_text_blocks() {
+        use crate::ocr::conversion::text_block_to_element;
+        use crate::types::extraction::BoundingBox;
+        use crate::types::internal::{ElementKind, InternalDocument, InternalElement};
+        use crate::types::ocr_elements::OcrElementLevel;
+
+        // Create mock TextBlocks like PaddleOCR would produce
+        let blocks = [
+            kreuzberg_paddle_ocr::TextBlock {
+                text: "Hello World".to_string(),
+                box_points: vec![
+                    kreuzberg_paddle_ocr::Point { x: 10, y: 10 },
+                    kreuzberg_paddle_ocr::Point { x: 200, y: 10 },
+                    kreuzberg_paddle_ocr::Point { x: 200, y: 50 },
+                    kreuzberg_paddle_ocr::Point { x: 10, y: 50 },
+                ],
+                box_score: 0.95,
+                text_score: 0.92,
+                angle_index: 0,
+                angle_score: 0.99,
+            },
+            kreuzberg_paddle_ocr::TextBlock {
+                text: "Second line".to_string(),
+                box_points: vec![
+                    kreuzberg_paddle_ocr::Point { x: 10, y: 60 },
+                    kreuzberg_paddle_ocr::Point { x: 300, y: 60 },
+                    kreuzberg_paddle_ocr::Point { x: 300, y: 100 },
+                    kreuzberg_paddle_ocr::Point { x: 10, y: 100 },
+                ],
+                box_score: 0.88,
+                text_score: 0.85,
+                angle_index: 0,
+                angle_score: 0.97,
+            },
+        ];
+
+        // Convert TextBlocks to OcrElements (same as backend does)
+        let ocr_elements: Vec<OcrElement> = blocks
+            .iter()
+            .map(|block| text_block_to_element(block, 1))
+            .filter_map(|result| result.transpose())
+            .collect::<crate::Result<Vec<_>>>()
+            .expect("text_block_to_element should succeed");
+
+        assert_eq!(ocr_elements.len(), 2, "Should produce 2 OcrElements");
+
+        // Build InternalDocument (same logic as process_image)
+        let mut doc = InternalDocument::new("pdf");
+        for elem in &ocr_elements {
+            let (left, top, width, height) = elem.geometry.to_aabb();
+            let bbox = BoundingBox {
+                x0: left as f64,
+                y0: top as f64,
+                x1: (left + width) as f64,
+                y1: (top + height) as f64,
+            };
+            let mut ie = InternalElement::text(
+                ElementKind::OcrText {
+                    level: OcrElementLevel::Line,
+                },
+                &elem.text,
+                0,
+            )
+            .with_page(elem.page_number as u32);
+            ie.bbox = Some(bbox);
+            ie.ocr_confidence = Some(elem.confidence.clone());
+            ie.ocr_geometry = Some(elem.geometry.clone());
+            doc.push_element(ie);
+        }
+
+        // Verify OcrText elements have correct ElementKind
+        for ie in &doc.elements {
+            assert!(
+                matches!(
+                    ie.kind,
+                    ElementKind::OcrText {
+                        level: OcrElementLevel::Line
+                    }
+                ),
+                "Element kind should be OcrText with Line level"
+            );
+        }
+
+        // Verify bounding boxes from Quadrilateral → AABB
+        let first_bbox = doc.elements[0].bbox.as_ref().expect("First element should have bbox");
+        assert_eq!(first_bbox.x0, 10.0, "left should be min x of quad points");
+        assert_eq!(first_bbox.y0, 10.0, "top should be min y of quad points");
+        assert_eq!(first_bbox.x1, 200.0, "right should be left + width");
+        assert_eq!(first_bbox.y1, 50.0, "bottom should be top + height");
+
+        let second_bbox = doc.elements[1].bbox.as_ref().expect("Second element should have bbox");
+        assert_eq!(second_bbox.x0, 10.0);
+        assert_eq!(second_bbox.y0, 60.0);
+        assert_eq!(second_bbox.x1, 300.0);
+        assert_eq!(second_bbox.y1, 100.0);
+
+        // Verify confidence scores are preserved
+        // Note: f32 → f64 conversion introduces small floating-point error,
+        // so we use a tolerance rather than exact equality.
+        let first_conf = doc.elements[0]
+            .ocr_confidence
+            .as_ref()
+            .expect("First element should have confidence");
+        assert!(
+            (first_conf.detection.unwrap() - 0.95).abs() < 1e-6,
+            "Detection confidence should be ~0.95, got {}",
+            first_conf.detection.unwrap()
+        );
+        assert!(
+            (first_conf.recognition - 0.92).abs() < 1e-6,
+            "Recognition confidence should be ~0.92, got {}",
+            first_conf.recognition
+        );
+
+        // Verify page numbers are set
+        assert_eq!(doc.elements[0].page, Some(1));
+        assert_eq!(doc.elements[1].page, Some(1));
+    }
 }
