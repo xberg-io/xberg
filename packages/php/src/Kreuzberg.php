@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Kreuzberg;
 
-use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Config\EmbeddingConfig;
+use Kreuzberg\Config\ExtractionConfig;
 use Kreuzberg\Exceptions\KreuzbergException;
 use Kreuzberg\Types\DeferredResult;
 use Kreuzberg\Types\ExtractionResult;

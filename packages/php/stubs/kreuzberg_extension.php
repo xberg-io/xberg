@@ -338,3 +338,27 @@ function kreuzberg_pdf_page_iterator_next(mixed $handle): ?string
 function kreuzberg_pdf_page_iterator_free(mixed $handle): void
 {
 }
+
+/**
+ * Generate text embeddings (native extension function).
+ *
+ * @param array<string> $texts List of strings to embed
+ * @param string|null $config JSON-encoded embedding configuration
+ * @return array<array<float>> List of embedding vectors
+ * @throws \Exception If embedding fails
+ */
+function kreuzberg_embed(array $texts, ?string $config): array
+{
+}
+
+/**
+ * Generate text embeddings asynchronously (native extension function).
+ *
+ * @param array<string> $texts List of strings to embed
+ * @param string|null $config JSON-encoded embedding configuration
+ * @return \Kreuzberg\Types\DeferredResult Deferred result
+ * @throws \Exception If embedding fails
+ */
+function kreuzberg_embed_async(array $texts, ?string $config): \Kreuzberg\Types\DeferredResult
+{
+}
