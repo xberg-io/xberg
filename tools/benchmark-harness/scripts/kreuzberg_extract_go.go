@@ -343,7 +343,7 @@ func mustEncodeNoNewline(value any) {
 	}
 }
 
-func mustEncodeError(err error, _ocrEnabled bool) {
+func mustEncodeError(err error, _ bool) {
 	errorMap := map[string]interface{}{
 		"error":               err.Error(),
 		"_extraction_time_ms": 0,
