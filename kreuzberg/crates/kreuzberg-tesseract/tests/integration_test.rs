@@ -60,7 +60,10 @@ fn ensure_eng_traineddata_exists(tessdata_dir: &Path) {
 }
 
 fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..").join("..")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("..")
+        .join("..")
 }
 
 fn load_test_image(relative: &str) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error>> {

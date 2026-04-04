@@ -564,8 +564,8 @@ mod tests {
     }
 
     fn load_test_pdf() -> Vec<u8> {
-        let path =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../test_documents/pdf/ocr_test_rotated_90.pdf");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../test_documents/pdf/ocr_test_rotated_90.pdf");
         std::fs::read(&path).unwrap_or_else(|e| panic!("Failed to read test PDF at {}: {}", path.display(), e))
     }
 
@@ -653,8 +653,8 @@ mod tests {
     #[test]
     #[serial]
     fn test_pdf_page_iterator_from_file() {
-        let path =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../test_documents/pdf/ocr_test_rotated_90.pdf");
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../test_documents/pdf/ocr_test_rotated_90.pdf");
         let iter = PdfPageIterator::from_file(&path, None, None).expect("from_file should succeed");
         let mut count = 0;
         for result in iter {

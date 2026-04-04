@@ -3501,7 +3501,8 @@ mod tests {
 
     #[test]
     fn test_extract_lorem_ipsum_docx() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../test_documents/docx/lorem_ipsum.docx");
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../test_documents/docx/lorem_ipsum.docx");
         if let Ok(bytes) = std::fs::read(&path) {
             let text = super::super::extract_text(&bytes).unwrap();
             assert!(!text.is_empty(), "Should extract text from lorem ipsum");
@@ -3515,7 +3516,8 @@ mod tests {
 
     #[test]
     fn test_extract_word_tables_docx() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../test_documents/docx/word_tables.docx");
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../test_documents/docx/word_tables.docx");
         if let Ok(bytes) = std::fs::read(&path) {
             let text = super::super::extract_text(&bytes).unwrap();
             assert!(!text.is_empty(), "Should extract text from word tables");
@@ -3555,7 +3557,8 @@ mod tests {
 
     #[test]
     fn test_extract_word_sample_no_field_leaks() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../test_documents/docx/word_sample.docx");
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../test_documents/docx/word_sample.docx");
         if let Ok(bytes) = std::fs::read(&path) {
             let text = super::super::extract_text(&bytes).unwrap();
             assert!(!text.is_empty());

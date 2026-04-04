@@ -24,7 +24,14 @@ fn get_binary_path() -> String {
 /// Get the test_documents directory path.
 fn get_test_documents_dir() -> PathBuf {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest_dir.parent().unwrap().parent().unwrap().parent().unwrap().join("test_documents")
+    manifest_dir
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("test_documents")
 }
 
 /// Get a test file path relative to test_documents/.
