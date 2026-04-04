@@ -174,7 +174,7 @@ public final class E2EHelpers {
      * Assertion utilities for E2E tests.
      */
     public static final class Assertions {
-        public static void assertEmbedResult(List<float[]> results, int count, int dimensions, boolean noNan, boolean noInf, boolean nonZero) {
+        public static void assertEmbedResult(List<float[]> results, int count, int dimensions, boolean noNan, boolean noInf, boolean nonZero, boolean normalized) {
             assertNotNull(results, "Embedding results should not be null");
             if (count >= 0) {
                 org.junit.jupiter.api.Assertions.assertEquals(count, results.size(), String.format("Expected %d vectors, got %d", count, results.size()));
@@ -188,6 +188,7 @@ public final class E2EHelpers {
                     }
 
                     boolean hasNonZero = false;
+                    double sqSum = 0.0;
                     for (int j = 0; j < vector.length; j++) {
                         float v = vector[j];
                         if (noNan) {
@@ -199,9 +200,14 @@ public final class E2EHelpers {
                         if (v != 0.0f) {
                             hasNonZero = true;
                         }
+                        sqSum += (double) v * (double) v;
                     }
                     if (nonZero) {
                         assertTrue(hasNonZero, String.format("Vector %d is all zeros", i));
+                    }
+                    if (normalized) {
+                        double l2Norm = Math.sqrt(sqSum);
+                        assertTrue(l2Norm > 0.999 && l2Norm < 1.001, String.format("Vector %d L2 norm is %f (expected ~1.0)", i, l2Norm));
                     }
                 }
             }
@@ -2977,8 +2983,8 @@ fn render_embed_test_java(fixture: &Fixture) -> Result<String> {
 
     writeln!(
         body,
-        "        E2EHelpers.Assertions.assertEmbedResult(results, {}, {}, {}, {}, {});",
-        count, dimensions, assertions.no_nan, assertions.no_inf, assertions.non_zero
+        "        E2EHelpers.Assertions.assertEmbedResult(results, {}, {}, {}, {}, {}, {});",
+        count, dimensions, assertions.no_nan, assertions.no_inf, assertions.non_zero, assertions.normalized
     )?;
 
     writeln!(body, "    }}")?;
@@ -2989,10 +2995,10 @@ fn render_embed_config_java(config: &Map<String, Value>) -> Result<String> {
     use std::fmt::Write as _;
     let mut expr = "EmbeddingConfig.builder()".to_string();
 
-    if let Some(model) = config.get("model") {
-        if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
-            write!(expr, ".preset(\"{name}\")").unwrap();
-        }
+    if let Some(model) = config.get("model")
+        && let Some(name) = model.get("name").and_then(|v| v.as_str())
+    {
+        write!(expr, ".preset(\"{name}\")").unwrap();
     }
 
     if let Some(normalize) = config.get("normalize").and_then(|v| v.as_bool()) {

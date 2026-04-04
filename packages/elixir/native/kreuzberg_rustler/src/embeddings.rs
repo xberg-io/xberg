@@ -1,5 +1,6 @@
 use crate::atoms;
 use crate::config::parse_embedding_config;
+use kreuzberg::KreuzbergError;
 use kreuzberg::embed_texts;
 use rustler::{Encoder, Env, NifResult, Term};
 
@@ -13,10 +14,11 @@ pub fn embed<'a>(env: Env<'a>, texts: Vec<String>, config_term: Term<'a>) -> Nif
     match embed_texts(&texts, &config) {
         Ok(result) => Ok((atoms::ok(), result).encode(env)),
         Err(e) => {
-            let error_atom = if e.to_string().to_lowercase().contains("embedding") {
-                atoms::embedding_error()
-            } else {
-                atoms::error()
+            let error_atom = match &e {
+                KreuzbergError::Embedding { .. } => atoms::embedding_error(),
+                KreuzbergError::Validation { .. } => atoms::validation_error(),
+                KreuzbergError::Io(_) => atoms::io_error(),
+                _ => atoms::error(),
             };
             Ok((error_atom, format!("Embedding failed: {}", e)).encode(env))
         }

@@ -528,7 +528,22 @@ defmodule Kreuzberg do
 
     * `{:ok, [[float()]]}` - List of embedding vectors
     * `{:error, reason}` - Embedding failed
+
+  ## Examples
+
+      # Embed with default config (balanced preset)
+      iex> {:ok, embeddings} = Kreuzberg.embed(["Hello world", "How are you?"])
+      iex> length(embeddings) == 2
+      true
+
+      # Embed with a specific preset
+      iex> config = %Kreuzberg.EmbeddingConfig{model: {:preset, "fast"}}
+      iex> {:ok, embeddings} = Kreuzberg.embed(["Hello world"], config)
+      iex> is_list(hd(embeddings))
+      true
+
   """
+  @doctest false
   def do_embed(texts, config \\ nil) do
     case config do
       nil -> Native.embed(texts, %{})
@@ -543,7 +558,25 @@ defmodule Kreuzberg do
     end
   end
 
-  @doc "Generate text embeddings, raising on error."
+  @doc """
+  Generate text embeddings, raising on error.
+
+  Same as `do_embed/2` but raises a `Kreuzberg.Error` on failure.
+
+  ## Examples
+
+      # Embed and get results directly
+      iex> embeddings = Kreuzberg.embed!(["Hello world"])
+      iex> is_list(embeddings)
+      true
+
+      # Each embedding is a list of floats
+      iex> [vector | _rest] = Kreuzberg.embed!(["Test sentence"])
+      iex> is_float(hd(vector))
+      true
+
+  """
+  @doctest false
   def do_embed!(texts, config \\ nil) do
     case do_embed(texts, config) do
       {:ok, result} ->

@@ -256,7 +256,7 @@ public class KreuzbergIOException : IOException, IKreuzbergError
 public class KreuzbergRuntimeException : Exception, IKreuzbergError
 {
     /// <summary>Gets the error kind for runtime errors.</summary>
-    public KreuzbergErrorKind Kind => KreuzbergErrorKind.Io;
+    public KreuzbergErrorKind Kind => KreuzbergErrorKind.Runtime;
 
     /// <summary>
     /// Initializes a new instance of the KreuzbergRuntimeException class.

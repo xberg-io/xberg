@@ -979,10 +979,10 @@ fn render_embed_test_elixir(fixture: &Fixture) -> Result<String> {
 fn render_embed_config_elixir(config: &Map<String, Value>) -> Result<String> {
     let mut parts = Vec::new();
 
-    if let Some(model) = config.get("model") {
-        if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
-            parts.push(format!("model: \"{}\"", name));
-        }
+    if let Some(model) = config.get("model")
+        && let Some(name) = model.get("name").and_then(|v| v.as_str())
+    {
+        parts.push(format!("model: \"{}\"", name));
     }
 
     if let Some(v) = config.get("normalize").and_then(|v| v.as_bool()) {

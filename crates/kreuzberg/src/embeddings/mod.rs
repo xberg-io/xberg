@@ -72,6 +72,17 @@ type CachedEngine = Arc<EmbeddingEngine>;
 
 static ENGINE_CACHE: Lazy<RwLock<AHashMap<String, CachedEngine>>> = Lazy::new(|| RwLock::new(AHashMap::new()));
 
+/// Global semaphore that limits concurrent ONNX embedding inference calls.
+///
+/// Prevents resource exhaustion when many async callers invoke `embed_texts_async`
+/// simultaneously. The permit count is set once on first access using the thread
+/// budget, matching the pattern used elsewhere (e.g., image OCR, batch extraction).
+#[cfg(feature = "tokio-runtime")]
+static EMBED_SEMAPHORE: Lazy<Arc<tokio::sync::Semaphore>> = Lazy::new(|| {
+    let budget = crate::core::config::concurrency::resolve_thread_budget(None);
+    Arc::new(tokio::sync::Semaphore::new(budget))
+});
+
 /// Preset configurations for common RAG use cases.
 ///
 /// Each preset combines chunk size, overlap, and embedding model
@@ -173,12 +184,9 @@ fn onnx_runtime_install_message() -> String {
     }
 }
 
-/// Create a `KreuzbergError::Plugin` for the embeddings plugin.
+/// Create a `KreuzbergError::Embedding` for embeddings failures.
 fn embedding_error(message: String) -> crate::KreuzbergError {
-    crate::KreuzbergError::Plugin {
-        message,
-        plugin_name: "embeddings".to_string(),
-    }
+    crate::KreuzbergError::Embedding { message, source: None }
 }
 
 /// Resolve the cache directory for embedding models.
@@ -551,7 +559,7 @@ fn normalize_in_place(embedding: &mut [f32]) {
 }
 
 /// Apply normalization to a batch of embeddings (parallel for large batches).
-fn normalize_embeddings(embeddings: &mut Vec<Vec<f32>>) {
+fn normalize_embeddings(embeddings: &mut [Vec<f32>]) {
     const PARALLEL_THRESHOLD: usize = 64;
     if embeddings.len() >= PARALLEL_THRESHOLD {
         use rayon::prelude::*;
@@ -584,11 +592,7 @@ pub fn generate_embeddings_for_chunks(
     }
 
     let texts: Vec<&str> = chunks.iter().map(|c| c.content.as_str()).collect();
-    let mut embeddings_result = embed_texts(&texts, config)?;
-
-    if config.normalize {
-        normalize_embeddings(&mut embeddings_result);
-    }
+    let embeddings_result = embed_texts(&texts, config)?;
 
     // Assign embeddings to chunks.
     for (chunk, embedding) in chunks.iter_mut().zip(embeddings_result) {
@@ -617,7 +621,7 @@ pub fn generate_embeddings_for_chunks(
 /// # Errors
 ///
 /// - `KreuzbergError::MissingDependency` if ONNX Runtime is not installed
-/// - `KreuzbergError::Plugin` if the preset name is unknown or model download fails
+/// - `KreuzbergError::Embedding` if the preset name is unknown or model download fails
 ///
 /// # Example
 ///
@@ -639,6 +643,17 @@ pub fn embed_texts<T: AsRef<str>>(
 ) -> crate::Result<Vec<Vec<f32>>> {
     if texts.is_empty() {
         return Ok(Vec::new());
+    }
+
+    // Validate that no individual text is empty — empty strings produce
+    // meaningless embeddings and can cause tokenizer edge-cases.
+    for (i, t) in texts.iter().enumerate() {
+        if t.as_ref().is_empty() {
+            return Err(embedding_error(format!(
+                "Text at position {pos} is empty. All texts must be non-empty.",
+                pos = i + 1
+            )));
+        }
     }
 
     let chunk_count = texts.len();
@@ -673,6 +688,12 @@ pub fn embed_texts<T: AsRef<str>>(
 /// * `texts` - Vec of strings to embed (owned, sent to blocking thread)
 /// * `config` - Embedding configuration specifying model, batch size, and normalization
 ///
+/// # Errors
+///
+/// - `KreuzbergError::MissingDependency` if ONNX Runtime is not installed
+/// - `KreuzbergError::Embedding` if the preset name is unknown, model download fails,
+///   or the blocking inference task panics
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -692,7 +713,16 @@ pub async fn embed_texts_async<T: AsRef<str> + Send + 'static>(
         return Ok(Vec::new());
     }
 
-    let config = config.clone();
+    // Acquire a permit from the global semaphore to limit concurrent ONNX
+    // inference calls, preventing resource exhaustion under high fan-out.
+    let _permit = EMBED_SEMAPHORE
+        .acquire()
+        .await
+        .map_err(|_| embedding_error("Embedding semaphore closed".to_string()))?;
+
+    // Wrap config in Arc to avoid cloning the entire struct (strings, PathBuf)
+    // into the blocking closure.
+    let config = Arc::new(config.clone());
     tokio::task::spawn_blocking(move || embed_texts(&texts, &config))
         .await
         .map_err(|e| embedding_error(format!("Embedding task panicked: {e}")))?
@@ -754,5 +784,34 @@ mod tests {
         let balanced = get_preset("balanced").unwrap();
         assert_eq!(balanced.model_repo, "Xenova/bge-base-en-v1.5");
         assert_eq!(balanced.pooling, "cls");
+    }
+
+    #[test]
+    fn test_embed_texts_rejects_empty_string() {
+        let config = crate::core::config::EmbeddingConfig::default();
+        let texts = vec!["valid", ""];
+        let err = embed_texts(&texts, &config).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("position 2"),
+            "Error should identify the empty text position, got: {msg}"
+        );
+        assert!(msg.contains("empty"), "Error should mention empty text, got: {msg}");
+    }
+
+    #[test]
+    fn test_embed_texts_empty_list_returns_empty() {
+        let config = crate::core::config::EmbeddingConfig::default();
+        let texts: Vec<&str> = vec![];
+        let result = embed_texts(&texts, &config).unwrap();
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_embed_texts_rejects_first_empty_string() {
+        let config = crate::core::config::EmbeddingConfig::default();
+        let texts = vec![""];
+        let err = embed_texts(&texts, &config).unwrap_err();
+        assert!(err.to_string().contains("position 1"));
     }
 }

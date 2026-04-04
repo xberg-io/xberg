@@ -457,6 +457,18 @@ public final class Kreuzberg {
 		}
 	}
 
+	/**
+	 * Generate embeddings from a list of text strings.
+	 *
+	 * <p>Each input text is encoded into a dense floating-point vector using the
+	 * configured ONNX embedding model. The returned array contains one vector per
+	 * input text, in the same order.</p>
+	 *
+	 * @param texts  list of strings to embed; must not be {@code null}
+	 * @param config embedding configuration (model, batch size, normalization), or {@code null} for defaults
+	 * @return a 2-D array where {@code result[i]} is the embedding vector for {@code texts.get(i)}
+	 * @throws KreuzbergException if the embedding model fails or the FFI call returns an error
+	 */
 	public static float[][] embed(List<String> texts, dev.kreuzberg.config.EmbeddingConfig config) throws KreuzbergException {
 		Objects.requireNonNull(texts, "texts must not be null");
 		if (texts.isEmpty()) {
@@ -489,6 +501,16 @@ public final class Kreuzberg {
 		}
 	}
 
+	/**
+	 * Generate embeddings asynchronously from a list of text strings.
+	 *
+	 * <p>Delegates to {@link #embed(List, dev.kreuzberg.config.EmbeddingConfig)} on a
+	 * background thread and returns the result as a {@link CompletableFuture}.</p>
+	 *
+	 * @param texts  list of strings to embed; must not be {@code null}
+	 * @param config embedding configuration (model, batch size, normalization), or {@code null} for defaults
+	 * @return a future that completes with a 2-D float array of embedding vectors
+	 */
 	public static CompletableFuture<float[][]> embedAsync(List<String> texts, dev.kreuzberg.config.EmbeddingConfig config) {
 		CompletableFuture<float[][]> future = new CompletableFuture<>();
 		CompletableFuture.runAsync(() -> {

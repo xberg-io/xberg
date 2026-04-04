@@ -1,4 +1,3 @@
-// cppcheck-suppress normalCheckLevelMaxBranches
 /**
  * Kreuzberg C extraction wrapper for benchmark harness.
  *

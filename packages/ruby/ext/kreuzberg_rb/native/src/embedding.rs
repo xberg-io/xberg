@@ -74,20 +74,13 @@ pub fn embed_sync(args: &[Value]) -> Result<RArray, Error> {
     embeddings_to_ruby(&ruby, embeddings)
 }
 
-/// Generate embeddings asynchronously (uses a blocking Tokio runtime internally).
+/// Generate embeddings (delegates to `embed_sync`).
+///
+/// Ruby's GVL prevents true async execution, so this simply delegates to
+/// the synchronous implementation to avoid creating a throwaway Tokio runtime.
 ///
 /// Keyword args: `texts:` (Array of String), `config:` (Hash, optional)
 /// Returns: Array of Arrays of Float (one per input text).
 pub fn embed(args: &[Value]) -> Result<RArray, Error> {
-    let ruby = Ruby::get().expect("Ruby not initialized");
-    let (texts, config) = parse_embed_args(&ruby, args)?;
-
-    let rt = tokio::runtime::Runtime::new()
-        .map_err(|e| runtime_error(format!("Failed to create Tokio runtime: {}", e)))?;
-
-    let embeddings = rt
-        .block_on(async { kreuzberg::embed_texts_async(texts, &config).await })
-        .map_err(kreuzberg_error)?;
-
-    embeddings_to_ruby(&ruby, embeddings)
+    embed_sync(args)
 }

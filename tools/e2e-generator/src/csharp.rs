@@ -2381,10 +2381,10 @@ fn render_embed_config_csharp(config: &Map<String, Value>) -> Result<String> {
     let mut expr = "new EmbeddingConfig { ".to_string();
     let mut parts = Vec::new();
 
-    if let Some(model) = config.get("model") {
-        if let Some(name) = model.get("name").and_then(|v| v.as_str()) {
-            parts.push(format!("Model = EmbeddingModelType.FromPreset(\"{name}\")"));
-        }
+    if let Some(model) = config.get("model")
+        && let Some(name) = model.get("name").and_then(|v| v.as_str())
+    {
+        parts.push(format!("Model = EmbeddingModelType.FromPreset(\"{name}\")"));
     }
 
     if let Some(v) = config.get("normalize").and_then(|v| v.as_bool()) {

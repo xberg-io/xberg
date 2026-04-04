@@ -281,7 +281,7 @@ func extractBatch(paths []string, ocrEnabled bool) (any, error) {
 	}
 
 	out := make([]*payload, 0, len(results))
-	perMs := totalMs / float64(maxInt(len(results), 1))
+	perMs := totalMs / float64(max(len(results), 1))
 	for _, item := range results {
 		if item == nil {
 			continue
@@ -343,7 +343,7 @@ func mustEncodeNoNewline(value any) {
 	}
 }
 
-func mustEncodeError(err error, _ bool) {
+func mustEncodeError(err error, ocrEnabled bool) {
 	errorMap := map[string]interface{}{
 		"error":               err.Error(),
 		"_extraction_time_ms": 0,
@@ -364,7 +364,7 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
-func maxInt(a, b int) int {
+func max(a, b int) int {
 	if a > b {
 		return a
 	}

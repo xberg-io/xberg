@@ -1,6 +1,7 @@
 use napi_derive::napi;
 
 use crate::config::JsEmbeddingConfig;
+use crate::error_handling::convert_error;
 
 #[napi(object)]
 pub struct EmbeddingPreset {
@@ -111,7 +112,7 @@ pub fn get_embedding_preset(name: String) -> Option<EmbeddingPreset> {
 #[napi(js_name = "embedSync")]
 pub fn embed_sync(texts: Vec<String>, config: Option<JsEmbeddingConfig>) -> napi::Result<Vec<Vec<f32>>> {
     let rust_config: kreuzberg::EmbeddingConfig = config.map(|c| c.into()).unwrap_or_default();
-    kreuzberg::embed_texts(&texts, &rust_config).map_err(|e| napi::Error::from_reason(e.to_string()))
+    kreuzberg::embed_texts(&texts, &rust_config).map_err(convert_error)
 }
 
 /// Generate embeddings from a list of text strings (asynchronous).
@@ -138,5 +139,5 @@ pub async fn embed(texts: Vec<String>, config: Option<JsEmbeddingConfig>) -> nap
     let rust_config: kreuzberg::EmbeddingConfig = config.map(|c| c.into()).unwrap_or_default();
     kreuzberg::embed_texts_async(texts, &rust_config)
         .await
-        .map_err(|e| napi::Error::from_reason(e.to_string()))
+        .map_err(convert_error)
 }

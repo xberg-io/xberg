@@ -142,6 +142,42 @@ pub fn get_embedding_preset(name: String) -> Option<JsValue> {
     Some(obj.into())
 }
 
+/// Generate embeddings for an array of texts synchronously.
+///
+/// Computes embedding vectors for each input text using the specified model
+/// configuration. This is a blocking operation and should only be used when
+/// async is not available.
+///
+/// # JavaScript Parameters
+///
+/// * `texts: string[]` - Array of text strings to embed
+/// * `config?: object` - Optional embedding configuration object with properties:
+///   - `modelRepo?: string` - Hugging Face model repository
+///   - `modelFile?: string` - ONNX model file name
+///   - `chunkSize?: number` - Characters per chunk
+///   - `overlap?: number` - Character overlap between chunks
+///
+/// # Returns
+///
+/// `number[][]` - Array of embedding vectors, one per input text
+///
+/// # Throws
+///
+/// Throws if the model cannot be loaded or embedding computation fails.
+///
+/// # Example
+///
+/// ```javascript
+/// import { embedTextsSync } from '@kreuzberg/wasm';
+///
+/// const texts = ['Hello world', 'How are you?'];
+/// const embeddings = embedTextsSync(texts);
+/// console.log(embeddings.length); // 2
+/// console.log(embeddings[0].length); // vector dimensions
+///
+/// // With custom config
+/// const custom = embedTextsSync(texts, { chunkSize: 512 });
+/// ```
 #[cfg(feature = "embeddings")]
 #[wasm_bindgen(js_name = embedTextsSync)]
 pub fn embed_texts_sync(texts: Vec<String>, config: Option<JsValue>) -> Result<JsValue, JsValue> {
@@ -151,6 +187,42 @@ pub fn embed_texts_sync(texts: Vec<String>, config: Option<JsValue>) -> Result<J
         .map_err(|e| JsValue::from_str(&format!("Failed to serialize embeddings: {}", e)))
 }
 
+/// Generate embeddings for an array of texts asynchronously.
+///
+/// Computes embedding vectors for each input text using the specified model
+/// configuration. Returns a Promise that resolves with the embedding results.
+/// This is the preferred method for WASM environments as it does not block
+/// the main thread.
+///
+/// # JavaScript Parameters
+///
+/// * `texts: string[]` - Array of text strings to embed
+/// * `config?: object` - Optional embedding configuration object with properties:
+///   - `modelRepo?: string` - Hugging Face model repository
+///   - `modelFile?: string` - ONNX model file name
+///   - `chunkSize?: number` - Characters per chunk
+///   - `overlap?: number` - Character overlap between chunks
+///
+/// # Returns
+///
+/// `Promise<number[][]>` - Promise resolving to array of embedding vectors
+///
+/// # Throws
+///
+/// Rejects if the model cannot be loaded or embedding computation fails.
+///
+/// # Example
+///
+/// ```javascript
+/// import { embedTexts } from '@kreuzberg/wasm';
+///
+/// const texts = ['Hello world', 'How are you?'];
+/// const embeddings = await embedTexts(texts);
+/// console.log(embeddings.length); // 2
+///
+/// // With custom config
+/// const custom = await embedTexts(texts, { chunkSize: 512 });
+/// ```
 #[cfg(feature = "embeddings")]
 #[wasm_bindgen(js_name = embedTexts)]
 pub fn embed_texts_async_wasm(texts: Vec<String>, config: Option<JsValue>) -> js_sys::Promise {

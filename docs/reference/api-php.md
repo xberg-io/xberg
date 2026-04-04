@@ -1537,6 +1537,33 @@ if ($result->pages !== null) {
 
 ---
 
+## Embeddings
+
+### embed()
+
+Generate embeddings for a list of texts.
+
+**Signature:**
+
+```php title="PHP"
+public function embed(array $texts, ?EmbeddingConfig $config = null): array
+```
+
+**Parameters:**
+
+- `$texts` (array\<string\>): List of strings to embed.
+- `$config` (EmbeddingConfig|null): Embedding configuration. Defaults to the "balanced" preset.
+
+**Returns:** `array<array<float>>` — one embedding vector per input text.
+
+**Throws:** `KreuzbergException` if embedding generation fails or the `embeddings` feature is not enabled.
+
+**Example:**
+
+--8<-- "snippets/php/utils/standalone_embed.md"
+
+---
+
 ## PDF Rendering
 
 !!! info "Added in v4.6.2"

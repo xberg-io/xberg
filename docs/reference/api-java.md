@@ -1614,7 +1614,46 @@ System.out.println(extensions); // ["jpg", "jpeg"]
 
 ---
 
-## Embeddings & Presets
+## Embeddings
+
+### embed()
+
+Generate embeddings for a list of texts synchronously.
+
+**Signature:**
+
+```java title="Java"
+public static float[][] embed(List<String> texts, EmbeddingConfig config) throws KreuzbergException
+```
+
+**Parameters:**
+
+- `texts` (List\<String\>): List of strings to embed.
+- `config` (EmbeddingConfig): Embedding configuration, or `null` for the default "balanced" preset.
+
+**Returns:** `float[][]` — one embedding vector per input text.
+
+**Throws:** `KreuzbergException` if embedding generation fails or the `embeddings` feature is not enabled.
+
+**Example:**
+
+--8<-- "snippets/java/utils/standalone_embed.md"
+
+---
+
+### embedAsync()
+
+Async variant of `embed()`. Returns a `CompletableFuture` that resolves to the embedding vectors.
+
+**Signature:**
+
+```java title="Java"
+public static CompletableFuture<float[][]> embedAsync(List<String> texts, EmbeddingConfig config)
+```
+
+Same parameters and return type as `embed()`, wrapped in a `CompletableFuture`.
+
+---
 
 ### getEmbeddingPreset()
 
