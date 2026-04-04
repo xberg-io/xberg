@@ -529,6 +529,7 @@ defmodule Kreuzberg do
     * `{:ok, [[float()]]}` - List of embedding vectors
     * `{:error, reason}` - Embedding failed
   """
+  def do_embed(texts, config \\ nil) do
     case config do
       nil -> Native.embed(texts, %{})
       %EmbeddingConfig{} = c -> Native.embed(texts, EmbeddingConfig.to_map(c))

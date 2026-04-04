@@ -3,11 +3,9 @@ defmodule Kreuzberg.EmbeddingConfig do
   Configuration for standalone text embedding generation.
   """
 
-  defstruct [
-    model: "balanced",
-    normalize: true,
-    batch_size: nil
-  ]
+  defstruct model: "balanced",
+            normalize: true,
+            batch_size: nil
 
   @type t :: %__MODULE__{
           model: String.t() | map(),
