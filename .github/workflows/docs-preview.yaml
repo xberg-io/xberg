@@ -21,8 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  preview:
-    name: "Deploy Preview"
+  # Build on a runner that never sees Netlify credentials (PR code may be untrusted).
+  build:
+    name: Build documentation
     if: github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -46,6 +47,27 @@ jobs:
         run: |
           uv sync --group doc --no-editable --no-install-workspace --no-install-project
           uv run --no-sync zensical build --clean
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: docs-site
+          path: site
+          if-no-files-found: error
+
+  deploy:
+    name: Deploy Preview
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Optional: add required reviewers or restrict secrets to this environment in repo Settings → Environments.
+    environment: docs-preview
+    steps:
+      - name: Download site artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: docs-site
+          path: site
 
       - name: Deploy to Netlify
         id: netlify
