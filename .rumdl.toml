@@ -22,3 +22,9 @@ disable = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051
 # MD024: Allow duplicate heading names if they are not siblings
 [MD024]
 siblings_only = true
+
+# Material card grids use `-   :icon` and indented `---` under list items; rumdl's
+# MD030/MD035 "fixes" break that pattern (top-level `---` breaks the grid).
+[per-file-ignores]
+"docs/index.md" = ["MD030", "MD035"]
+"docs/getting-started/installation.md" = ["MD030", "MD035"]

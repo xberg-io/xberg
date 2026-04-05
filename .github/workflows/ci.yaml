@@ -281,11 +281,13 @@ jobs:
           enable-cache: true
 
       - name: Build documentation
+        id: docs-build
         shell: bash
         run: scripts/ci/docs/build.sh --log-file /tmp/build-log.txt
 
       - name: Check build log for warnings
-        if: always()
+        # Only when the build step actually ran (skip if typos/rumdl failed first — no log file yet).
+        if: always() && (steps.docs-build.outcome == 'success' || steps.docs-build.outcome == 'failure')
         run: scripts/ci/docs/check-build-log.sh /tmp/build-log.txt
         shell: bash
 
