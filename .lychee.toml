@@ -3,30 +3,30 @@
 
 # Exclude common patterns that produce false positives
 exclude = [
-  # Localhost / loopback addresses
-  "localhost",
-  "127\\.0\\.0\\.1",
-  "0\\.0\\.0\\.0",
+    # Localhost / loopback addresses
+    "localhost",
+    "127\\.0\\.0\\.1",
+    "0\\.0\\.0\\.0",
 
-  # Placeholder / example domains
-  "example\\.com",
-  "example\\.org",
+    # Placeholder / example domains
+    "example\\.com",
+    "example\\.org",
 
-  # Template variables (e.g. ${var}, {{ var }})
-  "\\$\\{",
-  "\\{\\{",
+    # Template variables (e.g. ${var}, {{ var }})
+    "\\$\\{",
+    "\\{\\{",
 
-  # GitHub edit links (require auth)
-  "github\\.com/.*/edit/",
+    # GitHub edit links (require auth)
+    "github\\.com/.*/edit/",
 
-  # PyPI project pages (rate-limited)
-  "pypi\\.org/project/",
+    # PyPI project pages (rate-limited)
+    "pypi\\.org/project/",
 
-  # crates.io (rate-limited)
-  "crates\\.io/crates/",
+    # crates.io (rate-limited)
+    "crates\\.io/crates/",
 
-  # npm (rate-limited)
-  "npmjs\\.com/package/",
+    # npm (rate-limited)
+    "npmjs\\.com/package/",
 ]
 
 # Accept these HTTP status codes as valid

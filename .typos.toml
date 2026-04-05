@@ -9,11 +9,17 @@ extend-ignore-re = [
     "[A-Za-z0-9+/]{40,}={0,2}",
     # URLs — avoid flagging path segments
     "https?://[^\\s]+",
+    # ODF/XSL-FO namespace prefixes (fo:color, fo:font-size, etc.)
+    "fo:[a-z-]+",
+    "xsl-fo-compatible",
+    # Unicode escapes (e.g. \u{0065})
+    "'\\\\u\\{[0-9a-fA-F]+\\}'",
+    # Foreign language text in test strings and OCR backend language lists
+    '"[^"]*(?:programa|cursos|ist ein|künstliche|excepcional|utiliza|transforme|Exemple|Dies ist|internacional|Hauptstadt)[^"]*"',
 ]
 
 [default.extend-words]
 # Project-specific terms that are not typos.
-# Keys are lowercase; values must match the key exactly.
 kreuzberg = "kreuzberg"
 zensical = "zensical"
 pdfium = "pdfium"
@@ -30,6 +36,66 @@ mkdocs = "mkdocs"
 rumdl = "rumdl"
 flate = "flate"
 tha = "tha"
+# Domain-specific terms
+opf = "opf"
+hocr = "hocr"
+odf = "odf"
+# LaTeX environments
+multline = "multline"
+hom = "hom"
+# RTF control words
+headerr = "headerr"
+pard = "pard"
+# DOC format field names
+edn = "edn"
+# DOCX measurement units (twips, 50ths of percent, 240ths of line)
+ths = "ths"
+# Test data / examples
+ove = "ove"
+ges = "ges"
+caf = "caf"
+helo = "helo"
+# Common short variable names / identifiers in code
+fo = "fo"
+pn = "pn"
+thr = "thr"
+nd = "nd"
+ba = "ba"
+iy = "iy"
+siz = "siz"
+# Tesseract upstream API spelling
+extention = "extention"
+# PDFium upstream constant/function naming
+portait = "portait"
+fith = "fith"
+threed = "threed"
+chlidren = "chlidren"
+formated = "formated"
+specifing = "specifing"
+# English variants / valid words flagged incorrectly
+unparseable = "unparseable"
+# PaddleOCR upstream naming
+substract = "substract"
+charater = "charater"
+# OCR language codes (ISO 639)
+inh = "inh"
+bre = "bre"
+yor = "yor"
+# English suffix patterns in semantic analysis
+ment = "ment"
+# PaddleOCR upstream naming
+cliper = "cliper"
+# PDFium upstream doc typos
+similarily = "similarily"
+execpt = "execpt"
+faiure = "faiure"
+# Tesseract upstream code
+splitted = "splitted"
+# Short words flagged in code/data contexts
+mis = "mis"
+tre = "tre"
+ist = "ist"
+ein = "ein"
 
 [default.extend-identifiers]
 # Allow these identifiers in code
@@ -38,6 +104,7 @@ MarkItDown = "MarkItDown"
 SurrealDB = "SurrealDB"
 PDFium = "PDFium"
 WebUI = "WebUI"
+traineddata = "traineddata"
 
 [files]
 extend-exclude = [
@@ -54,8 +121,20 @@ extend-exclude = [
     "site/",
     # Code snippets (validated separately by snippet-runner)
     "docs/snippets/",
-    # Generated files
+    # Generated files (e2e tests, bindgen)
     "e2e/",
+    "**/bindgen/",
+    # Stopwords files (foreign language words)
+    "**/stopwords/",
+    # Test data (hOCR samples, etc.)
+    "**/test_data/",
+    # Patch files (upstream diffs)
+    "**/*.diff",
+    "**/*.patch",
+    # PDF text repair tests (intentionally broken text)
+    "**/text_repair.rs",
+    # Changelog (contains intentional examples of garbled text)
+    "CHANGELOG.md",
     "docs/CHANGELOG.md",
     # Vendored / third-party code
     "**/vendor/",
