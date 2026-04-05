@@ -267,8 +267,8 @@ jobs:
       - name: Lint markdown with rumdl
         uses: j178/prek-action@v2
         with:
-          # Lint docs/ only (same scope as typos in this job).
-          extra-args: rumdl-fmt docs
+          # Lint docs/ only; `docs` alone is parsed as a hook selector, not paths.
+          extra-args: rumdl-fmt --directory docs
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -294,7 +294,6 @@ jobs:
         with:
           args: >-
             --no-progress
-            --exclude-mail
             --timeout 30
             --max-retries 3
             './site/**/*.html'
