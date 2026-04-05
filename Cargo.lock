@@ -3527,7 +3527,7 @@ dependencies = [
  "wasm-bindgen-rayon",
  "whatlang",
  "yake-rust",
- "zip 7.2.0",
+ "zip 8.5.0",
 ]
 
 [[package]]
