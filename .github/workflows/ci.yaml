@@ -280,8 +280,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          uv sync --group doc --no-editable --no-install-workspace --no-install-project
-          uv run --no-sync zensical build --clean --strict 2>&1 | tee /tmp/build-log.txt
+          : > /tmp/build-log.txt
+          uv sync --group doc --no-editable --no-install-workspace --no-install-project 2>&1 | tee -a /tmp/build-log.txt
+          uv run --no-sync zensical build --clean --strict 2>&1 | tee -a /tmp/build-log.txt
 
       - name: Check build log for warnings
         if: always()
