@@ -18,7 +18,7 @@ High-performance document intelligence library for Rust. Extract text, metadata,
 
 This is the core Rust library that powers the Python, TypeScript, and Ruby bindings.
 
-> **🚀 Version 4.7.2 Release**
+> **🚀 Version 4.7.3 Release**
 > This is a pre-release version. We invite you to test the library and [report any issues](https://github.com/kreuzberg-dev/kreuzberg/issues) you encounter.
 >
 > **Note**: The Rust crate is not currently published to crates.io for this RC. Use git dependencies or language bindings (Python, TypeScript, Ruby) instead.

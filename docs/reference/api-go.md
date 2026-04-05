@@ -1,4 +1,4 @@
-# Go API Reference <span class="version-badge">v4.7.2</span>
+# Go API Reference <span class="version-badge">v4.7.3</span>
 
 Complete reference for the Kreuzberg Go bindings using cgo to access the Rust-powered extraction pipeline.
 
@@ -43,7 +43,7 @@ When building outside the monorepo, provide the static library via `CGO_LDFLAGS`
 
 ```bash title="Terminal"
 # Option 1: Download pre-built from GitHub Releases
-curl -LO https://github.com/kreuzberg-dev/kreuzberg/releases/download/v4.7.2/go-ffi-linux-x86_64.tar.gz
+curl -LO https://github.com/kreuzberg-dev/kreuzberg/releases/download/v4.7.3/go-ffi-linux-x86_64.tar.gz
 tar -xzf go-ffi-linux-x86_64.tar.gz
 mkdir -p ~/kreuzberg/lib
 cp kreuzberg-ffi/lib/libkreuzberg_ffi.a ~/kreuzberg/lib/
@@ -273,7 +273,7 @@ for i, result := range results {
 
 ---
 
-### BatchExtractFilesWithConfigs <span class="version-badge">v4.7.2</span>
+### BatchExtractFilesWithConfigs <span class="version-badge">v4.7.3</span>
 
 Batch extract multiple files with per-file configuration overrides (asynchronous).
 
@@ -291,7 +291,7 @@ func BatchExtractFilesWithConfigs(ctx context.Context, items []FileWithConfig, c
 
 ---
 
-### BatchExtractFilesWithConfigsSync <span class="version-badge">v4.7.2</span>
+### BatchExtractFilesWithConfigsSync <span class="version-badge">v4.7.3</span>
 
 Synchronous variant of `BatchExtractFilesWithConfigs`.
 
@@ -303,13 +303,13 @@ func BatchExtractFilesWithConfigsSync(items []FileWithConfig, config *Extraction
 
 ---
 
-### BatchExtractBytesWithConfigs / BatchExtractBytesWithConfigsSync <span class="version-badge">v4.7.2</span>
+### BatchExtractBytesWithConfigs / BatchExtractBytesWithConfigsSync <span class="version-badge">v4.7.3</span>
 
 Batch extract multiple byte arrays with per-file configuration overrides. Async and sync variants follow the same pattern.
 
 ---
 
-### FileExtractionConfig <span class="version-badge">v4.7.2</span>
+### FileExtractionConfig <span class="version-badge">v4.7.3</span>
 
 Per-file extraction configuration overrides for batch operations. All fields are pointers — `nil` means "use the batch-level default."
 
@@ -526,7 +526,7 @@ func LibraryVersion() string
 
 **Returns:**
 
-- `string`: Version string (e.g., "4.7.2")
+- `string`: Version string (e.g., "4.7.3")
 
 **Example:**
 
@@ -718,7 +718,7 @@ PDF-specific extraction options.
 
 ```go title="Go"
 type PdfConfig struct {
-	AllowSingleColumnTables *bool       // <span class="version-badge">v4.7.2</span> Allow extraction of single-column tables
+	AllowSingleColumnTables *bool       // <span class="version-badge">v4.7.3</span> Allow extraction of single-column tables
 	BottomMarginFraction    *float64    // Bottom margin to ignore during extraction
 	ExtractAnnotations      *bool       // Extract PDF annotations
 	ExtractImages           *bool       // Extract embedded images
@@ -731,7 +731,7 @@ type PdfConfig struct {
 
 ---
 
-### ConcurrencyConfig <span class="version-badge">v4.7.2</span>
+### ConcurrencyConfig <span class="version-badge">v4.7.3</span>
 
 Concurrency configuration for controlling parallel extraction.
 
@@ -810,7 +810,7 @@ type RakeParams struct {
 
 ---
 
-### LayoutDetectionConfig <span class="version-badge">v4.7.2</span>
+### LayoutDetectionConfig <span class="version-badge">v4.7.3</span>
 
 Configure ONNX-based document layout detection.
 
@@ -870,8 +870,8 @@ type PaddleOcrConfig struct {
 	DetLimitSideLen      *int     // Detection side length limit
 	EnableTableDetection *bool    // Detect tables in images
 	Language             string   // Language code
-	ModelTier            string   // (v4.7.2) Model tier: "mobile" (default, ~21MB total, fast) or "server" (~172MB, best with GPU)
-	Padding              *int     // (v4.7.2) Padding in pixels (0-100) around image before detection. Default: 10
+	ModelTier            string   // (v4.7.3) Model tier: "mobile" (default, ~21MB total, fast) or "server" (~172MB, best with GPU)
+	Padding              *int     // (v4.7.3) Padding in pixels (0-100) around image before detection. Default: 10
 	RecBatchNum          *int     // Recognition batch size
 	UseAngleCls          *bool    // Use angle classification
 }
@@ -1342,7 +1342,7 @@ for imgIdx, img := range result.Images {
 
 ## PDF Rendering
 
-!!! info "Added in v4.7.2"
+!!! info "Added in v4.7.3"
 
 ### RenderPdfPage
 
