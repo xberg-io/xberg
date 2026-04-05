@@ -91,11 +91,16 @@ public static class TestHelpers
 
     private static void EnsureNativeLibraryLoaded()
     {
-        var candidates = new[]
+        var lib = LibraryFileName();
+        var candidateList = new List<string>();
+        var ffiDir = Environment.GetEnvironmentVariable("KREUZBERG_FFI_DIR");
+        if (!string.IsNullOrEmpty(ffiDir))
         {
-            Path.Combine(WorkspaceRoot, "target", "release", LibraryFileName()),
-            Path.Combine(WorkspaceRoot, "target", "debug", LibraryFileName()),
-        };
+            candidateList.Add(Path.Combine(ffiDir, lib));
+        }
+        candidateList.Add(Path.Combine(WorkspaceRoot, "target", "release", lib));
+        candidateList.Add(Path.Combine(WorkspaceRoot, "target", "debug", lib));
+        var candidates = candidateList.ToArray();
 
         foreach (var candidate in candidates)
         {

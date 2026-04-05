@@ -95,7 +95,7 @@ static void test_pdf_pdf_large_ciml(void) {
 
 static void test_pdf_pdf_layout_detection(void) {
     if (skip_if_feature_unavailable("layout-detection")) return;
-    CExtractionResult *result = run_extraction("pdf/docling.pdf", "{\"layout\":{\"preset\":\"accurate\",\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
+    CExtractionResult *result = run_extraction("pdf/docling.pdf", "{\"layout\":{\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
     if (!result) return; /* skipped */
     assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
     assert_min_content_length(result, 100);

@@ -15,8 +15,9 @@
 #  define PATH_SEP "/"
 #endif
 
-/* Resolve the workspace root (two levels above the directory containing
-   the test binary).  Returns a heap-allocated string that must be freed. */
+/* Resolve the workspace root by walking up from the executable directory
+   until we find a directory containing test_documents/.
+   Returns a heap-allocated string that must be freed. */
 char *resolve_workspace_root(void);
 
 /* Join workspace-root / "test_documents" / relative path.

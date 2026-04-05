@@ -555,7 +555,7 @@ impl Drop for ResultIterator {
 }
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
-unsafe extern "C" {
+unsafe extern "C-unwind" {
     pub fn TessResultIteratorDelete(handle: *mut c_void);
     pub fn TessPageIteratorBegin(handle: *mut c_void);
     pub fn TessResultIteratorGetUTF8Text(handle: *mut c_void, level: c_int) -> *mut c_char;

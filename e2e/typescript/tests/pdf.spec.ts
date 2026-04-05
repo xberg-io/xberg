@@ -304,7 +304,7 @@ describe("pdf fixtures", () => {
 				console.warn("Notes: Requires layout-detection feature with ONNX Runtime");
 				return;
 			}
-			const config = buildConfig({ layout: { preset: "accurate", table_model: "tatr" }, output_format: "markdown" });
+			const config = buildConfig({ layout: { table_model: "tatr" }, output_format: "markdown" });
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);

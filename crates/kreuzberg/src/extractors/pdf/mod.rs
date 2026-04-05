@@ -593,11 +593,21 @@ impl PdfExtractor {
                 );
                 (native_text, false)
             } else if decision.fallback || has_font_encoding_issues {
-                let (ocr_text, ocr_tbls, ocr_elems, ocr_doc) = run_ocr_with_layout(content, config, path).await?;
-                ocr_tables = ocr_tbls;
-                _ocr_elements_from_ocr = ocr_elems;
-                ocr_internal_doc = ocr_doc;
-                (ocr_text, true)
+                match run_ocr_with_layout(content, config, path).await {
+                    Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc)) => {
+                        ocr_tables = ocr_tbls;
+                        _ocr_elements_from_ocr = ocr_elems;
+                        ocr_internal_doc = ocr_doc;
+                        (ocr_text, true)
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            "OCR fallback failed; using native text extraction result"
+                        );
+                        (native_text, false)
+                    }
+                }
             } else {
                 (native_text, false)
             }

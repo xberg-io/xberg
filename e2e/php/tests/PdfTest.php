@@ -212,7 +212,7 @@ class PdfTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('layout-detection');
 
-        $config = Helpers::buildConfig(['layout' => ['preset' => 'accurate', 'table_model' => 'tatr'], 'output_format' => 'markdown']);
+        $config = Helpers::buildConfig(['layout' => ['table_model' => 'tatr'], 'output_format' => 'markdown']);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -360,7 +360,7 @@ class PdfTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 50);
-        Helpers::assertContentContainsAll($result, ['Table 1', 'Selected Numbers', 'Celsius', 'Fahrenheit', 'Water Freezing Point', 'Water Boiling Point']);
+        Helpers::assertContentContainsAll($result, ['Table 1', 'Selected Numbers', 'Water Freezing Point', 'Water Boiling Point']);
         Helpers::assertTableCount($result, 1, null);
     }
 

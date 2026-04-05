@@ -202,8 +202,7 @@ public class PdfTest {
   @Test
   public void pdfLayoutDetection() throws Exception {
     JsonNode config =
-        MAPPER.readTree(
-            "{\"layout\":{\"preset\":\"accurate\",\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
+        MAPPER.readTree("{\"layout\":{\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
     E2EHelpers.skipIfFeatureUnavailable("layout-detection");
     E2EHelpers.runFixture(
         "pdf_layout_detection",

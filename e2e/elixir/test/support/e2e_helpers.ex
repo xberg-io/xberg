@@ -8,7 +8,23 @@ defmodule E2E.Helpers do
 
   import ExUnit.Assertions
 
-  @workspace_root Path.expand("../../../..", __DIR__)
+  @workspace_root (fn ->
+                     dir = Path.expand(__DIR__)
+
+                     Enum.reduce_while(0..20, dir, fn _, acc ->
+                       if File.dir?(Path.join(acc, "test_documents")) do
+                         {:halt, acc}
+                       else
+                         parent = Path.dirname(acc)
+
+                         if parent == acc do
+                           raise "Could not find workspace root (directory containing test_documents/)"
+                         else
+                           {:cont, parent}
+                         end
+                       end
+                     end)
+                   end).()
   @test_documents Path.join(@workspace_root, "test_documents")
 
   def resolve_document(relative) do

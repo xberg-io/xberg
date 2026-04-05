@@ -153,7 +153,7 @@ namespace Kreuzberg.E2E.Pdf
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/docling.pdf");
             TestHelpers.SkipIfOfficeTestOnWindows("pdf/docling.pdf");
             var documentPath = TestHelpers.EnsureDocument("pdf/docling.pdf", true);
-            var config = TestHelpers.BuildConfig("{\"layout\":{\"preset\":\"accurate\",\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
+            var config = TestHelpers.BuildConfig("{\"layout\":{\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });

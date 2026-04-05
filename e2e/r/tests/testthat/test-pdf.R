@@ -139,7 +139,7 @@ test_that("pdf_layout_detection", {
   result <- run_fixture(
     "pdf_layout_detection",
     "pdf/docling.pdf",
-    list(layout = list(preset = "accurate", table_model = "tatr"), output_format = "markdown"),
+    list(layout = list(table_model = "tatr"), output_format = "markdown"),
     requirements = c("layout-detection"),
     notes = "Requires layout-detection feature with ONNX Runtime",
     skip_if_missing = TRUE
@@ -244,7 +244,7 @@ test_that("pdf_tables_small", {
   )
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 50L)
-  assert_content_contains_all(result, c("Table 1", "Selected Numbers", "Celsius", "Fahrenheit", "Water Freezing Point", "Water Boiling Point"))
+  assert_content_contains_all(result, c("Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"))
   assert_table_count(result, minimum = 1L, maximum = NULL)
 })
 

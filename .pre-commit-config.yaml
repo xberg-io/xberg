@@ -175,7 +175,7 @@ repos:
 
   # Spelling: fast Rust-based spell checker
   - repo: https://github.com/crate-ci/typos
-    rev: v1.31.1
+    rev: v1.45.0
     hooks:
       - id: typos
         args: [--force-exclude]

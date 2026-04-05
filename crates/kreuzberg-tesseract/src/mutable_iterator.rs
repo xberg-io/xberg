@@ -191,7 +191,7 @@ impl Drop for MutableIterator {
     }
 }
 
-unsafe extern "C" {
+unsafe extern "C-unwind" {
     pub fn TessResultIteratorDelete(handle: *mut c_void);
     pub fn TessDeleteText(text: *mut c_char);
 }

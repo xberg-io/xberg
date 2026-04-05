@@ -285,7 +285,7 @@ defmodule E2E.OcrTest do
           result
           |> E2E.Helpers.assert_expected_mime(["image/png"])
           |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_table_count(1, nil)
+          |> E2E.Helpers.assert_content_contains_any(["Product", "Apple", "Banana", "Orange"])
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")

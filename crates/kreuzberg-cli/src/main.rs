@@ -389,6 +389,18 @@ enum CacheCommands {
             help = "Download all table structure models including SLANeXT variants (~730MB)"
         )]
         all_table_models: bool,
+
+        /// Download all tree-sitter grammar parsers
+        #[arg(long)]
+        all_grammars: bool,
+
+        /// Download specific tree-sitter grammar groups (comma-separated: web,systems,scripting,data,jvm,functional)
+        #[arg(long, value_name = "GROUPS", value_delimiter = ',')]
+        grammar_groups: Option<Vec<String>>,
+
+        /// Download specific tree-sitter grammars by language name (comma-separated)
+        #[arg(long, value_name = "LANGUAGES", value_delimiter = ',')]
+        grammars: Option<Vec<String>>,
     },
 }
 
@@ -769,8 +781,20 @@ fn main() -> Result<()> {
                 all_embeddings,
                 embedding_model,
                 all_table_models,
+                all_grammars,
+                grammar_groups,
+                grammars,
             } => {
-                warm_command(cache_dir, format, all_embeddings, embedding_model, all_table_models)?;
+                warm_command(
+                    cache_dir,
+                    format,
+                    all_embeddings,
+                    embedding_model,
+                    all_table_models,
+                    all_grammars,
+                    grammar_groups,
+                    grammars,
+                )?;
             }
         },
 

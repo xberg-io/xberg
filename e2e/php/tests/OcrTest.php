@@ -260,7 +260,7 @@ class OcrTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['image/png']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertTableCount($result, 1, null);
+        Helpers::assertContentContainsAny($result, ['Product', 'Apple', 'Banana', 'Orange']);
     }
 
     /**

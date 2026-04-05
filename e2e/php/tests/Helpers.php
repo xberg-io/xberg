@@ -17,7 +17,18 @@ class Helpers
     public static function getWorkspaceRoot(): string
     {
         if (self::$workspaceRoot === null) {
-            self::$workspaceRoot = realpath(__DIR__ . '/../../..');
+            $dir = __DIR__;
+            while (true) {
+                if (is_dir($dir . '/test_documents')) {
+                    self::$workspaceRoot = $dir;
+                    break;
+                }
+                $parent = dirname($dir);
+                if ($parent === $dir) {
+                    throw new \RuntimeException('Could not find workspace root (directory containing test_documents/)');
+                }
+                $dir = $parent;
+            }
         }
         return self::$workspaceRoot;
     }

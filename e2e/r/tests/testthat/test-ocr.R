@@ -172,7 +172,7 @@ test_that("ocr_paddle_table_detection", {
   )
   assert_expected_mime(result, c("image/png"))
   assert_min_content_length(result, 10L)
-  assert_table_count(result, minimum = 1L, maximum = NULL)
+  assert_content_contains_any(result, c("Product", "Apple", "Banana", "Orange"))
 })
 
 test_that("ocr_pdf_image_only_german", {

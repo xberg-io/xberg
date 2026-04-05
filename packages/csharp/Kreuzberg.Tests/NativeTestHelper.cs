@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using Xunit;
@@ -12,11 +13,16 @@ internal static class NativeTestHelper
     private static readonly Lazy<bool> LibraryLoaded = new(() =>
     {
         var root = WorkspaceRoot;
-        var candidates = new[]
+        var lib = LibraryFileName();
+        var candidateList = new List<string>();
+        var ffiDir = Environment.GetEnvironmentVariable("KREUZBERG_FFI_DIR");
+        if (!string.IsNullOrEmpty(ffiDir))
         {
-            Path.Combine(root, "target", "release", LibraryFileName()),
-            Path.Combine(root, "target", "debug", LibraryFileName()),
-        };
+            candidateList.Add(Path.Combine(ffiDir, lib));
+        }
+        candidateList.Add(Path.Combine(root, "target", "release", lib));
+        candidateList.Add(Path.Combine(root, "target", "debug", lib));
+        var candidates = candidateList.ToArray();
 
         // Load Pdfium before loading the FFI library to ensure it's available
         LoadPdfiumIfPresent(root);

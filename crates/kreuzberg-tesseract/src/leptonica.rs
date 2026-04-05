@@ -29,7 +29,7 @@ use std::ffi::c_void;
 // ---------------------------------------------------------------------------
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
-unsafe extern "C" {
+unsafe extern "C-unwind" {
     /// Allocates a new Pix with the given dimensions and bit depth.
     fn pixCreate(width: i32, height: i32, depth: i32) -> *mut c_void;
 

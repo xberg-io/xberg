@@ -530,7 +530,7 @@ describe("Configuration Options", () => {
 			const config1 = ExtractionConfig.fromFile(absolutePath);
 			expect(config1).toBeDefined();
 
-			const relativePath = "test_documents/test_fixtures/config.yaml";
+			const relativePath = join("..", "..", "test_documents", "test_fixtures", "config.yaml");
 			const config2 = ExtractionConfig.fromFile(relativePath);
 			expect(config2).toBeDefined();
 		});

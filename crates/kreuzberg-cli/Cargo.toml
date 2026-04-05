@@ -27,6 +27,7 @@ default = [
     "paddle-ocr",
     "layout-detection",
     "chunking-tokenizers",
+    "tree-sitter",
 ]
 
 bundled-pdfium = ["kreuzberg/bundled-pdfium"]
@@ -41,7 +42,8 @@ embeddings = ["kreuzberg/embeddings"]
 paddle-ocr = ["kreuzberg/paddle-ocr"]
 layout-detection = ["kreuzberg/layout-detection"]
 chunking-tokenizers = ["kreuzberg/chunking-tokenizers"]
-all = ["default", "api", "mcp", "mcp-http", "chunking-tokenizers"]
+tree-sitter = ["kreuzberg/tree-sitter", "dep:tree-sitter-language-pack"]
+all = ["default", "api", "mcp", "mcp-http", "chunking-tokenizers", "tree-sitter"]
 
 [dependencies]
 
@@ -56,6 +58,7 @@ serde_toon_format = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tree-sitter-language-pack = { workspace = true, features = ["dynamic-loading", "download", "serde"], optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

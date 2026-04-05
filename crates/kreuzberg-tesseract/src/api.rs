@@ -2160,7 +2160,7 @@ impl Clone for TesseractAPI {
 }
 
 #[cfg(any(feature = "build-tesseract", feature = "build-tesseract-wasm"))]
-unsafe extern "C" {
+unsafe extern "C-unwind" {
     fn TessBaseAPIMeanTextConf(handle: *mut c_void) -> c_int;
     fn TessBaseAPISetVariable(handle: *mut c_void, name: *const c_char, value: *const c_char) -> c_int;
     fn TessBaseAPIGetStringVariable(handle: *mut c_void, name: *const c_char) -> *const c_char;

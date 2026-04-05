@@ -69,7 +69,7 @@ impl Drop for ChoiceIterator {
     }
 }
 
-unsafe extern "C" {
+unsafe extern "C-unwind" {
     fn TessChoiceIteratorDelete(handle: *mut c_void);
     fn TessChoiceIteratorNext(handle: *mut c_void) -> c_int;
     fn TessChoiceIteratorGetUTF8Text(handle: *mut c_void) -> *mut c_char;

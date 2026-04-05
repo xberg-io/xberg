@@ -740,20 +740,18 @@ public final class E2EHelpers {
 
 fn build_pom_template(mode: &GenerationMode) -> String {
     let kreuzberg_dep = match mode {
-        GenerationMode::Published { version } => {
-            format!(
-                "        <dependency>\n\
+        GenerationMode::Published { version: _ } => {
+            "        <dependency>\n\
                  \x20           <groupId>dev.kreuzberg</groupId>\n\
                  \x20           <artifactId>kreuzberg</artifactId>\n\
-                 \x20           <version>{version}</version>\n\
-                 \x20       </dependency>"
-            )
+                 \x20           <version>4.7.2</version>\n\
+                 \x20       </dependency>".to_string()
         }
         GenerationMode::Local => {
             "        <dependency>\n\
              \x20           <groupId>dev.kreuzberg</groupId>\n\
              \x20           <artifactId>kreuzberg</artifactId>\n\
-             \x20           <version>4.7.1</version>\n\
+             \x20           <version>4.7.2</version>\n\
              \x20           <scope>system</scope>\n\
              \x20           <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.7.2.jar</systemPath>\n\
              \x20       </dependency>"
@@ -763,7 +761,7 @@ fn build_pom_template(mode: &GenerationMode) -> String {
 
     let _kreuzberg_version = match mode {
         GenerationMode::Published { version } => version.as_str(),
-        GenerationMode::Local => "4.7.1",
+        GenerationMode::Local => "4.7.2",
     };
 
     format!(

@@ -83,7 +83,6 @@ func TestPdfPdfLayoutDetection(t *testing.T) {
 	skipIfFeatureUnavailable(t, "layout-detection")
 	result := runExtraction(t, "pdf/docling.pdf", []byte(`{
 "layout": {
-	"preset": "accurate",
 	"table_model": "tatr"
 },
 "output_format": "markdown"

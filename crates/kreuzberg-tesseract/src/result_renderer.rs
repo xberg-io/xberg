@@ -198,7 +198,7 @@ impl Drop for TessResultRenderer {
     }
 }
 
-unsafe extern "C" {
+unsafe extern "C-unwind" {
     pub fn TessTextRendererCreate(outputbase: *const c_char) -> *mut c_void;
     pub fn TessHOcrRendererCreate(outputbase: *const c_char) -> *mut c_void;
     pub fn TessPDFRendererCreate(outputbase: *const c_char, datadir: *const c_char, textonly: c_int) -> *mut c_void;

@@ -849,7 +849,7 @@ pub fn generate(fixtures: &[Fixture], output_root: &Utf8Path, mode: &GenerationM
 
     for (category, mut fixtures) in grouped {
         fixtures.sort_by(|a, b| a.id.cmp(&b.id));
-        let file_name = format!("{}.test.ts", to_snake_case(&category));
+        let file_name = format!("{}.spec.ts", to_snake_case(&category));
         let content = render_category(&category, &fixtures)?;
         let path = output_dir.join(&file_name);
         fs::write(&path, content).with_context(|| format!("Writing {}", path))?;
@@ -884,7 +884,7 @@ fn clean_test_files(dir: &Utf8Path) -> Result<()> {
             continue;
         }
 
-        if file_name.ends_with(".test.ts") {
+        if file_name.ends_with(".spec.ts") {
             fs::remove_file(entry.path())?;
         }
     }
@@ -1620,7 +1620,7 @@ fn generate_plugin_api_tests(fixtures: &[&Fixture], output_dir: &Utf8Path) -> Re
         writeln!(buffer, "}});\n")?;
     }
 
-    let path = output_dir.join("plugin-apis.test.ts");
+    let path = output_dir.join("plugin-apis.spec.ts");
     fs::write(&path, buffer).with_context(|| format!("Writing {}", path))?;
 
     Ok(())
@@ -1851,7 +1851,7 @@ pub fn generate_parity(manifest: &ParityManifest, output_root: &Utf8Path, _mode:
         writeln!(buf)?;
     }
 
-    let path = output_dir.join("parity.test.ts");
+    let path = output_dir.join("parity.spec.ts");
     fs::write(&path, &buf).with_context(|| format!("Writing {path}"))?;
 
     Ok(())

@@ -120,6 +120,14 @@ strip = true
 opt-level = "z"
 codegen-units = 1
 
+# Archive crates crash with SIGBUS under opt-level=3 on macOS ARM64.
+# Reduce optimization to prevent miscompilation of unsafe code.
+[profile.release.package.sevenz-rust2]
+opt-level = 2
+
+[profile.release.package.zip]
+opt-level = 2
+
 [profile.dev]
 opt-level = 0
 debug = true

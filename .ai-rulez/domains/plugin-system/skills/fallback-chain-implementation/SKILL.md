@@ -10,9 +10,9 @@ Implement fallback execution chains
    a. Attempt operation
    b. On success, return result
    c. On error:
-      i. Log error details
-      ii. Store error for aggregation
-      iii. Try next plugin
+   i. Log error details
+   ii. Store error for aggregation
+   iii. Try next plugin
 3. After all attempts:
    a. If any succeeded, return best result
    b. If all failed, aggregate errors

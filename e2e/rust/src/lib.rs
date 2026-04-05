@@ -6,12 +6,15 @@ use std::path::{Path, PathBuf};
 
 /// Path to the workspace root.
 pub fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("e2e directory present")
-        .parent()
-        .expect("workspace root present")
-        .to_path_buf()
+    let mut dir = Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf();
+    loop {
+        if dir.join("test_documents").is_dir() {
+            return dir;
+        }
+        if !dir.pop() {
+            panic!("Could not find workspace root (directory containing test_documents/)");
+        }
+    }
 }
 
 /// Path to the shared test_documents directory.

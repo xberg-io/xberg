@@ -34,7 +34,20 @@ from kreuzberg import (
     TreeSitterProcessConfig,
 )
 
-_WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+def _find_workspace_root() -> Path:
+    d = Path(__file__).resolve().parent
+    while True:
+        if (d / "test_documents").is_dir():
+            return d
+        parent = d.parent
+        if parent == d:
+            msg = "Could not find workspace root (directory containing test_documents/)"
+            raise RuntimeError(msg)
+        d = parent
+
+
+_WORKSPACE_ROOT = _find_workspace_root()
 _TEST_DOCUMENTS = _WORKSPACE_ROOT / "test_documents"
 
 

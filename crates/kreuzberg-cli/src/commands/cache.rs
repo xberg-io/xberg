@@ -227,12 +227,16 @@ pub fn manifest_command(format: WireFormat) -> Result<()> {
 }
 
 /// Execute cache warm command - eagerly downloads all models.
+#[allow(clippy::too_many_arguments)]
 pub fn warm_command(
     cache_dir: Option<PathBuf>,
     format: WireFormat,
     all_embeddings: bool,
     embedding_model: Option<String>,
     all_table_models: bool,
+    all_grammars: bool,
+    grammar_groups: Option<Vec<String>>,
+    grammars: Option<Vec<String>>,
 ) -> Result<()> {
     let cache_base = resolve_cache_base(cache_dir);
 
@@ -336,6 +340,44 @@ pub fn warm_command(
     {
         if all_embeddings || embedding_model.is_some() {
             anyhow::bail!("Embedding model warming requires the 'embeddings' feature to be enabled");
+        }
+    }
+
+    // Tree-sitter grammar downloads
+    #[cfg(feature = "tree-sitter")]
+    {
+        if all_grammars {
+            let count =
+                tree_sitter_language_pack::download_all().context("Failed to download all tree-sitter grammars")?;
+            if count > 0 {
+                downloaded.push(format!("tree-sitter grammars ({count} languages)"));
+            } else {
+                already_cached.push("tree-sitter grammars (all)".to_string());
+            }
+        } else if let Some(ref groups) = grammar_groups {
+            let config = tree_sitter_language_pack::PackConfig {
+                cache_dir: None,
+                languages: None,
+                groups: Some(groups.clone()),
+            };
+            tree_sitter_language_pack::init(&config).context("Failed to download tree-sitter grammar groups")?;
+            downloaded.push(format!("tree-sitter grammars (groups: {})", groups.join(", ")));
+        } else if let Some(ref langs) = grammars {
+            let refs: Vec<&str> = langs.iter().map(String::as_str).collect();
+            let count =
+                tree_sitter_language_pack::download(&refs).context("Failed to download tree-sitter grammars")?;
+            if count > 0 {
+                downloaded.push(format!("tree-sitter grammars ({count} languages)"));
+            } else {
+                already_cached.push(format!("tree-sitter grammars ({})", langs.join(", ")));
+            }
+        }
+    }
+
+    #[cfg(not(feature = "tree-sitter"))]
+    {
+        if all_grammars || grammar_groups.is_some() || grammars.is_some() {
+            anyhow::bail!("Tree-sitter grammar warming requires the 'tree-sitter' feature to be enabled");
         }
     }
 

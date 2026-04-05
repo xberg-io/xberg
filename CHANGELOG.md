@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.7.3] - 2026-04-05
+
+### Fixed
+
+- **Archive extraction SIGBUS crash on macOS ARM64** — ZIP, 7Z, TAR, and GZIP archive extraction crashed with SIGBUS (signal 10) in release builds due to miscompilation of unsafe code in `sevenz-rust2` and `zip` crates under `opt-level=3`. Reduced optimization level to 2 for these crates. This also fixes Elixir, R, Go, and C benchmark crashes when processing archive files.
+- **Native-text PDF extraction fails when OCR backend unavailable** (#646) — PDFs with extractable native text hard-failed with `ParsingError: All OCR pipeline backends failed` when no OCR backend (PaddleOCR/Tesseract) was installed, even though pdfium already extracted text successfully. The automatic OCR quality-enhancement pass now gracefully falls back to the native extraction result when OCR backends are unavailable, emitting a warning instead of failing.
+- **Elixir Logger pollutes stdout** — Elixir benchmark scripts produced `[debug] Initialized Kreuzberg.Plugin.Registry` on stdout, corrupting JSON output. Logger default handler now configured to write to stderr via `config :logger, :default_handler`.
+- **WASM benchmark module resolution** — WASM benchmark script failed to load `@kreuzberg/wasm` through pnpm virtual store due to `import.meta.url` resolution issues in tsx. Changed to direct import from local build path.
+- **CI: FFI-dependent tests fail when FFI build skipped** — Go, Elixir, R, C FFI, and CLI test jobs ran and failed when `build-ffi` was skipped by paths-filter. Added `needs.build-ffi.result == 'success'` guard.
+- **Rust cannot catch foreign exceptions crash** (#606) — C++ exceptions from Tesseract or Leptonica (e.g. on corrupted images or edge-case inputs) propagated across the FFI boundary unhandled, causing `fatal runtime error: Rust cannot catch foreign exceptions, aborting`. All Tesseract/Leptonica FFI declarations now use `extern "C-unwind"` to allow foreign exceptions to unwind safely, and OCR processing is wrapped with `catch_unwind` to convert them to recoverable errors.
+
+---
+
 ## [4.7.2] - 2026-04-04
 
 ### Added

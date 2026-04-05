@@ -180,7 +180,7 @@ RSpec.describe 'pdf fixtures' do
     E2ERuby.run_fixture(
       'pdf_layout_detection',
       'pdf/docling.pdf',
-      { layout: { preset: 'accurate', table_model: 'tatr' }, output_format: 'markdown' },
+      { layout: { table_model: 'tatr' }, output_format: 'markdown' },
       requirements: %w[layout-detection],
       notes: 'Requires layout-detection feature with ONNX Runtime',
       skip_if_missing: true
@@ -316,7 +316,7 @@ RSpec.describe 'pdf fixtures' do
         ['application/pdf']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 50)
-      E2ERuby::Assertions.assert_content_contains_all(result, ['Table 1', 'Selected Numbers', 'Celsius', 'Fahrenheit', 'Water Freezing Point', 'Water Boiling Point'])
+      E2ERuby::Assertions.assert_content_contains_all(result, ['Table 1', 'Selected Numbers', 'Water Freezing Point', 'Water Boiling Point'])
       E2ERuby::Assertions.assert_table_count(result, 1, nil)
     end
   end

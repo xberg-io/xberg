@@ -8,13 +8,15 @@
 /* ---- workspace / document helpers --------------------------------------- */
 
 char *resolve_workspace_root(void) {
-    /* The test binary lives in e2e/c/.  Go two levels up to the workspace. */
+    /* Walk up from the executable directory (or cwd) until we find
+       a directory containing test_documents/. */
+    char start_dir[4096] = {0};
+
 #if defined(_WIN32) || defined(__CYGWIN__)
-    /* On Windows use GetModuleFileName – fall back to relative path. */
-    char *root = (char *)malloc(4096);
-    if (!root) { fputs("OOM\n", stderr); exit(1); }
-    strcpy(root, ".." PATH_SEP "..");
-    return root;
+    /* On Windows, start from current working directory */
+    if (_getcwd(start_dir, sizeof(start_dir)) == NULL) {
+        strcpy(start_dir, ".");
+    }
 #else
     char exe_path[4096] = {0};
     ssize_t n = -1;
@@ -27,34 +29,51 @@ char *resolve_workspace_root(void) {
         if (_NSGetExecutablePath(exe_path, &sz) == 0) n = (ssize_t)strlen(exe_path);
     }
 #  endif
-    if (n <= 0) {
-        /* Fallback: use cwd relative path */
-        char *root = (char *)malloc(8);
-        if (!root) { fputs("OOM\n", stderr); exit(1); }
-        strcpy(root, ".." PATH_SEP "..");
-        return root;
+    if (n > 0) {
+        exe_path[n] = '\0';
+        /* Strip the binary name to get the directory */
+        char *slash = strrchr(exe_path, '/');
+        if (slash) *slash = '\0';
+        if (realpath(exe_path, start_dir) == NULL) {
+            strcpy(start_dir, exe_path);
+        }
+    } else {
+        /* Fallback: use cwd */
+        if (getcwd(start_dir, sizeof(start_dir)) == NULL) {
+            strcpy(start_dir, ".");
+        }
     }
-    exe_path[n] = '\0';
-
-    /* Dirname twice to go from  .../e2e/c/test_xxx  ->  .../e2e/c  ->  .../e2e  ->  workspace */
-    char *slash = strrchr(exe_path, '/');
-    if (slash) *slash = '\0'; /* strip binary name -> .../e2e/c */
-    slash = strrchr(exe_path, '/');
-    if (slash) *slash = '\0'; /* strip "c"        -> .../e2e   */
-    slash = strrchr(exe_path, '/');
-    if (slash) *slash = '\0'; /* strip "e2e"      -> workspace  */
-
-    char resolved[4096] = {0};
-    if (realpath(exe_path, resolved) == NULL) {
-        /* realpath failed; just return what we have */
-        strcpy(resolved, exe_path);
-    }
-
-    char *root = (char *)malloc(strlen(resolved) + 1);
-    if (!root) { fputs("OOM\n", stderr); exit(1); }
-    strcpy(root, resolved);
-    return root;
 #endif
+
+    /* Walk up looking for test_documents/ directory */
+    char candidate[4096];
+    char check_path[4096 + 20];
+    struct stat st;
+
+    strncpy(candidate, start_dir, sizeof(candidate) - 1);
+    candidate[sizeof(candidate) - 1] = '\0';
+
+    for (int i = 0; i < 20; i++) {
+        snprintf(check_path, sizeof(check_path), "%s" PATH_SEP "test_documents", candidate);
+        if (stat(check_path, &st) == 0 && S_ISDIR(st.st_mode)) {
+            char *root = (char *)malloc(strlen(candidate) + 1);
+            if (!root) { fputs("OOM\n", stderr); exit(1); }
+            strcpy(root, candidate);
+            return root;
+        }
+        /* Go up one level */
+#if defined(_WIN32) || defined(__CYGWIN__)
+        char *sep = strrchr(candidate, '\\');
+        if (!sep) sep = strrchr(candidate, '/');
+#else
+        char *sep = strrchr(candidate, '/');
+#endif
+        if (!sep || sep == candidate) break;
+        *sep = '\0';
+    }
+
+    fputs("Could not find workspace root (directory containing test_documents/)\n", stderr);
+    exit(1);
 }
 
 char *resolve_document(const char *relative) {

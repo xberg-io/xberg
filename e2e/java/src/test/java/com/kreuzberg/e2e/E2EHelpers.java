@@ -20,7 +20,20 @@ import org.junit.jupiter.api.Assumptions;
 
 /** Helper utilities for E2E tests. */
 public final class E2EHelpers {
-  private static final Path WORKSPACE_ROOT = Paths.get("").toAbsolutePath().getParent().getParent();
+  private static final Path WORKSPACE_ROOT = findWorkspaceRoot();
+
+  private static Path findWorkspaceRoot() {
+    Path dir = Paths.get("").toAbsolutePath();
+    while (dir != null) {
+      if (Files.isDirectory(dir.resolve("test_documents"))) {
+        return dir;
+      }
+      dir = dir.getParent();
+    }
+    throw new RuntimeException(
+        "Could not find workspace root (directory containing test_documents/)");
+  }
+
   private static final Path TEST_DOCUMENTS = WORKSPACE_ROOT.resolve("test_documents");
   private static final ObjectMapper MAPPER = new ObjectMapper();
 

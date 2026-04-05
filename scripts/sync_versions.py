@@ -555,6 +555,17 @@ def main():
             r'(<api>)[^<]+(</api>)',
             rf"\g<1>{version}\g<2>",
         ),
+        # test_apps Java pom.xml versions
+        (
+            repo_root / "test_apps/java/pom.xml",
+            r'(<kreuzberg\.version>)[^<]+(</kreuzberg\.version>)',
+            rf"\g<1>{version}\g<2>",
+        ),
+        (
+            repo_root / "test_apps/java/pom.xml",
+            r'(<artifactId>kreuzberg</artifactId>\s*<version>)([^<]+)(</version>)',
+            rf"\g<1>{version}\g<3>",
+        ),
         # E2E Java pom.xml kreuzberg.version property
         (
             repo_root / "e2e/java/pom.xml",
@@ -567,10 +578,38 @@ def main():
             r'(<kreuzberg\.version>)[^<]+(</kreuzberg\.version>)',
             rf"\g<1>{version}\g<2>",
         ),
+        # WASM E2E Java pom.xml versions
+        (
+            repo_root / "crates/kreuzberg-wasm/e2e/java/pom.xml",
+            r'(<kreuzberg\.version>)[^<]+(</kreuzberg\.version>)',
+            rf"\g<1>{version}\g<2>",
+        ),
+        (
+            repo_root / "crates/kreuzberg-wasm/e2e/java/pom.xml",
+            r'(<artifactId>kreuzberg</artifactId>\s*<version>)([^<]+)(</version>)',
+            rf"\g<1>{version}\g<3>",
+        ),
+        (
+            repo_root / "crates/kreuzberg-wasm/e2e/java/pom.xml",
+            r'(<systemPath>\$\{project\.basedir\}/\.\./\.\./packages/java/target/kreuzberg-)[^<]+(\.jar</systemPath>)',
+            rf"\g<1>{version}\g<2>",
+        ),
         (
             repo_root / "tools/e2e-generator/src/java.rs",
             r'(<kreuzberg\.version>)[^<]+(</kreuzberg\.version>)',
             rf"\g<1>{version}\g<2>",
+        ),
+        # E2E generator java.rs Local mode hardcoded version in dependency
+        (
+            repo_root / "tools/e2e-generator/src/java.rs",
+            r'(\\x20           <version>)[^<]+(</version>)',
+            rf"\g<1>{version}\g<2>",
+        ),
+        # E2E generator java.rs _kreuzberg_version Local fallback
+        (
+            repo_root / "tools/e2e-generator/src/java.rs",
+            r'(GenerationMode::Local => ")\d+\.\d+\.\d+(?:-[a-zA-Z0-9.]+)?(")',
+            rf'\g<1>{version}\g<2>',
         ),
         # Doc API reference version examples
         (

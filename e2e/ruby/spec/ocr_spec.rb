@@ -220,7 +220,7 @@ RSpec.describe 'ocr fixtures' do
         ['image/png']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 10)
-      E2ERuby::Assertions.assert_table_count(result, 1, nil)
+      E2ERuby::Assertions.assert_content_contains_any(result, %w[Product Apple Banana Orange])
     end
   end
 

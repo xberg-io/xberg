@@ -14,7 +14,15 @@ require 'rspec/core'
 module E2ERuby
   module_function
 
-  WORKSPACE_ROOT = Pathname.new(__dir__).join('..', '..', '..').expand_path
+  WORKSPACE_ROOT = begin
+    dir = Pathname.new(__dir__).expand_path
+    loop do
+      break dir if dir.join('test_documents').directory?
+      parent = dir.parent
+      raise 'Could not find workspace root (directory containing test_documents/)' if parent == dir
+      dir = parent
+    end
+  end
   TEST_DOCUMENTS = WORKSPACE_ROOT.join('test_documents')
 
   def resolve_document(relative)

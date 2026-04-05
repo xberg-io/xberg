@@ -19,12 +19,17 @@ var (
 		if err != nil {
 			panic(fmt.Sprintf("failed to determine working directory: %v", err))
 		}
-		root := filepath.Clean(filepath.Join(wd, "..", ".."))
-		abs, err := filepath.Abs(root)
-		if err != nil {
-			panic(fmt.Sprintf("failed to resolve workspace root: %v", err))
+		dir := wd
+		for {
+			if info, err := os.Stat(filepath.Join(dir, "test_documents")); err == nil && info.IsDir() {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				panic("could not find workspace root (directory containing test_documents/)")
+			}
+			dir = parent
 		}
-		return abs
 	}()
 	testDocuments = filepath.Join(workspaceRoot, "test_documents")
 )
