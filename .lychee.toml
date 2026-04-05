@@ -38,8 +38,13 @@ timeout = 30
 # Max retries per link
 max_retries = 3
 
-# Max concurrent requests
-max_concurrency = 10
+# Max concurrent requests (keep low: many parallel github.com checks trigger backoffs)
+max_concurrency = 4
+
+# Throttle GitHub specifically (CI + local both benefit).
+[hosts."github.com"]
+concurrency = 2
+request_interval = "100ms"
 
 # Do not check email addresses
 include_mail = false

@@ -292,10 +292,13 @@ jobs:
       - name: Check links with lychee
         uses: lycheeverse/lychee-action@v2
         with:
+          # Use the job token so github.com checks get REST rate limits, not anonymous caps.
+          token: ${{ github.token }}
           args: >-
             --no-progress
+            --max-concurrency 4
             --timeout 30
-            --max-retries 3
+            --max-retries 2
             './site/**/*.html'
           fail: true
 
