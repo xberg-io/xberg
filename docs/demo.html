@@ -441,10 +441,7 @@
 
         outputScreen.style.display = "flex";
         try {
-          const result = await extractFromFile(file, file.type || null, {
-            extractTables: true,
-            extractMetadata: true,
-          });
+          const result = await extractFromFile(file, file.type || null);
           const mdEl   = document.getElementById("content-markdown");
           const jsonEl = document.getElementById("content-json");
           if (mdEl)   mdEl.innerHTML  = result.content ? renderMarkdown(result.content) : '<p style="color:#888">No content extracted.</p>';
