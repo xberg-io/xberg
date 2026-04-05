@@ -28,6 +28,8 @@ webui = "webui"
 wasm = "wasm"
 mkdocs = "mkdocs"
 rumdl = "rumdl"
+flate = "flate"
+tha = "tha"
 
 [default.extend-identifiers]
 # Allow these identifiers in code

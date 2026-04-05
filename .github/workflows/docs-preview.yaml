@@ -7,7 +7,10 @@ on:
       - 'docs/**'
       - 'mkdocs.yaml'
       - 'pyproject.toml'
+      - '.github/workflows/docs.yaml'
       - '.github/workflows/docs-preview.yaml'
+      - '_typos.toml'
+      - '.lychee.toml'
 
 permissions:
   contents: read
@@ -20,7 +23,7 @@ concurrency:
 jobs:
   preview:
     name: "Deploy Preview"
-    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
+    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

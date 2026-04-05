@@ -247,7 +247,10 @@ jobs:
 
   validate-docs:
     name: "Validate: Documentation"
-    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
+    needs: [changes]
+    if: |
+      github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'workflow_dispatch' || needs.changes.outputs.docs == 'true')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     steps:
@@ -274,7 +277,9 @@ jobs:
           enable-cache: true
 
       - name: Build documentation (strict mode)
+        shell: bash
         run: |
+          set -o pipefail
           uv sync --group doc --no-editable --no-install-workspace --no-install-project
           uv run --no-sync zensical build --clean --strict 2>&1 | tee /tmp/build-log.txt
 
@@ -312,6 +317,7 @@ jobs:
       ffi: ${{ steps.filter.outputs.ffi }}
       docker: ${{ steps.filter.outputs.docker }}
       core: ${{ steps.filter.outputs.core }}
+      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -395,6 +401,13 @@ jobs:
               - 'Dockerfile*'
               - 'docker/**'
               - '.dockerignore'
+            docs:
+              - 'docs/**'
+              - 'mkdocs.yaml'
+              - 'pyproject.toml'
+              - '.github/workflows/docs*'
+              - '_typos.toml'
+              - '.lychee.toml'
 
 # --- Stage 2: Build FFI + Rust Tests + Docker ---
 

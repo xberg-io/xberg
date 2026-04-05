@@ -771,7 +771,7 @@ class ExtractionResult:
 - `content` (str): Extracted text content
 - `detected_languages` (list[str] | None): Detected language codes (ISO 639-1)
 - `djot_content` (DjotContent | None): Structured djot content when `output_format="djot"`
-- `document` (DocumentStructure | None): Hierarchical document strucure when `include_document_structure=True`
+- `document` (DocumentStructure | None): Hierarchical document structure when `include_document_structure=True`
 - `elements` (list[Element] | None): Semantic elements when using element-based layout
 - `extracted_keywords` (list[ExtractedKeyword] | None): Keywords extracted with RAKE/YAKE
 - `images` (list[ExtractedImage] | None): Extracted images
