@@ -404,4 +404,4 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "time"] }
 tokio-test = "0.4"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-zip = { version = ">=7.0.0, <7.4.0", default-features = false, features = ["deflate-flate2"] }
+zip = { version = ">=7.0.0, <8.6.0", default-features = false, features = ["deflate-flate2"] }
