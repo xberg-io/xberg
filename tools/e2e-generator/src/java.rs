@@ -744,16 +744,16 @@ fn build_pom_template(mode: &GenerationMode) -> String {
             "        <dependency>\n\
                  \x20           <groupId>dev.kreuzberg</groupId>\n\
                  \x20           <artifactId>kreuzberg</artifactId>\n\
-                 \x20           <version>4.7.2</version>\n\
+                 \x20           <version>4.7.3</version>\n\
                  \x20       </dependency>".to_string()
         }
         GenerationMode::Local => {
             "        <dependency>\n\
              \x20           <groupId>dev.kreuzberg</groupId>\n\
              \x20           <artifactId>kreuzberg</artifactId>\n\
-             \x20           <version>4.7.2</version>\n\
+             \x20           <version>4.7.3</version>\n\
              \x20           <scope>system</scope>\n\
-             \x20           <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.7.2.jar</systemPath>\n\
+             \x20           <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.7.3.jar</systemPath>\n\
              \x20       </dependency>"
                 .to_string()
         }
@@ -761,7 +761,7 @@ fn build_pom_template(mode: &GenerationMode) -> String {
 
     let _kreuzberg_version = match mode {
         GenerationMode::Published { version } => version.as_str(),
-        GenerationMode::Local => "4.7.2",
+        GenerationMode::Local => "4.7.3",
     };
 
     format!(
@@ -782,7 +782,7 @@ fn build_pom_template(mode: &GenerationMode) -> String {
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.11.3</junit.version>
         <jackson.version>2.18.2</jackson.version>
-        <kreuzberg.version>4.7.2</kreuzberg.version>
+        <kreuzberg.version>4.7.3</kreuzberg.version>
     </properties>
 
     <dependencies>

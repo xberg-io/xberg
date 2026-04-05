@@ -1,6 +1,6 @@
 Package: kreuzberg
 Title: High-Performance Document Intelligence Framework
-Version: 4.7.2
+Version: 4.7.3
 Authors@R: person("Na'aman", "Hirschfeld", email = "nhirschfeld@gmail.com", role = c("aut", "cre"))
 Description: R bindings for Kreuzberg - a high-performance document intelligence framework
     supporting extraction, OCR, chunking, and language detection for 75+ file formats.

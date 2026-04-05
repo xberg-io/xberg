@@ -1,7 +1,7 @@
 PATH
   remote: ../../packages/ruby
   specs:
-    kreuzberg (4.7.2)
+    kreuzberg (4.7.3)
       rb_sys (~> 0.9.119)
       sorbet-runtime (~> 0.5)
 
@@ -80,7 +80,7 @@ CHECKSUMS
   ast (2.4.3)
   diff-lcs (1.6.2)
   json (2.19.3)
-  kreuzberg (4.7.2)
+  kreuzberg (4.7.3)
   language_server-protocol (3.17.0.5)
   lint_roller (1.1.0)
   parallel (1.28.0)
