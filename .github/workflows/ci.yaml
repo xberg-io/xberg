@@ -230,7 +230,7 @@ jobs:
 
   validate-snippets:
     name: "Validate: Documentation Snippets"
-    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
+    if: github.repository == 'pratik-mahalle/kreuzberg' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     steps:
@@ -249,7 +249,7 @@ jobs:
     name: "Validate: Documentation"
     needs: [changes]
     if: |
-      github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]' &&
+      github.actor != 'dependabot[bot]' &&
       (github.event_name == 'workflow_dispatch' || needs.changes.outputs.docs == 'true')
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
