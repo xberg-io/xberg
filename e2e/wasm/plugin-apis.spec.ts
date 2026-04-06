@@ -6,6 +6,7 @@
  * To regenerate: cargo run -p kreuzberg-e2e-generator -- generate --lang wasm
  */
 
+import { beforeAll, describe, expect, it } from "vitest";
 import {
 	clearOcrBackends,
 	clearPostProcessors,
@@ -18,7 +19,6 @@ import {
 	listValidators,
 	unregisterOcrBackend,
 } from "@kreuzberg/wasm";
-import { beforeAll, describe, expect, it } from "vitest";
 
 beforeAll(async () => {
 	try {

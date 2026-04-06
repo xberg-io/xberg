@@ -4,11 +4,20 @@ package com.kreuzberg.e2e;
 // CHECKSTYLE.OFF: LineLength - generated code
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Map;
+import dev.kreuzberg.BytesWithMime;
+import dev.kreuzberg.ExtractionResult;
+import dev.kreuzberg.Kreuzberg;
+import dev.kreuzberg.config.ExtractionConfig;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 // CHECKSTYLE.ON: UnusedImports
 // CHECKSTYLE.ON: LineLength
 
@@ -17,359 +26,349 @@ import org.junit.jupiter.api.Test;
 
 /** Tests for pdf fixtures. */
 public class PdfTest {
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
-  @Test
-  public void pdfAnnotations() throws Exception {
-    JsonNode config = MAPPER.readTree("{\"pdf_options\":{\"extract_annotations\":true}}");
-    if ((System.getProperty("os.arch").equals("aarch64")
-        && System.getProperty("os.name").startsWith("Linux"))) {
-      org.junit.jupiter.api.Assumptions.assumeTrue(
-          false, "Skipping pdf_annotations: not supported on this platform");
-      return;
+    @Test
+    public void pdfAnnotations() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"pdf_options\":{\"extract_annotations\":true}}");
+        if ((System.getProperty("os.arch").equals("aarch64") && System.getProperty("os.name").startsWith("Linux"))) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "Skipping pdf_annotations: not supported on this platform");
+            return;
+        }
+        E2EHelpers.runFixture(
+            "pdf_annotations",
+            "pdf/test_article.pdf",
+            config,
+            Collections.emptyList(),
+            "PDFium ARM Linux binary does not support annotation extraction",
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertAnnotations(result, true, 1);
+            }
+        );
     }
-    E2EHelpers.runFixture(
-        "pdf_annotations",
-        "pdf/test_article.pdf",
-        config,
-        Collections.emptyList(),
-        "PDFium ARM Linux binary does not support annotation extraction",
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertAnnotations(result, true, 1);
-        });
-  }
 
-  @Test
-  public void pdfAssemblyTechnical() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_assembly_technical",
-        "pdf/assembly_language_for_beginners_al4_b_en.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 5000);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("assembly", "register", "instruction"));
-          E2EHelpers.Assertions.assertMetadataExpectation(
-              result, "format_type", Map.of("eq", "pdf"));
-        });
-  }
-
-  @Test
-  public void pdfBayesianDataAnalysis() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_bayesian_data_analysis",
-        "pdf/bayesian_data_analysis_third_edition_13th_feb_2020.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10000);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("Bayesian", "probability", "distribution"));
-          E2EHelpers.Assertions.assertMetadataExpectation(
-              result, "format_type", Map.of("eq", "pdf"));
-        });
-  }
-
-  @Test
-  public void pdfBoundingBoxes() throws Exception {
-    JsonNode config =
-        MAPPER.readTree(
-            "{\"output_format\":\"markdown\",\"layout\":{\"table_model\":\"tatr\"},\"images\":{\"extract_images\":true}}");
-    E2EHelpers.skipIfFeatureUnavailable("pdf");
-    if ((System.getProperty("os.arch").equals("aarch64")
-        && System.getProperty("os.name").startsWith("Linux"))) {
-      org.junit.jupiter.api.Assumptions.assumeTrue(
-          false, "Skipping pdf_bounding_boxes: not supported on this platform");
-      return;
+    @Test
+    public void pdfAssemblyTechnical() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_assembly_technical",
+            "pdf/assembly_language_for_beginners_al4_b_en.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 5000);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("assembly", "register", "instruction"));
+                E2EHelpers.Assertions.assertMetadataExpectation(result, "format_type", Map.of("eq", "pdf"));
+            }
+        );
     }
-    E2EHelpers.runFixture(
-        "pdf_bounding_boxes",
-        "pdf/tiny.pdf",
-        config,
-        Arrays.asList("pdf"),
-        "ONNX Runtime model loading unstable on ARM Linux; table detection returns 0 tables",
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 50);
-          E2EHelpers.Assertions.assertTableCount(result, 1, null);
-          E2EHelpers.Assertions.assertTableBoundingBoxes(result);
-        });
-  }
 
-  @Test
-  public void pdfCodeAndFormula() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_code_and_formula",
-        "pdf/code_and_formula.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 100);
-        });
-  }
-
-  @Test
-  public void pdfDeepLearning() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_deep_learning",
-        "pdf/fundamentals_of_deep_learning_2014.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 1000);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("neural", "network", "deep learning"));
-          E2EHelpers.Assertions.assertMetadataExpectation(
-              result, "format_type", Map.of("eq", "pdf"));
-        });
-  }
-
-  @Test
-  public void pdfEmbeddedImages() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_embedded_images",
-        "pdf/embedded_images_tables.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 50);
-          E2EHelpers.Assertions.assertTableCount(result, 0, null);
-        });
-  }
-
-  @Test
-  public void pdfGoogleDoc() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_google_doc",
-        "pdf/google_doc_document.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 50);
-          E2EHelpers.Assertions.assertMetadataExpectation(
-              result, "format_type", Map.of("eq", "pdf"));
-        });
-  }
-
-  @Test
-  public void pdfLargeCiml() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_large_ciml",
-        "pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10000);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("machine learning", "algorithm", "training"));
-          E2EHelpers.Assertions.assertMetadataExpectation(
-              result, "format_type", Map.of("eq", "pdf"));
-        });
-  }
-
-  @Test
-  public void pdfLayoutDetection() throws Exception {
-    JsonNode config =
-        MAPPER.readTree("{\"layout\":{\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
-    E2EHelpers.skipIfFeatureUnavailable("layout-detection");
-    E2EHelpers.runFixture(
-        "pdf_layout_detection",
-        "pdf/docling.pdf",
-        config,
-        Arrays.asList("layout-detection"),
-        "Requires layout-detection feature with ONNX Runtime",
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 100);
-          E2EHelpers.Assertions.assertContentNotEmpty(result);
-        });
-  }
-
-  @Test
-  public void pdfNonEnglishGerman() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_non_english_german",
-        "pdf/5_level_paging_and_5_level_ept_intel_revision_1_1_may_2017.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 100);
-          E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("Intel", "paging"));
-          E2EHelpers.Assertions.assertMetadataExpectation(
-              result, "format_type", Map.of("eq", "pdf"));
-        });
-  }
-
-  @Test
-  public void pdfPasswordProtected() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_password_protected",
-        "pdf/copy_protected.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 50);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("LayoutParser", "document image analysis", "deep learning"));
-        });
-  }
-
-  @Test
-  public void pdfRightToLeft() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_right_to_left",
-        "pdf/right_to_left_01.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 50);
-          E2EHelpers.Assertions.assertMetadataExpectation(
-              result, "format_type", Map.of("eq", "pdf"));
-        });
-  }
-
-  @Test
-  public void pdfSimpleText() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_simple_text",
-        "pdf/fake_memo.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 50);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("May 5, 2023", "To Whom it May Concern", "Mallori"));
-        });
-  }
-
-  @Test
-  public void pdfTablesLarge() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_tables_large",
-        "pdf/large.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 500);
-        });
-  }
-
-  @Test
-  public void pdfTablesMedium() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_tables_medium",
-        "pdf/medium.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 100);
-        });
-  }
-
-  @Test
-  public void pdfTablesSmall() throws Exception {
-    JsonNode config =
-        MAPPER.readTree("{\"output_format\":\"markdown\",\"layout\":{\"table_model\":\"tatr\"}}");
-    E2EHelpers.skipIfFeatureUnavailable("ocr");
-    if ((System.getProperty("os.arch").equals("aarch64")
-        && System.getProperty("os.name").startsWith("Linux"))) {
-      org.junit.jupiter.api.Assumptions.assumeTrue(
-          false, "Skipping pdf_tables_small: not supported on this platform");
-      return;
+    @Test
+    public void pdfBayesianDataAnalysis() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_bayesian_data_analysis",
+            "pdf/bayesian_data_analysis_third_edition_13th_feb_2020.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10000);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("Bayesian", "probability", "distribution"));
+                E2EHelpers.Assertions.assertMetadataExpectation(result, "format_type", Map.of("eq", "pdf"));
+            }
+        );
     }
-    E2EHelpers.runFixture(
-        "pdf_tables_small",
-        "pdf/tiny.pdf",
-        config,
-        Arrays.asList("ocr"),
-        "PDF table extraction requires OCR feature. ONNX Runtime model loading unstable on ARM"
-            + " Linux.",
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 50);
-          E2EHelpers.Assertions.assertContentContainsAll(
-              result,
-              Arrays.asList(
-                  "Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"));
-          E2EHelpers.Assertions.assertTableCount(result, 1, null);
-        });
-  }
 
-  @Test
-  public void pdfTechnicalStatLearning() throws Exception {
-    JsonNode config = null;
-    E2EHelpers.runFixture(
-        "pdf_technical_stat_learning",
-        "pdf/an_introduction_to_statistical_learning_with_applications_in_r_islr_sixth_printing.pdf",
-        config,
-        Collections.emptyList(),
-        null,
-        true,
-        result -> {
-          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
-          E2EHelpers.Assertions.assertMinContentLength(result, 10000);
-          E2EHelpers.Assertions.assertContentContainsAny(
-              result, Arrays.asList("statistical", "regression", "learning"));
-          E2EHelpers.Assertions.assertMetadataExpectation(
-              result, "format_type", Map.of("eq", "pdf"));
-        });
-  }
+    @Test
+    public void pdfBoundingBoxes() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"output_format\":\"markdown\",\"layout\":{\"table_model\":\"tatr\"},\"images\":{\"extract_images\":true}}");
+        E2EHelpers.skipIfFeatureUnavailable("pdf");
+        if ((System.getProperty("os.arch").equals("aarch64") && System.getProperty("os.name").startsWith("Linux"))) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "Skipping pdf_bounding_boxes: not supported on this platform");
+            return;
+        }
+        E2EHelpers.runFixture(
+            "pdf_bounding_boxes",
+            "pdf/tiny.pdf",
+            config,
+            Arrays.asList("pdf"),
+            "ONNX Runtime model loading unstable on ARM Linux; table detection returns 0 tables",
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 50);
+                E2EHelpers.Assertions.assertTableCount(result, 1, null);
+                E2EHelpers.Assertions.assertTableBoundingBoxes(result);
+            }
+        );
+    }
+
+    @Test
+    public void pdfCodeAndFormula() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_code_and_formula",
+            "pdf/code_and_formula.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 100);
+            }
+        );
+    }
+
+    @Test
+    public void pdfDeepLearning() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_deep_learning",
+            "pdf/fundamentals_of_deep_learning_2014.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 1000);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("neural", "network", "deep learning"));
+                E2EHelpers.Assertions.assertMetadataExpectation(result, "format_type", Map.of("eq", "pdf"));
+            }
+        );
+    }
+
+    @Test
+    public void pdfEmbeddedImages() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_embedded_images",
+            "pdf/embedded_images_tables.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 50);
+                E2EHelpers.Assertions.assertTableCount(result, 0, null);
+            }
+        );
+    }
+
+    @Test
+    public void pdfGoogleDoc() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_google_doc",
+            "pdf/google_doc_document.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 50);
+                E2EHelpers.Assertions.assertMetadataExpectation(result, "format_type", Map.of("eq", "pdf"));
+            }
+        );
+    }
+
+    @Test
+    public void pdfLargeCiml() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_large_ciml",
+            "pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10000);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("machine learning", "algorithm", "training"));
+                E2EHelpers.Assertions.assertMetadataExpectation(result, "format_type", Map.of("eq", "pdf"));
+            }
+        );
+    }
+
+    @Test
+    public void pdfLayoutDetection() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"layout\":{\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
+        E2EHelpers.skipIfFeatureUnavailable("layout-detection");
+        E2EHelpers.runFixture(
+            "pdf_layout_detection",
+            "pdf/docling.pdf",
+            config,
+            Arrays.asList("layout-detection"),
+            "Requires layout-detection feature with ONNX Runtime",
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 100);
+                E2EHelpers.Assertions.assertContentNotEmpty(result);
+            }
+        );
+    }
+
+    @Test
+    public void pdfNonEnglishGerman() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_non_english_german",
+            "pdf/5_level_paging_and_5_level_ept_intel_revision_1_1_may_2017.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 100);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("Intel", "paging"));
+                E2EHelpers.Assertions.assertMetadataExpectation(result, "format_type", Map.of("eq", "pdf"));
+            }
+        );
+    }
+
+    @Test
+    public void pdfPasswordProtected() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_password_protected",
+            "pdf/copy_protected.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 50);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("LayoutParser", "document image analysis", "deep learning"));
+            }
+        );
+    }
+
+    @Test
+    public void pdfRightToLeft() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_right_to_left",
+            "pdf/right_to_left_01.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 50);
+                E2EHelpers.Assertions.assertMetadataExpectation(result, "format_type", Map.of("eq", "pdf"));
+            }
+        );
+    }
+
+    @Test
+    public void pdfSimpleText() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_simple_text",
+            "pdf/fake_memo.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 50);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("May 5, 2023", "To Whom it May Concern", "Mallori"));
+            }
+        );
+    }
+
+    @Test
+    public void pdfTablesLarge() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_tables_large",
+            "pdf/large.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 500);
+            }
+        );
+    }
+
+    @Test
+    public void pdfTablesMedium() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_tables_medium",
+            "pdf/medium.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 100);
+            }
+        );
+    }
+
+    @Test
+    public void pdfTablesSmall() throws Exception {
+        JsonNode config = MAPPER.readTree("{\"output_format\":\"markdown\",\"layout\":{\"table_model\":\"tatr\"}}");
+        E2EHelpers.skipIfFeatureUnavailable("ocr");
+        if ((System.getProperty("os.arch").equals("aarch64") && System.getProperty("os.name").startsWith("Linux"))) {
+            org.junit.jupiter.api.Assumptions.assumeTrue(false, "Skipping pdf_tables_small: not supported on this platform");
+            return;
+        }
+        E2EHelpers.runFixture(
+            "pdf_tables_small",
+            "pdf/tiny.pdf",
+            config,
+            Arrays.asList("ocr"),
+            "PDF table extraction requires OCR feature. ONNX Runtime model loading unstable on ARM Linux.",
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 50);
+                E2EHelpers.Assertions.assertContentContainsAll(result, Arrays.asList("Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"));
+                E2EHelpers.Assertions.assertTableCount(result, 1, null);
+            }
+        );
+    }
+
+    @Test
+    public void pdfTechnicalStatLearning() throws Exception {
+        JsonNode config = null;
+        E2EHelpers.runFixture(
+            "pdf_technical_stat_learning",
+            "pdf/an_introduction_to_statistical_learning_with_applications_in_r_islr_sixth_printing.pdf",
+            config,
+            Collections.emptyList(),
+            null,
+            true,
+            result -> {
+                E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+                E2EHelpers.Assertions.assertMinContentLength(result, 10000);
+                E2EHelpers.Assertions.assertContentContainsAny(result, Arrays.asList("statistical", "regression", "learning"));
+                E2EHelpers.Assertions.assertMetadataExpectation(result, "format_type", Map.of("eq", "pdf"));
+            }
+        );
+    }
+
 }

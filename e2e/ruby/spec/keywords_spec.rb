@@ -46,4 +46,3 @@ RSpec.describe 'keywords fixtures' do
     end
   end
 end
-# rubocop:enable Metrics/BlockLength

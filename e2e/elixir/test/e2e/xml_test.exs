@@ -11,13 +11,13 @@ defmodule E2E.XmlTest do
   describe "xml fixtures" do
     test "xml_plant_catalog" do
       case E2E.Helpers.run_fixture(
-        "xml_plant_catalog",
-        "xml/plant_catalog.xml",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "xml_plant_catalog",
+             "xml/plant_catalog.xml",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/xml"])

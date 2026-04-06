@@ -4,10 +4,10 @@
 // Tests for ocr fixtures.
 
 import { existsSync } from "node:fs";
-import type { ExtractionResult } from "@kreuzberg/node";
-import { extractFileSync } from "@kreuzberg/node";
 import { describe, it } from "vitest";
 import { assertions, buildConfig, chunkAssertions, resolveDocument, shouldSkipFixture } from "./helpers.js";
+import { extractFileSync } from "@kreuzberg/node";
+import type { ExtractionResult } from "@kreuzberg/node";
 
 const TEST_TIMEOUT_MS = 60_000;
 

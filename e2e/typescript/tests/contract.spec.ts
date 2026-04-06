@@ -4,7 +4,8 @@
 // Tests for contract fixtures.
 
 import { existsSync, readFileSync } from "node:fs";
-import type { ExtractionResult } from "@kreuzberg/node";
+import { describe, it } from "vitest";
+import { assertions, buildConfig, chunkAssertions, resolveDocument, shouldSkipFixture } from "./helpers.js";
 import {
 	batchExtractBytes,
 	batchExtractBytesSync,
@@ -16,8 +17,7 @@ import {
 	extractFile,
 	extractFileSync,
 } from "@kreuzberg/node";
-import { describe, it } from "vitest";
-import { assertions, buildConfig, chunkAssertions, resolveDocument, shouldSkipFixture } from "./helpers.js";
+import type { ExtractionResult } from "@kreuzberg/node";
 
 const TEST_TIMEOUT_MS = 60_000;
 

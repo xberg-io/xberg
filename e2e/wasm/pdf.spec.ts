@@ -4,8 +4,8 @@
 // Tests for pdf fixtures.
 
 import { beforeAll, describe, it } from "vitest";
-import type { ExtractionResult } from "./helpers.js";
 import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
+import type { ExtractionResult } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 

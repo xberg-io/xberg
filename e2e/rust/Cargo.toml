@@ -3,7 +3,7 @@
 
 [package]
 name = "e2e-rust"
-version = "4.7.4"
+version = "0.0.0"
 edition = "2024"
 publish = false
 license = "MIT"

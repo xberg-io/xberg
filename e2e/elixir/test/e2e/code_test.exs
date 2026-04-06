@@ -11,13 +11,13 @@ defmodule E2E.CodeTest do
   describe "code fixtures" do
     test "code_javascript_basic" do
       case E2E.Helpers.run_fixture(
-        "code_javascript_basic",
-        "code/app.js",
-        nil,
-        requirements: ["tree-sitter"],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "code_javascript_basic",
+             "code/app.js",
+             nil,
+             requirements: ["tree-sitter"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-source-code"])
@@ -34,13 +34,13 @@ defmodule E2E.CodeTest do
 
     test "code_python_basic" do
       case E2E.Helpers.run_fixture(
-        "code_python_basic",
-        "code/hello.py",
-        nil,
-        requirements: ["tree-sitter"],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "code_python_basic",
+             "code/hello.py",
+             nil,
+             requirements: ["tree-sitter"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-source-code"])
@@ -57,13 +57,13 @@ defmodule E2E.CodeTest do
 
     test "code_rust_basic" do
       case E2E.Helpers.run_fixture(
-        "code_rust_basic",
-        "code/main.rs",
-        nil,
-        requirements: ["tree-sitter"],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "code_rust_basic",
+             "code/main.rs",
+             nil,
+             requirements: ["tree-sitter"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-source-code"])
@@ -80,15 +80,15 @@ defmodule E2E.CodeTest do
 
     test "code_shebang_detection" do
       case E2E.Helpers.run_fixture_with_method(
-        "code_shebang_detection",
-        "code/script.sh",
-        nil,
-        :sync,
-        :bytes,
-        requirements: ["tree-sitter"],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "code_shebang_detection",
+             "code/script.sh",
+             nil,
+             :sync,
+             :bytes,
+             requirements: ["tree-sitter"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-source-code"])
@@ -105,13 +105,17 @@ defmodule E2E.CodeTest do
 
     test "code_tree_sitter_config" do
       case E2E.Helpers.run_fixture(
-        "code_tree_sitter_config",
-        "code/hello.py",
-        %{tree_sitter: %{process: %{structure: true, imports: true, exports: true, comments: true, docstrings: true}}},
-        requirements: ["tree-sitter"],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "code_tree_sitter_config",
+             "code/hello.py",
+             %{
+               tree_sitter: %{
+                 process: %{structure: true, imports: true, exports: true, comments: true, docstrings: true}
+               }
+             },
+             requirements: ["tree-sitter"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-source-code"])

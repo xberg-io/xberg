@@ -2,6 +2,7 @@
 // To regenerate: cargo run -p kreuzberg-e2e-generator -- generate --lang typescript
 
 import { join, resolve } from "node:path";
+import { expect } from "vitest";
 import type {
 	ChunkingConfig,
 	ExtractionConfig,
@@ -18,7 +19,6 @@ import type {
 	TreeSitterConfig,
 	TreeSitterProcessConfig,
 } from "@kreuzberg/node";
-import { expect } from "vitest";
 
 const WORKSPACE_ROOT = resolve(__dirname, "../../..");
 const TEST_DOCUMENTS = join(WORKSPACE_ROOT, "test_documents");
@@ -996,3 +996,38 @@ export const chunkAssertions = {
 		}
 	},
 };
+
+export function assertEmbedResult(
+	result: number[][],
+	count?: number | null,
+	dimensions?: number | null,
+	noNan: boolean = false,
+	noInf: boolean = false,
+	nonZero: boolean = false,
+	normalized: boolean = false,
+): void {
+	expect(Array.isArray(result)).toBe(true);
+	if (typeof count === "number") {
+		expect(result.length).toBe(count);
+	}
+	for (const [i, vec] of result.entries()) {
+		expect(Array.isArray(vec)).toBe(true);
+		if (typeof dimensions === "number") {
+			expect(vec.length).toBe(dimensions);
+		}
+		if (noNan) {
+			expect(vec.some((v) => Number.isNaN(v))).toBe(false);
+		}
+		if (noInf) {
+			expect(vec.some((v) => !Number.isFinite(v))).toBe(false);
+		}
+		if (nonZero) {
+			expect(vec.some((v) => v !== 0)).toBe(true);
+		}
+		if (normalized) {
+			const sumSq = vec.reduce((acc, v) => acc + v * v, 0);
+			const norm = Math.sqrt(sumSq);
+			expect(Math.abs(norm - 1.0)).toBeLessThan(1e-4);
+		}
+	}
+}

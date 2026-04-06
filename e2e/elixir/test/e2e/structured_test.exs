@@ -11,13 +11,13 @@ defmodule E2E.StructuredTest do
   describe "structured fixtures" do
     test "structured_csv_basic" do
       case E2E.Helpers.run_fixture(
-        "structured_csv_basic",
-        "csv/stanley_cups.csv",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_csv_basic",
+             "csv/stanley_cups.csv",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/csv"])
@@ -33,13 +33,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_enw_basic" do
       case E2E.Helpers.run_fixture(
-        "structured_enw_basic",
-        "data_formats/sample.enw",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_enw_basic",
+             "data_formats/sample.enw",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"])
@@ -54,13 +54,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_json_basic" do
       case E2E.Helpers.run_fixture(
-        "structured_json_basic",
-        "json/sample_document.json",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_json_basic",
+             "json/sample_document.json",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/json"])
@@ -77,13 +77,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_json_simple" do
       case E2E.Helpers.run_fixture(
-        "structured_json_simple",
-        "json/simple.json",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_json_simple",
+             "json/simple.json",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/json"])
@@ -100,13 +100,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_nbib_basic" do
       case E2E.Helpers.run_fixture(
-        "structured_nbib_basic",
-        "data_formats/sample.nbib",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_nbib_basic",
+             "data_formats/sample.nbib",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/nbib", "application/x-pubmed", "text/plain"])
@@ -122,13 +122,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_ris_basic" do
       case E2E.Helpers.run_fixture(
-        "structured_ris_basic",
-        "data_formats/sample.ris",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_ris_basic",
+             "data_formats/sample.ris",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-research-info-systems", "text/plain"])
@@ -144,13 +144,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_toml_basic" do
       case E2E.Helpers.run_fixture(
-        "structured_toml_basic",
-        "data_formats/cargo.toml",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_toml_basic",
+             "data_formats/cargo.toml",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/toml", "text/toml"])
@@ -166,13 +166,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_tsv_basic" do
       case E2E.Helpers.run_fixture(
-        "structured_tsv_basic",
-        "data_formats/employees.tsv",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_tsv_basic",
+             "data_formats/employees.tsv",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["text/tab-separated-values", "text/plain"])
@@ -188,13 +188,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_yaml_basic" do
       case E2E.Helpers.run_fixture(
-        "structured_yaml_basic",
-        "yaml/simple.yaml",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_yaml_basic",
+             "yaml/simple.yaml",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"])
@@ -210,13 +210,13 @@ defmodule E2E.StructuredTest do
 
     test "structured_yaml_simple" do
       case E2E.Helpers.run_fixture(
-        "structured_yaml_simple",
-        "yaml/simple.yaml",
-        nil,
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "structured_yaml_simple",
+             "yaml/simple.yaml",
+             nil,
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/x-yaml"])

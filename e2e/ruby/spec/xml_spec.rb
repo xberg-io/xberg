@@ -25,4 +25,3 @@ RSpec.describe 'xml fixtures' do
     end
   end
 end
-# rubocop:enable Metrics/BlockLength

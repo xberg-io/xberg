@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"unicode"
 
-	kreuzberg "github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
+	"github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
 )
 
 var (
@@ -700,7 +701,7 @@ func assertEmbedResult(t *testing.T, result [][]float32, count *int, dims *int, 
 		}
 		if noInf {
 			for _, v := range vec {
-				if v > 1e38 || v < -1e38 { // Simple Inf check for float32
+				if math.IsInf(float64(v), 0) {
 					t.Fatalf("embedding %d contains Inf", i)
 				}
 			}

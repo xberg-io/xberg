@@ -10,6 +10,7 @@ defmodule E2E.EmbedStandaloneTest do
     if :os.type() == {:win32, :nt} and :erlang.system_info(:wordsize) == 8 do
       flunk("Skip embeddings on Windows X64 until ONNX is implemented")
     end
+
     results =
       try do
         case Kreuzberg.embed_async(["Async embedding test"], %{model: "balanced", normalize: true}) do
@@ -19,6 +20,7 @@ defmodule E2E.EmbedStandaloneTest do
       rescue
         _ -> flunk("Embedding failed (exception)")
       end
+
     assert_embed_result(results, 1, 768, true, true, true)
   end
 
@@ -26,6 +28,7 @@ defmodule E2E.EmbedStandaloneTest do
     if :os.type() == {:win32, :nt} and :erlang.system_info(:wordsize) == 8 do
       flunk("Skip embeddings on Windows X64 until ONNX is implemented")
     end
+
     results =
       try do
         case Kreuzberg.embed(["Text one", "Text two", "Text three"], %{model: "fast", normalize: true, batch_size: 32}) do
@@ -35,6 +38,7 @@ defmodule E2E.EmbedStandaloneTest do
       rescue
         _ -> flunk("Embedding failed (exception)")
       end
+
     assert_embed_result(results, 3, 384, true, true, true)
   end
 
@@ -42,6 +46,7 @@ defmodule E2E.EmbedStandaloneTest do
     if :os.type() == {:win32, :nt} and :erlang.system_info(:wordsize) == 8 do
       flunk("Skip embeddings on Windows X64 until ONNX is implemented")
     end
+
     results =
       try do
         case Kreuzberg.embed([], %{model: "balanced"}) do
@@ -51,6 +56,7 @@ defmodule E2E.EmbedStandaloneTest do
       rescue
         _ -> flunk("Embedding failed (exception)")
       end
+
     assert_embed_result(results, 0, -1, true, true, false)
   end
 
@@ -58,15 +64,20 @@ defmodule E2E.EmbedStandaloneTest do
     if :os.type() == {:win32, :nt} and :erlang.system_info(:wordsize) == 8 do
       flunk("Skip embeddings on Windows X64 until ONNX is implemented")
     end
+
     results =
       try do
-        case Kreuzberg.embed(["Bonjour le monde", "Hallo Welt", "¡Hola Mundo!"], %{model: "multilingual", normalize: true}) do
+        case Kreuzberg.embed(["Bonjour le monde", "Hallo Welt", "¡Hola Mundo!"], %{
+               model: "multilingual",
+               normalize: true
+             }) do
           {:ok, res} -> res
           _ -> flunk("Embedding failed")
         end
       rescue
         _ -> flunk("Embedding failed (exception)")
       end
+
     assert_embed_result(results, 3, 768, true, true, true)
   end
 
@@ -74,6 +85,7 @@ defmodule E2E.EmbedStandaloneTest do
     if :os.type() == {:win32, :nt} and :erlang.system_info(:wordsize) == 8 do
       flunk("Skip embeddings on Windows X64 until ONNX is implemented")
     end
+
     results =
       try do
         case Kreuzberg.embed(["Hello, Kreuzberg!"], %{model: "balanced", normalize: true}) do
@@ -83,7 +95,7 @@ defmodule E2E.EmbedStandaloneTest do
       rescue
         _ -> flunk("Embedding failed (exception)")
       end
+
     assert_embed_result(results, 1, 768, true, true, true)
   end
-
 end

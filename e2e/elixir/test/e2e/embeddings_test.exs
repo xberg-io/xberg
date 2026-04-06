@@ -13,28 +13,34 @@ defmodule E2E.EmbeddingsTest do
       if :os.type() == {:win32, :nt} do
         IO.puts("SKIPPED: embedding_async - not supported on Windows")
       else
-      case E2E.Helpers.run_fixture_with_method(
-        "embedding_async",
-        "pdf/fake_memo.pdf",
-        %{chunking: %{max_chars: 500, max_overlap: 50, embedding: %{model: %{type: "preset", name: "balanced"}, normalize: true}}},
-        :async,
-        :file,
-        requirements: ["embeddings"],
-        notes: "Embeddings not supported on Windows",
-        skip_if_missing: true
-      ) do
-        {:ok, result} ->
-          result
-          |> E2E.Helpers.assert_expected_mime(["application/pdf"])
-          |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
+        case E2E.Helpers.run_fixture_with_method(
+               "embedding_async",
+               "pdf/fake_memo.pdf",
+               %{
+                 chunking: %{
+                   max_chars: 500,
+                   max_overlap: 50,
+                   embedding: %{model: %{type: "preset", name: "balanced"}, normalize: true}
+                 }
+               },
+               :async,
+               :file,
+               requirements: ["embeddings"],
+               notes: "Embeddings not supported on Windows",
+               skip_if_missing: true
+             ) do
+          {:ok, result} ->
+            result
+            |> E2E.Helpers.assert_expected_mime(["application/pdf"])
+            |> E2E.Helpers.assert_min_content_length(10)
+            |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
 
-        {:skipped, reason} ->
-          IO.puts("SKIPPED: #{reason}")
+          {:skipped, reason} ->
+            IO.puts("SKIPPED: #{reason}")
 
-        {:error, reason} ->
-          flunk("Extraction failed: #{inspect(reason)}")
-      end
+          {:error, reason} ->
+            flunk("Extraction failed: #{inspect(reason)}")
+        end
       end
     end
 
@@ -42,38 +48,44 @@ defmodule E2E.EmbeddingsTest do
       if :os.type() == {:win32, :nt} do
         IO.puts("SKIPPED: embedding_balanced_preset - not supported on Windows")
       else
-      case E2E.Helpers.run_fixture(
-        "embedding_balanced_preset",
-        "pdf/fake_memo.pdf",
-        %{chunking: %{max_chars: 500, max_overlap: 50, embedding: %{model: %{type: "preset", name: "balanced"}, normalize: true}}},
-        requirements: ["embeddings"],
-        notes: "Embeddings not supported on Windows",
-        skip_if_missing: true
-      ) do
-        {:ok, result} ->
-          result
-          |> E2E.Helpers.assert_expected_mime(["application/pdf"])
-          |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
+        case E2E.Helpers.run_fixture(
+               "embedding_balanced_preset",
+               "pdf/fake_memo.pdf",
+               %{
+                 chunking: %{
+                   max_chars: 500,
+                   max_overlap: 50,
+                   embedding: %{model: %{type: "preset", name: "balanced"}, normalize: true}
+                 }
+               },
+               requirements: ["embeddings"],
+               notes: "Embeddings not supported on Windows",
+               skip_if_missing: true
+             ) do
+          {:ok, result} ->
+            result
+            |> E2E.Helpers.assert_expected_mime(["application/pdf"])
+            |> E2E.Helpers.assert_min_content_length(10)
+            |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
 
-        {:skipped, reason} ->
-          IO.puts("SKIPPED: #{reason}")
+          {:skipped, reason} ->
+            IO.puts("SKIPPED: #{reason}")
 
-        {:error, reason} ->
-          flunk("Extraction failed: #{inspect(reason)}")
-      end
+          {:error, reason} ->
+            flunk("Extraction failed: #{inspect(reason)}")
+        end
       end
     end
 
     test "embedding_disabled" do
       case E2E.Helpers.run_fixture(
-        "embedding_disabled",
-        "pdf/fake_memo.pdf",
-        %{chunking: %{max_chars: 500, max_overlap: 50}},
-        requirements: [],
-        notes: nil,
-        skip_if_missing: true
-      ) do
+             "embedding_disabled",
+             "pdf/fake_memo.pdf",
+             %{chunking: %{max_chars: 500, max_overlap: 50}},
+             requirements: [],
+             notes: nil,
+             skip_if_missing: true
+           ) do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
@@ -92,26 +104,32 @@ defmodule E2E.EmbeddingsTest do
       if :os.type() == {:win32, :nt} do
         IO.puts("SKIPPED: embedding_fast_preset - not supported on Windows")
       else
-      case E2E.Helpers.run_fixture(
-        "embedding_fast_preset",
-        "pdf/fake_memo.pdf",
-        %{chunking: %{max_chars: 500, max_overlap: 50, embedding: %{model: %{type: "preset", name: "fast"}, normalize: true}}},
-        requirements: ["embeddings"],
-        notes: "Embeddings not supported on Windows",
-        skip_if_missing: true
-      ) do
-        {:ok, result} ->
-          result
-          |> E2E.Helpers.assert_expected_mime(["application/pdf"])
-          |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
+        case E2E.Helpers.run_fixture(
+               "embedding_fast_preset",
+               "pdf/fake_memo.pdf",
+               %{
+                 chunking: %{
+                   max_chars: 500,
+                   max_overlap: 50,
+                   embedding: %{model: %{type: "preset", name: "fast"}, normalize: true}
+                 }
+               },
+               requirements: ["embeddings"],
+               notes: "Embeddings not supported on Windows",
+               skip_if_missing: true
+             ) do
+          {:ok, result} ->
+            result
+            |> E2E.Helpers.assert_expected_mime(["application/pdf"])
+            |> E2E.Helpers.assert_min_content_length(10)
+            |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
 
-        {:skipped, reason} ->
-          IO.puts("SKIPPED: #{reason}")
+          {:skipped, reason} ->
+            IO.puts("SKIPPED: #{reason}")
 
-        {:error, reason} ->
-          flunk("Extraction failed: #{inspect(reason)}")
-      end
+          {:error, reason} ->
+            flunk("Extraction failed: #{inspect(reason)}")
+        end
       end
     end
   end

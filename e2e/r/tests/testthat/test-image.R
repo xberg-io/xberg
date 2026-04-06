@@ -14,8 +14,8 @@ test_that("image_bmp_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/bmp"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("image/bmp"))
+  assert_content_not_empty(result)
 })
 
 test_that("image_gif_basic", {
@@ -28,8 +28,8 @@ test_that("image_gif_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/gif"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("image/gif"))
+  assert_content_not_empty(result)
 })
 
 test_that("image_jp2_basic", {
@@ -42,8 +42,8 @@ test_that("image_jp2_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/jp2", "image/jpeg2000"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("image/jp2", "image/jpeg2000"))
+  assert_content_not_empty(result)
 })
 
 test_that("image_metadata_only", {
@@ -55,8 +55,8 @@ test_that("image_metadata_only", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/jpeg"))
-      assert_max_content_length(result, 200L)
+  assert_expected_mime(result, c("image/jpeg"))
+  assert_max_content_length(result, 200L)
 })
 
 test_that("image_pbm_basic", {
@@ -69,8 +69,8 @@ test_that("image_pbm_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/x-portable-bitmap", "image/x-pbm"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("image/x-portable-bitmap", "image/x-pbm"))
+  assert_content_not_empty(result)
 })
 
 test_that("image_pgm_basic", {
@@ -83,8 +83,8 @@ test_that("image_pgm_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/x-portable-graymap", "image/x-pgm"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("image/x-portable-graymap", "image/x-pgm"))
+  assert_content_not_empty(result)
 })
 
 test_that("image_ppm_basic", {
@@ -97,8 +97,8 @@ test_that("image_ppm_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/x-portable-pixmap", "image/x-ppm"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("image/x-portable-pixmap", "image/x-ppm"))
+  assert_content_not_empty(result)
 })
 
 test_that("image_svg_basic", {
@@ -110,8 +110,8 @@ test_that("image_svg_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/svg+xml"))
-      assert_min_content_length(result, 5L)
+  assert_expected_mime(result, c("image/svg+xml"))
+  assert_min_content_length(result, 5L)
 })
 
 test_that("image_tiff_basic", {
@@ -124,8 +124,8 @@ test_that("image_tiff_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/tiff"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("image/tiff"))
+  assert_content_not_empty(result)
 })
 
 test_that("image_webp_basic", {
@@ -138,7 +138,7 @@ test_that("image_webp_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/webp"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("image/webp"))
+  assert_content_not_empty(result)
 })
 # nolint end

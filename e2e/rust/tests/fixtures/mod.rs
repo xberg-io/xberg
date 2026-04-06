@@ -4,6 +4,7 @@ pub mod archive_test;
 pub mod code_test;
 pub mod contract_test;
 pub mod email_test;
+pub mod embed_test;
 pub mod embeddings_test;
 pub mod html_test;
 pub mod image_test;

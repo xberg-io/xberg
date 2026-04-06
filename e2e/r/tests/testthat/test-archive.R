@@ -13,8 +13,8 @@ test_that("archive_gz_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/gzip", "application/x-gzip"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/gzip", "application/x-gzip"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("archive_sevenz_basic", {
@@ -26,8 +26,8 @@ test_that("archive_sevenz_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/x-7z-compressed"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/x-7z-compressed"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("archive_tar_basic", {
@@ -39,8 +39,8 @@ test_that("archive_tar_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/x-tar", "application/tar"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/x-tar", "application/tar"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("archive_zip_basic", {
@@ -52,7 +52,7 @@ test_that("archive_zip_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/zip", "application/x-zip-compressed"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/zip", "application/x-zip-compressed"))
+  assert_min_content_length(result, 10L)
 })
 # nolint end

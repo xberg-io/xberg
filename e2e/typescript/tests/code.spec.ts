@@ -4,10 +4,10 @@
 // Tests for code fixtures.
 
 import { existsSync, readFileSync } from "node:fs";
-import type { ExtractionResult } from "@kreuzberg/node";
-import { detectMimeTypeFromPath, extractBytesSync, extractFileSync } from "@kreuzberg/node";
 import { describe, it } from "vitest";
 import { assertions, buildConfig, resolveDocument, shouldSkipFixture } from "./helpers.js";
+import { detectMimeTypeFromPath, extractBytesSync, extractFileSync } from "@kreuzberg/node";
+import type { ExtractionResult } from "@kreuzberg/node";
 
 const TEST_TIMEOUT_MS = 60_000;
 

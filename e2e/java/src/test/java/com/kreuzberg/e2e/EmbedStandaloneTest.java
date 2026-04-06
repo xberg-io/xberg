@@ -33,7 +33,7 @@ public class EmbedStandaloneTest {
             }
             throw e;
         }
-        E2EHelpers.Assertions.assertEmbedResult(results, 1, 768, true, true, true);
+        E2EHelpers.Assertions.assertEmbedResult(results, 1, 768, true, true, true, false);
     }
 
     @Test
@@ -53,7 +53,7 @@ public class EmbedStandaloneTest {
             }
             throw e;
         }
-        E2EHelpers.Assertions.assertEmbedResult(results, 3, 384, true, true, true);
+        E2EHelpers.Assertions.assertEmbedResult(results, 3, 384, true, true, true, true);
     }
 
     @Test
@@ -73,7 +73,7 @@ public class EmbedStandaloneTest {
             }
             throw e;
         }
-        E2EHelpers.Assertions.assertEmbedResult(results, 0, -1, true, true, false);
+        E2EHelpers.Assertions.assertEmbedResult(results, 0, -1, true, true, false, false);
     }
 
     @Test
@@ -93,7 +93,7 @@ public class EmbedStandaloneTest {
             }
             throw e;
         }
-        E2EHelpers.Assertions.assertEmbedResult(results, 3, 768, true, true, true);
+        E2EHelpers.Assertions.assertEmbedResult(results, 3, 768, true, true, true, false);
     }
 
     @Test
@@ -113,7 +113,7 @@ public class EmbedStandaloneTest {
             }
             throw e;
         }
-        E2EHelpers.Assertions.assertEmbedResult(results, 1, 768, true, true, true);
+        E2EHelpers.Assertions.assertEmbedResult(results, 1, 768, true, true, true, true);
     }
 
 }

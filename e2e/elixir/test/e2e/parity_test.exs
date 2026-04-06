@@ -8,7 +8,7 @@ defmodule Kreuzberg.E2E.ParityTest do
     expected = [
       :mime_type,
       :path,
-      :result,
+      :result
     ]
 
     struct_fields = Map.keys(%Kreuzberg.ArchiveEntry{}) -- [:__struct__]
@@ -24,7 +24,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :x0,
       :x1,
       :y0,
-      :y1,
+      :y1
     ]
 
     struct_fields = Map.keys(%Kreuzberg.BoundingBox{}) -- [:__struct__]
@@ -65,7 +65,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :security_limits,
       :token_reduction,
       :tree_sitter,
-      :use_cache,
+      :use_cache
     ]
 
     struct_fields = Map.keys(%Kreuzberg.ExtractionConfig{}) -- [:__struct__]
@@ -95,7 +95,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :processing_warnings,
       :quality_score,
       :tables,
-      :uris,
+      :uris
     ]
 
     struct_fields = Map.keys(%Kreuzberg.ExtractionResult{}) -- [:__struct__]
@@ -111,7 +111,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :algorithm,
       :positions,
       :score,
-      :text,
+      :text
     ]
 
     struct_fields = Map.keys(%Kreuzberg.Keyword{}) -- [:__struct__]
@@ -127,7 +127,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :annotation_type,
       :bounding_box,
       :content,
-      :page_number,
+      :page_number
     ]
 
     struct_fields = Map.keys(%Kreuzberg.PdfAnnotation{}) -- [:__struct__]
@@ -141,7 +141,7 @@ defmodule Kreuzberg.E2E.ParityTest do
   test "ProcessingWarning has all expected fields" do
     expected = [
       :message,
-      :source,
+      :source
     ]
 
     struct_fields = Map.keys(%Kreuzberg.ProcessingWarning{}) -- [:__struct__]
@@ -157,7 +157,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :bounding_box,
       :cells,
       :markdown,
-      :page_number,
+      :page_number
     ]
 
     struct_fields = Map.keys(%Kreuzberg.Table{}) -- [:__struct__]
@@ -173,7 +173,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :kind,
       :label,
       :page,
-      :url,
+      :url
     ]
 
     struct_fields = Map.keys(%Kreuzberg.Uri{}) -- [:__struct__]
@@ -189,7 +189,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :body,
       :header,
       :footer,
-      :footnote,
+      :footnote
     ]
 
     values = Kreuzberg.ContentLayer.values()
@@ -212,7 +212,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :code_block,
       :block_quote,
       :footer,
-      :header,
+      :header
     ]
 
     values = Kreuzberg.ElementType.values()
@@ -226,7 +226,7 @@ defmodule Kreuzberg.E2E.ParityTest do
   test "KeywordAlgorithm has all expected values" do
     expected = [
       :yake,
-      :rake,
+      :rake
     ]
 
     values = Kreuzberg.KeywordAlgorithm.values()
@@ -242,7 +242,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :word,
       :line,
       :block,
-      :page,
+      :page
     ]
 
     values = Kreuzberg.OcrElementLevel.values()
@@ -259,7 +259,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :markdown,
       :djot,
       :html,
-      :structured,
+      :structured
     ]
 
     values = Kreuzberg.OutputFormat.values()
@@ -274,7 +274,7 @@ defmodule Kreuzberg.E2E.ParityTest do
     expected = [
       :page,
       :slide,
-      :sheet,
+      :sheet
     ]
 
     values = Kreuzberg.PageUnitType.values()
@@ -293,7 +293,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :stamp,
       :underline,
       :strike_out,
-      :other,
+      :other
     ]
 
     values = Kreuzberg.PdfAnnotationType.values()
@@ -312,7 +312,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :caption,
       :label,
       :toc_entry,
-      :cross_reference,
+      :cross_reference
     ]
 
     values = Kreuzberg.RelationshipKind.values()
@@ -326,7 +326,7 @@ defmodule Kreuzberg.E2E.ParityTest do
   test "ResultFormat has all expected values" do
     expected = [
       :unified,
-      :element_based,
+      :element_based
     ]
 
     values = Kreuzberg.ResultFormat.values()
@@ -344,7 +344,7 @@ defmodule Kreuzberg.E2E.ParityTest do
       :anchor,
       :citation,
       :reference,
-      :email,
+      :email
     ]
 
     values = Kreuzberg.UriKind.values()
@@ -354,5 +354,4 @@ defmodule Kreuzberg.E2E.ParityTest do
              "UriKind missing value: #{inspect(val)}"
     end
   end
-
 end

@@ -142,5 +142,3 @@ RSpec.describe 'Plugin APIs' do
     end
   end
 end
-
-# rubocop:enable Metrics/BlockLength

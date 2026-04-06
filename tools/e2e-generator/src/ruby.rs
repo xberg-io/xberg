@@ -1,5 +1,5 @@
 use crate::fixtures::{
-    Assertions, EmbedAssertions, EmbedSpec, ExtractionMethod, Fixture, GenerationMode, InputType, RenderAssertions,
+    Assertions, ExtractionMethod, Fixture, GenerationMode, InputType, RenderAssertions,
 };
 use crate::parity::{self, ParityManifest, TypeDef};
 use anyhow::{Context, Result, bail};

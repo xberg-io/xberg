@@ -18,7 +18,6 @@ resolution-markers = [
 members = [
     "kreuzberg",
     "kreuzberg-e2e-tests",
-    "kreuzberg-examples-python",
 ]
 
 [manifest.dependency-groups]
@@ -2240,7 +2239,7 @@ wheels = [
 
 [[package]]
 name = "kreuzberg"
-version = "4.6.3"
+version = "4.7.4"
 source = { editable = "packages/python" }
 
 [package.optional-dependencies]
@@ -2263,7 +2262,7 @@ provides-extras = ["all", "easyocr"]
 
 [[package]]
 name = "kreuzberg-e2e-tests"
-version = "4.2.0"
+version = "0.0.0"
 source = { editable = "e2e/python" }
 dependencies = [
     { name = "kreuzberg" },
@@ -2286,17 +2285,6 @@ requires-dist = [
     { name = "pytest-timeout", marker = "extra == 'dev'", specifier = ">=2.1" },
 ]
 provides-extras = ["dev"]
-
-[[package]]
-name = "kreuzberg-examples-python"
-version = "4.6.3"
-source = { editable = "examples/python" }
-dependencies = [
-    { name = "kreuzberg" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "kreuzberg", editable = "packages/python" }]
 
 [[package]]
 name = "langdetect"

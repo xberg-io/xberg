@@ -13,8 +13,8 @@ test_that("html_complex_layout", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/html"))
-      assert_min_content_length(result, 1000L)
+  assert_expected_mime(result, c("text/html"))
+  assert_min_content_length(result, 1000L)
 })
 
 test_that("html_simple_table", {
@@ -26,8 +26,8 @@ test_that("html_simple_table", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/html"))
-      assert_min_content_length(result, 100L)
-      assert_content_contains_all(result, c("Product", "Category", "Price", "Stock", "Laptop", "Electronics", "Sample Data Table"))
+  assert_expected_mime(result, c("text/html"))
+  assert_min_content_length(result, 100L)
+  assert_content_contains_all(result, c("Product", "Category", "Price", "Stock", "Laptop", "Electronics", "Sample Data Table"))
 })
 # nolint end

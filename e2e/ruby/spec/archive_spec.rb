@@ -76,4 +76,3 @@ RSpec.describe 'archive fixtures' do
     end
   end
 end
-# rubocop:enable Metrics/BlockLength

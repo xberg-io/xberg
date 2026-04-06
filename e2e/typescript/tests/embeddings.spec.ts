@@ -4,10 +4,10 @@
 // Tests for embeddings fixtures.
 
 import { existsSync } from "node:fs";
-import type { ExtractionResult } from "@kreuzberg/node";
-import { extractFile, extractFileSync } from "@kreuzberg/node";
 import { describe, it } from "vitest";
 import { assertions, buildConfig, chunkAssertions, resolveDocument, shouldSkipFixture } from "./helpers.js";
+import { extractFile, extractFileSync } from "@kreuzberg/node";
+import type { ExtractionResult } from "@kreuzberg/node";
 
 const TEST_TIMEOUT_MS = 60_000;
 

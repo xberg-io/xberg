@@ -444,6 +444,29 @@ module E2ERuby
       expect(annotations.length).to be >= min_count if min_count
     end
 
+    def self.assert_embed_result(result, count: nil, dimensions: nil, no_nan: false, no_inf: false, non_zero: false, normalized: false)
+      expect(result).to be_a(Array)
+      expect(result.length).to eq(count) if count
+      result.each_with_index do |vec, i|
+        expect(vec).to be_a(Array)
+        expect(vec.length).to eq(dimensions) if dimensions
+
+        if no_nan
+          expect(vec.any? { |v| v.to_f.nan? }).to be(false), "Embedding #{i} contains NaN values"
+        end
+        if no_inf
+          expect(vec.any? { |v| v.to_f.infinite? }).to be(false), "Embedding #{i} contains Inf values"
+        end
+        if non_zero
+          expect(vec.all?(0.0)).to be(false), "Embedding #{i} is all zeros"
+        end
+        if normalized
+          norm = Math.sqrt(vec.sum { |v| v * v })
+          expect((norm - 1.0).abs).to be < 1e-4, "Embedding #{i} L2 norm #{norm} != 1.0 (not normalized)"
+        end
+      end
+    end
+
     class << self
       private
 

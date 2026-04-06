@@ -13,8 +13,8 @@ test_that("structured_csv_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/csv"))
-      assert_min_content_length(result, 20L)
+  assert_expected_mime(result, c("text/csv"))
+  assert_min_content_length(result, 20L)
 })
 
 test_that("structured_enw_basic", {
@@ -26,7 +26,7 @@ test_that("structured_enw_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/x-endnote-refer", "application/x-endnote+xml", "text/plain"))
+  assert_expected_mime(result, c("application/x-endnote-refer", "application/x-endnote+xml", "text/plain"))
 })
 
 test_that("structured_json_basic", {
@@ -38,9 +38,9 @@ test_that("structured_json_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/json"))
-      assert_min_content_length(result, 20L)
-      assert_content_contains_any(result, c("Sample Document", "Test Author"))
+  assert_expected_mime(result, c("application/json"))
+  assert_min_content_length(result, 20L)
+  assert_content_contains_any(result, c("Sample Document", "Test Author"))
 })
 
 test_that("structured_json_simple", {
@@ -52,9 +52,9 @@ test_that("structured_json_simple", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/json"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("{", "name"))
+  assert_expected_mime(result, c("application/json"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("{", "name"))
 })
 
 test_that("structured_nbib_basic", {
@@ -66,8 +66,8 @@ test_that("structured_nbib_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/nbib", "application/x-pubmed", "text/plain"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("application/nbib", "application/x-pubmed", "text/plain"))
+  assert_content_not_empty(result)
 })
 
 test_that("structured_ris_basic", {
@@ -79,8 +79,8 @@ test_that("structured_ris_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/x-research-info-systems", "text/plain"))
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("application/x-research-info-systems", "text/plain"))
+  assert_content_not_empty(result)
 })
 
 test_that("structured_toml_basic", {
@@ -92,8 +92,8 @@ test_that("structured_toml_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/toml", "text/toml"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/toml", "text/toml"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("structured_tsv_basic", {
@@ -105,8 +105,8 @@ test_that("structured_tsv_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/tab-separated-values", "text/plain"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("text/tab-separated-values", "text/plain"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("structured_yaml_basic", {
@@ -118,8 +118,8 @@ test_that("structured_yaml_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("structured_yaml_simple", {
@@ -131,7 +131,7 @@ test_that("structured_yaml_simple", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/x-yaml"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/x-yaml"))
+  assert_min_content_length(result, 10L)
 })
 # nolint end
