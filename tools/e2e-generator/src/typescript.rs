@@ -1,6 +1,4 @@
-use crate::fixtures::{
-    Assertions, ExtractionMethod, Fixture, GenerationMode, InputType, RenderAssertions,
-};
+use crate::fixtures::{Assertions, ExtractionMethod, Fixture, GenerationMode, InputType, RenderAssertions};
 use crate::parity::{self, ParityManifest, TypeDef};
 use anyhow::{Context, Result};
 use camino::Utf8Path;

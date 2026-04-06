@@ -184,7 +184,6 @@ fn onnx_runtime_install_message() -> String {
     }
 }
 
-
 /// Resolve the cache directory for embedding models.
 fn resolve_cache_dir(cache_dir: Option<std::path::PathBuf>) -> std::path::PathBuf {
     cache_dir.unwrap_or_else(|| crate::cache_dir::resolve_cache_dir("embeddings"))
@@ -196,8 +195,8 @@ fn resolve_model_info(
 ) -> crate::Result<(&str, &str, engine::Pooling)> {
     match model_type {
         crate::core::config::EmbeddingModelType::Preset { name } => {
-            let preset =
-                get_preset(name).ok_or_else(|| crate::KreuzbergError::embedding(format!("Unknown embedding preset: {name}")))?;
+            let preset = get_preset(name)
+                .ok_or_else(|| crate::KreuzbergError::embedding(format!("Unknown embedding preset: {name}")))?;
             let pooling = match preset.pooling {
                 "cls" => engine::Pooling::Cls,
                 _ => engine::Pooling::Mean,
@@ -225,7 +224,8 @@ fn load_tokenizer(
     use tokenizers::{AddedToken, PaddingParams, PaddingStrategy, TruncationParams};
 
     let config: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(config_path).map_err(|e| crate::KreuzbergError::embedding(format!("Failed to read config.json: {e}")))?,
+        &std::fs::read(config_path)
+            .map_err(|e| crate::KreuzbergError::embedding(format!("Failed to read config.json: {e}")))?,
     )
     .map_err(|e| crate::KreuzbergError::embedding(format!("Failed to parse config.json: {e}")))?;
 
@@ -534,7 +534,9 @@ pub fn download_model(
             Err(e) => {
                 // Model and tokenizer are required; others are optional
                 if *file == model_file || *file == "tokenizer.json" {
-                    return Err(crate::KreuzbergError::embedding(format!("Failed to download {file}: {e}")));
+                    return Err(crate::KreuzbergError::embedding(format!(
+                        "Failed to download {file}: {e}"
+                    )));
                 }
                 tracing::debug!(file = %file, error = %e, "Optional file not found, skipping");
             }

@@ -1,6 +1,5 @@
 use crate::fixtures::{
-    Assertions, ExtractionMethod, Fixture, GenerationMode, InputType,
-    PluginTestSpec, RenderAssertions,
+    Assertions, ExtractionMethod, Fixture, GenerationMode, InputType, PluginTestSpec, RenderAssertions,
 };
 use crate::parity::{self, ParityManifest, TypeDef};
 use anyhow::{Context, Result};
