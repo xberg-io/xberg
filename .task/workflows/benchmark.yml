@@ -100,7 +100,7 @@ tasks:
 
   import:omnidocbench:
     desc: "Import OmniDocBench into benchmark fixtures (run download:omnidocbench first)"
-    deps: [download:omnidocbench]
+    deps: ["download:omnidocbench"]
     cmds:
       - python3 tools/benchmark-harness/scripts/import_omnidocbench.py tools/benchmark-harness/datasets/omnidocbench .
     status:

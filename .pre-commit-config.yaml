@@ -134,6 +134,7 @@ repos:
             "--enable=warning,style,performance",
             "--suppress=missingIncludeSystem",
             "--suppress=unusedStructMember",
+            "--suppress=normalCheckLevelMaxBranches",
           ]
         files: (^crates/kreuzberg-ffi/tests/c/|^tools/benchmark-harness/scripts/.*\.c$)
 
