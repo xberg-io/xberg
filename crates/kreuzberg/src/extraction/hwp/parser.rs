@@ -107,10 +107,12 @@ impl Record {
 // HWP tag constants (only the ones we need)
 // ---------------------------------------------------------------------------
 
-/// HWP 5.0 body-text record tag 0x50: paragraph header.
-const TAG_PARA_HEADER: u16 = 0x50;
-/// HWP 5.0 body-text record tag 0x51: paragraph text (UTF-16LE).
-const TAG_PARA_TEXT: u16 = 0x51;
+/// HWPTAG_BEGIN as defined by the HWP 5.x specification.
+const HWPTAG_BEGIN: u16 = 0x010;
+/// HWP 5.x body-text record tag: paragraph header (HWPTAG_BEGIN + 50).
+const TAG_PARA_HEADER: u16 = HWPTAG_BEGIN + 50; // 0x42
+/// HWP 5.x body-text record tag: paragraph text, UTF-16LE (HWPTAG_BEGIN + 51).
+const TAG_PARA_TEXT: u16 = HWPTAG_BEGIN + 51; // 0x43
 
 // ---------------------------------------------------------------------------
 // BodyTextParser — parse a single decompressed section into paragraphs

@@ -55,10 +55,10 @@ pub struct Paragraph {
 }
 
 // ---------------------------------------------------------------------------
-// ParaText — decodes a TAG_PARA_TEXT (0x51) record
+// ParaText — decodes a TAG_PARA_TEXT (0x43) record
 // ---------------------------------------------------------------------------
 
-/// Plain text content decoded from a ParaText record (tag 0x51).
+/// Plain text content decoded from a ParaText record (tag 0x43).
 #[derive(Debug)]
 pub struct ParaText {
     pub content: String,
@@ -84,16 +84,25 @@ impl ParaText {
         while i < chars.len() {
             let ch = chars[i];
             match ch {
-                0x0000 => {} // null — skip
-                // Extended control characters 0x0001–0x0008 occupy 8 u16 units
-                // total (the control char + 7 parameter units). Skip all 8.
+                0x0000 => {} // null — 1 u16, no parameters
+                // HWP 5.x control characters that occupy 8 u16 units total
+                // (the control char itself + 7 parameter units):
+                //   0x0001–0x0008: inline extended controls
+                //   0x0009:        tab
+                //   0x000B–0x000C: drawing objects, reserved
+                //   0x000E–0x001F: extended controls (field, bookmark, etc.)
                 0x0001..=0x0008 => {
-                    i += 7; // skip 7 additional parameter units (loop increments by 1)
+                    i += 7;
                 }
-                0x0009 => content.push('\t'),           // horizontal tab
-                0x000A => content.push('\n'),           // line feed
-                0x000D => content.push('\r'),           // carriage return
-                0x000B..=0x000C | 0x000E..=0x001F => {} // skip remaining C0 controls
+                0x0009 => {
+                    content.push('\t');
+                    i += 7;
+                }
+                0x000A => content.push('\n'), // line feed — 1 u16
+                0x000D => {}                  // paragraph end — 1 u16
+                0x000B..=0x000C | 0x000E..=0x001F => {
+                    i += 7;
+                }
                 0xF020..=0xF07F => {}                   // HWP private-use controls — skip
                 _ => {
                     if let Some(c) = char::from_u32(ch as u32) {
