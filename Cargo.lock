@@ -3861,9 +3861,9 @@ checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
 
 [[package]]
 name = "liter-llm"
-version = "1.1.1"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c609a0b97bdde9541ad48887c118e06244586b162487db077cd568e76f8eba"
+checksum = "0405bbc5926db49a5f73a4f503d9cac19413416c95e2fd736b1bfa8ce9491660"
 dependencies = [
  "base64 0.22.1",
  "bytes",
