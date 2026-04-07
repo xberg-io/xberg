@@ -9,8 +9,8 @@
 
 #define KREUZBERG_VERSION_MAJOR 4
 #define KREUZBERG_VERSION_MINOR 7
-#define KREUZBERG_VERSION_PATCH 3
-#define KREUZBERG_VERSION "4.7.3"
+#define KREUZBERG_VERSION_PATCH 4
+#define KREUZBERG_VERSION "4.7.4"
 
 
 #include <stdarg.h>
@@ -246,7 +246,7 @@ typedef struct CErrorDetails {
  * # Memory Layout
  *
  * Must be kept in sync with the Java side's MemoryLayout definition in KreuzbergFFI.java
- * Field order: 23 pointers (8 bytes each) + 1 bool + 7 bytes padding = 192 bytes total
+ * Field order: 24 pointers (8 bytes each) + 1 bool + 7 bytes padding = 200 bytes total
  *
  * The `#[repr(C)]` attribute ensures the struct follows C's memory layout rules:
  * - Fields are laid out in order
@@ -351,6 +351,10 @@ typedef struct CExtractionResult {
    * JSON-serialized code intelligence results (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
    */
   char *code_intelligence_json;
+  /**
+   * Structured extraction output as JSON string (null-terminated, or null pointer if not configured, must be freed with kreuzberg_free_string)
+   */
+  char *structured_output_json;
   /**
    * Whether extraction was successful
    */
@@ -1422,7 +1426,7 @@ KREUZBERG_EXPORT uint32_t kreuzberg_error_code_count(void);
  *
  * # Arguments
  *
- * - `code`: Numeric error code (0-7)
+ * - `code`: Numeric error code (0-8)
  *
  * # Returns
  *
@@ -1451,7 +1455,7 @@ KREUZBERG_EXPORT const char *kreuzberg_error_code_name(uint32_t code);
  *
  * # Arguments
  *
- * - `code`: Numeric error code (0-7)
+ * - `code`: Numeric error code (0-8)
  *
  * # Returns
  *
