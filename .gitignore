@@ -66,6 +66,7 @@ vendor/
 php-kreuzberg.ini
 packages/php/php-kreuzberg.ini
 packages/php/tests.xml
+.php-cs-fixer.cache
 
 # Java / C# / .NET
 *.suo
