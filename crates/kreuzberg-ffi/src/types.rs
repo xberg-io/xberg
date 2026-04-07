@@ -51,7 +51,7 @@ impl Drop for CStringGuard {
 /// # Memory Layout
 ///
 /// Must be kept in sync with the Java side's MemoryLayout definition in KreuzbergFFI.java
-/// Field order: 23 pointers (8 bytes each) + 1 bool + 7 bytes padding = 192 bytes total
+/// Field order: 24 pointers (8 bytes each) + 1 bool + 7 bytes padding = 200 bytes total
 ///
 /// The `#[repr(C)]` attribute ensures the struct follows C's memory layout rules:
 /// - Fields are laid out in order
@@ -110,6 +110,8 @@ pub struct CExtractionResult {
     pub uris_json: *mut c_char,
     /// JSON-serialized code intelligence results (null-terminated, or null pointer if none, must be freed with kreuzberg_free_string)
     pub code_intelligence_json: *mut c_char,
+    /// Structured extraction output as JSON string (null-terminated, or null pointer if not configured, must be freed with kreuzberg_free_string)
+    pub structured_output_json: *mut c_char,
     /// Whether extraction was successful
     pub success: bool,
     /// Padding to match Java MemoryLayout (7 bytes padding to align to 8-byte boundary)
@@ -172,7 +174,7 @@ pub struct CBatchResult {
 const _: () = {
     const fn assert_c_extraction_result_size() {
         const SIZE: usize = std::mem::size_of::<CExtractionResult>();
-        const _: () = assert!(SIZE == 192, "CExtractionResult size must be 192 bytes");
+        const _: () = assert!(SIZE == 200, "CExtractionResult size must be 200 bytes");
     }
 
     const fn assert_c_extraction_result_alignment() {
@@ -217,8 +219,8 @@ mod tests {
     fn test_c_extraction_result_size() {
         assert_eq!(
             std::mem::size_of::<CExtractionResult>(),
-            192,
-            "CExtractionResult must be exactly 192 bytes"
+            200,
+            "CExtractionResult must be exactly 200 bytes"
         );
     }
 
@@ -360,7 +362,8 @@ mod tests {
         assert_eq!(offset_of!(CExtractionResult, tables_json), 160);
         assert_eq!(offset_of!(CExtractionResult, uris_json), 168);
         assert_eq!(offset_of!(CExtractionResult, code_intelligence_json), 176);
-        assert_eq!(offset_of!(CExtractionResult, success), 184);
+        assert_eq!(offset_of!(CExtractionResult, structured_output_json), 184);
+        assert_eq!(offset_of!(CExtractionResult, success), 192);
     }
 
     /// Verify field offsets in CBatchResult match expectations

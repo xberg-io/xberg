@@ -85,6 +85,7 @@ __all__ = [
     "LanguageDetectionConfig",
     "LayoutDetectionConfig",
     "LinkMetadata",
+    "LlmConfig",
     "Metadata",
     "MissingDependencyError",
     "NodeContent",
@@ -120,6 +121,7 @@ __all__ = [
     "RakeParams",
     "ResultFormat",
     "StructuredData",
+    "StructuredExtractionConfig",
     "TableGrid",
     "TesseractConfig",
     "TextAnnotation",
@@ -644,6 +646,44 @@ class CodeProcessResult(TypedDict):
     symbols: list[CodeSymbolInfo]
     diagnostics: list[CodeDiagnostic]
     chunks: list[CodeChunk]
+
+class LlmConfig:
+    model: str
+    api_key: str | None
+    base_url: str | None
+    timeout_secs: int | None
+    max_retries: int | None
+    temperature: float | None
+    max_tokens: int | None
+
+    def __init__(
+        self,
+        model: str,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        timeout_secs: int | None = None,
+        max_retries: int | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> None: ...
+
+class StructuredExtractionConfig:
+    schema: dict[str, Any]
+    llm: LlmConfig
+    schema_name: str
+    schema_description: str | None
+    strict: bool
+    prompt: str | None
+
+    def __init__(
+        self,
+        schema: dict[str, Any],
+        llm: LlmConfig,
+        schema_name: str = "extraction",
+        schema_description: str | None = None,
+        strict: bool = False,
+        prompt: str | None = None,
+    ) -> None: ...
 
 class ExtractionConfig:
     """Main extraction configuration for document processing.

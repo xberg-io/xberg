@@ -112,6 +112,7 @@ pub fn to_c_extraction_result(result: ExtractionResult) -> std::result::Result<*
         annotations,
         children,
         uris,
+        structured_output,
         ..
     } = result;
 
@@ -333,6 +334,17 @@ pub fn to_c_extraction_result(result: ExtractionResult) -> std::result::Result<*
         _ => None,
     };
 
+    let structured_output_json_guard = match &structured_output {
+        Some(val) => {
+            let json =
+                serde_json::to_string(val).map_err(|e| format!("Failed to serialize structured_output: {}", e))?;
+            Some(CStringGuard::new(CString::new(json).map_err(|e| {
+                format!("Failed to convert structured_output JSON to C string: {}", e)
+            })?))
+        }
+        _ => None,
+    };
+
     Ok(Box::into_raw(Box::new(CExtractionResult {
         annotations_json: annotations_json_guard.map_or(ptr::null_mut(), |g| g.into_raw()),
         chunks_json: chunks_json_guard.map_or(ptr::null_mut(), |g| g.into_raw()),
@@ -359,6 +371,7 @@ pub fn to_c_extraction_result(result: ExtractionResult) -> std::result::Result<*
         // code_intelligence will be populated once the core ExtractionResult
         // adds the field; for now, always null.
         code_intelligence_json: ptr::null_mut(),
+        structured_output_json: structured_output_json_guard.map_or(ptr::null_mut(), |g| g.into_raw()),
         success: true,
         _padding1: [0u8; 7],
     })))

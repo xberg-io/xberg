@@ -71,6 +71,7 @@ cbindgen = "0.29"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
+serial_test = "3.4.0"
 tempfile = { workspace = true }
 
 [[bench]]

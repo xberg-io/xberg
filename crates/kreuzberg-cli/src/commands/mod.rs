@@ -29,7 +29,6 @@ pub use config::load_config;
 #[cfg(feature = "embeddings")]
 pub use embed::embed_command;
 pub use extract::{batch_command, extract_command};
-pub use extract_structured::extract_structured_command;
 #[cfg(feature = "mcp")]
 pub use server::mcp_command;
 #[cfg(feature = "api")]

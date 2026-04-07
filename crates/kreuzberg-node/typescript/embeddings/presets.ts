@@ -111,7 +111,7 @@ export function setEmbeddingPreset(_name: string, _preset: EmbeddingPreset): voi
  */
 export function embedSync(texts: string[], config?: EmbeddingConfig): number[][] {
 	const binding = getBinding();
-	return binding.embedSync(texts, config ?? null);
+	return binding.embedSync(texts, (config ?? null) as Record<string, unknown> | null);
 }
 
 /**
@@ -137,5 +137,5 @@ export function embedSync(texts: string[], config?: EmbeddingConfig): number[][]
  */
 export async function embed(texts: string[], config?: EmbeddingConfig): Promise<number[][]> {
 	const binding = getBinding();
-	return binding.embed(texts, config ?? null);
+	return binding.embed(texts, (config ?? null) as Record<string, unknown> | null);
 }

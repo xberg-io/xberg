@@ -280,6 +280,7 @@ mod tests {
             annotations_json: ptr::null_mut(),
             uris_json: ptr::null_mut(),
             code_intelligence_json: ptr::null_mut(),
+            structured_output_json: ptr::null_mut(),
             success: true,
             _padding1: [0u8; 7],
         }))
@@ -311,6 +312,7 @@ mod tests {
             annotations_json: ptr::null_mut(),
             uris_json: ptr::null_mut(),
             code_intelligence_json: ptr::null_mut(),
+            structured_output_json: ptr::null_mut(),
             success: true,
             _padding1: [0u8; 7],
         }))
@@ -413,6 +415,7 @@ mod tests {
             annotations_json: ptr::null_mut(),
             uris_json: ptr::null_mut(),
             code_intelligence_json: ptr::null_mut(),
+            structured_output_json: ptr::null_mut(),
             success: true,
             _padding1: [0u8; 7],
         }));
@@ -450,6 +453,7 @@ mod tests {
             annotations_json: ptr::null_mut(),
             uris_json: ptr::null_mut(),
             code_intelligence_json: ptr::null_mut(),
+            structured_output_json: ptr::null_mut(),
             success: true,
             _padding1: [0u8; 7],
         }));

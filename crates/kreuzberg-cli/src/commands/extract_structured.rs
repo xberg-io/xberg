@@ -9,22 +9,36 @@ use std::path::PathBuf;
 
 use crate::WireFormat;
 
+/// Arguments for the extract-structured command.
+pub struct ExtractStructuredArgs {
+    pub path: PathBuf,
+    pub schema_path: PathBuf,
+    pub model: String,
+    pub api_key: Option<String>,
+    pub prompt: Option<String>,
+    pub schema_name: Option<String>,
+    pub strict: bool,
+    pub config_path: Option<PathBuf>,
+    pub format: WireFormat,
+}
+
 /// Execute the extract-structured command.
 ///
 /// Reads a JSON schema from `schema_path`, builds an `ExtractionConfig` with
 /// `structured_extraction` configured, extracts the document, and outputs the
 /// `structured_output` field from the result.
-pub fn extract_structured_command(
-    path: PathBuf,
-    schema_path: PathBuf,
-    model: String,
-    api_key: Option<String>,
-    prompt: Option<String>,
-    schema_name: Option<String>,
-    strict: bool,
-    config_path: Option<PathBuf>,
-    format: WireFormat,
-) -> Result<()> {
+pub fn extract_structured_command(args: ExtractStructuredArgs) -> Result<()> {
+    let ExtractStructuredArgs {
+        path,
+        schema_path,
+        model,
+        api_key,
+        prompt,
+        schema_name,
+        strict,
+        config_path,
+        format,
+    } = args;
     // 1. Read and parse the JSON schema file
     let schema_str = std::fs::read_to_string(&schema_path).with_context(|| {
         format!(

@@ -87,7 +87,7 @@ use std::ffi::CStr;
 /// # Repr and Stability
 ///
 /// - Uses `#[repr(u32)]` for C ABI compatibility
-/// - Error codes are guaranteed stable (0-7, never changing)
+/// - Error codes are guaranteed stable (0-8, never changing)
 /// - Can be safely cast to `int32_t` in C/C++ code
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
@@ -159,7 +159,7 @@ impl ErrorCode {
 
     /// Converts from numeric error code to enum variant.
     ///
-    /// Returns `None` if the code is outside the valid range [0, 7].
+    /// Returns `None` if the code is outside the valid range [0, 8].
     ///
     /// # Examples
     ///
@@ -184,14 +184,14 @@ impl ErrorCode {
         }
     }
 
-    /// Checks if a numeric code is valid (within [0, 7]).
+    /// Checks if a numeric code is valid (within [0, 8]).
     ///
     /// # Examples
     ///
     /// ```rust,ignore
     /// assert!(ErrorCode::is_valid(0));
-    /// assert!(ErrorCode::is_valid(7));
-    /// assert!(!ErrorCode::is_valid(8));
+    /// assert!(ErrorCode::is_valid(8));
+    /// assert!(!ErrorCode::is_valid(9));
     /// ```
     #[inline]
     pub fn is_valid(code: u32) -> bool {
@@ -325,7 +325,7 @@ pub extern "C" fn kreuzberg_error_code_count() -> u32 {
 ///
 /// # Arguments
 ///
-/// - `code`: Numeric error code (0-7)
+/// - `code`: Numeric error code (0-8)
 ///
 /// # Returns
 ///
@@ -368,7 +368,7 @@ pub extern "C" fn kreuzberg_error_code_name(code: u32) -> *const c_char {
 ///
 /// # Arguments
 ///
-/// - `code`: Numeric error code (0-7)
+/// - `code`: Numeric error code (0-8)
 ///
 /// # Returns
 ///
@@ -755,6 +755,7 @@ mod tests {
         assert_eq!(ErrorCode::Plugin as u32, 5);
         assert_eq!(ErrorCode::UnsupportedFormat as u32, 6);
         assert_eq!(ErrorCode::Internal as u32, 7);
+        assert_eq!(ErrorCode::Embedding as u32, 8);
     }
 
     #[test]
@@ -767,6 +768,7 @@ mod tests {
         assert_eq!(ErrorCode::Plugin.name(), "plugin");
         assert_eq!(ErrorCode::UnsupportedFormat.name(), "unsupported_format");
         assert_eq!(ErrorCode::Internal.name(), "internal");
+        assert_eq!(ErrorCode::Embedding.name(), "embedding");
     }
 
     #[test]
@@ -779,6 +781,7 @@ mod tests {
         assert_eq!(ErrorCode::Plugin.description(), "Plugin error");
         assert_eq!(ErrorCode::UnsupportedFormat.description(), "Unsupported format");
         assert_eq!(ErrorCode::Internal.description(), "Internal library error");
+        assert_eq!(ErrorCode::Embedding.description(), "Embedding generation error");
     }
 
     #[test]
@@ -791,29 +794,30 @@ mod tests {
         assert_eq!(ErrorCode::from_code(5), Some(ErrorCode::Plugin));
         assert_eq!(ErrorCode::from_code(6), Some(ErrorCode::UnsupportedFormat));
         assert_eq!(ErrorCode::from_code(7), Some(ErrorCode::Internal));
+        assert_eq!(ErrorCode::from_code(8), Some(ErrorCode::Embedding));
     }
 
     #[test]
     fn test_from_code_invalid() {
-        assert_eq!(ErrorCode::from_code(8), None);
+        assert_eq!(ErrorCode::from_code(9), None);
         assert_eq!(ErrorCode::from_code(99), None);
         assert_eq!(ErrorCode::from_code(u32::MAX), None);
     }
 
     #[test]
     fn test_is_valid() {
-        for code in 0..=7 {
+        for code in 0..=8 {
             assert!(ErrorCode::is_valid(code), "Code {} should be valid", code);
         }
 
-        assert!(!ErrorCode::is_valid(8));
+        assert!(!ErrorCode::is_valid(9));
         assert!(!ErrorCode::is_valid(99));
         assert!(!ErrorCode::is_valid(u32::MAX));
     }
 
     #[test]
     fn test_error_code_count() {
-        assert_eq!(kreuzberg_error_code_count(), 8);
+        assert_eq!(kreuzberg_error_code_count(), 9);
     }
 
     #[test]
@@ -826,6 +830,7 @@ mod tests {
         assert_eq!(kreuzberg_error_code_plugin(), 5);
         assert_eq!(kreuzberg_error_code_unsupported_format(), 6);
         assert_eq!(kreuzberg_error_code_internal(), 7);
+        assert_eq!(kreuzberg_error_code_embedding(), 8);
     }
 
     // #[test]
@@ -833,7 +838,7 @@ mod tests {
 
     #[test]
     fn test_error_code_round_trip() {
-        for code in 0u32..=7 {
+        for code in 0u32..=8 {
             let err = ErrorCode::from_code(code).unwrap();
             assert_eq!(err as u32, code);
 

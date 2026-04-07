@@ -23,6 +23,7 @@ path = "src/main.rs"
 default = [
     "bundled-pdfium",
     "embeddings",
+    "liter-llm",
     "ocr",
     "paddle-ocr",
     "layout-detection",

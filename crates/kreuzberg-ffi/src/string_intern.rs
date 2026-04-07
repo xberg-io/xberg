@@ -408,9 +408,11 @@ pub extern "C" fn kreuzberg_string_intern_reset() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::ffi::CString;
 
     #[test]
+    #[serial]
     fn test_intern_same_string() {
         let s1 = CString::new("test_unique_12345").unwrap();
         let s2 = CString::new("test_unique_12345").unwrap();
@@ -433,6 +435,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_intern_different_strings() {
         let s1 = CString::new("test_unique_aaa").unwrap();
         let s2 = CString::new("test_unique_bbb").unwrap();
@@ -455,6 +458,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_intern_reference_counting() {
         let s = CString::new("test_refcount_xyz").unwrap();
 
@@ -482,6 +486,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_intern_pre_populated() {
         kreuzberg_string_intern_reset();
 
@@ -502,6 +507,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_intern_memory_savings() {
         let test_str = "test_savings_qwerty";
         let s = CString::new(test_str).unwrap();
@@ -530,6 +536,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_intern_null_string() {
         unsafe {
             let ptr = kreuzberg_intern_string(ptr::null());
@@ -538,6 +545,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_free_null_string() {
         unsafe {
             kreuzberg_free_interned_string(ptr::null());
@@ -545,6 +553,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_intern_stats_format() {
         let s1 = CString::new("test_stats_1").unwrap();
         let s2 = CString::new("test_stats_2").unwrap();

@@ -709,10 +709,13 @@ pub async fn extract_structured_handler(
     State(_state): State<ApiState>,
     MultipartApi(_multipart): MultipartApi,
 ) -> Result<Json<super::types::StructuredExtractionResponse>, ApiError> {
-    Err(ApiError::internal(crate::error::KreuzbergError::MissingDependency(
-        "Structured extraction requires the 'liter-llm' feature to be enabled. Rebuild with --features liter-llm"
-            .to_string(),
-    )))
+    Err(ApiError::new(
+        axum::http::StatusCode::NOT_IMPLEMENTED,
+        crate::error::KreuzbergError::MissingDependency(
+            "Structured extraction requires the 'liter-llm' feature to be enabled. Rebuild with --features liter-llm"
+                .to_string(),
+        ),
+    ))
 }
 
 /// Chunk text endpoint handler.

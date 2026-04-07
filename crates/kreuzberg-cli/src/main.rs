@@ -67,8 +67,9 @@ use commands::overrides::ExtractionOverrides;
 #[cfg(feature = "api")]
 use commands::serve_command;
 use commands::{
-    batch_command, chunk_command, clear_command, extract_command, extract_structured_command, load_config,
-    manifest_command, stats_command, warm_command,
+    batch_command, chunk_command, clear_command, extract_command,
+    extract_structured::{ExtractStructuredArgs, extract_structured_command},
+    load_config, manifest_command, stats_command, warm_command,
 };
 use kreuzberg::{OutputFormat as ContentOutputFormat, detect_mime_type};
 use serde_json::json;
@@ -672,17 +673,17 @@ fn main() -> Result<()> {
         } => {
             validate_file_exists(&path)?;
             validate_file_exists(&schema)?;
-            extract_structured_command(
+            extract_structured_command(ExtractStructuredArgs {
                 path,
-                schema,
+                schema_path: schema,
                 model,
                 api_key,
                 prompt,
                 schema_name,
                 strict,
-                config,
+                config_path: config,
                 format,
-            )?;
+            })?;
         }
 
         Commands::Batch {

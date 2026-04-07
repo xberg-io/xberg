@@ -6,10 +6,72 @@
 //! produce higher-quality results for complex layouts, handwriting, or
 //! low-quality scans.
 
+use std::borrow::Cow;
+
+use async_trait::async_trait;
 use base64::Engine;
 use liter_llm::{ChatCompletionRequest, ContentPart, ImageUrl, LlmClient, Message, UserContent, UserMessage};
 
 use crate::core::config::LlmConfig;
+use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+
+/// VLM-based OCR backend using liter-llm vision models.
+///
+/// This backend sends images to a vision language model (e.g., GPT-4o, Claude)
+/// for text extraction, as an alternative to traditional OCR backends.
+pub struct VlmOcrBackend;
+
+impl Plugin for VlmOcrBackend {
+    fn name(&self) -> &str {
+        "vlm"
+    }
+
+    fn version(&self) -> String {
+        env!("CARGO_PKG_VERSION").to_string()
+    }
+
+    fn initialize(&self) -> crate::Result<()> {
+        Ok(())
+    }
+
+    fn shutdown(&self) -> crate::Result<()> {
+        Ok(())
+    }
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
+#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
+impl OcrBackend for VlmOcrBackend {
+    async fn process_image(
+        &self,
+        image_bytes: &[u8],
+        config: &crate::OcrConfig,
+    ) -> crate::Result<crate::ExtractionResult> {
+        let vlm_config = config
+            .vlm_config
+            .as_ref()
+            .ok_or_else(|| crate::KreuzbergError::validation("VLM OCR requires vlm_config to be set"))?;
+
+        // Detect MIME type from image bytes
+        let mime = infer::get(image_bytes).map(|t| t.mime_type()).unwrap_or("image/png");
+
+        let text = vlm_ocr(image_bytes, mime, &config.language, vlm_config).await?;
+
+        Ok(crate::ExtractionResult {
+            content: text,
+            mime_type: Cow::Borrowed("text/plain"),
+            ..Default::default()
+        })
+    }
+
+    fn supports_language(&self, _lang: &str) -> bool {
+        true
+    }
+
+    fn backend_type(&self) -> OcrBackendType {
+        OcrBackendType::Custom
+    }
+}
 
 /// Perform OCR on an image using a vision language model.
 ///

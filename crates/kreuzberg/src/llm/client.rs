@@ -29,8 +29,11 @@ pub fn create_client(config: &LlmConfig) -> crate::Result<DefaultClient> {
 
     let client_config = builder.build();
 
-    DefaultClient::new(client_config, Some(&config.model)).map_err(|e| crate::KreuzbergError::Validation {
-        message: format!("Failed to build LLM client: {e}"),
-        source: None,
+    DefaultClient::new(client_config, Some(&config.model)).map_err(|e| {
+        let msg = format!("Failed to build LLM client: {e}");
+        crate::KreuzbergError::Validation {
+            message: msg,
+            source: Some(Box::new(e)),
+        }
     })
 }
