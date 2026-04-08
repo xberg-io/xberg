@@ -226,23 +226,6 @@ jobs:
         run: scripts/ci/validate/cleanup-after-lint.sh
         shell: bash
 
-  validate-snippets:
-    name: "Validate: Documentation Snippets"
-    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: kreuzberg-dev/actions/setup-rust@v1
-        with:
-          cache-key-prefix: validate-snippets
-          use-sccache: "true"
-
-      - name: Build and run snippet validation
-        run: cargo run --release -p snippet-runner -- validate --snippets docs/snippets --reference docs/reference --level syntax --timeout 120
-
   changes:
     name: Detect Changes
     runs-on: ubuntu-24.04-arm
@@ -261,7 +244,6 @@ jobs:
       ffi: ${{ steps.filter.outputs.ffi }}
       docker: ${{ steps.filter.outputs.docker }}
       core: ${{ steps.filter.outputs.core }}
-      docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
@@ -345,14 +327,6 @@ jobs:
               - 'Dockerfile*'
               - 'docker/**'
               - '.dockerignore'
-            docs:
-              - 'docs/**'
-              - 'zensical.toml'
-              - 'pyproject.toml'
-              - '.github/workflows/docs*'
-              - '.typos.toml'
-              - '.lychee.toml'
-              - 'scripts/ci/docs/**'
 
   # --- Stage 2: Build FFI + Rust Tests + Docker ---
 

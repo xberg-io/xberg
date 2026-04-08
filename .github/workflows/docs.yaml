@@ -1,4 +1,4 @@
-name: Deploy Documentation
+name: Documentation
 
 on:
   push:
@@ -8,21 +8,33 @@ on:
       - 'docs/**'
       - 'pyproject.toml'
       - 'zensical.toml'
+      - '.typos.toml'
+      - '.lychee.toml'
       - '.github/workflows/docs.yaml'
-      - 'scripts/ci/docs/build.sh'
+      - 'scripts/ci/docs/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'pyproject.toml'
+      - 'zensical.toml'
+      - '.typos.toml'
+      - '.lychee.toml'
+      - '.github/workflows/docs.yaml'
+      - 'scripts/ci/docs/**'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: "pages"
-  cancel-in-progress: false
+  group: docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
+  validate:
+    name: "Validate: Build (strict)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -40,17 +52,32 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install dependencies and build docs
-        run: scripts/ci/docs/build.sh
+      - name: Build docs (strict)
+        run: scripts/ci/docs/build.sh --strict
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
+  validate-snippets:
+    name: "Validate: Documentation Snippets"
+    if: github.repository == 'kreuzberg-dev/kreuzberg' && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: kreuzberg-dev/actions/setup-rust@v1
         with:
-          path: site
+          cache-key-prefix: validate-snippets
+          use-sccache: "true"
+
+      - name: Build and run snippet validation
+        run: cargo run --release -p snippet-runner -- validate --snippets docs/snippets --reference docs/reference --level syntax --timeout 120
 
   deploy:
-    needs: build
+    name: "Deploy to GitHub Pages"
+    needs: [validate, validate-snippets]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
@@ -58,6 +85,29 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Build docs
+        run: scripts/ci/docs/build.sh
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
