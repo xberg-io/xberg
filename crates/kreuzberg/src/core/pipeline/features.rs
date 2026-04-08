@@ -40,7 +40,7 @@ fn recompute_boundaries_from_pages(content: &str, pages: &[crate::types::PageCon
         // Try exact match first
         if let Some(pos) = content[search_offset..].find(&page.content) {
             let byte_start = search_offset + pos;
-            let byte_end = byte_start + page.content.len();
+            let byte_end = content.floor_char_boundary(byte_start + page.content.len());
             boundaries.push(PageBoundary {
                 page_number: page.page_number,
                 byte_start,
@@ -55,7 +55,8 @@ fn recompute_boundaries_from_pages(content: &str, pages: &[crate::types::PageCon
             && let Some(pos) = content[search_offset..].find(line)
         {
             let byte_start = search_offset + pos;
-            let byte_end = (byte_start + page.content.len()).min(content.len());
+            let raw_end = (byte_start + page.content.len()).min(content.len());
+            let byte_end = content.floor_char_boundary(raw_end);
             boundaries.push(PageBoundary {
                 page_number: page.page_number,
                 byte_start,
