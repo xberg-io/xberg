@@ -1,0 +1,50 @@
+name: Validate Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'pyproject.toml'
+      - 'zensical.toml'
+      - '.github/workflows/docs-ci.yaml'
+      - 'scripts/ci/docs/build.sh'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'pyproject.toml'
+      - 'zensical.toml'
+      - '.github/workflows/docs-ci.yaml'
+      - 'scripts/ci/docs/build.sh'
+  workflow_dispatch:
+
+concurrency:
+  group: docs-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build (strict)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Build docs (strict)
+        run: scripts/ci/docs/build.sh --strict
