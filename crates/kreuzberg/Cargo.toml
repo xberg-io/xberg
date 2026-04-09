@@ -144,7 +144,7 @@ embeddings = [
 stopwords = []
 quality = ["dep:unicode-normalization", "dep:chardetng", "stopwords"]
 
-keywords-yake = ["dep:yake-rust", "stopwords"]
+keywords-yake = ["stopwords"]
 keywords-rake = ["dep:rake", "stopwords"]
 keywords = ["keywords-yake", "keywords-rake"]
 
@@ -359,7 +359,6 @@ unicode-normalization = { version = "0.1.25", optional = true }
 urlencoding = "2"
 utoipa = { version = "5.4", features = ["axum_extras"], optional = true }
 whatlang = { version = "0.18.0", optional = true }
-yake-rust = { version = "1.0.3", optional = true }
 zip = { version = ">=7.0.0", optional = true, default-features = false, features = [
     "deflate-flate2",
 ] }

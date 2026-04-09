@@ -223,6 +223,33 @@ Test documents derived from the `numbers-parser` test suite:
 
 ---
 
-**Last Updated**: March 21, 2026
+---
+
+## yake-rust
+
+YAKE keyword extraction algorithm vendored into kreuzberg:
+
+- **Source**: <https://github.com/quesurifn/yake-rust>
+- **License**: MIT
+- **Authors**: Kyle Fahey, Anton Vikstrom, Igor Strebz
+- **Vendored Version**: 1.0.3
+- **Location**: `crates/kreuzberg/src/keywords/yake/`
+- **Purpose**: YAKE (Yet Another Keyword Extractor) statistical keyword extraction
+
+### Modifications
+
+- Replaced segtok dependency with custom memchr-based sentence splitter (fixes #676 BacktrackLimitExceeded on large files)
+- Integrated with kreuzberg's stopwords module (64 languages vs original 34)
+- Replaced hashbrown with ahash, inlined streaming-stats and levenshtein
+- Optimized punctuation checks with byte lookup tables
+- Removed itertools dependency (manual dedup)
+
+### License Compatibility
+
+The original MIT license is compatible with Kreuzberg's Elastic License 2.0 (ELv2).
+
+---
+
+**Last Updated**: April 9, 2026
 **Pandoc Version Used**: 3.8.3
 **Baseline Generation Date**: December 6, 2025

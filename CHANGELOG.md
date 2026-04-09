@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Vendored yake-rust 1.0.3** into kreuzberg core, removing external dependency
+  - Fixes #676: `BacktrackLimitExceeded` panic on large files (10+ MB) by replacing regex-based sentence splitting with memchr-based approach
+  - Expanded YAKE stopwords from 34 to 64 languages using kreuzberg's unified stopwords module
+  - Optimized with ahash, memchr, and byte-table punctuation lookups
+  - Removed 6 transitive dependencies (yake-rust, segtok, fancy-regex, streaming-stats, hashbrown, levenshtein)
+
+---
+
 ## [4.8.0] - 2026-04-08
 
 ### Added

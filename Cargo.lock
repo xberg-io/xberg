@@ -2712,18 +2712,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "htmlize"
-version = "1.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d347c0de239be20ba0982e4822de3124404281e119ae3e11f5d7425a414e1935"
-dependencies = [
- "matchgen",
- "memchr",
- "pastey 0.1.1",
- "serde_json",
-]
-
-[[package]]
 name = "http"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3535,7 +3523,6 @@ dependencies = [
  "utoipa",
  "wasm-bindgen-rayon",
  "whatlang",
- "yake-rust",
  "zip 8.5.1",
 ]
 
@@ -3756,12 +3743,6 @@ name = "lebe"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a79a3332a6609480d7d0c9eab957bca6b455b91bb84e66d19f5ff66294b85b8"
-
-[[package]]
-name = "levenshtein"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db13adb97ab515a3691f56e4dbab09283d0b86cb45abd991d8634a9d6f501760"
 
 [[package]]
 name = "libbz2-rs-sys"
@@ -4023,12 +4004,6 @@ checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
  "regex-automata",
 ]
-
-[[package]]
-name = "matchgen"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3c6ed90dceac899d670024e99486140739a14a1bda2bd05604689b8979a2894"
 
 [[package]]
 name = "matchit"
@@ -6040,18 +6015,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "segtok"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80ee4d89b4a3f29cd09fc8dd79c26531298035276cdfd0673ec7e543fff32e51"
-dependencies = [
- "either",
- "fancy-regex 0.14.0",
- "htmlize",
- "itertools 0.14.0",
-]
-
-[[package]]
 name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6494,15 +6457,6 @@ name = "streaming-iterator"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
-
-[[package]]
-name = "streaming-stats"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0d670ce4e348a2081843569e0f79b21c99c91bb9028b3b3ecb0f050306de547"
-dependencies = [
- "num-traits",
-]
 
 [[package]]
 name = "string_cache"
@@ -8385,21 +8339,6 @@ name = "y4m"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5a4b21e1a62b67a2970e6831bc091d7b87e119e7f9791aef9702e3bef04448"
-
-[[package]]
-name = "yake-rust"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce4fc48712dfe1427747a6b1f2bb1ca7b9abb7168fbc086774f890b6e4e097f"
-dependencies = [
- "hashbrown 0.15.5",
- "indexmap",
- "itertools 0.14.0",
- "levenshtein",
- "regex",
- "segtok",
- "streaming-stats",
-]
 
 [[package]]
 name = "yoke"
