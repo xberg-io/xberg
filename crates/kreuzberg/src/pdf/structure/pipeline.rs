@@ -1240,7 +1240,10 @@ pub fn extract_document_structure(
     // Deduplicate paragraphs with identical text within each page.
     // Catches bold/shadow rendering artifacts (consecutive duplicates)
     // and table content rendered as both table and body text.
-    deduplicate_paragraphs(&mut all_page_paragraphs);
+    // When strip_repeating_text is disabled, skip dedup to preserve all content.
+    if strip_repeating_text {
+        deduplicate_paragraphs(&mut all_page_paragraphs);
+    }
 
     let total_paragraphs: usize = all_page_paragraphs.iter().map(|p| p.len()).sum();
     tracing::debug!(
@@ -2290,5 +2293,42 @@ mod tests {
         un_mark_layout_furniture_per_config(&mut paras, false, false);
         assert!(paras[0].is_page_furniture);
         assert!(paras[1].is_page_furniture);
+    }
+
+    #[test]
+    fn test_deduplicate_paragraphs_removes_consecutive_duplicates() {
+        let p1 = para(vec![line(vec![full_line_seg("Brand loses market share")])]);
+        let p2 = para(vec![line(vec![full_line_seg("Brand loses market share")])]);
+        let p3 = para(vec![line(vec![full_line_seg("Different content here")])]);
+        let mut pages = vec![vec![p1, p2, p3]];
+        deduplicate_paragraphs(&mut pages);
+        assert_eq!(pages[0].len(), 2, "consecutive duplicate should be removed");
+    }
+
+    #[test]
+    fn test_deduplicate_paragraphs_removes_non_consecutive_body_duplicates() {
+        let p1 = para(vec![line(vec![full_line_seg("Brand loses market share in volume")])]);
+        let p2 = para(vec![line(vec![full_line_seg("Some intervening paragraph")])]);
+        let p3 = para(vec![line(vec![full_line_seg("Brand loses market share in volume")])]);
+        let mut pages = vec![vec![p1, p2, p3]];
+        deduplicate_paragraphs(&mut pages);
+        assert_eq!(pages[0].len(), 2, "non-consecutive body duplicate should be removed");
+    }
+
+    #[test]
+    fn test_deduplicate_paragraphs_preserves_non_consecutive_headings() {
+        // Pass 2 (non-consecutive dedup) skips headings via is_dedup_candidate.
+        let mut h = para(vec![line(vec![full_line_seg("Brand loses market share in volume")])]);
+        h.heading_level = Some(2);
+        let filler = para(vec![line(vec![full_line_seg("Some other content between them")])]);
+        let mut h2 = para(vec![line(vec![full_line_seg("Brand loses market share in volume")])]);
+        h2.heading_level = Some(2);
+        let mut pages = vec![vec![h, filler, h2]];
+        deduplicate_paragraphs(&mut pages);
+        assert_eq!(
+            pages[0].len(),
+            3,
+            "non-consecutive heading duplicates must be preserved"
+        );
     }
 }
