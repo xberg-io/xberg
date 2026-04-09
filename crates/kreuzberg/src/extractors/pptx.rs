@@ -318,6 +318,11 @@ impl DocumentExtractor for PptxExtractor {
     ) -> Result<InternalDocument> {
         tracing::debug!(format = "pptx", size_bytes = content.len(), "extraction starting");
         let extract_images = config.images.as_ref().is_some_and(|img| img.extract_images);
+        let inject_placeholders = config
+            .images
+            .as_ref()
+            .map(|img| img.inject_placeholders)
+            .unwrap_or(true);
         let plain = matches!(config.output_format, crate::core::config::OutputFormat::Plain);
 
         let pptx_result = {
@@ -335,6 +340,7 @@ impl DocumentExtractor for PptxExtractor {
                             pages_config.as_ref(),
                             plain,
                             false, // include_structure not needed, we build InternalDocument
+                            inject_placeholders,
                         )
                     })
                     .await
@@ -348,6 +354,7 @@ impl DocumentExtractor for PptxExtractor {
                         config.pages.as_ref(),
                         plain,
                         false,
+                        inject_placeholders,
                     )?
                 }
             }
@@ -360,6 +367,7 @@ impl DocumentExtractor for PptxExtractor {
                     config.pages.as_ref(),
                     plain,
                     false,
+                    inject_placeholders,
                 )?
             }
         };
@@ -401,6 +409,11 @@ impl DocumentExtractor for PptxExtractor {
             .ok_or_else(|| crate::KreuzbergError::validation("Invalid file path".to_string()))?;
 
         let extract_images = config.images.as_ref().is_some_and(|img| img.extract_images);
+        let inject_placeholders = config
+            .images
+            .as_ref()
+            .map(|img| img.inject_placeholders)
+            .unwrap_or(true);
         let plain = matches!(config.output_format, crate::core::config::OutputFormat::Plain);
 
         let pptx_result = crate::extraction::pptx::extract_pptx_from_path(
@@ -409,6 +422,7 @@ impl DocumentExtractor for PptxExtractor {
             config.pages.as_ref(),
             plain,
             false,
+            inject_placeholders,
         )?;
 
         let doc = Self::build_document_from_result(pptx_result, mime_type, extract_images);

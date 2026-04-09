@@ -144,6 +144,10 @@ pub(super) struct ParserConfig {
     pub(super) extract_images: bool,
     pub(super) include_slide_comment: bool,
     pub(super) plain: bool,
+    /// When `false`, `![alt](target)` image references are omitted from the
+    /// markdown output even though the slide element is present. Mirrors
+    /// `ImageExtractionConfig::inject_placeholders`. Default: `true`.
+    pub(super) inject_placeholders: bool,
 }
 
 impl Default for ParserConfig {
@@ -152,6 +156,7 @@ impl Default for ParserConfig {
             extract_images: true,
             include_slide_comment: false,
             plain: false,
+            inject_placeholders: true,
         }
     }
 }
