@@ -1022,107 +1022,221 @@ if result.chunks:
 
 ## Extensibility
 
-### Custom Post-Processors
+Kreuzberg's plugin system lets you register custom OCR backends, post-processors, validators, and document extractors. Once registered, they're available to the Rust CLI, API server, and MCP server — not just the Python API.
 
-Create custom post-processors to add processing logic to the extraction pipeline.
+### OCR Backends
 
-**Protocol:**
+Swap in a cloud OCR service, a custom engine, or a fine-tuned model. Any Python object that implements the required methods can be registered.
+
+#### OcrBackendProtocol
+
+Defined in `kreuzberg.ocr.protocol`. Your backend needs three methods; everything else is optional.
+
+**Required:**
+
+| Method | Returns | Purpose |
+|--------|---------|---------|
+| `name()` | `str` | Unique backend name (lowercase, no spaces) |
+| `supported_languages()` | `list[str]` | ISO 639 language codes this backend handles |
+| `process_image(image_bytes, language)` | `dict` | The core OCR method — takes raw image bytes, returns extracted content |
+
+**Optional:**
+
+| Method | Purpose |
+|--------|---------|
+| `process_image_file(path, language)` | Optimized path-based processing (avoids loading entire file into memory) |
+| `supports_document_processing()` | Return `True` if `process_document()` is implemented |
+| `process_document(path, language)` | Native multi-page processing (PDFs, multi-page TIFFs) |
+| `initialize()` | Called on registration — load models, warm up GPU |
+| `shutdown()` | Called on unregistration — release resources |
+| `version()` | Version string (defaults to `"1.0.0"`) |
+
+The return dict from `process_image()` and `process_document()` must include `"content"` (extracted text). `"metadata"` and `"tables"` are optional:
 
 ```python title="Python"
-from kreuzberg import PostProcessorProtocol, ExtractionResult
-
-class PostProcessorProtocol:
-    def name(self) -> str:
-        """Return unique processor name"""
-        ...
-
-    def process(self, result: ExtractionResult) -> ExtractionResult:
-        """Process extraction result and return modified result"""
-        ...
-
-    def processing_stage(self) -> str:
-        """Return processing stage: 'early', 'middle', or 'late'"""
-        ...
+{
+    "content": "extracted text",
+    "metadata": {"width": 800, "height": 600, "confidence": 0.95},
+    "tables": [
+        {
+            "cells": [["Header1", "Header2"], ["Cell1", "Cell2"]],
+            "markdown": "| Header1 | Header2 |\n| --- | --- |\n| Cell1 | Cell2 |",
+            "page_number": 1
+        }
+    ]
+}
 ```
 
-Optional lifecycle methods: `initialize()` (called when registered), `shutdown()` (called when unregistered).
+#### EasyOCRBackend
 
-**Example:**
+The built-in backend wrapping [EasyOCR](https://github.com/JaidedAI/EasyOCR). Supports 80+ languages, optional GPU acceleration, and multi-page document processing. Available from `kreuzberg.ocr.easyocr`.
 
-```python title="basic_extraction.py"
+```python title="Python"
+from kreuzberg.ocr.easyocr import EasyOCRBackend
+
+backend = EasyOCRBackend(
+    languages=["en", "de"],
+    use_gpu=True,
+    model_storage_directory="/tmp/easyocr_models",
+    beam_width=10,
+)
+```
+
+| Parameter | Type | Default | Notes |
+|-----------|------|---------|-------|
+| `languages` | `list[str] \| None` | `["en"]` | EasyOCR language codes |
+| `use_gpu` | `bool \| None` | auto-detect | `None` checks for CUDA availability |
+| `model_storage_directory` | `str \| None` | EasyOCR default | Custom model cache path |
+| `beam_width` | `int` | `5` | Higher = slower but more accurate |
+
+You usually don't need to instantiate this directly. When you set `backend="easyocr"` in `OcrConfig`, Kreuzberg auto-registers it:
+
+```python title="Python"
+from kreuzberg import extract_file_sync, ExtractionConfig, OcrConfig
+
+config = ExtractionConfig(ocr=OcrConfig(backend="easyocr", language="en"))
+result = extract_file_sync("scanned.pdf", config=config, easyocr_kwargs={"use_gpu": True})
+```
+
+#### register_ocr_backend()
+
+```python title="Python"
+def register_ocr_backend(backend: Any) -> None
+```
+
+Validates the backend object, wraps it for Rust interop, and registers it globally. Raises `TypeError` if required methods are missing, `ValueError` if the name collides with an existing backend.
+
+```python title="register_ocr.py"
+from kreuzberg import register_ocr_backend
+import httpx
+
+class CloudOcrBackend:
+    def name(self) -> str:
+        return "cloud-ocr"
+
+    def supported_languages(self) -> list[str]:
+        return ["eng", "deu", "fra"]
+
+    def process_image(self, image_bytes: bytes, language: str) -> dict:
+        with httpx.Client() as client:
+            resp = client.post(
+                "https://api.example.com/ocr",
+                files={"image": image_bytes},
+                json={"language": language},
+            )
+            return {"content": resp.json()["text"], "metadata": {}, "tables": []}
+
+    def initialize(self) -> None:
+        pass
+
+    def shutdown(self) -> None:
+        pass
+
+register_ocr_backend(CloudOcrBackend())
+```
+
+#### unregister_ocr_backend()
+
+```python title="Python"
+def unregister_ocr_backend(name: str) -> None
+```
+
+Removes the backend and calls its `shutdown()` method.
+
+#### Managing OCR Backends
+
+```python title="manage_ocr.py"
 from kreuzberg import (
-    PostProcessorProtocol,
-    ExtractionResult,
-    register_post_processor
+    register_ocr_backend,
+    unregister_ocr_backend,
+    list_ocr_backends,
+    clear_ocr_backends,
 )
 
-class CustomProcessor:
+register_ocr_backend(my_backend)
+print(list_ocr_backends())
+unregister_ocr_backend("cloud-ocr")
+clear_ocr_backends()
+```
+
+---
+
+### Custom Post-Processors
+
+Post-processors run after extraction to transform or enrich results. They execute in three stages: **early** (language detection, normalization), **middle** (keyword extraction, summarization), **late** (analytics, output formatting).
+
+**Protocol** — implement these three methods:
+
+```python title="Python"
+class PostProcessorProtocol:
+    def name(self) -> str: ...
+    def process(self, result: ExtractionResult) -> ExtractionResult: ...
+    def processing_stage(self) -> str: ...   # "early", "middle", or "late"
+```
+
+Optional: `initialize()`, `shutdown()`, `version()`.
+
+```python title="word_count_processor.py"
+from kreuzberg import register_post_processor, ExtractionResult
+
+class WordCountProcessor:
     def name(self) -> str:
-        return "custom_processor"
+        return "word-count"
 
     def process(self, result: ExtractionResult) -> ExtractionResult:
-        # Add custom field to metadata
-        result.metadata["custom_field"] = "custom_value"
+        result.metadata["word_count"] = len(result.content.split())
         return result
 
     def processing_stage(self) -> str:
-        return "middle"
+        return "late"
 
-# Register the processor
-register_post_processor(CustomProcessor())
-
-# Now all extractions will use this processor
-result = extract_file_sync("document.pdf")
-print(result.metadata["custom_field"])  # "custom_value"
+register_post_processor(WordCountProcessor())
 ```
 
-**Managing Processors:**
-
-```python title="basic_extraction.py"
-from kreuzberg import (
-    register_post_processor,
-    unregister_post_processor,
-    clear_post_processors
-)
-
-# Register
-register_post_processor(CustomProcessor())
-
-# Unregister by name
-unregister_post_processor("custom_processor")
-
-# Clear all processors
-clear_post_processors()
-```
+**Managing processors:** `register_post_processor()`, `unregister_post_processor(name)`, `list_post_processors()`, `clear_post_processors()`.
 
 ---
 
 ### Custom Validators
 
-Create custom validators to validate extraction results.
+Validators run after extraction and post-processing. If a validator raises an exception, the extraction fails. Use them for hard quality gates — minimum content length, confidence thresholds, required metadata fields.
 
-**ValidatorProtocol:** Implement:
+**Required:** `name() -> str`, `validate(result) -> None` (raise to reject).
 
-- `name() -> str`
-- `validate(result: ExtractionResult) -> None` (raise to fail)
-- Optional: `priority() -> int` (default 50, higher runs first)
-- Optional: `should_validate(result: ExtractionResult) -> bool` (default True)
-- Optional lifecycle: `initialize()`, `shutdown()`
-
-**Functions:**
+**Optional:** `priority() -> int` (default 50, higher runs first), `should_validate(result) -> bool`, `initialize()`, `shutdown()`, `version()`.
 
 ```python title="custom_validator.py"
-from kreuzberg import register_validator, unregister_validator, clear_validators
+from kreuzberg import register_validator, ExtractionResult, ValidationError
 
-# Register a validator
-register_validator(validator)
+class MinLengthValidator:
+    def name(self) -> str:
+        return "min_length"
 
-# Unregister by name
-unregister_validator("validator_name")
+    def priority(self) -> int:
+        return 100
 
-# Clear all validators
-clear_validators()
+    def validate(self, result: ExtractionResult) -> None:
+        if len(result.content) < 50:
+            raise ValidationError(f"Content too short: {len(result.content)}")
+
+    def should_validate(self, result: ExtractionResult) -> bool:
+        return True
+
+register_validator(MinLengthValidator())
 ```
+
+**Managing validators:** `register_validator()`, `unregister_validator(name)`, `list_validators()`, `clear_validators()`.
+
+---
+
+### Document Extractors
+
+Add support for new file formats or override built-in extractors. Extractors are registered per-MIME type with a priority system — 0–100, with built-ins at 50. Register a higher priority to override, lower to use as fallback.
+
+**Managing extractors:** `list_document_extractors()`, `unregister_document_extractor(name)`, `clear_document_extractors()`.
+
+!!! Note
+    Extractor *implementation and registration* are covered in the [Creating Plugins Guide](../guides/plugins.md#document-extractors).
 
 ---
 
@@ -1165,14 +1279,327 @@ except KreuzbergError as e:
     print(f"Extraction failed: {e}")
 ```
 
-**Error inspection:**
+### Error Introspection
 
-- `get_last_error_code()` → int | None
-- `get_error_details()` → dict (message, error_code, error_type, source_file, source_line, is_panic, etc.)
-- `classify_error(message: str)` → int
-- `error_code_name(code: int)` → str
+When something goes wrong in the Rust core, these functions let you dig into what happened — the error code, a structured details dict, and (if a Rust panic occurred) the exact file and line in the source.
 
-See [Error Handling Reference](errors.md) for detailed error documentation and best practices.
+#### get_last_error_code()
+
+```python title="Python"
+def get_last_error_code() -> int | None
+```
+
+Returns the numeric error code from the most recent FFI operation, or `None` if nothing has failed. Match against `ErrorCode` for readable comparisons:
+
+```python title="error_introspection.py"
+from kreuzberg import get_last_error_code, ErrorCode
+
+code = get_last_error_code()
+if code == ErrorCode.PANIC:
+    print("A panic occurred in the Rust core")
+elif code == ErrorCode.OCR_ERROR:
+    print("OCR processing failed")
+```
+
+| Code | Name | Meaning |
+|------|------|---------|
+| 0 | `SUCCESS` | No error |
+| 1 | `GENERIC_ERROR` | Unspecified error |
+| 2 | `PANIC` | Rust core panic |
+| 3 | `INVALID_ARGUMENT` | Invalid argument |
+| 4 | `IO_ERROR` | I/O operation failed |
+| 5 | `PARSING_ERROR` | Document parsing failed |
+| 6 | `OCR_ERROR` | OCR processing failed |
+| 7 | `MISSING_DEPENDENCY` | Required dependency unavailable |
+| 8 | `EMBEDDING` | Embedding operation failed |
+
+---
+
+#### get_error_details()
+
+```python title="Python"
+def get_error_details() -> dict[str, Any]
+```
+
+Returns a structured dict from the FFI layer's thread-local error storage. More useful than the error code alone — you get the message, the source location, and whether a panic was involved:
+
+```python title="error_details.py"
+from kreuzberg import extract_file_sync, get_error_details, KreuzbergError
+
+try:
+    result = extract_file_sync("corrupt.pdf")
+except KreuzbergError:
+    details = get_error_details()
+    print(f"Error: {details['message']}")
+    print(f"Type: {details['error_type']}")
+    if details['is_panic']:
+        print(f"Panic at {details['source_file']}:{details['source_line']}")
+```
+
+**Keys:** `message` (str), `error_code` (int), `error_type` (str), `source_file` (str | None), `source_function` (str | None), `source_line` (int), `context_info` (str | None), `is_panic` (bool).
+
+---
+
+#### classify_error()
+
+```python title="Python"
+def classify_error(message: str) -> int
+```
+
+Takes a raw error message string — from an external library, a system call, wherever — and classifies it into a Kreuzberg error category. Useful for error routing in custom pipelines:
+
+```python title="classify.py"
+from kreuzberg import classify_error, error_code_name
+
+code = classify_error("Failed to open file: permission denied")
+print(f"Category: {error_code_name(code)}")  # "io"
+```
+
+Categories: 0 = Validation, 1 = Parsing, 2 = OCR, 3 = Missing dependency, 4 = I/O, 5 = Plugin, 6 = Unsupported format, 7 = Internal.
+
+---
+
+#### error_code_name()
+
+```python title="Python"
+def error_code_name(code: int) -> str
+```
+
+Converts a numeric error code to its human-readable name (`"validation"`, `"ocr"`, etc.). Returns `"unknown"` for out-of-range values.
+
+---
+
+### ErrorCode
+
+`IntEnum` mapping the FFI panic shield error codes. Use it for readable comparisons instead of raw integers:
+
+```python title="Python"
+from kreuzberg import ErrorCode
+
+ErrorCode.SUCCESS           # 0
+ErrorCode.PANIC             # 2
+ErrorCode.OCR_ERROR         # 6
+ErrorCode.MISSING_DEPENDENCY # 7
+ErrorCode.EMBEDDING         # 8
+```
+
+### PanicContext
+
+When the Rust core panics, `get_last_panic_context()` returns a JSON string you can parse into a `PanicContext` dataclass. This gives you the exact source file, line number, and function where the panic happened — invaluable for bug reports.
+
+```python title="panic_debugging.py"
+from kreuzberg.exceptions import PanicContext
+from kreuzberg import get_last_panic_context
+
+context_json = get_last_panic_context()
+if context_json:
+    ctx = PanicContext.from_json(context_json)
+    print(f"Panic at {ctx.file}:{ctx.line} in {ctx.function}")
+    print(f"Message: {ctx.message}")
+```
+
+**Fields:** `file`, `line`, `function`, `message`, `timestamp_secs`.
+
+See [Error Handling Reference](errors.md) for the complete error documentation.
+
+---
+
+## Validation Helpers
+
+These functions let you validate configuration values before passing them to extraction. All return `bool` (except `validate_mime_type` which returns the normalized string). All importable from `kreuzberg`.
+
+Useful for building UIs, CLI argument validation, or pre-flight checks in pipelines.
+
+| Function | Validates |
+|----------|-----------|
+| `validate_dpi(dpi: int)` | DPI within allowed range |
+| `validate_language_code(code: str)` | Valid language code string |
+| `validate_mime_type(mime_type: str) -> str` | Valid MIME type (returns normalized form) |
+| `validate_confidence(confidence: float)` | Confidence in 0.0–1.0 range |
+| `validate_ocr_backend(backend: str)` | Known OCR backend identifier |
+| `validate_output_format(output_format: str)` | Valid output format string |
+| `validate_tesseract_psm(psm: int)` | Valid Tesseract page segmentation mode |
+| `validate_tesseract_oem(oem: int)` | Valid Tesseract OCR engine mode |
+| `validate_chunking_params(max_chars: int, max_overlap: int)` | Chunk size/overlap constraints |
+| `validate_binarization_method(method: str)` | Valid binarization method name |
+| `validate_token_reduction_level(level: str)` | Valid token reduction level |
+
+To get the full list of valid values for any of these, use the corresponding discovery helper:
+
+```python title="discovery_helpers.py"
+from kreuzberg import (
+    get_valid_binarization_methods,
+    get_valid_language_codes,
+    get_valid_ocr_backends,
+    get_valid_token_reduction_levels,
+)
+
+print(get_valid_language_codes())          # All valid language codes
+print(get_valid_ocr_backends())           # Registered OCR backend names
+print(get_valid_binarization_methods())    # Valid binarization methods
+print(get_valid_token_reduction_levels())  # Valid reduction levels
+```
+
+---
+
+## Configuration Utilities
+
+Three helpers for working with `ExtractionConfig` objects programmatically — serializing, inspecting, and merging configs.
+
+### config_to_json()
+
+```python title="Python"
+def config_to_json(config: ExtractionConfig) -> str
+```
+
+Serialize a config to JSON. Useful for logging, debugging, or sending configs over the wire:
+
+```python title="config_json.py"
+from kreuzberg import ExtractionConfig, OcrConfig, config_to_json
+
+config = ExtractionConfig(ocr=OcrConfig(backend="tesseract", language="eng"))
+print(config_to_json(config))
+```
+
+### config_get_field()
+
+```python title="Python"
+def config_get_field(config: ExtractionConfig, field_name: str) -> Any | None
+```
+
+Look up a config field by name. Returns `None` if the field doesn't exist or isn't set:
+
+```python title="config_field.py"
+from kreuzberg import ExtractionConfig, OcrConfig, config_get_field
+
+config = ExtractionConfig(ocr=OcrConfig(backend="tesseract"))
+print(config_get_field(config, "ocr"))       # OcrConfig(...)
+print(config_get_field(config, "chunking"))  # None
+```
+
+### config_merge()
+
+```python title="Python"
+def config_merge(base: ExtractionConfig, override: ExtractionConfig) -> None
+```
+
+Merge `override` into `base` in place. Fields set on `override` win; unset fields leave `base` unchanged. This is how you layer environment defaults with per-request overrides:
+
+```python title="config_merge.py"
+from kreuzberg import ExtractionConfig, OcrConfig, ChunkingConfig, config_merge
+
+base = ExtractionConfig(ocr=OcrConfig(backend="tesseract", language="eng"))
+override = ExtractionConfig(chunking=ChunkingConfig(max_chars=1000))
+
+config_merge(base, override)
+```
+
+---
+
+## Configuration Discovery
+
+### discover_extraction_config()
+
+!!! Warning "Deprecated since v4.2.0"
+    Use `load_extraction_config_from_file()` with an explicit path instead.
+
+```python title="Python"
+def discover_extraction_config() -> ExtractionConfig | None
+```
+
+Searches for a config file automatically: first checks `KREUZBERG_CONFIG_PATH`, then walks up from the current directory looking for `kreuzberg.toml`, `kreuzberg.yaml`, or `kreuzberg.json`. Returns `None` if nothing is found.
+
+### load_extraction_config_from_file()
+
+```python title="Python"
+def load_extraction_config_from_file(path: str | Path) -> ExtractionConfig
+```
+
+Load a config from a specific file. The format is determined by extension (`.toml`, `.yaml`, `.json`). Raises `FileNotFoundError`, `RuntimeError` (invalid content), or `ValueError` (unsupported format).
+
+```python title="load_config.py"
+from kreuzberg import load_extraction_config_from_file, extract_file_sync
+
+config = load_extraction_config_from_file("kreuzberg.toml")
+result = extract_file_sync("document.pdf", config=config)
+```
+
+---
+
+## Embedding Presets
+
+Kreuzberg ships with named embedding presets that bundle a model, chunk size, and overlap into a single selection. Use `list_embedding_presets()` to see what's available and `get_embedding_preset()` to inspect details.
+
+### list_embedding_presets()
+
+```python title="Python"
+def list_embedding_presets() -> list[str]
+```
+
+### get_embedding_preset()
+
+```python title="Python"
+def get_embedding_preset(name: str) -> EmbeddingPreset | None
+```
+
+Returns `None` if the name doesn't match a known preset.
+
+### EmbeddingPreset
+
+Describes a preset's model and recommended chunking parameters:
+
+| Field | Type | Example |
+|-------|------|---------|
+| `name` | `str` | `"balanced"` |
+| `model_name` | `str` | ONNX model identifier |
+| `dimensions` | `int` | Embedding vector size |
+| `chunk_size` | `int` | Recommended chunk size in characters |
+| `overlap` | `int` | Recommended overlap between chunks |
+| `description` | `str` | What this preset optimizes for |
+
+```python title="preset_info.py"
+from kreuzberg import get_embedding_preset, list_embedding_presets
+
+for name in list_embedding_presets():
+    preset = get_embedding_preset(name)
+    print(f"{preset.name}: {preset.dimensions}d, chunk={preset.chunk_size}")
+```
+
+---
+
+## Types and Enums
+
+### OutputFormat
+
+Controls the text format of extraction results. Pass to `ExtractionConfig.output_format`:
+
+```python title="Python"
+from kreuzberg import OutputFormat
+
+OutputFormat.PLAIN       # "plain" — raw text
+OutputFormat.MARKDOWN    # "markdown" — Markdown with headings, lists, tables
+OutputFormat.DJOT        # "djot" — Djot markup
+OutputFormat.HTML        # "html" — HTML
+OutputFormat.STRUCTURED  # "structured" — element-based structured output
+```
+
+```python title="output_format.py"
+from kreuzberg import ExtractionConfig, OutputFormat, extract_file_sync
+
+config = ExtractionConfig(output_format=OutputFormat.MARKDOWN)
+result = extract_file_sync("document.pdf", config=config)
+```
+
+### ResultFormat
+
+Controls the shape of the result — a single unified string, or a list of structural elements:
+
+```python title="Python"
+from kreuzberg import ResultFormat
+
+ResultFormat.UNIFIED        # "unified" — one content string
+ResultFormat.ELEMENT_BASED  # "element_based" — list of typed elements
+```
 
 ---
 
@@ -1213,6 +1640,38 @@ from kreuzberg import render_pdf_page
 png_bytes = render_pdf_page("document.pdf", 0)
 with open("first_page.png", "wb") as f:
     f.write(png_bytes)
+```
+
+---
+
+### PdfPageIterator
+
+For rendering every page of a PDF without loading them all into memory at once. Yields `(page_index, png_bytes)` tuples — zero-based index paired with the PNG-encoded image bytes.
+
+```python title="Python"
+PdfPageIterator(path: str, dpi: int | None = None)
+```
+
+Works as a context manager, supports `len()`, and has a `page_count` property:
+
+```python title="iterate_pdf_pages.py"
+from kreuzberg import PdfPageIterator
+
+with PdfPageIterator("document.pdf", dpi=200) as pages:
+    print(f"Total pages: {pages.page_count}")
+
+    for page_index, png_bytes in pages:
+        with open(f"page_{page_index}.png", "wb") as f:
+            f.write(png_bytes)
+        print(f"Page {page_index}: {len(png_bytes)} bytes")
+```
+
+```python title="quick_page_count.py"
+from kreuzberg import PdfPageIterator
+
+pages = PdfPageIterator("document.pdf")
+print(f"Document has {len(pages)} pages")
+pages.close()
 ```
 
 ---

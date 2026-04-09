@@ -120,6 +120,8 @@ Transform and enrich results after extraction. Processors execute in three stage
 
 Integrate cloud OCR services or custom engines:
 
+### Implementation
+
 === "Rust"
 
     --8<-- "snippets/rust/ocr/cloud_ocr_backend.md"
@@ -143,6 +145,34 @@ Integrate cloud OCR services or custom engines:
 === "R"
 
     --8<-- "snippets/r/ocr/cloud_ocr_backend.md"
+
+### Registration
+
+Once you've implemented a backend (see above), register it so the extraction pipeline can use it. Set the backend name in `OcrConfig` to route OCR through your custom engine:
+
+=== "Python"
+
+    ```python title="Python"
+    from kreuzberg import register_ocr_backend, unregister_ocr_backend
+
+    backend = CloudOcrBackend(api_key="your-api-key")
+    register_ocr_backend(backend)
+
+    from kreuzberg import extract_file_sync, ExtractionConfig, OcrConfig
+
+    config = ExtractionConfig(ocr=OcrConfig(backend="cloud-ocr", language="eng"))
+    result = extract_file_sync("scanned.pdf", config=config)
+
+    unregister_ocr_backend("cloud-ocr")
+    ```
+
+### Using EasyOCR (Built-in)
+
+Kreuzberg ships with an EasyOCR backend that supports 80+ languages and optional GPU acceleration. You don't need to implement anything — just point `OcrConfig` at it:
+
+=== "Python"
+
+    --8<-- "snippets/python/ocr/ocr_easyocr.md"
 
 ## Validators
 
@@ -300,6 +330,10 @@ Enforce quality requirements on extraction results.
     --8<-- "snippets/csharp/plugin_testing.md"
 
 ## Complete Example: PDF Metadata Extractor
+
+=== "Python"
+
+    --8<-- "snippets/python/metadata/pdf_metadata_extractor.md"
 
 === "Go"
 

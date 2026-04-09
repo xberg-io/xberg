@@ -216,6 +216,40 @@ COPY kreuzberg.toml /app/kreuzberg.toml
 CMD ["serve", "--config", "/app/kreuzberg.toml"]
 ```
 
+## Other Image Variants
+
+The published Core and Full images cover most use cases. For specialized needs, the `docker/` directory has additional Dockerfiles:
+
+| Dockerfile | What it builds |
+|------------|---------------|
+| `Dockerfile.cli` | Minimal image with just the `kreuzberg` binary — good for CI pipelines and batch jobs |
+| `Dockerfile.musl-build` | Fully static Linux binaries via MUSL — runs on any distro, no dynamic libs |
+| `Dockerfile.musl-ffi` | Static C FFI library for language bindings (Go, Ruby, R, PHP, Elixir) |
+| `Dockerfile.musl-rustler` | MUSL-based Rustler NIF for Elixir |
+
+### CLI Image
+
+A stripped-down image with only the CLI binary. No server, no API — just extraction:
+
+```bash title="Terminal"
+docker build -f docker/Dockerfile.cli -t kreuzberg-cli .
+
+docker run -v $(pwd):/data kreuzberg-cli extract /data/document.pdf
+docker run -v $(pwd):/data kreuzberg-cli batch /data/*.pdf --format json
+docker run -v $(pwd):/data kreuzberg-cli detect /data/unknown-file.bin
+```
+
+### MUSL Static Builds
+
+These produce binaries with zero dynamic library dependencies. A single file that runs on any Linux — Alpine, scratch containers, bare EC2 instances, whatever.
+
+```bash title="Terminal"
+docker build -f docker/Dockerfile.musl-build -t kreuzberg-musl-build .
+docker build -f docker/Dockerfile.musl-ffi -t kreuzberg-musl-ffi .
+```
+
+The FFI variant builds a shared library used by the Go, Ruby, R, PHP, and Elixir bindings for portable cross-platform distribution.
+
 ## Troubleshooting
 
 ??? Question "Container won't start"
