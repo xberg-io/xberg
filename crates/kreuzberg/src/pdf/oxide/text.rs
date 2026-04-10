@@ -11,6 +11,7 @@ use crate::pdf::error::{PdfError, Result};
 use crate::pdf::metadata::PdfExtractionMetadata;
 use crate::pdf::text::{contains_html_markup, fix_pdf_control_chars};
 use crate::types::{PageBoundary, PageContent};
+use pdf_oxide::document::ReadingOrder;
 use std::borrow::Cow;
 
 /// Result type for PDF text extraction with optional page tracking.
@@ -87,9 +88,7 @@ fn extract_text_fast_path(doc: &mut OxideDocument) -> Result<PdfTextExtractionRe
     let mut sample_count = 0;
 
     for page_idx in 0..page_count {
-        let page_text = doc.doc.extract_text(page_idx).map_err(|e| {
-            PdfError::TextExtractionFailed(format!("Page {} text extraction failed: {}", page_idx + 1, e))
-        })?;
+        let page_text = extract_page_text_column_aware(&mut doc.doc, page_idx)?;
 
         let page_size = page_text.len();
 
@@ -140,9 +139,7 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
     for page_idx in 0..page_count {
         let page_number = page_idx + 1;
 
-        let page_text = doc.doc.extract_text(page_idx).map_err(|e| {
-            PdfError::TextExtractionFailed(format!("Page {} text extraction failed: {}", page_number, e))
-        })?;
+        let page_text = extract_page_text_column_aware(&mut doc.doc, page_idx)?;
 
         let page_size = page_text.len();
 
@@ -193,6 +190,44 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
     }
 
     Ok((content, Some(boundaries), page_contents))
+}
+
+/// Extract text from a single page using column-aware reading order.
+///
+/// Uses `extract_page_text_with_options` with `ReadingOrder::ColumnAware` to
+/// apply XY-Cut column detection. This reads each column top-to-bottom before
+/// moving to the next, avoiding interleaved text in multi-column layouts.
+fn extract_page_text_column_aware(doc: &mut pdf_oxide::PdfDocument, page_index: usize) -> Result<String> {
+    let page_text_data = doc
+        .extract_page_text_with_options(page_index, ReadingOrder::ColumnAware)
+        .map_err(|e| {
+            PdfError::TextExtractionFailed(format!("Page {} text extraction failed: {}", page_index + 1, e))
+        })?;
+
+    // Assemble text from column-aware ordered spans.
+    let mut text = String::with_capacity(page_text_data.spans.len() * 20);
+    let mut prev_span: Option<&pdf_oxide::layout::TextSpan> = None;
+
+    for span in &page_text_data.spans {
+        if let Some(prev) = prev_span {
+            let prev_end_x = prev.bbox.x + prev.bbox.width;
+            let y_gap = (prev.bbox.y - span.bbox.y).abs();
+            let same_line = y_gap < span.bbox.height.max(prev.bbox.height) * 0.5;
+
+            if same_line {
+                let x_gap = span.bbox.x - prev_end_x;
+                if x_gap > span.font_size * 0.15 {
+                    text.push(' ');
+                }
+            } else {
+                text.push('\n');
+            }
+        }
+        text.push_str(&span.text);
+        prev_span = Some(span);
+    }
+
+    Ok(text)
 }
 
 /// Apply common text cleanup: fix control chars and optionally convert HTML.

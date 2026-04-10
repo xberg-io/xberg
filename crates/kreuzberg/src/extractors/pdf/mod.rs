@@ -303,9 +303,9 @@ impl PdfExtractor {
         let _ = &path; // used only when `ocr` feature is enabled
 
         // --- pdf_oxide backend dispatch ---
-        // When the oxide backend is selected, run the full extraction through
-        // oxide modules and build the InternalDocument directly, bypassing the
-        // pdfium path entirely. For Auto, try oxide first and fall back to pdfium.
+        // PdfOxide: prefer oxide, fall back to pdfium on document open/parse failures.
+        // Auto: try oxide first, fall back to pdfium on any error.
+        // Pdfium: skip oxide entirely.
         #[cfg(feature = "pdf-oxide")]
         {
             use crate::core::config::pdf::PdfBackend;
@@ -317,13 +317,31 @@ impl PdfExtractor {
 
             match backend {
                 PdfBackend::PdfOxide => {
-                    return self.extract_core_oxide(content, mime_type, config, path).await;
+                    match self.extract_core_oxide(content, mime_type, config, path).await {
+                        Ok(doc) => return Ok(doc),
+                        Err(oxide_err) => {
+                            // Fall back to pdfium on document open/parse failures.
+                            // These are Parsing errors from pdf_oxide indicating the
+                            // document could not be opened or its structure could not
+                            // be parsed (e.g. password-protected, corrupt, complex
+                            // structure). Other error kinds (OCR, IO, etc.) propagate.
+                            if matches!(&oxide_err, crate::error::KreuzbergError::Parsing { .. }) {
+                                tracing::debug!(
+                                    error = %oxide_err,
+                                    "pdf_oxide could not parse document, falling back to pdfium"
+                                );
+                                // Fall through to pdfium path below
+                            } else {
+                                return Err(oxide_err);
+                            }
+                        }
+                    }
                 }
                 PdfBackend::Auto => {
                     match self.extract_core_oxide(content, mime_type, config, path).await {
                         Ok(doc) => return Ok(doc),
                         Err(oxide_err) => {
-                            tracing::warn!(
+                            tracing::debug!(
                                 error = %oxide_err,
                                 "pdf_oxide extraction failed, falling back to pdfium"
                             );

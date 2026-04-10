@@ -14,6 +14,11 @@ use crate::pdf::hierarchy::SegmentData;
 /// (size, bold, italic, monospace). These feed into the existing backend-agnostic
 /// font size clustering pipeline for heading detection.
 ///
+/// Uses default (top-to-bottom) reading order rather than column-aware ordering,
+/// because the hierarchy/structure pipeline depends on physical span position for
+/// font-size clustering and heading detection. Column-aware reordering changes
+/// span sequence in ways that break single-column heading detection.
+///
 /// # Arguments
 ///
 /// * `doc` - Mutable reference to the oxide document

@@ -47,7 +47,7 @@ pub(crate) fn extract_segments_with_oxide(page_count: usize) -> Option<Vec<Vec<S
             return None;
         }
     };
-    let mut pdf = match pdf_oxide::api::Pdf::open(&file_path) {
+    let mut pdf = match pdf_oxide::PdfDocument::open(&file_path) {
         Ok(pdf) => pdf,
         Err(e) => {
             tracing::debug!("pdf_oxide failed to open document: {e}");
@@ -62,11 +62,14 @@ pub(crate) fn extract_segments_with_oxide(page_count: usize) -> Option<Vec<Vec<S
         // pdf_oxide spans use y=0 at top (screen coords).
         // Our pipeline uses PDF coords: y=0 at bottom.
         let page_height = pdf
-            .page_media_box(page_idx)
+            .get_page_media_box(page_idx)
             .ok()
-            .map(|[_, lly, _, ury]| (ury - lly).abs())
+            .map(|(_, lly, _, ury)| (ury - lly).abs())
             .unwrap_or(792.0); // Letter size fallback
 
+        // Use default top-to-bottom ordering for the structure pipeline.
+        // Column-aware reordering changes span sequence which breaks font-size
+        // clustering for heading detection on single-column documents.
         let spans = match pdf.extract_spans(page_idx) {
             Ok(spans) => spans,
             Err(e) => {
@@ -104,9 +107,7 @@ pub(crate) fn extract_segments_with_oxide(page_count: usize) -> Option<Vec<Vec<S
                     font_size: span.font_size,
                     is_bold,
                     is_italic: span.is_italic,
-                    is_monospace: span.font_name.contains("Mono")
-                        || span.font_name.contains("Courier")
-                        || span.font_name.contains("Consola"),
+                    is_monospace: span.is_monospace,
                     baseline_y: pdf_baseline_y,
                 }
             })
