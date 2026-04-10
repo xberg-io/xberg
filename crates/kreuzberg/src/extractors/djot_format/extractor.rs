@@ -408,7 +408,7 @@ impl DjotExtractor {
                         ocr_rotation: None,
                     });
                     // Collect image URI with alt text as label
-                    let src_str = src.as_ref();
+                    let src_str: &str = src.as_ref();
                     if !src_str.is_empty() {
                         let trimmed = image_alt.trim();
                         let label = if trimmed.is_empty() {
@@ -667,5 +667,22 @@ mod tests {
 
         assert!(result.content.contains("太字"), "Bold CJK content present");
         assert!(result.content.contains("これは"), "Leading CJK preserved");
+    }
+
+    #[tokio::test]
+    async fn test_image_uri_extraction_djot() {
+        // Regression test for #622: src.as_ref() on Cow<str> from jotdown's Container::Image
+        // must compile without type-inference ambiguity introduced by typed-path.
+        let djot = b"![A diagram](https://example.com/diagram.png)\n\nSome text.";
+        let extractor = DjotExtractor::new();
+        let config = ExtractionConfig::default();
+
+        let doc = extractor
+            .extract_bytes(djot, "text/djot", &config)
+            .await
+            .expect("image djot should extract");
+
+        let has_image_uri = doc.uris.iter().any(|u| u.url.contains("diagram.png"));
+        assert!(has_image_uri, "image URI should be captured from Djot image node");
     }
 }

@@ -89,9 +89,7 @@ pub fn derive_document_structure(doc: &mut InternalDocument) -> DocumentStructur
 /// build_ocr_elements) must run before this function.
 fn derive_document_structure_inner(doc: &mut InternalDocument) -> DocumentStructure {
     let mut ds = DocumentStructure::with_capacity(doc.elements.len());
-    // Convert Cow<str> → String without double-allocation: as_ref() borrows the
-    // inner str regardless of Cow variant, then to_string() allocates once.
-    ds.source_format = Some(doc.source_format.as_ref().to_string());
+    ds.source_format = Some(doc.source_format.to_string());
 
     // Stack: (depth, NodeIndex) — depth is the element depth that "owns" this level
     let mut stack: Vec<(u16, NodeIndex)> = Vec::new();
@@ -1042,5 +1040,19 @@ mod tests {
         let ds = result.document.unwrap();
         assert!(ds.validate().is_ok());
         assert_eq!(ds.source_format.as_deref(), Some("pdf"));
+    }
+
+    #[test]
+    fn test_source_format_cow_owned_propagates() {
+        // Regression test for #622: Cow::Owned variant must not fail type inference
+        // when deriving document structure. Previously used unstable Cow::as_str().
+        let owned: std::borrow::Cow<'static, str> = std::borrow::Cow::Owned("epub".to_string());
+        let mut doc = InternalDocument::new(owned);
+        doc.push_element(InternalElement::text(ElementKind::Heading { level: 1 }, "Ch1", 0).with_page(1));
+        doc.push_element(InternalElement::text(ElementKind::Paragraph, "Body.", 1).with_page(1));
+
+        let result = derive_extraction_result(doc, true, crate::core::config::OutputFormat::Plain);
+        let ds = result.document.unwrap();
+        assert_eq!(ds.source_format.as_deref(), Some("epub"));
     }
 }
