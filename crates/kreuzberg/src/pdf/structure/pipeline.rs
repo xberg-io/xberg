@@ -1446,12 +1446,15 @@ pub(crate) fn extract_document_structure_from_segments(
         .collect();
 
     // Stage 3: Per-page structured extraction.
+    // When the structure tree provides heading roles, skip layout-model heading
+    // overrides — they can demote correctly-tagged headings. The tree is authoritative.
+    let effective_layout_hints = if used_structure_tree { None } else { layout_hints };
     let page_inputs: Vec<PageInput> = (0..page_count)
         .map(|i| PageInput {
             page_index: i,
             struct_paragraphs: None,
             heuristic_segments: std::mem::take(&mut all_page_segments[i]),
-            page_hints: layout_hints.and_then(|h| h.get(i)).cloned(),
+            page_hints: effective_layout_hints.and_then(|h| h.get(i)).cloned(),
             table_bboxes: extracted_table_bboxes_by_page.get(&i).cloned().unwrap_or_default(),
             hint_validations: Vec::new(),
             needs_classify: false,
