@@ -1090,6 +1090,16 @@ impl PdfExtractor {
     ) -> Result<InternalDocument> {
         let _ = &path; // used only when `ocr` feature is enabled
 
+        // Run layout detection on raw PDF bytes (uses pdfium for rendering internally).
+        // Layout hints drive furniture marking, heading overrides, and table region
+        // detection in the structure pipeline — same as the pdfium path.
+        #[cfg(feature = "layout-detection")]
+        let layout_bundle = run_layout_detection(content, config);
+        #[cfg(feature = "layout-detection")]
+        let layout_hints = layout_bundle.as_ref().map(|b| b.hints.as_slice());
+        #[cfg(not(feature = "layout-detection"))]
+        let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = None;
+
         #[allow(unused_variables, unused_mut)]
         let (
             pdf_metadata,
@@ -1100,7 +1110,7 @@ impl PdfExtractor {
             pre_rendered_doc,
             _has_font_encoding_issues,
             pdf_annotations,
-        ) = extract_all_from_oxide_document(content, config)?;
+        ) = extract_all_from_oxide_document(content, config, layout_hints)?;
 
         // --- OCR evaluation (reuses the same logic as the pdfium path) ---
         #[cfg(feature = "ocr")]

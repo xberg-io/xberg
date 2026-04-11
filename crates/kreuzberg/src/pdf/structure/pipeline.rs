@@ -1373,6 +1373,9 @@ pub fn extract_document_structure(
 /// post-processing stages without requiring a pdfium `PdfDocument`.
 ///
 /// Image positions can be supplied to insert image placeholders into the document.
+/// Layout hints (from RT-DETR layout detection) are optional; when present they
+/// drive furniture marking, heading overrides, and table region detection — the
+/// same role they play in the pdfium-backed [`extract_document_structure`].
 ///
 /// Returns the assembled `InternalDocument`.
 #[cfg(feature = "pdf-oxide")]
@@ -1385,6 +1388,7 @@ pub(crate) fn extract_document_structure_from_segments(
     include_footers: bool,
     used_structure_tree: bool,
     image_positions: &[(usize, usize)],
+    layout_hints: Option<&[Vec<LayoutHint>]>,
 ) -> Result<crate::types::internal::InternalDocument> {
     let page_count = all_page_segments.len();
     tracing::debug!(
@@ -1447,7 +1451,7 @@ pub(crate) fn extract_document_structure_from_segments(
             page_index: i,
             struct_paragraphs: None,
             heuristic_segments: std::mem::take(&mut all_page_segments[i]),
-            page_hints: None,
+            page_hints: layout_hints.and_then(|h| h.get(i)).cloned(),
             table_bboxes: extracted_table_bboxes_by_page.get(&i).cloned().unwrap_or_default(),
             hint_validations: Vec::new(),
             needs_classify: false,

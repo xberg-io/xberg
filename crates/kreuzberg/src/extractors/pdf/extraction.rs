@@ -415,6 +415,7 @@ fn extract_tables_from_document(
 pub(crate) fn extract_all_from_oxide_document(
     content: &[u8],
     config: &ExtractionConfig,
+    layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]>,
 ) -> Result<PdfExtractionPhaseResult> {
     let _span = tracing::debug_span!("extract_pdf_oxide").entered();
 
@@ -496,6 +497,7 @@ pub(crate) fn extract_all_from_oxide_document(
                 include_footers,
                 used_structure_tree,
                 &image_positions,
+                layout_hints,
             ) {
                 Ok(structured_doc) if !structured_doc.elements.is_empty() => {
                     tracing::debug!(
