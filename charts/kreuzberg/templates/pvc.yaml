@@ -1,0 +1,17 @@
+{{- if .Values.cache.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "kreuzberg.fullname" . }}-cache
+  labels:
+    {{- include "kreuzberg.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.cache.accessModes | nindent 4 }}
+  {{- if .Values.cache.storageClass }}
+  storageClassName: {{ .Values.cache.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.cache.size }}
+{{- end }}

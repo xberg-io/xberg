@@ -1,0 +1,24 @@
+apiVersion: v2
+name: kreuzberg
+description: >-
+  A Helm chart for Kreuzberg — polyglot document intelligence framework with
+  a Rust core. Extract text, metadata, images, and structured information from
+  PDFs, Office documents, images, and 91+ formats.
+type: application
+version: 0.1.0
+appVersion: "4.8.3"
+home: https://kreuzberg.dev
+sources:
+  - https://github.com/kreuzberg-dev/kreuzberg
+keywords:
+  - document-intelligence
+  - text-extraction
+  - pdf
+  - ocr
+  - tesseract
+  - rag
+  - rust
+maintainers:
+  - name: kreuzberg-dev
+    url: https://github.com/kreuzberg-dev
+icon: https://raw.githubusercontent.com/kreuzberg-dev/kreuzberg/main/docs/assets/logo.png

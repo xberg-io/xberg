@@ -1,0 +1,138 @@
+# -- Number of replicas
+replicaCount: 2
+
+image:
+  # -- Container image registry
+  registry: ghcr.io
+  # -- Container image repository
+  repository: kreuzberg-dev/kreuzberg
+  # -- Image tag. Use "latest" for the full image (Tesseract + PaddleOCR + layout models)
+  # or "core" for the minimal image (no pre-downloaded models).
+  tag: "latest"
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+
+# -- Override the chart name
+nameOverride: ""
+# -- Override the full release name
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount
+  create: true
+  # -- Annotations for the ServiceAccount
+  annotations: {}
+  # -- Override the ServiceAccount name (defaults to release fullname)
+  name: ""
+
+# -- Pod-level annotations
+podAnnotations: {}
+
+# -- Pod-level security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container-level security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Service port
+  port: 80
+
+ingress:
+  # -- Enable Ingress
+  enabled: false
+  # -- Ingress class name (e.g. "nginx")
+  className: ""
+  # -- Ingress annotations
+  annotations: {}
+  # -- Ingress hosts
+  hosts:
+    - host: kreuzberg.local
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- Ingress TLS configuration
+  tls: []
+  #  - secretName: kreuzberg-tls
+  #    hosts:
+  #      - kreuzberg.local
+
+# -- Container resource requests and limits
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "2Gi"
+    cpu: "2000m"
+
+autoscaling:
+  # -- Enable HorizontalPodAutoscaler
+  enabled: false
+  # -- Minimum replicas
+  minReplicas: 2
+  # -- Maximum replicas
+  maxReplicas: 10
+  # -- Target CPU utilization (percent)
+  targetCPUUtilizationPercentage: 80
+  # -- Target memory utilization (percent). Leave unset to disable.
+  # targetMemoryUtilizationPercentage: 80
+
+# -- Node selector for pod scheduling
+nodeSelector: {}
+
+# -- Tolerations for pod scheduling
+tolerations: []
+
+# -- Affinity rules for pod scheduling
+affinity: {}
+
+# -- Extra environment variables
+extraEnv: []
+#  - name: KREUZBERG_CORS_ORIGINS
+#    value: "https://app.example.com"
+#  - name: KREUZBERG_MAX_UPLOAD_SIZE_MB
+#    value: "500"
+
+# -- Kreuzberg-specific configuration
+kreuzberg:
+  # -- Log level: trace, debug, info, warn, error
+  logLevel: "info"
+  # -- Tesseract data prefix path (must match the container image)
+  tessdataPrefix: "/usr/share/tesseract-ocr/5/tessdata"
+  # -- Default OCR language
+  ocrLanguage: "eng"
+
+cache:
+  # -- Enable persistent cache for embedding models and downloaded assets.
+  # Models range from 90 MB to 1.2 GB and are re-downloaded on every pod
+  # restart without a PVC.
+  enabled: true
+  # -- Storage size for the cache PVC
+  size: 2Gi
+  # -- StorageClass for the cache PVC (empty string uses cluster default)
+  storageClass: ""
+  # -- Access modes for the cache PVC
+  accessModes:
+    - ReadWriteOnce
+
+podDisruptionBudget:
+  # -- Enable PodDisruptionBudget
+  enabled: false
+  # -- Minimum available pods during disruption
+  minAvailable: 1
