@@ -3,6 +3,8 @@
 //! This module implements the main chunking algorithms and provides the primary
 //! public API functions for splitting text into chunks.
 
+use std::fmt::Write;
+
 use crate::error::Result;
 use crate::types::PageBoundary;
 use text_splitter::{ChunkSizer, MarkdownSplitter, TextSplitter};
@@ -113,15 +115,32 @@ pub fn chunk_text_with_heading_source(
             // Optionally prepend heading hierarchy path to chunk content.
             if config.prepend_heading_context {
                 for chunk in &mut chunks {
-                    if let Some(ref ctx) = chunk.metadata.heading_context {
-                        let prefix = ctx
-                            .headings
-                            .iter()
-                            .map(|h| format!("{} {}", "#".repeat(h.level as usize), h.text))
-                            .collect::<Vec<_>>()
-                            .join(" > ");
-                        chunk.content = format!("{}\n\n{}", prefix, chunk.content);
+                    let Some(ref ctx) = chunk.metadata.heading_context else {
+                        continue;
+                    };
+
+                    // Build breadcrumb prefix directly into the output buffer.
+                    let mut new_content = String::with_capacity(chunk.content.len() + 64);
+                    for (i, h) in ctx.headings.iter().enumerate() {
+                        if i > 0 {
+                            new_content.push_str(" > ");
+                        }
+                        for _ in 0..h.level {
+                            new_content.push('#');
+                        }
+                        // Writing to String is infallible.
+                        let _ = write!(new_content, " {}", h.text);
                     }
+                    new_content.push_str("\n\n");
+
+                    // If the markdown splitter included the deepest heading at the
+                    // start of the chunk, skip it to avoid duplication.
+                    let body = match ctx.headings.last() {
+                        Some(h) => strip_leading_heading(&chunk.content, h.level, &h.text),
+                        None => &chunk.content,
+                    };
+                    new_content.push_str(body);
+                    chunk.content = new_content;
                 }
             }
         }
@@ -130,6 +149,30 @@ pub fn chunk_text_with_heading_source(
     let chunk_count = chunks.len();
 
     Ok(ChunkingResult { chunks, chunk_count })
+}
+
+/// If `text` starts with a markdown ATX heading matching `level` and `title`,
+/// return the remainder after that heading line with leading newlines trimmed.
+/// Otherwise return the input unchanged.
+///
+/// Handles optional closing ATX hashes (e.g. `## Heading ##`).
+fn strip_leading_heading<'a>(text: &'a str, level: u8, title: &str) -> &'a str {
+    debug_assert!(level > 0, "heading level must be 1..=6");
+    let n = level as usize;
+    let bytes = text.as_bytes();
+    // Must start with exactly `n` '#' characters followed by a space.
+    if bytes.len() <= n || bytes[..n].iter().any(|&b| b != b'#') || bytes[n] != b' ' {
+        return text;
+    }
+    let after_prefix = &text[n + 1..];
+    if !after_prefix.starts_with(title) {
+        return text;
+    }
+    // Consume only through the end of the heading line, then trim leading newlines.
+    // This avoids greedily eating into body content that follows on the same line.
+    let rest = &after_prefix[title.len()..];
+    let line_end = rest.find('\n').unwrap_or(rest.len());
+    rest[line_end..].trim_start_matches('\n')
 }
 
 /// Split text using the appropriate splitter type with a generic sizer.
@@ -589,7 +632,7 @@ mod tests {
                 assert!(
                     chunk.content.starts_with('#'),
                     "Expected chunk content to start with heading path, got: {:?}",
-                    &chunk.content[..chunk.content.len().min(80)]
+                    &chunk.content
                 );
             }
         }
@@ -602,6 +645,68 @@ mod tests {
             has_section,
             "Expected at least one chunk with heading breadcrumb in content"
         );
+        // No heading should appear more than once per chunk (breadcrumb + body duplication).
+        for chunk in &result.chunks {
+            if let Some(ref ctx) = chunk.metadata.heading_context {
+                if let Some(deepest) = ctx.headings.last() {
+                    let heading_line = format!("{} {}", "#".repeat(deepest.level as usize), deepest.text);
+                    let occurrences = chunk.content.matches(&heading_line).count();
+                    assert!(
+                        occurrences <= 1,
+                        "Heading '{}' appears {} times in chunk (expected at most 1): {:?}",
+                        heading_line,
+                        occurrences,
+                        &chunk.content
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_strip_leading_heading_basic() {
+        assert_eq!(strip_leading_heading("## Section\n\nBody", 2, "Section"), "Body");
+    }
+
+    #[test]
+    fn test_strip_leading_heading_closing_atx() {
+        assert_eq!(strip_leading_heading("## Section ##\n\nBody", 2, "Section"), "Body");
+    }
+
+    #[test]
+    fn test_strip_leading_heading_no_match() {
+        let text = "Some paragraph text";
+        assert_eq!(strip_leading_heading(text, 2, "Section"), text);
+    }
+
+    #[test]
+    fn test_strip_leading_heading_wrong_level() {
+        let text = "### Section\n\nBody";
+        assert_eq!(strip_leading_heading(text, 2, "Section"), text);
+    }
+
+    #[test]
+    fn test_strip_leading_heading_single_newline() {
+        assert_eq!(strip_leading_heading("# Title\nBody", 1, "Title"), "Body");
+    }
+
+    #[test]
+    fn test_strip_leading_heading_no_body() {
+        assert_eq!(strip_leading_heading("## Section", 2, "Section"), "");
+    }
+
+    #[test]
+    fn test_strip_leading_heading_empty_input() {
+        assert_eq!(strip_leading_heading("", 2, "Section"), "");
+    }
+
+    #[test]
+    fn test_strip_leading_heading_unicode() {
+        assert_eq!(
+            strip_leading_heading("## Übersicht\n\nInhalt", 2, "Übersicht"),
+            "Inhalt"
+        );
+        assert_eq!(strip_leading_heading("# 概要\n\n本文", 1, "概要"), "本文");
     }
 
     #[test]
