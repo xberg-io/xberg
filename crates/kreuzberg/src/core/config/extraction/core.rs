@@ -496,7 +496,7 @@ impl ExtractionConfig {
     /// `disable_ocr = true`. This method is the single source of truth for whether
     /// OCR should be skipped.
     pub fn effective_disable_ocr(&self) -> bool {
-        self.disable_ocr || self.ocr.as_ref().map_or(false, |o| !o.enabled)
+        self.disable_ocr || self.ocr.as_ref().is_some_and(|o| !o.enabled)
     }
 
     /// Check if image processing is needed by examining OCR and image extraction settings.
