@@ -593,9 +593,6 @@ mod tests {
     fn test_ocr_enabled_defaults_to_true() {
         let json = r#"{"ocr": {"backend": "tesseract"}}"#;
         let config: ExtractionConfig = serde_json::from_str(json).unwrap();
-        assert!(
-            !config.effective_disable_ocr(),
-            "OCR should be enabled by default"
-        );
+        assert!(!config.effective_disable_ocr(), "OCR should be enabled by default");
     }
 }
