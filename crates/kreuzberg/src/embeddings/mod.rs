@@ -662,16 +662,23 @@ pub fn embed_texts<T: AsRef<str>>(
         #[cfg(feature = "liter-llm")]
         crate::core::config::EmbeddingModelType::Llm { llm } => {
             let normalize = config.normalize;
-            // Create a dedicated runtime for the sync LLM call to avoid deadlocking
-            // the caller's runtime. This is only hit from the sync embed_texts() path.
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    crate::KreuzbergError::embedding(format!("Failed to create runtime for LLM embeddings: {e}"))
-                })?;
-            rt.block_on(crate::llm::vlm_embeddings::embed_via_llm(texts, llm, normalize))
-                .map(|(embeddings, _usage)| embeddings)
+            // If we're already inside an async runtime (e.g. server mode),
+            // use block_in_place to avoid the "cannot block inside runtime" panic.
+            // Otherwise, create a dedicated single-threaded runtime for the sync path.
+            let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                tokio::task::block_in_place(|| {
+                    handle.block_on(crate::llm::vlm_embeddings::embed_via_llm(texts, llm, normalize))
+                })
+            } else {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| {
+                        crate::KreuzbergError::embedding(format!("Failed to create runtime for LLM embeddings: {e}"))
+                    })?;
+                rt.block_on(crate::llm::vlm_embeddings::embed_via_llm(texts, llm, normalize))
+            };
+            result.map(|(embeddings, _usage)| embeddings)
         }
         #[cfg(not(feature = "liter-llm"))]
         crate::core::config::EmbeddingModelType::Llm { .. } => Err(crate::KreuzbergError::MissingDependency(
@@ -853,6 +860,34 @@ mod tests {
         let texts = vec![""];
         let err = embed_texts(&texts, &config).unwrap_err();
         assert!(err.to_string().contains("position 1"));
+    }
+
+    /// Regression test for #713: embed_texts called from inside a tokio runtime
+    /// (e.g. server mode) must not panic with "cannot block inside runtime".
+    /// The LLM path will fail with MissingDependency or a connection error,
+    /// but it must NOT panic.
+    #[cfg(feature = "liter-llm")]
+    #[tokio::test]
+    async fn test_embed_texts_llm_inside_runtime_does_not_panic() {
+        let config = crate::core::config::EmbeddingConfig {
+            model: crate::core::config::EmbeddingModelType::Llm {
+                llm: crate::core::config::LlmConfig {
+                    model: "openai/text-embedding-3-small".to_string(),
+                    api_key: Some("invalid-key-for-test".to_string()),
+                    base_url: None,
+                    timeout_secs: None,
+                    max_retries: None,
+                    temperature: None,
+                    max_tokens: None,
+                },
+            },
+            ..Default::default()
+        };
+        // This should return an error (bad API key), NOT panic.
+        let result = tokio::task::spawn_blocking(move || embed_texts(&["test text"], &config)).await;
+        assert!(result.is_ok(), "spawn_blocking should not panic");
+        // The inner result should be an error (auth failure), not a panic
+        assert!(result.unwrap().is_err(), "Expected auth error, not success");
     }
 
     /// Regression test for #683: GraphOptimizationLevel::Level3 maps to

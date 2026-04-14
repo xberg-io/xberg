@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **LLM embedding provider panics in server mode** — `embed_texts` called `block_on` inside a new runtime, which panics when already inside tokio (HTTP server, MCP). Uses `block_in_place` with the current runtime handle when available, falls back to a new runtime for standalone sync callers. (#713)
+
+---
+
 ## [4.8.5] - 2026-04-14
 
 ### Added
