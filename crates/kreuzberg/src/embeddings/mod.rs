@@ -333,7 +333,7 @@ fn cleanup_stale_locks(cache_dir: &std::path::Path, repo_name: &str) {
 
     for entry in entries.flatten() {
         let lock_path = entry.path();
-        if lock_path.extension().map_or(false, |ext| ext == "lock") {
+        if lock_path.extension().is_some_and(|ext| ext == "lock") {
             let part_path = lock_path.with_extension("part");
 
             // Prefer the .part file's mtime: an active download writes bytes
