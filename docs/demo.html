@@ -324,7 +324,7 @@
     </footer>
 
     <script type="module">
-      import { extractFromFile, initWasm } from 'https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/dist/index.js';
+      import { enableOcr, extractFromFile, initWasm } from 'https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/dist/index.js';
 
       const dropZone = document.getElementById("dropZone");
       const fileInput = document.getElementById("fileInput");
@@ -337,6 +337,10 @@
       let wasmReady = false;
       try {
         await initWasm('https://cdn.jsdelivr.net/npm/@kreuzberg/wasm@latest/dist/pkg/kreuzberg_wasm_bg.wasm');
+        // Enable OCR so image files (WebP, PNG, JPEG, etc.) can be extracted.
+        // Without this the Rust-side OCR plugin registry stays empty and any
+        // image upload fails with "OCR backend 'tesseract' not registered".
+        await enableOcr();
         wasmReady = true;
       } catch (e) {
         console.error('WASM initialization failed:', e);

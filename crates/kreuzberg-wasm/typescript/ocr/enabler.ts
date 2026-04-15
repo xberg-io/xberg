@@ -280,9 +280,21 @@ export async function enableOcr(): Promise<void> {
  * - processImage() returns a JSON string (not an object)
  */
 function registerBackendInRustRegistry(wasm: ReturnType<typeof getWasmModule>, backend: OcrBackendProtocol): void {
+	// wasm-bindgen exports the function as "register_ocr_backend" (snake_case).
+	// Guard against it being absent so we can emit a clear warning instead of
+	// silently leaving the Rust registry empty (which causes the "OCR backend
+	// 'tesseract' not registered. Available backends: []" error at extraction time).
 	const registerFn = wasm?.register_ocr_backend;
 	if (!registerFn) {
-		return;
+		// Fail fast: if the Rust bridge is absent, enableOcr() must throw rather
+		// than succeed silently. A silent return leaves the Rust registry empty,
+		// causing the cryptic "OCR backend 'tesseract' not registered. Available
+		// backends: []" error at extraction time — the exact bug in issue #719.
+		throw new Error(
+			"wasm.register_ocr_backend is not exported by the WASM module. " +
+				"The Rust-side OCR plugin registry cannot be populated. " +
+				"Ensure the WASM binary was built with the 'ocr-wasm' feature and the pkg glue is up to date.",
+		);
 	}
 
 	const rustAdapter = {
@@ -296,7 +308,12 @@ function registerBackendInRustRegistry(wasm: ReturnType<typeof getWasmModule>, b
 
 	try {
 		registerFn(rustAdapter);
-	} catch {
-		// Registration may fail if already registered; non-fatal
+	} catch (err) {
+		// wasm-bindgen throws if a backend with the same name is already registered.
+		// That is safe to ignore (idempotent re-registration). Re-throw anything else.
+		const msg = err instanceof Error ? err.message : String(err);
+		if (!msg.toLowerCase().includes("already registered")) {
+			throw new Error(`Failed to register OCR backend in the Rust plugin registry: ${msg}`);
+		}
 	}
 }
