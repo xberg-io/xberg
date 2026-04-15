@@ -553,13 +553,15 @@ mod tests {
                 true
             }
             async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<ExtractionResult> {
-                let include_elements =
-                    config.element_config.as_ref().is_some_and(|ec| ec.include_elements);
+                let include_elements = config.element_config.as_ref().is_some_and(|ec| ec.include_elements);
 
                 let elements = if include_elements {
                     // Return one element on page 1 — exactly what paddle-ocr returns.
                     let geo = OcrBoundingGeometry::Rectangle {
-                        left: 0, top: 0, width: 100, height: 20,
+                        left: 0,
+                        top: 0,
+                        width: 100,
+                        height: 20,
                     };
                     let confidence = OcrConfidence::from_tesseract(99.0);
                     let elem = OcrElement::new("hello world".to_string(), geo, confidence)
@@ -579,10 +581,18 @@ mod tests {
         }
 
         impl Plugin for GatedElementsBackend {
-            fn name(&self) -> &str { "gated-elements-test" }
-            fn version(&self) -> String { "0.0.0".to_string() }
-            fn initialize(&self) -> crate::Result<()> { Ok(()) }
-            fn shutdown(&self) -> crate::Result<()> { Ok(()) }
+            fn name(&self) -> &str {
+                "gated-elements-test"
+            }
+            fn version(&self) -> String {
+                "0.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
         }
 
         register_ocr_backend(std::sync::Arc::new(GatedElementsBackend)).unwrap();
