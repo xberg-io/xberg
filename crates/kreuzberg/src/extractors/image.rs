@@ -53,6 +53,20 @@ impl ImageExtractor {
         let mut ocr_config_with_format = ocr_config.clone();
         ocr_config_with_format.output_format = Some(config.output_format.clone());
 
+        // Always request OCR elements so that build_pages can populate pages[].
+        // Backends that gate element output behind include_elements (e.g. paddle-ocr)
+        // would otherwise return None, leaving pages[] empty while content is correct.
+        // This mirrors the ensure_elements_enabled pattern used by the PDF extractor.
+        match ocr_config_with_format.element_config.as_mut() {
+            Some(ec) => ec.include_elements = true,
+            None => {
+                ocr_config_with_format.element_config = Some(crate::types::OcrElementConfig {
+                    include_elements: true,
+                    ..Default::default()
+                });
+            }
+        }
+
         let ocr_result = backend.process_image(content, &ocr_config_with_format).await?;
 
         // Destructure to avoid partial-move issues when propagating OCR elements.
@@ -503,6 +517,97 @@ impl DocumentExtractor for ImageExtractor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression test for #705: paddle-ocr (and any backend that gates ocr_elements
+    /// on include_elements) left pages[] empty because extract_with_ocr never forced
+    /// include_elements = true before calling the backend.
+    ///
+    /// This test uses a minimal mock backend whose process_image returns ocr_elements
+    /// only when include_elements is true — exactly the paddle-ocr contract.
+    /// The fix is that extract_with_ocr now always sets include_elements = true so
+    /// build_pages can group those elements by page number.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    async fn test_extract_with_ocr_populates_pages_for_elements_gated_backend() {
+        use crate::core::config::OcrConfig;
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin, register_ocr_backend, unregister_ocr_backend};
+        use crate::types::{ExtractionResult, OcrBoundingGeometry, OcrConfidence, OcrElement, OcrElementLevel};
+
+        // 1×1 white PNG generated via the `image` crate so CRCs are valid.
+        let mut png_buf = std::io::Cursor::new(Vec::new());
+        image::ImageBuffer::<image::Rgb<u8>, _>::from_pixel(1, 1, image::Rgb([255u8, 255, 255]))
+            .write_to(&mut png_buf, image::ImageFormat::Png)
+            .expect("failed to encode test PNG");
+        let png_1x1 = png_buf.into_inner();
+
+        /// A mock backend that behaves like paddle-ocr: returns ocr_elements only when
+        /// include_elements is true. This is the exact contract that caused issue #705.
+        struct GatedElementsBackend;
+
+        #[async_trait::async_trait]
+        impl OcrBackend for GatedElementsBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, _: &[u8], config: &OcrConfig) -> crate::Result<ExtractionResult> {
+                let include_elements =
+                    config.element_config.as_ref().is_some_and(|ec| ec.include_elements);
+
+                let elements = if include_elements {
+                    // Return one element on page 1 — exactly what paddle-ocr returns.
+                    let geo = OcrBoundingGeometry::Rectangle {
+                        left: 0, top: 0, width: 100, height: 20,
+                    };
+                    let confidence = OcrConfidence::from_tesseract(99.0);
+                    let elem = OcrElement::new("hello world".to_string(), geo, confidence)
+                        .with_level(OcrElementLevel::Line)
+                        .with_page_number(1);
+                    Some(vec![elem])
+                } else {
+                    None
+                };
+
+                Ok(ExtractionResult {
+                    content: "hello world".to_string(),
+                    ocr_elements: elements,
+                    ..Default::default()
+                })
+            }
+        }
+
+        impl Plugin for GatedElementsBackend {
+            fn name(&self) -> &str { "gated-elements-test" }
+            fn version(&self) -> String { "0.0.0".to_string() }
+            fn initialize(&self) -> crate::Result<()> { Ok(()) }
+            fn shutdown(&self) -> crate::Result<()> { Ok(()) }
+        }
+
+        register_ocr_backend(std::sync::Arc::new(GatedElementsBackend)).unwrap();
+
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "gated-elements-test".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let extractor = ImageExtractor::new();
+        let doc = extractor.extract_bytes(&png_1x1, "image/png", &config).await.unwrap();
+
+        // At least one element must carry page: Some(1) so that build_pages produces
+        // a non-empty pages vec. Before the fix, all elements had page: None.
+        let has_paged_element = doc.elements.iter().any(|e| e.page == Some(1));
+        assert!(
+            has_paged_element,
+            "No elements with page number — pages[] would be empty (regression of #705)"
+        );
+
+        unregister_ocr_backend("gated-elements-test").unwrap();
+    }
 
     #[tokio::test]
     async fn test_image_extractor_invalid_image() {
