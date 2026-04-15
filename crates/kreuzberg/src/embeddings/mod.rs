@@ -294,9 +294,95 @@ fn load_tokenizer(
     Ok(tokenizer)
 }
 
+/// How long a partial download must be idle before it is considered stale.
+///
+/// hf-hub writes to the `.part` file continuously during an active download.
+/// If the file has not been modified in this window, no live process is writing
+/// to it and the corresponding lock is safe to remove.
+const STALE_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// Remove stale `.lock` and `.part` files left behind by interrupted downloads.
+///
+/// hf-hub coordinates concurrent downloads with `flock(LOCK_EX)`. The OS
+/// releases the flock when the owning process exits, but the `.lock` and
+/// `.part` files remain on disk. In practice this causes permanent
+/// `LockAcquisition` failures in two scenarios:
+///
+/// - A CI job or Docker container is killed mid-download; the next invocation
+///   cannot acquire the lock because the file still exists (even though no
+///   process holds it — the flock was released).
+/// - Two concurrent first-time invocations race; the loser exits with an
+///   error and the `.lock` / `.part` files are never cleaned up if the winner
+///   also fails later.
+///
+/// Staleness is detected via the modification time of the `.part` file (or
+/// the `.lock` file when no `.part` exists): if neither has been written in
+/// [`STALE_DOWNLOAD_TIMEOUT`], no live process is actively downloading and
+/// it is safe to remove both files so that the next `repo.get()` can proceed.
+fn cleanup_stale_locks(cache_dir: &std::path::Path, repo_name: &str) {
+    // hf-hub folder_name(): "models--" + repo_id.replace('/', "--")
+    let folder = format!("models--{}", repo_name.replace('/', "--"));
+    let blobs_dir = cache_dir.join(folder).join("blobs");
+
+    let entries = match std::fs::read_dir(&blobs_dir) {
+        Ok(e) => e,
+        Err(_) => return, // blobs dir doesn't exist yet — nothing to clean
+    };
+
+    let now = std::time::SystemTime::now();
+
+    for entry in entries.flatten() {
+        let lock_path = entry.path();
+        if lock_path.extension().map_or(false, |ext| ext == "lock") {
+            let part_path = lock_path.with_extension("part");
+
+            // Prefer the .part file's mtime: an active download writes bytes
+            // continuously, so a stale mtime there is the strongest signal.
+            // Fall back to the .lock file's mtime when no .part exists.
+            let probe_path = if part_path.exists() { &part_path } else { &lock_path };
+
+            let age = probe_path
+                .metadata()
+                .and_then(|m| m.modified())
+                .and_then(|modified| now.duration_since(modified).map_err(std::io::Error::other))
+                .unwrap_or(std::time::Duration::ZERO);
+
+            if age >= STALE_DOWNLOAD_TIMEOUT {
+                if std::fs::remove_file(&lock_path).is_ok() {
+                    tracing::info!(
+                        path = ?lock_path,
+                        idle_minutes = age.as_secs() / 60,
+                        "Removed stale download lock file",
+                    );
+                }
+                if part_path.exists() && std::fs::remove_file(&part_path).is_ok() {
+                    tracing::info!(path = ?part_path, "Removed stale partial download");
+                }
+            }
+        }
+    }
+}
+
+/// Build a human-readable hint to attach to a LockAcquisition error.
+fn lock_acquisition_hint(cache_dir: &std::path::Path, repo_name: &str) -> String {
+    let folder = format!("models--{}", repo_name.replace('/', "--"));
+    format!(
+        "\n\nAnother process may be downloading this model. \
+        If no download is in progress, remove the stale files and retry:\n  \
+        rm -f {cache}/{folder}/blobs/*.lock\n  \
+        rm -f {cache}/{folder}/blobs/*.part",
+        cache = cache_dir.display(),
+        folder = folder,
+    )
+}
+
 /// Download model files from HuggingFace and return their local paths.
 ///
 /// Returns `(model_path, tokenizer_path, config_path, special_tokens_path, tokenizer_config_path)`.
+///
+/// Before downloading, stale lock/part files left by interrupted or concurrent
+/// invocations are removed automatically so that the download can proceed
+/// without requiring manual intervention.
 fn download_model_files(
     repo_name: &str,
     model_file: &str,
@@ -308,6 +394,10 @@ fn download_model_files(
     std::path::PathBuf,
     std::path::PathBuf,
 )> {
+    // Self-heal any stale .lock/.part files from a previous interrupted download
+    // before hf-hub's own lock_file() runs and fails on them.
+    cleanup_stale_locks(cache_directory, repo_name);
+
     let api = hf_hub::api::sync::ApiBuilder::from_env()
         .with_cache_dir(cache_directory.to_path_buf())
         .with_progress(true)
@@ -316,9 +406,14 @@ fn download_model_files(
 
     let repo = api.model(repo_name.to_string());
 
-    let model_path = repo
-        .get(model_file)
-        .map_err(|e| crate::KreuzbergError::embedding(format!("Failed to download {model_file}: {e}")))?;
+    let model_path = repo.get(model_file).map_err(|e| {
+        let hint = if matches!(e, hf_hub::api::sync::ApiError::LockAcquisition(_)) {
+            lock_acquisition_hint(cache_directory, repo_name)
+        } else {
+            String::new()
+        };
+        crate::KreuzbergError::embedding(format!("Failed to download {model_file}: {e}{hint}"))
+    })?;
 
     let tokenizer_path = repo
         .get("tokenizer.json")
@@ -888,6 +983,95 @@ mod tests {
         assert!(result.is_ok(), "spawn_blocking should not panic");
         // The inner result should be an error (auth failure), not a panic
         assert!(result.unwrap().is_err(), "Expected auth error, not success");
+    }
+
+    // ── Stale lock cleanup tests ──────────────────────────────────────────────
+
+    /// Helper: write a file with a modified-time set to `age` seconds in the past.
+    fn write_file_aged(path: &std::path::Path, age_secs: u64) {
+        std::fs::write(path, b"").unwrap();
+        let mtime = std::time::SystemTime::now()
+            .checked_sub(std::time::Duration::from_secs(age_secs))
+            .unwrap();
+        let ft = filetime::FileTime::from_system_time(mtime);
+        filetime::set_file_mtime(path, ft).unwrap();
+    }
+
+    #[test]
+    fn test_cleanup_stale_locks_nonexistent_dir_is_noop() {
+        // Should not panic when the blobs dir does not exist.
+        let tmp = tempfile::tempdir().unwrap();
+        cleanup_stale_locks(tmp.path(), "org/model");
+    }
+
+    #[test]
+    fn test_cleanup_stale_locks_removes_old_lock_and_part() {
+        let tmp = tempfile::tempdir().unwrap();
+        let blobs = tmp.path().join("models--org--model").join("blobs");
+        std::fs::create_dir_all(&blobs).unwrap();
+
+        let lock = blobs.join("abc123.lock");
+        let part = blobs.join("abc123.part");
+
+        // Write files aged beyond the timeout.
+        let old_secs = STALE_DOWNLOAD_TIMEOUT.as_secs() + 60;
+        write_file_aged(&lock, old_secs);
+        write_file_aged(&part, old_secs);
+
+        cleanup_stale_locks(tmp.path(), "org/model");
+
+        assert!(!lock.exists(), ".lock should have been removed");
+        assert!(!part.exists(), ".part should have been removed");
+    }
+
+    #[test]
+    fn test_cleanup_stale_locks_leaves_recent_files_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let blobs = tmp.path().join("models--org--model").join("blobs");
+        std::fs::create_dir_all(&blobs).unwrap();
+
+        let lock = blobs.join("def456.lock");
+        let part = blobs.join("def456.part");
+
+        // Write files that are only 60 seconds old — well within the timeout.
+        write_file_aged(&lock, 60);
+        write_file_aged(&part, 60);
+
+        cleanup_stale_locks(tmp.path(), "org/model");
+
+        assert!(lock.exists(), ".lock for active download must not be removed");
+        assert!(part.exists(), ".part for active download must not be removed");
+    }
+
+    #[test]
+    fn test_cleanup_stale_locks_removes_lock_when_no_part() {
+        // When only a .lock file exists (download killed before first byte),
+        // staleness is assessed from the .lock file's own mtime.
+        let tmp = tempfile::tempdir().unwrap();
+        let blobs = tmp.path().join("models--org--model").join("blobs");
+        std::fs::create_dir_all(&blobs).unwrap();
+
+        let lock = blobs.join("ghi789.lock");
+        let old_secs = STALE_DOWNLOAD_TIMEOUT.as_secs() + 60;
+        write_file_aged(&lock, old_secs);
+
+        cleanup_stale_locks(tmp.path(), "org/model");
+
+        assert!(!lock.exists(), "stale .lock with no .part should be removed");
+    }
+
+    #[test]
+    fn test_lock_acquisition_hint_contains_recovery_commands() {
+        let cache = std::path::Path::new("/tmp/kreuzberg/embeddings");
+        let hint = lock_acquisition_hint(cache, "intfloat/multilingual-e5-base");
+
+        assert!(hint.contains("rm -f"), "hint must include rm command");
+        assert!(
+            hint.contains("models--intfloat--multilingual-e5-base"),
+            "hint must include the repo folder name"
+        );
+        assert!(hint.contains("*.lock"), "hint must mention .lock pattern");
+        assert!(hint.contains("*.part"), "hint must mention .part pattern");
     }
 
     /// Regression test for #683: GraphOptimizationLevel::Level3 maps to
