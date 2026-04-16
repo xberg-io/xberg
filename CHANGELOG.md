@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Doubled OCR content and corrupted page text in image extraction** — OCR elements were injected into the rendering pipeline as `OcrText` internal elements, causing `render_plain` to append every raw word token after the coherent HOCR string. `ExtractionResult.content` was effectively duplicated and `pages[*].content` contained a word-by-word dump instead of the readable text. OCR elements are now stored directly via `prebuilt_ocr_elements`, bypassing the rendering pipeline. (#706)
+- **`LlmConfig` missing `Default` trait** — the documented `..Default::default()` struct-update pattern failed to compile with "trait not satisfied". Added `Default` to the derive macro; all optional fields default to `None`, `model` to `""`. (#716)
 - **LLM embedding provider panics in server mode** — `embed_texts` called `block_on` inside a new runtime, which panics when already inside tokio (HTTP server, MCP). Uses `block_in_place` with the current runtime handle when available, falls back to a new runtime for standalone sync callers. (#713, #714)
 - **Duplicate `output_format` key in OCR metadata** — stale `additional` HashMap insert caused a duplicate JSON key violating RFC 8259. The value is already on the typed `Metadata::output_format` field. (#712)
 - **OCR table metadata serialized as strings instead of numbers** — `table_count`, `tables_detected`, `table_rows`, and `table_cols` were `"0"` instead of `0`, breaking numeric comparisons in all bindings. (#712)
