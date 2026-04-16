@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 /// model = "openai/gpt-4o"
 /// api_key = "sk-..."  # or use KREUZBERG_LLM_API_KEY env var
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LlmConfig {
     /// Provider/model string using liter-llm routing format.
     ///
@@ -105,4 +105,50 @@ pub struct StructuredExtractionConfig {
 
 fn default_schema_name() -> String {
     "extraction".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test for https://github.com/kreuzberg-dev/kreuzberg/issues/716
+    ///
+    /// `LlmConfig` must implement `Default` so callers can use the struct-update
+    /// syntax documented in the VLM OCR guide:
+    ///
+    /// ```rust
+    /// use kreuzberg::core::config::LlmConfig;
+    /// let cfg = LlmConfig {
+    ///     model: "openai/gpt-4o-mini".to_string(),
+    ///     ..Default::default()
+    /// };
+    /// ```
+    #[test]
+    fn test_llm_config_default_trait_is_satisfied() {
+        let cfg = LlmConfig::default();
+        assert!(cfg.model.is_empty(), "default model should be empty string");
+        assert!(cfg.api_key.is_none());
+        assert!(cfg.base_url.is_none());
+        assert!(cfg.timeout_secs.is_none());
+        assert!(cfg.max_retries.is_none());
+        assert!(cfg.temperature.is_none());
+        assert!(cfg.max_tokens.is_none());
+    }
+
+    /// Verify the struct-update pattern from the issue compiles and produces
+    /// only the explicitly set field.
+    #[test]
+    fn test_llm_config_struct_update_syntax() {
+        let cfg = LlmConfig {
+            model: "openai/gpt-4o-mini".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(cfg.model, "openai/gpt-4o-mini");
+        assert!(cfg.api_key.is_none());
+        assert!(cfg.base_url.is_none());
+        assert!(cfg.timeout_secs.is_none());
+        assert!(cfg.max_retries.is_none());
+        assert!(cfg.temperature.is_none());
+        assert!(cfg.max_tokens.is_none());
+    }
 }
