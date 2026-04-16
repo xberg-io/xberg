@@ -1812,7 +1812,7 @@ pub fn get_extensions_for_mime(mime_type: &str) -> Result<Vec<String>>
 
 ## LLM Integration
 
-Kreuzberg integrates with LLMs via the `liter-llm` crate for structured extraction and VLM-based OCR. Requires the `llm` feature flag. See the [LLM Integration Guide](../guides/llm-integration.md) for full details.
+Kreuzberg integrates with LLMs via the `liter-llm` crate for structured extraction and VLM-based OCR. Requires the `liter-llm` feature flag. See the [LLM Integration Guide](../guides/llm-integration.md) for full details.
 
 ### Structured Extraction
 
