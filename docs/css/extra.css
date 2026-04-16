@@ -1422,7 +1422,12 @@ nav.md-nav--secondary > .md-nav__list > .md-nav__item > .md-nav > .md-nav__list 
 }
 
 [data-md-color-scheme="default"] .md-top svg {
-	fill: #323040;
+	color: #da2ae0;
+}
+
+[data-md-color-scheme="default"] .md-top svg circle {
+	fill: #000000;
+	stroke: #000000;
 }
 
 [data-md-color-scheme="default"] .md-top:hover {
@@ -1438,7 +1443,12 @@ nav.md-nav--secondary > .md-nav__list > .md-nav__item > .md-nav > .md-nav__list 
 }
 
 [data-md-color-scheme="slate"] .md-top svg {
-	fill: #000000 !important;
+	color: #58fbda;
+}
+
+[data-md-color-scheme="slate"] .md-top svg circle {
+	fill: #000000;
+	stroke: #000000;
 }
 
 .benchmark-dashboard {
