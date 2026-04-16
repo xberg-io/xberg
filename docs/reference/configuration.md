@@ -253,7 +253,7 @@ Main extraction configuration controlling all aspects of document processing.
 | `acceleration`               | `AccelerationConfig?`      | `None`                 | Hardware acceleration configuration for ONNX Runtime inference (layout detection and embeddings). See [AccelerationConfig](#accelerationconfig).                                                 |
 | `include_document_structure` | `bool`                     | `false`                | Enable structured document model output. When true, the `document` field on ExtractionResult is populated with a tree-based representation of document content.                                  |
 | `tree_sitter`                | `TreeSitterConfig?`        | `None`                 | Tree-sitter code intelligence configuration. Controls code analysis features when extracting source code files. Only available with `tree-sitter` feature.                                       |
-| `structured_extraction`      | `StructuredExtractionConfig?` | `None`              | Structured extraction configuration for LLM-powered schema-based extraction. When set, extraction results include a `structured_output` field with data conforming to the provided JSON schema. Only available with `llm` feature. |
+| `structured_extraction`      | `StructuredExtractionConfig?` | `None`              | Structured extraction configuration for LLM-powered schema-based extraction. When set, extraction results include a `structured_output` field with data conforming to the provided JSON schema. Only available with `liter-llm` feature. |
 
 ### Result Format vs Output Format
 
@@ -586,7 +586,7 @@ Configuration for OCR (Optical Character Recognition) processing on images and s
 | `language`         | `str`              | `"eng"`       | Language code(s) for OCR, for example, `"eng"`, `"eng+fra"`, `"eng+deu+fra"` |
 | `tesseract_config` | `TesseractConfig?` | `None`        | Tesseract-specific configuration options                              |
 | `paddle_ocr_config` | `PaddleOcrConfig?` | `None`       | PaddleOCR-specific configuration options                              |
-| `vlm_config`       | `LlmConfig?`       | `None`        | Vision Language Model configuration for VLM-based OCR. When set, enables using a VLM as an OCR backend. Requires the `llm` feature. |
+| `vlm_config`       | `LlmConfig?`       | `None`        | Vision Language Model configuration for VLM-based OCR. When set, enables using a VLM as an OCR backend. Requires the `liter-llm` feature. |
 | `vlm_prompt`       | `String?`           | `None`        | Custom prompt for VLM-based OCR. Overrides the default OCR prompt sent to the vision model. Useful for domain-specific extraction instructions. |
 
 ### Example
@@ -863,7 +863,7 @@ model = { type = "llm", model = "openai/text-embedding-3-small" }
 batch_size = 32
 ```
 
-**Note**: When `api_key` is not set in `LlmConfig`, liter-llm falls back to provider-standard environment variables (for example, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). Requires the `llm` feature.
+**Note**: When `api_key` is not set in `LlmConfig`, liter-llm falls back to provider-standard environment variables (for example, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`). Requires the `liter-llm` feature.
 
 ### Cache Directory
 
