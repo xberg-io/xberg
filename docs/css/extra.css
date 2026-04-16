@@ -419,6 +419,18 @@ html {
 	color: #323040;
 }
 
+[data-md-color-scheme="slate"] .md-typeset details:not([class]),
+[data-md-color-scheme="slate"] .md-typeset details:not([class]) > summary,
+[data-md-color-scheme="slate"] .md-typeset details:not([class]) p,
+[data-md-color-scheme="slate"] .md-typeset details:not([class]) li,
+[data-md-color-scheme="slate"] .md-typeset details:not([class]) strong {
+	color: rgba(255, 255, 255, 0.9);
+}
+
+.md-typeset details:not([class])[open] {
+	padding-bottom: 0.6rem;
+}
+
 [data-md-color-scheme="slate"] .md-typeset .admonition > .admonition-title,
 [data-md-color-scheme="slate"] .md-typeset details > summary {
 	margin: 0 0 0.6rem 0;
