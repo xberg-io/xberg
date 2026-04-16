@@ -17,7 +17,9 @@ exclude = ["node_modules", "target", "dist", "vendor"]
 # MD046: Code block style (Zensical tabs indent fenced blocks)
 # MD051: Link fragment checking (incompatible with Zensical anchor generation)
 # MD076: Blank lines between list items (intentional formatting in READMEs)
-disable = ["MD012", "MD013", "MD024", "MD033", "MD036", "MD041", "MD046", "MD051", "MD076"]
+# MD030: Spaces after list markers (MkDocs Material grid cards require 3 spaces)
+# MD035: Horizontal rule style (grid cards use indented --- as card separators)
+disable = ["MD012", "MD013", "MD024", "MD030", "MD033", "MD035", "MD036", "MD041", "MD046", "MD051", "MD076"]
 
 # MD024: Allow duplicate heading names if they are not siblings
 [MD024]

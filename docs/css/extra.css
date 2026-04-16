@@ -997,7 +997,40 @@ strong {
 }
 
 .md-footer__inner.md-grid {
-	display: none;
+	background-color: #323040;
+	max-width: 100%;
+	width: 100%;
+	padding-left: 2rem;
+	padding-right: 2rem;
+}
+
+.md-footer__link {
+	color: rgba(255, 255, 255, 0.7);
+	transition: color 0.2s;
+}
+
+.md-footer__link:hover {
+	color: #fff;
+}
+
+[data-md-color-scheme="default"] .md-footer__link:hover .md-footer__title {
+	color: #da2ae0;
+}
+
+[data-md-color-scheme="slate"] .md-footer__link:hover .md-footer__title {
+	color: #58fbda;
+}
+
+.md-footer__inner .md-footer__button.md-icon svg {
+	fill: none;
+	stroke: rgba(255, 255, 255, 0.7);
+}
+
+.md-footer-meta__inner.md-grid {
+	max-width: 100%;
+	width: 100%;
+	padding-left: 2rem;
+	padding-right: 2rem;
 }
 
 .md-footer-meta {
@@ -1757,14 +1790,16 @@ body:has(.full-width-iframe) article {
 	font-size: 1rem;
 }
 
-/* Language icon color — black in light mode */
-.md-typeset .install-cards .lg svg {
-	fill: #1a1926 !important;
+/* Language icon color — pink accent in light mode */
+.md-typeset .install-cards .lg svg,
+.md-typeset .install-cards .lg svg path {
+	fill: #da2ae0;
 }
 
-/* Language icon color — white in dark mode */
-[data-md-color-scheme="slate"] .md-typeset .install-cards .lg svg {
-	fill: #ffffff !important;
+/* Language icon color — teal accent in dark mode */
+[data-md-color-scheme="slate"] .md-typeset .install-cards .lg svg,
+[data-md-color-scheme="slate"] .md-typeset .install-cards .lg svg path {
+	fill: #58fbda;
 }
 
 .md-typeset .install-cards .highlight {
