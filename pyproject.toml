@@ -22,7 +22,7 @@ dev = [
   "validate-pyproject>=0.24.1",
 ]
 bench-docling = [ "docling>=2.64.1" ]
-bench-markitdown = [ "markitdown[all]>=0.1.4" ]
+bench-markitdown = [ "markitdown[all]>=0.1.5" ]
 bench-mineru = [ "mineru[pipeline]>=2.6.7", "onnxruntime" ]
 bench-pdfminer = [ "pdfminer-six>=20231228" ]
 bench-pdfplumber = [ "pdfplumber>=0.11.4" ]
