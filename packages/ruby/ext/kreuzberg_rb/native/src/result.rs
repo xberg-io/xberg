@@ -751,6 +751,10 @@ pub fn extraction_result_to_ruby(ruby: &Ruby, result: RustExtractionResult) -> R
         set_hash_entry(ruby, &hash, "llm_usage", ruby.qnil().as_value())?;
     }
 
+    // Convert structured output (Value::Null maps to qnil via json_value_to_ruby)
+    let structured_ruby = json_value_to_ruby(ruby, &result.structured_output)?;
+    set_hash_entry(ruby, &hash, "structured_output", structured_ruby)?;
+
     // Convert annotations
     if let Some(annotations) = result.annotations {
         let annotations_array = ruby.ary_new();

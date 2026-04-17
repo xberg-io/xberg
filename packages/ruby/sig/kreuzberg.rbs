@@ -1548,6 +1548,7 @@ module Kreuzberg
     attr_reader uris: Array[uri_hash]?
     attr_reader children: Array[archive_entry_hash]?
     attr_reader llm_usage: Array[LlmUsage]?
+    attr_reader structured_output: (Hash[String, untyped] | Array[untyped] | Integer | Float | String | bool | nil)
 
     # PDF annotation extracted from a document page (Struct from result.rb)
     class PdfAnnotation

@@ -15,7 +15,7 @@ module Kreuzberg
     attr_reader :content, :mime_type, :metadata, :metadata_json, :tables,
                 :detected_languages, :chunks, :images, :pages, :elements, :ocr_elements, :djot_content,
                 :document, :extracted_keywords, :quality_score, :processing_warnings, :annotations,
-                :uris, :children
+                :uris, :children, :structured_output
 
     # @!attribute [r] cells
     #   @return [Array<Array<String>>] Table cells (2D array)
@@ -342,6 +342,7 @@ module Kreuzberg
       @annotations = parse_annotations(get_value(hash, 'annotations'))
       @uris = parse_uris(get_value(hash, 'uris'))
       @children = parse_children(get_value(hash, 'children'))
+      @structured_output = get_value(hash, 'structured_output')
     end
     # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
@@ -369,7 +370,8 @@ module Kreuzberg
         processing_warnings: @processing_warnings.map(&:to_h),
         annotations: @annotations&.map(&:to_h),
         uris: @uris&.map(&:to_h),
-        children: @children&.map(&:to_h)
+        children: @children&.map(&:to_h),
+        structured_output: @structured_output
       }
     end
     # rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength
