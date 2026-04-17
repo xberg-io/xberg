@@ -1,12 +1,12 @@
 [build-system]
 build-backend = "maturin"
-requires = [ "maturin>=1,<2" ]
+requires = [ "maturin>=1.13.1,<2" ]
 
 [dependency-groups]
 dev = [
   "covdefaults>=2.3.0",
   "httpx>=0.27.0",
-  "maturin>=1.10.2",
+  "maturin>=1.13.1",
   "mypy>=1.19.0",
   "prek>=0.2.21",
   "pyproject-fmt>=2.11.1",
