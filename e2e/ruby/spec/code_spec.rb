@@ -5,7 +5,6 @@
 #
 # Tests for code fixtures.
 
-# rubocop:disable Layout/LineLength
 require_relative 'spec_helper'
 
 RSpec.describe 'code fixtures' do
@@ -106,4 +105,3 @@ RSpec.describe 'code fixtures' do
     end
   end
 end
-# rubocop:enable Layout/LineLength

@@ -658,7 +658,7 @@ func assertLlmUsage(t *testing.T, result *kreuzberg.ExtractionResult, maxCount *
 	t.Helper()
 	usage := result.LlmUsage
 	if usage == nil {
-		usage = []interface{}{}
+		usage = []kreuzberg.LlmUsage{}
 	}
 	if isEmpty != nil && *isEmpty {
 		if len(usage) != 0 {

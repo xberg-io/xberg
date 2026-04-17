@@ -1398,4 +1398,27 @@ mod tests {
             error_msg
         );
     }
+
+    #[tokio::test]
+    async fn test_chunk_handler_topic_threshold_accepted() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/chunk")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"text": "Hello world. This is a test.", "chunker_type": "semantic", "config": {"topic_threshold": 0.5}}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["config"]["topic_threshold"], 0.5);
+    }
 }

@@ -105,7 +105,14 @@ defmodule E2E.Helpers do
     )
   end
 
-  def run_fixture_with_method(fixture_id, relative_path, config_hash, method, input_type, opts \\ []) do
+  def run_fixture_with_method(
+        fixture_id,
+        relative_path,
+        config_hash,
+        method,
+        input_type,
+        opts \\ []
+      ) do
     requirements = Keyword.get(opts, :requirements, [])
     notes = Keyword.get(opts, :notes, nil)
     skip_if_missing = Keyword.get(opts, :skip_if_missing, true)
@@ -276,12 +283,18 @@ defmodule E2E.Helpers do
       result
     else
       lowered = String.downcase(result.content || "")
-      found = Enum.filter(snippets, fn snippet -> String.contains?(lowered, String.downcase(snippet)) end)
+
+      found =
+        Enum.filter(snippets, fn snippet ->
+          String.contains?(lowered, String.downcase(snippet))
+        end)
 
       if Enum.empty?(found) do
         result
       else
-        flunk("Expected content to contain none of #{inspect(snippets)}, but found #{inspect(found)}")
+        flunk(
+          "Expected content to contain none of #{inspect(snippets)}, but found #{inspect(found)}"
+        )
       end
     end
   end
@@ -308,7 +321,9 @@ defmodule E2E.Helpers do
       languages = result.detected_languages || []
 
       if !Enum.all?(expected, fn lang -> Enum.member?(languages, lang) end) do
-        flunk("Detected languages #{inspect(languages)} do not include all of #{inspect(expected)}")
+        flunk(
+          "Detected languages #{inspect(languages)} do not include all of #{inspect(expected)}"
+        )
       end
 
       if min_confidence do
@@ -374,7 +389,9 @@ defmodule E2E.Helpers do
 
             is_list(value) && is_list(contains_val) ->
               if !Enum.all?(contains_val, fn item -> Enum.member?(value, item) end) do
-                flunk("Metadata path '#{path}' value does not contain all of #{inspect(contains_val)}")
+                flunk(
+                  "Metadata path '#{path}' value does not contain all of #{inspect(contains_val)}"
+                )
               end
 
             true ->
@@ -422,7 +439,9 @@ defmodule E2E.Helpers do
     end
 
     if opts[:each_has_heading_context] == false do
-      if !Enum.all?(chunks, fn chunk -> is_nil(chunk.metadata) || is_nil(chunk.metadata.heading_context) end) do
+      if !Enum.all?(chunks, fn chunk ->
+           is_nil(chunk.metadata) || is_nil(chunk.metadata.heading_context)
+         end) do
         flunk("Not all chunks have no heading_context")
       end
     end
@@ -439,7 +458,9 @@ defmodule E2E.Helpers do
           chunk.metadata && chunk.metadata.heading_context != nil
         end)
 
-      if !Enum.all?(chunks_with_heading, fn chunk -> chunk.content && String.starts_with?(chunk.content, "#") end) do
+      if !Enum.all?(chunks_with_heading, fn chunk ->
+           chunk.content && String.starts_with?(chunk.content, "#")
+         end) do
         flunk("Not all chunks with heading_context start with a heading (#)")
       end
     end
@@ -463,7 +484,9 @@ defmodule E2E.Helpers do
       found_formats = images |> Enum.map(fn img -> img.format end) |> Enum.uniq()
 
       if !Enum.all?(opts[:formats_include], fn fmt -> Enum.member?(found_formats, fmt) end) do
-        flunk("Image formats #{inspect(found_formats)} do not include all of #{inspect(opts[:formats_include])}")
+        flunk(
+          "Image formats #{inspect(found_formats)} do not include all of #{inspect(opts[:formats_include])}"
+        )
       end
     end
 
@@ -499,10 +522,13 @@ defmodule E2E.Helpers do
     end
 
     if opts[:types_include] do
-      found_types = elements |> Enum.map(fn elem -> to_string(elem.element_type) end) |> Enum.uniq()
+      found_types =
+        elements |> Enum.map(fn elem -> to_string(elem.element_type) end) |> Enum.uniq()
 
       if !Enum.all?(opts[:types_include], fn t -> Enum.member?(found_types, t) end) do
-        flunk("Element types #{inspect(found_types)} do not include all of #{inspect(opts[:types_include])}")
+        flunk(
+          "Element types #{inspect(found_types)} do not include all of #{inspect(opts[:types_include])}"
+        )
       end
     end
 
@@ -514,7 +540,12 @@ defmodule E2E.Helpers do
 
     if opts[:has_document] do
       assert document != nil, "Expected document but got nil"
-      nodes = if is_list(document), do: document, else: Map.get(document, :nodes) || Map.get(document, "nodes") || []
+
+      nodes =
+        if is_list(document),
+          do: document,
+          else: Map.get(document, :nodes) || Map.get(document, "nodes") || []
+
       nodes_len = length(nodes)
 
       if opts[:min_node_count] && nodes_len < opts[:min_node_count] do
@@ -706,7 +737,8 @@ defmodule E2E.Helpers do
   end
 
   def assert_processing_warnings(result, opts) do
-    warnings = Map.get(result, :processing_warnings) || Map.get(result, "processing_warnings") || []
+    warnings =
+      Map.get(result, :processing_warnings) || Map.get(result, "processing_warnings") || []
 
     if opts[:max_count] do
       if length(warnings) > opts[:max_count] do
@@ -890,7 +922,9 @@ defmodule E2E.Helpers do
     if length(results) > 0 do
       Enum.with_index(results)
       |> Enum.each(fn {vector, i} ->
-        assert is_list(vector) or is_struct(vector, Nx.Tensor), "Expected vector to be list or Tensor"
+        assert is_list(vector) or is_struct(vector, Nx.Tensor),
+               "Expected vector to be list or Tensor"
+
         # Convert to list if it's a tensor for easier checks if needed,
         # but here we assume it's a list for simplicity or we use Enum functions.
         list_vector =

@@ -385,7 +385,11 @@ defmodule E2E.ContractTest do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_chunks(min_count: 2, each_has_content: true, each_has_heading_context: true)
+          |> E2E.Helpers.assert_chunks(
+            min_count: 2,
+            each_has_content: true,
+            each_has_heading_context: true
+          )
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -430,7 +434,11 @@ defmodule E2E.ContractTest do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_chunks(min_count: 2, each_has_content: true, each_has_heading_context: false)
+          |> E2E.Helpers.assert_chunks(
+            min_count: 2,
+            each_has_content: true,
+            each_has_heading_context: false
+          )
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -444,7 +452,14 @@ defmodule E2E.ContractTest do
       case E2E.Helpers.run_fixture(
              "config_chunking_prepend_heading_context",
              "markdown/extraction_test.md",
-             %{chunking: %{chunker_type: "markdown", max_chars: 300, max_overlap: 50, prepend_heading_context: true}},
+             %{
+               chunking: %{
+                 chunker_type: "markdown",
+                 max_chars: 300,
+                 max_overlap: 50,
+                 prepend_heading_context: true
+               }
+             },
              requirements: ["chunking"],
              notes: nil,
              skip_if_missing: true
@@ -586,7 +601,13 @@ defmodule E2E.ContractTest do
       case E2E.Helpers.run_fixture(
              "config_chunking_tokenizer",
              "markdown/comprehensive.md",
-             %{chunking: %{max_chars: 200, max_overlap: 40, sizing: %{type: "tokenizer", model: "Xenova/gpt-4o"}}},
+             %{
+               chunking: %{
+                 max_chars: 200,
+                 max_overlap: 40,
+                 sizing: %{type: "tokenizer", model: "Xenova/gpt-4o"}
+               }
+             },
              requirements: ["chunking-tokenizers"],
              notes: "Requires network access for HuggingFace Hub tokenizer download",
              skip_if_missing: true
@@ -660,7 +681,11 @@ defmodule E2E.ContractTest do
         {:ok, result} ->
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
-          |> E2E.Helpers.assert_document(has_document: true, min_node_count: 1, node_types_include: ["paragraph"])
+          |> E2E.Helpers.assert_document(
+            has_document: true,
+            min_node_count: 1,
+            node_types_include: ["paragraph"]
+          )
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -884,7 +909,7 @@ defmodule E2E.ContractTest do
       case E2E.Helpers.run_fixture(
              "config_html_options",
              "html/complex_table.html",
-             %{html_options: %{"extractMetadata" => true}},
+             %{html_options: %{extract_metadata: true}},
              requirements: [],
              notes: nil,
              skip_if_missing: true
@@ -907,7 +932,10 @@ defmodule E2E.ContractTest do
       case E2E.Helpers.run_fixture(
              "config_html_styled_custom_css",
              "pdf/fake_memo.pdf",
-             %{output_format: "html", html_output: %{theme: "unstyled", css: ".kb-p { color: red; }", embed_css: true}},
+             %{
+               output_format: "html",
+               html_output: %{theme: "unstyled", css: ".kb-p { color: red; }", embed_css: true}
+             },
              requirements: [],
              notes: nil,
              skip_if_missing: true
@@ -1114,7 +1142,10 @@ defmodule E2E.ContractTest do
                chunking: %{
                  max_chars: 500,
                  max_overlap: 50,
-                 embedding: %{model: %{type: "llm", llm: %{model: "openai/text-embedding-3-small"}}, normalize: true}
+                 embedding: %{
+                   model: %{type: "llm", llm: %{model: "openai/text-embedding-3-small"}},
+                   normalize: true
+                 }
                }
              },
              requirements: ["liter-llm"],
@@ -1125,7 +1156,11 @@ defmodule E2E.ContractTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
+          |> E2E.Helpers.assert_chunks(
+            min_count: 1,
+            each_has_content: true,
+            each_has_embedding: true
+          )
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -1143,7 +1178,11 @@ defmodule E2E.ContractTest do
                structured_extraction: %{
                  schema: %{
                    type: "object",
-                   properties: %{title: %{type: "string"}, date: %{type: "string"}, summary: %{type: "string"}},
+                   properties: %{
+                     title: %{type: "string"},
+                     date: %{type: "string"},
+                     summary: %{type: "string"}
+                   },
                    required: ["title"]
                  },
                  schema_name: "memo_data",
@@ -1176,11 +1215,16 @@ defmodule E2E.ContractTest do
                structured_extraction: %{
                  schema: %{
                    type: "object",
-                   properties: %{sender: %{type: "string"}, recipient: %{type: "string"}, subject: %{type: "string"}},
+                   properties: %{
+                     sender: %{type: "string"},
+                     recipient: %{type: "string"},
+                     subject: %{type: "string"}
+                   },
                    required: ["sender", "recipient"]
                  },
                  schema_name: "memo_parties",
-                 prompt: "Extract the sender and recipient from this memo document. If not found, use 'unknown'.",
+                 prompt:
+                   "Extract the sender and recipient from this memo document. If not found, use 'unknown'.",
                  llm: %{model: "openai/gpt-4o"}
                }
              },
@@ -1192,7 +1236,10 @@ defmodule E2E.ContractTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_structured_output(has_output: true, field_exists: ["sender", "recipient"])
+          |> E2E.Helpers.assert_structured_output(
+            has_output: true,
+            field_exists: ["sender", "recipient"]
+          )
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -1342,7 +1389,10 @@ defmodule E2E.ContractTest do
       case E2E.Helpers.run_fixture(
              "config_pdf_hierarchy",
              "pdf/fake_memo.pdf",
-             %{pdf_options: %{hierarchy: %{enabled: true, include_bbox: true}}, pages: %{extract_pages: true}},
+             %{
+               pdf_options: %{hierarchy: %{enabled: true, include_bbox: true}},
+               pages: %{extract_pages: true}
+             },
              requirements: ["pdf"],
              notes: nil,
              skip_if_missing: true
@@ -1500,7 +1550,13 @@ defmodule E2E.ContractTest do
       case E2E.Helpers.run_fixture(
              "config_security_limits",
              "archives/documents.zip",
-             %{security_limits: %{max_archive_size: 104_857_600, max_compression_ratio: 50, max_files_in_archive: 100}},
+             %{
+               security_limits: %{
+                 max_archive_size: 104_857_600,
+                 max_compression_ratio: 50,
+                 max_files_in_archive: 100
+               }
+             },
              requirements: [],
              notes: nil,
              skip_if_missing: true

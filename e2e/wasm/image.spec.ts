@@ -4,210 +4,248 @@
 // Tests for image fixtures.
 
 import { beforeAll, describe, it } from "vitest";
-import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 import type { ExtractionResult } from "./helpers.js";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("image fixtures", () => {
-  it("image_bmp_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images/bmp_24.bmp"));
-      result = await extractBytes(documentBytes, "image/bmp", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_bmp_basic", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/bmp"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_bmp_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images/bmp_24.bmp"));
+				result = await extractBytes(documentBytes, "image/bmp", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_bmp_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/bmp"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_gif_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.gif"));
-      result = await extractBytes(documentBytes, "image/gif", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_gif_basic", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/gif"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_gif_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.gif"));
+				result = await extractBytes(documentBytes, "image/gif", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_gif_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/gif"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_jp2_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.jp2"));
-      result = await extractBytes(documentBytes, "image/jp2", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_jp2_basic", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/jp2", "image/jpeg2000"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_jp2_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.jp2"));
+				result = await extractBytes(documentBytes, "image/jp2", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_jp2_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/jp2", "image/jpeg2000"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_metadata_only", async () => {
-    const config = buildConfig({"ocr":null,"disable_ocr":true});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images/example.jpg"));
-      result = await extractBytes(documentBytes, "image/jpeg", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_metadata_only", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/jpeg"]);
-    assertions.assertMaxContentLength(result, 200);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_metadata_only",
+		async () => {
+			const config = buildConfig({ ocr: null, disable_ocr: true });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images/example.jpg"));
+				result = await extractBytes(documentBytes, "image/jpeg", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_metadata_only", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/jpeg"]);
+			assertions.assertMaxContentLength(result, 200);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_pbm_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.pbm"));
-      result = await extractBytes(documentBytes, "image/x-portable-bitmap", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_pbm_basic", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/x-portable-bitmap", "image/x-pbm"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_pbm_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.pbm"));
+				result = await extractBytes(documentBytes, "image/x-portable-bitmap", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_pbm_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/x-portable-bitmap", "image/x-pbm"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_pgm_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.pgm"));
-      result = await extractBytes(documentBytes, "image/x-portable-graymap", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_pgm_basic", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/x-portable-graymap", "image/x-pgm"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_pgm_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.pgm"));
+				result = await extractBytes(documentBytes, "image/x-portable-graymap", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_pgm_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/x-portable-graymap", "image/x-pgm"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_ppm_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.ppm"));
-      result = await extractBytes(documentBytes, "image/x-portable-pixmap", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_ppm_basic", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/x-portable-pixmap", "image/x-ppm"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_ppm_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.ppm"));
+				result = await extractBytes(documentBytes, "image/x-portable-pixmap", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_ppm_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/x-portable-pixmap", "image/x-ppm"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_svg_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("xml/simple_svg.svg"));
-      result = await extractBytes(documentBytes, "image/svg+xml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_svg_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/svg+xml"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_svg_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("xml/simple_svg.svg"));
+				result = await extractBytes(documentBytes, "image/svg+xml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_svg_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/svg+xml"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_tiff_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.tif"));
-      result = await extractBytes(documentBytes, "image/tiff", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_tiff_basic", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/tiff"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"image_tiff_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.tif"));
+				result = await extractBytes(documentBytes, "image/tiff", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_tiff_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/tiff"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("image_webp_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.webp"));
-      result = await extractBytes(documentBytes, "image/webp", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "image_webp_basic", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/webp"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"image_webp_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("images_extra/ocr_image.webp"));
+				result = await extractBytes(documentBytes, "image/webp", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "image_webp_basic", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/webp"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

@@ -14,9 +14,9 @@ test_that("keywords_rake", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_keywords(result, has_keywords = TRUE, min_count = 1L, max_count = 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_keywords(result, has_keywords = TRUE, min_count = 1L, max_count = 10L)
 })
 
 test_that("keywords_yake", {
@@ -29,8 +29,8 @@ test_that("keywords_yake", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_keywords(result, has_keywords = TRUE, min_count = 1L, max_count = 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_keywords(result, has_keywords = TRUE, min_count = 1L, max_count = 10L)
 })
 # nolint end

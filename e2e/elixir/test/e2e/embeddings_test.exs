@@ -33,7 +33,11 @@ defmodule E2E.EmbeddingsTest do
             result
             |> E2E.Helpers.assert_expected_mime(["application/pdf"])
             |> E2E.Helpers.assert_min_content_length(10)
-            |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
+            |> E2E.Helpers.assert_chunks(
+              min_count: 1,
+              each_has_content: true,
+              each_has_embedding: true
+            )
 
           {:skipped, reason} ->
             IO.puts("SKIPPED: #{reason}")
@@ -66,7 +70,11 @@ defmodule E2E.EmbeddingsTest do
             result
             |> E2E.Helpers.assert_expected_mime(["application/pdf"])
             |> E2E.Helpers.assert_min_content_length(10)
-            |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
+            |> E2E.Helpers.assert_chunks(
+              min_count: 1,
+              each_has_content: true,
+              each_has_embedding: true
+            )
 
           {:skipped, reason} ->
             IO.puts("SKIPPED: #{reason}")
@@ -90,7 +98,11 @@ defmodule E2E.EmbeddingsTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: false)
+          |> E2E.Helpers.assert_chunks(
+            min_count: 1,
+            each_has_content: true,
+            each_has_embedding: false
+          )
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -122,7 +134,11 @@ defmodule E2E.EmbeddingsTest do
             result
             |> E2E.Helpers.assert_expected_mime(["application/pdf"])
             |> E2E.Helpers.assert_min_content_length(10)
-            |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true, each_has_embedding: true)
+            |> E2E.Helpers.assert_chunks(
+              min_count: 1,
+              each_has_content: true,
+              each_has_embedding: true
+            )
 
           {:skipped, reason} ->
             IO.puts("SKIPPED: #{reason}")

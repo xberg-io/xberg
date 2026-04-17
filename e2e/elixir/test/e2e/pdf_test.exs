@@ -83,9 +83,14 @@ defmodule E2E.PdfTest do
       case E2E.Helpers.run_fixture(
              "pdf_bounding_boxes",
              "pdf/tiny.pdf",
-             %{output_format: "markdown", layout: %{table_model: "tatr"}, images: %{extract_images: true}},
+             %{
+               output_format: "markdown",
+               layout: %{table_model: "tatr"},
+               images: %{extract_images: true}
+             },
              requirements: ["pdf"],
-             notes: "ONNX Runtime model loading unstable on ARM Linux; table detection returns 0 tables",
+             notes:
+               "ONNX Runtime model loading unstable on ARM Linux; table detection returns 0 tables",
              skip_if_missing: true
            ) do
         {:ok, result} ->
@@ -208,7 +213,11 @@ defmodule E2E.PdfTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(10_000)
-          |> E2E.Helpers.assert_content_contains_any(["machine learning", "algorithm", "training"])
+          |> E2E.Helpers.assert_content_contains_any([
+            "machine learning",
+            "algorithm",
+            "training"
+          ])
           |> E2E.Helpers.assert_metadata_expectation("format_type", %{eq: "pdf"})
 
         {:skipped, reason} ->
@@ -279,7 +288,11 @@ defmodule E2E.PdfTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(50)
-          |> E2E.Helpers.assert_content_contains_any(["LayoutParser", "document image analysis", "deep learning"])
+          |> E2E.Helpers.assert_content_contains_any([
+            "LayoutParser",
+            "document image analysis",
+            "deep learning"
+          ])
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -325,7 +338,11 @@ defmodule E2E.PdfTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(50)
-          |> E2E.Helpers.assert_content_contains_any(["May 5, 2023", "To Whom it May Concern", "Mallori"])
+          |> E2E.Helpers.assert_content_contains_any([
+            "May 5, 2023",
+            "To Whom it May Concern",
+            "Mallori"
+          ])
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -385,7 +402,8 @@ defmodule E2E.PdfTest do
              "pdf/tiny.pdf",
              %{output_format: "markdown", layout: %{table_model: "tatr"}},
              requirements: ["ocr"],
-             notes: "PDF table extraction requires OCR feature. ONNX Runtime model loading unstable on ARM Linux.",
+             notes:
+               "PDF table extraction requires OCR feature. ONNX Runtime model loading unstable on ARM Linux.",
              skip_if_missing: true
            ) do
         {:ok, result} ->

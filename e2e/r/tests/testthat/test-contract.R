@@ -15,9 +15,9 @@ test_that("api_batch_bytes_async", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
 })
 
 test_that("api_batch_bytes_sync", {
@@ -31,9 +31,9 @@ test_that("api_batch_bytes_sync", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
 })
 
 test_that("api_batch_bytes_with_configs_async", {
@@ -47,8 +47,8 @@ test_that("api_batch_bytes_with_configs_async", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("api_batch_bytes_with_configs_sync", {
@@ -62,8 +62,8 @@ test_that("api_batch_bytes_with_configs_sync", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("api_batch_file_async", {
@@ -77,9 +77,9 @@ test_that("api_batch_file_async", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
 })
 
 test_that("api_batch_file_sync", {
@@ -93,9 +93,9 @@ test_that("api_batch_file_sync", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
 })
 
 test_that("api_batch_file_with_configs_async", {
@@ -109,8 +109,8 @@ test_that("api_batch_file_with_configs_async", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("api_batch_file_with_configs_sync", {
@@ -124,8 +124,8 @@ test_that("api_batch_file_with_configs_sync", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("api_batch_file_with_timeout_sync", {
@@ -139,8 +139,8 @@ test_that("api_batch_file_with_timeout_sync", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("api_extract_bytes_async", {
@@ -154,9 +154,9 @@ test_that("api_extract_bytes_async", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
 })
 
 test_that("api_extract_bytes_sync", {
@@ -170,9 +170,9 @@ test_that("api_extract_bytes_sync", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
 })
 
 test_that("api_extract_file_async", {
@@ -186,9 +186,9 @@ test_that("api_extract_file_async", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
 })
 
 test_that("api_extract_file_sync", {
@@ -200,9 +200,9 @@ test_that("api_extract_file_sync", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("May 5, 2023", "Mallori"))
 })
 
 test_that("config_acceleration_cpu_provider", {
@@ -214,9 +214,9 @@ test_that("config_acceleration_cpu_provider", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 50L)
-      assert_content_contains_any(result, c("May 5, 2023", "To Whom it May Concern"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 50L)
+  assert_content_contains_any(result, c("May 5, 2023", "To Whom it May Concern"))
 })
 
 test_that("config_chunking", {
@@ -228,9 +228,9 @@ test_that("config_chunking", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE)
 })
 
 test_that("config_chunking_heading_context", {
@@ -243,8 +243,8 @@ test_that("config_chunking_heading_context", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = TRUE)
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = TRUE)
 })
 
 test_that("config_chunking_markdown", {
@@ -257,9 +257,9 @@ test_that("config_chunking_markdown", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE)
 })
 
 test_that("config_chunking_no_headings", {
@@ -272,8 +272,8 @@ test_that("config_chunking_no_headings", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = FALSE)
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = FALSE)
 })
 
 test_that("config_chunking_prepend_heading_context", {
@@ -286,8 +286,8 @@ test_that("config_chunking_prepend_heading_context", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = TRUE, content_starts_with_heading = TRUE)
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = TRUE, content_starts_with_heading = TRUE)
 })
 
 test_that("config_chunking_semantic", {
@@ -300,9 +300,9 @@ test_that("config_chunking_semantic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/plain"))
-      assert_min_content_length(result, 100L)
-      assert_chunks(result, min_count = 2L, each_has_content = TRUE)
+  assert_expected_mime(result, c("text/plain"))
+  assert_min_content_length(result, 100L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE)
 })
 
 test_that("config_chunking_semantic_small", {
@@ -315,9 +315,9 @@ test_that("config_chunking_semantic_small", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/plain"))
-      assert_min_content_length(result, 100L)
-      assert_chunks(result, min_count = 5L, each_has_content = TRUE)
+  assert_expected_mime(result, c("text/plain"))
+  assert_min_content_length(result, 100L)
+  assert_chunks(result, min_count = 5L, each_has_content = TRUE)
 })
 
 test_that("config_chunking_semantic_threshold", {
@@ -330,9 +330,9 @@ test_that("config_chunking_semantic_threshold", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/plain"))
-      assert_min_content_length(result, 100L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE)
+  assert_expected_mime(result, c("text/plain"))
+  assert_min_content_length(result, 100L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE)
 })
 
 test_that("config_chunking_small", {
@@ -345,9 +345,9 @@ test_that("config_chunking_small", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 2L, each_has_content = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE)
 })
 
 test_that("config_chunking_text", {
@@ -359,9 +359,9 @@ test_that("config_chunking_text", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE)
 })
 
 test_that("config_chunking_tokenizer", {
@@ -374,8 +374,8 @@ test_that("config_chunking_tokenizer", {
     notes = "Requires network access for HuggingFace Hub tokenizer download",
     skip_if_missing = TRUE
   )
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 2L, each_has_content = TRUE)
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE)
 })
 
 test_that("config_disable_ocr", {
@@ -387,8 +387,8 @@ test_that("config_disable_ocr", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("image/png"))
-      assert_max_content_length(result, 5L)
+  assert_expected_mime(result, c("image/png"))
+  assert_max_content_length(result, 5L)
 })
 
 test_that("config_djot_content", {
@@ -401,8 +401,8 @@ test_that("config_djot_content", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("config_document_structure", {
@@ -414,8 +414,8 @@ test_that("config_document_structure", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_document(result, has_document = TRUE, min_node_count = 1L, node_types_include = c("paragraph"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_document(result, has_document = TRUE, min_node_count = 1L, node_types_include = c("paragraph"))
 })
 
 test_that("config_document_structure_disabled", {
@@ -427,8 +427,8 @@ test_that("config_document_structure_disabled", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_document(result, has_document = FALSE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_document(result, has_document = FALSE)
 })
 
 test_that("config_document_structure_groups", {
@@ -441,8 +441,8 @@ test_that("config_document_structure_groups", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-      assert_document(result, has_document = TRUE, has_groups = TRUE)
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+  assert_document(result, has_document = TRUE, has_groups = TRUE)
 })
 
 test_that("config_document_structure_headings", {
@@ -455,8 +455,8 @@ test_that("config_document_structure_headings", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-      assert_document(result, has_document = TRUE, min_node_count = 1L, node_types_include = c("heading", "paragraph"))
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+  assert_document(result, has_document = TRUE, min_node_count = 1L, node_types_include = c("heading", "paragraph"))
 })
 
 test_that("config_document_structure_with_headings", {
@@ -468,8 +468,8 @@ test_that("config_document_structure_with_headings", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-      assert_document(result, has_document = TRUE, min_node_count = 1L)
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+  assert_document(result, has_document = TRUE, min_node_count = 1L)
 })
 
 test_that("config_element_types", {
@@ -482,8 +482,8 @@ test_that("config_element_types", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-      assert_elements(result, min_count = 1L, types_include = c("narrative_text"))
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+  assert_elements(result, min_count = 1L, types_include = c("narrative_text"))
 })
 
 test_that("config_email_msg_fallback_codepage", {
@@ -495,8 +495,8 @@ test_that("config_email_msg_fallback_codepage", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.ms-outlook"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/vnd.ms-outlook"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("config_extraction_timeout", {
@@ -508,8 +508,8 @@ test_that("config_extraction_timeout", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("config_force_ocr", {
@@ -522,8 +522,8 @@ test_that("config_force_ocr", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 5L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 5L)
 })
 
 test_that("config_force_ocr_pages", {
@@ -536,22 +536,22 @@ test_that("config_force_ocr_pages", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 1L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 1L)
 })
 
 test_that("config_html_options", {
   result <- run_fixture(
     "config_html_options",
     "html/complex_table.html",
-    list(html_options = list(extractMetadata = TRUE)),
+    list(html_options = list(extract_metadata = TRUE)),
     requirements = character(0),
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/html"))
-      assert_min_content_length(result, 10L)
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("text/html"))
+  assert_min_content_length(result, 10L)
+  assert_content_not_empty(result)
 })
 
 test_that("config_html_styled_custom_css", {
@@ -563,7 +563,7 @@ test_that("config_html_styled_custom_css", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_content_contains_all(result, c(".kb-p { color: red; }", "kb-doc"))
+  assert_content_contains_all(result, c(".kb-p { color: red; }", "kb-doc"))
 })
 
 test_that("config_html_styled_default", {
@@ -575,8 +575,8 @@ test_that("config_html_styled_default", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_content_contains_all(result, c("kb-doc", "kb-content", "kb-p", "<style>"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_content_contains_all(result, c("kb-doc", "kb-content", "kb-p", "<style>"))
 })
 
 test_that("config_html_styled_no_embed", {
@@ -588,8 +588,8 @@ test_that("config_html_styled_no_embed", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_content_contains_all(result, c("kb-doc", "kb-content"))
-      assert_content_contains_none(result, c("<style>"))
+  assert_content_contains_all(result, c("kb-doc", "kb-content"))
+  assert_content_contains_none(result, c("<style>"))
 })
 
 test_that("config_images", {
@@ -601,8 +601,8 @@ test_that("config_images", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_images(result, min_count = 1L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_images(result, min_count = 1L)
 })
 
 test_that("config_images_with_formats", {
@@ -614,8 +614,8 @@ test_that("config_images_with_formats", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
-      assert_images(result, min_count = 1L)
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.presentationml.presentation"))
+  assert_images(result, min_count = 1L)
 })
 
 test_that("config_keywords", {
@@ -628,9 +628,9 @@ test_that("config_keywords", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_keywords(result, has_keywords = TRUE, min_count = 1L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_keywords(result, has_keywords = TRUE, min_count = 1L)
 })
 
 test_that("config_language_detection", {
@@ -642,9 +642,9 @@ test_that("config_language_detection", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_detected_languages(result, c("eng"), 0.5)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_detected_languages(result, c("eng"), 0.5)
 })
 
 test_that("config_language_detection_multi", {
@@ -656,9 +656,9 @@ test_that("config_language_detection_multi", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_detected_languages(result, c("eng"), NULL)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_detected_languages(result, c("eng"), NULL)
 })
 
 test_that("config_language_multi", {
@@ -671,9 +671,9 @@ test_that("config_language_multi", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_detected_languages(result, c("eng"), NULL)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_detected_languages(result, c("eng"), NULL)
 })
 
 test_that("config_llm_embeddings", {
@@ -686,9 +686,9 @@ test_that("config_llm_embeddings", {
     notes = "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var",
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = TRUE)
 })
 
 test_that("config_llm_structured_extraction", {
@@ -701,8 +701,8 @@ test_that("config_llm_structured_extraction", {
     notes = "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var",
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("config_llm_structured_extraction_with_prompt", {
@@ -715,8 +715,8 @@ test_that("config_llm_structured_extraction_with_prompt", {
     notes = "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var",
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("config_llm_vlm_ocr", {
@@ -729,8 +729,8 @@ test_that("config_llm_vlm_ocr", {
     notes = "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var",
     skip_if_missing = TRUE
   )
-      assert_min_content_length(result, 5L)
-      assert_content_not_empty(result)
+  assert_min_content_length(result, 5L)
+  assert_content_not_empty(result)
 })
 
 test_that("config_pages", {
@@ -743,9 +743,9 @@ test_that("config_pages", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("PAGE"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("PAGE"))
 })
 
 test_that("config_pages_exact_count", {
@@ -758,9 +758,9 @@ test_that("config_pages_exact_count", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_pages(result, exact_count = 5L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_pages(result, exact_count = 5L)
 })
 
 test_that("config_pages_extract", {
@@ -773,9 +773,9 @@ test_that("config_pages_extract", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_pages(result, min_count = 1L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_pages(result, min_count = 1L)
 })
 
 test_that("config_pages_markers", {
@@ -788,9 +788,9 @@ test_that("config_pages_markers", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_any(result, c("PAGE"))
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_any(result, c("PAGE"))
 })
 
 test_that("config_pdf_annotations_count", {
@@ -803,8 +803,8 @@ test_that("config_pdf_annotations_count", {
     notes = "PDFium ARM Linux binary does not support annotation extraction",
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_annotations(result, has_annotations = TRUE, min_count = 3L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_annotations(result, has_annotations = TRUE, min_count = 3L)
 })
 
 test_that("config_pdf_hierarchy", {
@@ -817,8 +817,8 @@ test_that("config_pdf_hierarchy", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 50L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 50L)
 })
 
 test_that("config_pdf_margins", {
@@ -831,8 +831,8 @@ test_that("config_pdf_margins", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 5L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 5L)
 })
 
 test_that("config_postprocessor", {
@@ -844,9 +844,9 @@ test_that("config_postprocessor", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_not_empty(result)
 })
 
 test_that("config_processing_warnings_empty", {
@@ -858,9 +858,9 @@ test_that("config_processing_warnings_empty", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_processing_warnings(result, is_empty = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_processing_warnings(result, is_empty = TRUE)
 })
 
 test_that("config_quality_disabled", {
@@ -872,9 +872,9 @@ test_that("config_quality_disabled", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_content_not_empty(result)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_content_not_empty(result)
 })
 
 test_that("config_quality_enabled", {
@@ -887,9 +887,9 @@ test_that("config_quality_enabled", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_quality_score(result, has_score = TRUE, min_score = 0, max_score = 1)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_quality_score(result, has_score = TRUE, min_score = 0, max_score = 1)
 })
 
 test_that("config_quality_score_range", {
@@ -902,8 +902,8 @@ test_that("config_quality_score_range", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_quality_score(result, has_score = TRUE, min_score = 0.1)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_quality_score(result, has_score = TRUE, min_score = 0.1)
 })
 
 test_that("config_security_limits", {
@@ -915,8 +915,8 @@ test_that("config_security_limits", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/zip", "application/x-zip-compressed"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/zip", "application/x-zip-compressed"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("config_structured_output", {
@@ -929,8 +929,8 @@ test_that("config_structured_output", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("config_tables_content", {
@@ -942,8 +942,8 @@ test_that("config_tables_content", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
-      assert_table_count(result, minimum = 1L, maximum = NULL)
+  assert_expected_mime(result, c("application/vnd.openxmlformats-officedocument.wordprocessingml.document"))
+  assert_table_count(result, minimum = 1L, maximum = NULL)
 })
 
 test_that("config_tree_sitter", {
@@ -956,8 +956,8 @@ test_that("config_tree_sitter", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/x-source-code"))
-      assert_min_content_length(result, 5L)
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 5L)
 })
 
 test_that("config_tree_sitter_process", {
@@ -970,8 +970,8 @@ test_that("config_tree_sitter_process", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/x-source-code"))
-      assert_min_content_length(result, 5L)
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 5L)
 })
 
 test_that("config_use_cache_false", {
@@ -983,8 +983,8 @@ test_that("config_use_cache_false", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("output_format_bytes_markdown", {
@@ -998,8 +998,8 @@ test_that("output_format_bytes_markdown", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("output_format_djot", {
@@ -1011,8 +1011,8 @@ test_that("output_format_djot", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("output_format_html", {
@@ -1024,8 +1024,8 @@ test_that("output_format_html", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("output_format_markdown", {
@@ -1037,8 +1037,8 @@ test_that("output_format_markdown", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("output_format_plain", {
@@ -1050,8 +1050,8 @@ test_that("output_format_plain", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("result_format_element_based", {
@@ -1063,8 +1063,8 @@ test_that("result_format_element_based", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_elements(result, min_count = 1L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_elements(result, min_count = 1L)
 })
 
 test_that("result_format_unified", {
@@ -1076,7 +1076,7 @@ test_that("result_format_unified", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
 })
 # nolint end

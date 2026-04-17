@@ -4,96 +4,110 @@
 // Tests for archive fixtures.
 
 import { beforeAll, describe, it } from "vitest";
-import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 import type { ExtractionResult } from "./helpers.js";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("archive fixtures", () => {
-  it("archive_gz_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("archives/book_war_and_peace_1p.txt.gz"));
-      result = await extractBytes(documentBytes, "application/gzip", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "archive_gz_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/gzip", "application/x-gzip"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"archive_gz_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("archives/book_war_and_peace_1p.txt.gz"));
+				result = await extractBytes(documentBytes, "application/gzip", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "archive_gz_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/gzip", "application/x-gzip"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("archive_sevenz_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("archives/documents.7z"));
-      result = await extractBytes(documentBytes, "application/x-7z-compressed", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "archive_sevenz_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-7z-compressed"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"archive_sevenz_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("archives/documents.7z"));
+				result = await extractBytes(documentBytes, "application/x-7z-compressed", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "archive_sevenz_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-7z-compressed"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("archive_tar_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("archives/documents.tar"));
-      result = await extractBytes(documentBytes, "application/x-tar", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "archive_tar_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-tar", "application/tar"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"archive_tar_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("archives/documents.tar"));
+				result = await extractBytes(documentBytes, "application/x-tar", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "archive_tar_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-tar", "application/tar"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("archive_zip_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("archives/documents.zip"));
-      result = await extractBytes(documentBytes, "application/zip", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "archive_zip_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/zip", "application/x-zip-compressed"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"archive_zip_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("archives/documents.zip"));
+				result = await extractBytes(documentBytes, "application/zip", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "archive_zip_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/zip", "application/x-zip-compressed"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

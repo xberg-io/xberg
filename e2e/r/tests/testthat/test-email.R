@@ -13,8 +13,8 @@ test_that("email_eml_html_body", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("message/rfc822"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("message/rfc822"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("email_eml_multipart", {
@@ -26,8 +26,8 @@ test_that("email_eml_multipart", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("message/rfc822"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("message/rfc822"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("email_eml_utf16", {
@@ -39,9 +39,9 @@ test_that("email_eml_utf16", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("message/rfc822"))
-      assert_min_content_length(result, 50L)
-      assert_content_contains_any(result, c("Test Email", "Roses are red"))
+  assert_expected_mime(result, c("message/rfc822"))
+  assert_min_content_length(result, 50L)
+  assert_content_contains_any(result, c("Test Email", "Roses are red"))
 })
 
 test_that("email_msg_basic", {
@@ -53,8 +53,8 @@ test_that("email_msg_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.ms-outlook"))
-      assert_min_content_length(result, 10L)
+  assert_expected_mime(result, c("application/vnd.ms-outlook"))
+  assert_min_content_length(result, 10L)
 })
 
 test_that("email_pst_empty", {
@@ -66,7 +66,7 @@ test_that("email_pst_empty", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/vnd.ms-outlook-pst"))
+  assert_expected_mime(result, c("application/vnd.ms-outlook-pst"))
 })
 
 test_that("email_sample_eml", {
@@ -78,7 +78,7 @@ test_that("email_sample_eml", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("message/rfc822"))
-      assert_min_content_length(result, 20L)
+  assert_expected_mime(result, c("message/rfc822"))
+  assert_min_content_length(result, 20L)
 })
 # nolint end

@@ -285,7 +285,9 @@ class Helpers
         }
         if ($contentStartsWithHeading === true) {
             foreach ($chunks as $i => $chunk) {
-                if (empty($chunk->metadata->heading_context ?? null)) continue;
+                if (empty($chunk->metadata->heading_context ?? null)) {
+                    continue;
+                }
                 Assert::assertStringStartsWith(
                     '#',
                     $chunk->content ?? '',
@@ -917,15 +919,21 @@ class Helpers
 
     public static function assertIsPng(string $data): void
     {
-        Assert::assertGreaterThanOrEqual(4, strlen($data),
-            sprintf('Data too short for PNG: %d bytes', strlen($data)));
+        Assert::assertGreaterThanOrEqual(
+            4,
+            strlen($data),
+            sprintf('Data too short for PNG: %d bytes', strlen($data))
+        );
         Assert::assertSame("\x89PNG", substr($data, 0, 4), 'Missing PNG magic bytes');
     }
 
     public static function assertMinByteLength(string $data, int $minLength): void
     {
-        Assert::assertGreaterThanOrEqual($minLength, strlen($data),
-            sprintf('Expected at least %d bytes, got %d', $minLength, strlen($data)));
+        Assert::assertGreaterThanOrEqual(
+            $minLength,
+            strlen($data),
+            sprintf('Expected at least %d bytes, got %d', $minLength, strlen($data))
+        );
     }
 
     public static function assertEmbedResult(array $results, int $count, int $dimensions, bool $noNan, bool $noInf, bool $nonZero): void

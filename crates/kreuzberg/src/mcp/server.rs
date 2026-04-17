@@ -1341,6 +1341,7 @@ mod tests {
             max_characters: None,
             overlap: None,
             chunker_type: None,
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
@@ -1369,6 +1370,7 @@ mod tests {
             max_characters: None,
             overlap: None,
             chunker_type: None,
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
@@ -1384,6 +1386,7 @@ mod tests {
             max_characters: None,
             overlap: None,
             chunker_type: Some("invalid".to_string()),
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
@@ -1423,6 +1426,7 @@ mod tests {
             max_characters: Some(0),
             overlap: None,
             chunker_type: None,
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
@@ -1444,6 +1448,7 @@ mod tests {
             max_characters: Some(2_000_000),
             overlap: None,
             chunker_type: None,
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));

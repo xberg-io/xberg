@@ -13,7 +13,7 @@ test_that("xml_plant_catalog", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/xml"))
-      assert_min_content_length(result, 100L)
+  assert_expected_mime(result, c("application/xml"))
+  assert_min_content_length(result, 100L)
 })
 # nolint end

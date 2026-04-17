@@ -14,9 +14,9 @@ test_that("code_javascript_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/x-source-code"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_all(result, c("class Application", "export function", "import"))
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_all(result, c("class Application", "export function", "import"))
 })
 
 test_that("code_python_basic", {
@@ -29,9 +29,9 @@ test_that("code_python_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/x-source-code"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_all(result, c("def greet", "class Greeter", "import os"))
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_all(result, c("def greet", "class Greeter", "import os"))
 })
 
 test_that("code_rust_basic", {
@@ -44,9 +44,9 @@ test_that("code_rust_basic", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/x-source-code"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_all(result, c("struct Store", "fn main", "HashMap"))
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_all(result, c("struct Store", "fn main", "HashMap"))
 })
 
 test_that("code_shebang_detection", {
@@ -61,9 +61,9 @@ test_that("code_shebang_detection", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/x-source-code"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_all(result, c("build", "clean"))
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_all(result, c("build", "clean"))
 })
 
 test_that("code_tree_sitter_config", {
@@ -76,8 +76,8 @@ test_that("code_tree_sitter_config", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("text/x-source-code"))
-      assert_min_content_length(result, 10L)
-      assert_content_contains_all(result, c("def greet", "class Greeter"))
+  assert_expected_mime(result, c("text/x-source-code"))
+  assert_min_content_length(result, 10L)
+  assert_content_contains_all(result, c("def greet", "class Greeter"))
 })
 # nolint end

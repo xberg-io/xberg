@@ -5,7 +5,6 @@
 #
 # Tests for token_reduction fixtures.
 
-# rubocop:disable Layout/LineLength
 require_relative 'spec_helper'
 
 RSpec.describe 'token_reduction fixtures' do
@@ -85,4 +84,3 @@ RSpec.describe 'token_reduction fixtures' do
     end
   end
 end
-# rubocop:enable Layout/LineLength

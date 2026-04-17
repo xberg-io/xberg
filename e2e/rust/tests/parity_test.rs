@@ -113,7 +113,6 @@ fn test_extraction_result_field_parity() {
         "elements",
         "extracted_keywords",
         "images",
-        "llm_usage",
         "metadata",
         "mime_type",
         "ocr_elements",

@@ -4,989 +4,1288 @@
 // Tests for office fixtures.
 
 import { beforeAll, describe, it } from "vitest";
-import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 import type { ExtractionResult } from "./helpers.js";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("office fixtures", () => {
-  it("office_bibtex_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("bibtex/comprehensive.bib"));
-      result = await extractBytes(documentBytes, "application/x-bibtex", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_bibtex_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-bibtex", "text/x-bibtex"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_bibtex_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("bibtex/comprehensive.bib"));
+				result = await extractBytes(documentBytes, "application/x-bibtex", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_bibtex_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-bibtex", "text/x-bibtex"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_commonmark_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/sample.commonmark"));
-      result = await extractBytes(documentBytes, "text/markdown", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_commonmark_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/markdown", "text/plain", "text/x-commonmark"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_commonmark_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/sample.commonmark"));
+				result = await extractBytes(documentBytes, "text/markdown", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_commonmark_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/markdown", "text/plain", "text/x-commonmark"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_dbf_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("dbf/stations.dbf"));
-      result = await extractBytes(documentBytes, "application/x-dbf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_dbf_basic", ["office"], "Requires the office feature.")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-dbf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["|"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_dbf_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("dbf/stations.dbf"));
+				result = await extractBytes(documentBytes, "application/x-dbf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_dbf_basic", ["office"], "Requires the office feature.")) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-dbf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["|"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_djot_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/tables.djot"));
-      result = await extractBytes(documentBytes, "text/x-djot", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_djot_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-djot", "text/djot"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_djot_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/tables.djot"));
+				result = await extractBytes(documentBytes, "text/x-djot", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_djot_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-djot", "text/djot"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_doc_legacy", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("doc/unit_test_lists.doc"));
-      result = await extractBytes(documentBytes, "application/msword", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_doc_legacy", ["office"], "Requires the office feature.")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/msword"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_doc_legacy",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("doc/unit_test_lists.doc"));
+				result = await extractBytes(documentBytes, "application/msword", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_doc_legacy", ["office"], "Requires the office feature.")) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/msword"]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_docbook_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docbook/docbook-reader.docbook"));
-      result = await extractBytes(documentBytes, "application/docbook+xml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_docbook_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/docbook+xml", "text/docbook"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_docbook_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docbook/docbook-reader.docbook"));
+				result = await extractBytes(documentBytes, "application/docbook+xml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_docbook_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/docbook+xml", "text/docbook"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_docx_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/sample_document.docx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_docx_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_docx_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/sample_document.docx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_docx_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_docx_equations", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/equations.docx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_docx_equations", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_docx_equations",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/equations.docx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_docx_equations", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_docx_fake", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/fake.docx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_docx_fake", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_docx_fake",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/fake.docx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_docx_fake", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_docx_formatting", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_formatting.docx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_docx_formatting", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_docx_formatting",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_formatting.docx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_docx_formatting", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_docx_headers", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_headers.docx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_docx_headers", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_docx_headers",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_headers.docx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_docx_headers", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_docx_lists", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_lists.docx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_docx_lists", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_docx_lists",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/unit_test_lists.docx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_docx_lists", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_docx_tables", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("docx/docx_tables.docx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_docx_tables", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAll(result, ["Simple uniform table", "Nested Table", "merged cells", "Header Col"]);
-    // Table and bounding box assertions require OCR feature for PDF table extraction
-    if (result.tables.length > 0) {
-      assertions.assertTableCount(result, 1, null);
-    }
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_docx_tables",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("docx/docx_tables.docx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_docx_tables", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAll(result, [
+				"Simple uniform table",
+				"Nested Table",
+				"merged cells",
+				"Header Col",
+			]);
+			// Table and bounding box assertions require OCR feature for PDF table extraction
+			if (result.tables.length > 0) {
+				assertions.assertTableCount(result, 1, null);
+			}
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_epub_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("epub/features.epub"));
-      result = await extractBytes(documentBytes, "application/epub+zip", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_epub_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/epub+zip"]);
-    assertions.assertMinContentLength(result, 50);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_epub_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("epub/features.epub"));
+				result = await extractBytes(documentBytes, "application/epub+zip", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_epub_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/epub+zip"]);
+			assertions.assertMinContentLength(result, 50);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_fb2_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("fictionbook/basic.fb2"));
-      result = await extractBytes(documentBytes, "application/x-fictionbook+xml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_fb2_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-fictionbook+xml"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_fb2_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("fictionbook/basic.fb2"));
+				result = await extractBytes(documentBytes, "application/x-fictionbook+xml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_fb2_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-fictionbook+xml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_fictionbook_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("fictionbook/basic.fb2"));
-      result = await extractBytes(documentBytes, "application/x-fictionbook+xml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_fictionbook_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-fictionbook+xml", "application/x-fictionbook"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_fictionbook_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("fictionbook/basic.fb2"));
+				result = await extractBytes(documentBytes, "application/x-fictionbook+xml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_fictionbook_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-fictionbook+xml", "application/x-fictionbook"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_hwp_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("hwp/converted_output.hwp"));
-      result = await extractBytes(documentBytes, "application/x-hwp", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_hwp_basic", ["office"], "Requires the office feature.")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-hwp"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_hwp_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("hwp/converted_output.hwp"));
+				result = await extractBytes(documentBytes, "application/x-hwp", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_hwp_basic", ["office"], "Requires the office feature.")) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-hwp"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_hwp_styled", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("hwp/styled_document.hwp"));
-      result = await extractBytes(documentBytes, "application/x-hwp", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_hwp_styled", ["hwp"], "HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux.")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-hwp"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_hwp_styled",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("hwp/styled_document.hwp"));
+				result = await extractBytes(documentBytes, "application/x-hwp", config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"office_hwp_styled",
+						["hwp"],
+						"HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux.",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-hwp"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_jats_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("jats/sample_article.jats"));
-      result = await extractBytes(documentBytes, "application/x-jats+xml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_jats_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-jats+xml", "text/jats"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_jats_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("jats/sample_article.jats"));
+				result = await extractBytes(documentBytes, "application/x-jats+xml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_jats_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-jats+xml", "text/jats"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_keynote_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("iwork/test.key"));
-      result = await extractBytes(documentBytes, "application/x-iwork-keynote-sffkey", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_keynote_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-iwork-keynote-sffkey"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_keynote_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("iwork/test.key"));
+				result = await extractBytes(documentBytes, "application/x-iwork-keynote-sffkey", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_keynote_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-iwork-keynote-sffkey"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_latex_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("latex/basic_sections.tex"));
-      result = await extractBytes(documentBytes, "application/x-latex", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_latex_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-latex", "text/x-latex"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_latex_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("latex/basic_sections.tex"));
+				result = await extractBytes(documentBytes, "application/x-latex", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_latex_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-latex", "text/x-latex"]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_markdown_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/comprehensive.md"));
-      result = await extractBytes(documentBytes, "text/markdown", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_markdown_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/markdown"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_markdown_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/comprehensive.md"));
+				result = await extractBytes(documentBytes, "text/markdown", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_markdown_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/markdown"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_mdx_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/sample.mdx"));
-      result = await extractBytes(documentBytes, "text/mdx", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_mdx_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/mdx", "text/x-mdx"]);
-    assertions.assertMinContentLength(result, 50);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_mdx_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/sample.mdx"));
+				result = await extractBytes(documentBytes, "text/mdx", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_mdx_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/mdx", "text/x-mdx"]);
+			assertions.assertMinContentLength(result, 50);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_mdx_getting_started", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/mdx_getting_started.mdx"));
-      result = await extractBytes(documentBytes, "text/mdx", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_mdx_getting_started", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/mdx", "text/x-mdx"]);
-    assertions.assertMinContentLength(result, 2000);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_mdx_getting_started",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/mdx_getting_started.mdx"));
+				result = await extractBytes(documentBytes, "text/mdx", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_mdx_getting_started", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/mdx", "text/x-mdx"]);
+			assertions.assertMinContentLength(result, 2000);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_mdx_troubleshooting", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/mdx_troubleshooting.mdx"));
-      result = await extractBytes(documentBytes, "text/mdx", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_mdx_troubleshooting", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/mdx", "text/x-mdx"]);
-    assertions.assertMinContentLength(result, 2000);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_mdx_troubleshooting",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/mdx_troubleshooting.mdx"));
+				result = await extractBytes(documentBytes, "text/mdx", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_mdx_troubleshooting", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/mdx", "text/x-mdx"]);
+			assertions.assertMinContentLength(result, 2000);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_mdx_using_mdx", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("markdown/mdx_using_mdx.mdx"));
-      result = await extractBytes(documentBytes, "text/mdx", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_mdx_using_mdx", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/mdx", "text/x-mdx"]);
-    assertions.assertMinContentLength(result, 2000);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_mdx_using_mdx",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("markdown/mdx_using_mdx.mdx"));
+				result = await extractBytes(documentBytes, "text/mdx", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_mdx_using_mdx", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/mdx", "text/x-mdx"]);
+			assertions.assertMinContentLength(result, 2000);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_numbers_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("iwork/test.numbers"));
-      result = await extractBytes(documentBytes, "application/x-iwork-numbers-sffnumbers", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_numbers_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-iwork-numbers-sffnumbers"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_numbers_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("iwork/test.numbers"));
+				result = await extractBytes(documentBytes, "application/x-iwork-numbers-sffnumbers", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_numbers_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-iwork-numbers-sffnumbers"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_ods_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("data_formats/test_01.ods"));
-      result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.spreadsheet", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_ods_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.spreadsheet"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_ods_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("data_formats/test_01.ods"));
+				result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.spreadsheet", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_ods_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.spreadsheet"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_odt_bold", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("odt/bold.odt"));
-      result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.text", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_odt_bold", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.text"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_odt_bold",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("odt/bold.odt"));
+				result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.text", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_odt_bold", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.text"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_odt_list", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("odt/unorderedList.odt"));
-      result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.text", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_odt_list", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.text"]);
-    assertions.assertMinContentLength(result, 30);
-    assertions.assertContentContainsAny(result, ["list item", "New level", "Pushed us"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_odt_list",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("odt/unorderedList.odt"));
+				result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.text", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_odt_list", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.text"]);
+			assertions.assertMinContentLength(result, 30);
+			assertions.assertContentContainsAny(result, ["list item", "New level", "Pushed us"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_odt_simple", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("odt/simple.odt"));
-      result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.text", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_odt_simple", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.text"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAny(result, ["favorite things", "Parrots", "Analysis"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_odt_simple",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("odt/simple.odt"));
+				result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.text", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_odt_simple", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.text"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAny(result, ["favorite things", "Parrots", "Analysis"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_odt_table", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("odt/table.odt"));
-      result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.text", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_odt_table", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.text"]);
-    assertions.assertMinContentLength(result, 10);
-    // Table and bounding box assertions require OCR feature for PDF table extraction
-    if (result.tables.length > 0) {
-      assertions.assertTableCount(result, 1, null);
-    }
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_odt_table",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("odt/table.odt"));
+				result = await extractBytes(documentBytes, "application/vnd.oasis.opendocument.text", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_odt_table", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.oasis.opendocument.text"]);
+			assertions.assertMinContentLength(result, 10);
+			// Table and bounding box assertions require OCR feature for PDF table extraction
+			if (result.tables.length > 0) {
+				assertions.assertTableCount(result, 1, null);
+			}
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_opml_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("opml/outline.opml"));
-      result = await extractBytes(documentBytes, "application/xml+opml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_opml_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/xml+opml", "text/x-opml", "application/x-opml+xml"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_opml_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("opml/outline.opml"));
+				result = await extractBytes(documentBytes, "application/xml+opml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_opml_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/xml+opml", "text/x-opml", "application/x-opml+xml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_org_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("org/comprehensive.org"));
-      result = await extractBytes(documentBytes, "text/x-org", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_org_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-org", "text/org"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_org_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("org/comprehensive.org"));
+				result = await extractBytes(documentBytes, "text/x-org", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_org_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-org", "text/org"]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_pages_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("iwork/test.pages"));
-      result = await extractBytes(documentBytes, "application/x-iwork-pages-sffpages", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_pages_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-iwork-pages-sffpages"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_pages_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("iwork/test.pages"));
+				result = await extractBytes(documentBytes, "application/x-iwork-pages-sffpages", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_pages_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-iwork-pages-sffpages"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_ppsx_slideshow", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pptx/sample.ppsx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.presentationml.slideshow", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_ppsx_slideshow", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.presentationml.slideshow"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_ppsx_slideshow",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pptx/sample.ppsx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_ppsx_slideshow", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.presentationml.slideshow"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_ppt_legacy", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("ppt/simple.ppt"));
-      result = await extractBytes(documentBytes, "application/vnd.ms-powerpoint", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_ppt_legacy", ["office"], "Requires the office feature.")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-powerpoint"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_ppt_legacy",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("ppt/simple.ppt"));
+				result = await extractBytes(documentBytes, "application/vnd.ms-powerpoint", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_ppt_legacy", ["office"], "Requires the office feature.")) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.ms-powerpoint"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_pptm_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pptx/powerpoint_with_image.pptm"));
-      result = await extractBytes(documentBytes, "application/vnd.ms-powerpoint.presentation.macroEnabled.12", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_pptm_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_pptm_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pptx/powerpoint_with_image.pptm"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_pptm_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+				"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_pptx_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pptx/simple.pptx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.presentationml.presentation", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_pptx_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
-    assertions.assertMinContentLength(result, 50);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_pptx_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pptx/simple.pptx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_pptx_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			]);
+			assertions.assertMinContentLength(result, 50);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_pptx_images", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pptx/powerpoint_with_image.pptx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.presentationml.presentation", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_pptx_images", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
-    assertions.assertMinContentLength(result, 15);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_pptx_images",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pptx/powerpoint_with_image.pptx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_pptx_images", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			]);
+			assertions.assertMinContentLength(result, 15);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_pptx_pitch_deck", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pptx/pitch_deck_presentation.pptx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.presentationml.presentation", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_pptx_pitch_deck", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
-    assertions.assertMinContentLength(result, 100);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_pptx_pitch_deck",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pptx/pitch_deck_presentation.pptx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_pptx_pitch_deck", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			]);
+			assertions.assertMinContentLength(result, 100);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_rst_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("rst/restructured_text.rst"));
-      result = await extractBytes(documentBytes, "text/x-rst", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_rst_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-rst", "text/prs.fallenstein.rst"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_rst_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("rst/restructured_text.rst"));
+				result = await extractBytes(documentBytes, "text/x-rst", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_rst_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-rst", "text/prs.fallenstein.rst"]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_rtf_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("rtf/extraction_test.rtf"));
-      result = await extractBytes(documentBytes, "application/rtf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_rtf_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/rtf", "text/rtf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_rtf_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("rtf/extraction_test.rtf"));
+				result = await extractBytes(documentBytes, "application/rtf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_rtf_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/rtf", "text/rtf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_typst_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("typst/headings.typ"));
-      result = await extractBytes(documentBytes, "application/x-typst", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_typst_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-typst", "text/x-typst"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_typst_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("typst/headings.typ"));
+				result = await extractBytes(documentBytes, "application/x-typst", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_typst_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-typst", "text/x-typst"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_xls_legacy", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("xls/test_excel.xls"));
-      result = await extractBytes(documentBytes, "application/vnd.ms-excel", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_xls_legacy", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-excel"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_xls_legacy",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("xls/test_excel.xls"));
+				result = await extractBytes(documentBytes, "application/vnd.ms-excel", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_xls_legacy", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.ms-excel"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_xlsb_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("xlsx/test_xlsb.xlsb"));
-      result = await extractBytes(documentBytes, "application/vnd.ms-excel.sheet.binary.macroEnabled.12", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_xlsb_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_xlsb_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("xlsx/test_xlsb.xlsb"));
+				result = await extractBytes(documentBytes, "application/vnd.ms-excel.sheet.binary.macroEnabled.12", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_xlsb_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.ms-excel.sheet.binary.macroEnabled.12",
+				"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_xlsm_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("xlsx/test_01.xlsm"));
-      result = await extractBytes(documentBytes, "application/vnd.ms-excel.sheet.macroEnabled.12", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_xlsm_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_xlsm_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("xlsx/test_01.xlsm"));
+				result = await extractBytes(documentBytes, "application/vnd.ms-excel.sheet.macroEnabled.12", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_xlsm_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.ms-excel.sheet.macroEnabled.12",
+				"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_xlsx_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("xlsx/stanley_cups.xlsx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_xlsx_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
-    assertions.assertMinContentLength(result, 100);
-    assertions.assertContentContainsAll(result, ["Team", "Location", "Stanley Cups"]);
-    // Table and bounding box assertions require OCR feature for PDF table extraction
-    if (result.tables.length > 0) {
-      assertions.assertTableCount(result, 1, null);
-    }
-    assertions.assertMetadataExpectation(result, "sheetCount", {"gte":2});
-    assertions.assertMetadataExpectation(result, "sheetNames", {"contains":["Stanley Cups"]});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_xlsx_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("xlsx/stanley_cups.xlsx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_xlsx_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+			assertions.assertMinContentLength(result, 100);
+			assertions.assertContentContainsAll(result, ["Team", "Location", "Stanley Cups"]);
+			// Table and bounding box assertions require OCR feature for PDF table extraction
+			if (result.tables.length > 0) {
+				assertions.assertTableCount(result, 1, null);
+			}
+			assertions.assertMetadataExpectation(result, "sheetCount", { gte: 2 });
+			assertions.assertMetadataExpectation(result, "sheetNames", { contains: ["Stanley Cups"] });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_xlsx_multi_sheet", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("xlsx/excel_multi_sheet.xlsx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_xlsx_multi_sheet", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
-    assertions.assertMinContentLength(result, 20);
-    assertions.assertMetadataExpectation(result, "sheetCount", {"gte":2});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"office_xlsx_multi_sheet",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("xlsx/excel_multi_sheet.xlsx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_xlsx_multi_sheet", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+			assertions.assertMinContentLength(result, 20);
+			assertions.assertMetadataExpectation(result, "sheetCount", { gte: 2 });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("office_xlsx_office_example", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("xlsx/test_01.xlsx"));
-      result = await extractBytes(documentBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "office_xlsx_office_example", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"office_xlsx_office_example",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("xlsx/test_01.xlsx"));
+				result = await extractBytes(
+					documentBytes,
+					"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+					config,
+				);
+			} catch (error) {
+				if (shouldSkipFixture(error, "office_xlsx_office_example", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

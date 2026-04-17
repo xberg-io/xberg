@@ -22,7 +22,11 @@ defmodule E2E.CodeTest do
           result
           |> E2E.Helpers.assert_expected_mime(["text/x-source-code"])
           |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_content_contains_all(["class Application", "export function", "import"])
+          |> E2E.Helpers.assert_content_contains_all([
+            "class Application",
+            "export function",
+            "import"
+          ])
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -109,7 +113,13 @@ defmodule E2E.CodeTest do
              "code/hello.py",
              %{
                tree_sitter: %{
-                 process: %{structure: true, imports: true, exports: true, comments: true, docstrings: true}
+                 process: %{
+                   structure: true,
+                   imports: true,
+                   exports: true,
+                   comments: true,
+                   docstrings: true
+                 }
                }
              },
              requirements: ["tree-sitter"],

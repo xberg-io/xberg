@@ -16,9 +16,9 @@ test_that("embedding_async", {
     notes = "Embeddings not supported on Windows",
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = TRUE)
 })
 
 test_that("embedding_balanced_preset", {
@@ -31,9 +31,9 @@ test_that("embedding_balanced_preset", {
     notes = "Embeddings not supported on Windows",
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = TRUE)
 })
 
 test_that("embedding_disabled", {
@@ -45,9 +45,9 @@ test_that("embedding_disabled", {
     notes = NULL,
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = FALSE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = FALSE)
 })
 
 test_that("embedding_fast_preset", {
@@ -60,8 +60,8 @@ test_that("embedding_fast_preset", {
     notes = "Embeddings not supported on Windows",
     skip_if_missing = TRUE
   )
-      assert_expected_mime(result, c("application/pdf"))
-      assert_min_content_length(result, 10L)
-      assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = TRUE)
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 10L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE, each_has_embedding = TRUE)
 })
 # nolint end

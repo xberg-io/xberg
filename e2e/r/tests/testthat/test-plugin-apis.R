@@ -7,10 +7,11 @@ library(kreuzberg)
 
 test_that("Configuration API tests", {
   # Discover configuration from current or parent directories
-  withr::with_tempdir({ tmpdir <- getwd()
+  withr::with_tempdir({
+    tmpdir <- getwd()
     config_path <- file.path(tmpdir, "kreuzberg.toml")
     writeLines(c(
-      "[chunking]",      "max_chars = 50"
+      "[chunking]", "max_chars = 50"
     ), config_path)
 
     subdir <- file.path(tmpdir, "subdir")
@@ -24,10 +25,11 @@ test_that("Configuration API tests", {
   })
 
   # Load configuration from a TOML file
-  withr::with_tempdir({ tmpdir <- getwd()
+  withr::with_tempdir({
+    tmpdir <- getwd()
     config_path <- file.path(tmpdir, "test_config.toml")
     writeLines(c(
-      "[chunking]",      "max_chars = 100",      "max_overlap = 20",      "",      "[language_detection]",      "enabled = false"
+      "[chunking]", "max_chars = 100", "max_overlap = 20", "", "[language_detection]", "enabled = false"
     ), config_path)
 
     config <- from_file(config_path)
@@ -37,7 +39,6 @@ test_that("Configuration API tests", {
     expect_false(is.null(config$language_detection))
     expect_equal(config$language_detection$enabled, FALSE)
   })
-
 })
 
 test_that("Document Extractor Management API tests", {
@@ -52,7 +53,6 @@ test_that("Document Extractor Management API tests", {
 
   # Unregister nonexistent document extractor gracefully
   expect_no_error(unregister_document_extractor("nonexistent-extractor-xyz"))
-
 })
 
 test_that("Mime Utilities API tests", {
@@ -62,7 +62,8 @@ test_that("Mime Utilities API tests", {
   expect_true(grepl("pdf", tolower(result), fixed = TRUE))
 
   # Detect MIME type from file path
-  withr::with_tempdir({ tmpdir <- getwd()
+  withr::with_tempdir({
+    tmpdir <- getwd()
     test_file <- file.path(tmpdir, "test.txt")
     writeLines("Hello, world!", test_file)
 
@@ -74,7 +75,6 @@ test_that("Mime Utilities API tests", {
   result <- get_extensions_for_mime("application/pdf")
   expect_true(is.character(result))
   expect_true("pdf" %in% result)
-
 })
 
 test_that("Ocr Backend Management API tests", {
@@ -89,7 +89,6 @@ test_that("Ocr Backend Management API tests", {
 
   # Unregister nonexistent OCR backend gracefully
   expect_no_error(unregister_ocr_backend("nonexistent-backend-xyz"))
-
 })
 
 test_that("Post Processor Management API tests", {
@@ -99,7 +98,6 @@ test_that("Post Processor Management API tests", {
   # List all registered post-processors
   result <- list_post_processors()
   expect_true(is.character(result) || is.list(result))
-
 })
 
 test_that("Validator Management API tests", {
@@ -111,7 +109,6 @@ test_that("Validator Management API tests", {
   # List all registered validators
   result <- list_validators()
   expect_true(is.character(result) || is.list(result))
-
 })
 
 # nolint end

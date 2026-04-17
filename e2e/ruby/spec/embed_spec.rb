@@ -13,67 +13,71 @@ RSpec.describe 'embed fixtures' do
     # Standalone embedding via async API path with balanced preset
     skip('Platform restricted') if Gem.win_platform?
     config = {
-      model: { type: "preset", name: "balanced" },
-      normalize: true,
+      model: { type: 'preset', name: 'balanced' },
+      normalize: true
     }
 
     texts = ['Async embedding test']
     result = Kreuzberg.embed(texts: texts, config: config)
-    E2ERuby::Assertions.assert_embed_result(result, count: 1, dimensions: 768, no_nan: true, no_inf: true, non_zero: true, normalized: false)
+    E2ERuby::Assertions.assert_embed_result(result, count: 1, dimensions: 768, no_nan: true, no_inf: true,
+                                                    non_zero: true, normalized: false)
   end
 
   it 'embed_batch_texts' do
     # Standalone embedding of a batch of 3 texts with fast preset
     skip('Platform restricted') if Gem.win_platform?
     config = {
-      model: { type: "preset", name: "fast" },
+      model: { type: 'preset', name: 'fast' },
       normalize: true,
       batch_size: 32
     }
 
     texts = ['Text one', 'Text two', 'Text three']
     result = Kreuzberg.embed_sync(texts: texts, config: config)
-    E2ERuby::Assertions.assert_embed_result(result, count: 3, dimensions: 384, no_nan: true, no_inf: true, non_zero: true, normalized: true)
+    E2ERuby::Assertions.assert_embed_result(result, count: 3, dimensions: 384, no_nan: true, no_inf: true,
+                                                    non_zero: true, normalized: true)
   end
 
   it 'embed_empty_input' do
     # Standalone embedding with empty text list returns empty result without error
     skip('Platform restricted') if Gem.win_platform?
     config = {
-      model: { type: "preset", name: "balanced" },
-      normalize: false,
+      model: { type: 'preset', name: 'balanced' },
+      normalize: false
     }
 
     texts = []
     result = Kreuzberg.embed_sync(texts: texts, config: config)
-    E2ERuby::Assertions.assert_embed_result(result, count: 0, dimensions: nil, no_nan: true, no_inf: true, non_zero: false, normalized: false)
+    E2ERuby::Assertions.assert_embed_result(result, count: 0, dimensions: nil, no_nan: true, no_inf: true,
+                                                    non_zero: false, normalized: false)
   end
 
   it 'embed_multilingual' do
     # Standalone embedding with multilingual preset for non-English text
     skip('Platform restricted') if Gem.win_platform?
     config = {
-      model: { type: "preset", name: "multilingual" },
-      normalize: true,
+      model: { type: 'preset', name: 'multilingual' },
+      normalize: true
     }
 
     texts = ['Bonjour le monde', 'Hallo Welt', '¡Hola Mundo!']
     result = Kreuzberg.embed_sync(texts: texts, config: config)
-    E2ERuby::Assertions.assert_embed_result(result, count: 3, dimensions: 768, no_nan: true, no_inf: true, non_zero: true, normalized: false)
+    E2ERuby::Assertions.assert_embed_result(result, count: 3, dimensions: 768, no_nan: true, no_inf: true,
+                                                    non_zero: true, normalized: false)
   end
 
   it 'embed_single_text' do
     # Standalone embedding of a single text with balanced preset
     skip('Platform restricted') if Gem.win_platform?
     config = {
-      model: { type: "preset", name: "balanced" },
-      normalize: true,
+      model: { type: 'preset', name: 'balanced' },
+      normalize: true
     }
 
     texts = ['Hello, Kreuzberg!']
     result = Kreuzberg.embed_sync(texts: texts, config: config)
-    E2ERuby::Assertions.assert_embed_result(result, count: 1, dimensions: 768, no_nan: true, no_inf: true, non_zero: true, normalized: true)
+    E2ERuby::Assertions.assert_embed_result(result, count: 1, dimensions: 768, no_nan: true, no_inf: true,
+                                                    non_zero: true, normalized: true)
   end
-
 end
 # rubocop:enable Metrics/BlockLength

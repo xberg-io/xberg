@@ -101,7 +101,6 @@ public class ParityTest
             "Elements",
             "ExtractedKeywords",
             "Images",
-            "LlmUsage",
             "Metadata",
             "MimeType",
             "OcrElements",

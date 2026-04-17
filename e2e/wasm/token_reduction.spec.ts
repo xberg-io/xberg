@@ -4,104 +4,121 @@
 // Tests for token_reduction fixtures.
 
 import { beforeAll, describe, it } from "vitest";
-import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 import type { ExtractionResult } from "./helpers.js";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("token_reduction fixtures", () => {
-  it("token_reduction_aggressive", async () => {
-    const config = buildConfig({"token_reduction":{"mode":"aggressive"}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "token_reduction_aggressive", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 5);
-    assertions.assertMaxContentLength(result, 150);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"token_reduction_aggressive",
+		async () => {
+			const config = buildConfig({ token_reduction: { mode: "aggressive" } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "token_reduction_aggressive", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 5);
+			assertions.assertMaxContentLength(result, 150);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("token_reduction_basic", async () => {
-    const config = buildConfig({"token_reduction":{"mode":"moderate"}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "token_reduction_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 5);
-    assertions.assertMaxContentLength(result, 200);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"token_reduction_basic",
+		async () => {
+			const config = buildConfig({ token_reduction: { mode: "moderate" } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "token_reduction_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 5);
+			assertions.assertMaxContentLength(result, 200);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("token_reduction_light", async () => {
-    const config = buildConfig({"token_reduction":{"mode":"light"}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "token_reduction_light", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"token_reduction_light",
+		async () => {
+			const config = buildConfig({ token_reduction: { mode: "light" } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "token_reduction_light", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("token_reduction_with_chunking", async () => {
-    const config = buildConfig({"token_reduction":{"mode":"moderate"},"chunking":{"max_chars":500,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "token_reduction_with_chunking", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 5);
-    assertions.assertMaxContentLength(result, 200);
-    assertions.assertChunks(result, 1, null, true, null, null, null, null);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"token_reduction_with_chunking",
+		async () => {
+			const config = buildConfig({
+				token_reduction: { mode: "moderate" },
+				chunking: { max_chars: 500, max_overlap: 50 },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "token_reduction_with_chunking", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 5);
+			assertions.assertMaxContentLength(result, 200);
+			assertions.assertChunks(result, 1, null, true, null, null, null, null);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

@@ -5,7 +5,6 @@
 #
 # Tests for xml fixtures.
 
-# rubocop:disable Layout/LineLength
 require_relative 'spec_helper'
 
 RSpec.describe 'xml fixtures' do
@@ -26,4 +25,3 @@ RSpec.describe 'xml fixtures' do
     end
   end
 end
-# rubocop:enable Layout/LineLength

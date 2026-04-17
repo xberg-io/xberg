@@ -59,7 +59,11 @@ defmodule E2E.OcrTest do
              "ocr_paddle_confidence_filter",
              "images/ocr_image.jpg",
              %{
-               ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{min_confidence: 80}},
+               ocr: %{
+                 backend: "paddle-ocr",
+                 language: "en",
+                 paddle_ocr_config: %{min_confidence: 80}
+               },
                force_ocr: true
              },
              requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
@@ -133,7 +137,11 @@ defmodule E2E.OcrTest do
           result
           |> E2E.Helpers.assert_expected_mime(["image/png"])
           |> E2E.Helpers.assert_min_content_length(5)
-          |> E2E.Helpers.assert_ocr_elements(has_elements: true, elements_have_geometry: true, min_count: 1)
+          |> E2E.Helpers.assert_ocr_elements(
+            has_elements: true,
+            elements_have_geometry: true,
+            min_count: 1
+          )
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -193,7 +201,11 @@ defmodule E2E.OcrTest do
              "ocr_paddle_markdown",
              "images/test_hello_world.png",
              %{
-               ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{output_format: "markdown"}},
+               ocr: %{
+                 backend: "paddle-ocr",
+                 language: "en",
+                 paddle_ocr_config: %{output_format: "markdown"}
+               },
                force_ocr: true
              },
              requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
@@ -242,7 +254,11 @@ defmodule E2E.OcrTest do
              "ocr_paddle_structured",
              "images/test_hello_world.png",
              %{
-               ocr: %{backend: "paddle-ocr", language: "en", element_config: %{include_elements: true}},
+               ocr: %{
+                 backend: "paddle-ocr",
+                 language: "en",
+                 element_config: %{include_elements: true}
+               },
                force_ocr: true
              },
              requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
@@ -273,7 +289,11 @@ defmodule E2E.OcrTest do
              "images/simple_table.png",
              %{
                output_format: "markdown",
-               ocr: %{backend: "paddle-ocr", language: "en", paddle_ocr_config: %{enable_table_detection: true}},
+               ocr: %{
+                 backend: "paddle-ocr",
+                 language: "en",
+                 paddle_ocr_config: %{enable_table_detection: true}
+               },
                force_ocr: true
              },
              requirements: ["paddle-ocr", "paddle-ocr", "onnxruntime"],
@@ -368,7 +388,11 @@ defmodule E2E.OcrTest do
              "ocr_tesseract_elements",
              "images/test_hello_world.png",
              %{
-               ocr: %{backend: "tesseract", language: "eng", element_config: %{include_elements: true}},
+               ocr: %{
+                 backend: "tesseract",
+                 language: "eng",
+                 element_config: %{include_elements: true}
+               },
                force_ocr: true
              },
              requirements: ["tesseract", "tesseract"],

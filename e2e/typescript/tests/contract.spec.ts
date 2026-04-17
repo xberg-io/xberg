@@ -4,1841 +4,2275 @@
 // Tests for contract fixtures.
 
 import { existsSync, readFileSync } from "node:fs";
+import type { ExtractionResult } from "@kreuzberg/node";
+import {
+	batchExtractBytes,
+	batchExtractBytesSync,
+	batchExtractFiles,
+	batchExtractFilesSync,
+	detectMimeTypeFromPath,
+	extractBytes,
+	extractBytesSync,
+	extractFile,
+	extractFileSync,
+} from "@kreuzberg/node";
 import { describe, it } from "vitest";
 import { assertions, buildConfig, chunkAssertions, resolveDocument, shouldSkipFixture } from "./helpers.js";
-import { batchExtractBytes, batchExtractBytesSync, batchExtractFiles, batchExtractFilesSync, detectMimeTypeFromPath, extractBytes, extractBytesSync, extractFile, extractFileSync } from "@kreuzberg/node";
-import type { ExtractionResult } from "@kreuzberg/node";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 describe("contract fixtures", () => {
-  it("api_batch_bytes_async", async () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_bytes_async: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const fileBytes = readFileSync(documentPath);
-      const mimeType = detectMimeTypeFromPath(documentPath);
-      const results = await batchExtractBytes([fileBytes], [mimeType], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_bytes_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_bytes_sync", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_bytes_sync: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const fileBytes = readFileSync(documentPath);
-      const mimeType = detectMimeTypeFromPath(documentPath);
-      const results = batchExtractBytesSync([fileBytes], [mimeType], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_bytes_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_bytes_with_configs_async", async () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_bytes_with_configs_async: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const fileBytes = readFileSync(documentPath);
-      const mimeType = detectMimeTypeFromPath(documentPath);
-      const results = await batchExtractBytes([fileBytes], [mimeType], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_bytes_with_configs_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_bytes_with_configs_sync", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_bytes_with_configs_sync: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const fileBytes = readFileSync(documentPath);
-      const mimeType = detectMimeTypeFromPath(documentPath);
-      const results = batchExtractBytesSync([fileBytes], [mimeType], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_bytes_with_configs_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_async", async () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_file_async: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const results = await batchExtractFiles([documentPath], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_sync", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_file_sync: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const results = batchExtractFilesSync([documentPath], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_with_configs_async", async () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_file_with_configs_async: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const results = await batchExtractFiles([documentPath], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_with_configs_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_with_configs_sync", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_file_with_configs_sync: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const results = batchExtractFilesSync([documentPath], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_with_configs_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_batch_file_with_timeout_sync", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_batch_file_with_timeout_sync: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"extraction_timeout_secs":300});
-    let result: ExtractionResult | null = null;
-    try {
-      const results = batchExtractFilesSync([documentPath], config);
-      result = results[0];
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_batch_file_with_timeout_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_extract_bytes_async", async () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_extract_bytes_async: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const fileBytes = readFileSync(documentPath);
-      const mimeType = detectMimeTypeFromPath(documentPath);
-      result = await extractBytes(fileBytes, mimeType, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_extract_bytes_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_extract_bytes_sync", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_extract_bytes_sync: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const fileBytes = readFileSync(documentPath);
-      const mimeType = detectMimeTypeFromPath(documentPath);
-      result = extractBytesSync(fileBytes, mimeType, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_extract_bytes_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_extract_file_async", async () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_extract_file_async: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = await extractFile(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_extract_file_async", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("api_extract_file_sync", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping api_extract_file_sync: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "api_extract_file_sync", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_acceleration_cpu_provider", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_acceleration_cpu_provider: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"acceleration":{"provider":"cpu","device_id":0}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_acceleration_cpu_provider", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "To Whom it May Concern"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"max_chars":500,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_heading_context", () => {
-    const documentPath = resolveDocument("markdown/extraction_test.md");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_heading_context: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"chunker_type":"markdown","max_chars":300,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_heading_context", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 2, null, true, null, true, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_markdown", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_markdown: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"chunker_type":"markdown","max_chars":500,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_markdown", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_no_headings", () => {
-    const documentPath = resolveDocument("text/book_war_and_peace_1p.txt");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_no_headings: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"chunker_type":"markdown","max_chars":300,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_no_headings", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 2, null, true, null, false, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_prepend_heading_context", () => {
-    const documentPath = resolveDocument("markdown/extraction_test.md");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_prepend_heading_context: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"chunker_type":"markdown","max_chars":300,"max_overlap":50,"prepend_heading_context":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_prepend_heading_context", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 2, null, true, null, true, undefined, true);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_semantic", () => {
-    const documentPath = resolveDocument("semantic/annual_report.txt");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_semantic: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"chunker_type":"semantic"}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_semantic", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/plain"]);
-    assertions.assertMinContentLength(result, 100);
-    chunkAssertions.assertChunks(result, 2, null, true, null, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_semantic_small", () => {
-    const documentPath = resolveDocument("semantic/annual_report.txt");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_semantic_small: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"chunker_type":"semantic","max_chars":200}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_semantic_small", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/plain"]);
-    assertions.assertMinContentLength(result, 100);
-    chunkAssertions.assertChunks(result, 5, null, true, null, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_semantic_threshold", () => {
-    const documentPath = resolveDocument("semantic/mixed_topics.txt");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_semantic_threshold: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"chunker_type":"semantic","topic_threshold":0.5}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_semantic_threshold", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/plain"]);
-    assertions.assertMinContentLength(result, 100);
-    chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_small", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_small: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"max_chars":100,"max_overlap":20}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_small", ["chunking"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 2, null, true, null, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_text", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_text: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"chunking":{"chunker_type":"text","max_chars":500,"max_overlap":50}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_text", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_chunking_tokenizer", () => {
-    const documentPath = resolveDocument("markdown/comprehensive.md");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_chunking_tokenizer: missing document at", documentPath);
-      console.warn("Notes: Requires network access for HuggingFace Hub tokenizer download");
-      return;
-    }
-    const config = buildConfig({"chunking":{"max_chars":200,"max_overlap":40,"sizing":{"type":"tokenizer","model":"Xenova/gpt-4o"}}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_chunking_tokenizer", ["chunking-tokenizers"], "Requires network access for HuggingFace Hub tokenizer download")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 2, null, true, null, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_disable_ocr", () => {
-    const documentPath = resolveDocument("images/test_hello_world.png");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_disable_ocr: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"disable_ocr":true});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_disable_ocr", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["image/png"]);
-    assertions.assertMaxContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_djot_content", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_djot_content: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"djot"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_djot_content", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_document_structure: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"include_document_structure":true});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    chunkAssertions.assertDocument(result, true, 1, ["paragraph"], null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure_disabled", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_document_structure_disabled: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure_disabled", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    chunkAssertions.assertDocument(result, false, null, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure_groups", () => {
-    const documentPath = resolveDocument("docx/unit_test_headers.docx");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_document_structure_groups: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"include_document_structure":true});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure_groups", ["office"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    chunkAssertions.assertDocument(result, true, null, null, true);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure_headings", () => {
-    const documentPath = resolveDocument("docx/unit_test_headers.docx");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_document_structure_headings: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"include_document_structure":true});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure_headings", ["office"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    chunkAssertions.assertDocument(result, true, 1, ["heading", "paragraph"], null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_document_structure_with_headings", () => {
-    const documentPath = resolveDocument("docx/fake.docx");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_document_structure_with_headings: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"include_document_structure":true});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_document_structure_with_headings", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    chunkAssertions.assertDocument(result, true, 1, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_element_types", () => {
-    const documentPath = resolveDocument("docx/unit_test_headers.docx");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_element_types: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"result_format":"element_based"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_element_types", ["office"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    chunkAssertions.assertElements(result, 1, ["narrative_text"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_email_msg_fallback_codepage", () => {
-    const documentPath = resolveDocument("email/fake_email.msg");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_email_msg_fallback_codepage: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"email":{"msg_fallback_codepage":1251}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_email_msg_fallback_codepage", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.ms-outlook"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_extraction_timeout", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_extraction_timeout: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"extraction_timeout_secs":300});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_extraction_timeout", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_force_ocr", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_force_ocr: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"force_ocr":true});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_force_ocr", ["tesseract"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_force_ocr_pages", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_force_ocr_pages: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"force_ocr_pages":[1],"ocr":{"backend":"tesseract","language":"eng"}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_force_ocr_pages", ["ocr"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 1);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_html_options", () => {
-    const documentPath = resolveDocument("html/complex_table.html");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_html_options: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"html_options":{"extractMetadata":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_html_options", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/html"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_html_styled_custom_css", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_html_styled_custom_css: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"html","html_output":{"theme":"unstyled","css":".kb-p { color: red; }","embed_css":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_html_styled_custom_css", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertContentContainsAll(result, [".kb-p { color: red; }", "kb-doc"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_html_styled_default", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_html_styled_default: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"html","html_output":{"theme":"default","embed_css":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_html_styled_default", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertContentContainsAll(result, ["kb-doc", "kb-content", "kb-p", "<style>"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_html_styled_no_embed", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_html_styled_no_embed: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"html","html_output":{"theme":"default","embed_css":false}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_html_styled_no_embed", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertContentContainsAll(result, ["kb-doc", "kb-content"]);
-    assertions.assertContentContainsNone(result, ["<style>"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_images", () => {
-    const documentPath = resolveDocument("pdf/embedded_images_tables.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_images: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"images":{"extract_images":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_images", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    chunkAssertions.assertImages(result, 1, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_images_with_formats", () => {
-    const documentPath = resolveDocument("pptx/powerpoint_with_image.pptx");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_images_with_formats: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"images":{"extract_images":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_images_with_formats", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.presentationml.presentation"]);
-    chunkAssertions.assertImages(result, 1, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_keywords", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_keywords: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"keywords":{"algorithm":"yake","max_keywords":10}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_keywords", ["keywords-yake"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertKeywords(result, true, 1, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_language_detection", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_language_detection: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"language_detection":{"enabled":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_language_detection", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertDetectedLanguages(result, ["eng"], 0.5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_language_detection_multi", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_language_detection_multi: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"language_detection":{"enabled":true,"detect_multiple":true,"min_confidence":0.3}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_language_detection_multi", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertDetectedLanguages(result, ["eng"], null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_language_multi", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_language_multi: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"language_detection":{"enabled":true,"detect_multiple":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_language_multi", ["language-detection"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertDetectedLanguages(result, ["eng"], null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_llm_embeddings", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_llm_embeddings: missing document at", documentPath);
-      console.warn("Notes: Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var");
-      return;
-    }
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn("Skipping config_llm_embeddings: OPENAI_API_KEY not set (required for liter-llm)");
-      return;
-    }
-    const config = buildConfig({"chunking":{"max_chars":500,"max_overlap":50,"embedding":{"model":{"type":"llm","llm":{"model":"openai/text-embedding-3-small"}},"normalize":true}}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_llm_embeddings", ["liter-llm"], "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertChunks(result, 1, null, true, true, undefined, undefined, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_llm_structured_extraction", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_llm_structured_extraction: missing document at", documentPath);
-      console.warn("Notes: Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var");
-      return;
-    }
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn("Skipping config_llm_structured_extraction: OPENAI_API_KEY not set (required for liter-llm)");
-      return;
-    }
-    const config = buildConfig({"structured_extraction":{"schema":{"type":"object","properties":{"title":{"type":"string"},"date":{"type":"string"},"summary":{"type":"string"}},"required":["title"]},"schema_name":"memo_data","llm":{"model":"openai/gpt-4o"}}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_llm_structured_extraction", ["liter-llm"], "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertStructuredOutput(result, true, null, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_llm_structured_extraction_with_prompt", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_llm_structured_extraction_with_prompt: missing document at", documentPath);
-      console.warn("Notes: Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var");
-      return;
-    }
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn("Skipping config_llm_structured_extraction_with_prompt: OPENAI_API_KEY not set (required for liter-llm)");
-      return;
-    }
-    const config = buildConfig({"structured_extraction":{"schema":{"type":"object","properties":{"sender":{"type":"string"},"recipient":{"type":"string"},"subject":{"type":"string"}},"required":["sender","recipient"]},"schema_name":"memo_parties","prompt":"Extract the sender and recipient from this memo document. If not found, use 'unknown'.","llm":{"model":"openai/gpt-4o"}}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_llm_structured_extraction_with_prompt", ["liter-llm"], "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertStructuredOutput(result, true, null, ["sender", "recipient"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_llm_vlm_ocr", () => {
-    const documentPath = resolveDocument("images/test_hello_world.png");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_llm_vlm_ocr: missing document at", documentPath);
-      console.warn("Notes: Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var");
-      return;
-    }
-    if (!process.env.OPENAI_API_KEY) {
-      console.warn("Skipping config_llm_vlm_ocr: OPENAI_API_KEY not set (required for liter-llm)");
-      return;
-    }
-    const config = buildConfig({"ocr":{"backend":"vlm","language":"eng","vlm_config":{"model":"openai/gpt-4o"}}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_llm_vlm_ocr", ["liter-llm"], "Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertMinContentLength(result, 5);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pages", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_pages: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"pages":{"extract_pages":true,"insert_page_markers":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pages", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["PAGE"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pages_exact_count", () => {
-    const documentPath = resolveDocument("pdf/multi_page.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_pages_exact_count: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"pages":{"extract_pages":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pages_exact_count", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertPages(result, null, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pages_extract", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_pages_extract: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"pages":{"extract_pages":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pages_extract", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    chunkAssertions.assertPages(result, 1, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pages_markers", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_pages_markers: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"pages":{"insert_page_markers":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pages_markers", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["PAGE"]);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pdf_annotations_count", () => {
-    const documentPath = resolveDocument("vendored/pdfplumber/pdf/annotations.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_pdf_annotations_count: missing document at", documentPath);
-      console.warn("Notes: PDFium ARM Linux binary does not support annotation extraction");
-      return;
-    }
-    if ((process.arch === "arm64" && process.platform === "linux")) {
-      console.warn("Skipping config_pdf_annotations_count: not supported on this platform");
-      return;
-    }
-    const config = buildConfig({"pdf_options":{"extract_annotations":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pdf_annotations_count", ["pdf"], "PDFium ARM Linux binary does not support annotation extraction")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertAnnotations(result, true, 3);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pdf_hierarchy", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_pdf_hierarchy: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"pdf_options":{"hierarchy":{"enabled":true,"include_bbox":true}},"pages":{"extract_pages":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pdf_hierarchy", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_pdf_margins", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_pdf_margins: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"pdf_options":{"top_margin_fraction":0.1,"bottom_margin_fraction":0.1}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_pdf_margins", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_postprocessor", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_postprocessor: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"postprocessor":{"enabled":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_postprocessor", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_processing_warnings_empty", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_processing_warnings_empty: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_processing_warnings_empty", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertProcessingWarnings(result, undefined, true);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_quality_disabled", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_quality_disabled: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"enable_quality_processing":false});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_quality_disabled", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_quality_enabled", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_quality_enabled: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"enable_quality_processing":true});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_quality_enabled", ["quality"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertQualityScore(result, true, 0, 1);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_quality_score_range", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_quality_score_range: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"enable_quality_processing":true});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_quality_score_range", ["quality"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertQualityScore(result, true, 0.1, undefined);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_security_limits", () => {
-    const documentPath = resolveDocument("archives/documents.zip");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_security_limits: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"security_limits":{"max_archive_size":104857600,"max_compression_ratio":50,"max_files_in_archive":100}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_security_limits", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/zip", "application/x-zip-compressed"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_structured_output", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_structured_output: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"structured"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_structured_output", ["pdf"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_tables_content", () => {
-    const documentPath = resolveDocument("docx/docx_tables.docx");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_tables_content: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_tables_content", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
-    assertions.assertTableCount(result, 1, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_tree_sitter", () => {
-    const documentPath = resolveDocument("code/hello.py");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_tree_sitter: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"tree_sitter":{"languages":["python","rust"],"groups":["web"],"process":{"structure":true,"imports":true,"exports":true,"comments":false,"docstrings":false,"symbols":false,"diagnostics":false}}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_tree_sitter", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_tree_sitter_process", () => {
-    const documentPath = resolveDocument("code/hello.py");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_tree_sitter_process: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"tree_sitter":{"process":{"structure":true,"imports":true,"exports":true,"comments":true,"docstrings":true,"symbols":true,"diagnostics":true,"chunk_max_size":2000}}});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_tree_sitter_process", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 5);
-  }, TEST_TIMEOUT_MS);
-
-  it("config_use_cache_false", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping config_use_cache_false: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"use_cache":false});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "config_use_cache_false", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_bytes_markdown", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping output_format_bytes_markdown: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"markdown"});
-    let result: ExtractionResult | null = null;
-    try {
-      const fileBytes = readFileSync(documentPath);
-      const mimeType = detectMimeTypeFromPath(documentPath);
-      result = extractBytesSync(fileBytes, mimeType, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_bytes_markdown", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_djot", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping output_format_djot: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"djot"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_djot", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_html", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping output_format_html: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"html"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_html", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_markdown", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping output_format_markdown: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"markdown"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_markdown", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("output_format_plain", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping output_format_plain: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"output_format":"plain"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "output_format_plain", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
-  it("result_format_element_based", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping result_format_element_based: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"result_format":"element_based"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "result_format_element_based", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    chunkAssertions.assertElements(result, 1, null);
-  }, TEST_TIMEOUT_MS);
-
-  it("result_format_unified", () => {
-    const documentPath = resolveDocument("pdf/fake_memo.pdf");
-    if (!existsSync(documentPath)) {
-      console.warn("Skipping result_format_unified: missing document at", documentPath);
-      return;
-    }
-    const config = buildConfig({"result_format":"unified"});
-    let result: ExtractionResult | null = null;
-    try {
-      result = extractFileSync(documentPath, null, config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "result_format_unified", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"api_batch_bytes_async",
+		async () => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_bytes_async: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const fileBytes = readFileSync(documentPath);
+				const mimeType = detectMimeTypeFromPath(documentPath);
+				const results = await batchExtractBytes([fileBytes], [mimeType], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_bytes_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_bytes_sync",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_bytes_sync: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const fileBytes = readFileSync(documentPath);
+				const mimeType = detectMimeTypeFromPath(documentPath);
+				const results = batchExtractBytesSync([fileBytes], [mimeType], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_bytes_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_bytes_with_configs_async",
+		async () => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_bytes_with_configs_async: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const fileBytes = readFileSync(documentPath);
+				const mimeType = detectMimeTypeFromPath(documentPath);
+				const results = await batchExtractBytes([fileBytes], [mimeType], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_bytes_with_configs_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_bytes_with_configs_sync",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_bytes_with_configs_sync: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const fileBytes = readFileSync(documentPath);
+				const mimeType = detectMimeTypeFromPath(documentPath);
+				const results = batchExtractBytesSync([fileBytes], [mimeType], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_bytes_with_configs_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_async",
+		async () => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_file_async: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const results = await batchExtractFiles([documentPath], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_sync",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_file_sync: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const results = batchExtractFilesSync([documentPath], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_with_configs_async",
+		async () => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_file_with_configs_async: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const results = await batchExtractFiles([documentPath], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_with_configs_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_with_configs_sync",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_file_with_configs_sync: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const results = batchExtractFilesSync([documentPath], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_with_configs_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_batch_file_with_timeout_sync",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_batch_file_with_timeout_sync: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ extraction_timeout_secs: 300 });
+			let result: ExtractionResult | null = null;
+			try {
+				const results = batchExtractFilesSync([documentPath], config);
+				result = results[0];
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_batch_file_with_timeout_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_extract_bytes_async",
+		async () => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_extract_bytes_async: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const fileBytes = readFileSync(documentPath);
+				const mimeType = detectMimeTypeFromPath(documentPath);
+				result = await extractBytes(fileBytes, mimeType, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_extract_bytes_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_extract_bytes_sync",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_extract_bytes_sync: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const fileBytes = readFileSync(documentPath);
+				const mimeType = detectMimeTypeFromPath(documentPath);
+				result = extractBytesSync(fileBytes, mimeType, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_extract_bytes_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_extract_file_async",
+		async () => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_extract_file_async: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = await extractFile(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_extract_file_async", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"api_extract_file_sync",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping api_extract_file_sync: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "api_extract_file_sync", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_acceleration_cpu_provider",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_acceleration_cpu_provider: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ acceleration: { provider: "cpu", device_id: 0 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_acceleration_cpu_provider", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "To Whom it May Concern"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { max_chars: 500, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_heading_context",
+		() => {
+			const documentPath = resolveDocument("markdown/extraction_test.md");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_heading_context: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "markdown", max_chars: 300, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_heading_context", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 2, null, true, null, true, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_markdown",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_markdown: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "markdown", max_chars: 500, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_markdown", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_no_headings",
+		() => {
+			const documentPath = resolveDocument("text/book_war_and_peace_1p.txt");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_no_headings: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "markdown", max_chars: 300, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_no_headings", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 2, null, true, null, false, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_prepend_heading_context",
+		() => {
+			const documentPath = resolveDocument("markdown/extraction_test.md");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_prepend_heading_context: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({
+				chunking: { chunker_type: "markdown", max_chars: 300, max_overlap: 50, prepend_heading_context: true },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_prepend_heading_context", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 2, null, true, null, true, undefined, true);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_semantic",
+		() => {
+			const documentPath = resolveDocument("semantic/annual_report.txt");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_semantic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "semantic" } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			chunkAssertions.assertChunks(result, 2, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_semantic_small",
+		() => {
+			const documentPath = resolveDocument("semantic/annual_report.txt");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_semantic_small: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "semantic", max_chars: 200 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic_small", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			chunkAssertions.assertChunks(result, 5, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_semantic_threshold",
+		() => {
+			const documentPath = resolveDocument("semantic/mixed_topics.txt");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_semantic_threshold: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "semantic", topic_threshold: 0.5 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic_threshold", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_small",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_small: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { max_chars: 100, max_overlap: 20 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_small", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 2, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_text",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_text: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "text", max_chars: 500, max_overlap: 50 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_text", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_tokenizer",
+		() => {
+			const documentPath = resolveDocument("markdown/comprehensive.md");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_tokenizer: missing document at", documentPath);
+				console.warn("Notes: Requires network access for HuggingFace Hub tokenizer download");
+				return;
+			}
+			const config = buildConfig({
+				chunking: { max_chars: 200, max_overlap: 40, sizing: { type: "tokenizer", model: "Xenova/gpt-4o" } },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"config_chunking_tokenizer",
+						["chunking-tokenizers"],
+						"Requires network access for HuggingFace Hub tokenizer download",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 2, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_disable_ocr",
+		() => {
+			const documentPath = resolveDocument("images/test_hello_world.png");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_disable_ocr: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ disable_ocr: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_disable_ocr", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["image/png"]);
+			assertions.assertMaxContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_djot_content",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_djot_content: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "djot" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_djot_content", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_document_structure: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ include_document_structure: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			chunkAssertions.assertDocument(result, true, 1, ["paragraph"], null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure_disabled",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_document_structure_disabled: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure_disabled", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			chunkAssertions.assertDocument(result, false, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure_groups",
+		() => {
+			const documentPath = resolveDocument("docx/unit_test_headers.docx");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_document_structure_groups: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ include_document_structure: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure_groups", ["office"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			chunkAssertions.assertDocument(result, true, null, null, true);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure_headings",
+		() => {
+			const documentPath = resolveDocument("docx/unit_test_headers.docx");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_document_structure_headings: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ include_document_structure: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure_headings", ["office"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			chunkAssertions.assertDocument(result, true, 1, ["heading", "paragraph"], null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_document_structure_with_headings",
+		() => {
+			const documentPath = resolveDocument("docx/fake.docx");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_document_structure_with_headings: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ include_document_structure: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_document_structure_with_headings", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			chunkAssertions.assertDocument(result, true, 1, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_element_types",
+		() => {
+			const documentPath = resolveDocument("docx/unit_test_headers.docx");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_element_types: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ result_format: "element_based" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_element_types", ["office"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			chunkAssertions.assertElements(result, 1, ["narrative_text"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_email_msg_fallback_codepage",
+		() => {
+			const documentPath = resolveDocument("email/fake_email.msg");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_email_msg_fallback_codepage: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ email: { msg_fallback_codepage: 1251 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_email_msg_fallback_codepage", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/vnd.ms-outlook"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_extraction_timeout",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_extraction_timeout: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ extraction_timeout_secs: 300 });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_extraction_timeout", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_force_ocr",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_force_ocr: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ force_ocr: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_force_ocr", ["tesseract"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_force_ocr_pages",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_force_ocr_pages: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ force_ocr_pages: [1], ocr: { backend: "tesseract", language: "eng" } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_force_ocr_pages", ["ocr"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 1);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_html_options",
+		() => {
+			const documentPath = resolveDocument("html/complex_table.html");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_html_options: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ html_options: { extract_metadata: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_html_options", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/html"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_html_styled_custom_css",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_html_styled_custom_css: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({
+				output_format: "html",
+				html_output: { theme: "unstyled", css: ".kb-p { color: red; }", embed_css: true },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_html_styled_custom_css", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertContentContainsAll(result, [".kb-p { color: red; }", "kb-doc"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_html_styled_default",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_html_styled_default: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "html", html_output: { theme: "default", embed_css: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_html_styled_default", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertContentContainsAll(result, ["kb-doc", "kb-content", "kb-p", "<style>"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_html_styled_no_embed",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_html_styled_no_embed: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "html", html_output: { theme: "default", embed_css: false } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_html_styled_no_embed", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertContentContainsAll(result, ["kb-doc", "kb-content"]);
+			assertions.assertContentContainsNone(result, ["<style>"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_images",
+		() => {
+			const documentPath = resolveDocument("pdf/embedded_images_tables.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_images: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ images: { extract_images: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_images", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			chunkAssertions.assertImages(result, 1, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_images_with_formats",
+		() => {
+			const documentPath = resolveDocument("pptx/powerpoint_with_image.pptx");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_images_with_formats: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ images: { extract_images: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_images_with_formats", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			]);
+			chunkAssertions.assertImages(result, 1, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_keywords",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_keywords: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ keywords: { algorithm: "yake", max_keywords: 10 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_keywords", ["keywords-yake"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertKeywords(result, true, 1, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_language_detection",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_language_detection: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ language_detection: { enabled: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_language_detection", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertDetectedLanguages(result, ["eng"], 0.5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_language_detection_multi",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_language_detection_multi: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true, min_confidence: 0.3 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_language_detection_multi", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertDetectedLanguages(result, ["eng"], null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_language_multi",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_language_multi: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ language_detection: { enabled: true, detect_multiple: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_language_multi", ["language-detection"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertDetectedLanguages(result, ["eng"], null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_llm_embeddings",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_llm_embeddings: missing document at", documentPath);
+				console.warn("Notes: Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var");
+				return;
+			}
+			if (!process.env.OPENAI_API_KEY) {
+				console.warn("Skipping config_llm_embeddings: OPENAI_API_KEY not set (required for liter-llm)");
+				return;
+			}
+			const config = buildConfig({
+				chunking: {
+					max_chars: 500,
+					max_overlap: 50,
+					embedding: { model: { type: "llm", llm: { model: "openai/text-embedding-3-small" } }, normalize: true },
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"config_llm_embeddings",
+						["liter-llm"],
+						"Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertChunks(result, 1, null, true, true, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_llm_structured_extraction",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_llm_structured_extraction: missing document at", documentPath);
+				console.warn("Notes: Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var");
+				return;
+			}
+			if (!process.env.OPENAI_API_KEY) {
+				console.warn("Skipping config_llm_structured_extraction: OPENAI_API_KEY not set (required for liter-llm)");
+				return;
+			}
+			const config = buildConfig({
+				structured_extraction: {
+					schema: {
+						type: "object",
+						properties: { title: { type: "string" }, date: { type: "string" }, summary: { type: "string" } },
+						required: ["title"],
+					},
+					schema_name: "memo_data",
+					llm: { model: "openai/gpt-4o" },
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"config_llm_structured_extraction",
+						["liter-llm"],
+						"Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertStructuredOutput(result, true, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_llm_structured_extraction_with_prompt",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_llm_structured_extraction_with_prompt: missing document at", documentPath);
+				console.warn("Notes: Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var");
+				return;
+			}
+			if (!process.env.OPENAI_API_KEY) {
+				console.warn(
+					"Skipping config_llm_structured_extraction_with_prompt: OPENAI_API_KEY not set (required for liter-llm)",
+				);
+				return;
+			}
+			const config = buildConfig({
+				structured_extraction: {
+					schema: {
+						type: "object",
+						properties: { sender: { type: "string" }, recipient: { type: "string" }, subject: { type: "string" } },
+						required: ["sender", "recipient"],
+					},
+					schema_name: "memo_parties",
+					prompt: "Extract the sender and recipient from this memo document. If not found, use 'unknown'.",
+					llm: { model: "openai/gpt-4o" },
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"config_llm_structured_extraction_with_prompt",
+						["liter-llm"],
+						"Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertStructuredOutput(result, true, null, ["sender", "recipient"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_llm_vlm_ocr",
+		() => {
+			const documentPath = resolveDocument("images/test_hello_world.png");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_llm_vlm_ocr: missing document at", documentPath);
+				console.warn("Notes: Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var");
+				return;
+			}
+			if (!process.env.OPENAI_API_KEY) {
+				console.warn("Skipping config_llm_vlm_ocr: OPENAI_API_KEY not set (required for liter-llm)");
+				return;
+			}
+			const config = buildConfig({ ocr: { backend: "vlm", language: "eng", vlm_config: { model: "openai/gpt-4o" } } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"config_llm_vlm_ocr",
+						["liter-llm"],
+						"Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertMinContentLength(result, 5);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pages",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_pages: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ pages: { extract_pages: true, insert_page_markers: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pages", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["PAGE"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pages_exact_count",
+		() => {
+			const documentPath = resolveDocument("pdf/multi_page.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_pages_exact_count: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ pages: { extract_pages: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pages_exact_count", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertPages(result, null, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pages_extract",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_pages_extract: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ pages: { extract_pages: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pages_extract", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			chunkAssertions.assertPages(result, 1, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pages_markers",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_pages_markers: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ pages: { insert_page_markers: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pages_markers", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["PAGE"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pdf_annotations_count",
+		() => {
+			const documentPath = resolveDocument("vendored/pdfplumber/pdf/annotations.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_pdf_annotations_count: missing document at", documentPath);
+				console.warn("Notes: PDFium ARM Linux binary does not support annotation extraction");
+				return;
+			}
+			if (process.arch === "arm64" && process.platform === "linux") {
+				console.warn("Skipping config_pdf_annotations_count: not supported on this platform");
+				return;
+			}
+			const config = buildConfig({ pdf_options: { extract_annotations: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"config_pdf_annotations_count",
+						["pdf"],
+						"PDFium ARM Linux binary does not support annotation extraction",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertAnnotations(result, true, 3);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pdf_hierarchy",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_pdf_hierarchy: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({
+				pdf_options: { hierarchy: { enabled: true, include_bbox: true } },
+				pages: { extract_pages: true },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pdf_hierarchy", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_pdf_margins",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_pdf_margins: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ pdf_options: { top_margin_fraction: 0.1, bottom_margin_fraction: 0.1 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_pdf_margins", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_postprocessor",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_postprocessor: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ postprocessor: { enabled: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_postprocessor", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_processing_warnings_empty",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_processing_warnings_empty: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_processing_warnings_empty", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertProcessingWarnings(result, undefined, true);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_quality_disabled",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_quality_disabled: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ enable_quality_processing: false });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_quality_disabled", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_quality_enabled",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_quality_enabled: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ enable_quality_processing: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_quality_enabled", ["quality"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertQualityScore(result, true, 0, 1);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_quality_score_range",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_quality_score_range: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ enable_quality_processing: true });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_quality_score_range", ["quality"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertQualityScore(result, true, 0.1, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_security_limits",
+		() => {
+			const documentPath = resolveDocument("archives/documents.zip");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_security_limits: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({
+				security_limits: { max_archive_size: 104857600, max_compression_ratio: 50, max_files_in_archive: 100 },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_security_limits", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/zip", "application/x-zip-compressed"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_structured_output",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_structured_output: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "structured" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_structured_output", ["pdf"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_tables_content",
+		() => {
+			const documentPath = resolveDocument("docx/docx_tables.docx");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_tables_content: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_tables_content", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, [
+				"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			]);
+			assertions.assertTableCount(result, 1, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_tree_sitter",
+		() => {
+			const documentPath = resolveDocument("code/hello.py");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_tree_sitter: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({
+				tree_sitter: {
+					languages: ["python", "rust"],
+					groups: ["web"],
+					process: {
+						structure: true,
+						imports: true,
+						exports: true,
+						comments: false,
+						docstrings: false,
+						symbols: false,
+						diagnostics: false,
+					},
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_tree_sitter", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_tree_sitter_process",
+		() => {
+			const documentPath = resolveDocument("code/hello.py");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_tree_sitter_process: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({
+				tree_sitter: {
+					process: {
+						structure: true,
+						imports: true,
+						exports: true,
+						comments: true,
+						docstrings: true,
+						symbols: true,
+						diagnostics: true,
+						chunk_max_size: 2000,
+					},
+				},
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_tree_sitter_process", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 5);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_use_cache_false",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_use_cache_false: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ use_cache: false });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_use_cache_false", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_bytes_markdown",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping output_format_bytes_markdown: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "markdown" });
+			let result: ExtractionResult | null = null;
+			try {
+				const fileBytes = readFileSync(documentPath);
+				const mimeType = detectMimeTypeFromPath(documentPath);
+				result = extractBytesSync(fileBytes, mimeType, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_bytes_markdown", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_djot",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping output_format_djot: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "djot" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_djot", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_html",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping output_format_html: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "html" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_html", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_markdown",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping output_format_markdown: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "markdown" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_markdown", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"output_format_plain",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping output_format_plain: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ output_format: "plain" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "output_format_plain", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"result_format_element_based",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping result_format_element_based: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ result_format: "element_based" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "result_format_element_based", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			chunkAssertions.assertElements(result, 1, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"result_format_unified",
+		() => {
+			const documentPath = resolveDocument("pdf/fake_memo.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping result_format_unified: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ result_format: "unified" });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "result_format_unified", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

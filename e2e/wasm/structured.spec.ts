@@ -4,211 +4,249 @@
 // Tests for structured fixtures.
 
 import { beforeAll, describe, it } from "vitest";
-import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 import type { ExtractionResult } from "./helpers.js";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("structured fixtures", () => {
-  it("structured_csv_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("csv/stanley_cups.csv"));
-      result = await extractBytes(documentBytes, "text/csv", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_csv_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/csv"]);
-    assertions.assertMinContentLength(result, 20);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_csv_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("csv/stanley_cups.csv"));
+				result = await extractBytes(documentBytes, "text/csv", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_csv_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/csv"]);
+			assertions.assertMinContentLength(result, 20);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_enw_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("data_formats/sample.enw"));
-      result = await extractBytes(documentBytes, "application/x-endnote-refer", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_enw_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_enw_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("data_formats/sample.enw"));
+				result = await extractBytes(documentBytes, "application/x-endnote-refer", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_enw_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_json_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("json/sample_document.json"));
-      result = await extractBytes(documentBytes, "application/json", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_json_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/json"]);
-    assertions.assertMinContentLength(result, 20);
-    assertions.assertContentContainsAny(result, ["Sample Document", "Test Author"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_json_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("json/sample_document.json"));
+				result = await extractBytes(documentBytes, "application/json", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_json_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/json"]);
+			assertions.assertMinContentLength(result, 20);
+			assertions.assertContentContainsAny(result, ["Sample Document", "Test Author"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_json_simple", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("json/simple.json"));
-      result = await extractBytes(documentBytes, "application/json", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_json_simple", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/json"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAny(result, ["{", "name"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_json_simple",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("json/simple.json"));
+				result = await extractBytes(documentBytes, "application/json", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_json_simple", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/json"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAny(result, ["{", "name"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_nbib_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("data_formats/sample.nbib"));
-      result = await extractBytes(documentBytes, "application/nbib", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_nbib_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/nbib", "application/x-pubmed", "text/plain"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_nbib_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("data_formats/sample.nbib"));
+				result = await extractBytes(documentBytes, "application/nbib", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_nbib_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/nbib", "application/x-pubmed", "text/plain"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_ris_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("data_formats/sample.ris"));
-      result = await extractBytes(documentBytes, "application/x-research-info-systems", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_ris_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-research-info-systems", "text/plain"]);
-    assertions.assertContentNotEmpty(result);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_ris_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("data_formats/sample.ris"));
+				result = await extractBytes(documentBytes, "application/x-research-info-systems", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_ris_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-research-info-systems", "text/plain"]);
+			assertions.assertContentNotEmpty(result);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_toml_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("data_formats/cargo.toml"));
-      result = await extractBytes(documentBytes, "application/toml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_toml_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/toml", "text/toml"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_toml_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("data_formats/cargo.toml"));
+				result = await extractBytes(documentBytes, "application/toml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_toml_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/toml", "text/toml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_tsv_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("data_formats/employees.tsv"));
-      result = await extractBytes(documentBytes, "text/tab-separated-values", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_tsv_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/tab-separated-values", "text/plain"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_tsv_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("data_formats/employees.tsv"));
+				result = await extractBytes(documentBytes, "text/tab-separated-values", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_tsv_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/tab-separated-values", "text/plain"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_yaml_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("yaml/simple.yaml"));
-      result = await extractBytes(documentBytes, "application/yaml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_yaml_basic", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"structured_yaml_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("yaml/simple.yaml"));
+				result = await extractBytes(documentBytes, "application/yaml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_yaml_basic", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("structured_yaml_simple", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("yaml/simple.yaml"));
-      result = await extractBytes(documentBytes, "application/x-yaml", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "structured_yaml_simple", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/x-yaml"]);
-    assertions.assertMinContentLength(result, 10);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"structured_yaml_simple",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("yaml/simple.yaml"));
+				result = await extractBytes(documentBytes, "application/x-yaml", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "structured_yaml_simple", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/x-yaml"]);
+			assertions.assertMinContentLength(result, 10);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

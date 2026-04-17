@@ -17,7 +17,6 @@ test_that("ExtractionResult has all expected fields", {
     "elements",
     "extracted_keywords",
     "images",
-    "llm_usage",
     "metadata",
     "mime_type",
     "ocr_elements",

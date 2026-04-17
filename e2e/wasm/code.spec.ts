@@ -4,120 +4,140 @@
 // Tests for code fixtures.
 
 import { beforeAll, describe, it } from "vitest";
-import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 import type { ExtractionResult } from "./helpers.js";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("code fixtures", () => {
-  it("code_javascript_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("code/app.js"));
-      result = await extractBytes(documentBytes, "text/x-source-code", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "code_javascript_basic", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAll(result, ["class Application", "export function", "import"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"code_javascript_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("code/app.js"));
+				result = await extractBytes(documentBytes, "text/x-source-code", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "code_javascript_basic", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAll(result, ["class Application", "export function", "import"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("code_python_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("code/hello.py"));
-      result = await extractBytes(documentBytes, "text/x-source-code", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "code_python_basic", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAll(result, ["def greet", "class Greeter", "import os"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"code_python_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("code/hello.py"));
+				result = await extractBytes(documentBytes, "text/x-source-code", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "code_python_basic", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAll(result, ["def greet", "class Greeter", "import os"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("code_rust_basic", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("code/main.rs"));
-      result = await extractBytes(documentBytes, "text/x-source-code", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "code_rust_basic", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAll(result, ["struct Store", "fn main", "HashMap"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"code_rust_basic",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("code/main.rs"));
+				result = await extractBytes(documentBytes, "text/x-source-code", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "code_rust_basic", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAll(result, ["struct Store", "fn main", "HashMap"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("code_shebang_detection", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("code/script.sh"));
-      result = await extractBytes(documentBytes, "text/x-source-code", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "code_shebang_detection", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAll(result, ["build", "clean"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"code_shebang_detection",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("code/script.sh"));
+				result = await extractBytes(documentBytes, "text/x-source-code", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "code_shebang_detection", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAll(result, ["build", "clean"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("code_tree_sitter_config", async () => {
-    const config = buildConfig({"tree_sitter":{"process":{"structure":true,"imports":true,"exports":true,"comments":true,"docstrings":true}}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("code/hello.py"));
-      result = await extractBytes(documentBytes, "text/x-source-code", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "code_tree_sitter_config", ["tree-sitter"], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["text/x-source-code"]);
-    assertions.assertMinContentLength(result, 10);
-    assertions.assertContentContainsAll(result, ["def greet", "class Greeter"]);
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"code_tree_sitter_config",
+		async () => {
+			const config = buildConfig({
+				tree_sitter: { process: { structure: true, imports: true, exports: true, comments: true, docstrings: true } },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("code/hello.py"));
+				result = await extractBytes(documentBytes, "text/x-source-code", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "code_tree_sitter_config", ["tree-sitter"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/x-source-code"]);
+			assertions.assertMinContentLength(result, 10);
+			assertions.assertContentContainsAll(result, ["def greet", "class Greeter"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

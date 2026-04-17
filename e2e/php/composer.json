@@ -1,15 +1,15 @@
 {
-    "autoload": {
-        "psr-4": {
-            "E2EPhp\\": "tests/"
-        }
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "E2EPhp\\Tests\\": "tests/"
-        }
-    },
-    "require-dev": {
-        "phpunit/phpunit": "^13.1"
-    }
+	"autoload": {
+		"psr-4": {
+			"E2EPhp\\": "tests/"
+		}
+	},
+	"autoload-dev": {
+		"psr-4": {
+			"E2EPhp\\Tests\\": "tests/"
+		}
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^13.1"
+	}
 }

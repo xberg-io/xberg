@@ -69,7 +69,12 @@ defmodule E2E.SmokeTest do
           result
           |> E2E.Helpers.assert_expected_mime(["text/html"])
           |> E2E.Helpers.assert_min_content_length(10)
-          |> E2E.Helpers.assert_content_contains_any(["Sample Data Table", "Laptop", "Electronics", "Product"])
+          |> E2E.Helpers.assert_content_contains_any([
+            "Sample Data Table",
+            "Laptop",
+            "Electronics",
+            "Product"
+          ])
 
         {:skipped, reason} ->
           IO.puts("SKIPPED: #{reason}")
@@ -179,7 +184,9 @@ defmodule E2E.SmokeTest do
            ) do
         {:ok, result} ->
           result
-          |> E2E.Helpers.assert_expected_mime(["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])
+          |> E2E.Helpers.assert_expected_mime([
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ])
           |> E2E.Helpers.assert_min_content_length(100)
           |> E2E.Helpers.assert_content_contains_all([
             "Team",

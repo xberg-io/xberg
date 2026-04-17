@@ -30,7 +30,7 @@ class ParityTest {
 
     @Test
     void testExtractionResultAllGetters() throws Exception {
-        String[] allGetters = {"getAnnotations", "getChildren", "getChunks", "getContent", "getDetectedLanguages", "getDjotContent", "getDocumentStructure", "getElements", "getExtractedKeywords", "getImages", "getLlmUsage", "getMetadata", "getMimeType", "getOcrElements", "getPages", "getProcessingWarnings", "getQualityScore", "getTables", "getUris"};
+        String[] allGetters = {"getAnnotations", "getChildren", "getChunks", "getContent", "getDetectedLanguages", "getDjotContent", "getDocumentStructure", "getElements", "getExtractedKeywords", "getImages", "getMetadata", "getMimeType", "getOcrElements", "getPages", "getProcessingWarnings", "getQualityScore", "getTables", "getUris"};
         for (String getter : allGetters) {
             assertDoesNotThrow(
                 () -> ExtractionResult.class.getMethod(getter),

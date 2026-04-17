@@ -4,373 +4,475 @@
 // Tests for pdf fixtures.
 
 import { beforeAll, describe, it } from "vitest";
-import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 import type { ExtractionResult } from "./helpers.js";
+import { assertions, buildConfig, extractBytes, initWasm, resolveDocument, shouldSkipFixture } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 
 // Initialize WASM module once before all tests in this file
 beforeAll(async () => {
-  try {
-    await initWasm();
-  } catch (e) {
-    console.warn("WASM init failed:", e);
-  }
+	try {
+		await initWasm();
+	} catch (e) {
+		console.warn("WASM init failed:", e);
+	}
 });
 
 describe("pdf fixtures", () => {
-  it("pdf_annotations", async () => {
-    const config = buildConfig({"pdf_options":{"extract_annotations":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/test_article.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_annotations", [], "PDFium ARM Linux binary does not support annotation extraction")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertAnnotations(result, true, 1);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_annotations",
+		async () => {
+			const config = buildConfig({ pdf_options: { extract_annotations: true } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/test_article.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"pdf_annotations",
+						[],
+						"PDFium ARM Linux binary does not support annotation extraction",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertAnnotations(result, true, 1);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_assembly_technical", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/assembly_language_for_beginners_al4_b_en.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_assembly_technical", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 5000);
-    assertions.assertContentContainsAny(result, ["assembly", "register", "instruction"]);
-    assertions.assertMetadataExpectation(result, "formatType", {"eq":"pdf"});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_assembly_technical",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/assembly_language_for_beginners_al4_b_en.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_assembly_technical", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 5000);
+			assertions.assertContentContainsAny(result, ["assembly", "register", "instruction"]);
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_bayesian_data_analysis", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/bayesian_data_analysis_third_edition_13th_feb_2020.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_bayesian_data_analysis", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10000);
-    assertions.assertContentContainsAny(result, ["Bayesian", "probability", "distribution"]);
-    assertions.assertMetadataExpectation(result, "formatType", {"eq":"pdf"});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_bayesian_data_analysis",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(
+					resolveDocument("pdf/bayesian_data_analysis_third_edition_13th_feb_2020.pdf"),
+				);
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_bayesian_data_analysis", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10000);
+			assertions.assertContentContainsAny(result, ["Bayesian", "probability", "distribution"]);
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_bounding_boxes", async () => {
-    const config = buildConfig({"output_format":"markdown","layout":{"table_model":"tatr"},"images":{"extract_images":true}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/tiny.pdf"));
-      result = await extractBytes(documentBytes, "application/octet-stream", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_bounding_boxes", ["pdf"], "ONNX Runtime model loading unstable on ARM Linux; table detection returns 0 tables")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    // Table and bounding box assertions require OCR feature for PDF table extraction
-    if (result.tables.length > 0) {
-      assertions.assertTableCount(result, 1, null);
-      assertions.assertTableBoundingBoxes(result, true);
-    }
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_bounding_boxes",
+		async () => {
+			const config = buildConfig({
+				output_format: "markdown",
+				layout: { table_model: "tatr" },
+				images: { extract_images: true },
+			});
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/tiny.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"pdf_bounding_boxes",
+						["pdf"],
+						"ONNX Runtime model loading unstable on ARM Linux; table detection returns 0 tables",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			// Table and bounding box assertions require OCR feature for PDF table extraction
+			if (result.tables.length > 0) {
+				assertions.assertTableCount(result, 1, null);
+				assertions.assertTableBoundingBoxes(result, true);
+			}
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_code_and_formula", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/code_and_formula.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_code_and_formula", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 100);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_code_and_formula",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/code_and_formula.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_code_and_formula", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 100);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_deep_learning", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fundamentals_of_deep_learning_2014.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_deep_learning", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 1000);
-    assertions.assertContentContainsAny(result, ["neural", "network", "deep learning"]);
-    assertions.assertMetadataExpectation(result, "formatType", {"eq":"pdf"});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_deep_learning",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fundamentals_of_deep_learning_2014.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_deep_learning", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 1000);
+			assertions.assertContentContainsAny(result, ["neural", "network", "deep learning"]);
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_embedded_images", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/embedded_images_tables.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_embedded_images", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    // Table and bounding box assertions require OCR feature for PDF table extraction
-    if (result.tables.length > 0) {
-      assertions.assertTableCount(result, 0, null);
-    }
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_embedded_images",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/embedded_images_tables.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_embedded_images", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			// Table and bounding box assertions require OCR feature for PDF table extraction
+			if (result.tables.length > 0) {
+				assertions.assertTableCount(result, 0, null);
+			}
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_google_doc", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/google_doc_document.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_google_doc", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertMetadataExpectation(result, "formatType", {"eq":"pdf"});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_google_doc",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/google_doc_document.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_google_doc", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_large_ciml", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_large_ciml", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10000);
-    assertions.assertContentContainsAny(result, ["machine learning", "algorithm", "training"]);
-    assertions.assertMetadataExpectation(result, "formatType", {"eq":"pdf"});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_large_ciml",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/a_course_in_machine_learning_ciml_v0_9_all.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_large_ciml", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10000);
+			assertions.assertContentContainsAny(result, ["machine learning", "algorithm", "training"]);
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_non_english_german", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/5_level_paging_and_5_level_ept_intel_revision_1_1_may_2017.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_non_english_german", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 100);
-    assertions.assertContentContainsAny(result, ["Intel", "paging"]);
-    assertions.assertMetadataExpectation(result, "formatType", {"eq":"pdf"});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_non_english_german",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(
+					resolveDocument("pdf/5_level_paging_and_5_level_ept_intel_revision_1_1_may_2017.pdf"),
+				);
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_non_english_german", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 100);
+			assertions.assertContentContainsAny(result, ["Intel", "paging"]);
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_password_protected", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/copy_protected.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_password_protected", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAny(result, ["LayoutParser", "document image analysis", "deep learning"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_password_protected",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/copy_protected.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_password_protected", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAny(result, ["LayoutParser", "document image analysis", "deep learning"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_right_to_left", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/right_to_left_01.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_right_to_left", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertMetadataExpectation(result, "formatType", {"eq":"pdf"});
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_right_to_left",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/right_to_left_01.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_right_to_left", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_simple_text", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_simple_text", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAny(result, ["May 5, 2023", "To Whom it May Concern", "Mallori"]);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_simple_text",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/fake_memo.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_simple_text", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAny(result, ["May 5, 2023", "To Whom it May Concern", "Mallori"]);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_tables_large", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/large.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_tables_large", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 500);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_tables_large",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/large.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_tables_large", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 500);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_tables_medium", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/medium.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_tables_medium", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 100);
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_tables_medium",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/medium.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_tables_medium", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 100);
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_tables_small", async () => {
-    const config = buildConfig({"output_format":"markdown","layout":{"table_model":"tatr"}});
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/tiny.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_tables_small", ["ocr"], "PDF table extraction requires OCR feature. ONNX Runtime model loading unstable on ARM Linux.")) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 50);
-    assertions.assertContentContainsAll(result, ["Table 1", "Selected Numbers", "Water Freezing Point", "Water Boiling Point"]);
-    // Table and bounding box assertions require OCR feature for PDF table extraction
-    if (result.tables.length > 0) {
-      assertions.assertTableCount(result, 1, null);
-    }
-  }, TEST_TIMEOUT_MS);
+	it(
+		"pdf_tables_small",
+		async () => {
+			const config = buildConfig({ output_format: "markdown", layout: { table_model: "tatr" } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/tiny.pdf"));
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (
+					shouldSkipFixture(
+						error,
+						"pdf_tables_small",
+						["ocr"],
+						"PDF table extraction requires OCR feature. ONNX Runtime model loading unstable on ARM Linux.",
+					)
+				) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 50);
+			assertions.assertContentContainsAll(result, [
+				"Table 1",
+				"Selected Numbers",
+				"Water Freezing Point",
+				"Water Boiling Point",
+			]);
+			// Table and bounding box assertions require OCR feature for PDF table extraction
+			if (result.tables.length > 0) {
+				assertions.assertTableCount(result, 1, null);
+			}
+		},
+		TEST_TIMEOUT_MS,
+	);
 
-  it("pdf_technical_stat_learning", async () => {
-    const config = buildConfig(undefined);
-    let result: ExtractionResult | null = null;
-    try {
-      const documentBytes = new Uint8Array(resolveDocument("pdf/an_introduction_to_statistical_learning_with_applications_in_r_islr_sixth_printing.pdf"));
-      result = await extractBytes(documentBytes, "application/pdf", config);
-    } catch (error) {
-      if (shouldSkipFixture(error, "pdf_technical_stat_learning", [], undefined)) {
-        return;
-      }
-      throw error;
-    }
-    if (result === null) {
-      return;
-    }
-    assertions.assertExpectedMime(result, ["application/pdf"]);
-    assertions.assertMinContentLength(result, 10000);
-    assertions.assertContentContainsAny(result, ["statistical", "regression", "learning"]);
-    assertions.assertMetadataExpectation(result, "formatType", {"eq":"pdf"});
-  }, TEST_TIMEOUT_MS);
-
+	it(
+		"pdf_technical_stat_learning",
+		async () => {
+			const config = buildConfig(undefined);
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(
+					resolveDocument("pdf/an_introduction_to_statistical_learning_with_applications_in_r_islr_sixth_printing.pdf"),
+				);
+				result = await extractBytes(documentBytes, "application/pdf", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "pdf_technical_stat_learning", [], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 10000);
+			assertions.assertContentContainsAny(result, ["statistical", "regression", "learning"]);
+			assertions.assertMetadataExpectation(result, "formatType", { eq: "pdf" });
+		},
+		TEST_TIMEOUT_MS,
+	);
 });
-

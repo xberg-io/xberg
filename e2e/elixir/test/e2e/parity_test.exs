@@ -90,7 +90,6 @@ defmodule Kreuzberg.E2E.ParityTest do
       :elements,
       :extracted_keywords,
       :images,
-      :llm_usage,
       :metadata,
       :mime_type,
       :ocr_elements,

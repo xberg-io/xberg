@@ -31,7 +31,11 @@ defmodule E2E.EmbedStandaloneTest do
 
     results =
       try do
-        case Kreuzberg.embed(["Text one", "Text two", "Text three"], %{model: "fast", normalize: true, batch_size: 32}) do
+        case Kreuzberg.embed(["Text one", "Text two", "Text three"], %{
+               model: "fast",
+               normalize: true,
+               batch_size: 32
+             }) do
           {:ok, res} -> res
           _ -> flunk("Embedding failed")
         end

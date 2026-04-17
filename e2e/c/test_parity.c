@@ -26,7 +26,6 @@ static void test_parity_extraction_result_fields(void) {
     (void)offsetof(CExtractionResult, elements_json); /* elements */
     (void)offsetof(CExtractionResult, extracted_keywords_json); /* extracted_keywords */
     (void)offsetof(CExtractionResult, images_json); /* images */
-    (void)offsetof(CExtractionResult, llm_usage_json); /* llm_usage */
     (void)offsetof(CExtractionResult, metadata_json); /* metadata */
     (void)offsetof(CExtractionResult, mime_type); /* mime_type */
     (void)offsetof(CExtractionResult, ocr_elements_json); /* ocr_elements */

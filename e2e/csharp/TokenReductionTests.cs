@@ -67,7 +67,7 @@ namespace Kreuzberg.E2E.TokenReduction
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 5);
             TestHelpers.AssertMaxContentLength(result, 200);
-        TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
+            TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
             TestHelpers.AssertContentNotEmpty(result);
         }
 
