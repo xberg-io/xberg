@@ -41,7 +41,7 @@ bench-pymupdf4llm = [
     { name = "pymupdf-layout", specifier = ">=0.0.1" },
     { name = "pymupdf4llm", specifier = ">=0.0.17" },
 ]
-bench-pypdf = [{ name = "pypdf", specifier = ">=6.10.1" }]
+bench-pypdf = [{ name = "pypdf", specifier = ">=6.10.2" }]
 bench-unstructured = [{ name = "unstructured", extras = ["all-docs"], specifier = ">=0.18.21" }]
 dev = [
     { name = "covdefaults", specifier = ">=2.3.0" },

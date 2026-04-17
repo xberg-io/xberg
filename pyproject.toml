@@ -29,7 +29,7 @@ bench-pdfplumber = [ "pdfplumber>=0.11.4" ]
 bench-pdftotext = [ "pdftotext>=2.2.2" ]
 bench-playa-pdf = [ "playa-pdf>=1.0.0" ]
 bench-pymupdf4llm = [ "pillow>=10.0.0", "pymupdf-layout>=0.0.1", "pymupdf4llm>=0.0.17" ]
-bench-pypdf = [ "pypdf>=6.10.1" ]
+bench-pypdf = [ "pypdf>=6.10.2" ]
 bench-unstructured = [ "unstructured[all-docs]>=0.18.21" ]
 doc = [
   "mkdocstrings>=1.0.3",
