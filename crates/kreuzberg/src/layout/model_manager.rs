@@ -9,7 +9,17 @@ use std::path::{Path, PathBuf};
 use crate::layout::error::LayoutError;
 use crate::model_download;
 
+#[cfg(feature = "paddle-ocr")]
 use crate::paddle_ocr::ModelManifestEntry;
+
+#[cfg(not(feature = "paddle-ocr"))]
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ModelManifestEntry {
+    pub relative_path: String,
+    pub sha256: String,
+    pub size_bytes: u64,
+    pub source_url: String,
+}
 
 /// Model definition for a layout model.
 #[derive(Debug, Clone)]
