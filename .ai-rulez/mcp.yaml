@@ -1,0 +1,28 @@
+$schema: https://raw.githubusercontent.com/Goldziher/ai-rulez/main/schema/ai-rules-v3-mcp.schema.json
+version: "3.0"
+
+mcp_servers:
+  - name: playwright
+    description: Browser automation for testing and web interaction
+    command: npx
+    args:
+      - "-y"
+      - "@playwright/mcp"
+    transport: stdio
+    enabled: true
+    use_cases:
+      - Browser testing
+      - Web scraping verification
+      - UI interaction testing
+
+  - name: ai-rulez
+    description: AI-Rulez MCP server for configuration management
+    command: ai-rulez
+    args:
+      - mcp
+    transport: stdio
+    enabled: true
+    use_cases:
+      - Configuration file management
+      - Project metadata updates
+      - Agent configuration

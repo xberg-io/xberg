@@ -1,0 +1,17 @@
+$schema: https://raw.githubusercontent.com/Goldziher/ai-rulez/main/schema/ai-rules-v3.schema.json
+version: "3.0"
+name: kreuzberg-surrealdb
+description: SurrealDB integration for kreuzberg document storage and retrieval
+gitignore: true
+
+builtins:
+  - python
+  - security
+  - git-workflow
+  - code-quality
+  - testing
+  - token-efficiency
+  - default-commands
+
+presets:
+  - claude

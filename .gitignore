@@ -12,3 +12,9 @@ build/
 .env
 .kreuzberg/
 uv.lock
+
+# AI Rules generated files
+CLAUDE.md
+AGENTS.md
+.claude/
+.mcp.json
