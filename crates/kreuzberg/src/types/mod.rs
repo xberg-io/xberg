@@ -171,6 +171,7 @@ mod tests {
             images: Vec::new(),
             hierarchy: None,
             is_blank: None,
+            layout_regions: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();
@@ -224,6 +225,7 @@ mod tests {
             images: vec![image1, image2],
             hierarchy: None,
             is_blank: None,
+            layout_regions: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();
@@ -252,6 +254,7 @@ mod tests {
             images: Vec::new(),
             hierarchy: None,
             is_blank: None,
+            layout_regions: None,
         };
 
         let page2 = PageContent {
@@ -261,6 +264,7 @@ mod tests {
             images: Vec::new(),
             hierarchy: None,
             is_blank: None,
+            layout_regions: None,
         };
 
         assert!(Arc::ptr_eq(&page1.tables[0], &page2.tables[0]));
@@ -283,6 +287,7 @@ mod tests {
             images: Vec::new(),
             hierarchy: None,
             is_blank: None,
+            layout_regions: None,
         };
 
         let json = serde_json::to_string(&page).unwrap();

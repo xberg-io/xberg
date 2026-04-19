@@ -435,8 +435,6 @@ Kreuzberg supports 75+ file formats across 8 categories:
 | **Text** | `.md`, `.txt`, `.xml`, `.json`, `.yaml`, `.toml`, `.csv` | Direct extraction |
 | **Archives** | `.zip`, `.tar`, `.tar.gz`, `.tar.bz2` | Recursive extraction |
 
-See the [installation guide](../getting-started/installation.md#system-dependencies) for optional dependencies (Tesseract).
-
 ## Page Tracking
 
 Kreuzberg can track page boundaries and extract per-page content. Page tracking availability depends on the format:
@@ -479,6 +477,40 @@ Control the content mode with `TreeSitterProcessConfig.content_mode`:
 - `chunks` (default) -- Semantic TSLP chunks as the content output
 - `raw` -- Source code as-is, no transformation
 - `structure` -- Headings and docstrings only
+
+## PDF Page Rendering
+
+Render individual PDF pages as PNG images. Unlike the extraction pipeline (which parses text, tables, metadata), this API produces raw pixel data for thumbnails, vision model input, or custom OCR pipelines.
+
+### Two Approaches
+
+| API | When to use |
+|-----|-------------|
+| `render_pdf_page` | You know which page you need, or only need a few pages |
+| `PdfPageIterator` | Process every page sequentially without loading all images into memory |
+
+### DPI Configuration
+
+| DPI | Pixel size (US Letter) | Use case |
+|-----|----------------------|----------|
+| 72 | 612 x 792 | Thumbnails, quick previews |
+| 150 (default) | 1275 x 1650 | General-purpose, screen display |
+| 300 | 2550 x 3300 | OCR input, print quality |
+
+**Tip:** Use 300 DPI when rendering pages for OCR or vision models. The default 150 DPI may reduce recognition accuracy on small text.
+
+## MIME Type Detection
+
+When extracting from bytes, Kreuzberg requires an explicit MIME type since there's no file extension to infer it from. For file paths, auto-detection from the extension is automatic.
+
+### Example: Override MIME Type
+
+```python title="Python"
+from kreuzberg import extract_file
+
+# File without extension — provide MIME type explicitly
+result = extract_file("document_copy", mime_type="application/pdf", config=config)
+```
 
 ## Error Handling
 
@@ -532,5 +564,5 @@ All extraction functions raise typed exceptions on failure. Catch specific excep
 - [Configuration](configuration.md) — all configuration options and file formats
 - [OCR Guide](ocr.md) — set up optical character recognition
 - [Advanced Features](advanced.md) — chunking, language detection, embeddings
-- [Element-Based Output](element-based-output.md) — structured element arrays for RAG
-- [Document Structure](document-structure.md) — hierarchical tree output
+- [Element-Based Output](output-formats.md#element-based-output) — structured element arrays for RAG
+- [Document Structure](output-formats.md#document-structure) — hierarchical tree output

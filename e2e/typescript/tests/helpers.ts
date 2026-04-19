@@ -143,6 +143,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
 		(config as PlainRecord).chunkerType = raw.chunker_type;
 	}
 	assignBooleanField(config as PlainRecord, raw, "prepend_heading_context", "prependHeadingContext");
+	if (typeof raw.topic_threshold === "number") {
+		(config as PlainRecord).topicThreshold = raw.topic_threshold;
+	}
 	return config;
 }
 
@@ -903,7 +906,13 @@ export const chunkAssertions = {
 		}
 	},
 
-	assertPages(result: ExtractionResult, minCount?: number | null, exactCount?: number | null): void {
+	assertPages(
+		result: ExtractionResult,
+		minCount?: number | null,
+		exactCount?: number | null,
+		hasLayoutRegions?: boolean | null,
+		layoutClassesInclude?: string[] | null,
+	): void {
 		const pages = (result as unknown as PlainRecord).pages as unknown[] | undefined;
 		expect(pages).toBeDefined();
 		if (!Array.isArray(pages)) {
@@ -919,6 +928,39 @@ export const chunkAssertions = {
 			const p = page as Record<string, unknown>;
 			const isBlank = p["isBlank"];
 			expect(isBlank === undefined || isBlank === null || typeof isBlank === "boolean").toBe(true);
+		}
+
+		if (hasLayoutRegions) {
+			let foundLayoutRegions = false;
+			for (const page of pages) {
+				const p = page as Record<string, unknown>;
+				const layoutRegions = (p["layoutRegions"] ?? p["layout_regions"]) as unknown[] | undefined;
+				if (layoutRegions && Array.isArray(layoutRegions) && layoutRegions.length > 0) {
+					foundLayoutRegions = true;
+					break;
+				}
+			}
+			expect(foundLayoutRegions).toBe(true);
+		}
+
+		if (layoutClassesInclude && layoutClassesInclude.length > 0) {
+			const allClasses = new Set<string>();
+			for (const page of pages) {
+				const p = page as Record<string, unknown>;
+				const layoutRegions = (p["layoutRegions"] ?? p["layout_regions"]) as unknown[] | undefined;
+				if (layoutRegions && Array.isArray(layoutRegions)) {
+					for (const region of layoutRegions) {
+						const r = region as Record<string, unknown>;
+						const className = r["class"] ?? r["className"];
+						if (typeof className === "string") {
+							allClasses.add(className);
+						}
+					}
+				}
+			}
+			for (const expectedClass of layoutClassesInclude) {
+				expect(allClasses.has(expectedClass)).toBe(true);
+			}
 		}
 	},
 

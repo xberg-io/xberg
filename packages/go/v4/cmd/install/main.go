@@ -31,7 +31,7 @@ import (
 
 const (
 	// DefaultVersion is the default version to download if not specified
-	DefaultVersion = "4.8.6"
+	DefaultVersion = "4.9.1"
 	// BaseURL is the base URL for GitHub releases
 	BaseURL = "https://github.com/kreuzberg-dev/kreuzberg/releases/download"
 	// DefaultInstallDir is the default installation directory

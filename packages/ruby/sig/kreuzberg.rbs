@@ -1012,7 +1012,8 @@ module Kreuzberg
     content: String,
     tables: Array[table_hash],
     images: Array[image_hash],
-    is_blank: bool?
+    is_blank: bool?,
+    layout_regions: Array[untyped]?
   }
 
   type djot_content_hash = {
@@ -1283,6 +1284,17 @@ module Kreuzberg
       def to_h: () -> image_hash
     end
 
+    # Layout detection region on a page (Struct from result.rb)
+    class LayoutRegion
+      attr_reader class_name: String
+      attr_reader confidence: Float
+      attr_reader bounding_box: ElementBoundingBox?
+      attr_reader area_fraction: Float
+
+      def initialize: (class_name: String, confidence: Float, bounding_box: ElementBoundingBox?, area_fraction: Float) -> void
+      def to_h: () -> Hash[Symbol, untyped]
+    end
+
     # Page content with text and extracted elements (Struct from result.rb)
     class PageContent
       attr_reader page_number: Integer
@@ -1291,8 +1303,9 @@ module Kreuzberg
       attr_reader images: Array[Image]?
       attr_reader hierarchy: PageHierarchy?
       attr_reader is_blank: bool?
+      attr_reader layout_regions: Array[LayoutRegion]?
 
-      def initialize: (page_number: Integer, content: String, tables: Array[Table], images: Array[Image]?, hierarchy: PageHierarchy?, is_blank: bool?) -> void
+      def initialize: (page_number: Integer, content: String, tables: Array[Table], images: Array[Image]?, hierarchy: PageHierarchy?, is_blank: bool?, layout_regions: Array[LayoutRegion]?) -> void
       def to_h: () -> Hash[Symbol, untyped]
     end
 
@@ -1585,6 +1598,8 @@ module Kreuzberg
     def parse_element: (Hash[String, untyped] element_hash) -> ElementStruct
     def parse_element_coordinates: (Hash[String, untyped]? coordinates_data) -> ElementBoundingBox?
     def parse_ocr_elements: (Array[ocr_element_hash]? ocr_elements_data) -> Array[OcrElement]?
+    def parse_layout_regions: (Array[untyped]? regions_data) -> Array[LayoutRegion]?
+    def parse_element_bounding_box: (Hash[String, untyped]? bounding_box_data) -> ElementBoundingBox?
     def parse_page_hierarchy: (Hash[String, untyped]? hierarchy_data) -> PageHierarchy?
     def parse_djot_content: (Hash[String, untyped]? djot_data) -> DjotContent?
     def parse_document_structure: (Hash[String, untyped]? document_data) -> DocumentStructure?
@@ -1815,6 +1830,9 @@ module Kreuzberg
     end
 
     class EmbeddingError < Error
+    end
+
+    class CancelledError < Error
     end
   end
 

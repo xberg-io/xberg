@@ -43,6 +43,7 @@ from kreuzberg import _setup_lib_path  # noqa: F401
 from kreuzberg._deprecation import deprecated
 from kreuzberg._internal_bindings import (
     AccelerationConfig,
+    CancellationToken,
     Chunk,
     ChunkingConfig,
     ConcurrencyConfig,
@@ -171,6 +172,7 @@ from kreuzberg._internal_bindings import (
 from kreuzberg.exceptions import (
     CacheError,
     ErrorCode,
+    ExtractionCancelledError,
     ExtractionTimeoutError,
     ImageProcessingError,
     KreuzbergError,
@@ -233,6 +235,7 @@ if not TYPE_CHECKING:
 __all__ = [
     "AccelerationConfig",
     "CacheError",
+    "CancellationToken",
     "Chunk",
     "ChunkingConfig",
     "ConcurrencyConfig",
@@ -244,6 +247,7 @@ __all__ = [
     "ErrorCode",
     "ExtractedImage",
     "ExtractedTable",
+    "ExtractionCancelledError",
     "ExtractionConfig",
     "ExtractionResult",
     "ExtractionTimeoutError",

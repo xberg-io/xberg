@@ -12,11 +12,6 @@ static MARKDOWN_CODE_BLOCK_REGEX: Lazy<Regex> =
 static MARKDOWN_INLINE_CODE_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"`[^`\n]+`").expect("Markdown inline code regex pattern is valid and should compile"));
 
-/// Regular expression for matching Markdown headers.
-/// Matches headers like `# Header`, `## Header`, etc.
-static MARKDOWN_HEADERS_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^#{1,6}\s+").expect("Markdown headers regex pattern is valid and should compile"));
-
 /// Regular expression for matching Markdown list items.
 /// Matches list markers: `- `, `* `, `+ ` at the start of lines
 static MARKDOWN_LISTS_REGEX: Lazy<Regex> =
@@ -100,7 +95,7 @@ pub fn preserve_markdown_structure(text: &str) -> String {
 
     for line in text.lines() {
         // Preserve headers
-        if MARKDOWN_HEADERS_REGEX.is_match(line) {
+        if crate::utils::markdown_utils::is_markdown_header(line) {
             processed_lines.push(line);
             continue;
         }
@@ -115,18 +110,6 @@ pub fn preserve_markdown_structure(text: &str) -> String {
     }
 
     processed_lines.join("\n")
-}
-
-/// Checks if a line is a Markdown header.
-///
-/// # Arguments
-/// * `line` - The line to check
-///
-/// # Returns
-/// `true` if the line is a Markdown header, `false` otherwise
-#[inline]
-pub fn is_markdown_header(line: &str) -> bool {
-    MARKDOWN_HEADERS_REGEX.is_match(line)
 }
 
 /// Checks if a line is a Markdown list item.
@@ -246,14 +229,7 @@ mod tests {
         assert!(result.contains("### Header 3"));
     }
 
-    #[test]
-    fn test_is_markdown_header() {
-        assert!(is_markdown_header("# Header 1"));
-        assert!(is_markdown_header("## Header 2"));
-        assert!(is_markdown_header("### Header 3"));
-        assert!(!is_markdown_header("Regular text"));
-        assert!(!is_markdown_header("- List item"));
-    }
+    // is_markdown_header tests are in crate::utils::markdown_utils::tests
 
     #[test]
     fn test_is_markdown_list() {
@@ -278,7 +254,6 @@ mod tests {
     fn test_lazy_regex_initialization() {
         let _ = &*MARKDOWN_CODE_BLOCK_REGEX;
         let _ = &*MARKDOWN_INLINE_CODE_REGEX;
-        let _ = &*MARKDOWN_HEADERS_REGEX;
         let _ = &*MARKDOWN_LISTS_REGEX;
     }
 }

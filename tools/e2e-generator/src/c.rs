@@ -110,7 +110,9 @@ void assert_images(const CExtractionResult *result,
 
 void assert_pages(const CExtractionResult *result,
                   int has_min, size_t min_count,
-                  int has_exact, size_t exact_count);
+                  int has_exact, size_t exact_count,
+                  int has_layout_regions,
+                  const char **layout_classes_include, size_t layout_classes_count);
 
 void assert_elements(const CExtractionResult *result,
                      int has_min, size_t min_count);
@@ -644,7 +646,9 @@ void assert_images(const CExtractionResult *result,
 
 void assert_pages(const CExtractionResult *result,
                   int has_min, size_t min_count,
-                  int has_exact, size_t exact_count) {
+                  int has_exact, size_t exact_count,
+                  int has_layout_regions,
+                  const char **layout_classes_include, size_t layout_classes_count) {
     size_t count = json_array_count(result->pages_json);
     if (has_min && count < min_count) {
         fprintf(stderr,
@@ -657,6 +661,64 @@ void assert_pages(const CExtractionResult *result,
                 "FAIL: expected exactly %zu pages, found %zu\n",
                 exact_count, count);
         exit(1);
+    }
+
+    if (has_layout_regions) {
+        int found_layout_regions = 0;
+        for (size_t i = 0; i < count; i++) {
+            JsonValue page = json_array_get(result->pages_json, i);
+            if (page.type == JSON_OBJECT) {
+                JsonValue layout_regions = json_object_get(page.value.object, "layout_regions");
+                if (layout_regions.type == JSON_ARRAY && json_array_count(layout_regions.value.array) > 0) {
+                    found_layout_regions = 1;
+                    break;
+                }
+            }
+        }
+        if (!found_layout_regions) {
+            fputs("FAIL: expected at least one page to have layout_regions populated\n", stderr);
+            exit(1);
+        }
+    }
+
+    if (layout_classes_count > 0) {
+        // Collect all class names from all pages' layout_regions
+        size_t collected_count = 0;
+        const char *collected_classes[1024];  // Reasonable upper bound
+        for (size_t i = 0; i < count && collected_count < 1024; i++) {
+            JsonValue page = json_array_get(result->pages_json, i);
+            if (page.type == JSON_OBJECT) {
+                JsonValue layout_regions = json_object_get(page.value.object, "layout_regions");
+                if (layout_regions.type == JSON_ARRAY) {
+                    size_t regions_count = json_array_count(layout_regions.value.array);
+                    for (size_t j = 0; j < regions_count && collected_count < 1024; j++) {
+                        JsonValue region = json_array_get(layout_regions.value.array, j);
+                        if (region.type == JSON_OBJECT) {
+                            JsonValue class_val = json_object_get(region.value.object, "class");
+                            if (class_val.type == JSON_STRING) {
+                                collected_classes[collected_count++] = class_val.value.string;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check that all expected classes are present
+        for (size_t i = 0; i < layout_classes_count; i++) {
+            int found = 0;
+            for (size_t j = 0; j < collected_count; j++) {
+                if (strcmp(collected_classes[j], layout_classes_include[i]) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                fprintf(stderr, "FAIL: expected layout class '%s' not found\n",
+                        layout_classes_include[i]);
+                exit(1);
+            }
+        }
     }
 }
 
@@ -1374,7 +1436,14 @@ fn render_assertions(assertions: &Assertions) -> String {
         let min = pages.min_count.unwrap_or(0);
         let has_exact = pages.exact_count.is_some() as u8;
         let exact = pages.exact_count.unwrap_or(0);
-        writeln!(buf, "    assert_pages(result, {has_min}, {min}, {has_exact}, {exact});").unwrap();
+        let has_layout = pages.has_layout_regions.unwrap_or(false) as u8;
+        let layout_classes = pages
+            .layout_classes_include
+            .as_ref()
+            .map(|c| render_string_array(c))
+            .unwrap_or_else(|| "NULL".to_string());
+        let layout_classes_count = pages.layout_classes_include.as_ref().map(|c| c.len()).unwrap_or(0);
+        writeln!(buf, "    assert_pages(result, {has_min}, {min}, {has_exact}, {exact}, {has_layout}, {layout_classes}, {layout_classes_count});").unwrap();
     }
     if let Some(elements) = assertions.elements.as_ref() {
         let has_min = elements.min_count.is_some() as u8;

@@ -41,6 +41,28 @@ pub(in crate::pdf::structure) fn extract_tables_from_layout_hints(
         let hint_img_top = (page_height - hint.top).max(0.0);
         let hint_img_bottom = (page_height - hint.bottom).max(0.0);
 
+        tracing::trace!(
+            hint_left = hint.left,
+            hint_right = hint.right,
+            hint_top = hint.top,
+            hint_bottom = hint.bottom,
+            hint_img_top,
+            hint_img_bottom,
+            page_height,
+            total_words = words.len(),
+            "table hint bbox (PDF→image coords)"
+        );
+        if let Some(first_word) = words.first() {
+            tracing::trace!(
+                word_text = %first_word.text,
+                word_left = first_word.left,
+                word_top = first_word.top,
+                word_width = first_word.width,
+                word_height = first_word.height,
+                "first word coords (image coords)"
+            );
+        }
+
         let table_words: Vec<HocrWord> = words
             .iter()
             .filter(|w| {
@@ -51,6 +73,8 @@ pub(in crate::pdf::structure) fn extract_tables_from_layout_hints(
             })
             .cloned()
             .collect();
+
+        tracing::trace!(matched_words = table_words.len(), "words overlapping table hint");
 
         // Need at least 4 words for a meaningful table
         if table_words.len() < 4 {

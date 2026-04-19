@@ -202,7 +202,8 @@ public class PdfTest {
   @Test
   public void pdfLayoutDetection() throws Exception {
     JsonNode config =
-        MAPPER.readTree("{\"layout\":{\"table_model\":\"tatr\"},\"output_format\":\"markdown\"}");
+        MAPPER.readTree(
+            "{\"layout\":{\"table_model\":\"tatr\"},\"output_format\":\"markdown\",\"pages\":{\"extract_pages\":true}}");
     E2EHelpers.skipIfFeatureUnavailable("layout-detection");
     E2EHelpers.runFixture(
         "pdf_layout_detection",
@@ -214,6 +215,7 @@ public class PdfTest {
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
           E2EHelpers.Assertions.assertMinContentLength(result, 100);
+          E2EHelpers.Assertions.assertPages(result, 1, null, true, null);
           E2EHelpers.Assertions.assertContentNotEmpty(result);
         });
   }

@@ -362,6 +362,63 @@ RSpec.describe 'contract fixtures' do
     end
   end
 
+  it 'config_chunking_semantic' do
+    E2ERuby.skip_if_feature_unavailable('chunking')
+    E2ERuby.run_fixture(
+      'config_chunking_semantic',
+      'semantic/annual_report.txt',
+      { chunking: { chunker_type: 'semantic' } },
+      requirements: %w[chunking],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['text/plain']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 100)
+      E2ERuby::Assertions.assert_chunks(result, min_count: 2, each_has_content: true)
+    end
+  end
+
+  it 'config_chunking_semantic_small' do
+    E2ERuby.skip_if_feature_unavailable('chunking')
+    E2ERuby.run_fixture(
+      'config_chunking_semantic_small',
+      'semantic/annual_report.txt',
+      { chunking: { chunker_type: 'semantic', max_chars: 200 } },
+      requirements: %w[chunking],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['text/plain']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 100)
+      E2ERuby::Assertions.assert_chunks(result, min_count: 5, each_has_content: true)
+    end
+  end
+
+  it 'config_chunking_semantic_threshold' do
+    E2ERuby.skip_if_feature_unavailable('chunking')
+    E2ERuby.run_fixture(
+      'config_chunking_semantic_threshold',
+      'semantic/mixed_topics.txt',
+      { chunking: { chunker_type: 'semantic', topic_threshold: 0.5 } },
+      requirements: %w[chunking],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['text/plain']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 100)
+      E2ERuby::Assertions.assert_chunks(result, min_count: 1, each_has_content: true)
+    end
+  end
+
   it 'config_chunking_small' do
     E2ERuby.skip_if_feature_unavailable('chunking')
     E2ERuby.run_fixture(
@@ -628,7 +685,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_html_options',
       'html/complex_table.html',
-      { html_options: { 'extractMetadata' => true } },
+      { html_options: { extract_metadata: true } },
       requirements: [],
       notes: nil,
       skip_if_missing: true

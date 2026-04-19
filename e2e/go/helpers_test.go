@@ -342,7 +342,7 @@ func assertImages(t *testing.T, result *kreuzberg.ExtractionResult, minCount, ma
 	}
 }
 
-func assertPages(t *testing.T, result *kreuzberg.ExtractionResult, minCount, exactCount *int) {
+func assertPages(t *testing.T, result *kreuzberg.ExtractionResult, minCount, exactCount *int, hasLayoutRegions *bool, layoutClassesInclude []string) {
 	t.Helper()
 	count := len(result.Pages)
 	if minCount != nil && count < *minCount {
@@ -356,6 +356,35 @@ func assertPages(t *testing.T, result *kreuzberg.ExtractionResult, minCount, exa
 			_ = *page.IsBlank // validate it's a valid bool pointer
 		}
 		_ = i
+	}
+
+	if hasLayoutRegions != nil && *hasLayoutRegions {
+		foundLayoutRegions := false
+		for _, page := range result.Pages {
+			if len(page.LayoutRegions) > 0 {
+				foundLayoutRegions = true
+				break
+			}
+		}
+		if !foundLayoutRegions {
+			t.Fatal("expected at least one page to have layout_regions populated")
+		}
+	}
+
+	if len(layoutClassesInclude) > 0 {
+		allClasses := make(map[string]bool)
+		for _, page := range result.Pages {
+			if page.LayoutRegions != nil {
+				for _, region := range page.LayoutRegions {
+					allClasses[region.Class] = true
+				}
+			}
+		}
+		for _, expectedClass := range layoutClassesInclude {
+			if !allClasses[expectedClass] {
+				t.Fatalf("expected layout class %q not found in collected classes", expectedClass)
+			}
+		}
 	}
 }
 

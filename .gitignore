@@ -2,6 +2,7 @@
 target/
 build/
 dist/
+.lycheecache
 dist-musl/
 *.so
 *.dylib

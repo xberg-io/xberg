@@ -759,9 +759,11 @@ pub async fn chunk_handler(JsonApi(request): JsonApi<ChunkRequest>) -> Result<Js
     let chunker_type = match request.chunker_type.to_lowercase().as_str() {
         "text" => ChunkerType::Text,
         "markdown" => ChunkerType::Markdown,
+        "yaml" => ChunkerType::Yaml,
+        "semantic" => ChunkerType::Semantic,
         other => {
             return Err(ApiError::validation(crate::error::KreuzbergError::validation(format!(
-                "Invalid chunker_type: '{}'. Valid values: 'text', 'markdown'",
+                "Invalid chunker_type: '{}'. Valid values: 'text', 'markdown', 'yaml', 'semantic'",
                 other
             ))));
         }
@@ -793,6 +795,7 @@ pub async fn chunk_handler(JsonApi(request): JsonApi<ChunkRequest>) -> Result<Js
         overlap,
         trim: cfg.trim.unwrap_or(true),
         chunker_type,
+        topic_threshold: cfg.topic_threshold,
         ..Default::default()
     };
 
@@ -833,6 +836,7 @@ pub async fn chunk_handler(JsonApi(request): JsonApi<ChunkRequest>) -> Result<Js
             overlap: config.overlap,
             trim: config.trim,
             chunker_type: format!("{:?}", config.chunker_type).to_lowercase(),
+            topic_threshold: config.topic_threshold,
         },
         input_size_bytes: request.text.len(),
         chunker_type: request.chunker_type.to_lowercase(),
@@ -1347,5 +1351,74 @@ mod tests {
             "Expected bounds error, got: {}",
             error_msg
         );
+    }
+
+    #[tokio::test]
+    async fn test_chunk_handler_semantic_chunker_type_accepted() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/chunk")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"text": "Hello world. This is a test.", "chunker_type": "semantic"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_chunk_handler_invalid_chunker_type_returns_400() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/chunk")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"text": "Hello world.", "chunker_type": "invalid"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let error_msg = json["message"].as_str().unwrap_or("");
+        assert!(
+            error_msg.contains("semantic"),
+            "Error should list valid chunker types including semantic, got: {}",
+            error_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_chunk_handler_topic_threshold_accepted() {
+        let app = test_router();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/chunk")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"text": "Hello world. This is a test.", "chunker_type": "semantic", "config": {"topic_threshold": 0.5}}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["config"]["topic_threshold"], 0.5);
     }
 }

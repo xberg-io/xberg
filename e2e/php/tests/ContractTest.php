@@ -423,6 +423,72 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Semantic chunker with defaults on a multi-section document
+     */
+    public function test_config_chunking_semantic(): void
+    {
+        $documentPath = Helpers::resolveDocument('semantic/annual_report.txt');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_chunking_semantic: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('chunking');
+
+        $config = Helpers::buildConfig(['chunking' => ['chunker_type' => 'semantic']]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['text/plain']);
+        Helpers::assertMinContentLength($result, 100);
+        Helpers::assertChunks($result, 2, null, true, null, null, null);
+    }
+
+    /**
+     * Semantic chunker with small budget produces more granular chunks
+     */
+    public function test_config_chunking_semantic_small(): void
+    {
+        $documentPath = Helpers::resolveDocument('semantic/annual_report.txt');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_chunking_semantic_small: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('chunking');
+
+        $config = Helpers::buildConfig(['chunking' => ['chunker_type' => 'semantic', 'max_chars' => 200]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['text/plain']);
+        Helpers::assertMinContentLength($result, 100);
+        Helpers::assertChunks($result, 5, null, true, null, null, null);
+    }
+
+    /**
+     * Semantic chunker with explicit topic threshold on mixed-topic text
+     */
+    public function test_config_chunking_semantic_threshold(): void
+    {
+        $documentPath = Helpers::resolveDocument('semantic/mixed_topics.txt');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_chunking_semantic_threshold: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('chunking');
+
+        $config = Helpers::buildConfig(['chunking' => ['chunker_type' => 'semantic', 'topic_threshold' => 0.5]]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['text/plain']);
+        Helpers::assertMinContentLength($result, 100);
+        Helpers::assertChunks($result, 1, null, true, null, null, null);
+    }
+
+    /**
      * Tests chunking with very small chunk size produces more chunks
      */
     public function test_config_chunking_small(): void
@@ -735,7 +801,7 @@ class ContractTest extends TestCase
             $this->markTestSkipped('Skipping config_html_options: missing document at ' . $documentPath);
         }
 
-        $config = Helpers::buildConfig(['html_options' => ['extractMetadata' => true]]);
+        $config = Helpers::buildConfig(['html_options' => ['extract_metadata' => true]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
@@ -1051,7 +1117,7 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertPages($result, null, 5);
+        Helpers::assertPages($result, null, 5, null, null);
     }
 
     /**
@@ -1073,7 +1139,7 @@ class ContractTest extends TestCase
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 10);
-        Helpers::assertPages($result, 1, null);
+        Helpers::assertPages($result, 1, null, null, null);
     }
 
     /**

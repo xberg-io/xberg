@@ -130,7 +130,7 @@ tasks:
     dir: e2e/typescript
     cmds:
       - pnpm exec biome check .
-      - pnpm exec oxlint --fix typescript
+      - pnpm exec oxlint --fix .
 
   e2e:test:
     desc: Run TypeScript E2E tests

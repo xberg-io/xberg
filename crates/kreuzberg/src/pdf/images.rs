@@ -535,7 +535,7 @@ pub fn reextract_raw_images_via_pdfium(pdf_bytes: &[u8], images: &mut [PdfImage]
         return Ok(0);
     }
 
-    let pdfium = super::bindings::bind_pdfium(PdfError::RenderingFailed, "image fallback rendering")?;
+    let pdfium = super::bindings::bind_pdfium(PdfError::RenderingFailed, "image fallback rendering", None)?;
     let document = pdfium
         .load_pdf_from_byte_slice(pdf_bytes, None)
         .map_err(|e| PdfError::InvalidPdf(super::error::format_pdfium_error(e)))?;

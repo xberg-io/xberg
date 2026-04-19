@@ -178,18 +178,42 @@ ocr_config <- function(backend = "tesseract", language = "eng", dpi = NULL, ...)
 #'
 #' @param max_characters Maximum characters per chunk. Must be a positive integer.
 #' @param overlap Number of overlapping characters between chunks. Must be non-negative.
+#' @param chunker_type Chunker type: "text", "markdown", "yaml", or "semantic". Default "text".
+#' @param topic_threshold Numeric or NULL. Cosine similarity threshold for semantic
+#'   topic detection (0.0-1.0). Only used when chunker_type is "semantic". Default NULL (0.75).
 #' @param ... Additional chunking options.
 #' @return A named list representing the chunking configuration.
 #' @export
-chunking_config <- function(max_characters = 1000L, overlap = 200L, ...) {
+chunking_config <- function(max_characters = 1000L, overlap = 200L,
+                            chunker_type = "text", topic_threshold = NULL, ...) {
   max_characters <- as.integer(max_characters)
   overlap <- as.integer(overlap)
   if (max_characters <= 0L) stop("max_characters must be a positive integer", call. = FALSE)
   if (overlap < 0L) stop("overlap must be non-negative", call. = FALSE)
+  stopifnot(is.character(chunker_type), length(chunker_type) == 1L)
+  valid_chunker_types <- c("text", "markdown", "yaml", "semantic")
+  if (!chunker_type %in% valid_chunker_types) {
+    stop(
+      paste0(
+        "chunker_type must be one of: ",
+        paste(valid_chunker_types, collapse = ", "),
+        ", got: ", chunker_type
+      ),
+      call. = FALSE
+    )
+  }
   config <- list(
     max_characters = max_characters,
-    overlap = overlap
+    overlap = overlap,
+    chunker_type = chunker_type
   )
+  if (!is.null(topic_threshold)) {
+    topic_threshold <- as.double(topic_threshold)
+    if (topic_threshold < 0 || topic_threshold > 1) {
+      stop("topic_threshold must be between 0.0 and 1.0", call. = FALSE)
+    }
+    config$topic_threshold <- topic_threshold
+  }
   extras <- list(...)
   if (length(extras) > 0) config <- c(config, extras)
   config

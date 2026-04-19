@@ -411,6 +411,81 @@ def test_config_chunking_prepend_heading_context() -> None:
         raise
 
 
+def test_config_chunking_semantic() -> None:
+    """Semantic chunker with defaults on a multi-section document"""
+
+    document_path = helpers.resolve_document("semantic/annual_report.txt")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_chunking_semantic: missing document at {document_path}")
+
+    try:
+        config = helpers.build_config({"chunking": {"chunker_type": "semantic"}})
+
+        result = extract_file_sync(document_path, None, config)
+
+        helpers.assert_expected_mime(result, ["text/plain"])
+        helpers.assert_min_content_length(result, 100)
+        helpers.assert_chunks(result, min_count=2, each_has_content=True)
+    except Exception as exc:
+        if (
+            "missing dependency" in str(exc).lower()
+            or "unsupported" in str(exc).lower()
+            or "parsing" in str(exc).lower()
+        ):
+            pytest.skip(f"Skipping config_chunking_semantic: {exc}")
+        raise
+
+
+def test_config_chunking_semantic_small() -> None:
+    """Semantic chunker with small budget produces more granular chunks"""
+
+    document_path = helpers.resolve_document("semantic/annual_report.txt")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_chunking_semantic_small: missing document at {document_path}")
+
+    try:
+        config = helpers.build_config({"chunking": {"chunker_type": "semantic", "max_chars": 200}})
+
+        result = extract_file_sync(document_path, None, config)
+
+        helpers.assert_expected_mime(result, ["text/plain"])
+        helpers.assert_min_content_length(result, 100)
+        helpers.assert_chunks(result, min_count=5, each_has_content=True)
+    except Exception as exc:
+        if (
+            "missing dependency" in str(exc).lower()
+            or "unsupported" in str(exc).lower()
+            or "parsing" in str(exc).lower()
+        ):
+            pytest.skip(f"Skipping config_chunking_semantic_small: {exc}")
+        raise
+
+
+def test_config_chunking_semantic_threshold() -> None:
+    """Semantic chunker with explicit topic threshold on mixed-topic text"""
+
+    document_path = helpers.resolve_document("semantic/mixed_topics.txt")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_chunking_semantic_threshold: missing document at {document_path}")
+
+    try:
+        config = helpers.build_config({"chunking": {"chunker_type": "semantic", "topic_threshold": 0.5}})
+
+        result = extract_file_sync(document_path, None, config)
+
+        helpers.assert_expected_mime(result, ["text/plain"])
+        helpers.assert_min_content_length(result, 100)
+        helpers.assert_chunks(result, min_count=1, each_has_content=True)
+    except Exception as exc:
+        if (
+            "missing dependency" in str(exc).lower()
+            or "unsupported" in str(exc).lower()
+            or "parsing" in str(exc).lower()
+        ):
+            pytest.skip(f"Skipping config_chunking_semantic_threshold: {exc}")
+        raise
+
+
 def test_config_chunking_small() -> None:
     """Tests chunking with very small chunk size produces more chunks"""
 

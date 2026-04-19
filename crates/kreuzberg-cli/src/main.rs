@@ -337,7 +337,7 @@ enum Commands {
         #[arg(long)]
         chunk_overlap: Option<usize>,
 
-        /// Chunker type: text or markdown
+        /// Chunker type: text, markdown, yaml, or semantic
         #[arg(long, default_value = "text")]
         chunker_type: String,
 
@@ -345,6 +345,10 @@ enum Commands {
         /// Requires the chunking-tokenizers feature.
         #[arg(long)]
         chunking_tokenizer: Option<String>,
+
+        /// Topic threshold for semantic chunking (0.0-1.0, default: 0.75)
+        #[arg(long)]
+        topic_threshold: Option<f32>,
 
         /// Output format (text or json)
         #[arg(short, long, default_value = "json")]
@@ -907,6 +911,7 @@ fn main() -> Result<()> {
             chunk_overlap,
             chunker_type,
             chunking_tokenizer,
+            topic_threshold,
             format,
         } => {
             let input = match text {
@@ -931,6 +936,8 @@ fn main() -> Result<()> {
             }
             match chunker_type.as_str() {
                 "markdown" => chunking_config.chunker_type = kreuzberg::ChunkerType::Markdown,
+                "yaml" => chunking_config.chunker_type = kreuzberg::ChunkerType::Yaml,
+                "semantic" => chunking_config.chunker_type = kreuzberg::ChunkerType::Semantic,
                 _ => chunking_config.chunker_type = kreuzberg::ChunkerType::Text,
             }
             if let Some(ref tokenizer) = chunking_tokenizer {
@@ -938,6 +945,9 @@ fn main() -> Result<()> {
                     model: tokenizer.clone(),
                     cache_dir: None,
                 };
+            }
+            if topic_threshold.is_some() {
+                chunking_config.topic_threshold = topic_threshold;
             }
 
             chunk_command(input, chunking_config, format)?;

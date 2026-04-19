@@ -518,8 +518,17 @@ fn render_assertions(assertions: &Assertions) -> String {
             .exact_count
             .map(|v| format!("Some({v})"))
             .unwrap_or_else(|| "None".into());
+        let has_layout = pages
+            .has_layout_regions
+            .map(|v| format!("Some({v})"))
+            .unwrap_or_else(|| "None".into());
+        let layout_classes = pages
+            .layout_classes_include
+            .as_ref()
+            .map(|v| format!("Some(&{})", render_string_slice(v)))
+            .unwrap_or_else(|| "None".into());
         buffer.push_str(&format!(
-            "    assertions::assert_pages(&result, {min_count}, {exact_count});\n"
+            "    assertions::assert_pages(&result, {min_count}, {exact_count}, {has_layout}, {layout_classes});\n"
         ));
     }
 

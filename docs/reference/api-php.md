@@ -1508,6 +1508,7 @@ readonly class PageContent
 - `$content` (string): Text content for this page
 - `$tables` (array<Table>): Tables on this page
 - `$images` (array<ExtractedImage>): Images on this page
+- `$layoutRegions` (array<LayoutRegion>|null): Detected layout regions when layout detection is enabled. Each region has `class` (string), `confidence` (float, 0–1), `boundingBox`, and `areaFraction` (float, 0–1). `null` when layout detection is not configured.
 
 **Examples:**
 

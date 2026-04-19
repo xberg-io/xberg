@@ -565,6 +565,24 @@ impl ExtractionResult {
                     page_dict.set_item("is_blank", is_blank)?;
                 }
 
+                if let Some(ref regions) = page.layout_regions {
+                    let regions_list = PyList::empty(py);
+                    for region in regions {
+                        let region_dict = PyDict::new(py);
+                        region_dict.set_item("class", &region.class)?;
+                        region_dict.set_item("confidence", region.confidence)?;
+                        let bbox_dict = PyDict::new(py);
+                        bbox_dict.set_item("x0", region.bounding_box.x0)?;
+                        bbox_dict.set_item("y0", region.bounding_box.y0)?;
+                        bbox_dict.set_item("x1", region.bounding_box.x1)?;
+                        bbox_dict.set_item("y1", region.bounding_box.y1)?;
+                        region_dict.set_item("bounding_box", bbox_dict)?;
+                        region_dict.set_item("area_fraction", region.area_fraction)?;
+                        regions_list.append(region_dict)?;
+                    }
+                    page_dict.set_item("layout_regions", regions_list)?;
+                }
+
                 page_list.append(page_dict)?;
             }
             Some(page_list.unbind())

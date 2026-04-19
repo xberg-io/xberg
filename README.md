@@ -22,7 +22,7 @@
     <img src="https://img.shields.io/maven-central/v/dev.kreuzberg/kreuzberg?label=Java&color=007ec6" alt="Java">
   </a>
   <a href="https://github.com/kreuzberg-dev/kreuzberg/releases">
-    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v4.8.6" alt="Go">
+    <img src="https://img.shields.io/github/v/tag/kreuzberg-dev/kreuzberg?label=Go&color=007ec6&filter=v4.9.1" alt="Go">
   </a>
   <a href="https://www.nuget.org/packages/Kreuzberg/">
     <img src="https://img.shields.io/nuget/v/Kreuzberg?label=C%23&color=007ec6" alt="C#">
@@ -250,7 +250,7 @@ Process multiple documents concurrently with configurable parallelism. Optimize 
 
 Handle encrypted PDFs with single or multiple password attempts. Supports both RC4 and AES encryption with automatic fallback strategies.
 
-**[PDF Configuration →](https://docs.kreuzberg.dev/migration/v3-to-v4/#password-protected-pdfs)**
+**[PDF Configuration →](https://docs.kreuzberg.dev/guides/configuration/)**
 
 </details>
 
@@ -292,7 +292,7 @@ The skill is located at [`skills/kreuzberg/SKILL.md`](skills/kreuzberg/SKILL.md)
 - **[Format Support](https://docs.kreuzberg.dev/reference/formats/)** – Supported file formats
 - **[OCR Backends](https://docs.kreuzberg.dev/guides/ocr/)** – OCR engine setup
 - **[CLI Guide](https://docs.kreuzberg.dev/cli/usage/)** – Command-line usage
-- **[Migration Guide](https://docs.kreuzberg.dev/migration/v3-to-v4/)** – Upgrading from v3
+- **[Migration Guides](https://docs.kreuzberg.dev/migration/from-unstructured/)** – Upgrading from other libraries
 
 ## Contributing
 

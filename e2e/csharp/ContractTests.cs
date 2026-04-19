@@ -295,6 +295,51 @@ namespace Kreuzberg.E2E.Contract
         }
 
         [SkippableFact]
+        public void ConfigChunkingSemantic()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("chunking");
+            TestHelpers.SkipIfLegacyOfficeDisabled("semantic/annual_report.txt");
+            TestHelpers.SkipIfOfficeTestOnWindows("semantic/annual_report.txt");
+            var documentPath = TestHelpers.EnsureDocument("semantic/annual_report.txt", true);
+            var config = TestHelpers.BuildConfig("{\"chunking\":{\"chunker_type\":\"semantic\"}}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "text/plain" });
+            TestHelpers.AssertMinContentLength(result, 100);
+            TestHelpers.AssertChunks(result, 2, null, true, null, null, null, null);
+        }
+
+        [SkippableFact]
+        public void ConfigChunkingSemanticSmall()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("chunking");
+            TestHelpers.SkipIfLegacyOfficeDisabled("semantic/annual_report.txt");
+            TestHelpers.SkipIfOfficeTestOnWindows("semantic/annual_report.txt");
+            var documentPath = TestHelpers.EnsureDocument("semantic/annual_report.txt", true);
+            var config = TestHelpers.BuildConfig("{\"chunking\":{\"chunker_type\":\"semantic\",\"max_chars\":200}}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "text/plain" });
+            TestHelpers.AssertMinContentLength(result, 100);
+            TestHelpers.AssertChunks(result, 5, null, true, null, null, null, null);
+        }
+
+        [SkippableFact]
+        public void ConfigChunkingSemanticThreshold()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("chunking");
+            TestHelpers.SkipIfLegacyOfficeDisabled("semantic/mixed_topics.txt");
+            TestHelpers.SkipIfOfficeTestOnWindows("semantic/mixed_topics.txt");
+            var documentPath = TestHelpers.EnsureDocument("semantic/mixed_topics.txt", true);
+            var config = TestHelpers.BuildConfig("{\"chunking\":{\"chunker_type\":\"semantic\",\"topic_threshold\":0.5}}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "text/plain" });
+            TestHelpers.AssertMinContentLength(result, 100);
+            TestHelpers.AssertChunks(result, 1, null, true, null, null, null, null);
+        }
+
+        [SkippableFact]
         public void ConfigChunkingSmall()
         {
             TestHelpers.SkipIfFeatureUnavailable("chunking");
@@ -505,7 +550,7 @@ namespace Kreuzberg.E2E.Contract
             TestHelpers.SkipIfLegacyOfficeDisabled("html/complex_table.html");
             TestHelpers.SkipIfOfficeTestOnWindows("html/complex_table.html");
             var documentPath = TestHelpers.EnsureDocument("html/complex_table.html", true);
-            var config = TestHelpers.BuildConfig("{\"html_options\":{\"extractMetadata\":true}}");
+            var config = TestHelpers.BuildConfig("{\"html_options\":{\"extract_metadata\":true}}");
 
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "text/html" });
@@ -721,7 +766,7 @@ namespace Kreuzberg.E2E.Contract
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 10);
-            TestHelpers.AssertPages(result, null, 5);
+            TestHelpers.AssertPages(result, null, 5, null, null);
         }
 
         [SkippableFact]
@@ -736,7 +781,7 @@ namespace Kreuzberg.E2E.Contract
             var result = KreuzbergClient.ExtractFileSync(documentPath, config);
             TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
             TestHelpers.AssertMinContentLength(result, 10);
-            TestHelpers.AssertPages(result, 1, null);
+            TestHelpers.AssertPages(result, 1, null, null, null);
         }
 
         [SkippableFact]

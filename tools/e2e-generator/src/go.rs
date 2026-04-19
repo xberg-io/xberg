@@ -351,7 +351,7 @@ func assertImages(t *testing.T, result *kreuzberg.ExtractionResult, minCount, ma
 	}
 }
 
-func assertPages(t *testing.T, result *kreuzberg.ExtractionResult, minCount, exactCount *int) {
+func assertPages(t *testing.T, result *kreuzberg.ExtractionResult, minCount, exactCount *int, hasLayoutRegions *bool, layoutClassesInclude []string) {
 	t.Helper()
 	count := len(result.Pages)
 	if minCount != nil && count < *minCount {
@@ -365,6 +365,35 @@ func assertPages(t *testing.T, result *kreuzberg.ExtractionResult, minCount, exa
 			_ = *page.IsBlank // validate it's a valid bool pointer
 		}
 		_ = i
+	}
+
+	if hasLayoutRegions != nil && *hasLayoutRegions {
+		foundLayoutRegions := false
+		for _, page := range result.Pages {
+			if len(page.LayoutRegions) > 0 {
+				foundLayoutRegions = true
+				break
+			}
+		}
+		if !foundLayoutRegions {
+			t.Fatal("expected at least one page to have layout_regions populated")
+		}
+	}
+
+	if len(layoutClassesInclude) > 0 {
+		allClasses := make(map[string]bool)
+		for _, page := range result.Pages {
+			if page.LayoutRegions != nil {
+				for _, region := range page.LayoutRegions {
+					allClasses[region.Class] = true
+				}
+			}
+		}
+		for _, expectedClass := range layoutClassesInclude {
+			if !allClasses[expectedClass] {
+				t.Fatalf("expected layout class %q not found in collected classes", expectedClass)
+			}
+		}
 	}
 }
 
@@ -1266,7 +1295,21 @@ fn render_assertions(assertions: &Assertions) -> String {
             .exact_count
             .map(|v| format!("intPtr({v})"))
             .unwrap_or_else(|| "nil".to_string());
-        writeln!(buffer, "    assertPages(t, result, {}, {})", min_count, exact_count).unwrap();
+        let has_layout = pages
+            .has_layout_regions
+            .map(|v| format!("boolPtr({v})"))
+            .unwrap_or_else(|| "nil".to_string());
+        let layout_classes = pages
+            .layout_classes_include
+            .as_ref()
+            .map(|v| render_string_slice(v))
+            .unwrap_or_else(|| "nil".to_string());
+        writeln!(
+            buffer,
+            "    assertPages(t, result, {}, {}, {}, {})",
+            min_count, exact_count, has_layout, layout_classes
+        )
+        .unwrap();
     }
     if let Some(elements) = assertions.elements.as_ref() {
         let min_count = elements

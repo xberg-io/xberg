@@ -16,6 +16,7 @@ use once_cell::sync::OnceCell;
 use pyo3::prelude::*;
 use pyo3_async_runtimes::TaskLocals;
 
+mod cancellation;
 mod config;
 mod conversion;
 mod core;
@@ -68,6 +69,11 @@ fn _internal_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
         "ExtractionTimeoutError",
         m.py().get_type::<error::ExtractionTimeoutError>(),
     )?;
+    m.add(
+        "ExtractionCancelledError",
+        m.py().get_type::<error::ExtractionCancelledError>(),
+    )?;
+    m.add_class::<cancellation::PyCancellationToken>()?;
 
     m.add_class::<config::ExtractionConfig>()?;
     m.add_class::<config::OcrConfig>()?;

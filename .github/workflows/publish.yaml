@@ -595,20 +595,7 @@ jobs:
 
       - name: Clean previous wheel artifacts
         shell: bash
-        run: rm -rf target/wheels target/maturin && rm -f packages/python/kreuzberg/_internal_bindings.*
-
-      - name: Build CLI binary (native)
-        if: runner.os != 'Linux'
-        shell: bash
-        run: |
-          echo "=== Building CLI Binary ==="
-          cargo build --release --package kreuzberg-cli --features all
-          mkdir -p packages/python/kreuzberg
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cp target/release/kreuzberg.exe packages/python/kreuzberg/kreuzberg-cli.exe
-          else
-            cp target/release/kreuzberg packages/python/kreuzberg/kreuzberg-cli
-          fi
+        run: rm -rf target/wheels target/maturin && find packages/python/kreuzberg -name "_internal_bindings.*" ! -name "*.pyi" -delete
 
       - name: Build Linux wheels
         if: runner.os == 'Linux'
@@ -625,8 +612,19 @@ jobs:
             set -euo pipefail
             # Prevent GCC 14+ from emitting C23-versioned glibc symbols
             # (__isoc23_strtoll etc.) that require glibc ≥ 2.38.
-            export CFLAGS="${CFLAGS:-} -std=gnu11"
-            export CXXFLAGS="${CXXFLAGS:-} -std=gnu++17"
+            # This affects manylinux_2_28 on systems like Debian 12 (glibc 2.36), Ubuntu 22.04.
+            # We force the compiler to use the C11/C++17 standard at every FFI boundary
+            # by setting flags at the compiler, build system, and environment level.
+            #
+            # Strategy:
+            # 1. Set base CFLAGS/CXXFLAGS for direct compilation
+            # 2. Propagate to CMake (respects CMAKE_C_FLAGS, CMAKE_CXX_FLAGS)
+            # 3. Set CPPFLAGS for autotools-based deps (e.g. libssl)
+            export CFLAGS="-std=gnu11"
+            export CXXFLAGS="-std=gnu++17"
+            # Propagate C23 suppressions to CMake-based build systems (Tesseract/Leptonica/ORT).
+            export CMAKE_C_FLAGS="${CFLAGS}"
+            export CMAKE_CXX_FLAGS="${CXXFLAGS}"
             rustup component add rust-src || true
             # Install dependencies based on the container distro
             if command -v yum >/dev/null 2>&1; then
@@ -663,13 +661,6 @@ jobs:
             cp "${ORT_DIR}"/lib/libonnxruntime.so* /usr/lib/ 2>/dev/null || true
             export ORT_LIB_LOCATION="${ORT_DIR}/lib"
             export ORT_PREFER_DYNAMIC_LINK=1
-            # Build CLI binary inside container
-            # Note: before-script-linux CWD is the working-directory (packages/python),
-            # but cargo outputs to the workspace root's target/ dir
-            echo "=== Building CLI Binary (Linux) ==="
-            cargo build --release --package kreuzberg-cli --features all
-            mkdir -p kreuzberg
-            cp ../../target/release/kreuzberg kreuzberg/kreuzberg-cli
 
       - name: Build wheels (native)
         if: runner.os != 'Linux'
@@ -701,6 +692,46 @@ jobs:
       - name: List built wheels
         shell: bash
         run: ls -lh target/wheels
+
+      - name: Verify no C23 glibc symbols in Linux wheels
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Checking for C23 glibc symbols in wheel binaries ==="
+          failed=0
+
+          for wheel in target/wheels/*.whl; do
+            echo "Extracting and checking: $(basename "$wheel")"
+            wheel_dir=$(mktemp -d)
+            trap 'rm -rf "$wheel_dir" 2>/dev/null || true' EXIT
+            unzip -q "$wheel" -d "$wheel_dir"
+
+            # Use process substitution to avoid subshell variable scoping issue
+            while IFS= read -r so_file; do
+              [[ -z "$so_file" ]] && continue
+              echo "  Scanning: $(basename "$so_file")"
+              if nm -D "$so_file" 2>/dev/null | grep -qE '__isoc23_'; then
+                echo "    ERROR: Found C23 glibc symbol(s) in $so_file:"
+                nm -D "$so_file" 2>/dev/null | grep '__isoc23_' || true
+                failed=1
+              else
+                echo "    OK: No C23 glibc symbols found"
+              fi
+            done < <(find "$wheel_dir" -type f \( -name "*.abi3.so" -o -name "*.so" \) 2>/dev/null || true)
+
+            rm -rf "$wheel_dir" 2>/dev/null || true
+            trap - EXIT
+          done
+
+          if [ "$failed" -eq 1 ]; then
+            echo ""
+            echo "FAILED: Wheel contains C23 glibc symbols incompatible with glibc < 2.38"
+            echo "This breaks compatibility with Debian 12, Ubuntu 22.04, and other systems with glibc 2.36."
+            exit 1
+          fi
+          echo ""
+          echo "SUCCESS: All wheels are free of C23 glibc symbols"
 
       - name: Setup Python for smoke test
         uses: actions/setup-python@v6
@@ -827,7 +858,7 @@ jobs:
         run: scripts/publish/ubuntu/free-disk-space.sh
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v5
         with:
           package_json_file: package.json
 
@@ -3170,7 +3201,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.ref }}
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v5
         with:
           package_json_file: package.json
 
@@ -3298,7 +3329,7 @@ jobs:
           registry-url: https://registry.npmjs.org/
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@v5
         with:
           package_json_file: package.json
           run_install: false

@@ -14,13 +14,20 @@
 			"layout": {
 				"table_model": "tatr"
 			},
-			"output_format": "markdown"
+			"output_format": "markdown",
+			"pages": {
+				"extract_pages": true
+			}
 		}
 	},
 	"assertions": {
 		"expected_mime": "application/pdf",
 		"content_not_empty": true,
-		"min_content_length": 100
+		"min_content_length": 100,
+		"pages": {
+			"min_count": 1,
+			"has_layout_regions": true
+		}
 	},
 	"skip": {
 		"requires_feature": ["layout-detection"],

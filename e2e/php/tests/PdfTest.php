@@ -212,13 +212,14 @@ class PdfTest extends TestCase
 
         Helpers::skipIfFeatureUnavailable('layout-detection');
 
-        $config = Helpers::buildConfig(['layout' => ['table_model' => 'tatr'], 'output_format' => 'markdown']);
+        $config = Helpers::buildConfig(['layout' => ['table_model' => 'tatr'], 'output_format' => 'markdown', 'pages' => ['extract_pages' => true]]);
 
         $kreuzberg = new Kreuzberg($config);
         $result = $kreuzberg->extractFile($documentPath);
 
         Helpers::assertExpectedMime($result, ['application/pdf']);
         Helpers::assertMinContentLength($result, 100);
+        Helpers::assertPages($result, 1, null, true, null);
         Helpers::assertContentNotEmpty($result);
     }
 

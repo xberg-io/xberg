@@ -283,7 +283,10 @@ fn test_pdf_layout_detection() {
   "layout": {
     "table_model": "tatr"
   },
-  "output_format": "markdown"
+  "output_format": "markdown",
+  "pages": {
+    "extract_pages": true
+  }
 }"#,
     )
     .expect("Fixture config should deserialize");
@@ -310,6 +313,7 @@ fn test_pdf_layout_detection() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 100);
+    assertions::assert_pages(&result, Some(1), None, Some(true), None);
     assertions::assert_content_not_empty(&result);
 }
 

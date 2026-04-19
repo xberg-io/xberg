@@ -260,9 +260,12 @@ pub struct ChunkRequest {
     /// Optional chunking configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<ChunkingConfigRequest>,
-    /// Chunker type (text or markdown)
+    /// Chunker type (text, markdown, yaml, or semantic)
     #[serde(default = "default_chunker_type")]
-    #[cfg_attr(feature = "api", schema(example = "text", pattern = "^(text|markdown)$"))]
+    #[cfg_attr(
+        feature = "api",
+        schema(example = "text", pattern = "^(text|markdown|yaml|semantic)$")
+    )]
     pub chunker_type: String,
 }
 
@@ -278,6 +281,9 @@ pub struct ChunkingConfigRequest {
     pub overlap: Option<usize>,
     /// Whether to trim whitespace
     pub trim: Option<bool>,
+    /// Cosine similarity threshold for semantic topic detection (0.0-1.0)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic_threshold: Option<f32>,
 }
 
 /// Chunk response with chunks and metadata.
@@ -466,4 +472,7 @@ pub struct ChunkingConfigResponse {
     /// Type of chunker used
     #[cfg_attr(feature = "api", schema(example = "text"))]
     pub chunker_type: String,
+    /// Topic threshold used for semantic chunking
+    #[cfg_attr(feature = "api", schema(example = "0.75"))]
+    pub topic_threshold: Option<f32>,
 }

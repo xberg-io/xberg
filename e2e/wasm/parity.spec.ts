@@ -39,6 +39,7 @@ describe("ExtractionConfig field parity", () => {
 			"forceOcr",
 			"forceOcrPages",
 			"htmlOptions",
+			"htmlOutput",
 			"images",
 			"includeDocumentStructure",
 			"keywords",

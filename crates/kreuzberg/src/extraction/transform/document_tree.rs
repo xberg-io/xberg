@@ -589,6 +589,7 @@ mod tests {
                     ],
                 }),
                 is_blank: None,
+                layout_regions: None,
             }]),
             ..test_result("")
         };
@@ -642,6 +643,7 @@ mod tests {
                     ],
                 }),
                 is_blank: None,
+                layout_regions: None,
             }]),
             ..test_result("")
         };
@@ -681,6 +683,7 @@ mod tests {
                     ],
                 }),
                 is_blank: None,
+                layout_regions: None,
             }]),
             ..test_result("")
         };

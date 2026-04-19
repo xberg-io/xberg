@@ -58,7 +58,7 @@ Before Kreuzberg can extract anything, it needs to know what format the file is.
 
 If the resolved MIME type isn't in the supported list, the pipeline stops immediately with an `UnsupportedFormat` error. No compute is wasted on files Kreuzberg can't handle.
 
-For the full details on how extension mapping, normalization, and validation work, see [MIME Detection](mime-detection.md).
+For the full details on how extension mapping, normalization, and validation work, see [Format Support](../reference/formats.md).
 
 ---
 
@@ -228,6 +228,6 @@ The pipeline includes several optimizations that run automatically without confi
 
 - [Architecture](architecture.md) — how the system is designed
 - [Plugin System](plugin-system.md) — building custom extractors, OCR backends, and processors
-- [MIME Detection](mime-detection.md) — how file types are identified
+- [Format Support](../reference/formats.md) — how file types are identified
 - [Configuration Guide](../guides/configuration.md) — tuning the pipeline
 - [OCR Guide](../guides/ocr.md) — configuring OCR backends

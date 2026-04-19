@@ -1,4 +1,4 @@
-# Java API Reference <span class="version-badge">v4.8.6</span>
+# Java API Reference <span class="version-badge">v4.9.1</span>
 
 Complete reference for the Kreuzberg Java bindings using Java 25+ Foreign Function & Memory API (FFM/Panama).
 
@@ -10,7 +10,7 @@ Add the dependency to your Maven `pom.xml`:
 <dependency>
     <groupId>dev.kreuzberg</groupId>
     <artifactId>kreuzberg</artifactId>
-    <version>4.8.6</version>
+    <version>4.9.1</version>
 </dependency>
 ```
 
@@ -18,7 +18,7 @@ Or with Gradle:
 
 ```gradle title="build.gradle"
 dependencies {
-    implementation 'dev.kreuzberg:kreuzberg:4.8.6'
+    implementation 'dev.kreuzberg:kreuzberg:4.9.1'
 }
 ```
 
@@ -233,7 +233,7 @@ public static CompletableFuture<List<ExtractionResult>> batchExtractFilesAsync(
 
 ---
 
-### BatchExtractFilesWithConfigs() <span class="version-badge">v4.8.6</span>
+### BatchExtractFilesWithConfigs() <span class="version-badge">v4.9.1</span>
 
 Extract multiple files in parallel with per-file configuration overrides (synchronous).
 
@@ -253,7 +253,7 @@ public static List<ExtractionResult> batchExtractFilesWithConfigs(
 
 ---
 
-### BatchExtractBytesWithConfigs() <span class="version-badge">v4.8.6</span>
+### BatchExtractBytesWithConfigs() <span class="version-badge">v4.9.1</span>
 
 Extract multiple byte arrays in parallel with per-file configuration overrides (synchronous).
 
@@ -268,7 +268,7 @@ public static List<ExtractionResult> batchExtractBytesWithConfigs(
 
 ---
 
-### FileExtractionConfig <span class="version-badge">v4.8.6</span>
+### FileExtractionConfig <span class="version-badge">v4.9.1</span>
 
 Per-file extraction configuration overrides for batch operations. All fields are `Optional<T>` — empty means "use the batch-level default."
 
@@ -667,7 +667,7 @@ OcrConfig ocr = OcrConfig.builder()
     .build();
 ```
 
-**PaddleOcrConfig Fields:** <span class="version-badge">v4.8.6</span>
+**PaddleOcrConfig Fields:** <span class="version-badge">v4.9.1</span>
 
 - `modelTier` (String): Model tier: "mobile" (lightweight, ~21MB total, fast) or "server" (high accuracy, ~172MB, best with GPU). Default: "mobile"
 - `padding` (Integer): Padding in pixels (0-100) added around the image before detection. Default: 10
@@ -788,7 +788,7 @@ PDF-specific extraction options.
 ```java title="PdfConfiguration.java"
 // Configure PDF-specific extraction options
 PdfConfig pdf = PdfConfig.builder()
-    .allowSingleColumnTables(false) // <span class="version-badge">v4.8.6</span> Allow extraction of single-column tables
+    .allowSingleColumnTables(false) // <span class="version-badge">v4.9.1</span> Allow extraction of single-column tables
     .extractImages(true)         // Extract images from PDF
     .extractMetadata(true)       // Extract PDF metadata
     .renderImages(false)         // Render pages as images for processing
@@ -832,7 +832,7 @@ ImagePreprocessingConfig preproc = ImagePreprocessingConfig.builder()
 
 ---
 
-### ConcurrencyConfig <span class="version-badge">v4.8.6</span>
+### ConcurrencyConfig <span class="version-badge">v4.9.1</span>
 
 Concurrency configuration for controlling parallel extraction.
 
@@ -1002,6 +1002,7 @@ Each page contains:
 - Text content for that page
 - Tables on that page
 - Images on that page
+- Layout regions when layout detection is enabled, each with `getClass()` (String), `getConfidence()` (double, 0–1), `getBoundingBox()`, and `getAreaFraction()` (double, 0–1)
 
 **Example:**
 
@@ -1703,7 +1704,7 @@ for (String preset : presets) {
 
 ## PDF Rendering
 
-!!! Info "Added in v4.8.6"
+!!! Info "Added in v4.9.1"
 
 ### Kreuzberg.renderPdfPage()
 
@@ -2143,7 +2144,7 @@ brew install tesseract
 
 ---
 
-### LayoutDetectionConfig <span class="version-badge">v4.8.6</span>
+### LayoutDetectionConfig <span class="version-badge">v4.9.1</span>
 
 Configuration for ONNX-based document layout detection.
 

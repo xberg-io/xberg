@@ -1,6 +1,6 @@
 //! Page content management for PDF extraction.
 //!
-//! Handles assignment of tables and images to specific pages.
+//! Handles assignment of tables, images, and layout regions to specific pages.
 
 use crate::types::PageContent;
 
@@ -55,4 +55,50 @@ pub(crate) fn assign_tables_and_images_to_pages(
     }
 
     Some(updated_pages)
+}
+
+/// Populate `layout_regions` on each page from layout detection results.
+///
+/// Maps each `PageLayoutResult` to its corresponding `PageContent` by page index,
+/// converting internal `PageLayoutRegion` values to the public `LayoutRegion` type.
+///
+/// Only populated when layout detection is enabled and results are available.
+/// Pages without matching layout results retain `layout_regions: None`.
+#[cfg(feature = "layout-detection")]
+pub(crate) fn assign_layout_regions_to_pages(
+    page_contents: &mut Option<Vec<PageContent>>,
+    layout_results: &[crate::pdf::layout_runner::PageLayoutResult],
+) {
+    let Some(pages) = page_contents.as_mut() else {
+        return;
+    };
+
+    for result in layout_results {
+        let page_number = result.page_index + 1; // page_index is 0-based, page_number is 1-based
+        if let Some(page) = pages.iter_mut().find(|p| p.page_number == page_number) {
+            let page_area = f64::from(result.page_width_pts) * f64::from(result.page_height_pts);
+            let regions: Vec<crate::types::LayoutRegion> = result
+                .regions
+                .iter()
+                .map(|r| {
+                    let region_area = f64::from(r.bbox.width()) * f64::from(r.bbox.height());
+                    let area_fraction = if page_area > 0.0 { region_area / page_area } else { 0.0 };
+                    crate::types::LayoutRegion {
+                        class: r.class.name().to_string(),
+                        confidence: f64::from(r.confidence),
+                        bounding_box: crate::types::BoundingBox {
+                            x0: f64::from(r.bbox.left),
+                            y0: f64::from(r.bbox.bottom),
+                            x1: f64::from(r.bbox.right),
+                            y1: f64::from(r.bbox.top),
+                        },
+                        area_fraction,
+                    }
+                })
+                .collect();
+            if !regions.is_empty() {
+                page.layout_regions = Some(regions);
+            }
+        }
+    }
 }

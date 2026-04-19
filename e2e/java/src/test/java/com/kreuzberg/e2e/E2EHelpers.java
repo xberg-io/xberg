@@ -499,7 +499,12 @@ public final class E2EHelpers {
       }
     }
 
-    public static void assertPages(ExtractionResult result, Integer minCount, Integer exactCount) {
+    public static void assertPages(
+        ExtractionResult result,
+        Integer minCount,
+        Integer exactCount,
+        Boolean hasLayoutRegions,
+        List<String> layoutClassesInclude) {
       var pages = result.getPages();
       int count = pages != null ? pages.size() : 0;
       if (minCount != null) {
@@ -516,6 +521,41 @@ public final class E2EHelpers {
           // isBlank should be accessible (Optional<Boolean>)
           var isBlank = page.getIsBlank();
           assertTrue(isBlank != null, "getIsBlank() should return non-null Optional");
+        }
+      }
+
+      if (Boolean.TRUE.equals(hasLayoutRegions)) {
+        boolean foundLayoutRegions = false;
+        if (pages != null) {
+          for (var page : pages) {
+            var layoutRegions = page.getLayoutRegions();
+            if (layoutRegions != null && !layoutRegions.isEmpty()) {
+              foundLayoutRegions = true;
+              break;
+            }
+          }
+        }
+        assertTrue(
+            foundLayoutRegions, "Expected at least one page to have layout_regions populated");
+      }
+
+      if (layoutClassesInclude != null && !layoutClassesInclude.isEmpty()) {
+        var allClasses = new java.util.HashSet<String>();
+        if (pages != null) {
+          for (var page : pages) {
+            var layoutRegions = page.getLayoutRegions();
+            if (layoutRegions != null) {
+              for (var region : layoutRegions) {
+                allClasses.add(region.getClassName());
+              }
+            }
+          }
+        }
+        for (var expectedClass : layoutClassesInclude) {
+          assertTrue(
+              allClasses.contains(expectedClass),
+              String.format(
+                  "Expected layout class '%s' not found in %s", expectedClass, allClasses));
         }
       }
     }
@@ -718,6 +758,19 @@ public final class E2EHelpers {
         assertTrue(
             count <= maxCount,
             String.format("Expected at most %d processing warnings, got %d", maxCount, count));
+      }
+    }
+
+    public static void assertLlmUsage(ExtractionResult result, Integer maxCount, Boolean isEmpty) {
+      var usage = result.getLlmUsage().orElse(null);
+      int count = usage != null ? usage.size() : 0;
+      if (isEmpty != null && isEmpty) {
+        assertTrue(count == 0, String.format("Expected llm usage to be empty, got %d", count));
+      }
+      if (maxCount != null) {
+        assertTrue(
+            count <= maxCount,
+            String.format("Expected at most %d llm usage entries, got %d", maxCount, count));
       }
     }
 

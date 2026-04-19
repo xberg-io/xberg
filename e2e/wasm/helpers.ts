@@ -135,6 +135,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
 		config.chunkerType = raw.chunker_type;
 	}
 	assignBooleanField(config, raw, "prepend_heading_context", "prependHeadingContext");
+	if (typeof raw.topic_threshold === "number") {
+		config.topicThreshold = raw.topic_threshold;
+	}
 	return config as unknown as ChunkingConfig;
 }
 
@@ -530,7 +533,13 @@ export const assertions = {
 		}
 	},
 
-	assertPages(result: ExtractionResult, minCount?: number | null, exactCount?: number | null): void {
+	assertPages(
+		result: ExtractionResult,
+		minCount?: number | null,
+		exactCount?: number | null,
+		hasLayoutRegions?: boolean | null,
+		layoutClassesInclude?: string[] | null,
+	): void {
 		const pages = (result as unknown as PlainRecord).pages as unknown[] | undefined;
 		if (pages === undefined || pages === null) {
 			return; // Field not available in this binding
@@ -548,6 +557,39 @@ export const assertions = {
 			const p = page as Record<string, unknown>;
 			const isBlank = p["isBlank"];
 			expect(isBlank === undefined || isBlank === null || typeof isBlank === "boolean").toBe(true);
+		}
+
+		if (hasLayoutRegions) {
+			let foundLayoutRegions = false;
+			for (const page of pages) {
+				const p = page as Record<string, unknown>;
+				const layoutRegions = (p["layoutRegions"] ?? p["layout_regions"]) as unknown[] | undefined;
+				if (layoutRegions && Array.isArray(layoutRegions) && layoutRegions.length > 0) {
+					foundLayoutRegions = true;
+					break;
+				}
+			}
+			expect(foundLayoutRegions).toBe(true);
+		}
+
+		if (layoutClassesInclude && layoutClassesInclude.length > 0) {
+			const allClasses = new Set<string>();
+			for (const page of pages) {
+				const p = page as Record<string, unknown>;
+				const layoutRegions = (p["layoutRegions"] ?? p["layout_regions"]) as unknown[] | undefined;
+				if (layoutRegions && Array.isArray(layoutRegions)) {
+					for (const region of layoutRegions) {
+						const r = region as Record<string, unknown>;
+						const className = r["class"] ?? r["className"];
+						if (typeof className === "string") {
+							allClasses.add(className);
+						}
+					}
+				}
+			}
+			for (const expectedClass of layoutClassesInclude) {
+				expect(allClasses.has(expectedClass)).toBe(true);
+			}
 		}
 	},
 
@@ -739,6 +781,19 @@ export const assertions = {
 		const warnings = ((result as unknown as PlainRecord).processingWarnings ??
 			(result as unknown as PlainRecord).processing_warnings) as unknown[] | undefined;
 		const list = Array.isArray(warnings) ? warnings : [];
+		if (typeof maxCount === "number") {
+			expect(list.length <= maxCount).toBe(true);
+		}
+		if (isEmpty === true) {
+			expect(list.length).toBe(0);
+		}
+	},
+
+	assertLlmUsage(result: ExtractionResult, maxCount?: number | null, isEmpty?: boolean | null): void {
+		const usage = ((result as unknown as PlainRecord).llmUsage ?? (result as unknown as PlainRecord).llm_usage) as
+			| unknown[]
+			| undefined;
+		const list = Array.isArray(usage) ? usage : [];
 		if (typeof maxCount === "number") {
 			expect(list.length <= maxCount).toBe(true);
 		}

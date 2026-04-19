@@ -13,6 +13,8 @@ pub enum PdfError {
     ExtractionFailed(String),
     FontLoadingFailed(String),
     IOError(String),
+    /// The operation was cancelled via a `CancellationToken`.
+    Cancelled,
 }
 
 impl fmt::Display for PdfError {
@@ -33,6 +35,7 @@ impl fmt::Display for PdfError {
             PdfError::ExtractionFailed(msg) => write!(f, "Extraction failed: {}", msg),
             PdfError::FontLoadingFailed(msg) => write!(f, "Font loading failed: {}", msg),
             PdfError::IOError(msg) => write!(f, "I/O error: {}", msg),
+            PdfError::Cancelled => write!(f, "Extraction cancelled"),
         }
     }
 }

@@ -7,12 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.9.1] - 2026-04-19
+
+### Fixed
+
+- **#754**: Preserve `_internal_bindings.pyi` type stub during wheel artifact cleanup — published wheels now include inline type information for the core binding module
+- Add missing `Default` impl for `PyCancellationToken` to satisfy clippy `new_without_default` lint
+- Improve download resilience for `eng.traineddata` in build script — increase retries from 3 to 5, add fallback URL via `raw.githubusercontent.com`, and increase timeout to 300s
+- Increase Task installer retry resilience in CI — 5 attempts with `--retry-all-errors` curl flag
+
+---
+
+## [4.9.0] - 2026-04-18
+
+### Fixed
+
+- **#588**: Suppress C23 glibc symbols (`__isoc23_strtoll` etc.) in manylinux wheels — added CMake flag propagation and CI verification step to prevent incompatible symbols on glibc < 2.38 (Debian 12, Ubuntu 22.04)
+- **#748**: Remove `kreuzberg-cli` from Python wheel to fix `libonnxruntime.so.1` loading failure — CLI is available as standalone release
+- **#749**: Add cancellation token support — cancelled extractions no longer block subsequent calls via `PDFIUM_OPERATION_LOCK`; wired across Python, Node.js, Ruby, WASM, and C FFI bindings
+- **#750**: Fix `kreuzberg[easyocr]` extra silently installing nothing on Python 3.14+; clean up stale `[paddleocr]` references in docs
+- **#752**: Fix ~1000x slowdown on Ghostscript-produced PDFs with structured output — replace O(N²) `Vec::contains` with O(1) `AHashSet` lookup, add minimum dimension filter for tiny inline images
+- **#753**: Fix `llm_usage` returning `None` when using VLM-based OCR — propagate usage through PDF OCR, image OCR, and `force_ocr_pages` paths
+
+### Added
+
+- Cancellation token API available in all language bindings (`CancellationToken` in Python/Node/Ruby/WASM/FFI)
+
+### Changed
+
+- **Breaking**: `kreuzberg-cli` binary is no longer bundled in the Python wheel — install the standalone CLI from GitHub releases
+
+---
+
+## [Unreleased]
+
+### Added
+
+- **Layout detection regions on PageContent** — new `layout_regions` field exposes detected layout regions (class, confidence, bounding box, area fraction) from the RT-DETR model when layout detection is enabled. Enables programmatic detection of diagrams, figures, tables, and other content types per page. Available across all 10 bindings. (#579)
+- **LayoutRegion type files** for Java, PHP, and Elixir bindings (were referenced but missing).
+- **E2E assertions for layout regions** — `has_layout_regions` and `layout_classes_include` assertion types in all 12 language generators.
+
+### Fixed
+
+- **Cross-format parity test failure** — HTML extractor now normalizes setext headings to ATX and strips trailing whitespace from html-to-markdown-rs output.
+- **Broken wasm-deno/wasm-workers e2e tasks** — removed non-functional deno and workers e2e generate/lint/test tasks that referenced invalid generator lang values.
+- **oxlint path in node e2e lint** — `oxlint --fix typescript` changed to `oxlint --fix .` (was looking for nonexistent `typescript/` directory).
+- **Clippy warnings in benchmark-harness** — `sort_by` replaced with `sort_by_key` + `Reverse`.
+
+### Changed
+
+- Removed redundant `.task/workflows/e2e.yml` — e2e tasks consolidated in top-level `Taskfile.yml`.
+
+---
+
 ## [4.8.6] - 2026-04-17
 
 ### Added
 
 - **PST message EntryID in extracted metadata** — the `entry_id` field from Outlook PST message entries is now included in the `metadata` HashMap of `EmailExtractionResult`, enabling callers to unambiguously link extracted data back to its source message. (#739)
 - **AccelerationConfig wired through all ORT model loading** — `AccelerationConfig` (CUDA, CoreML, TensorRT, Auto) is now propagated to all ONNX Runtime sessions: layout detection (RT-DETR, YOLO, SLANeT, TATR, TableClassifier), embeddings, document orientation, and PaddleOCR. Previously, GPU acceleration was silently ignored and all models used CPU. The `acceleration` field is also added to `LayoutDetectionConfig` and `EmbeddingConfig` across all 11 bindings (Python, TypeScript, Ruby, Go, Java, C#, PHP, R, Elixir, FFI, WASM). (#740)
+
+### Added
+
+- Semantic chunker (`ChunkerType::Semantic`) for topic-aware document splitting
+- `topic_threshold` configuration field for embedding-based topic detection
+- `utils/markdown_utils` shared utility for ATX heading detection
+- `preset_chunk_size()` helper in embeddings module
+- E2e contract fixtures for semantic chunking
 
 ### Fixed
 
@@ -2205,7 +2266,7 @@ First stable release of Kreuzberg v4, a complete rewrite with a Rust core and po
 
 #### Legacy Support
 
-- Completely removed v3 legacy Python package and infrastructure. V3 users should migrate to v4 using the [migration guide](https://docs.kreuzberg.dev/migration/v3-to-v4/).
+- Completely removed v3 legacy Python package and infrastructure.
 
 ---
 
@@ -2225,7 +2286,7 @@ First stable release of Kreuzberg v4, a complete rewrite with a Rust core and po
 
 #### API Server
 
-- Added `POST /embed` endpoint for generating embeddings from text. ([#266](https://github.com/Anthropic/kreuzberg/issues/266))
+- Added `POST /embed` endpoint for generating embeddings from text. ([#266](https://github.com/kreuzberg-dev/kreuzberg/issues/266))
 - Added `ServerConfig` type for file-based server configuration (TOML/YAML/JSON) with environment variable overrides.
 
 #### Observability
@@ -2669,7 +2730,7 @@ Complete architectural rewrite from Python-only to Rust-core with polyglot bindi
 - TypeScript/Node.js package renamed to `@kreuzberg/node`.
 - `char_start`/`char_end` -> `byte_start`/`byte_end`.
 
-See [Migration Guide](https://docs.kreuzberg.dev/migration/v3-to-v4/) for details.
+See the [API Reference](https://docs.kreuzberg.dev/reference/api-python/) for details.
 
 ---
 
@@ -3047,10 +3108,10 @@ See [Migration Guide](https://docs.kreuzberg.dev/migration/v3-to-v4/) for detail
 
 ## See Also
 
-- [Configuration Reference](docs/reference/configuration.md) - Detailed configuration options
-- [Migration Guide](docs/migration/v3-to-v4.md) - v3 to v4 migration instructions
-- [Format Support](docs/reference/formats.md) - Supported file formats
-- [Extraction Guide](docs/guides/extraction.md) - Extraction examples
+- [Configuration Reference](https://docs.kreuzberg.dev/reference/configuration/) - Detailed configuration options
+- [Migration Guides](https://docs.kreuzberg.dev/migration/from-unstructured/) - Migration from other libraries
+- [Format Support](https://docs.kreuzberg.dev/reference/formats/) - Supported file formats
+- [Extraction Guide](https://docs.kreuzberg.dev/guides/extraction/) - Extraction examples
 
 [4.8.5]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.8.5
 [4.8.4]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.8.4
@@ -3143,7 +3204,6 @@ See [Migration Guide](https://docs.kreuzberg.dev/migration/v3-to-v4/) for detail
 [4.0.0-rc.4]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.0.0-rc.4
 [4.0.0-rc.3]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.0.0-rc.3
 [4.0.0-rc.2]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.0.0-rc.2
-[4.0.0-rc.1]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v4.0.0-rc.1
 [3.22.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.22.0
 [3.21.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.21.0
 [3.20.2]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.20.2
@@ -3162,7 +3222,6 @@ See [Migration Guide](https://docs.kreuzberg.dev/migration/v3-to-v4/) for detail
 [3.11.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.11.0
 [3.10.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.10.0
 [3.9.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.9.0
-[3.8.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.8.0
 [3.7.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.7.0
 [3.6.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.6.0
 [3.5.0]: https://github.com/kreuzberg-dev/kreuzberg/releases/tag/v3.5.0

@@ -267,7 +267,7 @@ impl FixtureManager {
                     .filter(|s| !s.is_empty())
                     .collect::<HashSet<String>>()
             })
-            .and_then(|set: HashSet<String>| if set.is_empty() { None } else { Some(set) })
+            .filter(|set| !set.is_empty())
     }
 
     /// Load all fixtures from a directory (recursively)

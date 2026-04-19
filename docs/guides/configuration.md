@@ -207,19 +207,20 @@ Split extracted text into overlapping chunks for vector database ingestion:
 
     --8<-- "snippets/r/utils/chunking.md"
 
-## Field Reference
+## All Configuration Categories
 
-For complete documentation of all configuration fields, see [Configuration Reference](../reference/configuration.md).
+Kreuzberg's configuration covers extraction behavior, OCR, formatting, chunking, and hardware acceleration:
 
-Key sections:
-
-- [ExtractionConfig](../reference/configuration.md#extractionconfig) — top-level options (cache, quality processing, output format)
-- [OcrConfig](../reference/configuration.md#ocrconfig) — OCR backend, language, GPU
-- [TesseractConfig](../reference/configuration.md#tesseractconfig) — PSM mode, confidence, table detection
-- [ChunkingConfig](../reference/configuration.md#chunkingconfig) — chunk size, overlap, embedding model
-- [TokenReductionConfig](../reference/configuration.md#tokenreductionconfig) — token count optimization for LLMs
+- [ExtractionConfig](../reference/configuration.md#extractionconfig) — top-level options (cache, quality processing, output format, security limits)
+- [OcrConfig](../reference/configuration.md#ocrconfig) — OCR backend, language, GPU acceleration
+- [TesseractConfig](../reference/configuration.md#tesseractconfig) — Tesseract PSM mode, confidence, table detection
+- [ChunkingConfig](../reference/configuration.md#chunkingconfig) — chunk size, overlap, strategy for RAG
+- [TokenReductionConfig](../reference/configuration.md#tokenreductionconfig) — token count optimization for LLM prompts
+- [ContentFilterConfig](../reference/configuration.md#contentfilterconfig) — header/footer/watermark filtering
 - [PageConfig](../reference/configuration.md#pageconfig) — page tracking and markers
-- [AccelerationConfig](../reference/configuration.md#accelerationconfig) — hardware acceleration
+- [AccelerationConfig](../reference/configuration.md#accelerationconfig) — hardware acceleration (GPU, ONNX Runtime)
+
+See [Configuration Reference](../reference/configuration.md) for the complete field documentation.
 
 ## Next Steps
 

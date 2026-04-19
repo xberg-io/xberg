@@ -700,7 +700,7 @@ kreuzberg chunk [OPTIONS]
 - `--config <PATH>`: Configuration file (TOML, YAML, or JSON)
 - `--chunk-size <SIZE>`: Chunk size in characters
 - `--chunk-overlap <SIZE>`: Chunk overlap in characters
-- `--chunker-type <TYPE>`: Chunker type: `text` (default) or `markdown`
+- `--chunker-type <TYPE>`: Chunker type: `text` (default), `markdown`, `yaml`, or `semantic`
 - `--chunking-tokenizer <MODEL>`: Tokenizer model for token-based sizing (e.g. `Xenova/gpt-4o`)
 - `--format <FORMAT>`: Output format (`text` or `json`), default: `json`
 

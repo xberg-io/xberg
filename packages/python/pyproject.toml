@@ -4,7 +4,7 @@ requires = [ "maturin>=1,<2" ]
 
 [project]
 name = "kreuzberg"
-version = "4.8.6"
+version = "4.9.1"
 description = """\
   High-performance document intelligence library for Python. Extract text, metadata, and structured data from PDFs, \
   Office documents, images, and 88+ formats. Powered by Rust core for 10-50x speed improvements.\
@@ -62,11 +62,12 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = []
-optional-dependencies.all = [ "kreuzberg[easyocr]" ]
+optional-dependencies.all = [ "kreuzberg[easyocr]", "kreuzberg[tesseract]" ]
 optional-dependencies.easyocr = [
-  "easyocr>=1.7.2; python_version<'3.14'",
-  "torch>=2.9.1; python_version<'3.14'",
+  "easyocr>=1.7.2",
+  "torch>=2.9.1",
 ]
+optional-dependencies.tesseract = []
 urls.Changelog = "https://kreuzberg.dev/CHANGELOG/"
 urls.Documentation = "https://kreuzberg.dev"
 urls.Homepage = "https://kreuzberg.dev"
@@ -81,8 +82,6 @@ manifest-path = "../../crates/kreuzberg-py/Cargo.toml"
 include = [
   { path = "kreuzberg/_internal_bindings.pyi", format = [ "wheel", "sdist" ] },
   { path = "kreuzberg/py.typed", format = [ "wheel", "sdist" ] },
-  { path = "kreuzberg/kreuzberg-cli", format = "wheel" },
-  { path = "kreuzberg/kreuzberg-cli.exe", format = "wheel" },
 ]
 
 [tool.pytest]

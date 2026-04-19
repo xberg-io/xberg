@@ -17,6 +17,7 @@ public final class ChunkingConfig {
 	private final Map<String, Object> sizing;
 	private final Boolean prependHeadingContext;
 	private final String chunkerType;
+	private final Double topicThreshold;
 
 	private ChunkingConfig(Builder builder) {
 		this.maxChars = builder.maxChars;
@@ -27,6 +28,7 @@ public final class ChunkingConfig {
 		this.sizing = builder.sizing;
 		this.prependHeadingContext = builder.prependHeadingContext;
 		this.chunkerType = builder.chunkerType;
+		this.topicThreshold = builder.topicThreshold;
 	}
 
 	public static Builder builder() {
@@ -62,13 +64,27 @@ public final class ChunkingConfig {
 	}
 
 	/**
-	 * Get the chunker type (text or markdown).
+	 * Get the chunker type.
 	 *
-	 * @return the chunker type, or null if not set (defaults to "text")
+	 * <p>Set to {@code "semantic"} for topic-aware chunking that works out of
+	 * the box with no extra configuration needed.
+	 *
+	 * @return the chunker type, or null if not set (defaults to "text").
+	 *         Supported values: "text", "markdown", "yaml", "semantic".
 	 * @since 4.5.4
 	 */
 	public String getChunkerType() {
 		return chunkerType;
+	}
+
+	/**
+	 * Get the cosine similarity threshold for semantic topic detection.
+	 * Optional, defaults to 0.75. Rarely needs tuning.
+	 *
+	 * @return the topic threshold (0.0-1.0), or null if not set (defaults to 0.75)
+	 */
+	public Double getTopicThreshold() {
+		return topicThreshold;
 	}
 
 	public Map<String, Object> toMap() {
@@ -93,6 +109,9 @@ public final class ChunkingConfig {
 		if (chunkerType != null) {
 			map.put("chunker_type", chunkerType);
 		}
+		if (topicThreshold != null) {
+			map.put("topic_threshold", topicThreshold);
+		}
 		return map;
 	}
 
@@ -105,6 +124,7 @@ public final class ChunkingConfig {
 		private Map<String, Object> sizing;
 		private Boolean prependHeadingContext;
 		private String chunkerType;
+		private Double topicThreshold;
 
 		private Builder() {
 		}
@@ -166,12 +186,28 @@ public final class ChunkingConfig {
 		/**
 		 * Set the chunker type.
 		 *
-		 * @param chunkerType the chunker type ("text" or "markdown")
+		 * <p>Set to {@code "semantic"} for topic-aware chunking that works out of
+		 * the box with sensible defaults (max_chars=1000, overlap=200,
+		 * topic_threshold=0.75). No other parameters needed.
+		 *
+		 * @param chunkerType the chunker type ("text", "markdown", "yaml", or "semantic")
 		 * @return this builder for chaining
 		 * @since 4.5.4
 		 */
 		public Builder chunkerType(String chunkerType) {
 			this.chunkerType = chunkerType;
+			return this;
+		}
+
+		/**
+		 * Set the cosine similarity threshold for semantic topic detection.
+		 * Optional, defaults to 0.75. Rarely needs tuning.
+		 *
+		 * @param topicThreshold threshold value (0.0-1.0), optional, defaults to 0.75
+		 * @return this builder for chaining
+		 */
+		public Builder topicThreshold(Double topicThreshold) {
+			this.topicThreshold = topicThreshold;
 			return this;
 		}
 
@@ -226,6 +262,10 @@ public final class ChunkingConfig {
 		Object chunkerTypeValue = map.get("chunker_type");
 		if (chunkerTypeValue instanceof String) {
 			builder.chunkerType((String) chunkerTypeValue);
+		}
+		Object topicThresholdValue = map.get("topic_threshold");
+		if (topicThresholdValue instanceof Number) {
+			builder.topicThreshold(((Number) topicThresholdValue).doubleValue());
 		}
 		return builder.build();
 	}

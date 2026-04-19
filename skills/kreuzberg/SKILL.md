@@ -33,7 +33,6 @@ Use this skill when writing code that:
 pip install kreuzberg
 # Optional OCR backends:
 pip install kreuzberg[easyocr]    # EasyOCR
-pip install kreuzberg[paddleocr]  # PaddleOCR
 ```
 
 ### Node.js
@@ -274,7 +273,7 @@ OCR runs automatically for images and scanned PDFs. Tesseract is the default bac
 
 - **Tesseract** (default): Built-in native binding. All Tesseract languages supported.
 - **EasyOCR** (Python only): `pip install kreuzberg[easyocr]`. Pass `easyocr_kwargs={"gpu": True}`.
-- **PaddleOCR** (Python only): `pip install kreuzberg[paddleocr]`. Pass `paddleocr_kwargs={"use_angle_cls": True}`.
+- **PaddleOCR** (Python only): Bundled since 4.8.5, no extra install needed. Pass `paddleocr_kwargs={"use_angle_cls": True}`.
 - **Guten** (Node.js only): Built-in OCR backend via `GutenOcrBackend`.
 
 ### Language Codes

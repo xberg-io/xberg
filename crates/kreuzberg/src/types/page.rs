@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 // Import serde helper and types from sibling modules
-use super::extraction::ExtractedImage;
+use super::extraction::{BoundingBox, ExtractedImage};
 use super::serde_helpers::serde_vec_arc;
 use super::tables::Table;
 
@@ -157,6 +157,31 @@ pub struct PageContent {
     /// and contains no tables or images.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_blank: Option<bool>,
+
+    /// Layout detection regions for this page (when layout detection is enabled).
+    ///
+    /// Contains detected layout regions with class, confidence, bounding box,
+    /// and area fraction. Only populated when layout detection is configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub layout_regions: Option<Vec<LayoutRegion>>,
+}
+
+/// A detected layout region on a page.
+///
+/// When layout detection is enabled, each page may have layout regions
+/// identifying different content types (text, pictures, tables, etc.)
+/// with confidence scores and spatial positions.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
+pub struct LayoutRegion {
+    /// Layout class name (e.g. "picture", "table", "text", "section_header").
+    pub class: String,
+    /// Confidence score from the layout detection model (0.0 to 1.0).
+    pub confidence: f64,
+    /// Bounding box in document coordinate space.
+    pub bounding_box: BoundingBox,
+    /// Fraction of the page area covered by this region (0.0 to 1.0).
+    pub area_fraction: f64,
 }
 
 /// Page hierarchy structure containing heading levels and block information.

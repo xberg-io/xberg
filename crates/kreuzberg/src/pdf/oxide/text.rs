@@ -178,6 +178,7 @@ fn extract_text_with_tracking(doc: &mut OxideDocument, config: &PageConfig) -> R
                 images: Vec::new(),
                 hierarchy: None,
                 is_blank,
+                layout_regions: None,
             });
         }
 

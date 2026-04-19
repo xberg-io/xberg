@@ -86,6 +86,7 @@ export type {
 	HeadingContext,
 	HeadingLevel,
 	HierarchicalBlock,
+	LayoutRegion,
 	OutputFormat,
 	PageContent,
 	PageHierarchy,

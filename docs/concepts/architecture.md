@@ -141,7 +141,7 @@ The RendererRegistry selects the appropriate renderer based on the requested con
 
 **Real concurrency.** Unlike Python (limited by the GIL), Rust executes on all available cores simultaneously. Tokio's work-stealing scheduler distributes async tasks efficiently. File I/O is non-blocking, so threads never stall waiting on disk.
 
-For detailed performance analysis, see [Performance](performance.md).
+For detailed performance analysis, see [Performance](../guides/development.md#performance).
 
 ---
 
@@ -168,5 +168,5 @@ This makes Kreuzberg a fit for Rust-native applications, CLI tools, high-perform
 
 - [Extraction Pipeline](extraction-pipeline.md) - how files flow through the system stage by stage
 - [Plugin System](plugin-system.md) - extending Kreuzberg with custom extractors, OCR backends, and processors
-- [Performance](performance.md) - why Rust matters for extraction performance
+- [Performance](../guides/development.md#performance) - why Rust matters for extraction performance
 - [Creating Plugins](../guides/plugins.md) - step-by-step plugin development guide

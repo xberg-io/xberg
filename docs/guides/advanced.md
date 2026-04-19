@@ -2,7 +2,26 @@
 
 ## Text Chunking
 
-Split extracted text into chunks for RAG systems, vector databases, or LLM context windows. Two strategies: **Text** (splits on whitespace/punctuation boundaries) and **Markdown** (structure-aware, preserves headings, lists, code blocks).
+Split extracted text into chunks for RAG systems, vector databases, or LLM context windows. Four strategies: **Text** (splits on whitespace/punctuation boundaries), **Markdown** (structure-aware, preserves headings, lists, code blocks), **Yaml** (section-aware, preserves YAML document structure), and **Semantic** (topic-aware, splits at natural document boundaries).
+
+### Semantic
+
+The semantic chunker produces topic-coherent chunks by splitting at natural document boundaries. It requires either an embedding model for topic detection or uses structural heuristics as fallback.
+
+Set `chunker_type` to `"semantic"`:
+
+```python
+config = ExtractionConfig(
+    chunking=ChunkingConfig(chunker_type="semantic")
+)
+```
+
+**Behavior:**
+
+- **Without embeddings** — Uses structural heuristics: detects headers (ALL CAPS, numbered sections) and paragraph boundaries
+- **With embeddings** — Compares consecutive paragraphs via embeddings to detect topic shifts, merging paragraphs below the `topic_threshold` (default: 0.5)
+
+Use `topic_threshold` to control sensitivity: higher values (0.7–0.9) preserve more fine-grained topics, lower values (0.1–0.3) merge aggressive. Only applies when an embedding model is configured.
 
 ### Configuration
 
@@ -93,7 +112,9 @@ Chunks can be sized by token count instead of characters — enable the `chunkin
 
 ## Language Detection
 
-Detect languages using [`whatlang`](https://crates.io/crates/whatlang). Supports 60+ languages with ISO 639-3 codes. Set `detect_multiple: true` to detect all languages in a document (chunks text into 200-char segments, returns languages sorted by frequency).
+Detect languages in extracted text using [`whatlang`](https://crates.io/crates/whatlang). Supports 60+ languages with ISO 639-3 codes.
+
+By default, only the primary language is returned. Set `detect_multiple: true` to detect all languages in a document: the text is chunked into 200-character segments and language frequencies are aggregated, returning all detected languages sorted by prevalence.
 
 ### Configuration
 
@@ -165,14 +186,14 @@ Detect languages using [`whatlang`](https://crates.io/crates/whatlang). Supports
 
 ## Embedding Generation
 
-Generate embeddings for semantic search and RAG using ONNX models. Requires the `embeddings` feature.
+Generate embeddings for semantic search and RAG using local ONNX models. Requires the `embeddings` feature. Embeddings are generated in-process with no external API calls.
 
-| Preset | Model | Dimensions | Max tokens |
-|--------|-------|-----------|------------|
-| `fast` | AllMiniLML6V2Q | 384 | 512 |
-| `balanced` | BGEBaseENV15 | 768 | 1024 |
-| `quality` | BGELargeENV15 | 1024 | 2000 |
-| `multilingual` | MultilingualE5Base | 768 | 1024 |
+| Preset | Model | Dimensions | Max Tokens | Use Case |
+|--------|-------|-----------|------------|----------|
+| `fast` | all-MiniLM-L6-v2 (quantized) | 384 | 512 | Quick prototyping, development, resource-constrained |
+| `balanced` | BGE-base-en-v1.5 | 768 | 1024 | General-purpose RAG, production deployments, English |
+| `quality` | BGE-large-en-v1.5 | 1024 | 2000 | Complex documents, maximum accuracy, sufficient compute |
+| `multilingual` | multilingual-e5-base | 768 | 1024 | International documents, mixed-language content |
 
 ### Configuration
 

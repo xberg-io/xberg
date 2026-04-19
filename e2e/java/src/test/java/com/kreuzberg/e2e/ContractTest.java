@@ -635,6 +635,62 @@ public class ContractTest {
   }
 
   @Test
+  public void configChunkingSemantic() throws Exception {
+    JsonNode config = MAPPER.readTree("{\"chunking\":{\"chunker_type\":\"semantic\"}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking");
+    E2EHelpers.runFixture(
+        "config_chunking_semantic",
+        "semantic/annual_report.txt",
+        config,
+        Arrays.asList("chunking"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/plain"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 100);
+          E2EHelpers.Assertions.assertChunks(result, 2, null, true, null, null, null, null);
+        });
+  }
+
+  @Test
+  public void configChunkingSemanticSmall() throws Exception {
+    JsonNode config =
+        MAPPER.readTree("{\"chunking\":{\"chunker_type\":\"semantic\",\"max_chars\":200}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking");
+    E2EHelpers.runFixture(
+        "config_chunking_semantic_small",
+        "semantic/annual_report.txt",
+        config,
+        Arrays.asList("chunking"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/plain"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 100);
+          E2EHelpers.Assertions.assertChunks(result, 5, null, true, null, null, null, null);
+        });
+  }
+
+  @Test
+  public void configChunkingSemanticThreshold() throws Exception {
+    JsonNode config =
+        MAPPER.readTree("{\"chunking\":{\"chunker_type\":\"semantic\",\"topic_threshold\":0.5}}");
+    E2EHelpers.skipIfFeatureUnavailable("chunking");
+    E2EHelpers.runFixture(
+        "config_chunking_semantic_threshold",
+        "semantic/mixed_topics.txt",
+        config,
+        Arrays.asList("chunking"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("text/plain"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 100);
+          E2EHelpers.Assertions.assertChunks(result, 1, null, true, null, null, null, null);
+        });
+  }
+
+  @Test
   public void configChunkingSmall() throws Exception {
     JsonNode config = MAPPER.readTree("{\"chunking\":{\"max_chars\":100,\"max_overlap\":20}}");
     E2EHelpers.skipIfFeatureUnavailable("chunking");
@@ -906,7 +962,7 @@ public class ContractTest {
 
   @Test
   public void configHtmlOptions() throws Exception {
-    JsonNode config = MAPPER.readTree("{\"html_options\":{\"extractMetadata\":true}}");
+    JsonNode config = MAPPER.readTree("{\"html_options\":{\"extract_metadata\":true}}");
     E2EHelpers.runFixture(
         "config_html_options",
         "html/complex_table.html",
@@ -1201,7 +1257,7 @@ public class ContractTest {
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
           E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertPages(result, null, 5);
+          E2EHelpers.Assertions.assertPages(result, null, 5, null, null);
         });
   }
 
@@ -1219,7 +1275,7 @@ public class ContractTest {
         result -> {
           E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
           E2EHelpers.Assertions.assertMinContentLength(result, 10);
-          E2EHelpers.Assertions.assertPages(result, 1, null);
+          E2EHelpers.Assertions.assertPages(result, 1, null, null, null);
         });
   }
 

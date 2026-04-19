@@ -12,6 +12,7 @@ defmodule Kreuzberg.Page do
     * `:images` - Images found on this page
     * `:hierarchy` - Optional hierarchy information (heading levels and blocks)
     * `:is_blank` - Whether the page is blank (nil if unknown)
+    * `:layout_regions` - Detected layout regions on this page (nil if layout detection was not enabled)
 
   ## Examples
 
@@ -29,12 +30,14 @@ defmodule Kreuzberg.Page do
           tables: list(Kreuzberg.Table.t()),
           images: list(Kreuzberg.Image.t()),
           hierarchy: Kreuzberg.PageHierarchy.t() | nil,
-          is_blank: boolean() | nil
+          is_blank: boolean() | nil,
+          layout_regions: list(Kreuzberg.LayoutRegion.t()) | nil
         }
 
   defstruct [
     :hierarchy,
     :is_blank,
+    :layout_regions,
     page_number: 0,
     content: "",
     tables: [],
@@ -59,7 +62,8 @@ defmodule Kreuzberg.Page do
       tables: normalize_tables(data["tables"]),
       images: normalize_images(data["images"]),
       hierarchy: normalize_hierarchy(data["hierarchy"]),
-      is_blank: data["is_blank"]
+      is_blank: data["is_blank"],
+      layout_regions: normalize_layout_regions(data["layout_regions"])
     }
   end
 
@@ -78,7 +82,12 @@ defmodule Kreuzberg.Page do
           nil -> nil
           h -> Kreuzberg.PageHierarchy.to_map(h)
         end,
-      "is_blank" => page.is_blank
+      "is_blank" => page.is_blank,
+      "layout_regions" =>
+        case page.layout_regions do
+          nil -> nil
+          regions -> Enum.map(regions, &Kreuzberg.LayoutRegion.to_map/1)
+        end
     }
   end
 
@@ -107,4 +116,15 @@ defmodule Kreuzberg.Page do
   defp normalize_hierarchy(nil), do: nil
   defp normalize_hierarchy(%Kreuzberg.PageHierarchy{} = h), do: h
   defp normalize_hierarchy(map) when is_map(map), do: Kreuzberg.PageHierarchy.from_map(map)
+
+  defp normalize_layout_regions(nil), do: nil
+  defp normalize_layout_regions([]), do: []
+
+  defp normalize_layout_regions(regions) when is_list(regions) do
+    Enum.map(regions, fn
+      %Kreuzberg.LayoutRegion{} = r -> r
+      map when is_map(map) -> Kreuzberg.LayoutRegion.from_map(map)
+      other -> other
+    end)
+  end
 end

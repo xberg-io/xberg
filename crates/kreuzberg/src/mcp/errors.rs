@@ -13,6 +13,7 @@ use std::fmt::Write;
 /// - `UnsupportedFormat` errors → `INVALID_PARAMS` (-32602)
 /// - `Parsing` errors → `PARSE_ERROR` (-32700)
 /// - `Io` errors → `INTERNAL_ERROR` (-32603) with context preserved
+/// - `Cancelled` errors → `REQUEST_CANCELLED` (-32800)
 /// - All other errors → `INTERNAL_ERROR` (-32603)
 ///
 /// The error message and source chain are preserved to aid debugging.
@@ -102,6 +103,13 @@ pub fn map_kreuzberg_error_to_mcp(error: KreuzbergError) -> McpError {
         ),
 
         KreuzbergError::Other(msg) => McpError::internal_error(msg, None),
+
+        // MCP spec error code -32800: RequestCancelled
+        KreuzbergError::Cancelled => McpError {
+            code: rmcp::model::ErrorCode(-32800),
+            message: "Extraction cancelled".into(),
+            data: None,
+        },
     }
 }
 
@@ -268,6 +276,15 @@ mod tests {
     }
 
     #[test]
+    fn test_map_cancelled_to_request_cancelled() {
+        let error = KreuzbergError::Cancelled;
+        let mcp_error = map_kreuzberg_error_to_mcp(error);
+
+        assert_eq!(mcp_error.code.0, -32800);
+        assert!(mcp_error.message.contains("cancelled"));
+    }
+
+    #[test]
     fn test_error_type_differentiation() {
         let validation = KreuzbergError::validation("test");
         let parsing = KreuzbergError::parsing("test");
@@ -323,6 +340,7 @@ mod tests {
             },
             KreuzbergError::LockPoisoned("test".to_string()),
             KreuzbergError::Other("test".to_string()),
+            KreuzbergError::Cancelled,
         ];
 
         for error in errors {

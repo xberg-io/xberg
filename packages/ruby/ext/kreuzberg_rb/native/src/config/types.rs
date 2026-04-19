@@ -42,6 +42,7 @@ pub fn parse_ocr_config(ruby: &Ruby, hash: RHash) -> Result<OcrConfig, Error> {
     };
 
     let mut config = OcrConfig {
+        enabled: true,
         backend,
         language,
         paddle_ocr_config: None,
@@ -136,6 +137,8 @@ pub fn parse_chunking_config(ruby: &Ruby, hash: RHash) -> Result<ChunkingConfig,
     {
         match symbol_to_string(val)?.as_str() {
             "markdown" => kreuzberg::ChunkerType::Markdown,
+            "yaml" => kreuzberg::ChunkerType::Yaml,
+            "semantic" => kreuzberg::ChunkerType::Semantic,
             _ => kreuzberg::ChunkerType::Text,
         }
     } else {
@@ -150,6 +153,14 @@ pub fn parse_chunking_config(ruby: &Ruby, hash: RHash) -> Result<ChunkingConfig,
         false
     };
 
+    let topic_threshold = if let Some(val) = get_kw(ruby, hash, "topic_threshold")
+        && val.equal(ruby.qnil()).ok() != Some(true)
+    {
+        Some(f64::try_convert(val)? as f32)
+    } else {
+        None
+    };
+
     let config = ChunkingConfig {
         max_characters: max_chars,
         overlap: max_overlap,
@@ -159,6 +170,7 @@ pub fn parse_chunking_config(ruby: &Ruby, hash: RHash) -> Result<ChunkingConfig,
         preset,
         sizing,
         prepend_heading_context,
+        topic_threshold,
     };
 
     Ok(config)

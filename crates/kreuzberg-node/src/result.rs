@@ -25,6 +25,19 @@ pub struct JsPageHierarchy {
 }
 
 #[napi(object)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+pub struct JsLayoutRegion {
+    /// Layout class name (e.g. "picture", "table", "text")
+    pub class: String,
+    /// Confidence score (0.0 to 1.0)
+    pub confidence: f64,
+    /// Bounding box in document coordinate space
+    pub bounding_box: JsBoundingBox,
+    /// Fraction of page area covered (0.0 to 1.0)
+    pub area_fraction: f64,
+}
+
+#[napi(object)]
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct JsPageContent {
     pub page_number: u32,
@@ -35,6 +48,7 @@ pub struct JsPageContent {
     pub images: Vec<JsExtractedImage>,
     pub hierarchy: Option<JsPageHierarchy>,
     pub is_blank: Option<bool>,
+    pub layout_regions: Option<Vec<JsLayoutRegion>>,
 }
 
 #[napi(object)]
@@ -101,7 +115,7 @@ pub struct JsChunk {
 }
 
 #[napi(object)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct JsBoundingBox {
     pub x0: f64,
     pub y0: f64,
@@ -395,6 +409,22 @@ impl TryFrom<RustExtractionResult> for JsExtractionResult {
                     images: page_images,
                     hierarchy,
                     is_blank: page.is_blank,
+                    layout_regions: page.layout_regions.map(|regions| {
+                        regions
+                            .into_iter()
+                            .map(|r| JsLayoutRegion {
+                                class: r.class,
+                                confidence: r.confidence,
+                                bounding_box: JsBoundingBox {
+                                    x0: r.bounding_box.x0,
+                                    y0: r.bounding_box.y0,
+                                    x1: r.bounding_box.x1,
+                                    y1: r.bounding_box.y1,
+                                },
+                                area_fraction: r.area_fraction,
+                            })
+                            .collect()
+                    }),
                 });
             }
             js_pages

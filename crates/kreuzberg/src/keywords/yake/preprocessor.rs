@@ -90,28 +90,26 @@ fn find_sentence_end(text: &str, from: usize) -> Option<usize> {
         }
 
         // Look for sentence terminals: . ! ?
-        match memchr3(b'.', b'!', b'?', &bytes[pos..]) {
-            None => return None,
-            Some(offset) => {
-                let terminal_pos = pos + offset;
-                // Consume consecutive terminals (e.g., "..." or "?!")
-                let mut end = terminal_pos + 1;
-                while end < bytes.len() && (bytes[end] == b'.' || bytes[end] == b'!' || bytes[end] == b'?') {
-                    end += 1;
-                }
-
-                // Consume closing quotes/brackets after terminal
-                while end < bytes.len() && matches!(bytes[end], b'"' | b'\'' | b')' | b']' | b'}') {
-                    end += 1;
-                }
-
-                // Check if this is a real sentence boundary
-                if is_sentence_boundary(text, terminal_pos, end) {
-                    return Some(end);
-                }
-
-                pos = end;
+        {
+            let offset = memchr3(b'.', b'!', b'?', &bytes[pos..])?;
+            let terminal_pos = pos + offset;
+            // Consume consecutive terminals (e.g., "..." or "?!")
+            let mut end = terminal_pos + 1;
+            while end < bytes.len() && (bytes[end] == b'.' || bytes[end] == b'!' || bytes[end] == b'?') {
+                end += 1;
             }
+
+            // Consume closing quotes/brackets after terminal
+            while end < bytes.len() && matches!(bytes[end], b'"' | b'\'' | b')' | b']' | b'}') {
+                end += 1;
+            }
+
+            // Check if this is a real sentence boundary
+            if is_sentence_boundary(text, terminal_pos, end) {
+                return Some(end);
+            }
+
+            pos = end;
         }
     }
 

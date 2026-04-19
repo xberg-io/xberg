@@ -650,7 +650,9 @@ public static class TestHelpers
     public static void AssertPages(
         ExtractionResult result,
         int? minCount,
-        int? exactCount)
+        int? exactCount,
+        bool? hasLayoutRegions,
+        IEnumerable<string>? layoutClassesInclude)
     {
         var pages = result.Pages;
         if (pages is null)
@@ -670,6 +672,51 @@ public static class TestHelpers
         {
             // IsBlank should be accessible as bool?
             var _ = page.IsBlank;
+        }
+
+        if (hasLayoutRegions.HasValue && hasLayoutRegions.Value)
+        {
+            var foundLayoutRegions = false;
+            foreach (var page in pages)
+            {
+                var layoutRegions = page.LayoutRegions;
+                if (layoutRegions is not null && layoutRegions.Count > 0)
+                {
+                    foundLayoutRegions = true;
+                    break;
+                }
+            }
+            if (!foundLayoutRegions)
+            {
+                throw new XunitException("Expected at least one page to have layout_regions populated");
+            }
+        }
+
+        if (layoutClassesInclude is not null)
+        {
+            var layoutClassesArray = layoutClassesInclude.ToList();
+            if (layoutClassesArray.Count > 0)
+            {
+                var allClasses = new HashSet<string>();
+                foreach (var page in pages)
+                {
+                    var layoutRegions = page.LayoutRegions;
+                    if (layoutRegions is not null)
+                    {
+                        foreach (var region in layoutRegions)
+                        {
+                            allClasses.Add(region.ClassName);
+                        }
+                    }
+                }
+                foreach (var expectedClass in layoutClassesArray)
+                {
+                    if (!allClasses.Contains(expectedClass))
+                    {
+                        throw new XunitException($"Expected layout class '{expectedClass}' not found in {string.Join(", ", allClasses)}");
+                    }
+                }
+            }
         }
     }
 
@@ -1509,10 +1556,19 @@ fn render_assertions(buffer: &mut String, assertions: &Assertions) -> Result<()>
             .exact_count
             .map(|v| format!("{}", v))
             .unwrap_or_else(|| "null".to_string());
+        let has_layout = pages
+            .has_layout_regions
+            .map(|v| if v { "true" } else { "false" }.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let layout_classes = pages
+            .layout_classes_include
+            .as_ref()
+            .map(|c| format!("new[] {{ {} }}", render_string_array(c)))
+            .unwrap_or_else(|| "null".to_string());
         writeln!(
             buffer,
-            "            TestHelpers.AssertPages(result, {}, {});",
-            min_count, exact_count
+            "            TestHelpers.AssertPages(result, {}, {}, {}, {});",
+            min_count, exact_count, has_layout, layout_classes
         )?;
     }
 

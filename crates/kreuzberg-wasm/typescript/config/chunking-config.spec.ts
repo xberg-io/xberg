@@ -179,6 +179,22 @@ describe("WASM: ChunkingConfig", () => {
 			expect(parsed.preset).toBe("semantic");
 		});
 
+		it("should support semantic chunkerType", () => {
+			const config: ChunkingConfig = {
+				chunkerType: "semantic",
+				maxChars: 512,
+			};
+			expect(config.chunkerType).toBe("semantic");
+		});
+
+		it("should support topicThreshold field", () => {
+			const config: ChunkingConfig = {
+				chunkerType: "semantic",
+				topicThreshold: 0.5,
+			};
+			expect(config.topicThreshold).toBe(0.5);
+		});
+
 		it("should leave new fields undefined by default", () => {
 			const config: ChunkingConfig = {};
 

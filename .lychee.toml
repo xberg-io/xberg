@@ -1,6 +1,9 @@
 # Configuration for the lychee link checker.
 # https://github.com/lycheeverse/lychee
 
+# Root directory for resolving relative paths in the built site
+root_dir = "site"
+
 # Exclude common patterns that produce false positives
 exclude = [
     # Localhost / loopback addresses
@@ -18,6 +21,12 @@ exclude = [
 
     # GitHub edit links (require auth)
     "github\\.com/.*/edit/",
+
+    # GitHub raw links for new/renamed files (404 until pushed)
+    "github\\.com/.*/raw/",
+
+    # Docs site self-references (404 until deployed)
+    "docs\\.kreuzberg\\.dev",
 
     # PyPI project pages (rate-limited)
     "pypi\\.org/project/",

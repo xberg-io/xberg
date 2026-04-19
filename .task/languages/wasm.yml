@@ -154,18 +154,6 @@ tasks:
     cmds:
       - pnpm test:coverage
 
-  test:deno:
-    desc: Run Deno WASM E2E tests
-    dir: e2e/wasm-deno
-    cmds:
-      - deno task test
-
-  test:workers:
-    desc: Run Cloudflare Workers WASM E2E tests with Miniflare
-    dir: e2e/wasm-workers
-    cmds:
-      - pnpm test
-
   clippy:
     desc: Run clippy on kreuzberg-wasm crate
     env:
@@ -219,64 +207,31 @@ tasks:
     cmds:
       - echo "WASM dependencies updated via node:update (pnpm workspace)"
 
-  e2e:deno:generate:
-    desc: Generate and format Deno WASM E2E tests from fixtures
+  e2e:generate:
+    desc: Generate and format WASM E2E tests from fixtures
     cmds:
-      - cmd: bash scripts/task/e2e-generate.sh wasm-deno
+      - cmd: bash scripts/task/e2e-generate.sh wasm
         platforms: [linux, darwin]
       - cmd: echo "E2E generation not yet supported on Windows - use WSL or CI"
         platforms: [windows]
-      - task: e2e:deno:lint
+      - task: e2e:lint
 
-  e2e:deno:lint:
-    desc: Lint Deno WASM E2E code
-    dir: e2e/wasm-deno
+  e2e:lint:
+    desc: Lint WASM E2E code
+    dir: e2e/wasm
     cmds:
-      - deno lint
+      - pnpm exec biome check .
+      - pnpm exec oxlint --fix .
 
-  e2e:deno:test:
-    desc: Run Deno WASM E2E tests
-    dir: e2e/wasm-deno
-    cmds:
-      - deno task test
-
-  e2e:deno:verify:
-    desc: Build, regenerate, and validate Deno WASM E2E suite
-    cmds:
-      - task: build:deno
-      - task: e2e:deno:generate
-      - task: e2e:deno:test
-
-  e2e:workers:generate:
-    desc: Generate and format Cloudflare Workers WASM E2E tests from fixtures
-    cmds:
-      - cmd: bash scripts/task/e2e-generate.sh wasm-workers
-        platforms: [linux, darwin]
-      - cmd: echo "E2E generation not yet supported on Windows - use WSL or CI"
-        platforms: [windows]
-      - task: e2e:workers:lint
-
-  e2e:workers:lint:
-    desc: Lint Cloudflare Workers WASM E2E code
-    dir: e2e/wasm-workers
-    cmds:
-      - pnpm lint
-
-  e2e:workers:test:
-    desc: Run Cloudflare Workers WASM E2E tests with Miniflare
-    dir: e2e/wasm-workers
+  e2e:test:
+    desc: Run WASM E2E tests
+    dir: e2e/wasm
     cmds:
       - pnpm test
 
-  e2e:workers:verify:
-    desc: Build, regenerate, and validate Cloudflare Workers WASM E2E suite
+  e2e:verify:
+    desc: Regenerate and validate WASM E2E suite (generate + lint + test)
     cmds:
       - task: build
-      - task: e2e:workers:generate
-      - task: e2e:workers:test
-
-  e2e:verify:
-    desc: Verify all WASM test suites (Deno + Workers)
-    cmds:
-      - task: e2e:deno:verify
-      - task: e2e:workers:verify
+      - task: e2e:generate
+      - task: e2e:test

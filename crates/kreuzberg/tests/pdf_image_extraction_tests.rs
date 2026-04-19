@@ -111,3 +111,45 @@ fn test_docling_content_quality() {
         "Must mention table structure recognition or TableFormer"
     );
 }
+
+/// Regression test for issue #752: structured output was ~1000x slower than text
+/// on Ghostscript-produced PDFs with many inline images (~1,924 per page).
+///
+/// Root cause: `populate_images_from_pdfium` used `Vec::contains` (O(N)) inside
+/// the per-page object loop — O(N²) total. Fixed by converting to `AHashSet` for
+/// O(1) lookup before the loop.
+///
+/// This test skips when the repro file is absent (it is not committed to the
+/// repository due to size). To reproduce locally, generate a Ghostscript vector
+/// decomposition PDF and place it at:
+///   test_documents/pdf/ghostscript_inline_images_repro.pdf
+#[test]
+fn test_ghostscript_inline_images_completes_in_reasonable_time() {
+    let path = test_documents_dir().join("pdf/ghostscript_inline_images_repro.pdf");
+    if !path.exists() {
+        eprintln!("SKIP: test_documents/pdf/ghostscript_inline_images_repro.pdf not present");
+        return;
+    }
+
+    let config = kreuzberg::core::config::ExtractionConfig {
+        output_format: kreuzberg::core::config::OutputFormat::Markdown,
+        ..Default::default()
+    };
+    let rt = tokio::runtime::Runtime::new().unwrap();
+
+    let start = std::time::Instant::now();
+    let result = rt
+        .block_on(kreuzberg::core::extractor::extract_file(&path, None, &config))
+        .expect("extraction must succeed for Ghostscript inline-image PDF");
+    let elapsed = start.elapsed();
+
+    // Before the fix, a single-page PDF with ~1,924 inline images took ~56 seconds.
+    // After the fix it should complete in well under 10 seconds even on slow CI.
+    assert!(
+        elapsed.as_secs() < 10,
+        "Ghostscript inline-image PDF must extract in under 10 seconds, took {elapsed:?}"
+    );
+
+    // The file has no text — content may be empty or minimal; that is expected.
+    let _ = result;
+}

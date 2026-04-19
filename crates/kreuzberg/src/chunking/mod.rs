@@ -16,6 +16,7 @@
 //! - **Text**: Generic text splitter, splits on whitespace and punctuation
 //! - **Markdown**: Markdown-aware splitter, preserves formatting and structure
 //! - **Yaml**: YAML-aware splitter, creates one chunk per top-level key
+//! - **Semantic**: Topic-aware chunker that groups paragraphs by semantic similarity
 //!
 //! # Example
 //!
@@ -54,12 +55,14 @@ use std::sync::Arc;
 
 // Module declarations
 pub mod boundaries;
+pub mod boundary_detection;
 mod builder;
 pub mod classifier;
 pub mod config;
 pub mod core;
 mod headings;
 pub mod processor;
+pub mod semantic;
 #[cfg(feature = "chunking-tokenizers")]
 mod tokenizer_cache;
 pub mod validation;

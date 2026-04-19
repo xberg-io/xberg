@@ -230,6 +230,84 @@ fn push_link_uris_from_annotations(annotations: &[TextAnnotation], text: &str, b
     }
 }
 
+/// Normalize markdown output from html-to-markdown-rs to comply with GFM lint rules.
+///
+/// html-to-markdown-rs may produce:
+/// - Setext-style headings (`text\n===` or `text\n---`) instead of ATX (`# text`)
+/// - Lines with trailing whitespace
+/// - ATX headings without a preceding blank line
+///
+/// This function normalizes all three issues. Only called when `pre_rendered_content`
+/// is about to be stored as the Markdown output of an HTML extraction.
+pub(crate) fn normalize_html_markdown(raw: String) -> String {
+    let lines: Vec<&str> = raw.lines().collect();
+    // First pass: convert setext headings → ATX headings, strip trailing whitespace.
+    // This produces a flat Vec<String> where setext pairs are collapsed to a single line.
+    let mut pass1: Vec<String> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        let line_trimmed = line.trim_end(); // strip trailing whitespace
+
+        // Check whether the *next* line is a setext heading underline.
+        // setext H1: next line is all `=` with length >= 1
+        // setext H2: next line is all `-` with length >= 1 (but not a table separator
+        //            which starts after a `|`-prefixed line)
+        if i + 1 < lines.len() {
+            let next = lines[i + 1].trim();
+            let is_setext_h1 = !next.is_empty() && next.chars().all(|c| c == '=');
+            // Only treat as setext H2 if the current line is non-empty (to avoid
+            // converting horizontal rules or list separators).
+            let is_setext_h2 = !next.is_empty()
+                && next.chars().all(|c| c == '-')
+                && !line_trimmed.trim().is_empty()
+                && !line_trimmed.trim().starts_with('|');
+
+            if is_setext_h1 {
+                // Emit as ATX H1 and skip the underline
+                let heading_text = line_trimmed.trim();
+                pass1.push(format!("# {heading_text}"));
+                i += 2; // skip current line + underline
+                continue;
+            }
+            if is_setext_h2 {
+                // Emit as ATX H2 and skip the underline
+                let heading_text = line_trimmed.trim();
+                pass1.push(format!("## {heading_text}"));
+                i += 2; // skip current line + underline
+                continue;
+            }
+        }
+
+        pass1.push(line_trimmed.to_string());
+        i += 1;
+    }
+
+    // Second pass: ensure a blank line before every ATX heading that is not at
+    // the start of the file and not already preceded by a blank line.
+    let mut result = String::with_capacity(raw.len());
+    for (idx, line) in pass1.iter().enumerate() {
+        let is_atx_heading = line.starts_with('#');
+        if is_atx_heading && idx > 0 {
+            let prev = &pass1[idx - 1];
+            if !prev.is_empty() {
+                result.push('\n'); // inject blank line separator
+            }
+        }
+        result.push_str(line);
+        result.push('\n');
+    }
+
+    // Ensure single trailing newline (GFM rule)
+    let trimmed_len = result.trim_end().len();
+    if trimmed_len == 0 {
+        return String::new();
+    }
+    result.truncate(trimmed_len);
+    result.push('\n');
+    result
+}
+
 /// Merge content filter settings into HTML conversion options.
 ///
 /// When `content_filter` is `Some(...)`, adds `"header"` and/or `"footer"` to
@@ -343,8 +421,13 @@ impl SyncExtractor for HtmlExtractor {
 
         // Signal that the extractor already formatted the output so the pipeline
         // does not double-convert.
+        // Markdown content is normalized to GFM: setext headings → ATX, trailing
+        // whitespace removed. Djot is passed through as-is (different lint rules apply).
         let (pre_formatted, pre_rendered) = match config.output_format {
-            OutputFormat::Markdown => (Some("markdown".to_string()), Some(content_text.clone())),
+            OutputFormat::Markdown => {
+                let normalized = normalize_html_markdown(content_text.clone());
+                (Some("markdown".to_string()), Some(normalized))
+            }
             OutputFormat::Djot => (Some("djot".to_string()), Some(content_text.clone())),
             _ => (None, None),
         };
@@ -891,5 +974,94 @@ mod tests {
             doc.uris.iter().any(|u| u.url.contains("test.png")),
             "Should have URI for test.png"
         );
+    }
+
+    // =========================================================================
+    // normalize_html_markdown tests
+    // =========================================================================
+
+    #[test]
+    fn test_normalize_converts_setext_h1_to_atx() {
+        let input = "Title\n=====\n\nSome paragraph.\n".to_string();
+        let output = normalize_html_markdown(input);
+        assert!(output.contains("# Title"), "should convert setext H1, got: {output}");
+        assert!(!output.contains("====="), "should remove underline, got: {output}");
+    }
+
+    #[test]
+    fn test_normalize_converts_setext_h2_to_atx() {
+        let input = "Subtitle\n--------\n\nSome paragraph.\n".to_string();
+        let output = normalize_html_markdown(input);
+        assert!(
+            output.contains("## Subtitle"),
+            "should convert setext H2, got: {output}"
+        );
+        assert!(!output.contains("--------"), "should remove underline, got: {output}");
+    }
+
+    #[test]
+    fn test_normalize_strips_trailing_whitespace() {
+        let input = "Line one   \nLine two\t\n".to_string();
+        let output = normalize_html_markdown(input);
+        for line in output.lines() {
+            assert!(
+                !line.ends_with(' ') && !line.ends_with('\t'),
+                "line has trailing whitespace: {line:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_normalize_ensures_blank_line_before_atx_heading() {
+        let input = "Some text\n# Heading\n".to_string();
+        let output = normalize_html_markdown(input);
+        let lines: Vec<&str> = output.lines().collect();
+        // Find the heading line and assert the line before it is blank
+        let heading_idx = lines.iter().position(|l| l.starts_with("# Heading")).unwrap();
+        assert!(heading_idx > 0, "heading should not be at line 0");
+        assert!(
+            lines[heading_idx - 1].is_empty(),
+            "blank line before ATX heading required, found: {:?}",
+            lines[heading_idx - 1]
+        );
+    }
+
+    #[test]
+    fn test_normalize_atx_heading_at_file_start_no_blank_line_needed() {
+        let input = "# Top Heading\n\nSome text.\n".to_string();
+        let output = normalize_html_markdown(input.clone());
+        // When heading is the very first line, no blank line should be prepended
+        assert!(
+            output.starts_with("# Top Heading"),
+            "heading at file start should not have leading blank line, got: {output:?}"
+        );
+    }
+
+    #[test]
+    fn test_normalize_single_trailing_newline() {
+        let input = "Content\n\n\n".to_string();
+        let output = normalize_html_markdown(input);
+        assert!(output.ends_with('\n'), "should end with newline");
+        assert!(
+            !output.ends_with("\n\n"),
+            "should have exactly one trailing newline, got: {output:?}"
+        );
+    }
+
+    #[test]
+    fn test_normalize_does_not_convert_table_separator_as_setext_h2() {
+        let input = "| Col1 | Col2 |\n|------|------|\n| A    | B    |\n".to_string();
+        let output = normalize_html_markdown(input);
+        assert!(
+            output.contains("|------|"),
+            "table separator should not be treated as setext H2, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_normalize_empty_input() {
+        let input = String::new();
+        let output = normalize_html_markdown(input);
+        assert!(output.is_empty(), "empty input should produce empty output");
     }
 }

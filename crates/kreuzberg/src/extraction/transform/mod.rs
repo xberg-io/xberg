@@ -288,6 +288,7 @@ mod tests {
                         ],
                     }),
                     is_blank: None,
+                    layout_regions: None,
                 },
                 PageContent {
                     page_number: 2,
@@ -296,6 +297,7 @@ mod tests {
                     images: vec![],
                     hierarchy: None,
                     is_blank: None,
+                    layout_regions: None,
                 },
             ]),
             ..Default::default()
@@ -382,6 +384,7 @@ mod tests {
                 images: vec![Arc::new(image)],
                 hierarchy: None,
                 is_blank: None,
+                layout_regions: None,
             }]),
             ..Default::default()
         };
@@ -580,6 +583,7 @@ mod tests {
                     ],
                 }),
                 is_blank: None,
+                layout_regions: None,
             }]),
             ..Default::default()
         };
@@ -643,6 +647,7 @@ mod tests {
                     }],
                 }),
                 is_blank: None,
+                layout_regions: None,
             }]),
             ..Default::default()
         };

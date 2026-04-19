@@ -192,6 +192,7 @@ async fn run_ocr_with_layout(
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
     Option<crate::types::internal::InternalDocument>,
+    Vec<crate::types::LlmUsage>,
 )> {
     let default_ocr_config = crate::core::config::OcrConfig::default();
     let ocr_config = config.ocr.as_ref().unwrap_or(&default_ocr_config);
@@ -206,7 +207,7 @@ async fn run_ocr_with_layout(
 
     // Check for pipeline configuration
     if let Some(pipeline) = ocr_config.effective_pipeline() {
-        let (text, _ocr_tables, ocr_elements, pipeline_doc) = ocr::run_ocr_pipeline(
+        let (text, _ocr_tables, ocr_elements, pipeline_doc, llm_usage) = ocr::run_ocr_pipeline(
             Some(content),
             None,
             #[cfg(feature = "layout-detection")]
@@ -216,13 +217,10 @@ async fn run_ocr_with_layout(
             path,
         )
         .await?;
-        return Ok((text, Vec::new(), ocr_elements, pipeline_doc));
+        return Ok((text, Vec::new(), ocr_elements, pipeline_doc, llm_usage));
     }
 
-    #[cfg(feature = "layout-detection")]
-    let layout_detections = run_layout_detection_ocr_pass(content, config);
-
-    let (text, _mean_conf, ocr_tables, ocr_elements, ocr_doc) = extract_with_ocr(
+    let (text, _mean_conf, ocr_tables, ocr_elements, ocr_doc, llm_usage) = extract_with_ocr(
         Some(content),
         None, // Lazy stream 300 DPI pages in extract_with_ocr's batch loop
         #[cfg(feature = "layout-detection")]
@@ -231,7 +229,7 @@ async fn run_ocr_with_layout(
         path,
     )
     .await?;
-    Ok((text, ocr_tables, ocr_elements, ocr_doc))
+    Ok((text, ocr_tables, ocr_elements, ocr_doc, llm_usage))
 }
 
 /// PDF document extractor using pypdfium2 and playa-pdf.
@@ -383,20 +381,24 @@ impl PdfExtractor {
         ) = {
             #[cfg(target_arch = "wasm32")]
             {
-                let pdfium = crate::pdf::bindings::bind_pdfium(PdfError::MetadataExtractionFailed, "initialize Pdfium")
-                    .map_err(|pdf_err| {
-                        if pdf_err.to_string().contains("WASM") || pdf_err.to_string().contains("Module") {
-                            crate::error::KreuzbergError::Parsing {
-                                message: "PDF extraction requires proper WASM module initialization. \
+                let pdfium = crate::pdf::bindings::bind_pdfium(
+                    PdfError::MetadataExtractionFailed,
+                    "initialize Pdfium",
+                    config.cancel_token.as_ref(),
+                )
+                .map_err(|pdf_err| {
+                    if pdf_err.to_string().contains("WASM") || pdf_err.to_string().contains("Module") {
+                        crate::error::KreuzbergError::Parsing {
+                            message: "PDF extraction requires proper WASM module initialization. \
                                      Ensure your WASM environment is set up with PDFium support. \
                                      See: https://docs.kreuzberg.dev/wasm/pdf"
-                                    .to_string(),
-                                source: None,
-                            }
-                        } else {
-                            pdf_err.into()
+                                .to_string(),
+                            source: None,
                         }
-                    })?;
+                    } else {
+                        pdf_err.into()
+                    }
+                })?;
 
                 let document = load_pdf_from_byte_slice(&pdfium, content, config)?;
 
@@ -418,6 +420,10 @@ impl PdfExtractor {
                 let layout_hints: Option<Vec<Vec<crate::pdf::structure::types::LayoutHint>>> = None;
 
                 if crate::core::batch_mode::is_batch_mode() {
+                    // Check cancellation before dispatching to the blocking thread pool.
+                    if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
+                        return Err(crate::error::KreuzbergError::Cancelled);
+                    }
                     let content_owned = content.to_vec();
                     let span = tracing::Span::current();
                     let config_owned = config.clone();
@@ -427,8 +433,11 @@ impl PdfExtractor {
                         // Propagate PDF path to spawned thread for pdf_oxide extraction.
                         crate::pdf::oxide_text::set_current_pdf_path(oxide_path);
 
-                        let pdfium =
-                            crate::pdf::bindings::bind_pdfium(PdfError::MetadataExtractionFailed, "initialize Pdfium")?;
+                        let pdfium = crate::pdf::bindings::bind_pdfium(
+                            PdfError::MetadataExtractionFailed,
+                            "initialize Pdfium",
+                            config_owned.cancel_token.as_ref(),
+                        )?;
 
                         let document = load_pdf_from_byte_slice(&pdfium, &content_owned, &config_owned)?;
 
@@ -436,7 +445,7 @@ impl PdfExtractor {
                             pdf_metadata,
                             native_text,
                             tables,
-                            page_contents,
+                            mut page_contents,
                             boundaries,
                             pre_rendered_doc,
                             has_font_encoding_issues,
@@ -455,6 +464,12 @@ impl PdfExtractor {
                             None,
                         )
                         .map_err(|e| PdfError::ExtractionFailed(e.to_string()))?;
+
+                        // Populate layout_regions on pages from layout detection results.
+                        #[cfg(feature = "layout-detection")]
+                        if let Some(ref lr) = layout_results {
+                            crate::extractors::pdf::pages::assign_layout_regions_to_pages(&mut page_contents, lr);
+                        }
 
                         if let Some(page_cfg) = config_owned.pages.as_ref()
                             && page_cfg.extract_pages
@@ -485,24 +500,74 @@ impl PdfExtractor {
                         Err(e) => return Err(e.into()),
                     }
                 } else {
-                    let pdfium =
-                        crate::pdf::bindings::bind_pdfium(PdfError::MetadataExtractionFailed, "initialize Pdfium")?;
+                    // Even in non-batch mode, `bind_pdfium` may spin with
+                    // `std::thread::sleep` when a cancellation token is provided
+                    // (waiting for `PDFIUM_OPERATION_LOCK`).  Running that sleep
+                    // on a Tokio worker thread would stall the runtime, so we
+                    // always dispatch to the blocking thread pool here.
+                    let content_owned = content.to_vec();
+                    let span = tracing::Span::current();
+                    let config_owned = config.clone();
+                    let oxide_path = crate::pdf::oxide_text::current_pdf_path();
+                    let result = tokio::task::spawn_blocking(move || {
+                        let _guard = span.entered();
+                        crate::pdf::oxide_text::set_current_pdf_path(oxide_path);
 
-                    let document = load_pdf_from_byte_slice(&pdfium, content, config)?;
+                        let pdfium = crate::pdf::bindings::bind_pdfium(
+                            PdfError::MetadataExtractionFailed,
+                            "initialize Pdfium",
+                            config_owned.cancel_token.as_ref(),
+                        )?;
 
-                    extract_all_from_document(
-                        &document,
-                        config,
-                        layout_hints.as_deref(),
+                        let document = load_pdf_from_byte_slice(&pdfium, &content_owned, &config_owned)?;
+
+                        let (
+                            pdf_metadata,
+                            native_text,
+                            tables,
+                            mut pages,
+                            images,
+                            ocr_elements,
+                            ocr_internal_doc,
+                            structure_doc,
+                        ) = extract_all_from_document(
+                            &document,
+                            &config_owned,
+                            layout_hints.as_deref(),
+                            #[cfg(feature = "layout-detection")]
+                            layout_images.as_deref(),
+                            #[cfg(not(feature = "layout-detection"))]
+                            None,
+                            #[cfg(feature = "layout-detection")]
+                            layout_results.as_deref(),
+                            #[cfg(not(feature = "layout-detection"))]
+                            None,
+                        )
+                        .map_err(|e| PdfError::ExtractionFailed(e.to_string()))?;
+
                         #[cfg(feature = "layout-detection")]
-                        layout_images.as_deref(),
-                        #[cfg(not(feature = "layout-detection"))]
-                        None,
-                        #[cfg(feature = "layout-detection")]
-                        layout_results.as_deref(),
-                        #[cfg(not(feature = "layout-detection"))]
-                        None,
-                    )?
+                        if let Some(ref lr) = layout_results {
+                            pages::assign_layout_regions_to_pages(&mut pages, lr);
+                        }
+
+                        Ok::<_, crate::pdf::error::PdfError>((
+                            pdf_metadata,
+                            native_text,
+                            tables,
+                            pages,
+                            images,
+                            ocr_elements,
+                            ocr_internal_doc,
+                            structure_doc,
+                        ))
+                    })
+                    .await
+                    .map_err(|e| crate::error::KreuzbergError::Other(format!("PDF extraction task failed: {}", e)))?;
+
+                    match result {
+                        Ok(tuple) => tuple,
+                        Err(e) => return Err(e.into()),
+                    }
                 }
             }
             #[cfg(all(not(target_arch = "wasm32"), not(feature = "tokio-runtime")))]
@@ -521,12 +586,15 @@ impl PdfExtractor {
                     Option<()>,
                 ) = (None, None, None);
 
-                let pdfium =
-                    crate::pdf::bindings::bind_pdfium(PdfError::MetadataExtractionFailed, "initialize Pdfium")?;
+                let pdfium = crate::pdf::bindings::bind_pdfium(
+                    PdfError::MetadataExtractionFailed,
+                    "initialize Pdfium",
+                    config.cancel_token.as_ref(),
+                )?;
 
                 let document = load_pdf_from_byte_slice(&pdfium, content, config)?;
 
-                extract_all_from_document(
+                let (a, b, c, mut d, e, f, g, h) = extract_all_from_document(
                     &document,
                     config,
                     layout_hints.as_deref(),
@@ -538,7 +606,14 @@ impl PdfExtractor {
                     layout_results.as_deref(),
                     #[cfg(not(feature = "layout-detection"))]
                     None,
-                )?
+                )?;
+
+                #[cfg(feature = "layout-detection")]
+                if let Some(ref lr) = layout_results {
+                    pages::assign_layout_regions_to_pages(&mut d, lr);
+                }
+
+                (a, b, c, d, e, f, g, h)
             }
         };
 
@@ -550,21 +625,26 @@ impl PdfExtractor {
         #[cfg(feature = "ocr")]
         let mut ocr_internal_doc: Option<crate::types::internal::InternalDocument> = None;
         #[cfg(feature = "ocr")]
+        let mut ocr_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
+        #[cfg(feature = "ocr")]
         let (text, used_ocr) = if config.effective_disable_ocr() {
             (native_text, false)
         } else if config.force_ocr {
-            let (ocr_text, ocr_tbls, ocr_elems, ocr_doc) = run_ocr_with_layout(content, config, path).await?;
+            let (ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage) =
+                run_ocr_with_layout(content, config, path).await?;
             ocr_tables = ocr_tbls;
             _ocr_elements_from_ocr = ocr_elems;
             ocr_internal_doc = ocr_doc;
+            ocr_llm_usage = llm_usage;
             (ocr_text, true)
         } else if let Some(ref ocr_pages) = config.force_ocr_pages {
             if !ocr_pages.is_empty() {
                 if let Some(ref bounds) = boundaries {
                     if !bounds.is_empty() {
-                        let mixed =
+                        let (mixed, mixed_llm_usage) =
                             ocr::extract_mixed_ocr_native(&native_text, bounds, ocr_pages, content, config, path)
                                 .await?;
+                        ocr_llm_usage = mixed_llm_usage;
                         (mixed, true)
                     } else {
                         tracing::warn!("force_ocr_pages set but no page boundaries available; using native text");
@@ -656,10 +736,11 @@ impl PdfExtractor {
                 (native_text, false)
             } else if decision.fallback || has_font_encoding_issues {
                 match run_ocr_with_layout(content, config, path).await {
-                    Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc)) => {
+                    Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage)) => {
                         ocr_tables = ocr_tbls;
                         _ocr_elements_from_ocr = ocr_elems;
                         ocr_internal_doc = ocr_doc;
+                        ocr_llm_usage = llm_usage;
                         (ocr_text, true)
                     }
                     Err(e) => {
@@ -1071,6 +1152,12 @@ impl PdfExtractor {
         // Attach pre-built per-page content so derive_extraction_result can use it.
         doc.prebuilt_pages = final_pages;
 
+        // Attach LLM usage accumulated during OCR so derive_extraction_result can transfer it.
+        #[cfg(feature = "ocr")]
+        if !ocr_llm_usage.is_empty() {
+            doc.llm_usage = Some(ocr_llm_usage);
+        }
+
         #[cfg(feature = "pdf")]
         tracing::debug!(
             elements = doc.elements.len(),
@@ -1105,7 +1192,14 @@ impl PdfExtractor {
         #[cfg(feature = "layout-detection")]
         let layout_bundle = run_layout_detection(content, config);
         #[cfg(feature = "layout-detection")]
-        let layout_hints = layout_bundle.as_ref().map(|b| b.hints.as_slice());
+        let (layout_hints, layout_images, layout_results) = match layout_bundle {
+            Some(ref bundle) => (
+                Some(bundle.hints.as_slice()),
+                Some(bundle.images.as_slice()),
+                Some(bundle.results.as_slice()),
+            ),
+            None => (None, None, None),
+        };
         #[cfg(not(feature = "layout-detection"))]
         let layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]> = None;
 
@@ -1119,7 +1213,19 @@ impl PdfExtractor {
             pre_rendered_doc,
             _has_font_encoding_issues,
             pdf_annotations,
-        ) = extract_all_from_oxide_document(content, config, layout_hints)?;
+        ) = extract_all_from_oxide_document(
+            content,
+            config,
+            layout_hints,
+            #[cfg(feature = "layout-detection")]
+            layout_images,
+            #[cfg(not(feature = "layout-detection"))]
+            None,
+            #[cfg(feature = "layout-detection")]
+            layout_results,
+            #[cfg(not(feature = "layout-detection"))]
+            None,
+        )?;
 
         // --- OCR evaluation (reuses the same logic as the pdfium path) ---
         #[cfg(feature = "ocr")]
@@ -1129,15 +1235,19 @@ impl PdfExtractor {
         let mut _ocr_elements_from_ocr: Vec<crate::types::OcrElement> = Vec::new();
         #[cfg(feature = "ocr")]
         let mut ocr_internal_doc: Option<InternalDocument> = None;
+        #[cfg(feature = "ocr")]
+        let mut ocr_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
 
         #[cfg(feature = "ocr")]
         let (text, _used_ocr) = if config.effective_disable_ocr() {
             (native_text, false)
         } else if config.force_ocr {
-            let (ocr_text, ocr_tbls, ocr_elems, ocr_doc) = run_ocr_with_layout(content, config, path).await?;
+            let (ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage) =
+                run_ocr_with_layout(content, config, path).await?;
             ocr_tables = ocr_tbls;
             _ocr_elements_from_ocr = ocr_elems;
             ocr_internal_doc = ocr_doc;
+            ocr_llm_usage = llm_usage;
             (ocr_text, true)
         } else if let Some(ocr_config) = config.ocr.as_ref() {
             let thresholds = ocr_config.effective_thresholds();
@@ -1150,10 +1260,11 @@ impl PdfExtractor {
 
             if decision.fallback {
                 match run_ocr_with_layout(content, config, path).await {
-                    Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc)) => {
+                    Ok((ocr_text, ocr_tbls, ocr_elems, ocr_doc, llm_usage)) => {
                         ocr_tables = ocr_tbls;
                         _ocr_elements_from_ocr = ocr_elems;
                         ocr_internal_doc = ocr_doc;
+                        ocr_llm_usage = llm_usage;
                         (ocr_text, true)
                     }
                     Err(e) => {
@@ -1218,7 +1329,12 @@ impl PdfExtractor {
         };
 
         // --- Page assembly ---
-        let final_pages = assign_tables_and_images_to_pages(page_contents, &tables, &[]);
+        let mut final_pages = assign_tables_and_images_to_pages(page_contents, &tables, &[]);
+
+        #[cfg(feature = "layout-detection")]
+        if let Some(ref bundle) = layout_bundle {
+            pages::assign_layout_regions_to_pages(&mut final_pages, &bundle.results);
+        }
 
         // --- Build InternalDocument ---
         let pre_formatted_output: Option<String> = None;
@@ -1367,6 +1483,12 @@ impl PdfExtractor {
         }
 
         doc.prebuilt_pages = final_pages;
+
+        // Attach LLM usage accumulated during OCR so derive_extraction_result can transfer it.
+        #[cfg(feature = "ocr")]
+        if !ocr_llm_usage.is_empty() {
+            doc.llm_usage = Some(ocr_llm_usage);
+        }
 
         tracing::debug!(
             elements = doc.elements.len(),

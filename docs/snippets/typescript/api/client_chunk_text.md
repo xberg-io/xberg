@@ -1,7 +1,7 @@
 ```typescript title="TypeScript"
 interface ChunkRequest {
   text: string;
-  chunker_type?: "text" | "markdown";
+  chunker_type?: "text" | "markdown" | "yaml" | "semantic";
   config?: {
     max_characters?: number;
     overlap?: number;

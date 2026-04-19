@@ -1,4 +1,5 @@
 use super::error::PdfError;
+use crate::cancellation::CancellationToken;
 use pdfium_render::prelude::*;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -183,6 +184,8 @@ impl Deref for PdfiumHandle<'_> {
 ///
 /// * `map_err` - Function to convert error strings into `PdfError` variants
 /// * `context` - Context string for error messages (e.g., "text extraction")
+/// * `cancel_token` - Optional cancellation token. When provided, the function will
+///   return `PdfError::Cancelled` if the token is cancelled while waiting for the lock.
 ///
 /// # Returns
 ///
@@ -194,8 +197,9 @@ impl Deref for PdfiumHandle<'_> {
 /// - **First call**: Performs full initialization (~8-12ms for bundled extraction + binding)
 /// - **Subsequent calls**: Returns immediately (just fetches from `OnceLock`, ~nanoseconds)
 ///
-/// This lazy initialization defers Pdfium setup until the first PDF is processed,
-/// improving cold start time for non-PDF workloads.
+/// When a `cancel_token` is provided, the lock is acquired via a spin-sleep loop (10ms
+/// sleep between attempts) rather than a blocking `lock()`, so that cancellation can be
+/// observed without waiting indefinitely.
 ///
 /// # Thread Safety
 ///
@@ -217,25 +221,46 @@ impl Deref for PdfiumHandle<'_> {
 ///
 /// ```ignore
 /// // First call initializes the singleton
-/// let pdfium = bind_pdfium(PdfError::TextExtractionFailed, "text extraction")?;
+/// let pdfium = bind_pdfium(PdfError::TextExtractionFailed, "text extraction", None)?;
 ///
 /// // Use it like a &Pdfium
 /// let document = pdfium.load_pdf_from_byte_slice(bytes, None)?;
 ///
-/// // Subsequent calls return immediately
-/// let pdfium2 = bind_pdfium(PdfError::RenderingFailed, "page rendering")?;
-/// // pdfium and pdfium2 reference the same underlying instance
+/// // With cancellation support
+/// let pdfium2 = bind_pdfium(PdfError::RenderingFailed, "page rendering", cancel_token.as_ref())?;
 /// ```
 pub(crate) fn bind_pdfium(
     map_err: fn(String) -> PdfError,
     context: &'static str,
+    cancel_token: Option<&CancellationToken>,
 ) -> Result<PdfiumHandle<'static>, PdfError> {
     // Acquire exclusive lock on PDFium operations.
     // This prevents concurrent access to PDFium which is NOT thread-safe.
     // The lock is held for the duration of the PdfiumHandle's lifetime.
-    let guard = PDFIUM_OPERATION_LOCK
-        .lock()
-        .map_err(|e| map_err(format!("PDFium operation lock poisoned ({}): {}", context, e)))?;
+    //
+    // When a cancellation token is provided we spin with try_lock so we can
+    // observe cancellation while waiting.  When there is no token the simpler
+    // blocking lock() path is used to avoid the spin overhead.
+    let guard = if let Some(token) = cancel_token {
+        loop {
+            if token.is_cancelled() {
+                return Err(PdfError::Cancelled);
+            }
+            match PDFIUM_OPERATION_LOCK.try_lock() {
+                Ok(g) => break g,
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(std::sync::TryLockError::Poisoned(e)) => {
+                    return Err(map_err(format!("PDFium operation lock poisoned ({}): {}", context, e)));
+                }
+            }
+        }
+    } else {
+        PDFIUM_OPERATION_LOCK
+            .lock()
+            .map_err(|e| map_err(format!("PDFium operation lock poisoned ({}): {}", context, e)))?
+    };
 
     // Initialize the singleton on first access, or get the cached result
     let result = PDFIUM_SINGLETON.get_or_init(initialize_pdfium);
@@ -259,7 +284,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_bind_pdfium_lazy_initialization() {
-        let result = bind_pdfium(PdfError::TextExtractionFailed, "test context");
+        let result = bind_pdfium(PdfError::TextExtractionFailed, "test context", None);
         assert!(result.is_ok(), "First bind_pdfium call should succeed");
     }
 
@@ -268,13 +293,13 @@ mod tests {
     fn test_bind_pdfium_multiple_calls() {
         // First call - acquire lock, test success, then drop handle to release lock
         {
-            let result1 = bind_pdfium(PdfError::TextExtractionFailed, "test 1");
+            let result1 = bind_pdfium(PdfError::TextExtractionFailed, "test 1", None);
             assert!(result1.is_ok(), "First call should succeed");
         } // result1 dropped here, releasing the lock
 
         // Second call - can now acquire lock since first handle was dropped
         {
-            let result2 = bind_pdfium(PdfError::TextExtractionFailed, "test 2");
+            let result2 = bind_pdfium(PdfError::TextExtractionFailed, "test 2", None);
             assert!(result2.is_ok(), "Second call should also succeed");
         }
     }
@@ -284,13 +309,13 @@ mod tests {
     fn test_bind_pdfium_returns_same_instance() {
         // Get pointer from first handle, then drop it to release lock
         let ptr1 = {
-            let handle1 = bind_pdfium(PdfError::TextExtractionFailed, "test 1").unwrap();
+            let handle1 = bind_pdfium(PdfError::TextExtractionFailed, "test 1", None).unwrap();
             &*handle1 as *const Pdfium
         }; // handle1 dropped here, releasing the lock
 
         // Get pointer from second handle
         let ptr2 = {
-            let handle2 = bind_pdfium(PdfError::TextExtractionFailed, "test 2").unwrap();
+            let handle2 = bind_pdfium(PdfError::TextExtractionFailed, "test 2", None).unwrap();
             &*handle2 as *const Pdfium
         };
 
@@ -315,7 +340,7 @@ mod tests {
     #[test]
     #[serial]
     fn test_pdfium_handle_deref() {
-        let handle = bind_pdfium(PdfError::TextExtractionFailed, "test").unwrap();
+        let handle = bind_pdfium(PdfError::TextExtractionFailed, "test", None).unwrap();
 
         // Test that we can use the handle like a &Pdfium by calling a method
         // that requires &Pdfium. create_new_pdf() takes &self and returns a Result.

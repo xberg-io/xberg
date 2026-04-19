@@ -18,6 +18,7 @@ pub fn embed<'a>(env: Env<'a>, texts: Vec<String>, config_term: Term<'a>) -> Nif
                 KreuzbergError::Embedding { .. } => atoms::embedding_error(),
                 KreuzbergError::Validation { .. } => atoms::validation_error(),
                 KreuzbergError::Io(_) => atoms::io_error(),
+                KreuzbergError::Cancelled => atoms::cancelled(),
                 _ => atoms::error(),
             };
             Ok((error_atom, format!("Embedding failed: {}", e)).encode(env))

@@ -39,9 +39,9 @@ Official Docker images built on the Rust core with Debian 13 (Trixie). Each imag
 | **Legacy Office** | DOC, PPT, XLS (native OLE/CFB) | DOC, PPT, XLS (native OLE/CFB) |
 | **Startup** | ~1s | ~1s |
 
-**Core** is optimized for production deployments where image size matters. **Full** adds legacy format support for complete document intelligence pipelines.
+**Core** is optimized for production deployments where image size matters. Both images support all major formats — choose based on deployment constraints.
 
-Both images include: Tesseract OCR (eng, spa, fra, deu, ita, por, chi-sim, chi-tra, jpn, ara, rus, hin), pdfium, images, HTML, email, archives.
+All images include: Tesseract OCR (eng, spa, fra, deu, ita, por, chi-sim, chi-tra, jpn, ara, rus, hin), pdfium, images, HTML, email, and archives.
 
 ## Execution Modes
 

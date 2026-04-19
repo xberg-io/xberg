@@ -1,4 +1,4 @@
-# Go API Reference <span class="version-badge">v4.8.6</span>
+# Go API Reference <span class="version-badge">v4.9.1</span>
 
 Complete reference for the Kreuzberg Go bindings using cgo to access the Rust-powered extraction pipeline.
 
@@ -43,7 +43,7 @@ When building outside the monorepo, provide the static library via `CGO_LDFLAGS`
 
 ```bash title="Terminal"
 # Option 1: Download pre-built from GitHub Releases
-curl -LO https://github.com/kreuzberg-dev/kreuzberg/releases/download/v4.8.6/go-ffi-linux-x86_64.tar.gz
+curl -LO https://github.com/kreuzberg-dev/kreuzberg/releases/download/v4.9.1/go-ffi-linux-x86_64.tar.gz
 tar -xzf go-ffi-linux-x86_64.tar.gz
 mkdir -p ~/kreuzberg/lib
 cp kreuzberg-ffi/lib/libkreuzberg_ffi.a ~/kreuzberg/lib/
@@ -273,7 +273,7 @@ for i, result := range results {
 
 ---
 
-### BatchExtractFilesWithConfigs <span class="version-badge">v4.8.6</span>
+### BatchExtractFilesWithConfigs <span class="version-badge">v4.9.1</span>
 
 Batch extract multiple files with per-file configuration overrides (asynchronous).
 
@@ -291,7 +291,7 @@ func BatchExtractFilesWithConfigs(ctx context.Context, items []FileWithConfig, c
 
 ---
 
-### BatchExtractFilesWithConfigsSync <span class="version-badge">v4.8.6</span>
+### BatchExtractFilesWithConfigsSync <span class="version-badge">v4.9.1</span>
 
 Synchronous variant of `BatchExtractFilesWithConfigs`.
 
@@ -303,13 +303,13 @@ func BatchExtractFilesWithConfigsSync(items []FileWithConfig, config *Extraction
 
 ---
 
-### BatchExtractBytesWithConfigs / BatchExtractBytesWithConfigsSync <span class="version-badge">v4.8.6</span>
+### BatchExtractBytesWithConfigs / BatchExtractBytesWithConfigsSync <span class="version-badge">v4.9.1</span>
 
 Batch extract multiple byte arrays with per-file configuration overrides. Async and sync variants follow the same pattern.
 
 ---
 
-### FileExtractionConfig <span class="version-badge">v4.8.6</span>
+### FileExtractionConfig <span class="version-badge">v4.9.1</span>
 
 Per-file extraction configuration overrides for batch operations. All fields are pointers — `nil` means "use the batch-level default."
 
@@ -526,7 +526,7 @@ func LibraryVersion() string
 
 **Returns:**
 
-- `string`: Version string (for example, "4.8.6")
+- `string`: Version string (for example, "4.9.1")
 
 **Example:**
 
@@ -718,7 +718,7 @@ PDF-specific extraction options.
 
 ```go title="Go"
 type PdfConfig struct {
-	AllowSingleColumnTables *bool       // <span class="version-badge">v4.8.6</span> Allow extraction of single-column tables
+	AllowSingleColumnTables *bool       // <span class="version-badge">v4.9.1</span> Allow extraction of single-column tables
 	BottomMarginFraction    *float64    // Bottom margin to ignore during extraction
 	ExtractAnnotations      *bool       // Extract PDF annotations
 	ExtractImages           *bool       // Extract embedded images
@@ -731,7 +731,7 @@ type PdfConfig struct {
 
 ---
 
-### ConcurrencyConfig <span class="version-badge">v4.8.6</span>
+### ConcurrencyConfig <span class="version-badge">v4.9.1</span>
 
 Concurrency configuration for controlling parallel extraction.
 
@@ -810,7 +810,7 @@ type RakeParams struct {
 
 ---
 
-### LayoutDetectionConfig <span class="version-badge">v4.8.6</span>
+### LayoutDetectionConfig <span class="version-badge">v4.9.1</span>
 
 Configure ONNX-based document layout detection.
 
@@ -870,8 +870,8 @@ type PaddleOcrConfig struct {
 	DetLimitSideLen      *int     // Detection side length limit
 	EnableTableDetection *bool    // Detect tables in images
 	Language             string   // Language code
-	ModelTier            string   // (v4.8.6) Model tier: "mobile" (default, ~21MB total, fast) or "server" (~172MB, best with GPU)
-	Padding              *int     // (v4.8.6) Padding in pixels (0-100) around image before detection. Default: 10
+	ModelTier            string   // (v4.9.1) Model tier: "mobile" (default, ~21MB total, fast) or "server" (~172MB, best with GPU)
+	Padding              *int     // (v4.9.1) Padding in pixels (0-100) around image before detection. Default: 10
 	RecBatchNum          *int     // Recognition batch size
 	UseAngleCls          *bool    // Use angle classification
 }
@@ -959,6 +959,7 @@ Each page contains:
 - Text content for that page
 - Tables on that page
 - Images on that page
+- Layout regions when layout detection is enabled, each with `Class` (string), `Confidence` (float64, 0–1), `BoundingBox`, and `AreaFraction` (float64, 0–1)
 
 **Example:**
 
@@ -1381,7 +1382,7 @@ Same parameters as `EmbedTexts()`, plus a `context.Context` as the first argumen
 
 ## PDF Rendering
 
-!!! Info "Added in v4.8.6"
+!!! Info "Added in v4.9.1"
 
 ### RenderPdfPage
 
@@ -2092,4 +2093,4 @@ For configuration details, see the [Code Intelligence Guide](../guides/code-inte
 - **FFI Bridge:** [crates/kreuzberg-ffi/](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg-ffi) (C FFI layer)
 - **Rust Core:** [crates/kreuzberg/](https://github.com/kreuzberg-dev/kreuzberg/tree/main/crates/kreuzberg) (extraction logic)
 - **E2E Tests:** [e2e/go/](https://github.com/kreuzberg-dev/kreuzberg/tree/main/e2e/go) (auto-generated test fixtures)
-- **CI:** [.github/workflows/go-test.yml](https://github.com/kreuzberg-dev/kreuzberg/blob/main/.github/workflows/go-test.yml) (test pipeline)
+- **CI:** [.github/workflows/ci.yaml](https://github.com/kreuzberg-dev/kreuzberg/blob/main/.github/workflows/ci.yaml) (test pipeline)

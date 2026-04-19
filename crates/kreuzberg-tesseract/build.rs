@@ -383,7 +383,7 @@ mod build_tesseract {
             download_and_extract(&third_party_dir, &tesseract_url(), "tesseract")
         };
 
-        let (cmake_cxx_flags, additional_defines) = get_os_specific_config();
+        let (cmake_cxx_flags, cmake_c_flags, additional_defines) = get_os_specific_config();
 
         let leptonica_install_dir = out_dir.join("leptonica");
         let leptonica_cache_dir = cache_dir.join("leptonica");
@@ -464,6 +464,7 @@ mod build_tesseract {
                     .define("ENABLE_GIF", "OFF")
                     .define("NO_CONSOLE_IO", "ON")
                     .define("CMAKE_CXX_FLAGS", &cmake_cxx_flags)
+                    .define("CMAKE_C_FLAGS", &cmake_c_flags)
                     .define("MINIMUM_SEVERITY", "L_SEVERITY_NONE")
                     .define("SW_BUILD", "OFF")
                     .define("HAVE_LIBZ", "0")
@@ -596,7 +597,8 @@ mod build_tesseract {
                     .define("LEPT_TIFF_RESULT", "FALSE")
                     .define("INSTALL_CONFIGS", "ON")
                     .define("USE_SYSTEM_ICU", "ON")
-                    .define("CMAKE_CXX_FLAGS", &cmake_cxx_flags);
+                    .define("CMAKE_CXX_FLAGS", &cmake_cxx_flags)
+                    .define("CMAKE_C_FLAGS", &cmake_c_flags);
 
                 for (key, value) in &additional_defines {
                     tesseract_config.define(key, value);
@@ -611,8 +613,11 @@ mod build_tesseract {
         let eng_traineddata = bundled_tessdata_dir.join("eng.traineddata");
         if !eng_traineddata.exists() {
             fs::create_dir_all(&bundled_tessdata_dir).expect("Failed to create tessdata directory");
-            download_file(
-                "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata",
+            download_file_with_fallback(
+                &[
+                    "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata",
+                    "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/main/eng.traineddata",
+                ],
                 &eng_traineddata,
                 "eng.traineddata",
             );
@@ -667,8 +672,9 @@ mod build_tesseract {
         eprintln!("Tessdata dir: {:?}", tessdata_prefix);
     }
 
-    fn get_os_specific_config() -> (String, Vec<(String, String)>) {
+    fn get_os_specific_config() -> (String, String, Vec<(String, String)>) {
         let mut cmake_cxx_flags = String::new();
+        let mut cmake_c_flags = String::new();
         let mut additional_defines = Vec::new();
         let target = target_triple();
         let target_macos = is_macos_target(&target);
@@ -683,7 +689,10 @@ mod build_tesseract {
             cmake_cxx_flags.push_str("-std=c++17 ");
             cmake_cxx_flags.push_str("-fno-exceptions ");
         } else if target_linux {
-            cmake_cxx_flags.push_str("-std=c++17 ");
+            // Prevent GCC 14+ from emitting C23-versioned glibc symbols (__isoc23_strtoll etc.)
+            // that require glibc >= 2.38. Force C11 mode for C code.
+            cmake_c_flags.push_str("-std=gnu11 ");
+            cmake_cxx_flags.push_str("-std=gnu++17 ");
             cmake_cxx_flags.push_str("-fno-exceptions ");
             if target_musl {
                 // For musl: use g++ with musl-gcc specs (avoids libc++/musl locale
@@ -759,7 +768,7 @@ mod build_tesseract {
             additional_defines.push(("CMAKE_MODULE_LINKER_FLAGS".to_string(), "/INCREMENTAL:NO".to_string()));
         }
 
-        (cmake_cxx_flags, additional_defines)
+        (cmake_cxx_flags, cmake_c_flags, additional_defines)
     }
 
     fn set_os_specific_link_flags() {
@@ -905,49 +914,66 @@ mod build_tesseract {
     }
 
     /// Download a single file to a destination path with retries.
-    fn download_file(url: &str, dest: &Path, label: &str) {
+    /// Download a single file, trying each URL in order. Each URL gets up to
+    /// `max_attempts` retries with exponential backoff before falling through
+    /// to the next URL.
+    fn download_file_with_fallback(urls: &[&str], dest: &Path, label: &str) {
         let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(std::time::Duration::from_secs(300))
             .http1_only()
             .build()
             .expect("Failed to create HTTP client");
 
-        eprintln!("Downloading {} from {}", label, url);
-        let max_attempts = 3;
+        let max_attempts: u32 = 5;
+        let mut last_err = String::new();
 
-        for attempt in 1..=max_attempts {
-            let err_msg = match client.get(url).send() {
-                Ok(resp) => {
-                    if resp.status().is_success() {
-                        match resp.bytes() {
-                            Ok(bytes) => {
-                                fs::write(dest, &bytes).expect("Failed to write downloaded file");
-                                eprintln!("Downloaded {} ({} bytes)", label, bytes.len());
-                                return;
+        for url in urls {
+            eprintln!("Downloading {} from {}", label, url);
+
+            for attempt in 1..=max_attempts {
+                let err_msg = match client.get(*url).send() {
+                    Ok(resp) => {
+                        if resp.status().is_success() {
+                            match resp.bytes() {
+                                Ok(bytes) => {
+                                    fs::write(dest, &bytes).expect("Failed to write downloaded file");
+                                    eprintln!("Downloaded {} ({} bytes)", label, bytes.len());
+                                    return;
+                                }
+                                Err(err) => format!("Failed to read response: {}", err),
                             }
-                            Err(err) => format!("Failed to read response: {}", err),
+                        } else {
+                            format!("HTTP {}", resp.status().as_u16())
                         }
-                    } else {
-                        format!("HTTP {}", resp.status().as_u16())
                     }
+                    Err(err) => err.to_string(),
+                };
+
+                last_err = err_msg.clone();
+
+                if attempt == max_attempts {
+                    println!(
+                        "cargo:warning=All {} attempts for {} exhausted on URL {}",
+                        max_attempts, label, url
+                    );
+                    break;
                 }
-                Err(err) => err.to_string(),
-            };
 
-            if attempt == max_attempts {
-                panic!(
-                    "Failed to download {} after {} attempts: {}",
-                    label, max_attempts, err_msg
+                let backoff = 2u64.pow((attempt - 1).min(4));
+                println!(
+                    "cargo:warning=Download attempt {}/{} for {} failed ({}). Retrying in {}s...",
+                    attempt, max_attempts, label, err_msg, backoff
                 );
+                std::thread::sleep(std::time::Duration::from_secs(backoff));
             }
-
-            let backoff = 2u64.pow((attempt - 1).min(3));
-            println!(
-                "cargo:warning=Download attempt {}/{} for {} failed ({}). Retrying in {}s...",
-                attempt, max_attempts, label, err_msg, backoff
-            );
-            std::thread::sleep(std::time::Duration::from_secs(backoff));
         }
+
+        panic!(
+            "Failed to download {} after trying {} URL(s): {}",
+            label,
+            urls.len(),
+            last_err
+        );
     }
 
     fn normalize_cmake_path(path: &Path) -> String {

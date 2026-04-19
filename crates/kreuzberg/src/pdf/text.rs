@@ -88,7 +88,7 @@ pub struct PdfTextExtractor<'a> {
 
 impl PdfTextExtractor<'static> {
     pub fn new() -> Result<Self> {
-        let pdfium = bind_pdfium(PdfError::TextExtractionFailed, "text extraction")?;
+        let pdfium = bind_pdfium(PdfError::TextExtractionFailed, "text extraction", None)?;
         Ok(PdfTextExtractor { pdfium })
     }
 }
@@ -511,6 +511,7 @@ fn extract_text_lazy_with_tracking(
                 images: Vec::new(),
                 hierarchy,
                 is_blank,
+                layout_regions: None,
             });
         }
 

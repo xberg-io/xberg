@@ -145,7 +145,7 @@ module Kreuzberg
     #   @return [Array<Image>] Images on this page
     # @!attribute [r] hierarchy
     #   @return [PageHierarchy, nil] Hierarchy information for the page
-    PageContent = Struct.new(:page_number, :content, :tables, :images, :hierarchy, :is_blank) do
+    PageContent = Struct.new(:page_number, :content, :tables, :images, :hierarchy, :is_blank, :layout_regions) do
       def to_h
         {
           page_number: page_number,
@@ -153,7 +153,27 @@ module Kreuzberg
           tables: tables.map(&:to_h),
           images: images.map(&:to_h),
           hierarchy: hierarchy&.to_h,
-          is_blank: is_blank
+          is_blank: is_blank,
+          layout_regions: layout_regions&.map(&:to_h)
+        }
+      end
+    end
+
+    # @!attribute [r] class_name
+    #   @return [String] Layout class name (e.g. "picture", "table", "text")
+    # @!attribute [r] confidence
+    #   @return [Float] Detection confidence score (0.0 to 1.0)
+    # @!attribute [r] bounding_box
+    #   @return [ElementBoundingBox] Bounding box in document coordinate space
+    # @!attribute [r] area_fraction
+    #   @return [Float] Fraction of page area covered (0.0 to 1.0)
+    LayoutRegion = Struct.new(:class_name, :confidence, :bounding_box, :area_fraction) do
+      def to_h
+        {
+          class: class_name,
+          confidence: confidence,
+          bounding_box: bounding_box&.to_h,
+          area_fraction: area_fraction
         }
       end
     end
@@ -570,9 +590,34 @@ module Kreuzberg
           tables: parse_tables(page_hash['tables']),
           images: parse_images(page_hash['images']),
           hierarchy: parse_page_hierarchy(page_hash['hierarchy']),
-          is_blank: page_hash['is_blank']
+          is_blank: page_hash['is_blank'],
+          layout_regions: parse_layout_regions(page_hash['layout_regions'])
         )
       end
+    end
+
+    def parse_layout_regions(regions_data)
+      return nil if regions_data.nil?
+
+      regions_data.map do |region_hash|
+        LayoutRegion.new(
+          class_name: region_hash['class'],
+          confidence: region_hash['confidence']&.to_f,
+          bounding_box: parse_element_bounding_box(region_hash['bounding_box']),
+          area_fraction: region_hash['area_fraction']&.to_f
+        )
+      end
+    end
+
+    def parse_element_bounding_box(bounding_box_data)
+      return nil if bounding_box_data.nil?
+
+      ElementBoundingBox.new(
+        x0: bounding_box_data['x0'].to_f,
+        y0: bounding_box_data['y0'].to_f,
+        x1: bounding_box_data['x1'].to_f,
+        y1: bounding_box_data['y1'].to_f
+      )
     end
 
     def parse_page_hierarchy(hierarchy_data)

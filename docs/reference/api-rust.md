@@ -1109,6 +1109,7 @@ Each page contains:
 - `images` (Vec<Arc<ExtractedImage>>): Images on that page
 - `hierarchy` (Option<PageHierarchy>): Heading levels (H1-H6) when hierarchy extraction is enabled
 - `is_blank` (Option<bool>): Whether the page is considered blank (no meaningful text/tables/images)
+- `layout_regions` (Option<Vec<LayoutRegion>>): Detected layout regions when layout detection is enabled. Each region has `class` (string), `confidence` (float, 0–1), `bounding_box` (coordinates), and `area_fraction` (float, 0–1). `None` when layout detection is not configured.
 
 **Example:**
 

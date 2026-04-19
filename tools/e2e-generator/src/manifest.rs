@@ -150,6 +150,7 @@ const OPTIONAL_FIELDS: &[(&str, &str)] = &[
     // PageContent
     ("PageContent", "hierarchy"),
     ("PageContent", "is_blank"),
+    ("PageContent", "layout_regions"),
     // PageInfo
     ("PageInfo", "title"),
     ("PageInfo", "dimensions"),
@@ -292,6 +293,7 @@ fn sample_extraction_result() -> Value {
             }],
         }),
         is_blank: Some(false),
+        layout_regions: None,
     };
 
     let element = kreuzberg::types::extraction::Element {
@@ -490,6 +492,7 @@ fn sample_extraction_config() -> Value {
         tree_sitter: Some(kreuzberg::TreeSitterConfig::default()),
         structured_extraction: None,
         html_output: None,
+        cancel_token: None,
     };
 
     serde_json::to_value(&config).expect("ExtractionConfig serialization")

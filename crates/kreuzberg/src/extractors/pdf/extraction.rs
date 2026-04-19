@@ -420,6 +420,10 @@ pub(crate) fn extract_all_from_oxide_document(
     content: &[u8],
     config: &ExtractionConfig,
     layout_hints: Option<&[Vec<crate::pdf::structure::types::LayoutHint>]>,
+    #[cfg(feature = "layout-detection")] layout_images: Option<&[image::DynamicImage]>,
+    #[cfg(not(feature = "layout-detection"))] _layout_images: Option<()>,
+    #[cfg(feature = "layout-detection")] layout_results: Option<&[crate::pdf::layout_runner::PageLayoutResult]>,
+    #[cfg(not(feature = "layout-detection"))] _layout_results: Option<()>,
 ) -> Result<PdfExtractionPhaseResult> {
     let _span = tracing::debug_span!("extract_pdf_oxide").entered();
 
@@ -459,6 +463,11 @@ pub(crate) fn extract_all_from_oxide_document(
         config.output_format,
         OutputFormat::Markdown | OutputFormat::Djot | OutputFormat::Html
     );
+
+    let allow_single_column = config
+        .pdf_options
+        .as_ref()
+        .is_some_and(|o| o.allow_single_column_tables);
 
     let pre_rendered_doc =
         if needs_structured && !config.force_ocr {
@@ -503,6 +512,15 @@ pub(crate) fn extract_all_from_oxide_document(
                     used_structure_tree,
                     image_positions: &image_positions,
                     layout_hints,
+                    allow_single_column,
+                    #[cfg(feature = "layout-detection")]
+                    layout_images,
+                    #[cfg(feature = "layout-detection")]
+                    layout_results,
+                    #[cfg(feature = "layout-detection")]
+                    table_model: config.layout.as_ref().map(|l| l.table_model).unwrap_or_default(),
+                    #[cfg(feature = "layout-detection")]
+                    acceleration: config.acceleration.as_ref(),
                 },
             ) {
                 Ok(structured_doc) if !structured_doc.elements.is_empty() => {

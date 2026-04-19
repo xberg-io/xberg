@@ -735,12 +735,15 @@ Configuration for splitting extracted text into overlapping chunks, useful for v
 | `embedding`      | `EmbeddingConfig?` | `None`  | Optional embedding generation for each chunk                                      |
 | `preset`         | `str?`             | `None`  | Chunking preset: `"small"` (500/100), `"medium"` (1000/200), `"large"` (2000/400) |
 | `trim`           | `bool`             | `true`  | Whether to trim whitespace from chunk boundaries                                  |
-| `chunker_type`   | `ChunkerType`      | `Text`  | Type of chunker: `Text`, `Markdown`, or `Yaml`                                    |
+| `chunker_type`   | `ChunkerType`      | `Text`  | Type of chunker: `Text`, `Markdown`, `Yaml`, or `Semantic`. Set to `"semantic"` for topic-aware chunking that works out of the box with no extra configuration needed. |
+| `topic_threshold` | `float` / `None`  | `0.75`  | Optional. Cosine similarity threshold for topic boundary detection (0.0-1.0). Only used with `chunker_type="semantic"` and an embedding config. Rarely needs tuning. |
 | `sizing` <span class="version-badge">v4.5.0</span> | `ChunkSizing`      | `Characters` | Controls how chunk size is measured. `Characters` counts characters (default). `Tokenizer` counts tokens using a HuggingFace tokenizer model. Requires the `chunking-tokenizers` feature |
 
 **Note:** `max_chars` and `max_overlap` are accepted as aliases for `max_characters` and `overlap` respectively for backwards compatibility.
 
 When `chunker_type` is set to `"markdown"`, the chunker populates `heading_context` on each chunk's metadata with the heading hierarchy (for example, `# Title > ## Section`) that the chunk falls under. This is useful for preserving semantic context in RAG pipelines.
+
+When `chunker_type` is set to `"semantic"`, the chunker groups paragraphs by topic similarity. It works out of the box with no extra configuration -- just set `chunker_type="semantic"` and all defaults (max_characters=1000, overlap=200, topic_threshold=0.75) are tuned for typical RAG use cases. If an `embedding` config is provided, adjacent segments are compared and split at topic boundaries where cosine similarity falls below `topic_threshold`. Without embeddings, structural-only splitting is performed.
 
 ### Example
 
@@ -4288,7 +4291,7 @@ postprocessor:
 }
 ```
 
-For complete working examples, see the [examples directory](https://github.com/kreuzberg-dev/kreuzberg/tree/main/examples).
+For complete working examples, see the [e2e test suites](https://github.com/kreuzberg-dev/kreuzberg/tree/main/e2e).
 
 ---
 
@@ -4551,4 +4554,4 @@ For comprehensive documentation including memory impact calculations, reverse pr
 - [API Server Guide](../guides/api-server.md) - HTTP API server setup and deployment
 - [File Size Limits Reference](./file-size-limits.md) - Complete size limits documentation with performance tuning
 - [OCR Guide](../guides/ocr.md) - OCR-specific configuration and troubleshooting
-- [Examples Directory](https://github.com/kreuzberg-dev/kreuzberg/tree/main/examples) - Complete working examples
+- [E2E Test Suites](https://github.com/kreuzberg-dev/kreuzberg/tree/main/e2e) - Complete working examples

@@ -48,6 +48,12 @@ pyo3::create_exception!(
     "Raised when an operation exceeds its time limit."
 );
 pyo3::create_exception!(kreuzberg, EmbeddingError, PyException, "Raised when embedding fails.");
+pyo3::create_exception!(
+    kreuzberg,
+    ExtractionCancelledError,
+    PyException,
+    "Raised when an extraction is cancelled via a CancellationToken."
+);
 
 /// Format an error message with its source chain.
 ///
@@ -85,6 +91,7 @@ fn exception_from_module(name: &str, message: String) -> PyErr {
             "PluginError" => PyErr::from_type(py.get_type::<PluginError>(), (message,)),
             "ExtractionTimeoutError" => PyErr::from_type(py.get_type::<ExtractionTimeoutError>(), (message,)),
             "EmbeddingError" => PyErr::from_type(py.get_type::<EmbeddingError>(), (message,)),
+            "ExtractionCancelledError" => PyErr::from_type(py.get_type::<ExtractionCancelledError>(), (message,)),
             _ => PyRuntimeError::new_err(message),
         }
     })
@@ -150,6 +157,9 @@ pub fn to_py_err(error: kreuzberg::KreuzbergError) -> PyErr {
         ),
         KreuzbergError::Embedding { message, source } => {
             exception_from_module("EmbeddingError", format_error_with_source(message, source))
+        }
+        KreuzbergError::Cancelled => {
+            exception_from_module("ExtractionCancelledError", "Extraction cancelled".to_string())
         }
         // RuntimeError must bubble up - unexpected errors need user reports ~keep
         KreuzbergError::Other(msg) => PyRuntimeError::new_err(msg),

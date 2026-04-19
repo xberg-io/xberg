@@ -97,7 +97,9 @@ void assert_images(const CExtractionResult *result,
 
 void assert_pages(const CExtractionResult *result,
                   int has_min, size_t min_count,
-                  int has_exact, size_t exact_count);
+                  int has_exact, size_t exact_count,
+                  int has_layout_regions,
+                  const char **layout_classes_include, size_t layout_classes_count);
 
 void assert_elements(const CExtractionResult *result,
                      int has_min, size_t min_count);
@@ -125,6 +127,10 @@ void assert_quality_score(const CExtractionResult *result,
 void assert_processing_warnings(const CExtractionResult *result,
                                 int has_max, size_t max_count,
                                 int has_is_empty, int is_empty);
+
+void assert_llm_usage(const CExtractionResult *result,
+                      int has_max, size_t max_count,
+                      int has_is_empty, int is_empty);
 
 void assert_djot_content(const CExtractionResult *result,
                          int has_content, int content_present,

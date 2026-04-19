@@ -139,13 +139,14 @@ test_that("pdf_layout_detection", {
   result <- run_fixture(
     "pdf_layout_detection",
     "pdf/docling.pdf",
-    list(layout = list(table_model = "tatr"), output_format = "markdown"),
+    list(layout = list(table_model = "tatr"), output_format = "markdown", pages = list(extract_pages = TRUE)),
     requirements = c("layout-detection"),
     notes = "Requires layout-detection feature with ONNX Runtime",
     skip_if_missing = TRUE
   )
   assert_expected_mime(result, c("application/pdf"))
   assert_min_content_length(result, 100L)
+  assert_pages(result, min_count = 1L)
   assert_content_not_empty(result)
 })
 

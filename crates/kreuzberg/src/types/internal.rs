@@ -165,6 +165,12 @@ pub struct InternalDocument {
     /// injecting raw word tokens into the element list (which would otherwise corrupt
     /// `render_plain` and page content — issue #706).
     pub prebuilt_ocr_elements: Option<Vec<crate::types::ocr_elements::OcrElement>>,
+
+    /// LLM usage records accumulated during extraction (e.g., VLM OCR per page).
+    ///
+    /// Populated by extractors that call LLM-backed backends (VLM OCR).
+    /// `derive_extraction_result` transfers this to `ExtractionResult.llm_usage`.
+    pub llm_usage: Option<Vec<crate::types::LlmUsage>>,
 }
 
 impl InternalDocument {
@@ -185,6 +191,7 @@ impl InternalDocument {
             prebuilt_pages: None,
             pre_rendered_content: None,
             prebuilt_ocr_elements: None,
+            llm_usage: None,
         }
     }
 

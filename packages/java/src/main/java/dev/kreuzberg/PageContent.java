@@ -26,21 +26,26 @@ import java.util.Optional;
  *            hierarchy information for the page, or null
  * @param isBlank
  *            whether this page is blank, or null
+ * @param layoutRegions
+ *            layout regions detected on this page, or null
  */
 public record PageContent(@JsonProperty("page_number") int pageNumber, @JsonProperty("content") String content,
 		@JsonDeserialize(contentAs = Table.class) @JsonProperty("tables") List<Table> tables,
 		@JsonDeserialize(contentAs = ExtractedImage.class) @JsonProperty("images") List<ExtractedImage> images,
-		@JsonProperty("hierarchy") PageHierarchy hierarchy, @JsonProperty("is_blank") Boolean isBlank) {
+		@JsonProperty("hierarchy") PageHierarchy hierarchy, @JsonProperty("is_blank") Boolean isBlank,
+		@JsonDeserialize(contentAs = LayoutRegion.class) @JsonProperty("layout_regions") List<LayoutRegion> layoutRegions) {
 	@JsonCreator
 	public PageContent(@JsonProperty("page_number") int pageNumber, @JsonProperty("content") String content,
 			@JsonProperty("tables") List<Table> tables, @JsonProperty("images") List<ExtractedImage> images,
-			@JsonProperty("hierarchy") PageHierarchy hierarchy, @JsonProperty("is_blank") Boolean isBlank) {
+			@JsonProperty("hierarchy") PageHierarchy hierarchy, @JsonProperty("is_blank") Boolean isBlank,
+			@JsonDeserialize(contentAs = LayoutRegion.class) @JsonProperty("layout_regions") List<LayoutRegion> layoutRegions) {
 		this.pageNumber = pageNumber;
 		this.content = content != null ? content : "";
 		this.tables = tables != null ? Collections.unmodifiableList(tables) : List.of();
 		this.images = images != null ? Collections.unmodifiableList(images) : List.of();
 		this.hierarchy = hierarchy;
 		this.isBlank = isBlank;
+		this.layoutRegions = layoutRegions != null ? Collections.unmodifiableList(layoutRegions) : List.of();
 	}
 
 	/**
@@ -59,5 +64,14 @@ public record PageContent(@JsonProperty("page_number") int pageNumber, @JsonProp
 	 */
 	public Optional<Boolean> getIsBlank() {
 		return Optional.ofNullable(isBlank);
+	}
+
+	/**
+	 * Get the layout regions detected on this page.
+	 *
+	 * @return layout regions, or empty if layout detection was not enabled
+	 */
+	public Optional<List<LayoutRegion>> getLayoutRegions() {
+		return layoutRegions.isEmpty() ? Optional.empty() : Optional.of(layoutRegions);
 	}
 }

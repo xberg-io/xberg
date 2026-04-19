@@ -33,7 +33,7 @@ pub struct PdfRenderer<'a> {
 
 impl PdfRenderer<'static> {
     pub fn new() -> Result<Self> {
-        let pdfium = bind_pdfium(PdfError::RenderingFailed, "page rendering")?;
+        let pdfium = bind_pdfium(PdfError::RenderingFailed, "page rendering", None)?;
         Ok(Self { pdfium })
     }
 }

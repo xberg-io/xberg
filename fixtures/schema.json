@@ -227,6 +227,17 @@
 						"exact_count": {
 							"type": "integer",
 							"minimum": 0
+						},
+						"has_layout_regions": {
+							"type": "boolean",
+							"description": "Assert that at least one page has layout_regions populated."
+						},
+						"layout_classes_include": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							},
+							"description": "Assert that layout regions contain all of these class names."
 						}
 					},
 					"additionalProperties": false

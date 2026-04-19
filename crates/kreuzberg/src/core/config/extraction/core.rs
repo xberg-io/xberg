@@ -260,6 +260,18 @@ pub struct ExtractionConfig {
     /// `ExtractionResult::structured_output`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub structured_extraction: Option<super::super::llm::StructuredExtractionConfig>,
+
+    /// Cancellation token for this extraction (None = no external cancellation).
+    ///
+    /// Pass a [`CancellationToken`] clone here and call [`CancellationToken::cancel`]
+    /// from another thread / task to abort the extraction in progress. The extractor
+    /// checks the token at safe checkpoints (before lock acquisition, between pages,
+    /// between batch items) and returns [`KreuzbergError::Cancelled`] when set.
+    ///
+    /// The field is excluded from serialization because `CancellationToken` is a
+    /// runtime handle, not a configuration value.
+    #[serde(skip)]
+    pub cancel_token: Option<crate::cancellation::CancellationToken>,
 }
 
 impl Default for ExtractionConfig {
@@ -304,6 +316,7 @@ impl Default for ExtractionConfig {
             #[cfg(feature = "tree-sitter")]
             tree_sitter: None,
             structured_extraction: None,
+            cancel_token: None,
         }
     }
 }

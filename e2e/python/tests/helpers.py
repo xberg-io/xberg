@@ -435,10 +435,28 @@ def assert_images(
                 pytest.fail(f"Expected image format {fmt!r} not found in {found_formats}")
 
 
+def _get_page_field(page: Any, field: str) -> Any:
+    return page.get(field) if isinstance(page, dict) else getattr(page, field, None)
+
+
+def _collect_layout_classes(pages: list[Any]) -> set[str]:
+    all_classes: set[str] = set()
+    for page in pages:
+        regions = _get_page_field(page, "layout_regions")
+        if regions:
+            for region in regions:
+                cls = region.get("class") if isinstance(region, dict) else getattr(region, "class", None)
+                if cls:
+                    all_classes.add(cls)
+    return all_classes
+
+
 def assert_pages(
     result: Any,
     min_count: int | None = None,
     exact_count: int | None = None,
+    has_layout_regions: bool | None = None,
+    layout_classes_include: list[str] | None = None,
 ) -> None:
     pages = getattr(result, "pages", None)
     if pages is None:
@@ -449,8 +467,17 @@ def assert_pages(
     if min_count is not None and count < min_count:
         pytest.fail(f"Expected at least {min_count} pages, found {count}")
     for page in pages:
-        is_blank = page.get("is_blank") if isinstance(page, dict) else getattr(page, "is_blank", None)
+        is_blank = _get_page_field(page, "is_blank")
         assert is_blank is None or isinstance(is_blank, bool), f"is_blank should be None or bool, got {type(is_blank)}"
+
+    if has_layout_regions and not any(_get_page_field(p, "layout_regions") for p in pages):
+        pytest.fail("Expected at least one page to have layout_regions populated")
+
+    if layout_classes_include:
+        all_classes = _collect_layout_classes(pages)
+        for expected_class in layout_classes_include:
+            if expected_class not in all_classes:
+                pytest.fail(f"Expected layout class '{expected_class}' not found in {all_classes}")
 
 
 def assert_elements(

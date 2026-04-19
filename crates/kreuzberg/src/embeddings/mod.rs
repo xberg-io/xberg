@@ -151,6 +151,11 @@ pub fn get_preset(name: &str) -> Option<&'static EmbeddingPreset> {
     EMBEDDING_PRESETS.iter().find(|p| p.name == name)
 }
 
+/// Get the chunk_size for a preset by name.
+pub fn preset_chunk_size(name: &str) -> Option<usize> {
+    get_preset(name).map(|p| p.chunk_size)
+}
+
 /// List all available preset names.
 pub fn list_presets() -> Vec<&'static str> {
     EMBEDDING_PRESETS.iter().map(|p| p.name).collect()

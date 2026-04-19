@@ -77,12 +77,7 @@ tesseract --list-langs
 
 === "Python"
 
-    ```bash title="Terminal"
-    pip install "kreuzberg[paddleocr]"
-    ```
-
-    !!! warning "Python 3.14"
-        The Python PaddleOCR package is not yet compatible with Python 3.14. Use 3.10–3.13, or use the native backend instead.
+    PaddleOCR is bundled via the native Rust bindings and works out of the box since 4.8.5 — no extra installation is needed. Models are downloaded automatically on first use.
 
 ### EasyOCR (Python only)
 
@@ -90,8 +85,11 @@ tesseract --list-langs
 pip install "kreuzberg[easyocr]"
 ```
 
-!!! Warning "Python 3.14"
-    EasyOCR is not supported on Python 3.14 due to upstream PyTorch compatibility. Use Python 3.10–3.13.
+!!! Info "Python 3.14"
+    EasyOCR 1.7.3+ and PyTorch 2.9.1+ support Python 3.14. Install `kreuzberg[easyocr]` on any supported Python version (3.10–3.14).
+
+!!! Tip "Tesseract marker extra"
+    `pip install "kreuzberg[tesseract]"` is available as a metadata-only marker to document a dependency on the Tesseract system package. It installs no Python packages — Tesseract itself must still be installed via your OS package manager (see above).
 
 ## Configuration
 
@@ -262,24 +260,6 @@ Skip OCR entirely, even for image files that would normally require it. When `di
     let result = extract_file("scanned.png", &config).await?;
     // result.content will be empty — OCR was skipped
     ```
-
-### Using EasyOCR (Python Only)
-
-=== "Go"
-
-    --8<-- "snippets/go/ocr/ocr_easyocr.md"
-
-=== "Java"
-
-    --8<-- "snippets/java/ocr/ocr_easyocr.md"
-
-=== "Ruby"
-
-    --8<-- "snippets/ruby/ocr/ocr_easyocr.md"
-
-=== "R"
-
-    --8<-- "snippets/r/ocr/ocr_easyocr.md"
 
 ### Using PaddleOCR
 

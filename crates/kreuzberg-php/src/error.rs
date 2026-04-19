@@ -27,6 +27,7 @@ pub fn to_php_exception(error: kreuzberg::KreuzbergError) -> PhpException {
         KreuzbergError::MissingDependency(_) => PhpException::default(format!("[MissingDependency] {}", message)),
         KreuzbergError::Embedding { .. } => PhpException::default(format!("[Embedding] {}", message)),
         KreuzbergError::Timeout { .. } => PhpException::default(format!("[Timeout] {}", message)),
+        KreuzbergError::Cancelled => PhpException::default(format!("[Cancelled] {}", message)),
         KreuzbergError::Other(_) => PhpException::default(format!("[Other] {}", message)),
     }
 }
@@ -95,6 +96,7 @@ fn format_error_message(error: &kreuzberg::KreuzbergError) -> String {
         KreuzbergError::Timeout { elapsed_ms, limit_ms } => {
             format!("Extraction timed out after {}ms (limit: {}ms)", elapsed_ms, limit_ms)
         }
+        KreuzbergError::Cancelled => "Extraction was cancelled".to_string(),
         KreuzbergError::Other(msg) => msg.clone(),
     }
 }

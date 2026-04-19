@@ -97,7 +97,7 @@ Any liter-llm vision-capable provider works as a VLM OCR backend:
 | Provider | Example Model |
 |----------|--------------|
 | OpenAI | `openai/gpt-4o`, `openai/gpt-4o-mini` |
-| Anthropic | `anthropic/claude-sonnet-4-20250514` |
+| Anthropic | `anthropic/claude-3-5-sonnet-20241022` |
 | Google | `google/gemini-2.0-flash` |
 | Groq | `groq/llama-3.2-90b-vision-preview` |
 | Ollama (local) | `ollama/llama3.2-vision` |

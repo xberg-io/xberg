@@ -153,9 +153,12 @@ pub struct ChunkTextParams {
     /// Number of overlapping characters between chunks (default: 100)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub overlap: Option<usize>,
-    /// Chunker type: "text" or "markdown" (default: "text")
+    /// Chunker type: "text", "markdown", "yaml", or "semantic" (default: "text")
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chunker_type: Option<String>,
+    /// Topic threshold for semantic chunking (0.0-1.0, default: 0.75)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic_threshold: Option<f32>,
 }
 
 // These param structs are constructed by the rmcp framework via serde deserialization,
@@ -374,5 +377,20 @@ mod tests {
         assert_eq!(params.max_characters, Some(500));
         assert_eq!(params.overlap, Some(50));
         assert_eq!(params.chunker_type.as_deref(), Some("markdown"));
+    }
+
+    #[test]
+    fn test_chunk_text_params_with_topic_threshold() {
+        let json = r#"{"text": "hello", "chunker_type": "semantic", "topic_threshold": 0.6}"#;
+        let params: ChunkTextParams = serde_json::from_str(json).unwrap();
+        assert_eq!(params.chunker_type.as_deref(), Some("semantic"));
+        assert_eq!(params.topic_threshold, Some(0.6));
+    }
+
+    #[test]
+    fn test_chunk_text_params_topic_threshold_defaults_to_none() {
+        let json = r#"{"text": "hello"}"#;
+        let params: ChunkTextParams = serde_json::from_str(json).unwrap();
+        assert!(params.topic_threshold.is_none());
     }
 }

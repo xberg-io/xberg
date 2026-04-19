@@ -509,10 +509,21 @@ func WithChunkingPreset(preset string) ChunkingOption {
 	}
 }
 
-// WithChunkerType sets the chunker type: "text" (default), "markdown", or "yaml".
+// WithChunkerType sets the chunker type: "text" (default), "markdown", "yaml", or "semantic".
+// Set to "semantic" for topic-aware chunking that works out of the box with sensible defaults
+// (max_chars=1000, overlap=200, topic_threshold=0.75). No other parameters needed.
 func WithChunkerType(t string) ChunkingOption {
 	return func(c *ChunkingConfig) {
 		c.ChunkerType = &t
+	}
+}
+
+// WithTopicThreshold sets the cosine similarity threshold for semantic topic
+// detection. Optional, defaults to 0.75. Only used with chunker_type "semantic"
+// and embeddings enabled. Range: 0.0-1.0. Rarely needs tuning.
+func WithTopicThreshold(threshold float64) ChunkingOption {
+	return func(c *ChunkingConfig) {
+		c.TopicThreshold = &threshold
 	}
 }
 

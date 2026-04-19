@@ -50,7 +50,7 @@ test_that("image_metadata_only", {
   result <- run_fixture(
     "image_metadata_only",
     "images/example.jpg",
-    list(ocr = NULL),
+    list(ocr = NULL, disable_ocr = TRUE),
     requirements = character(0),
     notes = NULL,
     skip_if_missing = TRUE

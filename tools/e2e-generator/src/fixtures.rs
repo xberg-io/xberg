@@ -382,6 +382,12 @@ pub struct PageAssertion {
     pub min_count: Option<usize>,
     #[serde(default)]
     pub exact_count: Option<usize>,
+    /// Assert that at least one page has layout_regions populated
+    #[serde(default)]
+    pub has_layout_regions: Option<bool>,
+    /// Assert that layout regions contain specific class names
+    #[serde(default)]
+    pub layout_classes_include: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

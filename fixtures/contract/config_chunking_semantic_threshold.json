@@ -1,0 +1,29 @@
+{
+	"id": "config_chunking_semantic_threshold",
+	"description": "Semantic chunker with explicit topic threshold on mixed-topic text",
+	"tags": ["contract", "config", "chunking"],
+	"document": {
+		"path": "semantic/mixed_topics.txt"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"chunking": {
+				"chunker_type": "semantic",
+				"topic_threshold": 0.5
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "text/plain",
+		"min_content_length": 100,
+		"chunks": {
+			"min_count": 1,
+			"each_has_content": true
+		}
+	},
+	"skip": {
+		"requires_feature": ["chunking"]
+	}
+}

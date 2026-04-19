@@ -3047,10 +3047,11 @@ pub struct ChunkingConfig {
     pub max_characters: usize,     // default: 1000, serde alias: "max_chars"
     pub overlap: usize,              // default: 200, serde alias: "max_overlap"
     pub trim: bool,                  // default: true
-    pub chunker_type: ChunkerType,   // default: ChunkerType::Text
+    pub chunker_type: ChunkerType,   // default: ChunkerType::Text; set to Semantic for out-of-the-box topic-aware chunking
     pub embedding: Option<EmbeddingConfig>,
     pub preset: Option<String>,
     pub sizing: ChunkSizing,         // default: ChunkSizing::Characters
+    pub topic_threshold: Option<f32>, // optional, defaults to 0.75; rarely needs tuning
 }
 ```
 
@@ -3062,10 +3063,11 @@ class ChunkingConfig:
     max_characters: int = 1000
     overlap: int = 200
     trim: bool = True
-    chunker_type: ChunkerType = ChunkerType.TEXT
+    chunker_type: ChunkerType = ChunkerType.TEXT  # set to "semantic" for out-of-the-box topic-aware chunking
     embedding: EmbeddingConfig | None = None
     preset: str | None = None
     sizing: ChunkSizing = ChunkSizing.CHARACTERS
+    topic_threshold: float | None = None  # optional, defaults to 0.75; rarely needs tuning
 ```
 
 #### TypeScript
@@ -3075,10 +3077,11 @@ export interface ChunkingConfig {
   maxCharacters?: number;
   overlap?: number;
   trim?: boolean;
-  chunkerType?: ChunkerType;
+  chunkerType?: ChunkerType;  // set to "semantic" for out-of-the-box topic-aware chunking
   embedding?: EmbeddingConfig;
   preset?: string;
   sizing?: ChunkSizing;
+  topicThreshold?: number;  // optional, defaults to 0.75; rarely needs tuning
 }
 ```
 
@@ -3089,10 +3092,11 @@ public record ChunkingConfig(
     int maxCharacters,
     int overlap,
     boolean trim,
-    ChunkerType chunkerType,
+    ChunkerType chunkerType,      // set to "semantic" for out-of-the-box topic-aware chunking
     Optional<EmbeddingConfig> embedding,
     Optional<String> preset,
-    ChunkSizing sizing
+    ChunkSizing sizing,
+    Optional<Double> topicThreshold  // optional, defaults to 0.75; rarely needs tuning
 ) {}
 ```
 
@@ -3100,13 +3104,14 @@ public record ChunkingConfig(
 
 ```go title="chunking_config.go"
 type ChunkingConfig struct {
-    MaxCharacters int              `json:"max_characters"`
-    Overlap       int              `json:"overlap"`
-    Trim          bool             `json:"trim"`
-    ChunkerType   ChunkerType      `json:"chunker_type"`
-    Embedding     *EmbeddingConfig `json:"embedding,omitempty"`
-    Preset        *string          `json:"preset,omitempty"`
-    Sizing        ChunkSizing      `json:"sizing"`
+    MaxCharacters  int              `json:"max_characters"`
+    Overlap        int              `json:"overlap"`
+    Trim           bool             `json:"trim"`
+    ChunkerType    ChunkerType      `json:"chunker_type"`    // set to "semantic" for out-of-the-box topic-aware chunking
+    Embedding      *EmbeddingConfig `json:"embedding,omitempty"`
+    Preset         *string          `json:"preset,omitempty"`
+    Sizing         ChunkSizing      `json:"sizing"`
+    TopicThreshold *float64         `json:"topic_threshold,omitempty"` // optional, defaults to 0.75; rarely needs tuning
 }
 ```
 
@@ -3117,6 +3122,7 @@ Chunking strategy type for text processing.
 - **Text** — Generic text splitter, splits on whitespace and punctuation
 - **Markdown** — Markdown-aware splitter, preserves formatting and structure
 - **Yaml** — YAML-aware splitter, creates one chunk per top-level key with key name prepended as context
+- **Semantic** — Topic-aware chunker that works out of the box with `chunker_type="semantic"`. Groups paragraphs by topic similarity using embeddings. Without embeddings, performs structural-only splitting. All defaults (max_characters=1000, overlap=200, topic_threshold=0.75) are tuned for typical RAG use cases.
 
 #### Rust
 
@@ -3127,6 +3133,7 @@ pub enum ChunkerType {
     Text,
     Markdown,
     Yaml,
+    Semantic,
 }
 ```
 
@@ -3139,12 +3146,13 @@ class ChunkerType(str, Enum):
     TEXT = "text"
     MARKDOWN = "markdown"
     YAML = "yaml"
+    SEMANTIC = "semantic"
 ```
 
 #### TypeScript
 
 ```typescript title="chunker_type.ts"
-export type ChunkerType = "text" | "markdown" | "yaml";
+export type ChunkerType = "text" | "markdown" | "yaml" | "semantic";
 ```
 
 #### Java
@@ -3153,7 +3161,8 @@ export type ChunkerType = "text" | "markdown" | "yaml";
 public enum ChunkerType {
     TEXT("text"),
     MARKDOWN("markdown"),
-    YAML("yaml");
+    YAML("yaml"),
+    SEMANTIC("semantic");
 
     private final String value;
 
@@ -3176,6 +3185,7 @@ const (
     ChunkerTypeText     ChunkerType = "text"
     ChunkerTypeMarkdown ChunkerType = "markdown"
     ChunkerTypeYaml     ChunkerType = "yaml"
+    ChunkerTypeSemantic ChunkerType = "semantic"
 )
 ```
 
@@ -5605,6 +5615,121 @@ export interface BoundingBox {
   y0: number;
   x1: number;
   y1: number;
+}
+```
+
+## LayoutRegion
+
+Represents a detected layout region on a page when layout detection is enabled. Identifies content types (text, pictures, tables, section headers, etc.) with spatial coordinates and confidence scores.
+
+### Rust
+
+```rust title="layout_region.rs"
+pub struct LayoutRegion {
+    pub class: String,
+    pub confidence: f64,
+    pub bounding_box: BoundingBox,
+    pub area_fraction: f64,
+}
+```
+
+### Python
+
+```python title="layout_region.py"
+class LayoutRegion(TypedDict):
+    """Detected layout region on a page."""
+    class: str
+    confidence: float
+    bounding_box: BoundingBox
+    area_fraction: float
+```
+
+### TypeScript
+
+```typescript title="layout_region.ts"
+export interface LayoutRegion {
+  class: string;
+  confidence: number;
+  boundingBox: BoundingBox;
+  areaFraction: number;
+}
+```
+
+### Ruby
+
+```ruby title="layout_region.rb"
+class Kreuzberg::LayoutRegion
+    attr_reader :class, :confidence, :bounding_box, :area_fraction
+end
+```
+
+### Java
+
+```java title="LayoutRegion.java"
+public record LayoutRegion(
+    String layoutClass,
+    double confidence,
+    BoundingBox boundingBox,
+    double areaFraction
+) {}
+```
+
+### Go
+
+```go title="layout_region.go"
+type LayoutRegion struct {
+    Class        string       `json:"class"`
+    Confidence   float64      `json:"confidence"`
+    BoundingBox  BoundingBox  `json:"bounding_box"`
+    AreaFraction float64      `json:"area_fraction"`
+}
+```
+
+### C
+
+```csharp title="LayoutRegion.cs"
+public record LayoutRegion(
+    string Class,
+    double Confidence,
+    BoundingBox BoundingBox,
+    double AreaFraction
+);
+```
+
+### PHP
+
+```php title="LayoutRegion.php"
+class LayoutRegion {
+    public string $class;
+    public float $confidence;
+    public BoundingBox $boundingBox;
+    public float $areaFraction;
+}
+```
+
+### Elixir
+
+```elixir title="layout_region.ex"
+defmodule Kreuzberg.LayoutRegion do
+  @type t :: %__MODULE__{
+    class: String.t(),
+    confidence: float(),
+    bounding_box: Kreuzberg.BoundingBox.t(),
+    area_fraction: float()
+  }
+
+  defstruct [:class, :confidence, :bounding_box, :area_fraction]
+end
+```
+
+### WASM
+
+```typescript title="layout_region.ts"
+export interface LayoutRegion {
+  class: string;
+  confidence: number;
+  boundingBox: BoundingBox;
+  areaFraction: number;
 }
 ```
 

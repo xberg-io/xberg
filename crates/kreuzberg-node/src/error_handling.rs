@@ -83,6 +83,8 @@ pub(crate) fn convert_error(err: kreuzberg::KreuzbergError) -> napi::Error {
             Error::new(Status::GenericFailure, format!("Embedding error: {}", message))
         }
 
+        KreuzbergError::Cancelled => Error::new(Status::Cancelled, "Extraction cancelled"),
+
         KreuzbergError::Other(msg) => Error::new(Status::GenericFailure, msg),
     }
 }

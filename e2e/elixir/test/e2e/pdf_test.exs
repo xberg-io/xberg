@@ -223,7 +223,7 @@ defmodule E2E.PdfTest do
       case E2E.Helpers.run_fixture(
              "pdf_layout_detection",
              "pdf/docling.pdf",
-             %{layout: %{table_model: "tatr"}, output_format: "markdown"},
+             %{layout: %{table_model: "tatr"}, output_format: "markdown", pages: %{extract_pages: true}},
              requirements: ["layout-detection"],
              notes: "Requires layout-detection feature with ONNX Runtime",
              skip_if_missing: true
@@ -232,6 +232,7 @@ defmodule E2E.PdfTest do
           result
           |> E2E.Helpers.assert_expected_mime(["application/pdf"])
           |> E2E.Helpers.assert_min_content_length(100)
+          |> E2E.Helpers.assert_pages(min_count: 1, has_layout_regions: true)
           |> E2E.Helpers.assert_content_not_empty()
 
         {:skipped, reason} ->

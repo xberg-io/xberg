@@ -114,14 +114,25 @@ readonly class ChunkingConfig
         /**
          * Type of chunker to use.
          *
-         * Supported values: "text" (default), "markdown", "yaml".
-         * The markdown chunker preserves document structure during splitting.
-         * The yaml chunker creates one chunk per top-level key.
+         * Supported values: "text" (default), "markdown", "yaml", "semantic".
+         * Set to "semantic" for topic-aware chunking that works out of the box
+         * with sensible defaults (maxChars=1000, maxOverlap=200,
+         * topicThreshold=0.75). No other parameters needed.
          *
          * @var string
          * @default "text"
          */
         public string $chunkerType = 'text',
+
+        /**
+         * Cosine similarity threshold for semantic topic detection.
+         * Optional, defaults to 0.75. Only used with chunkerType "semantic"
+         * and embeddings. Rarely needs tuning. Range: 0.0-1.0.
+         *
+         * @var float|null
+         * @default null (uses 0.75)
+         */
+        public ?float $topicThreshold = null,
 
         /**
          * Prepend heading context to each chunk for improved retrieval.
@@ -206,6 +217,11 @@ readonly class ChunkingConfig
             $chunkerType = (string) $chunkerType;
         }
 
+        /** @var float|null $topicThreshold */
+        $topicThreshold = isset($data['topic_threshold']) && is_numeric($data['topic_threshold'])
+            ? (float) $data['topic_threshold']
+            : null;
+
         /** @var bool $prependHeadingContext */
         $prependHeadingContext = $data['prepend_heading_context'] ?? false;
         if (!is_bool($prependHeadingContext)) {
@@ -223,6 +239,7 @@ readonly class ChunkingConfig
             sizingModel: $sizingModel,
             sizingCacheDir: $sizingCacheDir,
             chunkerType: $chunkerType,
+            topicThreshold: $topicThreshold,
             prependHeadingContext: $prependHeadingContext,
         );
     }
@@ -282,6 +299,7 @@ readonly class ChunkingConfig
             'respect_paragraphs' => $this->respectParagraphs,
             'embedding' => $embedding,
             'chunker_type' => $this->chunkerType !== 'text' ? $this->chunkerType : null,
+            'topic_threshold' => $this->topicThreshold,
             'sizing' => $sizing,
             'prepend_heading_context' => $this->prependHeadingContext,
         ], static fn ($value): bool => $value !== null);

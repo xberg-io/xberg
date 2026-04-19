@@ -106,6 +106,7 @@ impl ImageExtractor {
                         images: vec![],
                         hierarchy: None,
                         is_blank: None,
+                        layout_regions: None,
                     }]);
                 }
             }
@@ -129,6 +130,7 @@ impl ImageExtractor {
                     images: vec![],
                     hierarchy: None,
                     is_blank: None,
+                    layout_regions: None,
                 }]);
             }
             Ok(doc)

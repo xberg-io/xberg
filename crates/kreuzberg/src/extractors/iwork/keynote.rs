@@ -151,11 +151,14 @@ impl DocumentExtractor for KeynoteExtractor {
         &self,
         content: &[u8],
         mime_type: &str,
-        _config: &ExtractionConfig,
+        config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         let data = {
             #[cfg(feature = "tokio-runtime")]
             if crate::core::batch_mode::is_batch_mode() {
+                if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
+                    return Err(crate::error::KreuzbergError::Cancelled);
+                }
                 let content_owned = content.to_vec();
                 let span = tracing::Span::current();
                 tokio::task::spawn_blocking(move || {

@@ -229,6 +229,7 @@ type ChunkingConfig struct {
 	Embedding             *EmbeddingConfig   `json:"embedding,omitempty"`
 	Sizing                *ChunkSizingConfig `json:"sizing,omitempty"`
 	PrependHeadingContext *bool              `json:"prepend_heading_context,omitempty"`
+	TopicThreshold        *float64           `json:"topic_threshold,omitempty"`
 }
 
 // ImageExtractionConfig controls inline image extraction from PDFs/Office docs.

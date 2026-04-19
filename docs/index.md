@@ -150,9 +150,9 @@ Precompiled binaries for Linux (x86_64 & aarch64), macOS (Apple Silicon), and Wi
 
     ---
 
-    Upgrade from v3 to v4, or migrate from Unstructured.
+    Migrate from Unstructured or other document extraction libraries.
 
-    [:octicons-arrow-right-24: Migration Guide](migration/v3-to-v4.md)
+    [:octicons-arrow-right-24: Migration Guides](migration/from-unstructured.md)
 
 </div>
 

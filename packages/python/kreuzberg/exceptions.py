@@ -312,3 +312,18 @@ class ExtractionTimeoutError(KreuzbergError):
         kreuzberg.exceptions.ExtractionTimeoutError: ExtractionTimeoutError: Extraction timed out after 5000ms (limit: 3000ms)
 
     """
+
+
+class ExtractionCancelledError(KreuzbergError):
+    """Raised when an extraction is cancelled via a CancellationToken.
+
+    This occurs when the caller requests cancellation of an in-progress extraction
+    by calling ``cancel()`` on the associated ``CancellationToken``.
+
+    Example:
+        >>> raise ExtractionCancelledError("Extraction cancelled")
+        Traceback (most recent call last):
+            ...
+        kreuzberg.exceptions.ExtractionCancelledError: ExtractionCancelledError: Extraction cancelled
+
+    """

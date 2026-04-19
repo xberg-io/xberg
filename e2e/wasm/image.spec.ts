@@ -91,7 +91,7 @@ describe("image fixtures", () => {
 	it(
 		"image_metadata_only",
 		async () => {
-			const config = buildConfig({ ocr: null });
+			const config = buildConfig({ ocr: null, disable_ocr: true });
 			let result: ExtractionResult | null = null;
 			try {
 				const documentBytes = new Uint8Array(resolveDocument("images/example.jpg"));

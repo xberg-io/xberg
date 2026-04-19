@@ -467,6 +467,75 @@ defmodule E2E.ContractTest do
       end
     end
 
+    test "config_chunking_semantic" do
+      case E2E.Helpers.run_fixture(
+             "config_chunking_semantic",
+             "semantic/annual_report.txt",
+             %{chunking: %{chunker_type: "semantic"}},
+             requirements: ["chunking"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["text/plain"])
+          |> E2E.Helpers.assert_min_content_length(100)
+          |> E2E.Helpers.assert_chunks(min_count: 2, each_has_content: true)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "config_chunking_semantic_small" do
+      case E2E.Helpers.run_fixture(
+             "config_chunking_semantic_small",
+             "semantic/annual_report.txt",
+             %{chunking: %{chunker_type: "semantic", max_chars: 200}},
+             requirements: ["chunking"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["text/plain"])
+          |> E2E.Helpers.assert_min_content_length(100)
+          |> E2E.Helpers.assert_chunks(min_count: 5, each_has_content: true)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
+    test "config_chunking_semantic_threshold" do
+      case E2E.Helpers.run_fixture(
+             "config_chunking_semantic_threshold",
+             "semantic/mixed_topics.txt",
+             %{chunking: %{chunker_type: "semantic", topic_threshold: 0.5}},
+             requirements: ["chunking"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["text/plain"])
+          |> E2E.Helpers.assert_min_content_length(100)
+          |> E2E.Helpers.assert_chunks(min_count: 1, each_has_content: true)
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "config_chunking_small" do
       case E2E.Helpers.run_fixture(
              "config_chunking_small",
@@ -815,7 +884,7 @@ defmodule E2E.ContractTest do
       case E2E.Helpers.run_fixture(
              "config_html_options",
              "html/complex_table.html",
-             %{html_options: %{"extractMetadata" => true}},
+             %{html_options: %{extract_metadata: true}},
              requirements: [],
              notes: nil,
              skip_if_missing: true

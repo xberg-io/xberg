@@ -365,7 +365,13 @@ pub mod assertions {
     }
 
     /// Assert page count boundaries.
-    pub fn assert_pages(result: &ExtractionResult, min_count: Option<usize>, exact_count: Option<usize>) {
+    pub fn assert_pages(
+        result: &ExtractionResult,
+        min_count: Option<usize>,
+        exact_count: Option<usize>,
+        has_layout_regions: Option<bool>,
+        layout_classes_include: Option<&[&str]>,
+    ) {
         let pages = result.pages.as_ref().expect("Expected pages in result");
         let count = pages.len();
 
@@ -380,6 +386,30 @@ pub mod assertions {
         for page in pages {
             // is_blank should be present as Option<bool>
             let _ = page.is_blank;
+        }
+
+        if let Some(true) = has_layout_regions {
+            let found = pages.iter().any(|page| {
+                page.layout_regions.as_ref().is_some_and(|regions| !regions.is_empty())
+            });
+            assert!(found, "Expected at least one page to have layout_regions populated");
+        }
+
+        if let Some(classes) = layout_classes_include {
+            let mut all_classes = std::collections::HashSet::new();
+            for page in pages {
+                if let Some(regions) = &page.layout_regions {
+                    for region in regions {
+                        all_classes.insert(region.class.as_str());
+                    }
+                }
+            }
+            for expected_class in classes {
+                assert!(
+                    all_classes.contains(*expected_class),
+                    "Expected layout class '{expected_class}' not found in {all_classes:?}"
+                );
+            }
         }
     }
 

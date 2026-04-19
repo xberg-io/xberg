@@ -353,7 +353,9 @@ class Helpers
     public static function assertPages(
         ExtractionResult $result,
         ?int $minCount,
-        ?int $exactCount
+        ?int $exactCount,
+        ?bool $hasLayoutRegions,
+        ?array $layoutClassesInclude
     ): void {
         $pages = $result->pages ?? [];
         $count = count($pages);
@@ -379,6 +381,45 @@ class Helpers
                 Assert::assertTrue(
                     $page->isBlank === null || is_bool($page->isBlank),
                     'isBlank should be null or bool'
+                );
+            }
+        }
+
+        if ($hasLayoutRegions === true) {
+            $foundLayoutRegions = false;
+            foreach ($pages as $page) {
+                if (
+                    property_exists($page, 'layoutRegions')
+                    && $page->layoutRegions !== null
+                    && count($page->layoutRegions) > 0
+                ) {
+                    $foundLayoutRegions = true;
+                    break;
+                }
+            }
+            Assert::assertTrue(
+                $foundLayoutRegions,
+                'Expected at least one page to have layout_regions populated'
+            );
+        }
+
+        if ($layoutClassesInclude !== null && count($layoutClassesInclude) > 0) {
+            $allClasses = new \SplFixedArray(0);
+            $allClasses = [];
+            foreach ($pages as $page) {
+                if (property_exists($page, 'layoutRegions') && $page->layoutRegions !== null) {
+                    foreach ($page->layoutRegions as $region) {
+                        if (property_exists($region, 'class')) {
+                            $allClasses[$region->class] = true;
+                        }
+                    }
+                }
+            }
+            foreach ($layoutClassesInclude as $expectedClass) {
+                Assert::assertArrayHasKey(
+                    $expectedClass,
+                    $allClasses,
+                    sprintf("Expected layout class '%s' not found", $expectedClass)
                 );
             }
         }
@@ -1432,10 +1473,19 @@ fn render_assertions(assertions: &Assertions) -> String {
             .exact_count
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".to_string());
+        let has_layout = pages
+            .has_layout_regions
+            .map(|v| if v { "true" } else { "false" }.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let layout_classes = pages
+            .layout_classes_include
+            .as_ref()
+            .map(|c| render_string_array(c))
+            .unwrap_or_else(|| "null".to_string());
         writeln!(
             buffer,
-            "        Helpers::assertPages($result, {}, {});",
-            min_count, exact_count
+            "        Helpers::assertPages($result, {}, {}, {}, {});",
+            min_count, exact_count, has_layout, layout_classes
         )
         .unwrap();
     }

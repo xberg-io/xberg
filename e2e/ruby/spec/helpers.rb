@@ -293,7 +293,7 @@ module E2ERuby
       end
     end
 
-    def self.assert_pages(result, min_count: nil, exact_count: nil)
+    def self.assert_pages(result, min_count: nil, exact_count: nil, has_layout_regions: nil, layout_classes_include: nil)
       pages = Array(result.pages)
       expect(pages.length).to be >= min_count if min_count
       expect(pages.length).to eq(exact_count) if exact_count
@@ -301,6 +301,25 @@ module E2ERuby
         if page.respond_to?(:is_blank)
           expect(page.is_blank).to be_nil.or be(true).or be(false)
         end
+      end
+
+      if has_layout_regions
+        found_layout_regions = pages.any? do |page|
+          page.respond_to?(:layout_regions) && !Array(page.layout_regions).empty?
+        end
+        expect(found_layout_regions).to be(true)
+      end
+
+      return unless layout_classes_include
+      all_classes = Set.new
+      pages.each do |page|
+        next unless page.respond_to?(:layout_regions) && page.layout_regions
+        Array(page.layout_regions).each do |region|
+          all_classes.add(region.class) if region.respond_to?(:class)
+        end
+      end
+      layout_classes_include.each do |expected_class|
+        expect(all_classes.include?(expected_class)).to be(true)
       end
     end
 
@@ -427,6 +446,14 @@ module E2ERuby
       return unless max_count
 
       expect(warnings.length).to be <= max_count
+    end
+
+    def self.assert_llm_usage(result, max_count: nil, is_empty: nil)
+      usage = Array(result.llm_usage)
+      expect(usage).to be_empty if is_empty == true
+      return unless max_count
+
+      expect(usage.length).to be <= max_count
     end
 
     def self.assert_djot_content(result, has_content: nil, min_blocks: nil)

@@ -488,6 +488,78 @@ describe("contract fixtures", () => {
 	);
 
 	it(
+		"config_chunking_semantic",
+		async () => {
+			const config = buildConfig({ chunking: { chunker_type: "semantic" } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("semantic/annual_report.txt"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			assertions.assertChunks(result, 2, null, true, null, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_semantic_small",
+		async () => {
+			const config = buildConfig({ chunking: { chunker_type: "semantic", max_chars: 200 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("semantic/annual_report.txt"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic_small", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			assertions.assertChunks(result, 5, null, true, null, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_semantic_threshold",
+		async () => {
+			const config = buildConfig({ chunking: { chunker_type: "semantic", topic_threshold: 0.5 } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("semantic/mixed_topics.txt"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic_threshold", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			assertions.assertChunks(result, 1, null, true, null, null, null, null);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"config_chunking_small",
 		async () => {
 			const config = buildConfig({ chunking: { max_chars: 100, max_overlap: 20 } });
@@ -822,7 +894,7 @@ describe("contract fixtures", () => {
 	it(
 		"config_html_options",
 		async () => {
-			const config = buildConfig({ html_options: { extractMetadata: true } });
+			const config = buildConfig({ html_options: { extract_metadata: true } });
 			let result: ExtractionResult | null = null;
 			try {
 				const documentBytes = new Uint8Array(resolveDocument("html/complex_table.html"));
@@ -1085,7 +1157,7 @@ describe("contract fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			assertions.assertPages(result, null, 5);
+			assertions.assertPages(result, null, 5, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -1109,7 +1181,7 @@ describe("contract fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			assertions.assertPages(result, 1, null);
+			assertions.assertPages(result, 1, null, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);

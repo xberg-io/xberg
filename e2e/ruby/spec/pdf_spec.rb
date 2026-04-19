@@ -180,7 +180,7 @@ RSpec.describe 'pdf fixtures' do
     E2ERuby.run_fixture(
       'pdf_layout_detection',
       'pdf/docling.pdf',
-      { layout: { table_model: 'tatr' }, output_format: 'markdown' },
+      { layout: { table_model: 'tatr' }, output_format: 'markdown', pages: { extract_pages: true } },
       requirements: %w[layout-detection],
       notes: 'Requires layout-detection feature with ONNX Runtime',
       skip_if_missing: true
@@ -190,6 +190,7 @@ RSpec.describe 'pdf fixtures' do
         ['application/pdf']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 100)
+      E2ERuby::Assertions.assert_pages(result, min_count: 1, has_layout_regions: true)
       E2ERuby::Assertions.assert_content_not_empty(result)
     end
   end

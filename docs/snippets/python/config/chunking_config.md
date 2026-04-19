@@ -43,6 +43,21 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+```python title="Python - Semantic"
+import asyncio
+from kreuzberg import ExtractionConfig, ChunkingConfig, extract_file
+
+async def main() -> None:
+    config: ExtractionConfig = ExtractionConfig(
+        chunking=ChunkingConfig(chunker_type="semantic")
+    )
+    result = await extract_file("document.pdf", config=config)
+    for chunk in result.chunks or []:
+        print(f"Content: {chunk.content[:100]}...")
+
+asyncio.run(main())
+```
+
 ```python title="Python - Prepend Heading Context"
 import asyncio
 from kreuzberg import ExtractionConfig, ChunkingConfig, extract_file

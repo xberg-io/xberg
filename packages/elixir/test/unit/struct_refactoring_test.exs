@@ -191,6 +191,59 @@ defmodule KreuzbergTest.Unit.StructRefactoringTest do
     end
   end
 
+  describe "LayoutRegion struct" do
+    test "creates layout region from map" do
+      map = %{
+        "class" => "picture",
+        "confidence" => 0.95,
+        "bounding_box" => %{"x0" => 10.0, "y0" => 20.0, "x1" => 200.0, "y1" => 300.0},
+        "area_fraction" => 0.3
+      }
+
+      region = Kreuzberg.LayoutRegion.from_map(map)
+
+      assert region.class == "picture"
+      assert region.confidence == 0.95
+      assert region.bounding_box == %{"x0" => 10.0, "y0" => 20.0, "x1" => 200.0, "y1" => 300.0}
+      assert region.area_fraction == 0.3
+      assert is_struct(region, Kreuzberg.LayoutRegion)
+    end
+
+    test "converts layout region to map" do
+      region = %Kreuzberg.LayoutRegion{
+        class: "table",
+        confidence: 0.88,
+        bounding_box: nil,
+        area_fraction: 0.15
+      }
+
+      map = Kreuzberg.LayoutRegion.to_map(region)
+
+      assert map["class"] == "table"
+      assert map["confidence"] == 0.88
+      assert map["bounding_box"] == nil
+      assert map["area_fraction"] == 0.15
+    end
+
+    test "uses default values for missing fields" do
+      region = Kreuzberg.LayoutRegion.from_map(%{})
+
+      assert region.class == ""
+      assert region.confidence == 0.0
+      assert region.bounding_box == nil
+      assert region.area_fraction == 0.0
+    end
+
+    test "coerces integer confidence and area_fraction to float" do
+      region = Kreuzberg.LayoutRegion.from_map(%{"confidence" => 1, "area_fraction" => 0})
+
+      assert is_float(region.confidence)
+      assert is_float(region.area_fraction)
+      assert region.confidence == 1.0
+      assert region.area_fraction == 0.0
+    end
+  end
+
   describe "Page struct" do
     test "creates page struct with from_map" do
       page = Kreuzberg.Page.from_map(%{"page_number" => 1, "content" => "Page content"})
@@ -222,6 +275,77 @@ defmodule KreuzbergTest.Unit.StructRefactoringTest do
 
       assert map["page_number"] == 3
       assert map["content"] == "content"
+    end
+
+    test "layout_regions defaults to nil when absent from map" do
+      page = Kreuzberg.Page.from_map(%{"page_number" => 0, "content" => ""})
+
+      assert page.layout_regions == nil
+    end
+
+    test "normalizes layout_regions from maps on from_map" do
+      map = %{
+        "page_number" => 0,
+        "content" => "text",
+        "layout_regions" => [
+          %{"class" => "picture", "confidence" => 0.9, "area_fraction" => 0.25},
+          %{"class" => "text", "confidence" => 0.98, "area_fraction" => 0.6}
+        ]
+      }
+
+      page = Kreuzberg.Page.from_map(map)
+
+      assert is_list(page.layout_regions)
+      assert length(page.layout_regions) == 2
+
+      [first, second] = page.layout_regions
+
+      assert is_struct(first, Kreuzberg.LayoutRegion)
+      assert first.class == "picture"
+      assert first.confidence == 0.9
+
+      assert is_struct(second, Kreuzberg.LayoutRegion)
+      assert second.class == "text"
+    end
+
+    test "preserves existing LayoutRegion structs in normalize" do
+      region = %Kreuzberg.LayoutRegion{class: "diagram", confidence: 0.75, area_fraction: 0.1}
+
+      page =
+        Kreuzberg.Page.from_map(%{
+          "page_number" => 1,
+          "content" => "text",
+          "layout_regions" => [region]
+        })
+
+      assert [^region] = page.layout_regions
+    end
+
+    test "serializes layout_regions to maps in to_map" do
+      region = %Kreuzberg.LayoutRegion{class: "table", confidence: 0.85, area_fraction: 0.2}
+      page = %Kreuzberg.Page{page_number: 0, content: "text", layout_regions: [region]}
+
+      map = Kreuzberg.Page.to_map(page)
+
+      assert [region_map] = map["layout_regions"]
+      assert region_map["class"] == "table"
+      assert region_map["confidence"] == 0.85
+    end
+
+    test "serializes nil layout_regions as nil in to_map" do
+      page = %Kreuzberg.Page{page_number: 0, content: "text", layout_regions: nil}
+
+      map = Kreuzberg.Page.to_map(page)
+
+      assert map["layout_regions"] == nil
+    end
+
+    test "serializes empty layout_regions list in to_map" do
+      page = %Kreuzberg.Page{page_number: 0, content: "text", layout_regions: []}
+
+      map = Kreuzberg.Page.to_map(page)
+
+      assert map["layout_regions"] == []
     end
   end
 

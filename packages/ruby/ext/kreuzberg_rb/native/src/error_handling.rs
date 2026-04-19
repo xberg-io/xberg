@@ -108,6 +108,13 @@ pub fn kreuzberg_error(err: KreuzbergError) -> Error {
                 Error::new(ruby.exception_runtime_error(), format!("EmbeddingError: {}", message))
             }
         }
+        KreuzbergError::Cancelled => {
+            if let Some(class) = fetch_error_class("CancelledError") {
+                Error::new(class, "Extraction cancelled")
+            } else {
+                Error::new(ruby.exception_runtime_error(), "Extraction cancelled")
+            }
+        }
         other => Error::new(ruby.exception_runtime_error(), other.to_string()),
     }
 }

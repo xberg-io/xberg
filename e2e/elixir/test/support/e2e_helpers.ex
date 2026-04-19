@@ -487,6 +487,37 @@ defmodule E2E.Helpers do
       assert is_blank == nil or is_boolean(is_blank), "is_blank should be nil or boolean"
     end)
 
+    if opts[:has_layout_regions] do
+      found_layout_regions =
+        Enum.any?(pages, fn page ->
+          layout_regions = Map.get(page, :layout_regions) || []
+          length(layout_regions) > 0
+        end)
+
+      if !found_layout_regions do
+        flunk("Expected at least one page to have layout_regions populated")
+      end
+    end
+
+    if opts[:layout_classes_include] do
+      all_classes =
+        pages
+        |> Enum.flat_map(fn page ->
+          layout_regions = Map.get(page, :layout_regions) || []
+
+          Enum.map(layout_regions, fn region ->
+            Map.get(region, :class)
+          end)
+        end)
+        |> Enum.uniq()
+
+      Enum.each(opts[:layout_classes_include], fn expected_class ->
+        if !Enum.member?(all_classes, expected_class) do
+          flunk("Expected layout class '#{expected_class}' not found in #{inspect(all_classes)}")
+        end
+      end)
+    end
+
     result
   end
 
@@ -717,6 +748,24 @@ defmodule E2E.Helpers do
     if opts[:is_empty] == true do
       if length(warnings) != 0 do
         flunk("Expected empty processing_warnings, got #{length(warnings)}")
+      end
+    end
+
+    result
+  end
+
+  def assert_llm_usage(result, opts) do
+    usage = Map.get(result, :llm_usage) || Map.get(result, "llm_usage") || []
+
+    if opts[:max_count] do
+      if length(usage) > opts[:max_count] do
+        flunk("llm_usage count #{length(usage)} > #{opts[:max_count]}")
+      end
+    end
+
+    if opts[:is_empty] == true do
+      if length(usage) != 0 do
+        flunk("Expected empty llm_usage, got #{length(usage)}")
       end
     end
 

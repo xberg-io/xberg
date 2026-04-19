@@ -14,6 +14,11 @@ use std::path::PathBuf;
 /// * `Text` - Generic text splitter, splits on whitespace and punctuation
 /// * `Markdown` - Markdown-aware splitter, preserves formatting and structure
 /// * `Yaml` - YAML-aware splitter, creates one chunk per top-level key
+/// * `Semantic` - Topic-aware chunker that splits at natural document boundaries
+///   (headers, paragraph breaks, topic shifts). Works out of the box with no extra
+///   configuration. Optionally add an `EmbeddingConfig` for embedding-based topic
+///   detection; `topic_threshold` (default 0.75) and `max_characters` (default 1000)
+///   are automatically applied when not specified.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ChunkerType {
@@ -21,6 +26,7 @@ pub enum ChunkerType {
     Text,
     Markdown,
     Yaml,
+    Semantic,
 }
 
 /// How chunk size is measured.
@@ -167,6 +173,16 @@ pub struct ChunkingConfig {
     /// Default: `false`
     #[serde(default)]
     pub prepend_heading_context: bool,
+
+    /// Optional cosine similarity threshold for semantic topic boundary detection.
+    ///
+    /// Only used when `chunker_type` is `Semantic` and an `EmbeddingConfig` is
+    /// provided. You almost never need to set this. When omitted, defaults to
+    /// `0.75` which works well for most documents. Lower values detect more
+    /// topic boundaries (more, smaller chunks); higher values detect fewer.
+    /// Range: `0.0..=1.0`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topic_threshold: Option<f32>,
 }
 
 impl ChunkingConfig {
@@ -183,6 +199,7 @@ impl ChunkingConfig {
             preset: None,
             sizing: ChunkSizing::default(),
             prepend_heading_context: false,
+            topic_threshold: None,
         }
     }
 
@@ -201,6 +218,20 @@ impl ChunkingConfig {
     /// Enable or disable prepending heading context to chunk content.
     pub fn with_prepend_heading_context(mut self, prepend: bool) -> Self {
         self.prepend_heading_context = prepend;
+        self
+    }
+
+    /// Set the cosine similarity threshold for semantic topic boundary detection.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `threshold` is outside `[0.0, 1.0]`.
+    pub fn with_topic_threshold(mut self, threshold: f32) -> Self {
+        assert!(
+            (0.0..=1.0).contains(&threshold),
+            "topic_threshold must be in [0.0, 1.0], got {threshold}"
+        );
+        self.topic_threshold = Some(threshold);
         self
     }
 
@@ -254,6 +285,7 @@ impl ChunkingConfig {
             preset: self.preset.clone(),
             sizing: self.sizing.clone(),
             prepend_heading_context: self.prepend_heading_context,
+            topic_threshold: self.topic_threshold,
         }
     }
 
@@ -278,6 +310,7 @@ impl Default for ChunkingConfig {
             preset: None,
             sizing: ChunkSizing::default(),
             prepend_heading_context: false,
+            topic_threshold: None,
         }
     }
 }
@@ -614,6 +647,27 @@ mod tests {
             }
             _ => panic!("Expected Llm variant"),
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "topic_threshold must be in [0.0, 1.0]")]
+    fn test_with_topic_threshold_panics_above_one() {
+        ChunkingConfig::default().with_topic_threshold(1.1);
+    }
+
+    #[test]
+    #[should_panic(expected = "topic_threshold must be in [0.0, 1.0]")]
+    fn test_with_topic_threshold_panics_below_zero() {
+        ChunkingConfig::default().with_topic_threshold(-0.1);
+    }
+
+    #[test]
+    fn test_with_topic_threshold_accepts_boundary_values() {
+        let config = ChunkingConfig::default().with_topic_threshold(0.0);
+        assert_eq!(config.topic_threshold, Some(0.0));
+
+        let config = ChunkingConfig::default().with_topic_threshold(1.0);
+        assert_eq!(config.topic_threshold, Some(1.0));
     }
 
     /// Tests Custom model type deserialization.

@@ -189,12 +189,15 @@ def test_pdf_layout_detection() -> None:
         pytest.skip(f"Skipping pdf_layout_detection: missing document at {document_path}")
 
     try:
-        config = helpers.build_config({"layout": {"table_model": "tatr"}, "output_format": "markdown"})
+        config = helpers.build_config(
+            {"layout": {"table_model": "tatr"}, "output_format": "markdown", "pages": {"extract_pages": True}}
+        )
 
         result = extract_file_sync(document_path, None, config)
 
         helpers.assert_expected_mime(result, ["application/pdf"])
         helpers.assert_min_content_length(result, 100)
+        helpers.assert_pages(result, min_count=1, has_layout_regions=True)
         helpers.assert_content_not_empty(result)
     except Exception as exc:
         if (

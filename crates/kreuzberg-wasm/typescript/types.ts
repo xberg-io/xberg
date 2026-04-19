@@ -607,8 +607,10 @@ export interface ChunkingConfig {
 	maxOverlap?: number;
 	/** Named preset for chunking strategy (e.g., "balanced", "fast", "semantic") */
 	preset?: string;
-	/** Chunker type: "text" (default), "markdown", or "yaml" */
-	chunkerType?: string;
+	/** Chunker type: "text" (default), "markdown", "yaml", or "semantic".
+	 * Set to "semantic" for topic-aware chunking that works out of the box
+	 * with sensible defaults. No other parameters needed. */
+	chunkerType?: "text" | "markdown" | "yaml" | "semantic";
 	/** Sizing type: "characters" (default) or "tokenizer" */
 	sizingType?: "characters" | "tokenizer";
 	/** HuggingFace model ID for tokenizer sizing (e.g., "Xenova/gpt-4o") */
@@ -617,6 +619,9 @@ export interface ChunkingConfig {
 	sizingCacheDir?: string;
 	/** Prepend heading context to each chunk when using markdown chunker. Default: false */
 	prependHeadingContext?: boolean;
+	/** Cosine similarity threshold for semantic topic detection (0.0-1.0).
+	 * Optional, defaults to 0.75. Rarely needs tuning. */
+	topicThreshold?: number;
 }
 
 /**
@@ -1072,6 +1077,23 @@ export interface PageHierarchy {
 }
 
 /**
+ * A detected layout region on a page.
+ *
+ * Produced by layout detection models when layout analysis is enabled.
+ * Each region represents a semantically classified area of the page.
+ */
+export interface LayoutRegion {
+	/** Layout class name (e.g. "picture", "table", "text", "section_header") */
+	class: string;
+	/** Confidence score from the layout detection model (0.0 to 1.0) */
+	confidence: number;
+	/** Bounding box in document coordinate space */
+	boundingBox: BoundingBox;
+	/** Fraction of the page area covered by this region (0.0 to 1.0) */
+	areaFraction: number;
+}
+
+/**
  * Per-page content
  */
 export interface PageContent {
@@ -1087,6 +1109,8 @@ export interface PageContent {
 	hierarchy?: PageHierarchy | null;
 	/** Whether this page is blank (contains no meaningful content) */
 	isBlank?: boolean;
+	/** Layout detection regions for this page (when layout detection is enabled) */
+	layoutRegions?: LayoutRegion[];
 }
 
 /**

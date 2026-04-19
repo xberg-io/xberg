@@ -326,8 +326,7 @@ jobs:
               - 'fixtures/**'
             wasm:
               - 'crates/kreuzberg-wasm/**'
-              - 'e2e/wasm-deno/**'
-              - 'e2e/wasm-workers/**'
+              - 'e2e/wasm/**'
               - 'fixtures/**'
             docker:
               - 'Dockerfile*'

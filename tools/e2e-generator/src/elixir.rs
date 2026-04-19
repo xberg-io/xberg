@@ -476,6 +476,36 @@ defmodule E2E.Helpers do
       assert is_blank == nil or is_boolean(is_blank), "is_blank should be nil or boolean"
     end)
 
+    if opts[:has_layout_regions] do
+      found_layout_regions =
+        Enum.any?(pages, fn page ->
+          layout_regions = Map.get(page, :layout_regions) || []
+          length(layout_regions) > 0
+        end)
+
+      if !found_layout_regions do
+        flunk("Expected at least one page to have layout_regions populated")
+      end
+    end
+
+    if opts[:layout_classes_include] do
+      all_classes =
+        pages
+        |> Enum.flat_map(fn page ->
+          layout_regions = Map.get(page, :layout_regions) || []
+          Enum.map(layout_regions, fn region ->
+            Map.get(region, :class)
+          end)
+        end)
+        |> Enum.uniq()
+
+      Enum.each(opts[:layout_classes_include], fn expected_class ->
+        if !Enum.member?(all_classes, expected_class) do
+          flunk("Expected layout class '#{expected_class}' not found in #{inspect(all_classes)}")
+        end
+      end)
+    end
+
     result
   end
 
@@ -1448,6 +1478,12 @@ fn render_assertions(assertions: &Assertions) -> String {
         }
         if let Some(exact) = pages.exact_count {
             args.push(format!("exact_count: {}", render_numeric_literal(exact as u64)));
+        }
+        if let Some(has_layout) = pages.has_layout_regions {
+            args.push(format!("has_layout_regions: {}", has_layout));
+        }
+        if let Some(classes) = pages.layout_classes_include.as_ref() {
+            args.push(format!("layout_classes_include: {}", render_string_list(classes)));
         }
         if !args.is_empty() {
             pipes.push(format!("E2E.Helpers.assert_pages({})", args.join(", ")));

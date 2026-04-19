@@ -4,6 +4,7 @@
 //! Go (cgo), C# (P/Invoke), Zig, and other languages with C FFI support.
 
 mod batch_streaming;
+mod cancellation;
 mod config;
 mod config_builder;
 mod embedding;
@@ -28,6 +29,10 @@ mod validation;
 pub use batch_streaming::{
     ErrorCallback, ResultCallback, kreuzberg_extract_batch_parallel, kreuzberg_extract_batch_streaming,
 };
+pub use cancellation::{
+    CancellationToken as CFfiCancellationToken, kreuzberg_cancel_token_cancel, kreuzberg_cancel_token_free,
+    kreuzberg_cancel_token_is_cancelled, kreuzberg_cancel_token_new,
+};
 pub use embedding::kreuzberg_embed;
 
 pub use config::{
@@ -46,10 +51,11 @@ pub use config_builder::{
 };
 pub use error::ErrorCode as KreuzbergErrorCode;
 pub use error::{
-    CErrorDetails, kreuzberg_classify_error, kreuzberg_error_code_count, kreuzberg_error_code_description,
-    kreuzberg_error_code_internal, kreuzberg_error_code_io, kreuzberg_error_code_missing_dependency,
-    kreuzberg_error_code_name, kreuzberg_error_code_ocr, kreuzberg_error_code_parsing, kreuzberg_error_code_plugin,
-    kreuzberg_error_code_unsupported_format, kreuzberg_error_code_validation, kreuzberg_get_error_details,
+    CErrorDetails, kreuzberg_classify_error, kreuzberg_error_code_cancelled, kreuzberg_error_code_count,
+    kreuzberg_error_code_description, kreuzberg_error_code_internal, kreuzberg_error_code_io,
+    kreuzberg_error_code_missing_dependency, kreuzberg_error_code_name, kreuzberg_error_code_ocr,
+    kreuzberg_error_code_parsing, kreuzberg_error_code_plugin, kreuzberg_error_code_unsupported_format,
+    kreuzberg_error_code_validation, kreuzberg_get_error_details,
 };
 pub use extraction::{
     kreuzberg_batch_extract_bytes_sync, kreuzberg_batch_extract_files_sync, kreuzberg_extract_bytes_sync,

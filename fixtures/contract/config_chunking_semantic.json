@@ -1,0 +1,28 @@
+{
+	"id": "config_chunking_semantic",
+	"description": "Semantic chunker with defaults on a multi-section document",
+	"tags": ["contract", "config", "chunking"],
+	"document": {
+		"path": "semantic/annual_report.txt"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"chunking": {
+				"chunker_type": "semantic"
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "text/plain",
+		"min_content_length": 100,
+		"chunks": {
+			"min_count": 2,
+			"each_has_content": true
+		}
+	},
+	"skip": {
+		"requires_feature": ["chunking"]
+	}
+}

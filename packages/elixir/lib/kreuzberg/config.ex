@@ -981,8 +981,62 @@ defmodule Kreuzberg.ExtractionConfig do
   defp validate_chunking_config(config) when is_map(config) do
     with :ok <- validate_positive_integer(config, "max_chars"),
          :ok <- validate_positive_integer(config, "max_overlap"),
-         :ok <- validate_optional_boolean(config, "prepend_heading_context") do
+         :ok <- validate_optional_boolean(config, "prepend_heading_context"),
+         :ok <- validate_chunker_type(config),
+         :ok <- validate_topic_threshold(config) do
       validate_overlap_not_exceeding_max_chars(config)
+    end
+  end
+
+  @doc false
+  defp validate_chunker_type(config) do
+    value = Map.get(config, "chunker_type") || Map.get(config, :chunker_type)
+
+    case value do
+      nil ->
+        :ok
+
+      v when is_binary(v) ->
+        case String.downcase(v) do
+          "text" ->
+            :ok
+
+          "markdown" ->
+            :ok
+
+          "yaml" ->
+            :ok
+
+          "semantic" ->
+            :ok
+
+          _invalid ->
+            {:error,
+             "Field 'chunker_type' must be one of: text, markdown, yaml, semantic, got: #{v}"}
+        end
+
+      v ->
+        {:error, "Field 'chunker_type' must be a string, got: #{type_name(v)}"}
+    end
+  end
+
+  @doc false
+  defp validate_topic_threshold(config) do
+    value = Map.get(config, "topic_threshold") || Map.get(config, :topic_threshold)
+
+    case value do
+      nil ->
+        :ok
+
+      v when is_number(v) and v >= 0.0 and v <= 1.0 ->
+        :ok
+
+      v when is_number(v) ->
+        {:error, "Field 'topic_threshold' must be between 0.0 and 1.0, got: #{v}"}
+
+      v ->
+        {:error,
+         "Field 'topic_threshold' must be a number between 0.0 and 1.0, got: #{type_name(v)}"}
     end
   end
 

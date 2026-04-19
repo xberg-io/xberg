@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import type { ExtractionResult } from "@kreuzberg/node";
 import { extractFileSync } from "@kreuzberg/node";
 import { describe, it } from "vitest";
-import { assertions, buildConfig, resolveDocument, shouldSkipFixture } from "./helpers.js";
+import { assertions, buildConfig, chunkAssertions, resolveDocument, shouldSkipFixture } from "./helpers.js";
 
 const TEST_TIMEOUT_MS = 60_000;
 
@@ -304,7 +304,11 @@ describe("pdf fixtures", () => {
 				console.warn("Notes: Requires layout-detection feature with ONNX Runtime");
 				return;
 			}
-			const config = buildConfig({ layout: { table_model: "tatr" }, output_format: "markdown" });
+			const config = buildConfig({
+				layout: { table_model: "tatr" },
+				output_format: "markdown",
+				pages: { extract_pages: true },
+			});
 			let result: ExtractionResult | null = null;
 			try {
 				result = extractFileSync(documentPath, null, config);
@@ -326,6 +330,7 @@ describe("pdf fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 100);
+			chunkAssertions.assertPages(result, 1, null, true, null);
 			assertions.assertContentNotEmpty(result);
 		},
 		TEST_TIMEOUT_MS,

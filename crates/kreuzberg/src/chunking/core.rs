@@ -82,6 +82,11 @@ pub fn chunk_text_with_heading_source(
         return super::yaml_section::chunk_yaml_by_sections(text, config);
     }
 
+    // Semantic chunker has its own pipeline (segment → topic detect → merge).
+    if config.chunker_type == ChunkerType::Semantic {
+        return super::semantic::chunk_semantic(text, config, page_boundaries);
+    }
+
     let text_chunks: Vec<&str> = match &config.sizing {
         #[cfg(feature = "chunking-tokenizers")]
         crate::core::config::ChunkSizing::Tokenizer { model, .. } => {
@@ -182,7 +187,9 @@ fn split_with_config<'a, S: ChunkSizer>(
     config: text_splitter::ChunkConfig<S>,
 ) -> Vec<&'a str> {
     match chunker_type {
-        ChunkerType::Text | ChunkerType::Yaml => TextSplitter::new(config).chunks(text).collect(),
+        ChunkerType::Text | ChunkerType::Yaml | ChunkerType::Semantic => {
+            TextSplitter::new(config).chunks(text).collect()
+        }
         ChunkerType::Markdown => MarkdownSplitter::new(config).chunks(text).collect(),
     }
 }

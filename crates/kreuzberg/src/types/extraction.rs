@@ -556,7 +556,7 @@ pub enum ElementType {
 }
 
 /// Bounding box coordinates for element positioning.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "api", derive(utoipa::ToSchema))]
 pub struct BoundingBox {
     /// Left x-coordinate

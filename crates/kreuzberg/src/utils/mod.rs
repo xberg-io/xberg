@@ -12,6 +12,7 @@ pub mod quality;
 pub mod string_utils;
 
 pub mod json_utils;
+pub mod markdown_utils;
 pub mod pool;
 pub mod pool_sizing;
 pub mod string_pool;

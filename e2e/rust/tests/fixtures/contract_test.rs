@@ -660,6 +660,185 @@ fn test_config_chunking_prepend_heading_context() {
 }
 
 #[test]
+fn test_config_chunking_semantic() {
+    // Semantic chunker with defaults on a multi-section document
+
+    let document_path = resolve_document("semantic/annual_report.txt");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_chunking_semantic: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "chunking": {
+    "chunker_type": "semantic"
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!("Skipping config_chunking_semantic: missing dependency {dep}", dep = dep);
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_chunking_semantic: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_semantic: parsing dependency unavailable: {msg}");
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_chunking_semantic: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["text/plain"]);
+    assertions::assert_min_content_length(&result, 100);
+    assertions::assert_chunks(
+        &result,
+        &assertions::ChunkAssertions {
+            min_count: Some(2),
+            max_count: None,
+            each_has_content: Some(true),
+            each_has_embedding: None,
+            each_has_heading_context: None,
+            each_has_chunk_type: None,
+            content_starts_with_heading: None,
+        },
+    );
+}
+
+#[test]
+fn test_config_chunking_semantic_small() {
+    // Semantic chunker with small budget produces more granular chunks
+
+    let document_path = resolve_document("semantic/annual_report.txt");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_chunking_semantic_small: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "chunking": {
+    "chunker_type": "semantic",
+    "max_chars": 200
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_chunking_semantic_small: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_chunking_semantic_small: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_semantic_small: parsing dependency unavailable: {msg}");
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_chunking_semantic_small: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["text/plain"]);
+    assertions::assert_min_content_length(&result, 100);
+    assertions::assert_chunks(
+        &result,
+        &assertions::ChunkAssertions {
+            min_count: Some(5),
+            max_count: None,
+            each_has_content: Some(true),
+            each_has_embedding: None,
+            each_has_heading_context: None,
+            each_has_chunk_type: None,
+            content_starts_with_heading: None,
+        },
+    );
+}
+
+#[test]
+fn test_config_chunking_semantic_threshold() {
+    // Semantic chunker with explicit topic threshold on mixed-topic text
+
+    let document_path = resolve_document("semantic/mixed_topics.txt");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_chunking_semantic_threshold: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "chunking": {
+    "chunker_type": "semantic",
+    "topic_threshold": 0.5
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_chunking_semantic_threshold: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_chunking_semantic_threshold: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_chunking_semantic_threshold: parsing dependency unavailable: {msg}");
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_chunking_semantic_threshold: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["text/plain"]);
+    assertions::assert_min_content_length(&result, 100);
+    assertions::assert_chunks(
+        &result,
+        &assertions::ChunkAssertions {
+            min_count: Some(1),
+            max_count: None,
+            each_has_content: Some(true),
+            each_has_embedding: None,
+            each_has_heading_context: None,
+            each_has_chunk_type: None,
+            content_starts_with_heading: None,
+        },
+    );
+}
+
+#[test]
 fn test_config_chunking_small() {
     // Tests chunking with very small chunk size produces more chunks
 
@@ -1981,7 +2160,7 @@ fn test_config_pages_exact_count() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_pages(&result, None, Some(5));
+    assertions::assert_pages(&result, None, Some(5), None, None);
 }
 
 #[test]
@@ -2027,7 +2206,7 @@ fn test_config_pages_extract() {
 
     assertions::assert_expected_mime(&result, &["application/pdf"]);
     assertions::assert_min_content_length(&result, 10);
-    assertions::assert_pages(&result, Some(1), None);
+    assertions::assert_pages(&result, Some(1), None, None, None);
 }
 
 #[test]

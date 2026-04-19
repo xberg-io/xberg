@@ -16,12 +16,14 @@ namespace Kreuzberg\Types;
  * @property-read array<ExtractedImage> $images Images found on this page
  * @property-read ?PageHierarchy $hierarchy Hierarchy information for the page
  * @property-read ?bool $isBlank Whether this page is blank
+ * @property-read array<LayoutRegion> $layoutRegions Layout regions detected on this page
  */
 readonly class PageContent
 {
     /**
      * @param array<Table> $tables
      * @param array<ExtractedImage> $images
+     * @param array<LayoutRegion> $layoutRegions
      */
     public function __construct(
         public int $pageNumber,
@@ -30,6 +32,7 @@ readonly class PageContent
         public array $images = [],
         public ?PageHierarchy $hierarchy = null,
         public ?bool $isBlank = null,
+        public array $layoutRegions = [],
     ) {
     }
 
@@ -56,6 +59,11 @@ readonly class PageContent
         /** @var ?bool $isBlank */
         $isBlank = isset($data['is_blank']) && is_bool($data['is_blank']) ? $data['is_blank'] : null;
 
+        /** @var array<array<string, mixed>> $layoutRegionsData */
+        $layoutRegionsData = isset($data['layout_regions']) && is_array($data['layout_regions'])
+            ? $data['layout_regions']
+            : [];
+
         return new self(
             pageNumber: $pageNumber,
             content: $content,
@@ -71,6 +79,11 @@ readonly class PageContent
             ),
             hierarchy: $hierarchyData !== null ? PageHierarchy::fromArray($hierarchyData) : null,
             isBlank: $isBlank,
+            layoutRegions: array_map(
+                /** @param array<string, mixed> $region */
+                static fn (array $region): LayoutRegion => LayoutRegion::fromArray($region),
+                $layoutRegionsData,
+            ),
         );
     }
 }

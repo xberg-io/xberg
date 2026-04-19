@@ -134,6 +134,9 @@ pub enum KreuzbergError {
     #[error("Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)")]
     Timeout { elapsed_ms: u64, limit_ms: u64 },
 
+    #[error("Extraction cancelled")]
+    Cancelled,
+
     #[error("{0}")]
     Other(String),
 }
@@ -178,6 +181,9 @@ impl From<rmp_serde::decode::Error> for KreuzbergError {
 #[cfg(feature = "pdf")]
 impl From<crate::pdf::error::PdfError> for KreuzbergError {
     fn from(err: crate::pdf::error::PdfError) -> Self {
+        if matches!(err, crate::pdf::error::PdfError::Cancelled) {
+            return KreuzbergError::Cancelled;
+        }
         KreuzbergError::Parsing {
             message: err.to_string(),
             source: Some(Box::new(err)),

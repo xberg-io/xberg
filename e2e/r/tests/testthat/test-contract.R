@@ -290,6 +290,51 @@ test_that("config_chunking_prepend_heading_context", {
   assert_chunks(result, min_count = 2L, each_has_content = TRUE, each_has_heading_context = TRUE, content_starts_with_heading = TRUE)
 })
 
+test_that("config_chunking_semantic", {
+  skip_if_feature_unavailable("chunking")
+  result <- run_fixture(
+    "config_chunking_semantic",
+    "semantic/annual_report.txt",
+    list(chunking = list(chunker_type = "semantic")),
+    requirements = c("chunking"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("text/plain"))
+  assert_min_content_length(result, 100L)
+  assert_chunks(result, min_count = 2L, each_has_content = TRUE)
+})
+
+test_that("config_chunking_semantic_small", {
+  skip_if_feature_unavailable("chunking")
+  result <- run_fixture(
+    "config_chunking_semantic_small",
+    "semantic/annual_report.txt",
+    list(chunking = list(chunker_type = "semantic", max_chars = 200L)),
+    requirements = c("chunking"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("text/plain"))
+  assert_min_content_length(result, 100L)
+  assert_chunks(result, min_count = 5L, each_has_content = TRUE)
+})
+
+test_that("config_chunking_semantic_threshold", {
+  skip_if_feature_unavailable("chunking")
+  result <- run_fixture(
+    "config_chunking_semantic_threshold",
+    "semantic/mixed_topics.txt",
+    list(chunking = list(chunker_type = "semantic", topic_threshold = 0.5)),
+    requirements = c("chunking"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("text/plain"))
+  assert_min_content_length(result, 100L)
+  assert_chunks(result, min_count = 1L, each_has_content = TRUE)
+})
+
 test_that("config_chunking_small", {
   skip_if_feature_unavailable("chunking")
   result <- run_fixture(
@@ -499,7 +544,7 @@ test_that("config_html_options", {
   result <- run_fixture(
     "config_html_options",
     "html/complex_table.html",
-    list(html_options = list(extractMetadata = TRUE)),
+    list(html_options = list(extract_metadata = TRUE)),
     requirements = character(0),
     notes = NULL,
     skip_if_missing = TRUE

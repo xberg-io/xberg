@@ -36,6 +36,7 @@
 
 pub mod cache;
 pub(crate) mod cache_dir;
+pub mod cancellation;
 pub mod core;
 pub mod error;
 pub mod extraction;
@@ -111,6 +112,7 @@ pub mod layout;
 #[cfg(feature = "pdf")]
 pub mod pdf;
 
+pub use cancellation::CancellationToken;
 pub use error::{KreuzbergError, Result};
 pub use types::*;
 

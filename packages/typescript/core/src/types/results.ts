@@ -280,6 +280,17 @@ export interface PageHierarchy {
 	blocks: HierarchicalBlock[];
 }
 
+export interface LayoutRegion {
+	/** Layout class name (e.g. "picture", "table", "text", "section_header") */
+	class: string;
+	/** Confidence score from the layout detection model (0.0 to 1.0) */
+	confidence: number;
+	/** Bounding box in document coordinate space */
+	boundingBox: BoundingBox;
+	/** Fraction of the page area covered by this region (0.0 to 1.0) */
+	areaFraction: number;
+}
+
 export interface PageContent {
 	pageNumber: number;
 	content: string;
@@ -287,6 +298,8 @@ export interface PageContent {
 	images: ExtractedImage[];
 	hierarchy?: PageHierarchy;
 	isBlank?: boolean;
+	/** Layout detection regions for this page (when layout detection is enabled) */
+	layoutRegions?: LayoutRegion[];
 }
 
 // ============================================================================

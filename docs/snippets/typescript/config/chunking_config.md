@@ -35,6 +35,21 @@ for (const chunk of result.chunks ?? []) {
 }
 ```
 
+```typescript title="TypeScript - Semantic"
+import { extractFile } from '@kreuzberg/node';
+
+const config = {
+	chunking: {
+		chunkerType: 'semantic',
+	},
+};
+
+const result = await extractFile('document.pdf', null, config);
+for (const chunk of result.chunks ?? []) {
+	console.log(`Content: ${chunk.content.slice(0, 100)}...`);
+}
+```
+
 ```typescript title="TypeScript - Prepend Heading Context"
 import { extractFile } from '@kreuzberg/node';
 

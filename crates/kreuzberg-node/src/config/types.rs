@@ -484,7 +484,9 @@ pub struct JsChunkingConfig {
     pub embedding: Option<JsEmbeddingConfig>,
     /// Optional preset name for chunking parameters
     pub preset: Option<String>,
-    /// Chunker type: "text" (default) or "markdown"
+    /// Chunker type: "text" (default), "markdown", "yaml", or "semantic".
+    /// Set to "semantic" for topic-aware chunking that works out of the box
+    /// with sensible defaults. No other parameters needed.
     pub chunker_type: Option<String>,
     /// Sizing type: "characters" (default) or "tokenizer"
     pub sizing_type: Option<String>,
@@ -495,12 +497,18 @@ pub struct JsChunkingConfig {
     /// Prepend heading context to each chunk when using markdown chunker
     #[napi(js_name = "prependHeadingContext")]
     pub prepend_heading_context: Option<bool>,
+    /// Cosine similarity threshold for semantic topic detection (0.0-1.0).
+    /// Optional, defaults to 0.75. Rarely needs tuning.
+    #[napi(js_name = "topicThreshold")]
+    pub topic_threshold: Option<f64>,
 }
 
 impl From<JsChunkingConfig> for RustChunkingConfig {
     fn from(val: JsChunkingConfig) -> Self {
         let ct = match val.chunker_type.as_deref() {
             Some("markdown") => ChunkerType::Markdown,
+            Some("yaml") => ChunkerType::Yaml,
+            Some("semantic") => ChunkerType::Semantic,
             _ => ChunkerType::Text,
         };
         let sizing = resolve_chunk_sizing(val.sizing_type, val.sizing_model, val.sizing_cache_dir);
@@ -513,6 +521,7 @@ impl From<JsChunkingConfig> for RustChunkingConfig {
             preset: val.preset,
             sizing,
             prepend_heading_context: val.prepend_heading_context.unwrap_or(false),
+            topic_threshold: val.topic_threshold.map(|t| t as f32),
         }
     }
 }
@@ -1582,6 +1591,7 @@ impl TryFrom<JsExtractionConfig> for ExtractionConfig {
             tree_sitter: val.tree_sitter.map(Into::into),
             structured_extraction: val.structured_extraction.map(Into::into),
             html_output: val.html_output.map(Into::into),
+            cancel_token: None,
         })
     }
 }
@@ -1678,6 +1688,7 @@ impl TryFrom<ExtractionConfig> for JsExtractionConfig {
                     ChunkerType::Text => None,
                     ChunkerType::Markdown => Some("markdown".to_string()),
                     ChunkerType::Yaml => Some("yaml".to_string()),
+                    ChunkerType::Semantic => Some("semantic".to_string()),
                 },
                 sizing_type: match &chunk.sizing {
                     kreuzberg::ChunkSizing::Characters => None,
@@ -1694,6 +1705,7 @@ impl TryFrom<ExtractionConfig> for JsExtractionConfig {
                     _ => None,
                 },
                 prepend_heading_context: Some(chunk.prepend_heading_context),
+                topic_threshold: chunk.topic_threshold.map(|t| t as f64),
             }),
             images: val.images.map(|img| JsImageExtractionConfig {
                 extract_images: Some(img.extract_images),
@@ -2071,6 +2083,7 @@ impl TryFrom<FileExtractionConfig> for JsFileExtractionConfig {
                     ChunkerType::Text => None,
                     ChunkerType::Markdown => Some("markdown".to_string()),
                     ChunkerType::Yaml => Some("yaml".to_string()),
+                    ChunkerType::Semantic => Some("semantic".to_string()),
                 },
                 sizing_type: match &chunk.sizing {
                     kreuzberg::ChunkSizing::Characters => None,
@@ -2087,6 +2100,7 @@ impl TryFrom<FileExtractionConfig> for JsFileExtractionConfig {
                     _ => None,
                 },
                 prepend_heading_context: Some(chunk.prepend_heading_context),
+                topic_threshold: chunk.topic_threshold.map(|t| t as f64),
             }),
             images: val.images.map(|img| JsImageExtractionConfig {
                 extract_images: Some(img.extract_images),

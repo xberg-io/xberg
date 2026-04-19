@@ -15,16 +15,16 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <junit.version>5.11.3</junit.version>
         <jackson.version>2.18.2</jackson.version>
-        <kreuzberg.version>4.8.6</kreuzberg.version>
+        <kreuzberg.version>4.9.1</kreuzberg.version>
     </properties>
 
     <dependencies>
         <dependency>
             <groupId>dev.kreuzberg</groupId>
             <artifactId>kreuzberg</artifactId>
-            <version>4.8.6</version>
+            <version>4.9.1</version>
             <scope>system</scope>
-            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.8.6.jar</systemPath>
+            <systemPath>${project.basedir}/../../packages/java/target/kreuzberg-4.9.1.jar</systemPath>
         </dependency>
 
         <dependency>
@@ -65,7 +65,7 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.5.4</version>
                 <configuration>
-                    <argLine>--enable-native-access=ALL-UNNAMED --enable-preview -Djava.library.path=${project.basedir}/../../target/release:${project.basedir}/../../target/debug</argLine>
+                    <argLine>--enable-native-access=ALL-UNNAMED --enable-preview -Djava.library.path=${project.basedir}/../../target/release</argLine>
                     <forkedProcessTimeoutInSeconds>300</forkedProcessTimeoutInSeconds>
                 </configuration>
             </plugin>

@@ -111,6 +111,8 @@ pub enum ErrorCode {
     Internal = 7,
     /// Embedding generation error (model initialization, inference failures)
     Embedding = 8,
+    /// Extraction was cancelled via a `CancellationToken`
+    Cancelled = 9,
 }
 
 impl ErrorCode {
@@ -137,6 +139,7 @@ impl ErrorCode {
             ErrorCode::UnsupportedFormat => "unsupported_format",
             ErrorCode::Internal => "internal",
             ErrorCode::Embedding => "embedding",
+            ErrorCode::Cancelled => "cancelled",
         }
     }
 
@@ -155,6 +158,7 @@ impl ErrorCode {
             ErrorCode::UnsupportedFormat => "Unsupported format",
             ErrorCode::Internal => "Internal library error",
             ErrorCode::Embedding => "Embedding generation error",
+            ErrorCode::Cancelled => "Extraction cancelled",
         }
     }
 
@@ -181,6 +185,7 @@ impl ErrorCode {
             6 => Some(ErrorCode::UnsupportedFormat),
             7 => Some(ErrorCode::Internal),
             8 => Some(ErrorCode::Embedding),
+            9 => Some(ErrorCode::Cancelled),
             _ => None,
         }
     }
@@ -196,7 +201,7 @@ impl ErrorCode {
     /// ```
     #[inline]
     pub fn is_valid(code: u32) -> bool {
-        code <= 8
+        code <= 9
     }
 }
 
@@ -308,9 +313,21 @@ pub extern "C" fn kreuzberg_error_code_embedding() -> u32 {
     ErrorCode::Embedding as u32
 }
 
+/// Returns the cancelled error code (9).
+///
+/// # C Signature
+///
+/// ```c
+/// uint32_t kreuzberg_error_code_cancelled(void);
+/// ```
+#[unsafe(no_mangle)]
+pub extern "C" fn kreuzberg_error_code_cancelled() -> u32 {
+    ErrorCode::Cancelled as u32
+}
+
 /// Returns the total count of valid error codes.
 ///
-/// Currently 9 error codes (0-8). This helps bindings validate error codes.
+/// Currently 10 error codes (0-9). This helps bindings validate error codes.
 ///
 /// # C Signature
 ///
@@ -319,7 +336,7 @@ pub extern "C" fn kreuzberg_error_code_embedding() -> u32 {
 /// ```
 #[unsafe(no_mangle)]
 pub extern "C" fn kreuzberg_error_code_count() -> u32 {
-    9
+    10
 }
 
 /// Returns the name of an error code as a C string.
@@ -360,6 +377,7 @@ pub extern "C" fn kreuzberg_error_code_name(code: u32) -> *const c_char {
             ErrorCode::UnsupportedFormat => c"unsupported_format".as_ptr(),
             ErrorCode::Internal => c"internal".as_ptr(),
             ErrorCode::Embedding => c"embedding".as_ptr(),
+            ErrorCode::Cancelled => c"cancelled".as_ptr(),
         },
         None => c"unknown".as_ptr(),
     }
@@ -396,6 +414,7 @@ pub extern "C" fn kreuzberg_error_code_description(code: u32) -> *const c_char {
             ErrorCode::UnsupportedFormat => c"Unsupported format".as_ptr(),
             ErrorCode::Internal => c"Internal library error".as_ptr(),
             ErrorCode::Embedding => c"Embedding generation error".as_ptr(),
+            ErrorCode::Cancelled => c"Extraction cancelled".as_ptr(),
         },
         None => c"Unknown error code".as_ptr(),
     }
@@ -739,6 +758,10 @@ pub unsafe extern "C" fn kreuzberg_classify_error(error_message: *const c_char) 
         return ErrorCode::Embedding as u32;
     }
 
+    if lower.contains("cancelled") || lower.contains("canceled") {
+        return ErrorCode::Cancelled as u32;
+    }
+
     ErrorCode::Internal as u32
 }
 
@@ -796,29 +819,30 @@ mod tests {
         assert_eq!(ErrorCode::from_code(6), Some(ErrorCode::UnsupportedFormat));
         assert_eq!(ErrorCode::from_code(7), Some(ErrorCode::Internal));
         assert_eq!(ErrorCode::from_code(8), Some(ErrorCode::Embedding));
+        assert_eq!(ErrorCode::from_code(9), Some(ErrorCode::Cancelled));
     }
 
     #[test]
     fn test_from_code_invalid() {
-        assert_eq!(ErrorCode::from_code(9), None);
+        assert_eq!(ErrorCode::from_code(10), None);
         assert_eq!(ErrorCode::from_code(99), None);
         assert_eq!(ErrorCode::from_code(u32::MAX), None);
     }
 
     #[test]
     fn test_is_valid() {
-        for code in 0..=8 {
+        for code in 0..=9 {
             assert!(ErrorCode::is_valid(code), "Code {} should be valid", code);
         }
 
-        assert!(!ErrorCode::is_valid(9));
+        assert!(!ErrorCode::is_valid(10));
         assert!(!ErrorCode::is_valid(99));
         assert!(!ErrorCode::is_valid(u32::MAX));
     }
 
     #[test]
     fn test_error_code_count() {
-        assert_eq!(kreuzberg_error_code_count(), 9);
+        assert_eq!(kreuzberg_error_code_count(), 10);
     }
 
     #[test]
@@ -832,6 +856,7 @@ mod tests {
         assert_eq!(kreuzberg_error_code_unsupported_format(), 6);
         assert_eq!(kreuzberg_error_code_internal(), 7);
         assert_eq!(kreuzberg_error_code_embedding(), 8);
+        assert_eq!(kreuzberg_error_code_cancelled(), 9);
     }
 
     // #[test]

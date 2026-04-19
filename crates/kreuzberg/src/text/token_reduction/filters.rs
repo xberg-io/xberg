@@ -11,10 +11,11 @@ mod html;
 mod markdown;
 
 // Re-export all filter functions for backward compatibility
+pub use crate::utils::markdown_utils::is_markdown_header;
 pub use general::{normalize_newlines, normalize_spaces, remove_stopwords};
 pub use html::remove_html_comments;
 pub use markdown::{
-    extract_and_preserve_code, is_markdown_header, is_markdown_list, is_markdown_table, preserve_markdown_structure,
+    extract_and_preserve_code, is_markdown_list, is_markdown_table, preserve_markdown_structure,
     restore_preserved_blocks,
 };
 

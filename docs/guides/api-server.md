@@ -102,7 +102,7 @@ Chunk text for RAG pipelines.
 | Field | Required | Description |
 |-------|----------|-------------|
 | `text` | Yes | Text to chunk |
-| `chunker_type` | No | `"text"` (default) or `"markdown"` |
+| `chunker_type` | No | `"text"` (default), `"markdown"`, `"yaml"`, or `"semantic"` |
 | `config.max_characters` | No | Max chars per chunk (default: 2000) |
 | `config.overlap` | No | Overlap between chunks (default: 100) |
 

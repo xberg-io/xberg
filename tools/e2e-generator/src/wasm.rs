@@ -146,6 +146,9 @@ function mapChunkingConfig(raw: PlainRecord): ChunkingConfig {
         config.chunkerType = raw.chunker_type;
     }
     assignBooleanField(config, raw, "prepend_heading_context", "prependHeadingContext");
+    if (typeof raw.topic_threshold === "number") {
+        config.topicThreshold = raw.topic_threshold;
+    }
     return config as unknown as ChunkingConfig;
 }
 
@@ -543,6 +546,8 @@ export const assertions = {
         result: ExtractionResult,
         minCount?: number | null,
         exactCount?: number | null,
+        hasLayoutRegions?: boolean | null,
+        layoutClassesInclude?: string[] | null,
     ): void {
         const pages = (result as unknown as PlainRecord).pages as unknown[] | undefined;
         if (pages === undefined || pages === null) {
@@ -561,6 +566,39 @@ export const assertions = {
             const p = page as Record<string, unknown>;
             const isBlank = p["isBlank"];
             expect(isBlank === undefined || isBlank === null || typeof isBlank === "boolean").toBe(true);
+        }
+
+        if (hasLayoutRegions) {
+            let foundLayoutRegions = false;
+            for (const page of pages) {
+                const p = page as Record<string, unknown>;
+                const layoutRegions = (p["layoutRegions"] ?? p["layout_regions"]) as unknown[] | undefined;
+                if (layoutRegions && Array.isArray(layoutRegions) && layoutRegions.length > 0) {
+                    foundLayoutRegions = true;
+                    break;
+                }
+            }
+            expect(foundLayoutRegions).toBe(true);
+        }
+
+        if (layoutClassesInclude && layoutClassesInclude.length > 0) {
+            const allClasses = new Set<string>();
+            for (const page of pages) {
+                const p = page as Record<string, unknown>;
+                const layoutRegions = (p["layoutRegions"] ?? p["layout_regions"]) as unknown[] | undefined;
+                if (layoutRegions && Array.isArray(layoutRegions)) {
+                    for (const region of layoutRegions) {
+                        const r = region as Record<string, unknown>;
+                        const className = r["class"] ?? r["className"];
+                        if (typeof className === "string") {
+                            allClasses.add(className);
+                        }
+                    }
+                }
+            }
+            for (const expectedClass of layoutClassesInclude) {
+                expect(allClasses.has(expectedClass)).toBe(true);
+            }
         }
     },
 
@@ -1360,7 +1398,18 @@ fn render_assertions(assertions: &Assertions, _requirements: &[String]) -> Strin
             .exact_count
             .map(|v| v.to_string())
             .unwrap_or_else(|| "null".into());
-        buffer.push_str(&format!("    assertions.assertPages(result, {min}, {exact});\n"));
+        let has_layout = pages
+            .has_layout_regions
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".into());
+        let layout_classes = pages
+            .layout_classes_include
+            .as_ref()
+            .map(|c| render_string_array(c))
+            .unwrap_or_else(|| "null".into());
+        buffer.push_str(&format!(
+            "    assertions.assertPages(result, {min}, {exact}, {has_layout}, {layout_classes});\n"
+        ));
     }
 
     if let Some(elements) = assertions.elements.as_ref() {

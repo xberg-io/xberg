@@ -75,6 +75,7 @@ impl ContentBuilder {
                 images: Vec::new(),
                 hierarchy: None,
                 is_blank,
+                layout_regions: None,
             });
         }
     }

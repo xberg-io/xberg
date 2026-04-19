@@ -570,6 +570,90 @@ describe("contract fixtures", () => {
 	);
 
 	it(
+		"config_chunking_semantic",
+		() => {
+			const documentPath = resolveDocument("semantic/annual_report.txt");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_semantic: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "semantic" } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			chunkAssertions.assertChunks(result, 2, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_semantic_small",
+		() => {
+			const documentPath = resolveDocument("semantic/annual_report.txt");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_semantic_small: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "semantic", max_chars: 200 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic_small", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			chunkAssertions.assertChunks(result, 5, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
+		"config_chunking_semantic_threshold",
+		() => {
+			const documentPath = resolveDocument("semantic/mixed_topics.txt");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_chunking_semantic_threshold: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ chunking: { chunker_type: "semantic", topic_threshold: 0.5 } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_chunking_semantic_threshold", ["chunking"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["text/plain"]);
+			assertions.assertMinContentLength(result, 100);
+			chunkAssertions.assertChunks(result, 1, null, true, null, undefined, undefined, undefined);
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"config_chunking_small",
 		() => {
 			const documentPath = resolveDocument("pdf/fake_memo.pdf");
@@ -1512,7 +1596,7 @@ describe("contract fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertPages(result, null, 5);
+			chunkAssertions.assertPages(result, null, 5, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);
@@ -1540,7 +1624,7 @@ describe("contract fixtures", () => {
 			}
 			assertions.assertExpectedMime(result, ["application/pdf"]);
 			assertions.assertMinContentLength(result, 10);
-			chunkAssertions.assertPages(result, 1, null);
+			chunkAssertions.assertPages(result, 1, null, null, null);
 		},
 		TEST_TIMEOUT_MS,
 	);

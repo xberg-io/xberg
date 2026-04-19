@@ -250,7 +250,7 @@ pub fn compute_token_diff(extracted: &[String], truth: &[String]) -> TokenDiff {
             }
         })
         .collect();
-    missing.sort_by(|a, b| b.1.cmp(&a.1));
+    missing.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     // Tokens in extraction but not in GT or over-represented
     let mut extra: Vec<(String, usize)> = extracted_counts
@@ -264,7 +264,7 @@ pub fn compute_token_diff(extracted: &[String], truth: &[String]) -> TokenDiff {
             }
         })
         .collect();
-    extra.sort_by(|a, b| b.1.cmp(&a.1));
+    extra.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     (missing, extra)
 }

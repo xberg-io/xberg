@@ -14,17 +14,17 @@ Kreuzberg provides async/sync APIs, text chunking, language detection, keyword e
 - [Architecture](https://docs.kreuzberg.dev/concepts/architecture/): Rust core with polyglot bindings architecture
 - [Extraction Pipeline](https://docs.kreuzberg.dev/concepts/extraction-pipeline/): How document extraction works
 - [Plugin System](https://docs.kreuzberg.dev/concepts/plugin-system/): Extend Kreuzberg with custom extractors and backends
-- [MIME Detection](https://docs.kreuzberg.dev/concepts/mime-detection/): Automatic file format detection
-- [Performance](https://docs.kreuzberg.dev/concepts/performance/): Performance characteristics and optimization
+- [MIME Detection](https://docs.kreuzberg.dev/guides/extraction/#mime-type-detection): Automatic file format detection
+- [Performance](https://docs.kreuzberg.dev/guides/development/#performance): Performance characteristics and optimization
 
 ## Guides
 
 - [Extraction Basics](https://docs.kreuzberg.dev/guides/extraction/): Core extraction functionality
 - [Configuration](https://docs.kreuzberg.dev/guides/configuration/): Configuration options
 - [OCR](https://docs.kreuzberg.dev/guides/ocr/): Optical character recognition setup with Tesseract, EasyOCR, or PaddleOCR
-- [Element-Based Output](https://docs.kreuzberg.dev/guides/element-based-output/): Structured element extraction
-- [Document Structure](https://docs.kreuzberg.dev/guides/document-structure/): Hierarchical tree-based document output
-- [PDF Hierarchy](https://docs.kreuzberg.dev/guides/pdf-hierarchy/): PDF hierarchy detection using K-means clustering
+- [Element-Based Output](https://docs.kreuzberg.dev/guides/output-formats/#element-based-output): Structured element extraction
+- [Document Structure](https://docs.kreuzberg.dev/guides/output-formats/#document-structure): Hierarchical tree-based document output
+- [PDF Hierarchy](https://docs.kreuzberg.dev/guides/output-formats/#pdf-hierarchy-detection): PDF hierarchy detection using K-means clustering
 - [Keyword Extraction](https://docs.kreuzberg.dev/guides/keywords/): YAKE and RAKE keyword extraction
 - [Advanced Features](https://docs.kreuzberg.dev/guides/advanced/): Advanced usage patterns
 - [Docker Deployment](https://docs.kreuzberg.dev/guides/docker/): Docker container deployment
@@ -61,7 +61,6 @@ Kreuzberg provides async/sync APIs, text chunking, language detection, keyword e
 
 ## Migration
 
-- [v3 to v4](https://docs.kreuzberg.dev/migration/v3-to-v4/): Migration guide from v3 to v4
 - [From Unstructured](https://docs.kreuzberg.dev/migration/from-unstructured/): Migrate from the Unstructured library
 
 ## Optional

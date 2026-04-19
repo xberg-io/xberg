@@ -15,7 +15,7 @@ That's it. You now have an MCP server running over stdio, ready for any compatib
 
 ## How It Works
 
-The MCP server wraps Kreuzberg's full extraction engine behind 12 tools that agents can discover and call. It runs as a child process, communicating over stdin/stdout with JSON-RPC messages. No HTTP ports, no network configuration — the agent spawns it and talks to it directly.
+The MCP server wraps Kreuzberg's full extraction engine behind 13 tools that agents can discover and call. It runs as a child process, communicating over stdin/stdout with JSON-RPC messages. No HTTP ports, no network configuration — the agent spawns it and talks to it directly.
 
 ```mermaid
 flowchart LR
@@ -67,8 +67,9 @@ Every tool is discoverable at runtime via `list_tools`. Here's the full surface:
 | `cache_clear` | — | Evict all cached results |
 | `cache_manifest` | — | Model checksums <span class="version-badge">v4.5.2</span> |
 | `cache_warm` | — | Pre-download models <span class="version-badge">v4.5.2</span> |
+| `extract_structured` | `path`, `schema`, `model` | Extract structured JSON via LLM <span class="version-badge">v4.8.0</span> |
 
-All extraction tools accept an optional `config` object — the same `ExtractionConfig` shape used in the Python API.
+All extraction tools accept an optional `config` object — the same `ExtractionConfig` shape used in the Python API. `extract_structured` requires the server to be built with the `liter-llm` feature.
 
 ---
 

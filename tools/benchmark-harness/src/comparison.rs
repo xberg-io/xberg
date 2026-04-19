@@ -1149,7 +1149,7 @@ fn print_noise_summary(results: &[DocResult]) {
     // Print kind breakdown
     eprintln!("\nBy kind:");
     let mut sorted_kinds: Vec<_> = kind_counts.into_iter().collect();
-    sorted_kinds.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted_kinds.sort_by_key(|b| std::cmp::Reverse(b.1));
     for (kind, count) in &sorted_kinds {
         eprintln!("  {:<30} {}", kind, count);
     }

@@ -1,17 +1,10 @@
-"""Custom build hook for building the Kreuzberg CLI with all features.
+"""Custom build hook for the Kreuzberg Python package.
 
-This hook ensures that the kreuzberg-cli binary is built with the 'all' feature
-(which includes 'api' and 'mcp') before the wheel is built. This is required for
-the serve and mcp commands to be available in the Python package.
-
-It also ensures that the sdist includes all necessary workspace crates.
+It ensures that the sdist includes all necessary workspace crates.
 """
 
 from __future__ import annotations
 
-import platform
-import shutil
-import subprocess
 import tarfile
 import tempfile
 from pathlib import Path
@@ -43,41 +36,6 @@ def ensure_stub_file() -> None:
             "class ExtractionConfig: ...\n"
             "class OcrConfig: ...\n"
         )
-
-
-def build_cli_binary() -> None:
-    """Build the kreuzberg-cli binary with all features and copy it to the package."""
-    workspace_root = Path(__file__).resolve().parents[2]
-    package_dir = Path(__file__).resolve().parent / "kreuzberg"
-
-    cargo = shutil.which("cargo")
-    if cargo is None:
-        return
-
-    try:
-        subprocess.run(
-            [cargo, "build", "-p", "kreuzberg-cli", "--release", "--features", "all"],
-            cwd=workspace_root,
-            check=True,
-            capture_output=True,
-        )
-
-        # Handle platform-specific binary names
-        is_windows = platform.system() == "Windows"
-        source_name = "kreuzberg.exe" if is_windows else "kreuzberg"
-        dest_name = "kreuzberg-cli.exe" if is_windows else "kreuzberg-cli"
-
-        source_binary = workspace_root / "target" / "release" / source_name
-        dest_binary = package_dir / dest_name
-
-        if source_binary.exists():
-            shutil.copy2(source_binary, dest_binary)
-            # chmod is a no-op on Windows, but doesn't hurt
-            if not is_windows:
-                dest_binary.chmod(0o755)
-
-    except subprocess.CalledProcessError:
-        pass
 
 
 def fix_sdist_workspace_members(sdist_path: str) -> None:
@@ -163,9 +121,8 @@ def build_wheel(
     config_settings: dict[str, Any] | None = None,
     metadata_directory: str | None = None,
 ) -> str:
-    """Build a wheel, ensuring CLI is built and stub files are present."""
+    """Build a wheel, ensuring stub files are present."""
     ensure_stub_file()
-    build_cli_binary()
 
     return maturin.build_wheel(wheel_directory, config_settings, metadata_directory)  # type: ignore
 
@@ -195,6 +152,5 @@ def build_editable(
 ) -> str:
     """Build an editable wheel, ensuring stub files are present."""
     ensure_stub_file()
-    build_cli_binary()
 
     return maturin.build_editable(wheel_directory, config_settings, metadata_directory)  # type: ignore

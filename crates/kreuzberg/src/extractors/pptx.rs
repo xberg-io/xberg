@@ -329,6 +329,9 @@ impl DocumentExtractor for PptxExtractor {
             #[cfg(feature = "tokio-runtime")]
             {
                 if crate::core::batch_mode::is_batch_mode() {
+                    if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
+                        return Err(crate::error::KreuzbergError::Cancelled);
+                    }
                     let content_owned = content.to_vec();
                     let options = crate::extraction::pptx::PptxExtractionOptions {
                         extract_images,

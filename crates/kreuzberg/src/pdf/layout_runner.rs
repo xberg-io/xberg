@@ -227,6 +227,7 @@ where
     let pdfium = bind_pdfium(
         crate::pdf::error::PdfError::RenderingFailed,
         "layout detection render + dimensions",
+        None,
     )?;
     let document = pdfium.load_pdf_from_byte_slice(pdf_bytes, None).map_err(|e| {
         crate::pdf::error::PdfError::InvalidPdf(format!("Failed to load PDF for layout detection: {:?}", e))

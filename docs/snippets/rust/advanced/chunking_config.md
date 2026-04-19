@@ -11,6 +11,18 @@ let config = ExtractionConfig {
 };
 ```
 
+```rust title="Rust - Semantic"
+use kreuzberg::{ExtractionConfig, ChunkingConfig, ChunkerType};
+
+let config = ExtractionConfig {
+    chunking: Some(ChunkingConfig {
+        chunker_type: ChunkerType::Semantic,
+        ..Default::default()
+    }),
+    ..Default::default()
+};
+```
+
 ```rust title="Rust - Prepend Heading Context"
 use kreuzberg::{ExtractionConfig, ChunkingConfig, ChunkerType};
 

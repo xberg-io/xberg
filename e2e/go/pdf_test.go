@@ -85,10 +85,14 @@ func TestPdfPdfLayoutDetection(t *testing.T) {
 "layout": {
 	"table_model": "tatr"
 },
-"output_format": "markdown"
+"output_format": "markdown",
+"pages": {
+	"extract_pages": true
+}
 }`))
 	assertExpectedMime(t, result, []string{"application/pdf"})
 	assertMinContentLength(t, result, 100)
+	assertPages(t, result, intPtr(1), nil, boolPtr(true), nil)
 	assertContentNotEmpty(t, result)
 }
 

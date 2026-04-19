@@ -116,5 +116,8 @@ module Kreuzberg
 
     # Raised when embedding fails
     class EmbeddingError < Error; end
+
+    # Raised when an extraction is cancelled via a cancellation token
+    class CancelledError < Error; end
   end
 end

@@ -39,9 +39,6 @@ includes:
   _lint_wf:
     taskfile: .task/workflows/lint.yml
     internal: true
-  _e2e_wf:
-    taskfile: .task/workflows/e2e.yml
-    internal: true
   benchmark:
     taskfile: .task/workflows/benchmark.yml
   snippets:
@@ -251,8 +248,7 @@ tasks:
       - task: go:e2e:generate
       - task: java:e2e:generate
       - task: csharp:e2e:generate
-      - task: wasm:e2e:deno:generate
-      - task: wasm:e2e:workers:generate
+      - task: wasm:e2e:generate
       - task: ruby:e2e:generate
       - task: php:e2e:generate
       - task: elixir:e2e:generate
@@ -268,8 +264,7 @@ tasks:
       - task: go:e2e:test
       - task: java:e2e:test
       - task: csharp:e2e:test
-      - task: wasm:e2e:deno:test
-      - task: wasm:e2e:workers:test
+      - task: wasm:e2e:test
       - task: ruby:e2e:test
       - task: php:e2e:test
       - task: r:e2e:test
@@ -284,8 +279,7 @@ tasks:
       - task: go:e2e:lint
       - task: java:e2e:lint
       - task: csharp:e2e:lint
-      - task: wasm:e2e:deno:lint
-      - task: wasm:e2e:workers:lint
+      - task: wasm:e2e:lint
       - task: ruby:e2e:lint
       - task: php:e2e:lint
       - task: r:e2e:lint

@@ -18,12 +18,12 @@
   <date>2025-01-01</date>
   <time>00:00:00</time>
   <version>
-    <release>4.8.6</release>
-    <api>4.8.6</api>
+    <release>4.9.1</release>
+    <api>4.9.1</api>
   </version>
   <stability>
-    <release>4.8.6</release>
-    <api>4.8.6</api>
+    <release>4.9.1</release>
+    <api>4.9.1</api>
   </stability>
   <license uri="https://www.elastic.co/licensing/elastic-license">Elastic-2.0</license>
   <notes>
@@ -113,12 +113,12 @@
   <changelog>
     <release>
       <version>
-        <release>4.8.6</release>
-        <api>4.8.6</api>
+        <release>4.9.1</release>
+        <api>4.9.1</api>
       </version>
       <stability>
-        <release>4.8.6</release>
-        <api>4.8.6</api>
+        <release>4.9.1</release>
+        <api>4.9.1</api>
       </stability>
       <date>2025-01-01</date>
       <license uri="https://www.elastic.co/licensing/elastic-license">Elastic-2.0</license>

@@ -167,7 +167,7 @@ impl SyncExtractor for ExcelExtractor {
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl DocumentExtractor for ExcelExtractor {
     #[cfg_attr(feature = "otel", tracing::instrument(
-        skip(self, content, _config),
+        skip(self, content, config),
         fields(
             extractor.name = self.name(),
             content.size_bytes = content.len(),
@@ -177,7 +177,7 @@ impl DocumentExtractor for ExcelExtractor {
         &self,
         content: &[u8],
         mime_type: &str,
-        _config: &ExtractionConfig,
+        config: &ExtractionConfig,
     ) -> Result<InternalDocument> {
         let extension = match mime_type {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => ".xlsx",
@@ -195,6 +195,9 @@ impl DocumentExtractor for ExcelExtractor {
             #[cfg(feature = "tokio-runtime")]
             {
                 if crate::core::batch_mode::is_batch_mode() {
+                    if config.cancel_token.as_ref().map(|t| t.is_cancelled()).unwrap_or(false) {
+                        return Err(crate::error::KreuzbergError::Cancelled);
+                    }
                     let content_owned = content.to_vec();
                     let extension_owned = extension.to_string();
                     let span = tracing::Span::current();

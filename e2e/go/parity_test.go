@@ -23,7 +23,6 @@ func TestExtractionResultFieldParity(t *testing.T) {
 		"Elements":           "elements",
 		"ExtractedKeywords":  "extracted_keywords",
 		"Images":             "images",
-		"LlmUsage":           "llm_usage",
 		"Metadata":           "metadata",
 		"MimeType":           "mime_type",
 		"OcrElements":        "ocr_elements",

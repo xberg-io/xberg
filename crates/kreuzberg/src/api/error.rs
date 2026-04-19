@@ -118,6 +118,7 @@ impl ApiError {
             KreuzbergError::Embedding { .. } => "EmbeddingError",
             KreuzbergError::Timeout { .. } => "TimeoutError",
             KreuzbergError::Other(_) => "Error",
+            KreuzbergError::Cancelled => "CancelledError",
         };
 
         Self {

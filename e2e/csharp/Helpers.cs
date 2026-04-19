@@ -602,7 +602,9 @@ public static class TestHelpers
     public static void AssertPages(
         ExtractionResult result,
         int? minCount,
-        int? exactCount)
+        int? exactCount,
+        bool? hasLayoutRegions,
+        IEnumerable<string>? layoutClassesInclude)
     {
         var pages = result.Pages;
         if (pages is null)
@@ -622,6 +624,51 @@ public static class TestHelpers
         {
             // IsBlank should be accessible as bool?
             var _ = page.IsBlank;
+        }
+
+        if (hasLayoutRegions.HasValue && hasLayoutRegions.Value)
+        {
+            var foundLayoutRegions = false;
+            foreach (var page in pages)
+            {
+                var layoutRegions = page.LayoutRegions;
+                if (layoutRegions is not null && layoutRegions.Count > 0)
+                {
+                    foundLayoutRegions = true;
+                    break;
+                }
+            }
+            if (!foundLayoutRegions)
+            {
+                throw new XunitException("Expected at least one page to have layout_regions populated");
+            }
+        }
+
+        if (layoutClassesInclude is not null)
+        {
+            var layoutClassesArray = layoutClassesInclude.ToList();
+            if (layoutClassesArray.Count > 0)
+            {
+                var allClasses = new HashSet<string>();
+                foreach (var page in pages)
+                {
+                    var layoutRegions = page.LayoutRegions;
+                    if (layoutRegions is not null)
+                    {
+                        foreach (var region in layoutRegions)
+                        {
+                            allClasses.Add(region.ClassName);
+                        }
+                    }
+                }
+                foreach (var expectedClass in layoutClassesArray)
+                {
+                    if (!allClasses.Contains(expectedClass))
+                    {
+                        throw new XunitException($"Expected layout class '{expectedClass}' not found in {string.Join(", ", allClasses)}");
+                    }
+                }
+            }
         }
     }
 
@@ -875,6 +922,20 @@ public static class TestHelpers
         if (maxCount.HasValue && count > maxCount.Value)
         {
             throw new XunitException($"Expected at most {maxCount.Value} processing warnings, got {count}");
+        }
+    }
+
+    public static void AssertLlmUsage(ExtractionResult result, int? maxCount, bool? isEmpty)
+    {
+        var usage = result.LlmUsage;
+        var count = usage?.Count ?? 0;
+        if (isEmpty == true && count != 0)
+        {
+            throw new XunitException($"Expected llm usage to be empty, got {count}");
+        }
+        if (maxCount.HasValue && count > maxCount.Value)
+        {
+            throw new XunitException($"Expected at most {maxCount.Value} llm usage entries, got {count}");
         }
     }
 

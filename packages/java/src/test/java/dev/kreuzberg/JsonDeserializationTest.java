@@ -630,6 +630,97 @@ class JsonDeserializationTest {
 	}
 
 	@Nested
+	@DisplayName("LayoutRegion deserialization")
+	class LayoutRegionTests {
+
+		@Test
+		@DisplayName("should deserialize List<LayoutRegion> on PageContent correctly")
+		void testLayoutRegionsDeserialization() throws Exception {
+			String json = """
+					{
+						"page_number": 1,
+						"content": "Page with layout",
+						"tables": [],
+						"images": [],
+						"hierarchy": null,
+						"layout_regions": [
+							{
+								"class": "picture",
+								"confidence": 0.95,
+								"bounding_box": {"x0": 0.1, "y0": 0.2, "x1": 0.5, "y1": 0.7},
+								"area_fraction": 0.24
+							},
+							{
+								"class": "text",
+								"confidence": 0.87,
+								"bounding_box": {"x0": 0.0, "y0": 0.0, "x1": 1.0, "y1": 0.15},
+								"area_fraction": 0.15
+							}
+						]
+					}
+					""";
+
+			PageContent pageContent = mapper.readValue(json, PageContent.class);
+
+			assertNotNull(pageContent);
+			assertTrue(pageContent.getLayoutRegions().isPresent());
+
+			List<LayoutRegion> regions = pageContent.getLayoutRegions().get();
+			assertEquals(2, regions.size());
+
+			// This would throw ClassCastException if elements were LinkedHashMap
+			LayoutRegion first = regions.get(0);
+			assertEquals("picture", first.getClassName());
+			assertEquals(0.95, first.getConfidence(), 1e-9);
+			assertEquals(0.24, first.getAreaFraction(), 1e-9);
+			assertNotNull(first.getBoundingBox());
+			assertEquals(0.1, first.getBoundingBox().getX0(), 1e-9);
+			assertEquals(0.5, first.getBoundingBox().getX1(), 1e-9);
+
+			LayoutRegion second = regions.get(1);
+			assertEquals("text", second.getClassName());
+			assertEquals(0.87, second.getConfidence(), 1e-9);
+		}
+
+		@Test
+		@DisplayName("should return empty Optional when layout_regions absent")
+		void testMissingLayoutRegions() throws Exception {
+			String json = """
+					{
+						"page_number": 2,
+						"content": "No layout",
+						"tables": [],
+						"images": [],
+						"hierarchy": null
+					}
+					""";
+
+			PageContent pageContent = mapper.readValue(json, PageContent.class);
+
+			assertFalse(pageContent.getLayoutRegions().isPresent());
+		}
+
+		@Test
+		@DisplayName("should return empty Optional when layout_regions is empty list")
+		void testEmptyLayoutRegions() throws Exception {
+			String json = """
+					{
+						"page_number": 3,
+						"content": "Empty layout",
+						"tables": [],
+						"images": [],
+						"hierarchy": null,
+						"layout_regions": []
+					}
+					""";
+
+			PageContent pageContent = mapper.readValue(json, PageContent.class);
+
+			assertFalse(pageContent.getLayoutRegions().isPresent());
+		}
+	}
+
+	@Nested
 	@DisplayName("Complex nested structures")
 	class ComplexNestedTests {
 

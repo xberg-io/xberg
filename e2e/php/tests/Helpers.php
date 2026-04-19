@@ -343,7 +343,9 @@ class Helpers
     public static function assertPages(
         ExtractionResult $result,
         ?int $minCount,
-        ?int $exactCount
+        ?int $exactCount,
+        ?bool $hasLayoutRegions,
+        ?array $layoutClassesInclude
     ): void {
         $pages = $result->pages ?? [];
         $count = count($pages);
@@ -369,6 +371,45 @@ class Helpers
                 Assert::assertTrue(
                     $page->isBlank === null || is_bool($page->isBlank),
                     'isBlank should be null or bool'
+                );
+            }
+        }
+
+        if ($hasLayoutRegions === true) {
+            $foundLayoutRegions = false;
+            foreach ($pages as $page) {
+                if (
+                    property_exists($page, 'layoutRegions')
+                    && $page->layoutRegions !== null
+                    && count($page->layoutRegions) > 0
+                ) {
+                    $foundLayoutRegions = true;
+                    break;
+                }
+            }
+            Assert::assertTrue(
+                $foundLayoutRegions,
+                'Expected at least one page to have layout_regions populated'
+            );
+        }
+
+        if ($layoutClassesInclude !== null && count($layoutClassesInclude) > 0) {
+            $allClasses = new \SplFixedArray(0);
+            $allClasses = [];
+            foreach ($pages as $page) {
+                if (property_exists($page, 'layoutRegions') && $page->layoutRegions !== null) {
+                    foreach ($page->layoutRegions as $region) {
+                        if (property_exists($region, 'class')) {
+                            $allClasses[$region->class] = true;
+                        }
+                    }
+                }
+            }
+            foreach ($layoutClassesInclude as $expectedClass) {
+                Assert::assertArrayHasKey(
+                    $expectedClass,
+                    $allClasses,
+                    sprintf("Expected layout class '%s' not found", $expectedClass)
                 );
             }
         }
@@ -795,6 +836,30 @@ class Helpers
                 0,
                 $warnings,
                 sprintf('Expected empty processing_warnings, got %d', count($warnings))
+            );
+        }
+    }
+
+    public static function assertLlmUsage(
+        ExtractionResult $result,
+        ?int $maxCount = null,
+        ?bool $isEmpty = null
+    ): void {
+        $usage = $result->llmUsage ?? $result->llm_usage ?? [];
+
+        if ($maxCount !== null) {
+            Assert::assertLessThanOrEqual(
+                $maxCount,
+                count($usage),
+                sprintf('llm_usage count %d > %d', count($usage), $maxCount)
+            );
+        }
+
+        if ($isEmpty === true) {
+            Assert::assertCount(
+                0,
+                $usage,
+                sprintf('Expected empty llm_usage, got %d', count($usage))
             );
         }
     }

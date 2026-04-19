@@ -94,11 +94,11 @@ fn extract_common_metadata(doc: &mut OxideDocument) -> Result<CommonPdfMetadata>
 
     let authors = get_info_string(&mut doc.doc, "Author")
         .map(|author_str| parse_authors(&author_str))
-        .and_then(|parsed| if parsed.is_empty() { None } else { Some(parsed) });
+        .filter(|parsed| !parsed.is_empty());
 
     let keywords = get_info_string(&mut doc.doc, "Keywords")
         .map(|kw_str| parse_keywords(&kw_str))
-        .and_then(|parsed| if parsed.is_empty() { None } else { Some(parsed) });
+        .filter(|parsed| !parsed.is_empty());
 
     let created_at = get_info_string(&mut doc.doc, "CreationDate").map(|d| parse_pdf_date(&d));
     let modified_at = get_info_string(&mut doc.doc, "ModDate").map(|d| parse_pdf_date(&d));

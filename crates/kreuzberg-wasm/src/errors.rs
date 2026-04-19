@@ -64,6 +64,8 @@ pub fn convert_error(err: KreuzbergError) -> JsValue {
         ),
         KreuzbergError::Embedding { message, .. } => ("EmbeddingError", format!("Embedding error: {}", message)),
 
+        KreuzbergError::Cancelled => ("CancelledError", "Extraction cancelled".to_string()),
+
         KreuzbergError::Other(msg) => ("Error", msg),
     };
 

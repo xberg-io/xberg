@@ -636,12 +636,29 @@ type PageHierarchy struct {
 
 // PageContent represents extracted content for a single page.
 type PageContent struct {
-	PageNumber uint64           `json:"page_number"`
-	Content    string           `json:"content"`
-	Tables     []Table          `json:"tables,omitempty"`
-	Images     []ExtractedImage `json:"images,omitempty"`
-	Hierarchy  *PageHierarchy   `json:"hierarchy,omitempty"`
-	IsBlank    *bool            `json:"is_blank,omitempty"`
+	PageNumber    uint64           `json:"page_number"`
+	Content       string           `json:"content"`
+	Tables        []Table          `json:"tables,omitempty"`
+	Images        []ExtractedImage `json:"images,omitempty"`
+	Hierarchy     *PageHierarchy   `json:"hierarchy,omitempty"`
+	IsBlank       *bool            `json:"is_blank,omitempty"`
+	LayoutRegions []LayoutRegion   `json:"layout_regions,omitempty"`
+}
+
+// LayoutRegion represents a detected layout region on a page.
+//
+// When layout detection is enabled, each page may have layout regions
+// identifying different content types (text, pictures, tables, etc.)
+// with confidence scores and spatial positions.
+type LayoutRegion struct {
+	// Class is the layout class name (e.g. "picture", "table", "text", "section_header").
+	Class string `json:"class"`
+	// Confidence is the detection confidence score (0.0 to 1.0).
+	Confidence float64 `json:"confidence"`
+	// BoundingBox contains the spatial coordinates of this region.
+	BoundingBox BoundingBox `json:"bounding_box"`
+	// AreaFraction is the fraction of the page area covered by this region (0.0 to 1.0).
+	AreaFraction float64 `json:"area_fraction"`
 }
 
 // ElementType defines semantic classification for extracted elements.

@@ -308,7 +308,7 @@ pub fn parse_markdown_blocks(md: &str) -> Vec<MdBlock> {
                     index += 1;
                 }
             }
-            Event::Start(Tag::Image { dest_url, title: _, .. }) => {
+            Event::Start(Tag::Image { dest_url, .. }) => {
                 flush_text(&mut current_text, &mut blocks, &mut index, MdBlockType::Paragraph);
                 // Store URL temporarily
                 current_text.push_str("![");

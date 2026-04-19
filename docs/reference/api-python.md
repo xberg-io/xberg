@@ -821,6 +821,7 @@ Each page contains:
 - Text content for that page
 - Tables on that page
 - Images on that page
+- Layout regions when layout detection is enabled, each with `class` (string), `confidence` (float, 0–1), `bounding_box`, and `area_fraction` (float, 0–1)
 
 **Example:**
 
@@ -1100,7 +1101,7 @@ config = ExtractionConfig(ocr=OcrConfig(backend="easyocr", language="en"))
 result = extract_file_sync("scanned.pdf", config=config, easyocr_kwargs={"use_gpu": True})
 ```
 
-#### register_ocr_backend()
+#### Register_ocr_backend()
 
 ```python title="Python"
 def register_ocr_backend(backend: Any) -> None
@@ -1137,7 +1138,7 @@ class CloudOcrBackend:
 register_ocr_backend(CloudOcrBackend())
 ```
 
-#### unregister_ocr_backend()
+#### Unregister_ocr_backend()
 
 ```python title="Python"
 def unregister_ocr_backend(name: str) -> None
@@ -1291,7 +1292,7 @@ except KreuzbergError as e:
 
 When something goes wrong in the Rust core, these functions let you dig into what happened — the error code, a structured details dict, and (if a Rust panic occurred) the exact file and line in the source.
 
-#### get_last_error_code()
+#### Get_last_error_code()
 
 ```python title="Python"
 def get_last_error_code() -> int | None
@@ -1323,7 +1324,7 @@ elif code == ErrorCode.OCR_ERROR:
 
 ---
 
-#### get_error_details()
+#### Get_error_details()
 
 ```python title="Python"
 def get_error_details() -> dict[str, Any]
@@ -1348,7 +1349,7 @@ except KreuzbergError:
 
 ---
 
-#### classify_error()
+#### Classify_error()
 
 ```python title="Python"
 def classify_error(message: str) -> int
@@ -1370,7 +1371,7 @@ Categories: 0 = Validation, 1 = Parsing, 2 = OCR, 3 = Missing dependency, 4 = I/
 
 ---
 
-#### error_code_name()
+#### Error_code_name()
 
 ```python title="Python"
 def error_code_name(code: int) -> str
@@ -1463,7 +1464,7 @@ print(get_valid_token_reduction_levels())  # Valid reduction levels
 
 Three helpers for working with `ExtractionConfig` objects programmatically — serializing, inspecting, and merging configs.
 
-### config_to_json()
+### Config_to_json()
 
 ```python title="Python"
 def config_to_json(config: ExtractionConfig) -> str
@@ -1478,7 +1479,7 @@ config = ExtractionConfig(ocr=OcrConfig(backend="tesseract", language="eng"))
 print(config_to_json(config))
 ```
 
-### config_get_field()
+### Config_get_field()
 
 ```python title="Python"
 def config_get_field(config: ExtractionConfig, field_name: str) -> Any | None
@@ -1494,7 +1495,7 @@ print(config_get_field(config, "ocr"))       # OcrConfig(...)
 print(config_get_field(config, "chunking"))  # None
 ```
 
-### config_merge()
+### Config_merge()
 
 ```python title="Python"
 def config_merge(base: ExtractionConfig, override: ExtractionConfig) -> None
@@ -1515,7 +1516,7 @@ config_merge(base, override)
 
 ## Configuration Discovery
 
-### discover_extraction_config()
+### Discover_extraction_config()
 
 !!! Warning "Deprecated since v4.2.0"
     Use `load_extraction_config_from_file()` with an explicit path instead.
@@ -1526,7 +1527,7 @@ def discover_extraction_config() -> ExtractionConfig | None
 
 Searches for a config file automatically: first checks `KREUZBERG_CONFIG_PATH`, then walks up from the current directory looking for `kreuzberg.toml`, `kreuzberg.yaml`, or `kreuzberg.json`. Returns `None` if nothing is found.
 
-### load_extraction_config_from_file()
+### Load_extraction_config_from_file()
 
 ```python title="Python"
 def load_extraction_config_from_file(path: str | Path) -> ExtractionConfig
@@ -1547,13 +1548,13 @@ result = extract_file_sync("document.pdf", config=config)
 
 Kreuzberg ships with named embedding presets that bundle a model, chunk size, and overlap into a single selection. Use `list_embedding_presets()` to see what's available and `get_embedding_preset()` to inspect details.
 
-### list_embedding_presets()
+### List_embedding_presets()
 
 ```python title="Python"
 def list_embedding_presets() -> list[str]
 ```
 
-### get_embedding_preset()
+### Get_embedding_preset()
 
 ```python title="Python"
 def get_embedding_preset(name: str) -> EmbeddingPreset | None

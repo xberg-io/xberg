@@ -16,7 +16,7 @@ That installs all toolchains and dependencies. Safe to re-run anytime — it's i
 
 ### The Pattern
 
-Tasks follow `<language>:<action>`. Once you internalize this, you can guess the command for anything:
+Tasks follow `<language>:<action>`. Once you learn this pattern, the command for any task is predictable:
 
 ```bash title="Terminal"
 task rust:build           # Build the Rust core
@@ -106,9 +106,25 @@ task wasm:build && task wasm:test
 
 ---
 
-## E2E Tests
+## E2E Test Suites
 
-End-to-end tests exist to guarantee that every language binding produces identical results for the same document. They live in `e2e/` as shared fixtures — test inputs paired with expected outputs.
+End-to-end tests guarantee that every language binding produces identical results for the same document. They live in `e2e/` as shared fixtures — test inputs paired with expected outputs.
+
+### Run E2E Tests
+
+| Language | Directory | Run with |
+|----------|-----------|----------|
+| Python | `e2e/python/` | `task python:e2e:test` |
+| TypeScript / Node.js | `e2e/typescript/` | `task node:e2e:test` |
+| Rust | `e2e/rust/` | `task rust:e2e:test` |
+| Go | `e2e/go/` | `task go:e2e:test` |
+| Java | `e2e/java/` | `task java:e2e:test` |
+| .NET | `e2e/csharp/` | `task csharp:e2e:test` |
+| Ruby | `e2e/ruby/` | `task ruby:e2e:test` |
+| PHP | `e2e/php/` | `task php:e2e:test` |
+| R | `e2e/r/` | `task r:e2e:test` |
+
+### Regenerate E2E Tests
 
 When you add a feature that changes extraction behavior, regenerate the affected E2E suites:
 
@@ -117,6 +133,45 @@ task python:e2e:generate
 task node:e2e:generate
 task <lang>:e2e:generate
 ```
+
+To regenerate and test all suites at once:
+
+```bash title="Terminal"
+task e2e:generate:all
+task e2e:test:all
+```
+
+---
+
+## Benchmarking
+
+Measure extraction performance with the benchmark harness in `tools/benchmark-harness/`. Use it to track regressions, compare against alternatives, and identify bottlenecks with flamegraphs.
+
+### Quick Start
+
+```bash title="Terminal"
+task benchmark:run FRAMEWORK=kreuzberg MODE=single-file
+task benchmark:run FRAMEWORK=kreuzberg MODE=batch
+```
+
+### Common Modes
+
+| Mode | What it measures |
+|------|-----------------|
+| `single-file` | Latency — one file at a time |
+| `batch` | Throughput — multiple files in parallel |
+
+### With Profiling
+
+Generate flamegraphs to see where time is spent:
+
+```bash title="Terminal"
+task benchmark:profile FRAMEWORK=kreuzberg MODE=single-file
+```
+
+Results appear in the `flamegraphs/` directory as interactive SVGs.
+
+View live benchmark results at <https://kreuzberg.dev/benchmarks>.
 
 ---
 
@@ -246,7 +301,27 @@ task test:all:ci        # Everything
 
 ---
 
-## What to Read Next
+## Performance
 
-- [Contributing Guide](../contributing.md) — the full contribution workflow from fork to merge
-- [Benchmarking](benchmarking.md) — how to measure and profile extraction performance
+Kreuzberg's core is written in Rust, which enables zero-copy memory handling, SIMD acceleration, and true multi-core parallelism — all at compile time with no garbage collection.
+
+### Why Rust Matters
+
+- **Native compilation:** LLVM optimizes code ahead of time (inlining, vectorization, dead code elimination)
+- **Zero-copy strings:** Slicing uses borrowed references, not heap allocations
+- **SIMD acceleration:** Whitespace detection and character classification run 15-37x faster than scalar operations
+- **No GIL:** True multi-core parallelism across all CPU cores
+- **Deterministic memory:** Drop semantics free memory instantly, no GC pauses
+
+### Key Optimizations
+
+- **Batch processing:** 6-10x faster than sequential extraction through work-stealing scheduler
+- **Caching:** 85%+ hit rates for repeated files (SQLite-backed, automatic invalidation)
+- **Streaming:** Large files processed in 4KB chunks, constant memory regardless of file size
+- **Lazy initialization:** Expensive subsystems (Tokio, plugins) initialized on first use only
+
+### Benchmarking Your Workload
+
+Measure with your actual files using the benchmark harness (see [Benchmarking](#benchmarking) section for full instructions). For detailed analysis and live benchmark results, visit <https://kreuzberg.dev/benchmarks>.
+
+---

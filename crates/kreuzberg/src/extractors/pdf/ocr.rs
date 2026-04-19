@@ -330,7 +330,7 @@ pub(crate) async fn extract_mixed_ocr_native(
     content: &[u8],
     config: &ExtractionConfig,
     _path: Option<&std::path::Path>,
-) -> crate::Result<String> {
+) -> crate::Result<(String, Vec<crate::types::LlmUsage>)> {
     use std::collections::HashSet;
 
     // Deduplicate and validate page numbers (must be >= 1)
@@ -348,7 +348,7 @@ pub(crate) async fn extract_mixed_ocr_native(
         .collect();
 
     if ocr_set.is_empty() {
-        return Ok(native_text.to_string());
+        return Ok((native_text.to_string(), Vec::new()));
     }
 
     // Convert 1-indexed page numbers to 0-indexed for rendering (sorted + deduplicated)
@@ -357,7 +357,7 @@ pub(crate) async fn extract_mixed_ocr_native(
     let page_images = render_selected_pages_for_ocr(content, &page_indices)?;
 
     if page_images.is_empty() {
-        return Ok(native_text.to_string());
+        return Ok((native_text.to_string(), Vec::new()));
     }
 
     // OCR all selected pages concurrently using the same batched pipeline pattern
@@ -382,6 +382,7 @@ pub(crate) async fn extract_mixed_ocr_native(
     let ocr_config_owned = ocr_config.clone();
     let total = page_images.len();
     let mut ocr_results: ahash::AHashMap<usize, String> = ahash::AHashMap::with_capacity(total);
+    let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
 
     // Process in batches to bound peak memory (PNG buffers freed between batches)
     for batch_start in (0..total).step_by(batch_size) {
@@ -424,7 +425,10 @@ pub(crate) async fn extract_mixed_ocr_native(
                 message: format!("OCR task panicked: {}", e),
                 plugin_name: "ocr".to_string(),
             })?;
-            let extraction_result = result?;
+            let mut extraction_result = result?;
+            if let Some(usage) = extraction_result.llm_usage.take() {
+                accumulated_llm_usage.extend(usage);
+            }
             ocr_results.insert(page_idx + 1, extraction_result.content); // 1-indexed
         }
         // encoded PNGs dropped here — memory freed before next batch
@@ -446,7 +450,7 @@ pub(crate) async fn extract_mixed_ocr_native(
         }
     }
 
-    Ok(result)
+    Ok((result, accumulated_llm_usage))
 }
 
 /// Extract text from PDF using OCR on pre-rendered page images.
@@ -477,6 +481,7 @@ pub(crate) async fn extract_with_ocr(
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
     Option<crate::types::internal::InternalDocument>,
+    Vec<crate::types::LlmUsage>,
 )> {
     use crate::plugins::registry::get_ocr_backend_registry;
     use image::ImageEncoder;
@@ -533,7 +538,8 @@ pub(crate) async fn extract_with_ocr(
             .and_then(|v| v.as_f64())
             .map(|v| v / 100.0);
         let ocr_elements = result.ocr_elements.unwrap_or_default();
-        return Ok((result.content, mean_conf, Vec::new(), ocr_elements, None));
+        let llm_usage = result.llm_usage.unwrap_or_default();
+        return Ok((result.content, mean_conf, Vec::new(), ocr_elements, None, llm_usage));
     }
     let mut lazy_pdf_page_count = 0;
 
@@ -595,6 +601,7 @@ pub(crate) async fn extract_with_ocr(
     #[allow(unused_mut)]
     let mut collected_tables: Vec<crate::types::Table> = Vec::new();
     let mut all_ocr_elements: Vec<crate::types::OcrElement> = Vec::new();
+    let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
     let mut conf_sum: f64 = 0.0;
     let mut conf_count: usize = 0;
 
@@ -721,6 +728,11 @@ pub(crate) async fn extract_with_ocr(
             {
                 conf_sum += conf_val as f64;
                 conf_count += 1;
+            }
+
+            // Accumulate LLM usage from this page (e.g., VLM OCR).
+            if let Some(usage) = ocr_result.llm_usage.take() {
+                accumulated_llm_usage.extend(usage);
             }
 
             // Accumulate OCR elements from this page.
@@ -891,7 +903,14 @@ pub(crate) async fn extract_with_ocr(
         Some(doc)
     };
 
-    Ok((result, mean_text_conf, collected_tables, all_ocr_elements, ocr_doc))
+    Ok((
+        result,
+        mean_text_conf,
+        collected_tables,
+        all_ocr_elements,
+        ocr_doc,
+        accumulated_llm_usage,
+    ))
 }
 
 /// Adapt batch size to available system memory.
@@ -997,6 +1016,7 @@ pub(crate) async fn run_ocr_pipeline(
     Vec<crate::types::Table>,
     Vec<crate::types::OcrElement>,
     Option<crate::types::internal::InternalDocument>,
+    Vec<crate::types::LlmUsage>,
 )> {
     use crate::plugins::registry::get_ocr_backend_registry;
 
@@ -1037,6 +1057,10 @@ pub(crate) async fn run_ocr_pipeline(
         Option<crate::types::internal::InternalDocument>,
     )> = None;
 
+    // Accumulate LLM usage from ALL attempted stages for accurate billing.
+    // Usage is incurred even when a backend doesn't win the quality race.
+    let mut accumulated_usage: Vec<crate::types::LlmUsage> = Vec::new();
+
     for stage in &available_stages {
         // Build a modified config for this stage
         let mut stage_ocr = ocr_config.clone();
@@ -1073,7 +1097,7 @@ pub(crate) async fn run_ocr_pipeline(
         .await;
 
         match result {
-            Ok((text, mean_conf, stage_tables, stage_ocr_elements, stage_doc)) => {
+            Ok((text, mean_conf, stage_tables, stage_ocr_elements, stage_doc, stage_llm_usage)) => {
                 let text_score = compute_quality_score(&text, &pipeline.quality_thresholds);
 
                 let score = match mean_conf {
@@ -1090,11 +1114,14 @@ pub(crate) async fn run_ocr_pipeline(
                     "Pipeline: backend produced result"
                 );
 
+                // Always accumulate usage regardless of whether this stage wins.
+                accumulated_usage.extend(stage_llm_usage);
+
                 if score >= pipeline.quality_thresholds.pipeline_min_quality {
-                    return Ok((text, stage_tables, stage_ocr_elements, stage_doc));
+                    return Ok((text, stage_tables, stage_ocr_elements, stage_doc, accumulated_usage));
                 }
 
-                // Track best-so-far
+                // Track best-so-far (without usage, which is in accumulated_usage)
                 match best_result {
                     Some((_, best_score, _, _, _)) if score > best_score => {
                         best_result = Some((text, score, stage_tables, stage_ocr_elements, stage_doc));
@@ -1123,7 +1150,7 @@ pub(crate) async fn run_ocr_pipeline(
                 threshold = pipeline.quality_thresholds.pipeline_min_quality,
                 "All OCR pipeline backends produced suboptimal quality, using best result"
             );
-            Ok((text, tables, elements, doc))
+            Ok((text, tables, elements, doc, accumulated_usage))
         }
         None => Err(crate::KreuzbergError::Parsing {
             message: "All OCR pipeline backends failed".to_string(),
@@ -1921,8 +1948,116 @@ mod tests {
 
         assert!(result.is_ok());
         assert!(called.load(Ordering::SeqCst), "process_document was not called");
+        let (_, _, _, _, _, llm_usage) = result.unwrap();
+        assert!(llm_usage.is_empty(), "No LLM usage expected for mock backend");
 
         // Clean up
         crate::plugins::unregister_ocr_backend("mock").unwrap();
+    }
+
+    /// Verifies that `llm_usage` entries returned by a VLM OCR backend are
+    /// accumulated per-page and returned from `extract_with_ocr`.
+    #[cfg(feature = "ocr")]
+    #[tokio::test]
+    async fn test_llm_usage_propagated_through_extract_with_ocr() {
+        use crate::core::config::OcrConfig;
+        use crate::plugins::{OcrBackend, OcrBackendType, Plugin};
+        use crate::types::{ExtractionResult, LlmUsage};
+        use std::sync::Arc;
+
+        struct VlmMockBackend;
+
+        #[async_trait::async_trait]
+        impl OcrBackend for VlmMockBackend {
+            fn backend_type(&self) -> OcrBackendType {
+                OcrBackendType::Custom
+            }
+            fn supports_language(&self, _: &str) -> bool {
+                true
+            }
+            async fn process_image(&self, _: &[u8], _: &OcrConfig) -> crate::Result<ExtractionResult> {
+                Ok(ExtractionResult {
+                    content: "page text".to_string(),
+                    llm_usage: Some(vec![LlmUsage {
+                        model: "gpt-4o".to_string(),
+                        source: "vlm_ocr".to_string(),
+                        input_tokens: Some(100),
+                        output_tokens: Some(50),
+                        total_tokens: Some(150),
+                        estimated_cost: Some(0.001),
+                        finish_reason: Some("stop".to_string()),
+                    }]),
+                    ..Default::default()
+                })
+            }
+            fn supports_document_processing(&self) -> bool {
+                false
+            }
+        }
+
+        impl Plugin for VlmMockBackend {
+            fn name(&self) -> &str {
+                "vlm-mock"
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        let backend = Arc::new(VlmMockBackend);
+        let config = ExtractionConfig {
+            ocr: Some(OcrConfig {
+                backend: "vlm-mock".to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        crate::plugins::register_ocr_backend(backend).unwrap();
+
+        // Provide two synthetic 1x1 pixel images so extract_with_ocr processes two pages.
+        let tiny_png = {
+            use image::ImageEncoder;
+            use image::codecs::png::PngEncoder;
+            use std::io::Cursor;
+            let img = image::DynamicImage::new_rgb8(1, 1);
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let mut buf = Cursor::new(Vec::new());
+            PngEncoder::new(&mut buf)
+                .write_image(&rgb, w, h, image::ColorType::Rgb8.into())
+                .unwrap();
+            image::load_from_memory(&buf.into_inner()).unwrap()
+        };
+        let images = vec![tiny_png.clone(), tiny_png];
+
+        let result = extract_with_ocr(
+            None,
+            Some(&images),
+            #[cfg(feature = "layout-detection")]
+            None,
+            &config,
+            None,
+        )
+        .await;
+
+        crate::plugins::unregister_ocr_backend("vlm-mock").unwrap();
+
+        let (_, _, _, _, _, llm_usage) = result.expect("extract_with_ocr should succeed");
+        assert_eq!(
+            llm_usage.len(),
+            2,
+            "should have one LlmUsage entry per page, got {}",
+            llm_usage.len()
+        );
+        assert_eq!(llm_usage[0].model, "gpt-4o");
+        assert_eq!(llm_usage[0].source, "vlm_ocr");
+        assert_eq!(llm_usage[0].total_tokens, Some(150));
     }
 }

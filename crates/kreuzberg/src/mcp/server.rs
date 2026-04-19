@@ -583,11 +583,11 @@ impl KreuzbergMcp {
 
     /// Split text into chunks with configurable size and overlap.
     ///
-    /// Supports text and markdown chunking modes. Useful for preparing
+    /// Supports text, markdown, yaml, and semantic chunking modes. Useful for preparing
     /// text for embedding generation or other downstream processing.
     /// Requires the `chunking` feature to be enabled.
     #[tool(
-        description = "Split text into chunks with configurable size and overlap. Supports 'text' and 'markdown' chunker types.",
+        description = "Split text into chunks with configurable size and overlap. Supports 'text', 'markdown', 'yaml', and 'semantic' chunker types.",
         annotations(title = "Chunk Text", read_only_hint = true, idempotent_hint = true)
     )]
     fn chunk_text(
@@ -765,9 +765,14 @@ fn chunk_text_impl(params: super::params::ChunkTextParams) -> Result<CallToolRes
     let chunker_type = match params.chunker_type.as_deref().unwrap_or("text") {
         "text" => ChunkerType::Text,
         "markdown" => ChunkerType::Markdown,
+        "yaml" => ChunkerType::Yaml,
+        "semantic" => ChunkerType::Semantic,
         other => {
             return Err(rmcp::ErrorData::invalid_params(
-                format!("Invalid chunker_type: '{}'. Valid values: 'text', 'markdown'", other),
+                format!(
+                    "Invalid chunker_type: '{}'. Valid values: 'text', 'markdown', 'yaml', 'semantic'",
+                    other
+                ),
                 None,
             ));
         }
@@ -798,6 +803,7 @@ fn chunk_text_impl(params: super::params::ChunkTextParams) -> Result<CallToolRes
         overlap,
         trim: true,
         chunker_type,
+        topic_threshold: params.topic_threshold,
         ..Default::default()
     };
 
@@ -1335,6 +1341,7 @@ mod tests {
             max_characters: None,
             overlap: None,
             chunker_type: None,
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
@@ -1363,6 +1370,7 @@ mod tests {
             max_characters: None,
             overlap: None,
             chunker_type: None,
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
@@ -1378,6 +1386,7 @@ mod tests {
             max_characters: None,
             overlap: None,
             chunker_type: Some("invalid".to_string()),
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
@@ -1417,6 +1426,7 @@ mod tests {
             max_characters: Some(0),
             overlap: None,
             chunker_type: None,
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));
@@ -1438,6 +1448,7 @@ mod tests {
             max_characters: Some(2_000_000),
             overlap: None,
             chunker_type: None,
+            topic_threshold: None,
         };
 
         let result = server.chunk_text(rmcp::handler::server::wrapper::Parameters(params));

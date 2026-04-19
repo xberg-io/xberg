@@ -147,9 +147,9 @@ Kreuzberg supports three OCR backends. You can use one backend, or chain multipl
 | **Languages** | 100+ | 80+ (11 script families) | 80+ |
 | **Best for** | General purpose, broad language coverage | CJK, complex scripts, high accuracy | GPU-accelerated workloads |
 | **Platform** | All bindings including WASM | All non-WASM bindings | Python only |
-| **Install** | System package (`tesseract-ocr`) | Cargo feature `paddle-ocr` or `pip install kreuzberg[paddleocr]` | `pip install kreuzberg[easyocr]` |
+| **Install** | System package (`tesseract-ocr`) | Cargo feature `paddle-ocr` (bundled in Python package since 4.8.5) | `pip install kreuzberg[easyocr]` |
 | **Runtime** | C library (Tesseract 4.0+) | ONNX Runtime (models downloaded on first use) | PyTorch (optional CUDA) |
-| **Python version** | Any | Native: any. Python package: <3.14 | <3.14 |
+| **Python version** | Any | Any | Any |
 
 ### Multi-Backend Pipeline
 
@@ -192,9 +192,9 @@ After extraction, Kreuzberg can run a chain of processing steps. Each is optiona
 
 **Page Tracking** -- Extract per-page content with byte-accurate offsets for O(1) page lookups. Chunks are automatically mapped to their source pages, enabling precise citations in retrieval systems. Supported for PDF (byte-accurate), PPTX (slide boundaries), and DOCX (best-effort page breaks). See [Extraction Basics](guides/extraction.md) for usage.
 
-**PDF Hierarchy Detection** -- Detect document structure from PDFs using K-means clustering on block characteristics (font size, weight, indentation, position). Blocks are assigned to semantic levels (title, section, subsection, paragraph) without relying on explicit heading tags. See the [PDF Hierarchy Guide](guides/pdf-hierarchy.md).
+**PDF Hierarchy Detection** -- Detect document structure from PDFs using K-means clustering on block characteristics (font size, weight, indentation, position). Blocks are assigned to semantic levels (title, section, subsection, paragraph) without relying on explicit heading tags. See the [Output Formats Guide](guides/output-formats.md#pdf-hierarchy-detection).
 
-**PDF Page Rendering** -- Render individual PDF pages as PNG images for thumbnails, vision model input, or custom processing pipelines. Memory-efficient iterator renders one page at a time. Configurable DPI (default 150). Available across all language bindings. See [PDF Rendering Guide](guides/pdf-rendering.md).
+**PDF Page Rendering** -- Render individual PDF pages as PNG images for thumbnails, vision model input, or custom processing pipelines. Memory-efficient iterator renders one page at a time. Configurable DPI (default 150). Available across all language bindings. See [Extraction Guide](guides/extraction.md#pdf-page-rendering).
 
 !!! Info "Added in v4.6.2"
 
@@ -280,20 +280,21 @@ Customize the prompts sent to LLMs with Minijinja templates. Available variables
 
 !!! Info "Added in v4.5.0"
 
-Detect and classify document regions using ONNX-based deep learning models. Layout detection identifies tables, figures, headers, text blocks, code sections, forms, and more, then feeds that structure into extraction for better accuracy.
+Detect and classify document regions using ONNX-based deep learning. Layout detection identifies 17 element types (text, tables, figures, headers, code, forms, captions, and more), enabling accurate region-aware extraction and structured table recovery.
 
-### Model Presets
+**RT-DETR v2** -- The layout detection model that identifies document structure with high precision. Automatically selects and configures separate table structure models (TATR, SLANeXT variants, or SLANet-plus) for cell-level analysis within detected table regions.
 
-| Preset | Model | Element Classes | Use Case |
-|---|---|---|---|
-| `"fast"` | YOLO | 11 | High-throughput pipelines, general documents |
-| `"accurate"` | RT-DETR v2 | 17 | Complex layouts, forms, mixed-content pages |
+**Table Structure Recognition** -- When layout detection identifies a table, a configurable table structure model analyzes rows, columns, headers, and spanning cells for HTML recovery with colspan/rowspan support. Choose from:
 
-Layout detection includes SLANet table structure recognition for HTML table recovery with colspan/rowspan, heading detection with confidence-based overrides, and GPU acceleration via ONNX Runtime (CUDA, CoreML, TensorRT).
+- **TATR** (30 MB) — General-purpose, fast, default
+- **SLANeXT Wired/Wireless/Auto** (365–737 MB) — Optimized for bordered/borderless tables with auto-detection
+- **SLANet-plus** (7.78 MB) — Lightweight, resource-constrained environments
 
-Models are automatically downloaded and cached from HuggingFace on first use. Available across all language bindings **except WebAssembly** -- WASM does not support layout detection because ONNX Runtime is unavailable in browser environments.
+GPU acceleration via ONNX Runtime (CUDA, CoreML, TensorRT) significantly reduces inference time. Models are automatically downloaded and cached on first use.
 
-For configuration and usage examples, see the [Layout Detection Guide](guides/layout-detection.md).
+**Availability:** All language bindings **except WebAssembly** — WASM does not support layout detection because ONNX Runtime is unavailable in browser environments.
+
+For configuration and usage, see the [Layout Detection Guide](guides/layout-detection.md).
 
 ---
 
@@ -345,10 +346,14 @@ Kreuzberg's Rust core is exposed through native bindings for 12 languages. All b
 
 **Full features, synchronous API** -- Go, Ruby, C#, Java
 
-**Subset or constrained environment** -- TypeScript/WASM (browser/edge, no filesystem or server modes), PHP, Elixir, R, C (FFI)
+**Subset or constrained environments** -- PHP, Elixir, R, C (FFI)
 
-!!! Note "TypeScript: Native vs WASM"
-    **Native** (`@kreuzberg/node`) runs at full speed with complete feature parity including servers, plugins, and config file discovery. **WASM** (`@kreuzberg/wasm`) runs in browsers and edge runtimes at 60-80% of native speed with no native dependencies, but lacks filesystem access, server modes, file-based configuration, layout detection (requires ONNX Runtime), hardware acceleration config, concurrency config, and email config. Choose Native for server-side Node.js; choose WASM for browser or edge deployments.
+**TypeScript: Two flavors**
+
+- **Native** (`@kreuzberg/node`) — Full speed, complete feature parity (servers, plugins, config file discovery)
+- **WASM** (`@kreuzberg/wasm`) — Browser/edge runtime, 60–80% of native speed, no native dependencies required, but no filesystem access, server modes, layout detection, hardware acceleration, or email extraction
+
+Choose Native for server-side Node.js; choose WASM for browser or edge deployments.
 
 ### Rust Feature Flags
 
@@ -366,8 +371,7 @@ Rust builds are modular through Cargo features. Nothing is enabled by default --
 === "Python"
 
     ```bash
-    pip install kreuzberg                  # Core + Tesseract
-    pip install kreuzberg[paddleocr]       # + PaddleOCR
+    pip install kreuzberg                  # Core + Tesseract + PaddleOCR
     pip install kreuzberg[easyocr]         # + EasyOCR
     pip install kreuzberg[all]             # Everything
     ```
@@ -432,4 +436,4 @@ Compatible with Claude Code, Codex, Gemini CLI, Cursor, VS Code, Amp, Goose, Roo
 - [Installation](getting-started/installation.md) -- Install Kreuzberg for your language
 - [Quick Start](getting-started/quickstart.md) -- Extract your first document in 5 minutes
 - [Architecture](concepts/architecture.md) -- Understand the Rust core and binding layers
-- [Performance](concepts/performance.md) -- Benchmarks and optimization guidance
+- [Development Workflow](guides/development.md#performance) -- Performance benchmarks and optimization guidance
