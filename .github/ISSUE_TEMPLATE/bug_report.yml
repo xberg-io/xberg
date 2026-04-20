@@ -1,0 +1,28 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "fix: "
+labels: ["bug"]
+projects: ["kreuzberg-dev/1"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps to reproduce the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction-files
+    attributes:
+      label: Relevant files and configuration
+      description: >-
+        Any configuration files, input files, or code snippets needed to
+        reproduce the issue.
+      render: text

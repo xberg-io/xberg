@@ -1,0 +1,10 @@
+# Default owner — everything
+* @Goldziher
+
+# Zensical config and documentation
+/zensical.toml @Goldziher @pratik-mahalle @v-tan
+/docs/ @Goldziher @pratik-mahalle @v-tan
+*.md @Goldziher @pratik-mahalle @v-tan
+
+# Rust crates
+/crates/ @Goldziher @kh3rld
