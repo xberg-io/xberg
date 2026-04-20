@@ -4,6 +4,11 @@ default_install_hook_types:
 exclude: ^dist/
 
 repos:
+  - repo: https://github.com/Goldziher/ai-rulez
+    rev: v3.14.2
+    hooks:
+      - id: ai-rulez-generate
+
   - repo: https://github.com/Goldziher/gitfluff
     rev: v0.8.0
     hooks:
