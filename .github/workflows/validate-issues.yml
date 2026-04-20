@@ -1,0 +1,9 @@
+name: Validate Issues
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  validate:
+    uses: kreuzberg-dev/actions/.github/workflows/reusable-validate-issues.yml@main

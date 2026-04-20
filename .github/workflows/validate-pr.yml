@@ -1,0 +1,9 @@
+name: Validate PR
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  validate:
+    uses: kreuzberg-dev/actions/.github/workflows/reusable-validate-pr.yml@main

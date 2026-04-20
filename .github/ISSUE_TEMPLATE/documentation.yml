@@ -1,0 +1,20 @@
+name: Documentation Issue
+description: Report missing, unclear, or incorrect documentation
+title: "docs: "
+labels: ["documentation"]
+projects: ["kreuzberg-dev/1"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: What documentation is missing, unclear, or incorrect?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Why does this need to change?
+    validations:
+      required: true
