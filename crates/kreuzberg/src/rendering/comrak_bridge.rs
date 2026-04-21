@@ -675,21 +675,29 @@ pub fn build_comrak_ast<'a>(doc: &InternalDocument, arena: &'a comrak::Arena<'a>
             ElementKind::Image { image_index } => {
                 let image = doc.images.get(image_index as usize);
                 let desc = image.and_then(|img| img.description.as_deref()).unwrap_or("");
-                let url = image
-                    .and_then(|img| {
-                        if !img.data.is_empty() {
-                            Some(format!("image_{}.{}", image_index, img.format))
-                        } else {
-                            img.source_path.clone()
+                let url = match image {
+                    None => {
+                        // image_index is out-of-bounds — no corresponding entry in doc.images.
+                        // Skip to avoid emitting a broken link with no context.
+                        if desc.is_empty() {
+                            continue;
                         }
-                    })
-                    .unwrap_or_default();
-
-                // Skip images with no URL and no description — they produce
-                // empty `![]()` nodes that add noise to the output.
-                if url.is_empty() && desc.is_empty() {
-                    continue;
-                }
+                        String::new()
+                    }
+                    Some(img) => {
+                        if !img.data.is_empty() {
+                            format!("image_{}.{}", image_index, img.format)
+                        } else if let Some(ref path) = img.source_path {
+                            path.clone()
+                        } else {
+                            // The image is known to exist in the document (pdfium detected it)
+                            // but its pixel data could not be extracted (too small, encoding
+                            // failure, etc.). Emit a stable placeholder filename so the link
+                            // appears in markdown output rather than being silently dropped.
+                            format!("image_{}.bin", image_index)
+                        }
+                    }
+                };
 
                 let para = mk(arena, NodeValue::Paragraph);
                 let img_node = mk(
@@ -1216,5 +1224,95 @@ mod tests {
         let doc = b.build();
         let out = render(&doc);
         assert!(out.contains("footnote"), "should contain footnote marker, got: {}", out);
+    }
+
+    /// Regression test for issue #762: image links must appear in markdown when image
+    /// data is available via pdfium extraction (non-empty `data` field).
+    #[test]
+    fn test_image_with_data_renders_link() {
+        use crate::types::internal::ElementKind;
+        use crate::types::ExtractedImage;
+
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph("Before image.", vec![], None, None);
+        b.push_element(crate::types::internal::InternalElement::text(
+            ElementKind::Image { image_index: 0 },
+            "",
+            0,
+        ));
+        let mut doc = b.build();
+        doc.images.push(ExtractedImage {
+            data: bytes::Bytes::from_static(b"\x89PNG"),
+            format: std::borrow::Cow::Borrowed("png"),
+            image_index: 0,
+            page_number: Some(1),
+            width: Some(100),
+            height: Some(100),
+            colorspace: None,
+            bits_per_component: None,
+            is_mask: false,
+            description: None,
+            ocr_result: None,
+            bounding_box: None,
+            source_path: None,
+        });
+        let out = render(&doc);
+        assert!(out.contains("image_0.png"), "image link must appear; got: {}", out);
+        assert!(out.contains("!["), "must use image markdown syntax; got: {}", out);
+    }
+
+    /// Regression test for issue #762: image with no data but known to exist (placeholder)
+    /// must still emit a link with a `.bin` fallback URL rather than being silently dropped.
+    #[test]
+    fn test_image_placeholder_with_empty_data_renders_fallback_link() {
+        use crate::types::internal::ElementKind;
+        use crate::types::ExtractedImage;
+
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_element(crate::types::internal::InternalElement::text(
+            ElementKind::Image { image_index: 0 },
+            "",
+            0,
+        ));
+        let mut doc = b.build();
+        doc.images.push(ExtractedImage {
+            data: bytes::Bytes::new(), // empty — extraction failed
+            format: std::borrow::Cow::Borrowed("unknown"),
+            image_index: 0,
+            page_number: Some(1),
+            width: None,
+            height: None,
+            colorspace: None,
+            bits_per_component: None,
+            is_mask: false,
+            description: None,
+            ocr_result: None,
+            bounding_box: None,
+            source_path: None,
+        });
+        let out = render(&doc);
+        assert!(
+            out.contains("image_0.bin"),
+            "empty-data image must emit placeholder link; got: {:?}",
+            out
+        );
+    }
+
+    /// Image element with out-of-bounds index and no description must be silently dropped.
+    #[test]
+    fn test_image_out_of_bounds_index_dropped() {
+        use crate::types::internal::ElementKind;
+
+        let mut b = InternalDocumentBuilder::new("test");
+        b.push_paragraph("Only text.", vec![], None, None);
+        b.push_element(crate::types::internal::InternalElement::text(
+            ElementKind::Image { image_index: 99 }, // no such image
+            "",
+            0,
+        ));
+        let doc = b.build(); // doc.images is empty
+        let out = render(&doc);
+        assert!(!out.contains("image_99"), "out-of-bounds image must be dropped; got: {}", out);
+        assert!(out.contains("Only text."), "paragraph must still render; got: {}", out);
     }
 }

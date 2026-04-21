@@ -960,9 +960,11 @@ impl PdfExtractor {
                         pre_doc.tables.push(table);
                     }
                 }
-                if let Some(imgs) = images {
-                    pre_doc.images = imgs;
-                }
+                // Do NOT overwrite pre_doc.images here. The structure pipeline already
+                // populated it via populate_images_from_pdfium with images indexed to match
+                // the ElementKind::Image { image_index } values in pre_doc.elements. Overwriting
+                // with the lopdf-extracted images (indexed 0, 1, 2...) would break that
+                // correspondence and cause image links to silently disappear from markdown output.
                 if let Some(warning) = image_fallback_warning.clone() {
                     pre_doc.processing_warnings.push(warning);
                 }

@@ -865,6 +865,38 @@ mod tests {
     }
 
     #[test]
+    fn test_image_elements_injected_with_positions() {
+        let pages = vec![vec![make_paragraph("Page with image", None)]];
+        // Image at page 1 (1-indexed), image_index = 0
+        let image_positions = vec![(1usize, 0usize)];
+        let doc = assemble_internal_document(pages, &[], &image_positions);
+
+        let image_elems: Vec<_> = doc
+            .elements
+            .iter()
+            .filter(|e| matches!(e.kind, ElementKind::Image { .. }))
+            .collect();
+        assert_eq!(image_elems.len(), 1, "one image element should be injected");
+        assert!(
+            matches!(image_elems[0].kind, ElementKind::Image { image_index: 0 }),
+            "image_index must match the position provided"
+        );
+    }
+
+    #[test]
+    fn test_no_image_elements_with_empty_positions() {
+        let pages = vec![vec![make_paragraph("No images here", None)]];
+        let doc = assemble_internal_document(pages, &[], &[]);
+
+        let image_count = doc
+            .elements
+            .iter()
+            .filter(|e| matches!(e.kind, ElementKind::Image { .. }))
+            .count();
+        assert_eq!(image_count, 0, "no image elements when positions is empty");
+    }
+
+    #[test]
     fn test_caption_skipped_in_main_flow() {
         let para1 = make_paragraph("Main text", None);
         let mut caption = make_paragraph("Caption text", None);

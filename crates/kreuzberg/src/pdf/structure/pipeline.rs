@@ -549,6 +549,7 @@ pub fn extract_document_structure(
     include_footers: bool,
     max_images_per_page: Option<u32>,
     cancel_token: Option<&crate::cancellation::CancellationToken>,
+    inject_placeholders: bool,
 ) -> Result<(crate::types::internal::InternalDocument, bool)> {
     let pages = document.pages();
     let page_count = pages.len();
@@ -1330,11 +1331,16 @@ pub fn extract_document_structure(
     let mut combined_tables: Vec<crate::types::Table> = tables.iter().cloned().chain(layout_tables).collect();
     deduplicate_overlapping_tables(&mut combined_tables);
 
-    // Convert image positions to (page_idx, image_index) pairs for the assembler
-    let image_pos_pairs: Vec<(usize, usize)> = all_image_positions
-        .iter()
-        .map(|img| (img.page_number, img.image_index))
-        .collect();
+    // Convert image positions to (page_idx, image_index) pairs for the assembler.
+    // Skip when inject_placeholders=false: the caller does not want image links in output.
+    let image_pos_pairs: Vec<(usize, usize)> = if inject_placeholders {
+        all_image_positions
+            .iter()
+            .map(|img| (img.page_number, img.image_index))
+            .collect()
+    } else {
+        Vec::new()
+    };
 
     tracing::debug!(
         combined_tables = combined_tables.len(),
@@ -1348,7 +1354,10 @@ pub fn extract_document_structure(
     // Stage 4b: Populate doc.images with actual image data from pdfium.
     // Image elements reference indices into doc.images, which must be populated
     // for markdown/HTML rendering to produce `![desc](image_N.png)` instead of `![]()`.
-    populate_images_from_pdfium(document, &all_image_positions, &mut doc, cancel_token);
+    // Skip when inject_placeholders=false to avoid unnecessary rendering work.
+    if inject_placeholders {
+        populate_images_from_pdfium(document, &all_image_positions, &mut doc, cancel_token);
+    }
 
     let element_count = doc.elements.len();
     tracing::debug!(element_count, "PDF structure pipeline: assembly complete");
@@ -1397,6 +1406,7 @@ pub(crate) struct SegmentStructureConfig<'a> {
     pub include_footers: bool,
     pub used_structure_tree: bool,
     pub image_positions: &'a [(usize, usize)],
+    pub inject_placeholders: bool,
     pub layout_hints: Option<&'a [Vec<LayoutHint>]>,
     pub allow_single_column: bool,
     pub cancel_token: Option<&'a crate::cancellation::CancellationToken>,
@@ -1423,6 +1433,7 @@ pub(crate) fn extract_document_structure_from_segments(
         include_footers,
         used_structure_tree,
         image_positions,
+        inject_placeholders,
         layout_hints,
         allow_single_column,
         cancel_token,
@@ -2096,7 +2107,8 @@ pub(crate) fn extract_document_structure_from_segments(
     // overlapping tables on the same page (same pattern as the pdfium path).
     let mut combined_tables: Vec<crate::types::Table> = tables.iter().cloned().chain(layout_tables).collect();
     deduplicate_overlapping_tables(&mut combined_tables);
-    let mut doc = assemble_internal_document(all_page_paragraphs, &combined_tables, image_positions);
+    let effective_image_positions = if inject_placeholders { image_positions } else { &[] };
+    let mut doc = assemble_internal_document(all_page_paragraphs, &combined_tables, effective_image_positions);
 
     // Stage 5: Element-level text normalization.
     for elem in &mut doc.elements {

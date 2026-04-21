@@ -121,7 +121,13 @@ pub(crate) fn extract_all_from_document(
             .map(|cf| (cf.strip_repeating_text, cf.include_headers, cf.include_footers))
             .unwrap_or((true, false, false)); // defaults match current behavior
 
-        tracing::debug!(k_clusters = k, "PDF structure path: calling extract_document_structure");
+        let inject_placeholders = config
+            .images
+            .as_ref()
+            .map(|c| c.inject_placeholders)
+            .unwrap_or(true);
+
+        tracing::debug!(k_clusters = k, inject_placeholders, "PDF structure path: calling extract_document_structure");
         match crate::pdf::structure::extract_document_structure(
             document,
             k,
@@ -151,6 +157,7 @@ pub(crate) fn extract_all_from_document(
             include_footers,
             config.images.as_ref().and_then(|i| i.max_images_per_page),
             config.cancel_token.as_ref(),
+            inject_placeholders,
         ) {
             Ok((doc, has_encoding_issues)) if !doc.elements.is_empty() => {
                 tracing::debug!(
@@ -503,6 +510,12 @@ pub(crate) fn extract_all_from_oxide_document(
                 "oxide structure: extracted segments for heading detection"
             );
 
+            let inject_placeholders = config
+                .images
+                .as_ref()
+                .map(|c| c.inject_placeholders)
+                .unwrap_or(true);
+
             match crate::pdf::structure::extract_document_structure_from_segments(
                 segments,
                 crate::pdf::structure::SegmentStructureConfig {
@@ -513,6 +526,7 @@ pub(crate) fn extract_all_from_oxide_document(
                     include_footers,
                     used_structure_tree,
                     image_positions: &image_positions,
+                    inject_placeholders,
                     layout_hints,
                     allow_single_column,
                     cancel_token: config.cancel_token.as_ref(),
