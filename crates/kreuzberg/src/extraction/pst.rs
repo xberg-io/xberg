@@ -26,7 +26,7 @@
 //! ```
 
 use crate::error::{KreuzbergError, Result};
-use crate::types::{EmailExtractionResult, ProcessingWarning};
+use crate::types::{EmailAttachment, EmailExtractionResult, ProcessingWarning};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -202,6 +202,15 @@ fn extract_message_content(message: &dyn PstMessage, entry_id: &EntryId) -> Emai
         }
     });
 
+    // Build MAPI EntryID hex string: 4 zero bytes (flags) + 16-byte record_key + 4-byte node_id LE
+    let record_key = entry_id.record_key();
+    let node_id_bytes = u32::from(entry_id.node_id()).to_le_bytes();
+    let entry_id_hex: String = std::iter::repeat_n(0u8, 4)
+        .chain(record_key.iter().copied())
+        .chain(node_id_bytes.iter().copied())
+        .map(|b| format!("{b:02X}"))
+        .collect();
+
     // Extract recipients from the recipient table
     let mut to_emails: Vec<String> = Vec::new();
     let mut cc_emails: Vec<String> = Vec::new();
@@ -263,6 +272,62 @@ fn extract_message_content(message: &dyn PstMessage, entry_id: &EntryId) -> Emai
         }
     }
 
+    // Extract attachments from the attachment table
+    let mut attachments: Vec<EmailAttachment> = Vec::new();
+
+    if let Some(attach_table) = message.attachment_table() {
+        let context = attach_table.context();
+        let col_defs: Vec<(u16, _)> = context.columns().iter().map(|c| (c.prop_id(), c.prop_type())).collect();
+
+        for row in attach_table.rows_matrix() {
+            let Ok(col_values) = row.columns(context) else {
+                continue;
+            };
+
+            let mut long_filename: Option<String> = None;
+            let mut short_filename: Option<String> = None;
+            let mut attach_data: Option<Vec<u8>> = None;
+
+            for ((prop_id, prop_type), value_opt) in col_defs.iter().zip(col_values.iter()) {
+                let Some(value_record) = value_opt else {
+                    continue;
+                };
+                let Ok(value) = attach_table.read_column(value_record, *prop_type) else {
+                    continue;
+                };
+
+                match prop_id {
+                    0x3707 => long_filename = prop_value_to_string(&value), // PR_ATTACH_LONG_FILENAME
+                    0x3704 => short_filename = prop_value_to_string(&value), // PR_ATTACH_FILENAME
+                    0x3701 => {
+                        // PR_ATTACH_DATA_BINARY
+                        if let PropertyValue::Binary(v) = value {
+                            attach_data = Some(v.buffer().to_vec());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            let filename = long_filename.or(short_filename);
+            let size = attach_data.as_ref().map(|d| d.len());
+            let mime_type = filename
+                .as_deref()
+                .and_then(|f| mime_guess::from_path(f).first())
+                .map(|m| m.to_string());
+            let is_image = mime_type.as_deref().is_some_and(|m| m.starts_with("image/"));
+
+            attachments.push(EmailAttachment {
+                name: filename.clone(),
+                filename,
+                mime_type,
+                size,
+                is_image,
+                data: attach_data.map(bytes::Bytes::from),
+            });
+        }
+    }
+
     EmailExtractionResult {
         subject,
         from_email,
@@ -274,8 +339,8 @@ fn extract_message_content(message: &dyn PstMessage, entry_id: &EntryId) -> Emai
         plain_text,
         html_content,
         cleaned_text,
-        attachments: vec![],
-        metadata: HashMap::from([("entry_id".to_string(), format!("{:?}", entry_id))]),
+        attachments,
+        metadata: HashMap::from([("entry_id".to_string(), entry_id_hex)]),
     }
 }
 
@@ -326,7 +391,49 @@ pub fn extract_pst_messages(_pst_data: &[u8]) -> Result<(Vec<EmailExtractionResu
 #[cfg(feature = "email")]
 mod tests {
     use super::*;
-    use outlook_pst::ltp::prop_context::PropertyValue;
+    use outlook_pst::{
+        ltp::prop_context::PropertyValue,
+        messaging::store::{EntryId, StoreRecordKey},
+        ndb::node_id::NodeId,
+    };
+
+    // ── EntryID format ───────────────────────────────────────────────────────
+
+    /// Regression test for issue #764: entry_id must be the MAPI hex format,
+    /// not the Rust Debug representation of the EntryId struct.
+    #[test]
+    fn test_entry_id_hex_format_issue_764() {
+        // 16-byte record_key (store UID), all distinct so we can verify ordering
+        let record_key_bytes: [u8; 16] = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10,
+        ];
+        let record_key = StoreRecordKey::new(record_key_bytes);
+
+        // Build a NormalMessage node_id with index = 1
+        // NodeId bits: index<<5 | nid_type; NormalMessage = 0x04
+        let node_id = NodeId::from(0x04 | (1u32 << 5));
+        let entry_id = EntryId::new(record_key, node_id);
+
+        // Reconstruct the expected hex manually
+        let node_id_u32 = u32::from(entry_id.node_id());
+        let node_id_le = node_id_u32.to_le_bytes();
+        let expected: String = std::iter::repeat_n(0u8, 4)
+            .chain(record_key_bytes.iter().copied())
+            .chain(node_id_le.iter().copied())
+            .map(|b| format!("{b:02X}"))
+            .collect();
+
+        // Must be 48 hex chars (24 bytes)
+        assert_eq!(expected.len(), 48, "MAPI EntryID must be 48 hex chars");
+
+        // Must start with 8 zeros (4 zero bytes = rgbFlags)
+        assert!(expected.starts_with("00000000"), "EntryID must start with 00000000");
+
+        // Must NOT contain Debug-style syntax
+        assert!(!expected.contains("EntryId"), "must not be Debug representation");
+        assert!(!expected.contains("record_key"), "must not be Debug representation");
+        assert!(!expected.contains('{'), "must not be Debug representation");
+    }
 
     // ── FILETIME conversion ──────────────────────────────────────────────────
 
