@@ -55,7 +55,7 @@ impl OcrBackend for VlmOcrBackend {
         // Detect MIME type from image bytes
         let mime = infer::get(image_bytes).map(|t| t.mime_type()).unwrap_or("image/png");
 
-        let (text, usage) = vlm_ocr(image_bytes, mime, &config.language, vlm_config).await?;
+        let (text, usage) = vlm_ocr(image_bytes, mime, &config.language, vlm_config, config.vlm_prompt.as_deref()).await?;
 
         Ok(crate::ExtractionResult {
             content: text,
@@ -101,6 +101,7 @@ pub async fn vlm_ocr(
     image_mime_type: &str,
     language: &str,
     config: &LlmConfig,
+    vlm_prompt: Option<&str>,
 ) -> crate::Result<(String, Option<crate::types::LlmUsage>)> {
     let client = super::client::create_client(config)?;
 
@@ -108,9 +109,11 @@ pub async fn vlm_ocr(
     let b64 = base64::engine::general_purpose::STANDARD.encode(image_bytes);
     let data_url = format!("data:{image_mime_type};base64,{b64}");
 
-    // Build prompt from Jinja2 template with language context.
+    // Use the caller-supplied Jinja2 template if provided, otherwise fall back to the
+    // built-in default.  The template receives `{{ language }}` as a context variable.
+    let template = vlm_prompt.unwrap_or(super::prompts::VLM_OCR_TEMPLATE);
     let ctx = minijinja::context! { language => language };
-    let prompt = super::prompts::render_template(super::prompts::VLM_OCR_TEMPLATE, &ctx)?;
+    let prompt = super::prompts::render_template(template, &ctx)?;
 
     // Build a multi-part user message with text prompt + image.
     let message = Message::User(UserMessage {
@@ -179,5 +182,42 @@ mod tests {
     fn test_vlm_ocr_prompt_en_no_language_hint() {
         let prompt = render_ocr_prompt("en");
         assert!(!prompt.contains("language:"));
+    }
+
+    /// Regression test for issue #760: OcrConfig.vlm_prompt must be honoured.
+    ///
+    /// Before the fix, vlm_prompt was never passed to vlm_ocr() and the hardcoded
+    /// VLM_OCR_TEMPLATE was always used instead.
+    #[test]
+    fn test_vlm_prompt_custom_template_is_used_issue_760() {
+        let custom_prompt = "Extract all text from this document image. \
+                             Preserve formatting and use latex for mathematical formulas.";
+
+        // When a custom template is supplied it must be rendered instead of the default.
+        let ctx = minijinja::context! { language => "eng" };
+        let prompt = super::super::prompts::render_template(custom_prompt, &ctx).unwrap();
+
+        assert!(prompt.contains("latex"), "custom prompt must be used; got: {prompt}");
+        assert!(
+            prompt.contains("Preserve formatting"),
+            "custom prompt must be used; got: {prompt}"
+        );
+        assert!(
+            !prompt.contains("Extract all visible text"),
+            "default template must NOT be used when custom prompt is set; got: {prompt}"
+        );
+    }
+
+    /// When vlm_prompt is None the built-in default template is used.
+    #[test]
+    fn test_vlm_prompt_none_falls_back_to_default() {
+        let ctx = minijinja::context! { language => "eng" };
+        let prompt =
+            super::super::prompts::render_template(super::super::prompts::VLM_OCR_TEMPLATE, &ctx).unwrap();
+
+        assert!(
+            prompt.contains("Extract all visible text"),
+            "default template must be used when vlm_prompt is None; got: {prompt}"
+        );
     }
 }
