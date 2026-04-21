@@ -149,6 +149,8 @@ pub(crate) fn extract_all_from_document(
             strip_repeating_text,
             include_headers,
             include_footers,
+            config.images.as_ref().and_then(|i| i.max_images_per_page),
+            config.cancel_token.as_ref(),
         ) {
             Ok((doc, has_encoding_issues)) if !doc.elements.is_empty() => {
                 tracing::debug!(
@@ -513,6 +515,7 @@ pub(crate) fn extract_all_from_oxide_document(
                     image_positions: &image_positions,
                     layout_hints,
                     allow_single_column,
+                    cancel_token: config.cancel_token.as_ref(),
                     #[cfg(feature = "layout-detection")]
                     layout_images,
                     #[cfg(feature = "layout-detection")]

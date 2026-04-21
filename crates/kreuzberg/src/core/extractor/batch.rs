@@ -64,11 +64,16 @@ where
 }
 
 /// Run a single extraction task with semaphore gating, timing, optional timeout, and batch mode.
+///
+/// When `cancel_token` is provided and the timeout fires, the token is signalled so that
+/// any blocking pdfium operations in progress can observe the cancellation at the next
+/// inter-page checkpoint and stop early.
 #[cfg(feature = "tokio-runtime")]
 async fn run_timed_extraction<F, Fut>(
     index: usize,
     semaphore: Arc<tokio::sync::Semaphore>,
     timeout_secs: Option<u64>,
+    cancel_token: Option<crate::cancellation::CancellationToken>,
     extract_fn: F,
 ) -> (usize, Result<ExtractionResult>, u64)
 where
@@ -84,6 +89,11 @@ where
         Some(secs) => match tokio::time::timeout(std::time::Duration::from_secs(secs), extraction_future).await {
             Ok(inner) => inner,
             Err(_elapsed) => {
+                // Signal the cancellation token so that any blocking pdfium thread can
+                // detect it at the next inter-page checkpoint and stop processing.
+                if let Some(ref token) = cancel_token {
+                    token.cancel();
+                }
                 let elapsed_ms = start.elapsed().as_millis() as u64;
                 Err(KreuzbergError::Timeout {
                     elapsed_ms,
@@ -200,7 +210,8 @@ pub async fn batch_extract_file(
             let (ref path, ref file_config) = items[index];
             let resolved = resolve_config(&cfg, file_config);
             let timeout = resolved.extraction_timeout_secs;
-            run_timed_extraction(index, sem, timeout, || {
+            let cancel_token = resolved.cancel_token.clone();
+            run_timed_extraction(index, sem, timeout, cancel_token, || {
                 let path = path.clone();
                 async move { extract_file(&path, None, &resolved).await }
             })
@@ -301,7 +312,8 @@ pub async fn batch_extract_bytes(
             let (bytes, mime_type, file_config) = slots[index].lock().take().expect("batch item already consumed");
             let resolved = resolve_config(&cfg, &file_config);
             let timeout = resolved.extraction_timeout_secs;
-            run_timed_extraction(index, sem, timeout, || async move {
+            let cancel_token = resolved.cancel_token.clone();
+            run_timed_extraction(index, sem, timeout, cancel_token, || async move {
                 extract_bytes(&bytes, &mime_type, &resolved).await
             })
             .await

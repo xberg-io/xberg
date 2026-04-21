@@ -173,6 +173,7 @@ fn extract_heuristic_segments(
     has_layout_hints: bool,
     include_headers: bool,
     include_footers: bool,
+    max_images_per_page: Option<u32>,
 ) -> (Vec<Vec<SegmentData>>, Vec<ImagePosition>, Vec<Vec<f32>>, Vec<f32>) {
     let stage1_start = crate::utils::timing::Instant::now();
     let mut all_page_segments: Vec<Vec<SegmentData>> = vec![Vec::new(); page_count as usize];
@@ -192,7 +193,8 @@ fn extract_heuristic_segments(
 
         page_heights[i] = page.height().value;
         let page_t = crate::utils::timing::Instant::now();
-        let (mut segments, image_positions, paragraph_gap_ys) = objects_to_page_data(&page, i + 1, &mut image_offset);
+        let (mut segments, image_positions, paragraph_gap_ys) =
+            objects_to_page_data(&page, i + 1, &mut image_offset, max_images_per_page);
         let page_ms = page_t.elapsed_ms();
         if page_ms > 1000.0 {
             tracing::warn!(
@@ -545,6 +547,8 @@ pub fn extract_document_structure(
     strip_repeating_text: bool,
     include_headers: bool,
     include_footers: bool,
+    max_images_per_page: Option<u32>,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) -> Result<(crate::types::internal::InternalDocument, bool)> {
     let pages = document.pages();
     let page_count = pages.len();
@@ -615,6 +619,7 @@ pub fn extract_document_structure(
                 has_hints,
                 include_headers,
                 include_footers,
+                max_images_per_page,
             );
             (
                 all_segs,
@@ -633,6 +638,7 @@ pub fn extract_document_structure(
                 has_hints,
                 include_headers,
                 include_footers,
+                max_images_per_page,
             )
         };
 
@@ -1342,7 +1348,7 @@ pub fn extract_document_structure(
     // Stage 4b: Populate doc.images with actual image data from pdfium.
     // Image elements reference indices into doc.images, which must be populated
     // for markdown/HTML rendering to produce `![desc](image_N.png)` instead of `![]()`.
-    populate_images_from_pdfium(document, &all_image_positions, &mut doc);
+    populate_images_from_pdfium(document, &all_image_positions, &mut doc, cancel_token);
 
     let element_count = doc.elements.len();
     tracing::debug!(element_count, "PDF structure pipeline: assembly complete");
@@ -1393,6 +1399,7 @@ pub(crate) struct SegmentStructureConfig<'a> {
     pub image_positions: &'a [(usize, usize)],
     pub layout_hints: Option<&'a [Vec<LayoutHint>]>,
     pub allow_single_column: bool,
+    pub cancel_token: Option<&'a crate::cancellation::CancellationToken>,
     #[cfg(feature = "layout-detection")]
     pub layout_images: Option<&'a [image::DynamicImage]>,
     #[cfg(feature = "layout-detection")]
@@ -1418,6 +1425,7 @@ pub(crate) fn extract_document_structure_from_segments(
         image_positions,
         layout_hints,
         allow_single_column,
+        cancel_token,
         #[cfg(feature = "layout-detection")]
         layout_images,
         #[cfg(feature = "layout-detection")]
@@ -2651,6 +2659,7 @@ fn populate_images_from_pdfium(
     document: &PdfDocument,
     image_positions: &[super::bridge::ImagePosition],
     doc: &mut crate::types::internal::InternalDocument,
+    cancel_token: Option<&crate::cancellation::CancellationToken>,
 ) {
     use bytes::Bytes;
     use image::ImageEncoder;
@@ -2669,6 +2678,21 @@ fn populate_images_from_pdfium(
     let mut extracted_count = 0u32;
 
     for (&page_num, indices) in &by_page {
+        // Check cancellation between pages so a timeout can interrupt a long
+        // pdfium image-extraction run without having to wait for the current
+        // page to finish.  Individual pdfium FFI calls cannot be interrupted,
+        // but we can at least skip remaining pages once cancelled.
+        if cancel_token.is_some_and(|t| t.is_cancelled()) {
+            tracing::debug!(
+                page_num,
+                "populate_images_from_pdfium: cancelled, skipping remaining pages"
+            );
+            for &idx in indices {
+                doc.images.push(empty_image_placeholder(idx, page_num));
+            }
+            continue;
+        }
+
         let page_idx = page_num.saturating_sub(1) as i32;
         let Ok(page) = pages.get(page_idx) else {
             for &idx in indices {

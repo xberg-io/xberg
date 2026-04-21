@@ -40,6 +40,18 @@ pub struct ImageExtractionConfig {
     /// Maximum DPI threshold
     #[serde(default = "default_max_dpi")]
     pub max_dpi: i32,
+
+    /// Maximum number of image objects to extract per PDF page.
+    ///
+    /// Some PDFs (e.g. technical diagrams stored as thousands of raster fragments)
+    /// can trigger extremely long or indefinite extraction times when every image
+    /// object on a dense page is decoded individually via pdfium FFI. Setting this
+    /// limit causes kreuzberg to stop collecting individual images once the count
+    /// per page reaches the cap and emit a warning instead.
+    ///
+    /// `None` (default) means no limit — all images are extracted.
+    #[serde(default)]
+    pub max_images_per_page: Option<u32>,
 }
 
 /// Token reduction configuration.
@@ -97,4 +109,45 @@ fn default_reduction_mode() -> String {
 
 fn default_confidence() -> f64 {
     0.8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_max_images_per_page_defaults_none() {
+        let config = ImageExtractionConfig::default();
+        assert_eq!(config.max_images_per_page, None);
+    }
+
+    #[test]
+    fn test_max_images_per_page_serializes_as_null_when_none() {
+        let config = ImageExtractionConfig::default();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("\"max_images_per_page\":null"));
+    }
+
+    #[test]
+    fn test_max_images_per_page_roundtrips_via_json() {
+        let config = ImageExtractionConfig {
+            max_images_per_page: Some(50),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let back: ImageExtractionConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.max_images_per_page, Some(50));
+    }
+
+    /// Regression test for issue #766: missing field in JSON must not break
+    /// deserialization (backwards-compat — existing configs without this key
+    /// must still deserialize cleanly).
+    #[test]
+    fn test_max_images_per_page_absent_in_json_deserializes_as_none() {
+        let json = r#"{"extract_images":true,"target_dpi":300,"max_image_dimension":4096,
+                       "inject_placeholders":true,"auto_adjust_dpi":true,
+                       "min_dpi":72,"max_dpi":600}"#;
+        let config: ImageExtractionConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.max_images_per_page, None);
+    }
 }

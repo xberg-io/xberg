@@ -530,19 +530,40 @@ pub(super) fn objects_to_page_data(
     page: &PdfPage,
     page_number: usize,
     image_offset: &mut usize,
+    max_images_per_page: Option<u32>,
 ) -> (Vec<SegmentData>, Vec<ImagePosition>, Vec<f32>) {
     let objects: Vec<PdfPageObject> = page.objects().iter().collect();
 
     // Image scan BEFORE text extraction.
     let mut images = Vec::new();
+    let mut page_image_count = 0u32;
+    let mut capped = false;
     for obj in &objects {
         if obj.as_image_object().is_some() {
+            if max_images_per_page.is_some_and(|cap| page_image_count >= cap) {
+                capped = true;
+                // Still advance the global offset so indices stay consistent
+                // with what populate_images_from_pdfium will see.
+                *image_offset += 1;
+                page_image_count += 1;
+                continue;
+            }
             images.push(ImagePosition {
                 page_number,
                 image_index: *image_offset,
             });
             *image_offset += 1;
+            page_image_count += 1;
         }
+    }
+    if capped {
+        tracing::warn!(
+            page_number,
+            cap = max_images_per_page.unwrap_or(0),
+            total_images = page_image_count,
+            "PDF page has more image objects than max_images_per_page; \
+             excess images skipped to prevent hang"
+        );
     }
 
     // Primary extraction: full-text blocks with char-indexed font metadata.
