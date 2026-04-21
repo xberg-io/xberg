@@ -674,6 +674,24 @@ def assert_keywords(
             pytest.fail(f"Expected <= {max_count} keywords, found {len(keywords)}")
 
 
+def assert_extraction_method(result: Any, expected: str) -> None:
+    actual = getattr(result, "extraction_method", None)
+    if actual is None and isinstance(result, dict):
+        actual = result.get("extraction_method") or result.get("extractionMethod")
+
+    metadata = getattr(result, "metadata", None)
+    if isinstance(result, dict):
+        metadata = result.get("metadata")
+
+    if actual is None and isinstance(metadata, Mapping):
+        actual = metadata.get("extraction_method")
+        additional = metadata.get("additional")
+        if actual is None and isinstance(additional, Mapping):
+            actual = additional.get("extraction_method")
+
+    assert actual == expected, f"Expected extraction_method={expected!r}, got {actual!r}"
+
+
 def assert_content_not_empty(result: Any) -> None:
     content = getattr(result, "content", None)
     if content is None or len(content.strip()) == 0:
@@ -1477,6 +1495,15 @@ fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("max_count={max}"));
         }
         writeln!(buffer, "    helpers.assert_keywords(result, {})", args.join(", ")).unwrap();
+    }
+
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        writeln!(
+            buffer,
+            "    helpers.assert_extraction_method(result, {})",
+            python_string_literal(&extraction_method.is)
+        )
+        .unwrap();
     }
 
     if assertions.content_not_empty == Some(true) {

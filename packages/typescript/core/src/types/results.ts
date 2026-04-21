@@ -649,7 +649,6 @@ export interface ExtractionResult {
 	content: string;
 	mimeType: string;
 	metadata: Metadata;
-	extractionMethod?: "native" | "ocr" | "mixed";
 	tables: Table[];
 	detectedLanguages?: string[];
 	chunks?: Chunk[];

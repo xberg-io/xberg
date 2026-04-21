@@ -417,6 +417,7 @@ fn sample_extraction_result() -> Value {
         content: "Hello world".to_string(),
         mime_type: Cow::Borrowed("text/plain"),
         metadata: kreuzberg::types::metadata::Metadata::default(),
+        extraction_method: Some(kreuzberg::ExtractionMethod::Native),
         tables: vec![table],
         detected_languages: Some(vec!["en".to_string()]),
         chunks: Some(vec![chunk]),
@@ -443,6 +444,7 @@ fn sample_extraction_result() -> Value {
         uris: Some(vec![uri]),
         llm_usage: None,
         formatted_content: None,
+        #[cfg(feature = "tree-sitter")]
         code_intelligence: None,
         ocr_internal_document: None,
         structured_output: None,
@@ -481,6 +483,7 @@ fn sample_extraction_config() -> Value {
         result_format: kreuzberg::types::OutputFormat::Unified,
         security_limits: Some(kreuzberg::extractors::security::SecurityLimits::default()),
         output_format: kreuzberg::core::config::OutputFormat::Plain,
+        #[cfg(feature = "layout-detection")]
         layout: Some(kreuzberg::LayoutDetectionConfig::default()),
         include_document_structure: true,
         acceleration: Some(kreuzberg::AccelerationConfig::default()),
@@ -489,6 +492,7 @@ fn sample_extraction_config() -> Value {
         email: Some(kreuzberg::EmailConfig::default()),
         concurrency: Some(kreuzberg::core::config::ConcurrencyConfig::default()),
         max_archive_depth: 3,
+        #[cfg(feature = "tree-sitter")]
         tree_sitter: Some(kreuzberg::TreeSitterConfig::default()),
         structured_extraction: None,
         html_output: None,

@@ -295,6 +295,9 @@ pub struct Assertions {
     /// Keyword extraction assertions
     #[serde(default)]
     pub keywords: Option<KeywordAssertion>,
+    /// Extraction method assertions
+    #[serde(default)]
+    pub extraction_method: Option<ExtractionMethodAssertion>,
     /// Whether content must be non-empty
     #[serde(default)]
     pub content_not_empty: Option<bool>,
@@ -429,6 +432,14 @@ pub struct KeywordAssertion {
     /// Maximum number of keywords expected
     #[serde(default)]
     pub max_count: Option<usize>,
+}
+
+/// Extraction method assertions.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Deserialize)]
+pub struct ExtractionMethodAssertion {
+    /// Expected extraction method (`native`, `ocr`, or `mixed`).
+    pub is: String,
 }
 
 /// Document structure assertions for hierarchical document tree validation

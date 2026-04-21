@@ -814,6 +814,29 @@ defmodule E2E.ContractTest do
       end
     end
 
+    test "config_extraction_method_mixed" do
+      case E2E.Helpers.run_fixture(
+             "config_extraction_method_mixed",
+             "pdf/multi_page.pdf",
+             %{force_ocr_pages: [2], ocr: %{backend: "tesseract", language: "eng"}},
+             requirements: ["ocr"],
+             notes: nil,
+             skip_if_missing: true
+           ) do
+        {:ok, result} ->
+          result
+          |> E2E.Helpers.assert_expected_mime(["application/pdf"])
+          |> E2E.Helpers.assert_min_content_length(1)
+          |> E2E.Helpers.assert_extraction_method(is: "mixed")
+
+        {:skipped, reason} ->
+          IO.puts("SKIPPED: #{reason}")
+
+        {:error, reason} ->
+          flunk("Extraction failed: #{inspect(reason)}")
+      end
+    end
+
     test "config_extraction_timeout" do
       case E2E.Helpers.run_fixture(
              "config_extraction_timeout",

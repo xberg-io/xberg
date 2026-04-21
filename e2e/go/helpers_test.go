@@ -11,7 +11,7 @@ import (
 	"testing"
 	"unicode"
 
-	kreuzberg "github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
+	"github.com/kreuzberg-dev/kreuzberg/packages/go/v4"
 )
 
 var (
@@ -602,6 +602,24 @@ func assertKeywords(t *testing.T, result *kreuzberg.ExtractionResult, hasKeyword
 	}
 	if maxCount != nil && count > *maxCount {
 		t.Fatalf("expected at most %d keywords, found %d", *maxCount, count)
+	}
+}
+
+func assertExtractionMethod(t *testing.T, result *kreuzberg.ExtractionResult, expected string) {
+	t.Helper()
+	if result.Metadata.Additional == nil {
+		t.Fatalf("expected extraction_method=%q but metadata.additional was empty", expected)
+	}
+	raw, ok := result.Metadata.Additional["extraction_method"]
+	if !ok {
+		t.Fatalf("expected extraction_method=%q but metadata.additional had no extraction_method key", expected)
+	}
+	var actual string
+	if err := json.Unmarshal(raw, &actual); err != nil {
+		t.Fatalf("failed to decode extraction_method from metadata.additional: %v", err)
+	}
+	if actual != expected {
+		t.Fatalf("expected extraction_method=%q, got %q", expected, actual)
 	}
 }
 

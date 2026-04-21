@@ -636,6 +636,17 @@ defmodule E2E.Helpers do
     result
   end
 
+  def assert_extraction_method(result, opts) do
+    metadata = Map.get(result, :metadata) || Map.get(result, "metadata") || %{}
+    additional = Map.get(metadata, :additional) || Map.get(metadata, "additional") || %{}
+    actual = Map.get(additional, "extraction_method") || Map.get(additional, :extraction_method)
+
+    assert actual == opts[:is],
+           "Expected extraction_method=#{opts[:is]} but got #{inspect(actual)}"
+
+    result
+  end
+
   def assert_content_not_empty(result) do
     content_len = String.length(result.content || "")
 

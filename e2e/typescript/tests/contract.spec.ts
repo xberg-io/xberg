@@ -998,6 +998,34 @@ describe("contract fixtures", () => {
 	);
 
 	it(
+		"config_extraction_method_mixed",
+		() => {
+			const documentPath = resolveDocument("pdf/multi_page.pdf");
+			if (!existsSync(documentPath)) {
+				console.warn("Skipping config_extraction_method_mixed: missing document at", documentPath);
+				return;
+			}
+			const config = buildConfig({ force_ocr_pages: [2], ocr: { backend: "tesseract", language: "eng" } });
+			let result: ExtractionResult | null = null;
+			try {
+				result = extractFileSync(documentPath, null, config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_extraction_method_mixed", ["ocr"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 1);
+			assertions.assertExtractionMethod(result, "mixed");
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"config_extraction_timeout",
 		() => {
 			const documentPath = resolveDocument("pdf/fake_memo.pdf");

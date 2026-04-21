@@ -1351,9 +1351,6 @@ export interface ExtractionResult {
 	/** Document metadata including title, author, creation date, language, and format-specific fields */
 	metadata: Metadata;
 
-	/** How text was extracted from the source document. */
-	extractionMethod?: "native" | "ocr" | "mixed";
-
 	/** Tables extracted from the document (2D cell arrays with Markdown representation) */
 	tables: Table[];
 

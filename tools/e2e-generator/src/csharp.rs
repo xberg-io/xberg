@@ -880,6 +880,15 @@ public static class TestHelpers
         }
     }
 
+    public static void AssertExtractionMethod(ExtractionResult result, string expected)
+    {
+        var actual = result.Metadata?.Additional?["extraction_method"]?.ToString();
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        {
+            throw new XunitException($"Expected extraction_method={expected} but got {actual ?? "null"}");
+        }
+    }
+
     public static void AssertContentNotEmpty(ExtractionResult result)
     {
         if (string.IsNullOrEmpty(result.Content))
@@ -1519,7 +1528,7 @@ fn render_assertions(buffer: &mut String, assertions: &Assertions) -> Result<()>
             .map(|v| v.to_string().to_lowercase())
             .unwrap_or_else(|| "null".into());
         buffer.push_str(&format!(
-            "        TestHelpers.AssertChunks(result, {min_count}, {max_count}, {each_has_content}, {each_has_embedding}, {each_has_heading_context}, {each_has_chunk_type}, {content_starts_with_heading});\n"
+            "            TestHelpers.AssertChunks(result, {min_count}, {max_count}, {each_has_content}, {each_has_embedding}, {each_has_heading_context}, {each_has_chunk_type}, {content_starts_with_heading});\n"
         ));
     }
 
@@ -1655,6 +1664,14 @@ fn render_assertions(buffer: &mut String, assertions: &Assertions) -> Result<()>
         )?;
     }
 
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        writeln!(
+            buffer,
+            "            TestHelpers.AssertExtractionMethod(result, {});",
+            csharp_string_literal(&extraction_method.is)
+        )?;
+    }
+
     if assertions.content_not_empty == Some(true) {
         writeln!(buffer, "            TestHelpers.AssertContentNotEmpty(result);")?;
     }
@@ -1773,6 +1790,10 @@ fn render_string_array(values: &[String]) -> String {
         .map(|v| format!("\"{}\"", escape_csharp_string(v)))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn csharp_string_literal(value: &str) -> String {
+    format!("\"{}\"", escape_csharp_string(value))
 }
 
 fn render_csharp_metadata_expectation(value: &Value) -> String {

@@ -323,6 +323,18 @@
 					},
 					"additionalProperties": false
 				},
+				"extraction_method": {
+					"type": "object",
+					"properties": {
+						"is": {
+							"type": "string",
+							"enum": ["native", "ocr", "mixed"],
+							"description": "Expected extraction method."
+						}
+					},
+					"required": ["is"],
+					"additionalProperties": false
+				},
 				"quality_score": {
 					"type": "object",
 					"properties": {

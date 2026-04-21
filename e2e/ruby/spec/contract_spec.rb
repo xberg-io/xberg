@@ -628,6 +628,25 @@ RSpec.describe 'contract fixtures' do
     end
   end
 
+  it 'config_extraction_method_mixed' do
+    E2ERuby.skip_if_feature_unavailable('ocr')
+    E2ERuby.run_fixture(
+      'config_extraction_method_mixed',
+      'pdf/multi_page.pdf',
+      { force_ocr_pages: [2], ocr: { backend: 'tesseract', language: 'eng' } },
+      requirements: %w[ocr],
+      notes: nil,
+      skip_if_missing: true
+    ) do |result|
+      E2ERuby::Assertions.assert_expected_mime(
+        result,
+        ['application/pdf']
+      )
+      E2ERuby::Assertions.assert_min_content_length(result, 1)
+      E2ERuby::Assertions.assert_extraction_method(result, 'mixed')
+    end
+  end
+
   it 'config_extraction_timeout' do
     E2ERuby.run_fixture(
       'config_extraction_timeout',
@@ -894,7 +913,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_llm_structured_extraction_with_prompt',
       'pdf/fake_memo.pdf',
-      { structured_extraction: { schema: { type: 'object', properties: { sender: { type: 'string' }, recipient: { type: 'string' }, subject: { type: 'string' } }, required: %w[sender recipient] }, schema_name: 'memo_parties', prompt: "Extract the sender and recipient from this memo document. If not found, use 'unknown'.", llm: { model: 'openai/gpt-4o' } } },
+      { structured_extraction: { schema: { type: 'object', properties: { sender: { type: 'string' }, recipient: { type: 'string' }, subject: { type: 'string' } }, required: ['sender', 'recipient'] }, schema_name: 'memo_parties', prompt: "Extract the sender and recipient from this memo document. If not found, use 'unknown'.", llm: { model: 'openai/gpt-4o' } } },
       requirements: %w[liter-llm],
       notes: 'Requires liter-llm feature and KREUZBERG_LLM_API_KEY env var',
       skip_if_missing: true
@@ -904,7 +923,7 @@ RSpec.describe 'contract fixtures' do
         ['application/pdf']
       )
       E2ERuby::Assertions.assert_min_content_length(result, 10)
-      E2ERuby::Assertions.assert_structured_output(result, has_output: true, field_exists: %w[sender recipient])
+      E2ERuby::Assertions.assert_structured_output(result, has_output: true, field_exists: ['sender', 'recipient'])
     end
   end
 
@@ -1201,7 +1220,7 @@ RSpec.describe 'contract fixtures' do
     E2ERuby.run_fixture(
       'config_tree_sitter',
       'code/hello.py',
-      { tree_sitter: { languages: %w[python rust], groups: ['web'], process: { structure: true, imports: true, exports: true, comments: false, docstrings: false, symbols: false, diagnostics: false } } },
+      { tree_sitter: { languages: ['python', 'rust'], groups: ['web'], process: { structure: true, imports: true, exports: true, comments: false, docstrings: false, symbols: false, diagnostics: false } } },
       requirements: %w[tree-sitter],
       notes: nil,
       skip_if_missing: true

@@ -740,6 +740,31 @@ def test_config_email_msg_fallback_codepage() -> None:
     helpers.assert_min_content_length(result, 10)
 
 
+def test_config_extraction_method_mixed() -> None:
+    """Tests that selective page OCR reports a mixed extraction method"""
+
+    document_path = helpers.resolve_document("pdf/multi_page.pdf")
+    if not document_path.exists():
+        pytest.skip(f"Skipping config_extraction_method_mixed: missing document at {document_path}")
+
+    try:
+        config = helpers.build_config({"force_ocr_pages": [2], "ocr": {"backend": "tesseract", "language": "eng"}})
+
+        result = extract_file_sync(document_path, None, config)
+
+        helpers.assert_expected_mime(result, ["application/pdf"])
+        helpers.assert_min_content_length(result, 1)
+        helpers.assert_extraction_method(result, "mixed")
+    except Exception as exc:
+        if (
+            "missing dependency" in str(exc).lower()
+            or "unsupported" in str(exc).lower()
+            or "parsing" in str(exc).lower()
+        ):
+            pytest.skip(f"Skipping config_extraction_method_mixed: {exc}")
+        raise
+
+
 def test_config_extraction_timeout() -> None:
     """Tests that extraction_timeout_secs config field is accepted and does not affect fast extractions"""
 

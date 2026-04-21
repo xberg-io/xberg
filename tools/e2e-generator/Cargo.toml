@@ -7,13 +7,19 @@ authors.workspace = true
 license.workspace = true
 publish = false
 
+[features]
+default = ["formats"]
+formats = ["kreuzberg/formats"]
+layout-detection = ["kreuzberg/layout-detection"]
+tree-sitter = ["kreuzberg/tree-sitter"]
+
 [dependencies]
 anyhow = { workspace = true }
 bytes = { workspace = true }
 camino = "1.2"
 clap = { workspace = true }
 itertools = { workspace = true }
-kreuzberg = { path = "../../crates/kreuzberg", features = ["full"], default-features = false }
+kreuzberg = { path = "../../crates/kreuzberg", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 walkdir = "2.5"

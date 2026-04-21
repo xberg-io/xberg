@@ -731,6 +731,28 @@ class ContractTest extends TestCase
     }
 
     /**
+     * Tests that selective page OCR reports a mixed extraction method
+     */
+    public function test_config_extraction_method_mixed(): void
+    {
+        $documentPath = Helpers::resolveDocument('pdf/multi_page.pdf');
+        if (!file_exists($documentPath)) {
+            $this->markTestSkipped('Skipping config_extraction_method_mixed: missing document at ' . $documentPath);
+        }
+
+        Helpers::skipIfFeatureUnavailable('ocr');
+
+        $config = Helpers::buildConfig(['force_ocr_pages' => [2], 'ocr' => ['backend' => 'tesseract', 'language' => 'eng']]);
+
+        $kreuzberg = new Kreuzberg($config);
+        $result = $kreuzberg->extractFile($documentPath);
+
+        Helpers::assertExpectedMime($result, ['application/pdf']);
+        Helpers::assertMinContentLength($result, 1);
+        Helpers::assertExtractionMethod($result, 'mixed');
+    }
+
+    /**
      * Tests that extraction_timeout_secs config field is accepted and does not affect fast extractions
      */
     public function test_config_extraction_timeout(): void

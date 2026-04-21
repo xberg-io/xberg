@@ -28,6 +28,7 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -767,6 +768,12 @@ public final class E2EHelpers {
                 assertTrue(count <= maxCount,
                         String.format("Expected at most %d processing warnings, got %d", maxCount, count));
             }
+        }
+
+        public static void assertExtractionMethod(ExtractionResult result, String expected) {
+            Object actual = result.getMetadata().getAdditional().get("extraction_method");
+            assertEquals(expected, actual,
+                    String.format("Expected extraction_method=%s, got %s", expected, actual));
         }
 
         public static void assertLlmUsage(ExtractionResult result, Integer maxCount, Boolean isEmpty) {
@@ -1982,6 +1989,13 @@ fn render_assertions(assertions: &Assertions) -> String {
         ));
     }
 
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        buffer.push_str(&format!(
+            "                E2EHelpers.Assertions.assertExtractionMethod(result, {});\n",
+            java_string_literal(&extraction_method.is)
+        ));
+    }
+
     if assertions.content_not_empty == Some(true) {
         buffer.push_str("                E2EHelpers.Assertions.assertContentNotEmpty(result);\n");
     }
@@ -2101,6 +2115,10 @@ fn render_string_list(items: &[String]) -> String {
             .join(", ");
         format!("Arrays.asList({})", content)
     }
+}
+
+fn java_string_literal(text: &str) -> String {
+    render_java_string(text)
 }
 
 fn render_optional_string(value: Option<&String>) -> String {

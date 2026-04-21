@@ -410,7 +410,7 @@ fn run_styler_format(dir: &Utf8Path) {
 fn run_ruff_format(dir: &Utf8Path) {
     // Fix lint issues
     let status = std::process::Command::new("uv")
-        .args(["run", "ruff", "check", "--fix"])
+        .args(["run", "--no-project", "ruff", "check", "--fix"])
         .arg(dir.as_str())
         .status();
     match status {
@@ -423,7 +423,7 @@ fn run_ruff_format(dir: &Utf8Path) {
     }
     // Apply formatting
     let status = std::process::Command::new("uv")
-        .args(["run", "ruff", "format"])
+        .args(["run", "--no-project", "ruff", "format"])
         .arg(dir.as_str())
         .status();
     match status {

@@ -909,6 +909,26 @@ public class ContractTest {
   }
 
   @Test
+  public void configExtractionMethodMixed() throws Exception {
+    JsonNode config =
+        MAPPER.readTree(
+            "{\"force_ocr_pages\":[2],\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+    E2EHelpers.skipIfFeatureUnavailable("ocr");
+    E2EHelpers.runFixture(
+        "config_extraction_method_mixed",
+        "pdf/multi_page.pdf",
+        config,
+        Arrays.asList("ocr"),
+        null,
+        true,
+        result -> {
+          E2EHelpers.Assertions.assertExpectedMime(result, Arrays.asList("application/pdf"));
+          E2EHelpers.Assertions.assertMinContentLength(result, 1);
+          E2EHelpers.Assertions.assertExtractionMethod(result, "mixed");
+        });
+  }
+
+  @Test
   public void configExtractionTimeout() throws Exception {
     JsonNode config = MAPPER.readTree("{\"extraction_timeout_secs\":300}");
     E2EHelpers.runFixture(

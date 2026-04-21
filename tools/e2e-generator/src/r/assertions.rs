@@ -7,42 +7,42 @@ pub fn render_assertions(assertions: &Assertions) -> String {
 
     if !assertions.expected_mime.is_empty() {
         buf.push_str(&format!(
-            "      assert_expected_mime(result, {})\n",
+            "  assert_expected_mime(result, {})\n",
             render_string_vector(&assertions.expected_mime)
         ));
     }
 
     if let Some(min) = assertions.min_content_length {
         buf.push_str(&format!(
-            "      assert_min_content_length(result, {})\n",
+            "  assert_min_content_length(result, {})\n",
             render_numeric_literal(min as u64)
         ));
     }
 
     if let Some(max) = assertions.max_content_length {
         buf.push_str(&format!(
-            "      assert_max_content_length(result, {})\n",
+            "  assert_max_content_length(result, {})\n",
             render_numeric_literal(max as u64)
         ));
     }
 
     if !assertions.content_contains_any.is_empty() {
         buf.push_str(&format!(
-            "      assert_content_contains_any(result, {})\n",
+            "  assert_content_contains_any(result, {})\n",
             render_string_vector(&assertions.content_contains_any)
         ));
     }
 
     if !assertions.content_contains_all.is_empty() {
         buf.push_str(&format!(
-            "      assert_content_contains_all(result, {})\n",
+            "  assert_content_contains_all(result, {})\n",
             render_string_vector(&assertions.content_contains_all)
         ));
     }
 
     if !assertions.content_contains_none.is_empty() {
         buf.push_str(&format!(
-            "      assert_content_contains_none(result, {})\n",
+            "  assert_content_contains_none(result, {})\n",
             render_string_vector(&assertions.content_contains_none)
         ));
     }
@@ -57,17 +57,17 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             .map(|v| render_numeric_literal(v as u64))
             .unwrap_or_else(|| "NULL".into());
         buf.push_str(&format!(
-            "      assert_table_count(result, minimum = {}, maximum = {})\n",
+            "  assert_table_count(result, minimum = {}, maximum = {})\n",
             min_lit, max_lit
         ));
         if tables.has_bounding_boxes == Some(true) {
-            buf.push_str("      assert_table_bounding_boxes(result)\n");
+            buf.push_str("  assert_table_bounding_boxes(result)\n");
         }
         if let Some(snippets) = tables.content_contains_any.as_ref()
             && !snippets.is_empty()
         {
             buf.push_str(&format!(
-                "      assert_table_content_contains_any(result, {})\n",
+                "  assert_table_content_contains_any(result, {})\n",
                 render_string_vector(snippets)
             ));
         }
@@ -80,7 +80,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             .map(|v| v.to_string())
             .unwrap_or_else(|| "NULL".into());
         buf.push_str(&format!(
-            "      assert_detected_languages(result, {}, {})\n",
+            "  assert_detected_languages(result, {}, {})\n",
             expected, min_conf
         ));
     }
@@ -88,7 +88,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
     if !assertions.metadata.is_empty() {
         for (path, expectation) in &assertions.metadata {
             buf.push_str(&format!(
-                "      assert_metadata_expectation(result, {}, {})\n",
+                "  assert_metadata_expectation(result, {}, {})\n",
                 render_r_string(path),
                 render_r_value(expectation)
             ));
@@ -134,7 +134,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             ));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_chunks(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_chunks(result, {})\n", args.join(", ")));
         }
     }
 
@@ -150,10 +150,10 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("formats_include = {}", render_string_vector(formats)));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_images(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_images(result, {})\n", args.join(", ")));
         }
         if images.has_bounding_boxes == Some(true) {
-            buf.push_str("      assert_image_bounding_boxes(result)\n");
+            buf.push_str("  assert_image_bounding_boxes(result)\n");
         }
     }
 
@@ -166,7 +166,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("exact_count = {}", render_numeric_literal(exact as u64)));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_pages(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_pages(result, {})\n", args.join(", ")));
         }
     }
 
@@ -179,7 +179,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("types_include = {}", render_string_vector(types)));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_elements(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_elements(result, {})\n", args.join(", ")));
         }
     }
 
@@ -207,7 +207,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("min_count = {}", render_numeric_literal(min as u64)));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_ocr_elements(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_ocr_elements(result, {})\n", args.join(", ")));
         }
     }
 
@@ -228,7 +228,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
         if let Some(has_groups) = document.has_groups {
             args.push(format!("has_groups = {}", if has_groups { "TRUE" } else { "FALSE" }));
         }
-        buf.push_str(&format!("      assert_document(result, {})\n", args.join(", ")));
+        buf.push_str(&format!("  assert_document(result, {})\n", args.join(", ")));
     }
 
     if let Some(keywords) = assertions.keywords.as_ref() {
@@ -246,12 +246,19 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("max_count = {}", render_numeric_literal(max as u64)));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_keywords(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_keywords(result, {})\n", args.join(", ")));
         }
     }
 
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        buf.push_str(&format!(
+            "  assert_extraction_method(result, {})\n",
+            render_r_string(&extraction_method.is)
+        ));
+    }
+
     if assertions.content_not_empty == Some(true) {
-        buf.push_str("      assert_content_not_empty(result)\n");
+        buf.push_str("  assert_content_not_empty(result)\n");
     }
 
     if let Some(qs) = assertions.quality_score.as_ref() {
@@ -266,7 +273,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("max_score = {}", max_score));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_quality_score(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_quality_score(result, {})\n", args.join(", ")));
         }
     }
 
@@ -279,10 +286,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("is_empty = {}", if is_empty { "TRUE" } else { "FALSE" }));
         }
         if !args.is_empty() {
-            buf.push_str(&format!(
-                "      assert_processing_warnings(result, {})\n",
-                args.join(", ")
-            ));
+            buf.push_str(&format!("  assert_processing_warnings(result, {})\n", args.join(", ")));
         }
     }
 
@@ -295,7 +299,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("is_empty = {}", if is_empty { "TRUE" } else { "FALSE" }));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_llm_usage(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_llm_usage(result, {})\n", args.join(", ")));
         }
     }
 
@@ -308,7 +312,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
             args.push(format!("min_blocks = {}", render_numeric_literal(min_blocks as u64)));
         }
         if !args.is_empty() {
-            buf.push_str(&format!("      assert_djot_content(result, {})\n", args.join(", ")));
+            buf.push_str(&format!("  assert_djot_content(result, {})\n", args.join(", ")));
         }
     }
 
@@ -320,7 +324,7 @@ pub fn render_assertions(assertions: &Assertions) -> String {
         if let Some(min_count) = annotations.min_count {
             args.push(format!("min_count = {}", render_numeric_literal(min_count as u64)));
         }
-        buf.push_str(&format!("      assert_annotations(result, {})\n", args.join(", ")));
+        buf.push_str(&format!("  assert_annotations(result, {})\n", args.join(", ")));
     }
 
     buf

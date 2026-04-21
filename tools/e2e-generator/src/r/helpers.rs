@@ -358,6 +358,18 @@ assert_keywords <- function(result, has_keywords = NULL, min_count = NULL, max_c
   }
 }
 
+assert_extraction_method <- function(result, expected) {
+  metadata <- result$metadata
+  actual <- NULL
+  if (!is.null(metadata$additional)) {
+    actual <- metadata$additional[["extraction_method"]]
+  }
+  if (is.null(actual)) {
+    actual <- metadata[["extraction_method"]]
+  }
+  testthat::expect_identical(actual, expected)
+}
+
 assert_content_not_empty <- function(result) {
   testthat::expect_false(is.null(result$content))
   testthat::expect_gt(nchar(result$content), 0)

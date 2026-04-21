@@ -728,6 +728,17 @@ class Helpers
         }
     }
 
+    public static function assertExtractionMethod(ExtractionResult $result, string $expected): void
+    {
+        $actual = $result->metadata->getCustom('extraction_method');
+
+        Assert::assertSame(
+            $expected,
+            $actual,
+            sprintf('Expected extraction_method=%s, got %s', $expected, var_export($actual, true))
+        );
+    }
+
     public static function assertContentNotEmpty(ExtractionResult $result): void
     {
         Assert::assertNotEmpty(
@@ -1571,6 +1582,15 @@ fn render_assertions(assertions: &Assertions) -> String {
             buffer,
             "        Helpers::assertKeywords($result, {}, {}, {});",
             has_keywords, min_count, max_count
+        )
+        .unwrap();
+    }
+
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        writeln!(
+            buffer,
+            "        Helpers::assertExtractionMethod($result, {});",
+            php_string_literal(&extraction_method.is)
         )
         .unwrap();
     }

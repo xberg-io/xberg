@@ -832,6 +832,15 @@ public static class TestHelpers
         }
     }
 
+    public static void AssertExtractionMethod(ExtractionResult result, string expected)
+    {
+        var actual = result.Metadata?.Additional?["extraction_method"]?.ToString();
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        {
+            throw new XunitException($"Expected extraction_method={expected} but got {actual ?? "null"}");
+        }
+    }
+
     public static void AssertContentNotEmpty(ExtractionResult result)
     {
         if (string.IsNullOrEmpty(result.Content))

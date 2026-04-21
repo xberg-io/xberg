@@ -823,6 +823,30 @@ describe("contract fixtures", () => {
 	);
 
 	it(
+		"config_extraction_method_mixed",
+		async () => {
+			const config = buildConfig({ force_ocr_pages: [2], ocr: { backend: "tesseract", language: "eng" } });
+			let result: ExtractionResult | null = null;
+			try {
+				const documentBytes = new Uint8Array(resolveDocument("pdf/multi_page.pdf"));
+				result = await extractBytes(documentBytes, "application/octet-stream", config);
+			} catch (error) {
+				if (shouldSkipFixture(error, "config_extraction_method_mixed", ["ocr"], undefined)) {
+					return;
+				}
+				throw error;
+			}
+			if (result === null) {
+				return;
+			}
+			assertions.assertExpectedMime(result, ["application/pdf"]);
+			assertions.assertMinContentLength(result, 1);
+			assertions.assertExtractionMethod(result, "mixed");
+		},
+		TEST_TIMEOUT_MS,
+	);
+
+	it(
 		"config_extraction_timeout",
 		async () => {
 			const config = buildConfig({ extraction_timeout_secs: 300 });

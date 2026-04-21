@@ -504,6 +504,21 @@ namespace Kreuzberg.E2E.Contract
         }
 
         [SkippableFact]
+        public void ConfigExtractionMethodMixed()
+        {
+            TestHelpers.SkipIfFeatureUnavailable("ocr");
+            TestHelpers.SkipIfLegacyOfficeDisabled("pdf/multi_page.pdf");
+            TestHelpers.SkipIfOfficeTestOnWindows("pdf/multi_page.pdf");
+            var documentPath = TestHelpers.EnsureDocument("pdf/multi_page.pdf", true);
+            var config = TestHelpers.BuildConfig("{\"force_ocr_pages\":[2],\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+
+            var result = KreuzbergClient.ExtractFileSync(documentPath, config);
+            TestHelpers.AssertExpectedMime(result, new[] { "application/pdf" });
+            TestHelpers.AssertMinContentLength(result, 1);
+            TestHelpers.AssertExtractionMethod(result, "mixed");
+        }
+
+        [SkippableFact]
         public void ConfigExtractionTimeout()
         {
             TestHelpers.SkipIfLegacyOfficeDisabled("pdf/fake_memo.pdf");

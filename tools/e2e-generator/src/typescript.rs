@@ -590,6 +590,16 @@ export const assertions = {
         }
     },
 
+    assertExtractionMethod(result: ExtractionResult, expected: string): void {
+        const metadata = isPlainRecord(result.metadata) ? (result.metadata as PlainRecord) : null;
+        const additional = metadata && isPlainRecord(metadata.additional) ? (metadata.additional as PlainRecord) : null;
+        const actual = (result as unknown as PlainRecord).extractionMethod
+            ?? (result as unknown as PlainRecord).extraction_method
+            ?? metadata?.extraction_method
+            ?? additional?.extraction_method;
+        expect(actual).toBe(expected);
+    },
+
     assertContentNotEmpty(result: ExtractionResult): void {
         expect(result.content).toBeDefined();
         expect(result.content.trim().length).toBeGreaterThan(0);
@@ -1709,6 +1719,13 @@ fn render_assertions(assertions: &Assertions) -> String {
         ));
     }
 
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        buffer.push_str(&format!(
+            "    assertions.assertExtractionMethod(result, {});\n",
+            render_string_literal(&extraction_method.is)
+        ));
+    }
+
     if assertions.content_not_empty == Some(true) {
         buffer.push_str("    assertions.assertContentNotEmpty(result);\n");
     }
@@ -1822,6 +1839,10 @@ fn render_string_array(items: &[String]) -> String {
             .join(", ");
         format!("[{quoted}]")
     }
+}
+
+fn render_string_literal(value: &str) -> String {
+    format!("\"{}\"", escape_ts_string(value))
 }
 
 fn render_optional_string(value: Option<&String>) -> String {

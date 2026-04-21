@@ -22,7 +22,6 @@ namespace Kreuzberg\Types;
  * @property-read DocumentStructure|null $document Hierarchical document structure when include_document_structure=true
  * @property-read array<ExtractedKeyword>|null $extractedKeywords Extracted keywords with scores and algorithm metadata
  * @property-read float|null $qualityScore Quality score of the extraction (0.0 to 1.0)
- * @property-read 'native'|'ocr'|'mixed'|null $extractionMethod How text was extracted
  * @property-read array<ProcessingWarning>|null $processingWarnings Warnings generated during processing
  */
 readonly class ExtractionResult
@@ -40,7 +39,6 @@ readonly class ExtractionResult
      * @param DocumentStructure|null $document
      * @param array<ExtractedKeyword>|null $extractedKeywords
      * @param float|null $qualityScore
-     * @param 'native'|'ocr'|'mixed'|null $extractionMethod
      * @param array<ProcessingWarning>|null $processingWarnings
      */
     public function __construct(
@@ -59,7 +57,6 @@ readonly class ExtractionResult
         public ?DocumentStructure $document = null,
         public ?array $extractedKeywords = null,
         public ?float $qualityScore = null,
-        public ?string $extractionMethod = null,
         public ?array $processingWarnings = null,
         /** @var array<PdfAnnotation>|null */
         public ?array $annotations = null,
@@ -190,11 +187,6 @@ readonly class ExtractionResult
             }
         }
 
-        $extractionMethod = null;
-        if (isset($data['extraction_method']) && is_string($data['extraction_method'])) {
-            $extractionMethod = $data['extraction_method'];
-        }
-
         $processingWarnings = null;
         if (isset($data['processing_warnings'])) {
             /** @var array<array<string, mixed>> $processingWarningsData */
@@ -244,7 +236,6 @@ readonly class ExtractionResult
             document: $document,
             extractedKeywords: $extractedKeywords,
             qualityScore: $qualityScore,
-            extractionMethod: $extractionMethod,
             processingWarnings: $processingWarnings,
             annotations: $annotations,
             codeIntelligence: $codeIntelligence,

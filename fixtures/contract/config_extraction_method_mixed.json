@@ -1,0 +1,29 @@
+{
+	"id": "config_extraction_method_mixed",
+	"description": "Tests that selective page OCR reports a mixed extraction method",
+	"tags": ["contract", "config", "ocr", "extraction_method"],
+	"document": {
+		"path": "pdf/multi_page.pdf"
+	},
+	"extraction": {
+		"method": "sync",
+		"input_type": "file",
+		"config": {
+			"force_ocr_pages": [2],
+			"ocr": {
+				"backend": "tesseract",
+				"language": "eng"
+			}
+		}
+	},
+	"assertions": {
+		"expected_mime": "application/pdf",
+		"min_content_length": 1,
+		"extraction_method": {
+			"is": "mixed"
+		}
+	},
+	"skip": {
+		"requires_feature": ["ocr"]
+	}
+}

@@ -619,6 +619,17 @@ defmodule E2E.Helpers do
     result
   end
 
+  def assert_extraction_method(result, opts) do
+    metadata = Map.get(result, :metadata) || Map.get(result, "metadata") || %{}
+    additional = Map.get(metadata, :additional) || Map.get(metadata, "additional") || %{}
+    actual = Map.get(additional, "extraction_method") || Map.get(additional, :extraction_method)
+
+    assert actual == opts[:is],
+           "Expected extraction_method=#{opts[:is]} but got #{inspect(actual)}"
+
+    result
+  end
+
   def assert_content_not_empty(result) do
     content_len = String.length(result.content || "")
     if content_len > 0 do
@@ -1558,6 +1569,13 @@ fn render_assertions(assertions: &Assertions) -> String {
         }
     }
 
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        pipes.push(format!(
+            "E2E.Helpers.assert_extraction_method(is: {})",
+            elixir_string_literal(&extraction_method.is)
+        ));
+    }
+
     if assertions.content_not_empty == Some(true) {
         pipes.push("E2E.Helpers.assert_content_not_empty()".into());
     }
@@ -1704,6 +1722,10 @@ fn render_string_list(items: &[String]) -> String {
             .join(", ");
         format!("[{content}]")
     }
+}
+
+fn elixir_string_literal(value: &str) -> String {
+    render_elixir_string(value)
 }
 
 fn render_optional_string(value: Option<&String>) -> String {

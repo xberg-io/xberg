@@ -583,6 +583,22 @@ pub mod assertions {
         }
     }
 
+    /// Assert the reported extraction method.
+    pub fn assert_extraction_method(result: &ExtractionResult, expected: &str) {
+        let actual = result
+            .extraction_method
+            .map(|method| method.as_str())
+            .or_else(|| result.metadata.additional.get("extraction_method").and_then(Value::as_str));
+
+        assert_eq!(
+            actual,
+            Some(expected),
+            "Expected extraction_method {:?}, got {:?}",
+            expected,
+            actual
+        );
+    }
+
     /// Assert that content is not empty.
     pub fn assert_content_not_empty(result: &ExtractionResult) {
         assert!(!result.content.trim().is_empty(), "Expected non-empty content");

@@ -706,6 +706,17 @@ export const assertions = {
 		}
 	},
 
+	assertExtractionMethod(result: ExtractionResult, expected: string): void {
+		const metadata = isPlainRecord(result.metadata) ? (result.metadata as PlainRecord) : null;
+		const additional = metadata && isPlainRecord(metadata.additional) ? (metadata.additional as PlainRecord) : null;
+		const actual =
+			(result as unknown as PlainRecord).extractionMethod ??
+			(result as unknown as PlainRecord).extraction_method ??
+			metadata?.extraction_method ??
+			additional?.extraction_method;
+		expect(actual).toBe(expected);
+	},
+
 	assertContentNotEmpty(result: ExtractionResult): void {
 		expect(result.content.length > 0).toBe(true);
 	},

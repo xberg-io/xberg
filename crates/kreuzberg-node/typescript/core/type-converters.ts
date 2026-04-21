@@ -261,15 +261,6 @@ function convertResult(rawResult: unknown): ExtractionResult {
 		document: (result["document"] as Record<string, unknown> | null) ?? null,
 	};
 
-	const extractionMethodData = result["extractionMethod"];
-	if (
-		extractionMethodData === "native" ||
-		extractionMethodData === "ocr" ||
-		extractionMethodData === "mixed"
-	) {
-		returnObj.extractionMethod = extractionMethodData;
-	}
-
 	const chunksData = result["chunks"];
 	if (Array.isArray(chunksData)) {
 		returnObj.chunks = (chunksData as unknown[]).map((chunk) => convertChunk(chunk));

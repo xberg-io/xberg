@@ -499,6 +499,21 @@ test_that("config_email_msg_fallback_codepage", {
   assert_min_content_length(result, 10L)
 })
 
+test_that("config_extraction_method_mixed", {
+  skip_if_feature_unavailable("ocr")
+  result <- run_fixture(
+    "config_extraction_method_mixed",
+    "pdf/multi_page.pdf",
+    list(force_ocr_pages = c(2L), ocr = list(backend = "tesseract", language = "eng")),
+    requirements = c("ocr"),
+    notes = NULL,
+    skip_if_missing = TRUE
+  )
+  assert_expected_mime(result, c("application/pdf"))
+  assert_min_content_length(result, 1L)
+  assert_extraction_method(result, "mixed")
+})
+
 test_that("config_extraction_timeout", {
   result <- run_fixture(
     "config_extraction_timeout",

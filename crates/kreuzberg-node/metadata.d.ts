@@ -445,7 +445,6 @@ export interface ExtractionResult<T extends Record<string, unknown> = Record<str
 	content: string;
 	mimeType: string;
 	metadata: Metadata<T>;
-	extractionMethod?: "native" | "ocr" | "mixed";
 	tables: ExtractedTable[];
 	detectedLanguages?: string[];
 	chunks?: string[];

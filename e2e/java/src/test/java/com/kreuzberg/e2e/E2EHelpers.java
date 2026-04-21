@@ -1,5 +1,6 @@
 package com.kreuzberg.e2e;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -759,6 +760,14 @@ public final class E2EHelpers {
             count <= maxCount,
             String.format("Expected at most %d processing warnings, got %d", maxCount, count));
       }
+    }
+
+    public static void assertExtractionMethod(ExtractionResult result, String expected) {
+      Object actual = result.getMetadata().getAdditional().get("extraction_method");
+      assertEquals(
+          expected,
+          actual,
+          String.format("Expected extraction_method=%s, got %s", expected, actual));
     }
 
     public static void assertLlmUsage(ExtractionResult result, Integer maxCount, Boolean isEmpty) {

@@ -416,6 +416,14 @@ module E2ERuby
       expect(keywords.length).to be <= max_count if max_count
     end
 
+    def self.assert_extraction_method(result, expected)
+      metadata_value =
+        if result.respond_to?(:metadata) && result.metadata.respond_to?(:additional)
+          result.metadata.additional['extraction_method']
+        end
+      expect(metadata_value).to eq(expected)
+    end
+
     def self.assert_content_not_empty(result)
       expect(result.content).not_to be_nil
       expect(result.content).not_to be_empty
@@ -1153,6 +1161,13 @@ fn render_assertions(assertions: &Assertions) -> String {
         }
     }
 
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        buffer.push_str(&format!(
+            "      E2ERuby::Assertions.assert_extraction_method(result, {})\n",
+            render_string_literal(&extraction_method.is)
+        ));
+    }
+
     if assertions.content_not_empty == Some(true) {
         buffer.push_str("      E2ERuby::Assertions.assert_content_not_empty(result)\n");
     }
@@ -1313,6 +1328,10 @@ fn render_string_array(items: &[String]) -> String {
             .join(", ");
         format!("[{content}]")
     }
+}
+
+fn render_string_literal(text: &str) -> String {
+    render_ruby_string(text)
 }
 
 fn render_optional_string(value: Option<&String>) -> String {

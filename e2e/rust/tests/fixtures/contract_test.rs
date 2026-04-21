@@ -1332,6 +1332,59 @@ fn test_config_email_msg_fallback_codepage() {
 }
 
 #[test]
+fn test_config_extraction_method_mixed() {
+    // Tests that selective page OCR reports a mixed extraction method
+
+    let document_path = resolve_document("pdf/multi_page.pdf");
+    if !document_path.exists() {
+        println!(
+            "Skipping config_extraction_method_mixed: missing document at {}",
+            document_path.display()
+        );
+        return;
+    }
+    let config: ExtractionConfig = serde_json::from_str(
+        r#"{
+  "force_ocr_pages": [
+    2
+  ],
+  "ocr": {
+    "backend": "tesseract",
+    "language": "eng"
+  }
+}"#,
+    )
+    .expect("Fixture config should deserialize");
+
+    let result = match kreuzberg::extract_file_sync(&document_path, None, &config) {
+        Err(KreuzbergError::MissingDependency(dep)) => {
+            println!(
+                "Skipping config_extraction_method_mixed: missing dependency {dep}",
+                dep = dep
+            );
+            return;
+        }
+        Err(KreuzbergError::UnsupportedFormat(fmt)) => {
+            println!(
+                "Skipping config_extraction_method_mixed: unsupported format {fmt} (requires optional tool)",
+                fmt = fmt
+            );
+            return;
+        }
+        Err(KreuzbergError::Parsing { message: ref msg, .. }) => {
+            println!("Skipping config_extraction_method_mixed: parsing dependency unavailable: {msg}");
+            return;
+        }
+        Err(err) => panic!("Extraction failed for config_extraction_method_mixed: {err:?}"),
+        Ok(result) => result,
+    };
+
+    assertions::assert_expected_mime(&result, &["application/pdf"]);
+    assertions::assert_min_content_length(&result, 1);
+    assertions::assert_extraction_method(&result, "mixed");
+}
+
+#[test]
 fn test_config_extraction_timeout() {
     // Tests that extraction_timeout_secs config field is accepted and does not affect fast extractions
 

@@ -363,6 +363,22 @@ func TestContractConfigEmailMsgFallbackCodepage(t *testing.T) {
 	assertMinContentLength(t, result, 10)
 }
 
+func TestContractConfigExtractionMethodMixed(t *testing.T) {
+	skipIfFeatureUnavailable(t, "ocr")
+	result := runExtraction(t, "pdf/multi_page.pdf", []byte(`{
+"force_ocr_pages": [
+	2
+],
+"ocr": {
+	"backend": "tesseract",
+	"language": "eng"
+}
+}`))
+	assertExpectedMime(t, result, []string{"application/pdf"})
+	assertMinContentLength(t, result, 1)
+	assertExtractionMethod(t, result, "mixed")
+}
+
 func TestContractConfigExtractionTimeout(t *testing.T) {
 	result := runExtraction(t, "pdf/fake_memo.pdf", []byte(`{
 "extraction_timeout_secs": 300

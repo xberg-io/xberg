@@ -467,6 +467,16 @@ static void test_contract_config_email_msg_fallback_codepage(void) {
     kreuzberg_free_result(result);
 }
 
+static void test_contract_config_extraction_method_mixed(void) {
+    if (skip_if_feature_unavailable("ocr")) return;
+    CExtractionResult *result = run_extraction("pdf/multi_page.pdf", "{\"force_ocr_pages\":[2],\"ocr\":{\"backend\":\"tesseract\",\"language\":\"eng\"}}");
+    if (!result) return; /* skipped */
+    assert_expected_mime(result, (const char *[]){"application/pdf"}, 1);
+    assert_min_content_length(result, 1);
+    assert_extraction_method(result, "mixed");
+    kreuzberg_free_result(result);
+}
+
 static void test_contract_config_extraction_timeout(void) {
     CExtractionResult *result = run_extraction("pdf/fake_memo.pdf", "{\"extraction_timeout_secs\":300}");
     if (!result) return; /* skipped */
@@ -873,6 +883,7 @@ int main(void) {
     test_contract_config_document_structure_with_headings();
     test_contract_config_element_types();
     test_contract_config_email_msg_fallback_codepage();
+    test_contract_config_extraction_method_mixed();
     test_contract_config_extraction_timeout();
     test_contract_config_force_ocr();
     test_contract_config_force_ocr_pages();

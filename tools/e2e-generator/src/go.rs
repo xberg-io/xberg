@@ -614,6 +614,24 @@ func assertKeywords(t *testing.T, result *kreuzberg.ExtractionResult, hasKeyword
 	}
 }
 
+func assertExtractionMethod(t *testing.T, result *kreuzberg.ExtractionResult, expected string) {
+	t.Helper()
+	if result.Metadata.Additional == nil {
+		t.Fatalf("expected extraction_method=%q but metadata.additional was empty", expected)
+	}
+	raw, ok := result.Metadata.Additional["extraction_method"]
+	if !ok {
+		t.Fatalf("expected extraction_method=%q but metadata.additional had no extraction_method key", expected)
+	}
+	var actual string
+	if err := json.Unmarshal(raw, &actual); err != nil {
+		t.Fatalf("failed to decode extraction_method from metadata.additional: %v", err)
+	}
+	if actual != expected {
+		t.Fatalf("expected extraction_method=%q, got %q", expected, actual)
+	}
+}
+
 func assertContentNotEmpty(t *testing.T, result *kreuzberg.ExtractionResult) {
 	t.Helper()
 	if len(result.Content) == 0 {
@@ -1394,6 +1412,14 @@ fn render_assertions(assertions: &Assertions) -> String {
         )
         .unwrap();
     }
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        writeln!(
+            buffer,
+            "    assertExtractionMethod(t, result, {})",
+            render_string_literal(&extraction_method.is)
+        )
+        .unwrap();
+    }
     if assertions.content_not_empty == Some(true) {
         writeln!(buffer, "    assertContentNotEmpty(t, result)").unwrap();
     }
@@ -1533,6 +1559,10 @@ fn render_string_slice(values: &[String]) -> String {
 
 fn go_string_literal(value: &str) -> String {
     format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+fn render_string_literal(value: &str) -> String {
+    go_string_literal(value)
 }
 
 /// Convert a snake_case or UPPER_CASE identifier to PascalCase for Go test names

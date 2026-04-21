@@ -1270,7 +1270,7 @@ impl PdfExtractor {
                         _ocr_elements_from_ocr = ocr_elems;
                         ocr_internal_doc = ocr_doc;
                         ocr_llm_usage = llm_usage;
-                        (ocr_text, true)
+                        (ocr_text, ExtractionMethod::Ocr)
                     }
                     Err(e) => {
                         tracing::warn!(

@@ -607,6 +607,13 @@ fn render_assertions(assertions: &Assertions) -> String {
         ));
     }
 
+    if let Some(extraction_method) = assertions.extraction_method.as_ref() {
+        buffer.push_str(&format!(
+            "    assertions::assert_extraction_method(&result, \"{}\");\n",
+            escape_rust_string(&extraction_method.is)
+        ));
+    }
+
     if assertions.content_not_empty == Some(true) {
         buffer.push_str("    assertions::assert_content_not_empty(&result);\n");
     }

@@ -640,6 +640,23 @@ void assert_keywords(const CExtractionResult *result,
     }
 }
 
+void assert_extraction_method(const CExtractionResult *result,
+                              const char *expected) {
+    const char *metadata_json = result->metadata_json ? result->metadata_json : "";
+    char needle[128];
+    char spaced_needle[128];
+    snprintf(needle, sizeof(needle), "\"extraction_method\":\"%s\"", expected);
+    snprintf(spaced_needle, sizeof(spaced_needle), "\"extraction_method\": \"%s\"", expected);
+    if (str_contains_ci(metadata_json, needle) || str_contains_ci(metadata_json, spaced_needle)) {
+        return;
+    }
+    fprintf(stderr,
+            "FAIL: expected extraction_method \"%s\" in metadata_json but got %s\n",
+            expected,
+            metadata_json[0] ? metadata_json : "(null)");
+    exit(1);
+}
+
 void assert_quality_score(const CExtractionResult *result,
                           int has_score, int score_present,
                           int has_min, double min_score,

@@ -119,6 +119,9 @@ void assert_keywords(const CExtractionResult *result,
                      int has_min, size_t min_count,
                      int has_max, size_t max_count);
 
+void assert_extraction_method(const CExtractionResult *result,
+                              const char *expected);
+
 void assert_quality_score(const CExtractionResult *result,
                           int has_score, int score_present,
                           int has_min, double min_score,
