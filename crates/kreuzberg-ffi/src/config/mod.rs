@@ -25,9 +25,9 @@ pub use parse::parse_extraction_config_from_json;
 pub use serialize::{config_to_json_string, get_field_as_json, json_to_c_string};
 
 use crate::ffi_panic_guard;
-use crate::helpers::{clear_last_error, set_last_error};
 #[cfg(feature = "embeddings")]
 use crate::helpers::string_to_c_string;
+use crate::helpers::{clear_last_error, set_last_error};
 use kreuzberg::core::config::ExtractionConfig;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
