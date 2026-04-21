@@ -156,7 +156,7 @@ repos:
 
   # Shell scripts: formatting and linting
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.14.2-1
+    rev: v3.13.1-1
     hooks:
       - id: shfmt
         args: ["-w", "-i", "2"]
