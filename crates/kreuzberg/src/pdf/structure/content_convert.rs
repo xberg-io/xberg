@@ -497,17 +497,22 @@ fn element_to_paragraph(elem: &ContentElement) -> Option<PdfParagraph> {
     let is_monospace = elem.is_monospace || is_code_block;
     let is_page_furniture = false;
 
-    // Detect list items from text content when not tagged.
-    // Use multi-token check to catch patterns like "(1)" or "[iv]" split across words.
-    if !is_list_item {
-        is_list_item = super::paragraphs::is_list_prefix_multi_token(&full_text);
-    }
-
     // Map heading level from semantic role, with word-count guard.
     let heading_level = match elem.semantic_role {
         Some(SemanticRole::Heading { level }) if word_count <= MAX_HEADING_WORD_COUNT => Some(level),
         _ => None,
     };
+
+    // Detect list items from text content when not tagged.
+    // Use multi-token check to catch patterns like "(1)" or "[iv]" split across words.
+    // Gate on `heading_level.is_none()`: a numbered section heading like
+    // "3. Conclusions" is a Heading, not a list item. Without this gate the
+    // element carries BOTH `heading_level=Some(3)` and `is_list_item=true`,
+    // which makes the assembly layer wrap the heading in a `ListStart`/`ListEnd`
+    // pair and produces an ill-formed AST (`List` → `Heading`).
+    if !is_list_item && heading_level.is_none() {
+        is_list_item = super::paragraphs::is_list_prefix_multi_token(&full_text);
+    }
 
     // Extract block_bbox as (left, bottom, right, top) tuple for PdfParagraph.
     let block_bbox = elem.bbox.map(|r| (r.left, r.y_min, r.right, r.y_max));
@@ -826,6 +831,26 @@ mod tests {
         let page = make_page(vec![make_element("• Bullet point", Some(SemanticRole::Paragraph))]);
         let paras = content_to_paragraphs(&page);
         assert!(paras[0].is_list_item);
+    }
+
+    /// Regression: a tagged Heading whose visible text happens to start
+    /// with a numeric prefix (e.g. `"3. Conclusions"`) must not also get
+    /// flagged as a list item. When both flags are set, assembly wraps
+    /// the heading in a `ListStart`/`ListEnd` pair around a `Heading`
+    /// node, which is an invalid CommonMark AST (`List` children may only
+    /// be `Item`/`TaskItem`) and trips comrak's debug validator.
+    #[test]
+    fn test_heading_with_numeric_prefix_not_marked_list_item() {
+        let page = make_page(vec![make_element(
+            "3. Conclusions",
+            Some(SemanticRole::Heading { level: 3 }),
+        )]);
+        let paras = content_to_paragraphs(&page);
+        assert_eq!(paras[0].heading_level, Some(3));
+        assert!(
+            !paras[0].is_list_item,
+            "tagged Heading must not also be flagged is_list_item from text pattern"
+        );
     }
 
     #[test]

@@ -19,11 +19,27 @@ pub(super) fn from_structure_tree(blocks: &[ExtractedBlock]) -> PageContent {
 }
 
 /// Recursively flatten `ExtractedBlock` hierarchy into `ContentElement`s.
+///
+/// A block is the author's logical unit (paragraph, list-item, table-cell).
+/// Either the block's own `text` OR its nested children can be non-empty — and
+/// in tagged PDFs both occur frequently: a `Paragraph`/`LBody` whose child span
+/// carries the bold lead-in while the continuation text lives on the parent.
+///
+/// For each block we emit:
+///   1. Its children's contents (recursive flatten), then
+///   2. Its own `text` as a separate element, if non-empty.
+///
+/// Emitting children first matches the reading order observed in tagged PDFs
+/// from word processors / presentation tools (Google Docs/Slides, Word), where
+/// nested child spans visually precede the parent's continuation MCIDs (e.g.
+/// a `Lbl`/`LBody` list structure or a `Paragraph` whose bold lead-in is a
+/// child span). Without this step, the parent's own text is silently dropped
+/// whenever it has children, truncating paragraph bodies and breaking list
+/// items across page boundaries.
 fn flatten_blocks(blocks: &[ExtractedBlock], elements: &mut Vec<ContentElement>) {
     for block in blocks {
         if !block.children.is_empty() {
             flatten_blocks(&block.children, elements);
-            continue;
         }
 
         if block.text.trim().is_empty() {
@@ -296,6 +312,29 @@ mod tests {
         let page = from_structure_tree(&blocks);
         assert_eq!(page.elements[0].semantic_role, Some(SemanticRole::ListItem));
         assert_eq!(page.elements[0].list_label, Some("1.".to_string()));
+    }
+
+    /// Regression: a block with both own `text` and nested children
+    /// (e.g. a tagged `LBody` whose bold lead-in is a child `P` while
+    /// the continuation text lives on the parent) must not silently drop
+    /// the parent text during flatten.
+    #[test]
+    fn test_from_structure_tree_preserves_parent_text_with_children() {
+        let blocks = vec![ExtractedBlock {
+            role: ContentRole::Other("LBody".to_string()),
+            text: " — continuation text on parent".to_string(),
+            bounds: None,
+            font_size: Some(12.0),
+            is_bold: false,
+            is_italic: false,
+            is_monospace: false,
+            children: vec![make_block(ContentRole::Paragraph, "Bold lead-in on child")],
+        }];
+        let page = from_structure_tree(&blocks);
+        assert_eq!(page.elements.len(), 2, "both child and parent texts must be emitted");
+        // Child first (reading order), parent own-text after.
+        assert_eq!(page.elements[0].text, "Bold lead-in on child");
+        assert_eq!(page.elements[1].text, " — continuation text on parent");
     }
 
     #[test]

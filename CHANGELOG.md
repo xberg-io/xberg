@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **#774**: Tagged-PDF structure tree dropped paragraph body text when a block had both own text and children, and wrapped numbered section headings in an invalid `List → Heading` AST (panics comrak in debug, emits malformed markdown in release). `flatten_blocks` now emits parent text alongside children; text-pattern list detection in `element_to_paragraph` is gated on `heading_level.is_none()`.
 - **Semantic chunker fallback path now respects `max_characters`** — previously the non-embedding fallback hardcoded a 4000-char ceiling and silently ignored the caller's `max_characters`. A warning is also emitted when `chunker_type='semantic'` is used without an `EmbeddingConfig` so the fallback mode is discoverable. The `ChunkerType::Semantic` docstring has been corrected to describe both paths accurately.
 - **OCR backend dispatch**: `OcrConfig(backend=...)` with a non-default backend no longer silently falls back to paddleocr when the chosen backend errors — auto-fallback is limited to the default tesseract backend; users who want multi-backend fallback configure it via `OcrConfig.pipeline` (unchanged).
 - **EasyOCR on PDFs**: `EasyOCRBackend.supports_document_processing()` returns `False` so Rust's `PdfRenderer` handles page rendering, removing the implicit `pdf2image`/`pymupdf` requirement that was never declared in the `[easyocr]` extra.
