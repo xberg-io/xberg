@@ -718,7 +718,7 @@ class Helpers
 
     public static function assertExtractionMethod(ExtractionResult $result, string $expected): void
     {
-        $actual = $result->metadata->getCustom('extraction_method');
+        $actual = $result->extractionMethod ?? $result->metadata->getCustom('extraction_method');
 
         Assert::assertSame(
             $expected,

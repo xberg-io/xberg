@@ -650,6 +650,7 @@ export interface ExtractionResult {
 	mimeType: string;
 	metadata: Metadata;
 	tables: Table[];
+	extractionMethod?: "native" | "ocr" | "mixed";
 	detectedLanguages?: string[];
 	chunks?: Chunk[];
 	images?: ExtractedImage[];

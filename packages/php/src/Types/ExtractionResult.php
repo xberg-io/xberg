@@ -23,6 +23,7 @@ namespace Kreuzberg\Types;
  * @property-read array<ExtractedKeyword>|null $extractedKeywords Extracted keywords with scores and algorithm metadata
  * @property-read float|null $qualityScore Quality score of the extraction (0.0 to 1.0)
  * @property-read array<ProcessingWarning>|null $processingWarnings Warnings generated during processing
+ * @property-read 'native'|'ocr'|'mixed'|null $extractionMethod Strategy used to extract content from the document
  */
 readonly class ExtractionResult
 {
@@ -40,6 +41,7 @@ readonly class ExtractionResult
      * @param array<ExtractedKeyword>|null $extractedKeywords
      * @param float|null $qualityScore
      * @param array<ProcessingWarning>|null $processingWarnings
+     * @param 'native'|'ocr'|'mixed'|null $extractionMethod
      */
     public function __construct(
         public string $content,
@@ -58,6 +60,7 @@ readonly class ExtractionResult
         public ?array $extractedKeywords = null,
         public ?float $qualityScore = null,
         public ?array $processingWarnings = null,
+        public ?string $extractionMethod = null,
         /** @var array<PdfAnnotation>|null */
         public ?array $annotations = null,
         public ?CodeProcessResult $codeIntelligence = null,
@@ -198,6 +201,9 @@ readonly class ExtractionResult
             );
         }
 
+        /** @var 'native'|'ocr'|'mixed'|null $extractionMethod */
+        $extractionMethod = $data['extraction_method'] ?? null;
+
         $annotations = null;
         if (isset($data['annotations'])) {
             /** @var array<array<string, mixed>> $annotationsData */
@@ -237,6 +243,7 @@ readonly class ExtractionResult
             extractedKeywords: $extractedKeywords,
             qualityScore: $qualityScore,
             processingWarnings: $processingWarnings,
+            extractionMethod: $extractionMethod,
             annotations: $annotations,
             codeIntelligence: $codeIntelligence,
         );

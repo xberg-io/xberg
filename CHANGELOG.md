@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Layout detection regions on PageContent** — new `layout_regions` field exposes detected layout regions (class, confidence, bounding box, area fraction) from the RT-DETR model when layout detection is enabled. Enables programmatic detection of diagrams, figures, tables, and other content types per page. Available across all 10 bindings. (#579)
 - **LayoutRegion type files** for Java, PHP, and Elixir bindings (were referenced but missing).
 - **E2E assertions for layout regions** — `has_layout_regions` and `layout_classes_include` assertion types in all 12 language generators.
+- `ExtractionResult.extraction_method` / `extractionMethod` is now surfaced in the TypeScript and PHP binding type definitions, and image OCR results now mark the extraction method as `ocr`.
 
 ### Fixed
 
