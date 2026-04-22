@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **#783**: Fix GPU acceleration silent fallback to CPU. `kreuzberg` now uses dynamic ONNX Runtime loading (`ort-dynamic`) for Python and CI environments. This ensures that manually provided GPU-enabled binaries (e.g., via `pip install onnxruntime-gpu`) are correctly utilized instead of being ignored by compile-time bundled CPU binaries.
+- **Python Bindings**: Added auto-discovery for Python's `onnxruntime` package. `kreuzberg` now automatically detects and loads `libonnxruntime` from the user's Python environment, enabling seamless GPU support.
+- **Breaking**: Removed `ort-bundled` from `layout-detection`, `embeddings`, and `auto-rotate` features in the core library. Consumers using these features as a library must now explicitly opt-in to `ort-bundled` if they want auto-downloading of CPU binaries.
 - **#783**: PaddleOCR backend not utilizing GPU (CUDA) despite `AccelerationConfig` — `AccelerationConfig` from `ExtractionConfig` was never reaching PaddleOCR ONNX sessions, silently falling back to CPU. Acceleration is now propagated through `OcrConfig` to all OCR call sites (image extractor, PDF OCR).
 - **#779**: Expose `PaddleOcrConfig` in Python bindings and update `OcrConfig` for backward compatibility.
 

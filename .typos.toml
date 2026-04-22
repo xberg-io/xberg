@@ -16,6 +16,8 @@ extend-ignore-re = [
     "'\\\\u\\{[0-9a-fA-F]+\\}'",
     # Foreign language text in test strings and OCR backend language lists
     '"[^"]*(?:programa|cursos|ist ein|künstliche|excepcional|utiliza|transforme|Exemple|Dies ist|internacional|Hauptstadt)[^"]*"',
+    # GPU runner name
+    "runner-gpu-t4-spot",
 ]
 
 [default.extend-words]
@@ -97,6 +99,9 @@ mis = "mis"
 tre = "tre"
 ist = "ist"
 ein = "ein"
+runner-gpu-t4-spot = "runner-gpu-t4-spot"
+t4 = "t4"
+spot = "spot"
 
 [default.extend-identifiers]
 # Allow these identifiers in code
@@ -146,4 +151,5 @@ extend-exclude = [
     "*.png",
     "*.ico",
     "*.svg",
+    ".github/workflows/ci-gpu.yaml",
 ]

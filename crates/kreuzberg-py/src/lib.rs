@@ -56,6 +56,33 @@ fn init_async_runtime() -> PyResult<()> {
 /// Internal bindings module for Kreuzberg
 #[pymodule]
 fn _internal_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // If ORT_DYLIB_PATH isn't set, try to discover the library provided by the
+    // `onnxruntime` or `onnxruntime-gpu` pip packages.
+    if std::env::var("ORT_DYLIB_PATH").is_err()
+        && let Ok(onnx) = m.py().import("onnxruntime")
+        && let Ok(paths) = onnx.getattr("__path__")
+        && let Ok(paths_vec) = paths.extract::<Vec<String>>()
+        && let Some(base_dir) = paths_vec.first()
+    {
+        let mut dylib_path = std::path::PathBuf::from(base_dir);
+        dylib_path.push("capi");
+
+        #[cfg(target_os = "windows")]
+        dylib_path.push("onnxruntime.dll");
+        #[cfg(target_os = "macos")]
+        dylib_path.push("libonnxruntime.dylib");
+        #[cfg(target_os = "linux")]
+        dylib_path.push("libonnxruntime.so");
+
+        if dylib_path.exists() {
+            // SAFETY: Single-threaded during module initialization.
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::set_var("ORT_DYLIB_PATH", dylib_path.to_string_lossy().as_ref());
+            }
+        }
+    }
+
     kreuzberg::ort_discovery::ensure_ort_available();
 
     m.add("ValidationError", m.py().get_type::<error::ValidationError>())?;

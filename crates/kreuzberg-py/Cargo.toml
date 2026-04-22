@@ -25,7 +25,7 @@ ahash = { workspace = true }
 
 async-trait = { workspace = true }
 html-to-markdown-rs = { workspace = true }
-kreuzberg = { workspace = true, features = ["bundled-pdfium", "full"] }
+kreuzberg = { workspace = true, features = ["bundled-pdfium", "formats", "ocr", "paddle-ocr", "layout-detection", "embeddings", "api", "mcp", "otel", "tree-sitter", "liter-llm", "ort-dynamic"] }
 kreuzberg-ffi = { workspace = true }
 once_cell = "1.21"
 # NOTE: pyo3 pinned to 0.27.x until pyo3-async-runtimes supports 0.28.x

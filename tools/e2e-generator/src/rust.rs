@@ -110,7 +110,7 @@ default = ["embeddings"]
 embeddings = ["kreuzberg/embeddings"]
 
 [dependencies]
-kreuzberg = { path = "../../crates/kreuzberg", features = ["bundled-pdfium", "full"] }
+kreuzberg = { path = "../../crates/kreuzberg", features = ["bundled-pdfium", "full", "ort-bundled"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
@@ -144,7 +144,7 @@ default = ["embeddings"]
 embeddings = ["kreuzberg/embeddings"]
 
 [dependencies]
-kreuzberg = {{ version = "{version}", features = ["bundled-pdfium", "full"] }}
+kreuzberg = {{ version = "{version}", features = ["bundled-pdfium", "full", "ort-bundled"] }}
 serde_json = "1"
 tokio = {{ version = "1", features = ["rt-multi-thread", "macros"] }}
 

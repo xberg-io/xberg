@@ -48,11 +48,7 @@ struct LogCapture {
 }
 
 impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for LogCapture {
-    fn on_event(
-        &self,
-        event: &tracing::Event<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
+    fn on_event(&self, event: &tracing::Event<'_>, _ctx: tracing_subscriber::layer::Context<'_, S>) {
         let mut visitor = MessageVisitor(String::new());
         event.record(&mut visitor);
         if let Ok(mut msgs) = self.messages.lock() {
@@ -138,7 +134,10 @@ mod paddle_ocr_cuda {
         assert_cuda_requested(&captured);
 
         let text = result.unwrap().content.to_lowercase();
-        assert!(text.contains("hello") || text.contains("helo"), "Expected 'hello': {text}");
+        assert!(
+            text.contains("hello") || text.contains("helo"),
+            "Expected 'hello': {text}"
+        );
     }
 
     #[tokio::test]
@@ -305,10 +304,7 @@ mod embeddings_cuda {
             ..Default::default()
         };
 
-        let result = kreuzberg::embed_texts(
-            &["Hello, world!", "GPU-accelerated embeddings test"],
-            &config,
-        );
+        let result = kreuzberg::embed_texts(&["Hello, world!", "GPU-accelerated embeddings test"], &config);
         assert!(result.is_ok(), "Embedding CUDA failed: {:?}", result.err());
         assert_cuda_requested(&captured);
 
@@ -330,10 +326,7 @@ mod embeddings_cuda {
             ..Default::default()
         };
 
-        let result = kreuzberg::embed_texts(
-            &["Document intelligence with GPU acceleration"],
-            &config,
-        );
+        let result = kreuzberg::embed_texts(&["Document intelligence with GPU acceleration"], &config);
         assert!(result.is_ok(), "Embedding CUDA balanced failed: {:?}", result.err());
         assert_cuda_requested(&captured);
 

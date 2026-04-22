@@ -105,7 +105,7 @@ jobs:
       - name: Run GPU tests (Rust)
         run: |
           cargo test -p kreuzberg \
-            --features "paddle-ocr,layout-detection,embeddings,pdf,ocr" \
+            --features "paddle-ocr,layout-detection,embeddings,pdf,ocr,ort-dynamic" \
             --test gpu_acceleration \
             -- --ignored --nocapture
         env:

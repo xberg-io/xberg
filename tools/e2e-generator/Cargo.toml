@@ -13,7 +13,7 @@ bytes = { workspace = true }
 camino = "1.2"
 clap = { workspace = true }
 itertools = { workspace = true }
-kreuzberg = { path = "../../crates/kreuzberg", features = ["full"], default-features = false }
+kreuzberg = { path = "../../crates/kreuzberg", features = ["full", "ort-bundled"], default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 walkdir = "2.5"

@@ -118,7 +118,6 @@ auto-rotate = [
     "dep:sha2",
     "dep:image",
     "dep:ureq",
-    "ort-bundled",
 ]
 layout-detection = [
     "dep:ort",
@@ -127,7 +126,6 @@ layout-detection = [
     "dep:sha2",
     "dep:image",
     "tokio-runtime",
-    "ort-bundled",
 ]
 language-detection = ["dep:whatlang"]
 chunking = ["dep:text-splitter"]
@@ -139,7 +137,6 @@ embeddings = [
     "dep:tokenizers",
     "chunking",
     "tokio-runtime",
-    "ort-bundled",
 ]
 stopwords = []
 quality = ["dep:unicode-normalization", "dep:chardetng", "stopwords"]
