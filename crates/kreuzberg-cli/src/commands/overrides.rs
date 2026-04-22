@@ -419,6 +419,7 @@ impl ExtractionOverrides {
                     auto_rotate,
                     vlm_config: None,
                     vlm_prompt: None,
+                    acceleration: None,
                 });
             } else {
                 config.ocr = None;
@@ -478,6 +479,7 @@ impl ExtractionOverrides {
                 auto_rotate: false,
                 vlm_config: None,
                 vlm_prompt: None,
+                acceleration: None,
             });
 
             ocr.backend = "vlm".to_string();

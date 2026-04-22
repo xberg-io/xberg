@@ -730,6 +730,7 @@ impl OcrConfig {
                 auto_rotate: false,
                 vlm_config: vlm_config.map(|c| c.inner),
                 vlm_prompt,
+                acceleration: None,
             },
         })
     }
