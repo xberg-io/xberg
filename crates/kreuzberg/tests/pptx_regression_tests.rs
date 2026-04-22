@@ -694,6 +694,7 @@ async fn test_pptx_image_page_numbers_not_reversed() {
             auto_adjust_dpi: true,
             min_dpi: 72,
             max_dpi: 600,
+            max_images_per_page: None,
         }),
         ..Default::default()
     };
@@ -762,6 +763,7 @@ async fn test_pptx_image_page_numbers_issue329_user_file() {
             auto_adjust_dpi: true,
             min_dpi: 72,
             max_dpi: 600,
+            max_images_per_page: None,
         }),
         ..Default::default()
     };

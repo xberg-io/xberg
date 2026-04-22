@@ -52,7 +52,7 @@ dbase = "0.7"
 futures = "0.3"
 getrandom = { version = "0.4.2", features = ["wasm_js"] }
 hex = "0.4.3"
-html-to-markdown-rs = { version = "3.2.5", default-features = false }
+html-to-markdown-rs = { version = "3.2.6", default-features = false }
 image = { version = "0.25.10", default-features = false }
 itertools = "0.14"
 js-sys = "0.3"
@@ -70,7 +70,7 @@ once_cell = "1.21.4"
 
 ort = { version = "2.0.0-rc.12", default-features = false, features = ["std", "api-18"] }
 parking_lot = "0.12.5"
-pdf_oxide = { version = "0.3.34", default-features = false }
+pdf_oxide = { version = "0.3.37", default-features = false }
 pdfium-render = { package = "kreuzberg-pdfium-render", path = "crates/kreuzberg-pdfium-render", version = "4.3" }
 rayon = "1.12.0"
 reqwest = { version = "0.13.2", default-features = false }

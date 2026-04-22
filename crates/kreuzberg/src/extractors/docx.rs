@@ -955,11 +955,7 @@ impl DocumentExtractor for DocxExtractor {
                 let span = tracing::Span::current();
                 tokio::task::spawn_blocking(move || {
                     let _guard = span.entered();
-                    parse_docx_core(
-                        &content_owned,
-                        include_doc_structure,
-                        output_format,
-                    )
+                    parse_docx_core(&content_owned, include_doc_structure, output_format)
                 })
                 .await
                 .map_err(|e| crate::error::KreuzbergError::parsing(format!("DOCX extraction task failed: {}", e)))??

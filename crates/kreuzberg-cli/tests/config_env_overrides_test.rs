@@ -15,7 +15,9 @@ fn test_regression_773_env_override_loading() {
     config.apply_env_overrides().expect("Failed to apply overrides");
     unsafe { std::env::remove_var("KREUZBERG_OCR_LANGUAGE") };
 
-    let ocr = config.ocr.expect("OCR config should be Some when KREUZBERG_OCR_LANGUAGE is set");
+    let ocr = config
+        .ocr
+        .expect("OCR config should be Some when KREUZBERG_OCR_LANGUAGE is set");
     assert_eq!(ocr.language, "fra");
 }
 
@@ -24,10 +26,14 @@ fn test_regression_773_vlm_embedding_env_override() {
     let mut config = ExtractionConfig::default();
 
     unsafe { std::env::set_var("KREUZBERG_VLM_EMBEDDING_MODEL", "openai/text-embedding-3-small") };
-    config.apply_env_overrides().expect("Failed to apply environment overrides");
+    config
+        .apply_env_overrides()
+        .expect("Failed to apply environment overrides");
     unsafe { std::env::remove_var("KREUZBERG_VLM_EMBEDDING_MODEL") };
 
-    let chunking = config.chunking.expect("Chunking should be enabled when VLM embedding is set");
+    let chunking = config
+        .chunking
+        .expect("Chunking should be enabled when VLM embedding is set");
     let embedding = chunking.embedding.expect("Embedding should be configured");
 
     match embedding.model {

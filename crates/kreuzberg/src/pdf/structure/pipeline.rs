@@ -1513,6 +1513,10 @@ pub(crate) fn extract_document_structure_from_segments(
 
         #[allow(clippy::needless_range_loop)]
         for page_idx in 0..page_count {
+            if cancel_token.is_some_and(|t| t.is_cancelled()) {
+                tracing::debug!(page_idx, "oxide structure pipeline: cancelled during table page prep");
+                break;
+            }
             let Some(hints) = hints_pages.get(page_idx) else {
                 continue;
             };
@@ -1961,6 +1965,10 @@ pub(crate) fn extract_document_structure_from_segments(
                     "oxide running heuristic table extraction (no TATR)"
                 );
                 for tp in &table_pages {
+                    if cancel_token.is_some_and(|t| t.is_cancelled()) {
+                        tracing::debug!("oxide structure pipeline: cancelled during heuristic table extraction");
+                        break;
+                    }
                     let hints = &hints_pages[tp.page_idx];
                     layout_tables.extend(super::regions::extract_tables_from_layout_hints(
                         &tp.words,
@@ -1978,6 +1986,10 @@ pub(crate) fn extract_document_structure_from_segments(
         {
             // No layout detection — run heuristic fallback sequentially.
             for tp in &table_pages {
+                if cancel_token.is_some_and(|t| t.is_cancelled()) {
+                    tracing::debug!("oxide structure pipeline: cancelled during heuristic table extraction");
+                    break;
+                }
                 let hints = &hints_pages[tp.page_idx];
                 layout_tables.extend(super::regions::extract_tables_from_layout_hints(
                     &tp.words,
@@ -2066,6 +2078,12 @@ pub(crate) fn extract_document_structure_from_segments(
             include_footers,
         })
         .collect();
+
+    if cancel_token.is_some_and(|t| t.is_cancelled()) {
+        return Err(crate::pdf::error::PdfError::TextExtractionFailed(
+            "extraction cancelled".to_string(),
+        ));
+    }
 
     #[cfg(not(target_arch = "wasm32"))]
     let mut all_page_paragraphs: Vec<Vec<PdfParagraph>> = page_inputs

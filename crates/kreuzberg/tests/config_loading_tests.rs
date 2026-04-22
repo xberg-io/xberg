@@ -366,7 +366,8 @@ fn test_from_file_comprehensive_config() {
     let temp_dir = TempDir::new().expect("Operation failed");
     let config_path = temp_dir.path().join("config.toml");
 
-    let mut toml_content = String::from(r#"
+    let mut toml_content = String::from(
+        r#"
 [ocr]
 enabled = true
 backend = "tesseract"
@@ -380,7 +381,8 @@ enabled = true
 
 [images]
 extract_images = true
-"#);
+"#,
+    );
 
     #[cfg(feature = "pdf")]
     toml_content.push_str("\n[pdf_options]\nextract_images = true\n");

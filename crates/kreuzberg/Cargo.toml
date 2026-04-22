@@ -287,7 +287,7 @@ image = { workspace = true, default-features = false, features = [
 ], optional = true }
 indexmap = "2.14.0"
 infer = "0.19.0"
-jotdown = "0.9"
+jotdown = "0.10"
 kamadak-exif = { version = "0.6.1", optional = true }
 
 kreuzberg-tesseract = { path = "../kreuzberg-tesseract", version = "4.9.2", optional = true }

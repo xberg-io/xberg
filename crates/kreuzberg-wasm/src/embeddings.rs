@@ -15,14 +15,12 @@ use wasm_bindgen::prelude::*;
 
 #[cfg(feature = "embeddings")]
 fn parse_embedding_config(config: Option<JsValue>) -> Result<EmbeddingConfig, JsValue> {
-    if let Some(js_config) = config {
-        if !js_config.is_null() && !js_config.is_undefined() {
-            let json_value: serde_json::Value = serde_wasm_bindgen::from_value(js_config)
-                .map_err(|e| JsValue::from_str(&format!("Failed to parse embedding config: {e}")))?;
-            let snake_value = camel_to_snake(json_value);
-            return serde_json::from_value(snake_value)
-                .map_err(|e| JsValue::from_str(&format!("Failed to parse embedding config: {e}")));
-        }
+    if let Some(js_config) = config.filter(|c| !c.is_null() && !c.is_undefined()) {
+        let json_value: serde_json::Value = serde_wasm_bindgen::from_value(js_config)
+            .map_err(|e| JsValue::from_str(&format!("Failed to parse embedding config: {e}")))?;
+        let snake_value = camel_to_snake(json_value);
+        return serde_json::from_value(snake_value)
+            .map_err(|e| JsValue::from_str(&format!("Failed to parse embedding config: {e}")));
     }
     Ok(EmbeddingConfig::default())
 }

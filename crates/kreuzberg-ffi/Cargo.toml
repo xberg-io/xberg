@@ -22,6 +22,8 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 [features]
 default = []
 rayon = ["dep:rayon"]
+embeddings = ["kreuzberg/embeddings"]
+tree-sitter = ["kreuzberg/tree-sitter"]
 
 [dependencies]
 ahash = { workspace = true }

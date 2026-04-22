@@ -628,6 +628,7 @@ pub struct JsImageExtractionConfig {
     pub auto_adjust_dpi: Option<bool>,
     pub min_dpi: Option<i32>,
     pub max_dpi: Option<i32>,
+    pub max_images_per_page: Option<u32>,
 }
 
 impl From<JsImageExtractionConfig> for RustImageExtractionConfig {
@@ -640,6 +641,7 @@ impl From<JsImageExtractionConfig> for RustImageExtractionConfig {
             auto_adjust_dpi: val.auto_adjust_dpi.unwrap_or(true),
             min_dpi: val.min_dpi.unwrap_or(72),
             max_dpi: val.max_dpi.unwrap_or(600),
+            max_images_per_page: val.max_images_per_page,
         }
     }
 }
@@ -1715,6 +1717,7 @@ impl TryFrom<ExtractionConfig> for JsExtractionConfig {
                 auto_adjust_dpi: Some(img.auto_adjust_dpi),
                 min_dpi: Some(img.min_dpi),
                 max_dpi: Some(img.max_dpi),
+                max_images_per_page: img.max_images_per_page,
             }),
             pdf_options: val.pdf_options.map(|pdf| JsPdfConfig {
                 extract_images: Some(pdf.extract_images),
@@ -2110,6 +2113,7 @@ impl TryFrom<FileExtractionConfig> for JsFileExtractionConfig {
                 auto_adjust_dpi: Some(img.auto_adjust_dpi),
                 min_dpi: Some(img.min_dpi),
                 max_dpi: Some(img.max_dpi),
+                max_images_per_page: img.max_images_per_page,
             }),
             pdf_options: val.pdf_options.map(|pdf| JsPdfConfig {
                 extract_images: Some(pdf.extract_images),

@@ -1476,16 +1476,12 @@ impl<R: Read + Seek> DocxParser<R> {
 
                         if is_page_break && table_stack.is_empty() {
                             document.elements.push(DocumentElement::PageBreak);
-                        } else if !is_page_break {
-                            if let Some(ref mut run) = current_run {
-                                run.text.push('\n');
-                            }
+                        } else if !is_page_break && let Some(ref mut run) = current_run {
+                            run.text.push('\n');
                         }
                     }
-                    b"w:lastRenderedPageBreak" => {
-                        if table_stack.is_empty() {
-                            document.elements.push(DocumentElement::PageBreak);
-                        }
+                    b"w:lastRenderedPageBreak" if table_stack.is_empty() => {
+                        document.elements.push(DocumentElement::PageBreak);
                     }
                     b"w:sectPr" => {
                         let sect_props = super::section::parse_section_properties_streaming(&mut reader);
@@ -1524,16 +1520,12 @@ impl<R: Read + Seek> DocxParser<R> {
 
                         if is_page_break && table_stack.is_empty() {
                             document.elements.push(DocumentElement::PageBreak);
-                        } else if !is_page_break {
-                            if let Some(ref mut run) = current_run {
-                                run.text.push('\n');
-                            }
+                        } else if !is_page_break && let Some(ref mut run) = current_run {
+                            run.text.push('\n');
                         }
                     }
-                    b"w:lastRenderedPageBreak" => {
-                        if table_stack.is_empty() {
-                            document.elements.push(DocumentElement::PageBreak);
-                        }
+                    b"w:lastRenderedPageBreak" if table_stack.is_empty() => {
+                        document.elements.push(DocumentElement::PageBreak);
                     }
                     b"w:footnoteReference" | b"w:endnoteReference" => {
                         // Insert inline footnote/endnote reference marker [^N]

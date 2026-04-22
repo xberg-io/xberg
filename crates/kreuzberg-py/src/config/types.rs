@@ -1187,6 +1187,7 @@ pub struct ImageExtractionConfig {
 }
 
 #[pymethods]
+#[allow(clippy::too_many_arguments)]
 impl ImageExtractionConfig {
     #[new]
     #[pyo3(signature = (
@@ -1196,7 +1197,8 @@ impl ImageExtractionConfig {
         inject_placeholders=None,
         auto_adjust_dpi=None,
         min_dpi=None,
-        max_dpi=None
+        max_dpi=None,
+        max_images_per_page=None
     ))]
     fn new(
         extract_images: Option<bool>,
@@ -1206,6 +1208,7 @@ impl ImageExtractionConfig {
         auto_adjust_dpi: Option<bool>,
         min_dpi: Option<i32>,
         max_dpi: Option<i32>,
+        max_images_per_page: Option<u32>,
     ) -> Self {
         Self {
             inner: kreuzberg::ImageExtractionConfig {
@@ -1216,6 +1219,7 @@ impl ImageExtractionConfig {
                 auto_adjust_dpi: auto_adjust_dpi.unwrap_or(true),
                 min_dpi: min_dpi.unwrap_or(72),
                 max_dpi: max_dpi.unwrap_or(600),
+                max_images_per_page,
             },
         }
     }
@@ -1288,6 +1292,16 @@ impl ImageExtractionConfig {
     #[setter]
     fn set_max_dpi(&mut self, value: i32) {
         self.inner.max_dpi = value;
+    }
+
+    #[getter]
+    fn max_images_per_page(&self) -> Option<u32> {
+        self.inner.max_images_per_page
+    }
+
+    #[setter]
+    fn set_max_images_per_page(&mut self, value: Option<u32>) {
+        self.inner.max_images_per_page = value;
     }
 
     fn __repr__(&self) -> String {

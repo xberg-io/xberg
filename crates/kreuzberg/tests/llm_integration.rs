@@ -76,7 +76,7 @@ async fn test_vlm_ocr_openai() {
     let api_key = require_env!("OPENAI_API_KEY");
     let config = make_llm_config("openai/gpt-4o-mini", api_key);
     let image_bytes = std::fs::read("../../test_documents/images/test_hello_world.png").unwrap();
-    let (result, _usage) = kreuzberg::llm::vlm_ocr::vlm_ocr(&image_bytes, "image/png", "eng", &config)
+    let (result, _usage) = kreuzberg::llm::vlm_ocr::vlm_ocr(&image_bytes, "image/png", "eng", &config, None)
         .await
         .unwrap();
     assert!(!result.is_empty(), "VLM OCR returned empty string");
@@ -92,7 +92,7 @@ async fn test_vlm_ocr_anthropic() {
     let api_key = require_env!("ANTHROPIC_API_KEY");
     let config = make_llm_config("anthropic/claude-sonnet-4-20250514", api_key);
     let image_bytes = std::fs::read("../../test_documents/images/test_hello_world.png").unwrap();
-    let (result, _usage) = kreuzberg::llm::vlm_ocr::vlm_ocr(&image_bytes, "image/png", "eng", &config)
+    let (result, _usage) = kreuzberg::llm::vlm_ocr::vlm_ocr(&image_bytes, "image/png", "eng", &config, None)
         .await
         .unwrap();
     assert!(!result.is_empty(), "VLM OCR returned empty string");
@@ -108,7 +108,7 @@ async fn test_vlm_ocr_gemini() {
     let api_key = require_env!("GEMINI_API_KEY");
     let config = make_llm_config("gemini/gemini-2.5-flash", api_key);
     let image_bytes = std::fs::read("../../test_documents/images/test_hello_world.png").unwrap();
-    let (result, _usage) = kreuzberg::llm::vlm_ocr::vlm_ocr(&image_bytes, "image/png", "eng", &config)
+    let (result, _usage) = kreuzberg::llm::vlm_ocr::vlm_ocr(&image_bytes, "image/png", "eng", &config, None)
         .await
         .unwrap();
     assert!(!result.is_empty(), "VLM OCR returned empty string");
