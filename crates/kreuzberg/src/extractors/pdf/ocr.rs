@@ -379,7 +379,8 @@ pub(crate) async fn extract_mixed_ocr_native(
 
     let batch_size = crate::core::config::concurrency::resolve_thread_budget(config.concurrency.as_ref());
 
-    let ocr_config_owned = ocr_config.clone();
+    let mut ocr_config_owned = ocr_config.clone();
+    ocr_config_owned.acceleration = config.acceleration.clone();
     let total = page_images.len();
     let mut ocr_results: ahash::AHashMap<usize, String> = ahash::AHashMap::with_capacity(total);
     let mut accumulated_llm_usage: Vec<crate::types::LlmUsage> = Vec::new();
@@ -588,7 +589,8 @@ pub(crate) async fn extract_with_ocr(
         );
     }
 
-    let ocr_config_owned = ocr_config.clone();
+    let mut ocr_config_owned = ocr_config.clone();
+    ocr_config_owned.acceleration = config.acceleration.clone();
     let total_pages = if let Some(imgs) = images {
         imgs.len()
     } else {

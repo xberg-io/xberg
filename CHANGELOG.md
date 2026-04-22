@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Ruby gem build failure** — add missing `max_images_per_page` field to `ImageExtractionConfig` initializer in Ruby binding (`kreuzberg-rb`), fixing compilation error E0063 on all platforms.
 - **Node binding build failure on Linux** — stop removing `/usr/local/lib/node_modules` in CI disk cleanup script; npm was being deleted before `pnpm/action-setup` could use it, causing `spawn npm ENOENT`.
 - **Homebrew formula publish failure** — grant `contents: write` permission to the `publish-homebrew` job so `gh release upload` can attach bottle artifacts (was `contents: read`).
+- **#783**: PaddleOCR now correctly utilises the GPU (CUDA) when `AccelerationConfig(provider="cuda")` is set. Previously `self.acceleration` on `PaddleOcrBackend` was always `None` (hardcoded at construction time), so the ONNX session builder never received the requested execution provider and silently fell back to CPU. `AccelerationConfig` is now threaded from `ExtractionConfig` into the ephemeral `OcrConfig` at each `process_image` call site (image extractor and both PDF OCR paths), and `PaddleOcrBackend::process_image` sets the module-level thread-local before the engine-pool slow path — so ONNX sessions are created with the correct provider on first use.
 
 ---
 

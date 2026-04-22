@@ -52,6 +52,7 @@ impl ImageExtractor {
         // Thread output_format from ExtractionConfig to OcrConfig
         let mut ocr_config_with_format = ocr_config.clone();
         ocr_config_with_format.output_format = Some(config.output_format.clone());
+        ocr_config_with_format.acceleration = config.acceleration.clone();
 
         // Always request OCR elements so that build_pages can populate pages[].
         // Backends that gate element output behind include_elements (e.g. paddle-ocr)

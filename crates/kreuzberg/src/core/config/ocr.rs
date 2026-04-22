@@ -271,6 +271,13 @@ pub struct OcrConfig {
     /// - `{{ language }}` — The document language code (e.g., "eng", "deu").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vlm_prompt: Option<String>,
+
+    /// Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection).
+    ///
+    /// Not user-configurable via config files — injected at runtime from
+    /// `ExtractionConfig::acceleration` before each `process_image` call.
+    #[serde(skip)]
+    pub acceleration: Option<super::acceleration::AccelerationConfig>,
 }
 
 impl Default for OcrConfig {
@@ -288,6 +295,7 @@ impl Default for OcrConfig {
             auto_rotate: false,
             vlm_config: None,
             vlm_prompt: None,
+            acceleration: None,
         }
     }
 }

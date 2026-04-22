@@ -150,14 +150,13 @@ impl PaddleOcrBackend {
         // Build a custom session builder function if acceleration is configured.
         // Uses module-level thread-local to pass AccelerationConfig to the fn pointer
         // since OcrLite's API uses fn pointers (not closures).
+        // NOTE: The thread-local is set by `process_image` from the per-call
+        // `OcrConfig::acceleration` before engines are created.
         let builder_fn: Option<
             fn(
                 ort::session::builder::SessionBuilder,
             ) -> std::result::Result<ort::session::builder::SessionBuilder, ort::Error>,
-        > = if self.acceleration.is_some() {
-            PADDLE_TL_ACCEL.with(|cell| {
-                *cell.borrow_mut() = self.acceleration.clone();
-            });
+        > = if PADDLE_TL_ACCEL.with(|cell| cell.borrow().is_some()) {
             Some(paddle_accel_builder_fn)
         } else {
             None
@@ -393,6 +392,13 @@ impl OcrBackend for PaddleOcrBackend {
                 source: None,
             });
         }
+
+        // Set per-call acceleration on the thread-local so that the ONNX session
+        // builder picks it up when lazily initializing engines. This replaces the
+        // old `self.acceleration` path which was always None.
+        PADDLE_TL_ACCEL.with(|cell| {
+            *cell.borrow_mut() = config.acceleration.clone();
+        });
 
         let effective_config: Arc<PaddleOcrConfig> = if let Some(ref paddle_json) = config.paddle_ocr_config {
             let overridden: PaddleOcrConfig =
@@ -788,5 +794,53 @@ mod tests {
         // Verify page numbers are set
         assert_eq!(doc.elements[0].page, Some(1));
         assert_eq!(doc.elements[1].page, Some(1));
+    }
+
+    /// Regression test for #783: verifies that `process_image` sets `PADDLE_TL_ACCEL`
+    /// from `OcrConfig::acceleration` so that ONNX session builders can apply the
+    /// requested execution provider (e.g. CUDA).
+    ///
+    /// This is a unit test of the threading mechanism only — it does not create
+    /// real ONNX sessions or require a GPU.
+    #[test]
+    fn test_paddle_accel_tl_set_from_ocr_config_acceleration() {
+        use crate::core::config::AccelerationConfig;
+
+        // Start with no acceleration — thread-local should be cleared.
+        PADDLE_TL_ACCEL.with(|cell| {
+            *cell.borrow_mut() = Some(AccelerationConfig {
+                provider: crate::core::config::acceleration::ExecutionProviderType::Cpu,
+                device_id: 0,
+            });
+        });
+
+        // Simulate what process_image does when config.acceleration is None.
+        let accel: Option<AccelerationConfig> = None;
+        PADDLE_TL_ACCEL.with(|cell| {
+            *cell.borrow_mut() = accel.clone();
+        });
+        let tl_value = PADDLE_TL_ACCEL.with(|cell| cell.borrow().clone());
+        assert!(tl_value.is_none(), "TL should be cleared when acceleration is None");
+
+        // Simulate what process_image does when config.acceleration is Some(cuda).
+        let cuda_accel = AccelerationConfig {
+            provider: crate::core::config::acceleration::ExecutionProviderType::Cuda,
+            device_id: 0,
+        };
+        PADDLE_TL_ACCEL.with(|cell| {
+            *cell.borrow_mut() = Some(cuda_accel.clone());
+        });
+        let tl_value = PADDLE_TL_ACCEL.with(|cell| cell.borrow().clone());
+        assert!(tl_value.is_some(), "TL should be set when acceleration is Some");
+        assert_eq!(
+            tl_value.unwrap().provider,
+            crate::core::config::acceleration::ExecutionProviderType::Cuda,
+            "TL provider should be Cuda"
+        );
+
+        // Clean up thread-local after test.
+        PADDLE_TL_ACCEL.with(|cell| {
+            *cell.borrow_mut() = None;
+        });
     }
 }
