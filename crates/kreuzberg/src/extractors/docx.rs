@@ -244,6 +244,7 @@ fn build_document_structure(doc: &crate::extraction::docx::parser::Document) -> 
 
                 b.push_image(description.as_deref(), Some(*idx as u32), None, bbox);
             }
+            crate::extraction::docx::parser::DocumentElement::PageBreak => {}
         }
     }
 
@@ -555,6 +556,7 @@ fn build_internal_document(doc: &crate::extraction::docx::parser::Document) -> I
                     builder.set_attributes(img_elem_idx, attrs);
                 }
             }
+            crate::extraction::docx::parser::DocumentElement::PageBreak => {}
         }
     }
 
@@ -796,18 +798,13 @@ fn parse_docx_core(
     content: &[u8],
     include_doc_structure: bool,
     output_format: crate::core::config::OutputFormat,
-    inject_placeholders: bool,
 ) -> crate::error::Result<DocxParseResult> {
     let doc = crate::extraction::docx::parser::parse_document(content)?;
-    let text = match output_format {
-        crate::core::config::OutputFormat::Markdown
-        | crate::core::config::OutputFormat::Djot
-        | crate::core::config::OutputFormat::Html => doc.to_markdown(inject_placeholders),
-        _ => doc.to_plain_text(),
-    };
-    // Determine the correct 1-based page number for each top-level table by scanning
-    // the raw XML for explicit page breaks and table elements in document order.
-    let table_page_nums = crate::extraction::docx::detect_table_page_numbers(content).unwrap_or_default();
+    let (text, page_boundaries) =
+        doc.extract_text_with_boundaries(matches!(output_format, crate::core::config::OutputFormat::Markdown));
+
+    // Determine the correct 1-based page number for each top-level table.
+    let table_page_nums = doc.table_page_numbers();
     let tables: Vec<Table> = doc
         .tables
         .iter()
@@ -817,7 +814,13 @@ fn parse_docx_core(
             convert_docx_table_to_table(table, page_number)
         })
         .collect();
-    let page_boundaries = crate::extraction::docx::detect_page_breaks_from_docx(content)?;
+
+    let page_boundaries = if page_boundaries.len() > 1 {
+        Some(page_boundaries)
+    } else {
+        None
+    };
+
     let drawings = doc.drawings.clone();
     let image_rels = doc.image_relationships.clone();
     let doc_structure = if include_doc_structure {
@@ -942,11 +945,6 @@ impl DocumentExtractor for DocxExtractor {
         };
 
         let include_doc_structure = config.include_document_structure;
-        let inject_placeholders = config
-            .images
-            .as_ref()
-            .map(|img| img.inject_placeholders)
-            .unwrap_or(true);
         let (text, tables, page_boundaries, drawings, image_rels, _doc_structure, mut internal_doc) = {
             #[cfg(feature = "tokio-runtime")]
             if crate::core::batch_mode::is_batch_mode() {
@@ -961,17 +959,16 @@ impl DocumentExtractor for DocxExtractor {
                         &content_owned,
                         include_doc_structure,
                         output_format,
-                        inject_placeholders,
                     )
                 })
                 .await
                 .map_err(|e| crate::error::KreuzbergError::parsing(format!("DOCX extraction task failed: {}", e)))??
             } else {
-                parse_docx_core(content, include_doc_structure, output_format, inject_placeholders)?
+                parse_docx_core(content, include_doc_structure, output_format)?
             }
 
             #[cfg(not(feature = "tokio-runtime"))]
-            parse_docx_core(content, include_doc_structure, output_format, inject_placeholders)?
+            parse_docx_core(content, include_doc_structure, output_format)?
         };
 
         let mut archive = {
@@ -1247,8 +1244,9 @@ impl DocumentExtractor for DocxExtractor {
             });
         }
 
-        // Build PageContent from page boundaries
-        let _page_contents = {
+        // Build PageContent from page boundaries and store as prebuilt_pages so
+        // derive_extraction_result can populate ExtractionResult.pages.
+        let page_contents = {
             let arc_tables: Vec<Arc<Table>> = tables.iter().map(|t| Arc::new(t.clone())).collect();
             let arc_images: Vec<Arc<ExtractedImage>> = extracted_images.iter().map(|i| Arc::new(i.clone())).collect();
 
@@ -1316,6 +1314,7 @@ impl DocumentExtractor for DocxExtractor {
                 }])
             }
         };
+        internal_doc.prebuilt_pages = page_contents;
 
         // Extract typed metadata fields and remove them from additional map to avoid duplication
         let meta_title: Option<String> = metadata_map

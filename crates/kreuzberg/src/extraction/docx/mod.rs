@@ -14,10 +14,8 @@ pub mod styles;
 pub mod table;
 pub mod theme;
 
-use crate::error::{KreuzbergError, Result};
-use crate::extraction::capacity;
+use crate::error::Result;
 use crate::types::PageBoundary;
-use std::io::Cursor;
 
 // --- DOCX Constants ---
 
@@ -61,15 +59,13 @@ pub fn extract_text(bytes: &[u8]) -> Result<String> {
 /// # Performance
 /// Performs two passes: one with docx-lite for text extraction and one for page break detection.
 pub fn extract_text_with_page_breaks(bytes: &[u8]) -> Result<(String, Option<Vec<PageBoundary>>)> {
-    let text = extract_text(bytes)?;
+    let doc = parser::parse_document(bytes)?;
+    // Default to markdown as requested by typical extraction config
+    let (text, boundaries) = doc.extract_text_with_boundaries(true);
 
-    let page_breaks = detect_page_breaks(bytes)?;
-
-    if page_breaks.is_empty() {
+    if boundaries.is_empty() {
         return Ok((text, None));
     }
-
-    let boundaries = map_page_breaks_to_boundaries(&text, page_breaks)?;
 
     Ok((text, Some(boundaries)))
 }
@@ -112,178 +108,12 @@ pub fn detect_page_breaks_from_docx(bytes: &[u8]) -> Result<Option<Vec<PageBound
 /// # Limitations
 /// - Only detects explicit page breaks, not reflowed/automatic pagination.
 pub fn detect_table_page_numbers(bytes: &[u8]) -> Result<Vec<usize>> {
-    use zip::ZipArchive;
-
-    let cursor = Cursor::new(bytes);
-    let mut archive =
-        ZipArchive::new(cursor).map_err(|e| KreuzbergError::parsing(format!("Failed to open DOCX as ZIP: {}", e)))?;
-
-    let document_xml = match archive.by_name("word/document.xml") {
-        Ok(mut file) => {
-            let mut content = String::new();
-            std::io::Read::read_to_string(&mut file, &mut content)
-                .map_err(|e| KreuzbergError::parsing(format!("Failed to read document.xml: {}", e)))?;
-            content
-        }
-        Err(_) => return Ok(Vec::new()),
-    };
-
-    #[derive(Copy, Clone)]
-    enum Marker {
-        PageBreak,
-        TableOpen,
-        TableClose,
-    }
-
-    let mut events: Vec<(usize, Marker)> = Vec::new();
-
-    // Explicit page breaks: <w:br w:type="page"/>
-    for (pos, _) in document_xml.match_indices(r#"<w:br w:type="page"/>"#) {
-        events.push((pos, Marker::PageBreak));
-    }
-
-    // Top-level table opens: <w:tbl> or <w:tbl ...> — but NOT <w:tblPr>, <w:tblGrid>, etc.
-    for (pos, _) in document_xml.match_indices("<w:tbl") {
-        let after = pos + "<w:tbl".len();
-        if matches!(
-            document_xml.as_bytes().get(after),
-            Some(b'>') | Some(b' ') | Some(b'\n') | Some(b'\r') | Some(b'\t')
-        ) {
-            events.push((pos, Marker::TableOpen));
-        }
-    }
-
-    // Table closes: </w:tbl>
-    for (pos, _) in document_xml.match_indices("</w:tbl>") {
-        events.push((pos, Marker::TableClose));
-    }
-
-    events.sort_unstable_by_key(|(pos, _)| *pos);
-
-    let mut current_page: usize = 1;
-    let mut table_depth: usize = 0;
-    let mut table_page_numbers: Vec<usize> = Vec::new();
-
-    for (_, marker) in events {
-        match marker {
-            Marker::PageBreak => current_page += 1,
-            Marker::TableOpen => {
-                if table_depth == 0 {
-                    // Top-level table: record its page
-                    table_page_numbers.push(current_page);
-                }
-                table_depth += 1;
-            }
-            Marker::TableClose => {
-                table_depth = table_depth.saturating_sub(1);
-            }
-        }
-    }
-
-    Ok(table_page_numbers)
+    let doc = parser::parse_document(bytes)?;
+    Ok(doc.table_page_numbers())
 }
 
-/// Detect explicit page break positions in document.xml.
-///
-/// Returns a vector of byte offsets within the document.xml content where page breaks occur.
-/// These offsets will later be mapped to character positions in the extracted text.
-///
-/// # Arguments
-/// * `bytes` - The DOCX file contents (ZIP archive)
-///
-/// # Returns
-/// * `Ok(Vec<usize>)` - Vector of detected page break byte offsets (empty if none found)
-/// * `Err(KreuzbergError)` - If ZIP/XML parsing fails
-fn detect_page_breaks(bytes: &[u8]) -> Result<Vec<usize>> {
-    use zip::ZipArchive;
-
-    let cursor = Cursor::new(bytes);
-    let mut archive =
-        ZipArchive::new(cursor).map_err(|e| KreuzbergError::parsing(format!("Failed to open DOCX as ZIP: {}", e)))?;
-
-    let document_xml = match archive.by_name("word/document.xml") {
-        Ok(mut file) => {
-            let file_size = file.size();
-            let estimated_size = capacity::estimate_content_capacity(file_size, "docx").max(file_size as usize);
-            let mut content = String::with_capacity(estimated_size);
-            std::io::Read::read_to_string(&mut file, &mut content)
-                .map_err(|e| KreuzbergError::parsing(format!("Failed to read document.xml: {}", e)))?;
-            content
-        }
-        Err(_) => return Ok(Vec::new()),
-    };
-
-    let mut breaks = Vec::with_capacity(16);
-    let search_pattern = r#"<w:br w:type="page"/>"#;
-
-    for (idx, _) in document_xml.match_indices(search_pattern) {
-        breaks.push(idx);
-    }
-
-    Ok(breaks)
-}
-
-/// Map detected page break positions to byte boundaries in extracted text.
-///
-/// Since we don't have a precise mapping between document.xml byte positions and final text
-/// character positions, we use a heuristic: divide the text roughly equally between detected breaks.
-/// This is best-effort and may not perfectly match Word's pagination.
-///
-/// # LIMITATION
-/// This is a best-effort heuristic that distributes content evenly across detected page breaks.
-/// It does not account for actual page layout, varying page sizes, or Word's pagination logic.
-/// Use with caution. The function correctly handles multibyte UTF-8 characters (emoji, CJK, etc.)
-/// by working with character indices rather than byte indices.
-///
-/// # Arguments
-/// * `text` - The extracted document text
-/// * `page_breaks` - Vector of detected page break positions (unused, but kept for extension)
-///
-/// # Returns
-/// * `Ok(Vec<PageBoundary>)` - Byte boundaries for each page
-fn map_page_breaks_to_boundaries(text: &str, page_breaks: Vec<usize>) -> Result<Vec<PageBoundary>> {
-    if page_breaks.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    let page_count = page_breaks.len() + 1;
-    let char_count = text.chars().count();
-    let chars_per_page = char_count / page_count;
-
-    let mut boundaries = Vec::with_capacity(page_count);
-    let mut current_byte = 0;
-    let mut current_char = 0;
-
-    for page_num in 1..=page_count {
-        let start_byte = current_byte;
-
-        let end_byte = if page_num == page_count {
-            text.len()
-        } else {
-            let target_char = (page_num * chars_per_page).min(char_count);
-
-            for ch in text[current_byte..].chars() {
-                if current_char >= target_char {
-                    break;
-                }
-                current_byte += ch.len_utf8();
-                current_char += 1;
-            }
-
-            current_byte
-        };
-
-        boundaries.push(PageBoundary {
-            byte_start: start_byte,
-            byte_end: end_byte,
-            page_number: page_num,
-        });
-
-        current_byte = end_byte;
-    }
-
-    Ok(boundaries)
-}
+// detect_page_breaks and map_page_breaks_to_boundaries are removed as their logic
+// is now integrated into the DocxParser and parser::Document struct.
 
 #[cfg(test)]
 mod tests {
@@ -300,204 +130,6 @@ mod tests {
         let result = extract_text(b"not a docx file");
         assert!(result.is_err());
     }
-
-    #[test]
-    fn test_map_page_breaks_to_boundaries_empty() {
-        let result = map_page_breaks_to_boundaries("test text", Vec::new()).unwrap();
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn test_map_page_breaks_to_boundaries_single_break() {
-        let text = "Page 1 content here with some text.Page 2 content here with more text.";
-        let breaks = vec![0];
-
-        let result = map_page_breaks_to_boundaries(text, breaks).unwrap();
-
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0].page_number, 1);
-        assert_eq!(result[0].byte_start, 0);
-        assert!(result[0].byte_end > 0);
-        assert!(result[0].byte_end < text.len());
-
-        assert_eq!(result[1].page_number, 2);
-        assert_eq!(result[1].byte_start, result[0].byte_end);
-        assert_eq!(result[1].byte_end, text.len());
-    }
-
-    #[test]
-    fn test_map_page_breaks_to_boundaries_multiple_breaks() {
-        let text = "A".repeat(300);
-        let breaks = vec![0, 0, 0];
-
-        let result = map_page_breaks_to_boundaries(&text, breaks).unwrap();
-
-        assert_eq!(result.len(), 4);
-        assert_eq!(result[0].page_number, 1);
-        assert_eq!(result[3].page_number, 4);
-        assert_eq!(result[3].byte_end, text.len());
-
-        for i in 0..result.len() - 1 {
-            assert_eq!(result[i].byte_end, result[i + 1].byte_start);
-        }
-    }
-
-    #[test]
-    fn test_map_page_breaks_to_boundaries_utf8_boundary() {
-        let text = "Hello world! こんにちは世界！ More text here.";
-        let breaks = vec![0];
-
-        let result = map_page_breaks_to_boundaries(text, breaks).unwrap();
-
-        assert_eq!(result.len(), 2);
-        assert!(text.is_char_boundary(result[0].byte_start));
-        assert!(text.is_char_boundary(result[0].byte_end));
-        assert!(text.is_char_boundary(result[1].byte_start));
-        assert!(text.is_char_boundary(result[1].byte_end));
-    }
-
-    #[test]
-    fn test_docx_page_breaks_with_emoji() {
-        let text = "Hello 😀 World 🌍 Foo 🎉 Bar";
-        let breaks = vec![0, 0];
-
-        let result = map_page_breaks_to_boundaries(text, breaks).unwrap();
-
-        assert_eq!(result.len(), 3);
-        assert_eq!(result[0].page_number, 1);
-        assert_eq!(result[1].page_number, 2);
-        assert_eq!(result[2].page_number, 3);
-
-        for boundary in &result {
-            assert!(
-                text.is_char_boundary(boundary.byte_start),
-                "byte_start {} is not a valid UTF-8 boundary",
-                boundary.byte_start
-            );
-            assert!(
-                text.is_char_boundary(boundary.byte_end),
-                "byte_end {} is not a valid UTF-8 boundary",
-                boundary.byte_end
-            );
-        }
-
-        assert_eq!(result[0].byte_start, 0);
-        assert_eq!(result[0].byte_end, result[1].byte_start);
-        assert_eq!(result[1].byte_end, result[2].byte_start);
-        assert_eq!(result[2].byte_end, text.len());
-
-        let reconstructed = format!(
-            "{}{}{}",
-            &text[result[0].byte_start..result[0].byte_end],
-            &text[result[1].byte_start..result[1].byte_end],
-            &text[result[2].byte_start..result[2].byte_end]
-        );
-        assert_eq!(reconstructed, text);
-    }
-
-    #[test]
-    fn test_docx_page_breaks_with_cjk() {
-        let text = "你好世界你好世界你好世界你好世界";
-        let breaks = vec![0];
-
-        let result = map_page_breaks_to_boundaries(text, breaks).unwrap();
-
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0].page_number, 1);
-        assert_eq!(result[1].page_number, 2);
-
-        for boundary in &result {
-            assert!(
-                text.is_char_boundary(boundary.byte_start),
-                "byte_start {} is not a valid UTF-8 boundary",
-                boundary.byte_start
-            );
-            assert!(
-                text.is_char_boundary(boundary.byte_end),
-                "byte_end {} is not a valid UTF-8 boundary",
-                boundary.byte_end
-            );
-        }
-
-        assert_eq!(result[0].byte_start, 0);
-        assert_eq!(result[0].byte_end, result[1].byte_start);
-        assert_eq!(result[1].byte_end, text.len());
-
-        let reconstructed = format!(
-            "{}{}",
-            &text[result[0].byte_start..result[0].byte_end],
-            &text[result[1].byte_start..result[1].byte_end]
-        );
-        assert_eq!(reconstructed, text);
-    }
-
-    #[test]
-    fn test_docx_page_breaks_multibyte_utf8() {
-        let text = "ASCII 😀 中文 hello 🎉 world 日本語";
-        let breaks = vec![0, 0];
-
-        let result = map_page_breaks_to_boundaries(text, breaks).unwrap();
-
-        assert_eq!(result.len(), 3);
-
-        for boundary in &result {
-            assert!(
-                text.is_char_boundary(boundary.byte_start),
-                "byte_start {} is not a valid UTF-8 boundary",
-                boundary.byte_start
-            );
-            assert!(
-                text.is_char_boundary(boundary.byte_end),
-                "byte_end {} is not a valid UTF-8 boundary",
-                boundary.byte_end
-            );
-        }
-
-        assert_eq!(result[0].byte_start, 0);
-        for i in 0..result.len() - 1 {
-            assert_eq!(
-                result[i].byte_end,
-                result[i + 1].byte_start,
-                "Gap or overlap between page {} and {}",
-                i + 1,
-                i + 2
-            );
-        }
-        assert_eq!(
-            result[result.len() - 1].byte_end,
-            text.len(),
-            "Last page does not end at text boundary"
-        );
-
-        let mut reconstructed = String::new();
-        for boundary in &result {
-            reconstructed.push_str(&text[boundary.byte_start..boundary.byte_end]);
-        }
-        assert_eq!(reconstructed, text);
-    }
-
-    #[test]
-    fn test_detect_page_breaks_no_feature() {
-        let result = detect_page_breaks(b"invalid");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_extract_text_with_page_breaks_no_breaks() {
-        let docx_path =
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../test_documents/docx/lorem_ipsum.docx");
-        if let Ok(bytes) = std::fs::read(docx_path) {
-            let result = extract_text_with_page_breaks(&bytes);
-            if let Ok((text, boundaries)) = result {
-                assert!(!text.is_empty());
-                if let Some(b) = boundaries {
-                    assert!(!b.is_empty());
-                }
-            }
-        }
-    }
-
-    // ---- detect_table_page_numbers tests ----
 
     /// Build a minimal in-memory DOCX ZIP with the given document.xml body content.
     fn build_test_docx(body: &str) -> Vec<u8> {
@@ -529,6 +161,78 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_text_with_page_breaks_accurate_boundaries() {
+        // Page 1: Very long text
+        // Page 2: Very short text
+        // The old heuristic split in half.
+        // The new logic should split exactly at the \f boundary.
+        let body = r#"
+<w:p><w:r><w:t>This is page one. It has a lot of text to ensure we don't just split in half.</w:t></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+<w:p><w:r><w:t>Short</w:t></w:r></w:p>
+"#;
+        let docx = build_test_docx(body);
+        let (text, boundaries) = extract_text_with_page_breaks(&docx).unwrap();
+        let boundaries = boundaries.expect("Should have detected page break");
+
+        assert_eq!(boundaries.len(), 2);
+        assert_eq!(boundaries[0].page_number, 1);
+        assert_eq!(boundaries[1].page_number, 2);
+
+        let p1_content = &text[boundaries[0].byte_start..boundaries[0].byte_end];
+        let p2_content = &text[boundaries[1].byte_start..boundaries[1].byte_end];
+
+        assert!(p1_content.contains("This is page one"));
+        assert_eq!(p2_content.trim(), "Short");
+        assert!(!p1_content.contains("Short"));
+
+        // Verify \f is at the expected position (between boundaries)
+        assert_eq!(text.as_bytes()[boundaries[0].byte_end], b'\x0c');
+    }
+
+    #[test]
+    fn test_extract_text_with_last_rendered_page_break() {
+        let body = r#"
+<w:p><w:r><w:t>Page 1</w:t><w:lastRenderedPageBreak/><w:t>Page 2</w:t></w:r></w:p>
+"#;
+        let docx = build_test_docx(body);
+        let (text, boundaries) = extract_text_with_page_breaks(&docx).unwrap();
+        let boundaries = boundaries.expect("Should have detected last rendered page break");
+
+        assert_eq!(boundaries.len(), 2);
+        assert_eq!(boundaries[0].page_number, 1);
+        assert_eq!(boundaries[1].page_number, 2);
+
+        let p1_content = &text[boundaries[0].byte_start..boundaries[0].byte_end];
+        let p2_content = &text[boundaries[1].byte_start..boundaries[1].byte_end];
+
+        assert_eq!(p1_content.trim(), "Page 1");
+        assert_eq!(p2_content.trim(), "Page 2");
+    }
+
+    #[test]
+    fn test_extract_text_with_page_breaks_no_breaks() {
+        let body = r#"<w:p><w:r><w:t>Single page</w:t></w:r></w:p>"#;
+        let docx = build_test_docx(body);
+        let result = extract_text_with_page_breaks(&docx).unwrap();
+        assert!(result.1.is_none());
+        assert_eq!(result.0.trim(), "Single page");
+    }
+
+    #[test]
+    fn test_detect_table_page_numbers_accurate() {
+        let body = r#"
+<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table 1</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+<w:p><w:r><w:t>Small gap</w:t></w:r></w:p>
+<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table 2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+"#;
+        let docx = build_test_docx(body);
+        let result = detect_table_page_numbers(&docx).unwrap();
+        assert_eq!(result, vec![1, 2]);
+    }
+
+    #[test]
     fn test_detect_table_page_numbers_no_tables() {
         let body = r#"<w:p><w:r><w:t>Hello</w:t></w:r></w:p>"#;
         let docx = build_test_docx(body);
@@ -537,64 +241,49 @@ mod tests {
     }
 
     #[test]
-    fn test_detect_table_page_numbers_single_table_page_1() {
-        let body = r#"
-<w:p><w:r><w:t>Some text</w:t></w:r></w:p>
-<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
-"#;
-        let docx = build_test_docx(body);
-        let result = detect_table_page_numbers(&docx).unwrap();
-        assert_eq!(result, vec![1]);
+    fn test_detect_table_page_numbers_invalid_docx() {
+        let result = detect_table_page_numbers(b"not a docx");
+        assert!(result.is_err());
     }
 
+    /// A `<w:lastRenderedPageBreak/>` inside a table cell must NOT create a phantom page
+    /// boundary before the table. The table should remain on page 1.
     #[test]
-    fn test_detect_table_page_numbers_table_after_page_break() {
+    fn test_page_break_inside_table_not_counted() {
         let body = r#"
-<w:p><w:r><w:t>Page 1 text</w:t></w:r></w:p>
-<w:p><w:r><w:br w:type="page"/></w:r></w:p>
-<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table on page 2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
+<w:p><w:r><w:t>Page 1</w:t></w:r></w:p>
+<w:tbl>
+  <w:tr><w:tc><w:p><w:r><w:lastRenderedPageBreak/><w:t>Cell content</w:t></w:r></w:p></w:tc></w:tr>
+</w:tbl>
+<w:p><w:r><w:t>Still page 1</w:t></w:r></w:p>
 "#;
         let docx = build_test_docx(body);
-        let result = detect_table_page_numbers(&docx).unwrap();
-        assert_eq!(result, vec![2]);
+        // No page breaks should be detected since the break is inside a table cell
+        let result = extract_text_with_page_breaks(&docx).unwrap();
+        assert!(
+            result.1.is_none(),
+            "Page break inside table cell should not create page boundaries"
+        );
+
+        // The table should be on page 1
+        let table_pages = detect_table_page_numbers(&docx).unwrap();
+        assert_eq!(table_pages, vec![1]);
     }
 
+    /// Explicit page break inside a table cell must not disrupt document-level page count.
     #[test]
-    fn test_detect_table_page_numbers_multiple_tables_mixed_pages() {
-        let body = r#"
-<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table 1</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
-<w:p><w:r><w:t>Some more text</w:t></w:r></w:p>
-<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table 2</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
-<w:p><w:r><w:br w:type="page"/></w:r></w:p>
-<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Table 3</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
-"#;
-        let docx = build_test_docx(body);
-        let result = detect_table_page_numbers(&docx).unwrap();
-        // Tables 1 and 2 are on page 1; table 3 is on page 2
-        assert_eq!(result, vec![1, 1, 2]);
-    }
-
-    #[test]
-    fn test_detect_table_page_numbers_nested_table_not_counted() {
-        // Nested table (inside a cell) should NOT appear as an extra entry.
+    fn test_explicit_page_break_inside_table_not_counted() {
         let body = r#"
 <w:tbl>
-  <w:tr><w:tc>
-    <w:tbl><w:tr><w:tc><w:p><w:r><w:t>inner</w:t></w:r></w:p></w:tc></w:tr></w:tbl>
-  </w:tc></w:tr>
+  <w:tr><w:tc><w:p><w:r><w:br w:type="page"/></w:r></w:p></w:tc></w:tr>
 </w:tbl>
+<w:p><w:r><w:t>After table</w:t></w:r></w:p>
 "#;
         let docx = build_test_docx(body);
-        let result = detect_table_page_numbers(&docx).unwrap();
-        // Only the outer top-level table is recorded
-        assert_eq!(result, vec![1]);
-    }
-
-    #[test]
-    fn test_detect_table_page_numbers_invalid_docx() {
-        // Should return empty, not panic or error
-        let result = detect_table_page_numbers(b"not a docx");
-        // Either Ok(empty) or Err is acceptable; must not panic
-        let _ = result;
+        let result = extract_text_with_page_breaks(&docx).unwrap();
+        assert!(
+            result.1.is_none(),
+            "Explicit page break inside table cell should not create page boundaries"
+        );
     }
 }

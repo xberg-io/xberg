@@ -23,6 +23,7 @@ pub enum DocumentElement {
     Paragraph(usize), // index into Document::paragraphs
     Table(usize),     // index into Document::tables
     Drawing(usize),   // index into Document::drawings
+    PageBreak,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -194,7 +195,57 @@ impl Document {
         Self::default()
     }
 
-    /// Ensure output ends with a blank line (double newline).
+    /// Render the document and return both the text and accurate page boundaries.
+    pub fn extract_text_with_boundaries(&self, is_markdown: bool) -> (String, Vec<crate::types::PageBoundary>) {
+        let text = if is_markdown {
+            self.to_markdown(true)
+        } else {
+            self.to_plain_text()
+        };
+
+        let mut boundaries = Vec::new();
+        let mut start_idx = 0;
+        let mut page_num = 1;
+
+        for (idx, _) in text.match_indices('\x0c') {
+            boundaries.push(crate::types::PageBoundary {
+                byte_start: start_idx,
+                byte_end: idx,
+                page_number: page_num,
+            });
+            start_idx = idx + 1; // Skip the \f character
+            page_num += 1;
+        }
+
+        // Add the last page
+        boundaries.push(crate::types::PageBoundary {
+            byte_start: start_idx,
+            byte_end: text.len(),
+            page_number: page_num,
+        });
+
+        (text, boundaries)
+    }
+
+    /// Return the 1-based page number for each top-level table in the document.
+    pub fn table_page_numbers(&self) -> Vec<usize> {
+        let mut table_page_numbers = Vec::new();
+        let mut current_page = 1;
+
+        for element in &self.elements {
+            match element {
+                DocumentElement::PageBreak => current_page += 1,
+                DocumentElement::Table(_) => {
+                    table_page_numbers.push(current_page);
+                }
+                _ => {}
+            }
+        }
+
+        table_page_numbers
+    }
+
+    /// Internal helper to ensure a blank line before appending new content.
     fn ensure_blank_line(output: &mut String) {
         if !output.is_empty() && !output.ends_with("\n\n") {
             if output.ends_with('\n') {
@@ -326,6 +377,13 @@ impl Document {
                         }
                         prev_was_list = false;
                     }
+                    DocumentElement::PageBreak => {
+                        // In markdown, we can represent a page break as a form feed character \f
+                        // or a triple dash at the start of a line. For now, we use \f which
+                        // is a standard page break marker and easy to find for boundary mapping.
+                        output.push('\x0c');
+                        prev_was_list = false;
+                    }
                 }
             }
         } else {
@@ -415,6 +473,9 @@ impl Document {
                             Self::ensure_blank_line(&mut output);
                             output.push_str(alt);
                         }
+                    }
+                    DocumentElement::PageBreak => {
+                        output.push('\x0c');
                     }
                 }
             }
@@ -1403,10 +1464,27 @@ impl<R: Read + Seek> DocxParser<R> {
                         document.drawings.push(drawing);
                         document.elements.push(DocumentElement::Drawing(idx));
                     }
-                    // Line break (when not self-closing)
+                    // Line break (when not self-closing) or Page break
                     b"w:br" => {
-                        if let Some(ref mut run) = current_run {
-                            run.text.push('\n');
+                        let mut is_page_break = false;
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"w:type" && attr.value.as_ref() == b"page" {
+                                is_page_break = true;
+                                break;
+                            }
+                        }
+
+                        if is_page_break && table_stack.is_empty() {
+                            document.elements.push(DocumentElement::PageBreak);
+                        } else if !is_page_break {
+                            if let Some(ref mut run) = current_run {
+                                run.text.push('\n');
+                            }
+                        }
+                    }
+                    b"w:lastRenderedPageBreak" => {
+                        if table_stack.is_empty() {
+                            document.elements.push(DocumentElement::PageBreak);
                         }
                     }
                     b"w:sectPr" => {
@@ -1436,8 +1514,25 @@ impl<R: Read + Seek> DocxParser<R> {
                     }
                     // Line break: insert newline to separate adjacent text
                     b"w:br" => {
-                        if let Some(ref mut run) = current_run {
-                            run.text.push('\n');
+                        let mut is_page_break = false;
+                        for attr in e.attributes().flatten() {
+                            if attr.key.as_ref() == b"w:type" && attr.value.as_ref() == b"page" {
+                                is_page_break = true;
+                                break;
+                            }
+                        }
+
+                        if is_page_break && table_stack.is_empty() {
+                            document.elements.push(DocumentElement::PageBreak);
+                        } else if !is_page_break {
+                            if let Some(ref mut run) = current_run {
+                                run.text.push('\n');
+                            }
+                        }
+                    }
+                    b"w:lastRenderedPageBreak" => {
+                        if table_stack.is_empty() {
+                            document.elements.push(DocumentElement::PageBreak);
                         }
                     }
                     b"w:footnoteReference" | b"w:endnoteReference" => {
