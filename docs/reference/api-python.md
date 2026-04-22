@@ -452,6 +452,7 @@ OCR processing configuration.
 - `backend` (str): OCR backend to use. Options: "tesseract", "easyocr", "paddleocr". Default: "tesseract"
 - `language` (str): Language code for OCR (ISO 639-3). Default: "eng"
 - `tesseract_config` (TesseractConfig | None): Tesseract-specific configuration. Default: None
+- `paddle_ocr_config` (PaddleOcrConfig | None) <span class="version-badge">v4.9.3</span>: PaddleOCR-specific configuration. Default: None
 - `model_tier` (str | None): <span class="version-badge">v4.5.0</span> PaddleOCR model tier: "mobile" (lightweight, ~21MB total, fast) or "server" (high accuracy, ~172MB, best with GPU). Default: "mobile"
 - `padding` (int | None): <span class="version-badge">v4.5.0</span> Padding in pixels (0-100) added around the image before PaddleOCR detection. Default: 10
 
@@ -469,6 +470,40 @@ ocr_config = OcrConfig(backend="tesseract", language="eng")
 from kreuzberg import OcrConfig
 
 ocr_config = OcrConfig(backend="easyocr", language="en")
+```
+
+---
+
+### PaddleOcrConfig <span class="version-badge">v4.9.3</span>
+
+PaddleOCR-specific configuration.
+
+**Fields:**
+
+- `language` (str | None): Language code for OCR. Default: None
+- `cache_dir` (str | None): Directory for caching model files. Default: None
+- `use_angle_cls` (bool | None): Use angle classifier for orientation correction. Default: None
+- `enable_table_detection` (bool | None): Enable table detection. Default: None
+- `model_tier` (str | None): Model tier ("mobile" or "server"). Default: None
+- `padding` (int | None): Padding around detection boxes. Default: None
+- `det_db_thresh` (float | None): Detection DB threshold. Default: None
+- `det_db_box_thresh` (float | None): Detection DB box threshold. Default: None
+- `det_db_unclip_ratio` (float | None): Detection DB unclip ratio. Default: None
+- `det_limit_side_len` (int | None): Detection side length limit. Default: None
+- `rec_batch_num` (int | None): Recognition batch size. Default: None
+
+**Example:**
+
+```python title="paddle_config.py"
+from kreuzberg import OcrConfig, PaddleOcrConfig
+
+config = OcrConfig(
+    backend="paddleocr",
+    paddle_ocr_config=PaddleOcrConfig(
+        model_tier="server",
+        language="chi_sim"
+    )
+)
 ```
 
 ---

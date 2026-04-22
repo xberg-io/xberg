@@ -696,16 +696,22 @@ impl OcrConfig {
         vlm_prompt: Option<String>,
         enabled: Option<bool>,
     ) -> PyResult<Self> {
-        let paddle_ocr_json = if let Some(obj) = paddle_ocr_config {
-            let json_mod = py.import("json")?;
-            let json_str: String = json_mod.call_method1("dumps", (&obj,))?.extract()?;
-            Some(
-                serde_json::from_str(&json_str)
-                    .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid paddle_ocr_config: {e}")))?,
-            )
-        } else {
-            None
-        };
+        let paddle_ocr_json =
+            if let Some(obj) = paddle_ocr_config {
+                if let Ok(config) = obj.extract::<PyPaddleOcrConfig>() {
+                    Some(serde_json::to_value(&config.inner).map_err(|e| {
+                        pyo3::exceptions::PyValueError::new_err(format!("Invalid paddle_ocr_config: {e}"))
+                    })?)
+                } else {
+                    let json_mod = py.import("json")?;
+                    let json_str: String = json_mod.call_method1("dumps", (&obj,))?.extract()?;
+                    Some(serde_json::from_str(&json_str).map_err(|e| {
+                        pyo3::exceptions::PyValueError::new_err(format!("Invalid paddle_ocr_config: {e}"))
+                    })?)
+                }
+            } else {
+                None
+            };
         let element_cfg = if let Some(obj) = element_config {
             let json_mod = py.import("json")?;
             let json_str: String = json_mod.call_method1("dumps", (&obj,))?.extract()?;
@@ -772,6 +778,36 @@ impl OcrConfig {
     #[setter]
     fn set_tesseract_config(&mut self, value: Option<TesseractConfig>) {
         self.inner.tesseract_config = value.map(Into::into);
+    }
+
+    #[getter]
+    fn paddle_ocr_config(&self) -> Option<PyPaddleOcrConfig> {
+        self.inner.paddle_ocr_config.as_ref().and_then(|v| {
+            serde_json::from_value::<kreuzberg::PaddleOcrConfig>(v.clone())
+                .ok()
+                .map(|inner| PyPaddleOcrConfig { inner })
+        })
+    }
+
+    #[setter]
+    fn set_paddle_ocr_config(&mut self, py: Python<'_>, value: Option<Bound<'_, pyo3::types::PyAny>>) -> PyResult<()> {
+        self.inner.paddle_ocr_config =
+            if let Some(obj) = value {
+                if let Ok(config) = obj.extract::<PyPaddleOcrConfig>() {
+                    Some(serde_json::to_value(&config.inner).map_err(|e| {
+                        pyo3::exceptions::PyValueError::new_err(format!("Invalid paddle_ocr_config: {e}"))
+                    })?)
+                } else {
+                    let json_mod = py.import("json")?;
+                    let json_str: String = json_mod.call_method1("dumps", (&obj,))?.extract()?;
+                    Some(serde_json::from_str(&json_str).map_err(|e| {
+                        pyo3::exceptions::PyValueError::new_err(format!("Invalid paddle_ocr_config: {e}"))
+                    })?)
+                }
+            } else {
+                None
+            };
+        Ok(())
     }
 
     #[getter]
@@ -2187,6 +2223,201 @@ impl TesseractConfig {
         format!(
             "TesseractConfig(language='{}', psm={}, output_format='{}', enable_table_detection={})",
             self.inner.language, self.inner.psm, self.inner.output_format, self.inner.enable_table_detection
+        )
+    }
+}
+
+/// PaddleOCR configuration.
+///
+/// Example:
+///     >>> from kreuzberg import PaddleOcrConfig
+///     >>> config = PaddleOcrConfig(language="en", model_tier="server")
+#[pyclass(name = "PaddleOcrConfig", module = "kreuzberg", from_py_object)]
+#[derive(Clone)]
+pub struct PyPaddleOcrConfig {
+    pub inner: kreuzberg::PaddleOcrConfig,
+}
+
+#[pymethods]
+impl PyPaddleOcrConfig {
+    #[new]
+    #[pyo3(signature = (language=None, cache_dir=None, use_angle_cls=None, enable_table_detection=None, det_db_thresh=None, det_db_box_thresh=None, det_db_unclip_ratio=None, det_limit_side_len=None, rec_batch_num=None, padding=None, drop_score=None, model_tier=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        language: Option<String>,
+        cache_dir: Option<String>,
+        use_angle_cls: Option<bool>,
+        enable_table_detection: Option<bool>,
+        det_db_thresh: Option<f32>,
+        det_db_box_thresh: Option<f32>,
+        det_db_unclip_ratio: Option<f32>,
+        det_limit_side_len: Option<u32>,
+        rec_batch_num: Option<u32>,
+        padding: Option<u32>,
+        drop_score: Option<f32>,
+        model_tier: Option<String>,
+    ) -> Self {
+        let mut config = kreuzberg::PaddleOcrConfig::new(language.unwrap_or_else(|| "en".to_string()));
+        if let Some(dir) = cache_dir {
+            config = config.with_cache_dir(std::path::PathBuf::from(dir));
+        }
+        if let Some(v) = use_angle_cls {
+            config.use_angle_cls = v;
+        }
+        if let Some(v) = enable_table_detection {
+            config.enable_table_detection = v;
+        }
+        if let Some(v) = det_db_thresh {
+            config.det_db_thresh = v;
+        }
+        if let Some(v) = det_db_box_thresh {
+            config.det_db_box_thresh = v;
+        }
+        if let Some(v) = det_db_unclip_ratio {
+            config.det_db_unclip_ratio = v;
+        }
+        if let Some(v) = det_limit_side_len {
+            config.det_limit_side_len = v;
+        }
+        if let Some(v) = rec_batch_num {
+            config.rec_batch_num = v;
+        }
+        if let Some(v) = padding {
+            config.padding = v;
+        }
+        if let Some(v) = drop_score {
+            config.drop_score = v;
+        }
+        if let Some(v) = model_tier {
+            config.model_tier = v;
+        }
+        Self { inner: config }
+    }
+
+    #[getter]
+    fn language(&self) -> String {
+        self.inner.language.clone()
+    }
+
+    #[setter]
+    fn set_language(&mut self, value: String) {
+        self.inner.language = value;
+    }
+
+    #[getter]
+    fn cache_dir(&self) -> Option<String> {
+        self.inner.cache_dir.as_ref().map(|p| p.to_string_lossy().into_owned())
+    }
+
+    #[setter]
+    fn set_cache_dir(&mut self, value: Option<String>) {
+        self.inner.cache_dir = value.map(std::path::PathBuf::from);
+    }
+
+    #[getter]
+    fn use_angle_cls(&self) -> bool {
+        self.inner.use_angle_cls
+    }
+
+    #[setter]
+    fn set_use_angle_cls(&mut self, value: bool) {
+        self.inner.use_angle_cls = value;
+    }
+
+    #[getter]
+    fn enable_table_detection(&self) -> bool {
+        self.inner.enable_table_detection
+    }
+
+    #[setter]
+    fn set_enable_table_detection(&mut self, value: bool) {
+        self.inner.enable_table_detection = value;
+    }
+
+    #[getter]
+    fn det_db_thresh(&self) -> f32 {
+        self.inner.det_db_thresh
+    }
+
+    #[setter]
+    fn set_det_db_thresh(&mut self, value: f32) {
+        self.inner.det_db_thresh = value;
+    }
+
+    #[getter]
+    fn det_db_box_thresh(&self) -> f32 {
+        self.inner.det_db_box_thresh
+    }
+
+    #[setter]
+    fn set_det_db_box_thresh(&mut self, value: f32) {
+        self.inner.det_db_box_thresh = value;
+    }
+
+    #[getter]
+    fn det_db_unclip_ratio(&self) -> f32 {
+        self.inner.det_db_unclip_ratio
+    }
+
+    #[setter]
+    fn set_det_db_unclip_ratio(&mut self, value: f32) {
+        self.inner.det_db_unclip_ratio = value;
+    }
+
+    #[getter]
+    fn det_limit_side_len(&self) -> u32 {
+        self.inner.det_limit_side_len
+    }
+
+    #[setter]
+    fn set_det_limit_side_len(&mut self, value: u32) {
+        self.inner.det_limit_side_len = value;
+    }
+
+    #[getter]
+    fn rec_batch_num(&self) -> u32 {
+        self.inner.rec_batch_num
+    }
+
+    #[setter]
+    fn set_rec_batch_num(&mut self, value: u32) {
+        self.inner.rec_batch_num = value;
+    }
+
+    #[getter]
+    fn padding(&self) -> u32 {
+        self.inner.padding
+    }
+
+    #[setter]
+    fn set_padding(&mut self, value: u32) {
+        self.inner.padding = value;
+    }
+
+    #[getter]
+    fn drop_score(&self) -> f32 {
+        self.inner.drop_score
+    }
+
+    #[setter]
+    fn set_drop_score(&mut self, value: f32) {
+        self.inner.drop_score = value;
+    }
+
+    #[getter]
+    fn model_tier(&self) -> String {
+        self.inner.model_tier.clone()
+    }
+
+    #[setter]
+    fn set_model_tier(&mut self, value: String) {
+        self.inner.model_tier = value;
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "PaddleOcrConfig(language='{}', model_tier='{}', enable_table_detection={})",
+            self.inner.language, self.inner.model_tier, self.inner.enable_table_detection
         )
     }
 }

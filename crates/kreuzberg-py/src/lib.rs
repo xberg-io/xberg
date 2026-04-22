@@ -88,6 +88,7 @@ fn _internal_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<config::PostProcessorConfig>()?;
     m.add_class::<config::TesseractConfig>()?;
     m.add_class::<config::ImagePreprocessingConfig>()?;
+    m.add_class::<config::PyPaddleOcrConfig>()?;
     m.add_class::<config::HierarchyConfig>()?;
     m.add_class::<config::LayoutDetectionConfig>()?;
     m.add_class::<config::AccelerationConfig>()?;

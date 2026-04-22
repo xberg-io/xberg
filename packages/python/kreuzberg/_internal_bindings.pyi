@@ -1008,7 +1008,7 @@ class OcrConfig:
     backend: str
     language: str
     tesseract_config: TesseractConfig | None
-    paddle_ocr_config: PaddleOcrConfig | None
+    paddle_ocr_config: PaddleOcrConfig | dict[str, Any] | None
     element_config: OcrElementConfig | None
 
     def __init__(
@@ -1017,7 +1017,7 @@ class OcrConfig:
         backend: str | None = None,
         language: str | None = None,
         tesseract_config: TesseractConfig | None = None,
-        paddle_ocr_config: PaddleOcrConfig | None = None,
+        paddle_ocr_config: PaddleOcrConfig | dict[str, Any] | None = None,
         element_config: OcrElementConfig | None = None,
     ) -> None: ...
 
