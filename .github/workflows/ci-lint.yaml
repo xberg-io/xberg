@@ -71,41 +71,6 @@ jobs:
       - name: Setup Node
         uses: kreuzberg-dev/actions/setup-node-workspace@v1
 
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: "1.26"
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "25"
-
-      - name: Setup Elixir
-        uses: kreuzberg-dev/actions/setup-elixir@v1
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.4"
-          bundler-cache: true
-          working-directory: packages/ruby
-
-      - name: Setup PHP
-        uses: kreuzberg-dev/actions/setup-php@v1
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: "10.0.x"
-
-      - name: Setup R
-        uses: kreuzberg-dev/actions/setup-r@v1
-        with:
-          r-version: "release"
-          install-deps: "false"
-
       - name: Install Task
         uses: kreuzberg-dev/actions/install-task@v1
 
@@ -116,7 +81,11 @@ jobs:
         uses: bmuschko/setup-kubeconform@v1
 
       - name: Install alef CLI
-        uses: kreuzberg-dev/actions/install-alef@v1
+        shell: bash
+        run: |
+          curl -fsSL "https://github.com/kreuzberg-dev/alef/releases/download/v0.6.1/alef-aarch64-unknown-linux-gnu.tar.gz" \
+            | tar xz --strip-components=1 -C /usr/local/bin
+          alef --help > /dev/null
 
       - name: Run universal prek hooks
         uses: j178/prek-action@v2
@@ -128,7 +97,7 @@ jobs:
         uses: j178/prek-action@v2
         with:
           cache: false
-          extra-args: cargo-fmt cargo-clippy typos rumdl-fmt textlint helm-lint kubeconform --all-files
+          extra-args: ruff ruff-format biome-format biome-lint oxlint cargo-fmt taplo-format typos rumdl-fmt textlint helm-lint kubeconform --all-files
 
       - name: Validate C header
         shell: bash
