@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: archive."""
-
 import pytest
 from kreuzberg import extract_file
 
@@ -14,11 +13,8 @@ async def test_archive_gz_basic() -> None:
     """Gzip compressed file extraction."""
     path = "archives/book_war_and_peace_1p.txt.gz"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type for v in ["application/gzip", "application/x-gzip"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/gzip", "application/x-gzip"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_archive_sevenz_basic() -> None:
@@ -28,7 +24,6 @@ async def test_archive_sevenz_basic() -> None:
     assert result.mime_type.strip() == "application/x-7z-compressed"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_archive_tar_basic() -> None:
     """TAR archive extraction."""
@@ -37,14 +32,11 @@ async def test_archive_tar_basic() -> None:
     assert any(v in result.mime_type for v in ["application/x-tar", "application/tar"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_archive_zip_basic() -> None:
     """ZIP archive extraction."""
     path = "archives/documents.zip"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in ["application/zip", "application/x-zip-compressed"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/zip", "application/x-zip-compressed"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
+

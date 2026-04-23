@@ -75,8 +75,11 @@ static ENGINE_CACHE: LazyLock<RwLock<AHashMap<String, CachedEngine>>> = LazyLock
 /// Global semaphore that limits concurrent ONNX embedding inference calls.
 ///
 /// Prevents resource exhaustion when many async callers invoke `embed_texts_async`
-/// simultaneously. The permit count is set once on first access using the thread
-/// budget, matching the pattern used elsewhere (e.g., image OCR, batch extraction).
+/// against the ONNX path (Preset/Custom variants) simultaneously. The Llm and
+/// Plugin variants short-circuit out of `embed_texts_async` before reaching the
+/// semaphore — they don't share the local-inference resource pool. The permit
+/// count is set once on first access using the thread budget, matching the pattern
+/// used elsewhere (e.g., image OCR, batch extraction).
 #[cfg(feature = "tokio-runtime")]
 static EMBED_SEMAPHORE: LazyLock<Arc<tokio::sync::Semaphore>> = LazyLock::new(|| {
     let budget = crate::core::config::concurrency::resolve_thread_budget(None);
@@ -214,7 +217,10 @@ fn resolve_model_info(
             Ok((model_id.as_str(), "onnx/model.onnx", engine::Pooling::Mean))
         }
         crate::core::config::EmbeddingModelType::Llm { .. } => Err(crate::KreuzbergError::embedding(
-            "LLM-based embeddings require the 'liter-llm' feature and are handled by a separate code path",
+            "LLM embeddings have no local model to warm or download — the provider serves them over HTTP at embed time.",
+        )),
+        crate::core::config::EmbeddingModelType::Plugin { .. } => Err(crate::KreuzbergError::embedding(
+            "Plugin embeddings have no local model to warm or download — the registered backend owns the model lifecycle.",
         )),
     }
 }
@@ -661,6 +667,50 @@ fn normalize_in_place(embedding: &mut [f32]) {
     }
 }
 
+/// Validate that a backend-produced batch of embeddings matches the expected
+/// shape (batch size and per-vector dimension).
+///
+/// The dispatcher calls this on every `Plugin`-variant response before returning
+/// to downstream consumers. A non-conforming backend surfaces as a
+/// [`crate::KreuzbergError::Validation`] here rather than a panic in semantic
+/// chunking, `chunk.embedding` assignment, or user code.
+///
+/// # Errors
+///
+/// - [`crate::KreuzbergError::Validation`] if `embeddings.len() != expected_count`.
+/// - [`crate::KreuzbergError::Validation`] if any `embeddings[i].len() != expected_dim`.
+fn validate_embedding_shape(
+    embeddings: &[Vec<f32>],
+    expected_count: usize,
+    expected_dim: usize,
+    backend_name: &str,
+) -> crate::Result<()> {
+    if embeddings.len() != expected_count {
+        return Err(crate::KreuzbergError::Validation {
+            message: format!(
+                "Embedding backend '{backend_name}' returned {got} vectors for {expected} inputs",
+                got = embeddings.len(),
+                expected = expected_count,
+            ),
+            source: None,
+        });
+    }
+
+    for (i, vec) in embeddings.iter().enumerate() {
+        if vec.len() != expected_dim {
+            return Err(crate::KreuzbergError::Validation {
+                message: format!(
+                    "Embedding backend '{backend_name}' returned vector at index {i} with length {got}, expected {expected_dim}",
+                    got = vec.len(),
+                ),
+                source: None,
+            });
+        }
+    }
+
+    Ok(())
+}
+
 /// Apply normalization to a batch of embeddings (parallel for large batches).
 fn normalize_embeddings(embeddings: &mut [Vec<f32>]) {
     const PARALLEL_THRESHOLD: usize = 64;
@@ -786,7 +836,63 @@ pub fn embed_texts<T: AsRef<str>>(
         crate::core::config::EmbeddingModelType::Llm { .. } => Err(crate::KreuzbergError::MissingDependency(
             "LLM embeddings require the 'liter-llm' feature. Rebuild with --features liter-llm".into(),
         )),
-        _ => {
+        crate::core::config::EmbeddingModelType::Plugin { name } => {
+            let registry = crate::plugins::get_embedding_backend_registry();
+            // Clone the Arc out of the lock along with the dimensions captured
+            // at registration (the trait contract requires stability, but we
+            // don't re-ask the backend on every dispatch — that would let a
+            // buggy backend drift past shape validation silently).
+            let (backend, expected_dim) = {
+                let guard = registry.read();
+                guard.get_with_dimensions(name)?
+            };
+            let expected_count = texts.len();
+            let owned_texts: Vec<String> = texts.iter().map(|t| t.as_ref().to_string()).collect();
+
+            // Dispatch the async `embed` call. Same pattern as the `Llm` arm:
+            // if we're already in a tokio runtime, `block_in_place` to avoid
+            // starving workers; otherwise spin up a single-threaded runtime.
+            // `Some(0)` is treated as "no timeout" rather than "timeout immediately" — a
+            // zero-duration `tokio::time::timeout` fires before the backend gets a chance
+            // to run, which is a surprising config interpretation users rarely intend.
+            let timeout = config
+                .max_embed_duration_secs
+                .filter(|&s| s > 0)
+                .map(std::time::Duration::from_secs);
+            let embed_future = async {
+                match timeout {
+                    Some(dur) => tokio::time::timeout(dur, backend.embed(owned_texts))
+                        .await
+                        .map_err(|_| crate::KreuzbergError::Plugin {
+                            message: format!("Embedding backend '{name}' did not complete within {dur:?}"),
+                            plugin_name: name.clone(),
+                        })?,
+                    None => backend.embed(owned_texts).await,
+                }
+            };
+            let embed_result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                tokio::task::block_in_place(|| handle.block_on(embed_future))
+            } else {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(|e| {
+                        crate::KreuzbergError::embedding(format!("Failed to create runtime for plugin embeddings: {e}"))
+                    })?;
+                rt.block_on(embed_future)
+            };
+            let mut embeddings = embed_result?;
+
+            validate_embedding_shape(&embeddings, expected_count, expected_dim, name)?;
+
+            if config.normalize {
+                normalize_embeddings(&mut embeddings);
+            }
+
+            Ok(embeddings)
+        }
+        crate::core::config::EmbeddingModelType::Preset { .. }
+        | crate::core::config::EmbeddingModelType::Custom { .. } => {
             // Local ONNX path for Preset and Custom model types.
             let chunk_count = texts.len();
             let (repo, model_file, pooling) = resolve_model_info(&config.model)?;
@@ -853,19 +959,69 @@ pub async fn embed_texts_async<T: AsRef<str> + Send + 'static>(
         return Ok(Vec::new());
     }
 
-    // LLM-hosted embeddings can be awaited directly — no need for spawn_blocking.
-    #[cfg(feature = "liter-llm")]
-    if let crate::core::config::EmbeddingModelType::Llm { llm } = &config.model {
-        return crate::llm::vlm_embeddings::embed_via_llm(&texts, llm, config.normalize)
-            .await
-            .map(|(embeddings, _usage)| embeddings);
+    // Reject empty-string inputs here so every dispatch path (Llm fast path,
+    // Plugin fast path, ONNX via spawn_blocking) rejects them the same way.
+    // The sync `embed_texts` has this check; the async fast paths used to skip
+    // it.
+    for (i, t) in texts.iter().enumerate() {
+        if t.as_ref().is_empty() {
+            return Err(crate::KreuzbergError::embedding(format!(
+                "Text at position {pos} is empty. All texts must be non-empty.",
+                pos = i + 1
+            )));
+        }
     }
 
-    #[cfg(not(feature = "liter-llm"))]
-    if let crate::core::config::EmbeddingModelType::Llm { .. } = &config.model {
-        return Err(crate::KreuzbergError::MissingDependency(
-            "LLM embeddings require the 'liter-llm' feature. Rebuild with --features liter-llm".into(),
-        ));
+    // Dispatch is exhaustive over EmbeddingModelType so a future variant must add an arm here.
+    // Llm is cfg-gated; Plugin awaits the host-language backend directly (no spawn_blocking
+    // round-trip since the trait is async); Preset/Custom fall through to the local ONNX path.
+    match &config.model {
+        #[cfg(feature = "liter-llm")]
+        crate::core::config::EmbeddingModelType::Llm { llm } => {
+            return crate::llm::vlm_embeddings::embed_via_llm(&texts, llm, config.normalize)
+                .await
+                .map(|(embeddings, _usage)| embeddings);
+        }
+        #[cfg(not(feature = "liter-llm"))]
+        crate::core::config::EmbeddingModelType::Llm { .. } => {
+            return Err(crate::KreuzbergError::MissingDependency(
+                "LLM embeddings require the 'liter-llm' feature. Rebuild with --features liter-llm".into(),
+            ));
+        }
+        crate::core::config::EmbeddingModelType::Plugin { name } => {
+            let registry = crate::plugins::get_embedding_backend_registry();
+            let (backend, expected_dim) = {
+                let guard = registry.read();
+                guard.get_with_dimensions(name)?
+            };
+            let expected_count = texts.len();
+            let owned_texts: Vec<String> = texts.iter().map(|t| t.as_ref().to_string()).collect();
+            // `Some(0)` is treated as "no timeout" rather than "timeout immediately" — a
+            // zero-duration `tokio::time::timeout` fires before the backend gets a chance
+            // to run, which is a surprising config interpretation users rarely intend.
+            let timeout = config
+                .max_embed_duration_secs
+                .filter(|&s| s > 0)
+                .map(std::time::Duration::from_secs);
+            let mut embeddings = match timeout {
+                Some(dur) => tokio::time::timeout(dur, backend.embed(owned_texts))
+                    .await
+                    .map_err(|_| crate::KreuzbergError::Plugin {
+                        message: format!("Embedding backend '{name}' did not complete within {dur:?}"),
+                        plugin_name: name.clone(),
+                    })??,
+                None => backend.embed(owned_texts).await?,
+            };
+            validate_embedding_shape(&embeddings, expected_count, expected_dim, name)?;
+            if config.normalize {
+                normalize_embeddings(&mut embeddings);
+            }
+            return Ok(embeddings);
+        }
+        crate::core::config::EmbeddingModelType::Preset { .. }
+        | crate::core::config::EmbeddingModelType::Custom { .. } => {
+            // Fall through to ONNX path below.
+        }
     }
 
     // Acquire a permit from the global semaphore to limit concurrent ONNX
@@ -1099,5 +1255,450 @@ mod tests {
         let level3_repr = format!("{:?}", GraphOptimizationLevel::Level3);
         assert_eq!(all_repr, "All");
         assert_ne!(level3_repr, "All", "Level3 must not be the same variant as All");
+    }
+
+    // --- Plugin variant dispatch tests -----------------------------------
+
+    mod plugin_dispatch {
+        use crate::plugins::embedding::{register_embedding_backend, unregister_embedding_backend};
+        use crate::plugins::{EmbeddingBackend, Plugin};
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        fn unique_name(suffix: &str) -> String {
+            static COUNTER: AtomicU64 = AtomicU64::new(0);
+            let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+            format!("dispatch-{suffix}-{id}")
+        }
+
+        /// Backend whose `embed` response shape is fully parameterised so tests
+        /// can exercise the validation paths (length mismatch, dim mismatch).
+        struct ConfigurableBackend {
+            name: String,
+            reported_dimensions: usize,
+            vector_dimensions: usize,
+            response_count: Option<usize>, // None → one vector per input (correct); Some(n) → force n
+            panic_on_embed: bool,
+            fill_value: f32,
+        }
+
+        impl Plugin for ConfigurableBackend {
+            fn name(&self) -> &str {
+                &self.name
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl EmbeddingBackend for ConfigurableBackend {
+            fn dimensions(&self) -> usize {
+                self.reported_dimensions
+            }
+
+            async fn embed(&self, texts: Vec<String>) -> crate::Result<Vec<Vec<f32>>> {
+                if self.panic_on_embed {
+                    return Err(crate::KreuzbergError::Plugin {
+                        message: "simulated backend failure".to_string(),
+                        plugin_name: self.name.clone(),
+                    });
+                }
+                let count = self.response_count.unwrap_or(texts.len());
+                Ok((0..count)
+                    .map(|_| vec![self.fill_value; self.vector_dimensions])
+                    .collect())
+            }
+        }
+
+        fn config_for(name: &str, normalize: bool) -> crate::core::config::EmbeddingConfig {
+            crate::core::config::EmbeddingConfig {
+                model: crate::core::config::EmbeddingModelType::Plugin { name: name.to_string() },
+                normalize,
+                ..Default::default()
+            }
+        }
+
+        #[test]
+        fn dispatches_to_registered_backend() {
+            let name = unique_name("happy");
+            register_embedding_backend(Arc::new(ConfigurableBackend {
+                name: name.clone(),
+                reported_dimensions: 4,
+                vector_dimensions: 4,
+                response_count: None,
+                panic_on_embed: false,
+                fill_value: 0.25,
+            }))
+            .unwrap();
+
+            let vectors = super::super::embed_texts(&["a", "b", "c"], &config_for(&name, false)).unwrap();
+            assert_eq!(vectors.len(), 3);
+            assert!(vectors.iter().all(|v| v.len() == 4 && v[0] == 0.25));
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[test]
+        fn unknown_plugin_name_errors() {
+            let config = config_for("never-registered-x", false);
+            let err = super::super::embed_texts(&["a"], &config).unwrap_err();
+            assert!(matches!(err, crate::KreuzbergError::Plugin { .. }));
+        }
+
+        #[test]
+        fn length_mismatch_surfaces_as_validation_error() {
+            let name = unique_name("len-mismatch");
+            register_embedding_backend(Arc::new(ConfigurableBackend {
+                name: name.clone(),
+                reported_dimensions: 3,
+                vector_dimensions: 3,
+                response_count: Some(2), // 2 vectors for 3 inputs
+                panic_on_embed: false,
+                fill_value: 0.0,
+            }))
+            .unwrap();
+
+            let err = super::super::embed_texts(&["a", "b", "c"], &config_for(&name, false)).unwrap_err();
+            let msg = err.to_string();
+            assert!(
+                matches!(err, crate::KreuzbergError::Validation { .. }),
+                "expected Validation error, got {err:?}"
+            );
+            assert!(msg.contains('2') && msg.contains('3'), "message: {msg}");
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[test]
+        fn dimension_mismatch_surfaces_as_validation_error() {
+            let name = unique_name("dim-mismatch");
+            register_embedding_backend(Arc::new(ConfigurableBackend {
+                name: name.clone(),
+                reported_dimensions: 4,
+                vector_dimensions: 5, // wrong
+                response_count: None,
+                panic_on_embed: false,
+                fill_value: 0.0,
+            }))
+            .unwrap();
+
+            let err = super::super::embed_texts(&["a", "b"], &config_for(&name, false)).unwrap_err();
+            assert!(matches!(err, crate::KreuzbergError::Validation { .. }));
+            let msg = err.to_string();
+            assert!(msg.contains("index 0"), "message should cite bad index: {msg}");
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[test]
+        fn backend_error_surfaces_as_plugin_error() {
+            let name = unique_name("err");
+            register_embedding_backend(Arc::new(ConfigurableBackend {
+                name: name.clone(),
+                reported_dimensions: 3,
+                vector_dimensions: 3,
+                response_count: None,
+                panic_on_embed: true, // flag now means "return Plugin error"
+                fill_value: 0.0,
+            }))
+            .unwrap();
+
+            let err = super::super::embed_texts(&["a"], &config_for(&name, false)).unwrap_err();
+            assert!(matches!(err, crate::KreuzbergError::Plugin { .. }));
+            assert!(err.to_string().contains("simulated backend failure"));
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[test]
+        fn empty_texts_short_circuits_before_backend_call() {
+            // No backend registered under this name — if we don't short-circuit,
+            // the dispatch would fail with a Plugin-not-registered error.
+            let config = config_for("never-looked-up", false);
+            let texts: Vec<&str> = vec![];
+            let vectors = super::super::embed_texts(&texts, &config).unwrap();
+            assert!(vectors.is_empty());
+        }
+
+        #[test]
+        fn concurrent_registration_stress() {
+            use std::thread;
+            // Stress-test the registry under concurrent registrations.
+            // 8 threads each register 10 uniquely-named backends. Assert final
+            // list() contains all 80 + each dispatch still resolves cleanly.
+            let mut handles = Vec::new();
+            let prefix = unique_name("stress");
+            for t in 0..8 {
+                let prefix = prefix.clone();
+                handles.push(thread::spawn(move || {
+                    for i in 0..10 {
+                        let name = format!("{prefix}-t{t}-i{i}");
+                        register_embedding_backend(Arc::new(ConfigurableBackend {
+                            name: name.clone(),
+                            reported_dimensions: 2,
+                            vector_dimensions: 2,
+                            response_count: None,
+                            panic_on_embed: false,
+                            fill_value: 0.5,
+                        }))
+                        .unwrap();
+                    }
+                }));
+            }
+            for h in handles {
+                h.join().unwrap();
+            }
+
+            let list = crate::plugins::embedding::list_embedding_backends().unwrap();
+            let registered = list.iter().filter(|n| n.starts_with(&prefix)).count();
+            assert_eq!(registered, 80, "expected 80 registrations, got {registered}");
+
+            // Dispatch should still resolve any of them.
+            let sample = format!("{prefix}-t0-i0");
+            let vectors = super::super::embed_texts(&["probe"], &config_for(&sample, false)).unwrap();
+            assert_eq!(vectors.len(), 1);
+
+            // Clean up the 80 we created.
+            for t in 0..8 {
+                for i in 0..10 {
+                    let name = format!("{prefix}-t{t}-i{i}");
+                    let _ = crate::plugins::embedding::unregister_embedding_backend(&name);
+                }
+            }
+        }
+
+        /// Backend that sleeps longer than the configured timeout — exercises
+        /// the tokio::time::timeout wrapper in the dispatch arm.
+        struct SlowBackend {
+            name: String,
+            sleep_duration: std::time::Duration,
+        }
+
+        impl Plugin for SlowBackend {
+            fn name(&self) -> &str {
+                &self.name
+            }
+            fn version(&self) -> String {
+                "1.0.0".to_string()
+            }
+            fn initialize(&self) -> crate::Result<()> {
+                Ok(())
+            }
+            fn shutdown(&self) -> crate::Result<()> {
+                Ok(())
+            }
+        }
+
+        #[async_trait::async_trait]
+        impl EmbeddingBackend for SlowBackend {
+            fn dimensions(&self) -> usize {
+                4
+            }
+
+            async fn embed(&self, texts: Vec<String>) -> crate::Result<Vec<Vec<f32>>> {
+                tokio::time::sleep(self.sleep_duration).await;
+                Ok(texts.iter().map(|_| vec![0.0; 4]).collect())
+            }
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn timeout_fires_when_backend_exceeds_duration() {
+            let name = unique_name("timeout");
+            // Backend sleeps 2 seconds; timeout is 1 second.
+            register_embedding_backend(Arc::new(SlowBackend {
+                name: name.clone(),
+                sleep_duration: std::time::Duration::from_secs(2),
+            }))
+            .unwrap();
+
+            let config = crate::core::config::EmbeddingConfig {
+                model: crate::core::config::EmbeddingModelType::Plugin { name: name.clone() },
+                max_embed_duration_secs: Some(1),
+                ..Default::default()
+            };
+
+            let err = super::super::embed_texts(&["probe"], &config).expect_err("timeout should fire");
+            assert!(
+                matches!(err, crate::KreuzbergError::Plugin { .. }),
+                "expected Plugin error, got {err:?}"
+            );
+            let msg = err.to_string();
+            assert!(
+                msg.contains("did not complete within"),
+                "error message should mention timeout; got: {msg}"
+            );
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn async_dispatch_applies_normalization_when_enabled() {
+            // Complements normalization_applied_when_enabled (sync path): makes
+            // sure the async fast path calls normalize_embeddings too. Any
+            // refactor that drops the normalize step only on one path gets
+            // caught.
+            let name = unique_name("async-normalize");
+            register_embedding_backend(Arc::new(ConfigurableBackend {
+                name: name.clone(),
+                reported_dimensions: 2,
+                vector_dimensions: 2,
+                response_count: None,
+                panic_on_embed: false,
+                fill_value: 3.0, // non-unit-norm — must be normalized to unit length
+            }))
+            .unwrap();
+
+            let texts: Vec<String> = vec!["probe".to_string()];
+            let vectors = super::super::embed_texts_async(texts, &config_for(&name, true))
+                .await
+                .expect("async dispatch should succeed");
+            let v = &vectors[0];
+            let mag = (v[0] * v[0] + v[1] * v[1]).sqrt();
+            assert!(
+                (mag - 1.0).abs() < 1e-6,
+                "expected unit-norm after normalize=true on async path; got mag={mag}"
+            );
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn async_dispatch_smoke_test() {
+            // Smoke-test embed_texts_async for the Plugin variant — routes
+            // through the async fast path, returns the expected shape. A
+            // regression that silently re-routed Plugin through spawn_blocking
+            // would still pass this test (it only checks output); keep that
+            // stronger property enforced by code review + the normalize +
+            // timeout tests above.
+            let name = unique_name("async-path");
+            register_embedding_backend(Arc::new(ConfigurableBackend {
+                name: name.clone(),
+                reported_dimensions: 3,
+                vector_dimensions: 3,
+                response_count: None,
+                panic_on_embed: false,
+                fill_value: 0.5,
+            }))
+            .unwrap();
+
+            let config = config_for(&name, false);
+            let texts: Vec<String> = vec!["x".to_string(), "y".to_string()];
+            let vectors = super::super::embed_texts_async(texts, &config)
+                .await
+                .expect("async dispatch should succeed");
+            assert_eq!(vectors.len(), 2);
+            assert!(vectors.iter().all(|v| v.len() == 3 && v[0] == 0.5));
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn disabled_timeout_allows_slow_backend_to_complete() {
+            // Complement to the timeout test: with None, a slow backend must
+            // still succeed (sleep under test threshold).
+            let name = unique_name("no-timeout");
+            register_embedding_backend(Arc::new(SlowBackend {
+                name: name.clone(),
+                sleep_duration: std::time::Duration::from_millis(100),
+            }))
+            .unwrap();
+
+            let config = crate::core::config::EmbeddingConfig {
+                model: crate::core::config::EmbeddingModelType::Plugin { name: name.clone() },
+                max_embed_duration_secs: None,
+                ..Default::default()
+            };
+
+            let result = super::super::embed_texts(&["probe"], &config);
+            assert!(result.is_ok(), "expected Ok with timeout disabled; got {result:?}");
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn zero_max_duration_treated_as_disabled() {
+            // `Some(0)` is a config nonsense value — a zero-duration timeout would
+            // fire before the backend ever runs. Dispatch should treat it as
+            // equivalent to `None` (no timeout) instead of erroring on every call.
+            let name = unique_name("zero-timeout");
+            register_embedding_backend(Arc::new(SlowBackend {
+                name: name.clone(),
+                sleep_duration: std::time::Duration::from_millis(50),
+            }))
+            .unwrap();
+
+            let config = crate::core::config::EmbeddingConfig {
+                model: crate::core::config::EmbeddingModelType::Plugin { name: name.clone() },
+                max_embed_duration_secs: Some(0),
+                ..Default::default()
+            };
+
+            let result = super::super::embed_texts(&["probe"], &config);
+            assert!(
+                result.is_ok(),
+                "expected Ok with Some(0) treated as disabled; got {result:?}"
+            );
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+
+        #[test]
+        fn normalization_applied_when_enabled() {
+            let name = unique_name("normalize");
+            register_embedding_backend(Arc::new(ConfigurableBackend {
+                name: name.clone(),
+                reported_dimensions: 2,
+                vector_dimensions: 2,
+                response_count: None,
+                panic_on_embed: false,
+                fill_value: 3.0, // non-unit-norm input
+            }))
+            .unwrap();
+
+            let vectors = super::super::embed_texts(&["a"], &config_for(&name, true)).unwrap();
+            let v = &vectors[0];
+            let mag = (v[0] * v[0] + v[1] * v[1]).sqrt();
+            assert!(
+                (mag - 1.0).abs() < 1e-6,
+                "expected unit-norm after normalize=true, got mag={mag}"
+            );
+
+            unregister_embedding_backend(&name).unwrap();
+        }
+    }
+
+    // --- validate_embedding_shape direct tests ---------------------------
+
+    #[test]
+    fn validate_shape_accepts_correct_response() {
+        let embeddings = vec![vec![0.0; 4]; 3];
+        super::validate_embedding_shape(&embeddings, 3, 4, "ok").unwrap();
+    }
+
+    #[test]
+    fn validate_shape_rejects_count_mismatch() {
+        let embeddings = vec![vec![0.0; 4]; 2];
+        let err = super::validate_embedding_shape(&embeddings, 3, 4, "bad-count").unwrap_err();
+        assert!(matches!(err, crate::KreuzbergError::Validation { .. }));
+    }
+
+    #[test]
+    fn validate_shape_rejects_dim_mismatch() {
+        let embeddings = vec![vec![0.0; 4], vec![0.0; 3], vec![0.0; 4]];
+        let err = super::validate_embedding_shape(&embeddings, 3, 4, "bad-dim").unwrap_err();
+        assert!(matches!(err, crate::KreuzbergError::Validation { .. }));
+        assert!(err.to_string().contains("index 1"));
+    }
+
+    #[test]
+    fn validate_shape_empty_expected_count_ok() {
+        super::validate_embedding_shape(&[], 0, 4, "empty").unwrap();
     }
 }

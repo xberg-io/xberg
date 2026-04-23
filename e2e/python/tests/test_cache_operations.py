@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: cache_operations."""
-
 from kreuzberg import generate_cache_key, validate_cache_key
 
 
@@ -14,20 +13,18 @@ def test_cache_key_basic() -> None:
     result = generate_cache_key(parts=parts)
     assert len(result.result) >= 10  # noqa: S101
 
-
 def test_cache_key_single() -> None:
     """Generate cache key from single part."""
     parts = '["test"]'
     _ = generate_cache_key(parts=parts)
-
 
 def test_cache_key_validate_empty() -> None:
     """Validate empty cache key (should return false but not error)."""
     key = ""
     _ = validate_cache_key(key=key)
 
-
 def test_cache_key_validate_valid() -> None:
     """Validate a valid cache key format."""
     key = "abc123def456"
     _ = validate_cache_key(key=key)
+

@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: table_operations."""
-
 from kreuzberg import cells_to_markdown, cells_to_text
 
 
@@ -14,12 +13,10 @@ def test_cells_markdown_basic() -> None:
     result = cells_to_markdown(cells=cells)
     assert "|" in result.result  # noqa: S101
 
-
 def test_cells_markdown_single() -> None:
     """Convert single-column cell array to markdown table."""
     cells = '[["Header"],["Value"]]'
     _ = cells_to_markdown(cells=cells)
-
 
 def test_cells_text_basic() -> None:
     """Convert basic 2D cell array to space-separated text."""
@@ -27,8 +24,8 @@ def test_cells_text_basic() -> None:
     result = cells_to_text(cells=cells)
     assert "Alice" in result.result  # noqa: S101
 
-
 def test_cells_text_single() -> None:
     """Convert simple 2x2 cell array to text."""
     cells = '[["A","B"],["1","2"]]'
     _ = cells_to_text(cells=cells)
+

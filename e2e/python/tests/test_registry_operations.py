@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: registry_operations."""
-
 from kreuzberg import get_extensions_for_mime, list_supported_formats
 
 
@@ -13,12 +12,10 @@ def test_extensions_docx() -> None:
     mime_type = ""
     _ = get_extensions_for_mime(mime_type=mime_type)
 
-
 def test_extensions_html() -> None:
     """Get file extensions for HTML MIME type."""
     mime_type = ""
     _ = get_extensions_for_mime(mime_type=mime_type)
-
 
 def test_extensions_pdf() -> None:
     """Get file extensions for PDF MIME type."""
@@ -26,7 +23,7 @@ def test_extensions_pdf() -> None:
     result = get_extensions_for_mime(mime_type=mime_type)
     assert "pdf" in result.result  # noqa: S101
 
-
 def test_list_formats_all() -> None:
     """List all supported formats and their extensions."""
     _ = list_supported_formats()
+

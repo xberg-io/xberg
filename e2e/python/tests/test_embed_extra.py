@@ -4,16 +4,8 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: embed_extra."""
-
 import pytest
-from kreuzberg import (
-    get_preset,
-    list_presets,
-    normalize,
-    embed_text,
-    embed_texts,
-    ExtractionConfig,
-)
+from kreuzberg import get_preset, list_presets, normalize, embed_text, embed_texts, ExtractionConfig
 
 
 @pytest.mark.skip(reason="Requires features: embeddings")
@@ -22,25 +14,21 @@ def test_embed_get_preset() -> None:
     name = "all-MiniLM-L6-v2"
     _ = get_preset(name=name)
 
-
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_embed_get_preset_invalid() -> None:
     """Get preset invalid name."""
     name = "nonexistent-model"
     _ = get_preset(name=name)
 
-
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_embed_list_presets() -> None:
     """Lists available embedding model presets."""
     _ = list_presets()
 
-
 def test_embed_normalize_unit() -> None:
     """Normalize unit vector."""
     data = [1.0, 0.0, 0.0]
     _ = normalize(data=data)
-
 
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_embed_normalize_vec() -> None:
@@ -48,12 +36,10 @@ def test_embed_normalize_vec() -> None:
     data = [1.0, 2.0, 3.0, 4.0]
     _ = normalize(data=data)
 
-
 def test_embed_normalize_zero() -> None:
     """Normalize zero vector."""
     data = [0.0, 0.0, 0.0]
     _ = normalize(data=data)
-
 
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_embed_text_basic() -> None:
@@ -61,13 +47,11 @@ def test_embed_text_basic() -> None:
     text = "Hello world"
     _ = embed_text(text=text)
 
-
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_embed_text_long() -> None:
     """Embedding of longer text content."""
     text = "This is a longer sentence to test embedding generation with more content that might produce different vector representations."
     _ = embed_text(text=text)
-
 
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_embed_texts_batch() -> None:
@@ -75,3 +59,4 @@ def test_embed_texts_batch() -> None:
     texts = ["Hello", "World"]
     config = ExtractionConfig()
     _ = embed_texts(texts=texts, config=config)
+

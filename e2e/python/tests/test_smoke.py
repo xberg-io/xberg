@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: smoke."""
-
 import pytest
 from kreuzberg import extract_file, ExtractionConfig
 
@@ -13,27 +12,20 @@ from kreuzberg import extract_file, ExtractionConfig
 async def test_smoke_cache_namespace() -> None:
     """Smoke test: Extraction with cache namespace and TTL configuration."""
     path = "text/report.txt"
-    config = ExtractionConfig(
-        cache_namespace="test_tenant", cache_ttl_secs=3600, use_cache=True
-    )
+    config = ExtractionConfig(cache_namespace="test_tenant", cache_ttl_secs=3600, use_cache=True)
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "text/plain"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_smoke_docx_basic() -> None:
     """Smoke test: DOCX with formatted text."""
     path = "docx/fake.docx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["Lorem", "ipsum", "document", "text"])  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_smoke_html_basic() -> None:
@@ -43,15 +35,9 @@ async def test_smoke_html_basic() -> None:
     assert result.mime_type.strip() == "text/html"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
     assert result.content is not None  # noqa: S101
-    assert any(
-        v in result.content
-        for v in ["Sample Data Table", "Laptop", "Electronics", "Product"]
-    )  # noqa: S101
+    assert any(v in result.content for v in ["Sample Data Table", "Laptop", "Electronics", "Product"])  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Skip if document missing; Image extraction requires image processing dependencies"
-)
+@pytest.mark.skip(reason="Skip if document missing; Image extraction requires image processing dependencies")
 @pytest.mark.asyncio
 async def test_smoke_image_png() -> None:
     """Smoke test: PNG image (without OCR, metadata only)."""
@@ -61,7 +47,6 @@ async def test_smoke_image_png() -> None:
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert result.metadata.format.strip() == "PNG"  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_smoke_json_basic() -> None:
     """Smoke test: JSON file extraction."""
@@ -69,7 +54,6 @@ async def test_smoke_json_basic() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/json"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_smoke_pdf_basic() -> None:
@@ -81,7 +65,6 @@ async def test_smoke_pdf_basic() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["May 5, 2023", "To Whom it May Concern"])  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_smoke_txt_basic() -> None:
     """Smoke test: Plain text file."""
@@ -90,16 +73,12 @@ async def test_smoke_txt_basic() -> None:
     assert result.mime_type.strip() == "text/plain"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_smoke_xlsx_basic() -> None:
     """Smoke test: XLSX with basic spreadsheet data including tables."""
     path = "xlsx/stanley_cups.xlsx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"  # noqa: S101
     assert len(result.content) >= 100  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert "Team" in result.content  # noqa: S101
@@ -122,3 +101,4 @@ async def test_smoke_xlsx_basic() -> None:
     assert len(result.tables) >= 1  # noqa: S101
     assert result.metadata.sheet_count >= 2  # noqa: S101
     assert "Stanley Cups" in result.metadata.sheet_names  # noqa: S101
+

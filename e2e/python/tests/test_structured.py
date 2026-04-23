@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: structured."""
-
 import pytest
 from kreuzberg import extract_file
 
@@ -17,21 +16,12 @@ async def test_structured_csv_basic() -> None:
     assert result.mime_type.strip() == "text/csv"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_structured_enw_basic() -> None:
     """EndNote ENW citation format extraction."""
     path = "data_formats/sample.enw"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in [
-            "application/x-endnote-refer",
-            "application/x-endnote+xml",
-            "text/plain",
-        ]
-    )  # noqa: S101
-
+    assert any(v in result.mime_type for v in ["application/x-endnote-refer", "application/x-endnote+xml", "text/plain"])  # noqa: S101
 
 @pytest.mark.asyncio
 async def test_structured_json_basic() -> None:
@@ -43,7 +33,6 @@ async def test_structured_json_basic() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["Sample Document", "Test Author"])  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_structured_json_simple() -> None:
     """Simple JSON document to verify structured extraction."""
@@ -54,30 +43,21 @@ async def test_structured_json_simple() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["{", "name"])  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_structured_nbib_basic() -> None:
     """PubMed NBIB citation format extraction."""
     path = "data_formats/sample.nbib"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in ["application/nbib", "application/x-pubmed", "text/plain"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/nbib", "application/x-pubmed", "text/plain"])  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_structured_ris_basic() -> None:
     """RIS citation format extraction."""
     path = "data_formats/sample.ris"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in ["application/x-research-info-systems", "text/plain"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/x-research-info-systems", "text/plain"])  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_structured_toml_basic() -> None:
@@ -87,29 +67,21 @@ async def test_structured_toml_basic() -> None:
     assert any(v in result.mime_type for v in ["application/toml", "text/toml"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_structured_tsv_basic() -> None:
     """TSV (tab-separated values) data file extraction."""
     path = "data_formats/employees.tsv"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type for v in ["text/tab-separated-values", "text/plain"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["text/tab-separated-values", "text/plain"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_structured_yaml_basic() -> None:
     """YAML file text extraction."""
     path = "yaml/simple.yaml"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in ["application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/yaml", "text/yaml", "text/x-yaml", "application/x-yaml"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_structured_yaml_simple() -> None:
@@ -118,3 +90,4 @@ async def test_structured_yaml_simple() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/x-yaml"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
+

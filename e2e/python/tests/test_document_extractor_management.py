@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: document_extractor_management."""
-
 import pytest
 from kreuzberg import extract_file, list_document_extractors
 
@@ -16,14 +15,13 @@ async def test_extractors_clear() -> None:
     result = await extract_file(path=path)
     assert not result.result  # noqa: S101
 
-
 def test_extractors_list() -> None:
     """List all registered document extractors."""
     _ = list_document_extractors()
-
 
 @pytest.mark.asyncio
 async def test_extractors_unregister() -> None:
     """Unregister nonexistent document extractor gracefully."""
     path = ""
     _ = await extract_file(path=path)
+

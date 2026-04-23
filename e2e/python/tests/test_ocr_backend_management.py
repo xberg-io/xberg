@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: ocr_backend_management."""
-
 import pytest
 from kreuzberg import extract_file, list_ocr_backends
 
@@ -16,14 +15,13 @@ async def test_ocr_backends_clear() -> None:
     result = await extract_file(path=path)
     assert not result.result  # noqa: S101
 
-
 def test_ocr_backends_list() -> None:
     """List all registered OCR backends."""
     _ = list_ocr_backends()
-
 
 @pytest.mark.asyncio
 async def test_ocr_backends_unregister() -> None:
     """Unregister nonexistent OCR backend gracefully."""
     path = ""
     _ = await extract_file(path=path)
+

@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: token_reduction."""
-
 import pytest
 from kreuzberg import reduce_tokens, extract_file_sync, ExtractionConfig
 
@@ -16,14 +15,12 @@ def test_reduce_tokens_maximum() -> None:
     level = "maximum"
     _ = reduce_tokens(text=text, level=level)
 
-
 @pytest.mark.skip(reason="Requires features: quality")
 def test_reduce_tokens_moderate() -> None:
     """Reduce tokens moderate."""
     text = "Some redundant verbose text."
     level = "moderate"
     _ = reduce_tokens(text=text, level=level)
-
 
 @pytest.mark.skip(reason="Requires features: quality")
 def test_reduce_tokens_off() -> None:
@@ -32,7 +29,6 @@ def test_reduce_tokens_off() -> None:
     level = "off"
     result = reduce_tokens(text=text, level=level)
     assert "Passthrough text." in result.result  # noqa: S101
-
 
 def test_token_reduction_aggressive() -> None:
     """Tests aggressive token reduction mode significantly reduces content."""
@@ -44,7 +40,6 @@ def test_token_reduction_aggressive() -> None:
     assert len(result.content) <= 150  # noqa: S101
     assert result.content  # noqa: S101
 
-
 def test_token_reduction_basic() -> None:
     """Tests basic token reduction on PDF document."""
     path = "pdf/fake_memo.pdf"
@@ -55,7 +50,6 @@ def test_token_reduction_basic() -> None:
     assert len(result.content) <= 200  # noqa: S101
     assert result.content  # noqa: S101
 
-
 def test_token_reduction_light() -> None:
     """Tests light token reduction mode preserves most content."""
     path = "pdf/fake_memo.pdf"
@@ -65,14 +59,12 @@ def test_token_reduction_light() -> None:
     assert len(result.content) >= 10  # noqa: S101
     assert result.content  # noqa: S101
 
-
 def test_token_reduction_reduce_aggressive() -> None:
     """Reduce tokens with aggressive compression level."""
     text = "The quick brown fox jumps over the lazy dog."
     level = "aggressive"
     result = reduce_tokens(text=text, level=level)
     assert len(result.result) >= 1  # noqa: S101
-
 
 def test_token_reduction_reduce_basic() -> None:
     """Reduce tokens with light compression level."""
@@ -81,14 +73,10 @@ def test_token_reduction_reduce_basic() -> None:
     result = reduce_tokens(text=text, level=level)
     assert "quick" in result.result  # noqa: S101
 
-
 def test_token_reduction_with_chunking() -> None:
     """Tests token reduction combined with chunking."""
     path = "pdf/fake_memo.pdf"
-    config = ExtractionConfig(
-        chunking={"max_chars": 500, "max_overlap": 50},
-        token_reduction={"mode": "moderate"},
-    )
+    config = ExtractionConfig(chunking={"max_chars": 500, "max_overlap": 50}, token_reduction={"mode": "moderate"})
     result = extract_file_sync(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
@@ -96,3 +84,4 @@ def test_token_reduction_with_chunking() -> None:
     assert result.content  # noqa: S101
     assert len(result.chunks) >= 1  # noqa: S101
     assert result.chunks_have_content is True  # noqa: S101
+

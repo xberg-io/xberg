@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: hash."""
-
 import pytest
 from kreuzberg import blake3_hash_bytes, blake3_hash_file, compute_hash, fast_hash
 
@@ -15,13 +14,11 @@ def test_blake3_bytes_pdf() -> None:
     result = blake3_hash_bytes(data=data)
     assert len(result) >= 64  # noqa: S101
 
-
 def test_blake3_bytes_text() -> None:
     """Hash text file bytes using BLAKE3."""
     data = "text/plain.txt"
     result = blake3_hash_bytes(data=data)
     assert len(result) >= 64  # noqa: S101
-
 
 def test_blake3_file_not_found() -> None:
     """blake3_hash_file nonexistent file."""
@@ -29,13 +26,11 @@ def test_blake3_file_not_found() -> None:
     with pytest.raises(Exception):  # noqa: B017
         blake3_hash_file(path=path)
 
-
 def test_blake3_file_pdf() -> None:
     """Hash PDF file using BLAKE3."""
     path = "pdf/fake_memo.pdf"
     result = blake3_hash_file(path=path)
     assert len(result) >= 64  # noqa: S101
-
 
 def test_blake3_file_text() -> None:
     """Hash text file using BLAKE3."""
@@ -43,26 +38,23 @@ def test_blake3_file_text() -> None:
     result = blake3_hash_file(path=path)
     assert len(result) >= 64  # noqa: S101
 
-
 def test_compute_hash_basic() -> None:
     """Compute hash for PDF file."""
     data = "pdf/fake_memo.pdf"
     _ = compute_hash(data=data)
-
 
 def test_compute_hash_different() -> None:
     """Hash different content."""
     data = "different content"
     _ = compute_hash(data=data)
 
-
 def test_fast_hash_basic() -> None:
     """Hash PDF file using fast hash."""
     data = "pdf/fake_memo.pdf"
     _ = fast_hash(data=data)
 
-
 def test_fast_hash_empty() -> None:
     """Hash empty bytes."""
     data = ""
     _ = fast_hash(data=data)
+

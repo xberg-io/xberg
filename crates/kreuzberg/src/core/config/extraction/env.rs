@@ -29,6 +29,7 @@ impl ExtractionConfig {
     /// - `KREUZBERG_LLM_BASE_URL`: Custom base URL for the structured extraction LLM provider
     /// - `KREUZBERG_VLM_OCR_MODEL`: VLM model for vision-based OCR (e.g., "openai/gpt-4o")
     /// - `KREUZBERG_VLM_EMBEDDING_MODEL`: LLM model for embedding generation (e.g., "openai/text-embedding-3-small")
+    /// - `KREUZBERG_EMBEDDING_PLUGIN_NAME`: Name of an in-process embedding backend registered via `plugins::register_embedding_backend`
     /// - `KREUZBERG_MSG_FALLBACK_CODEPAGE`: (deferred) Windows codepage for MSG PT_STRING8 fallback
     ///
     /// # Behavior
@@ -376,6 +377,117 @@ impl ExtractionConfig {
             }
         }
 
+        // KREUZBERG_EMBEDDING_PLUGIN_NAME override.
+        // Selects an already-registered in-process embedding backend by name.
+        // Setting this together with KREUZBERG_VLM_EMBEDDING_MODEL is rejected — they
+        // configure mutually-exclusive embedding sources and the result of "both set"
+        // would otherwise depend on source order in this function. Pick one.
+        let plugin_name = std::env::var("KREUZBERG_EMBEDDING_PLUGIN_NAME").ok();
+        if plugin_name.is_some() && std::env::var("KREUZBERG_VLM_EMBEDDING_MODEL").is_ok() {
+            return Err(KreuzbergError::Validation {
+                message:
+                    "KREUZBERG_EMBEDDING_PLUGIN_NAME and KREUZBERG_VLM_EMBEDDING_MODEL are mutually exclusive — set one or the other, not both."
+                        .to_string(),
+                source: None,
+            });
+        }
+        if let Some(value) = plugin_name {
+            if value.is_empty() {
+                return Err(KreuzbergError::Validation {
+                    message: "KREUZBERG_EMBEDDING_PLUGIN_NAME must not be empty".to_string(),
+                    source: None,
+                });
+            }
+            if self.chunking.is_none() {
+                self.chunking = Some(ChunkingConfig::default());
+            }
+            if let Some(ref mut chunking) = self.chunking {
+                chunking.embedding = Some(super::super::processing::EmbeddingConfig {
+                    model: super::super::processing::EmbeddingModelType::Plugin { name: value },
+                    ..super::super::processing::EmbeddingConfig::default()
+                });
+            }
+        }
+
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unsafe_code)] // env mutation in 2024 edition is unsafe; tests serialize via ENV_LOCK
+mod tests {
+    use super::*;
+    use crate::core::config::processing::EmbeddingModelType;
+
+    /// Lock guarding env-var mutation across tests in this module — `std::env::set_var`
+    /// is process-global and concurrent tests would race.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn clear_embedding_env() {
+        // SAFETY: callers hold ENV_LOCK so no other thread is reading these vars.
+        unsafe {
+            std::env::remove_var("KREUZBERG_EMBEDDING_PLUGIN_NAME");
+            std::env::remove_var("KREUZBERG_VLM_EMBEDDING_MODEL");
+        }
+    }
+
+    #[test]
+    fn embedding_plugin_and_vlm_embedding_model_are_mutually_exclusive() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        clear_embedding_env();
+        // SAFETY: see clear_embedding_env.
+        unsafe {
+            std::env::set_var("KREUZBERG_EMBEDDING_PLUGIN_NAME", "my-embedder");
+            std::env::set_var("KREUZBERG_VLM_EMBEDDING_MODEL", "openai/text-embedding-3-small");
+        }
+        let mut config = ExtractionConfig::default();
+        let err = config
+            .apply_env_overrides()
+            .expect_err("should reject conflicting embedding env vars");
+        assert!(
+            matches!(err, KreuzbergError::Validation { .. }),
+            "expected Validation, got {err:?}"
+        );
+        let msg = err.to_string();
+        assert!(msg.contains("mutually exclusive"), "message: {msg}");
+        clear_embedding_env();
+    }
+
+    #[test]
+    fn empty_embedding_plugin_name_rejected() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        clear_embedding_env();
+        // SAFETY: see clear_embedding_env.
+        unsafe { std::env::set_var("KREUZBERG_EMBEDDING_PLUGIN_NAME", "") };
+        let mut config = ExtractionConfig::default();
+        let err = config
+            .apply_env_overrides()
+            .expect_err("should reject empty plugin name");
+        assert!(
+            matches!(err, KreuzbergError::Validation { .. }),
+            "expected Validation, got {err:?}"
+        );
+        clear_embedding_env();
+    }
+
+    #[test]
+    fn embedding_plugin_env_sets_chunking_embedding_to_plugin_variant() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        clear_embedding_env();
+        // SAFETY: see clear_embedding_env.
+        unsafe { std::env::set_var("KREUZBERG_EMBEDDING_PLUGIN_NAME", "my-embedder") };
+        let mut config = ExtractionConfig::default();
+        config
+            .apply_env_overrides()
+            .expect("should succeed with only plugin name set");
+        let chunking = config.chunking.as_ref().expect("chunking should be created");
+        let embedding = chunking.embedding.as_ref().expect("embedding should be set");
+        match &embedding.model {
+            EmbeddingModelType::Plugin { name } => {
+                assert_eq!(name, "my-embedder");
+            }
+            other => panic!("expected Plugin variant, got {other:?}"),
+        }
+        clear_embedding_env();
     }
 }

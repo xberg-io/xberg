@@ -1,0 +1,33 @@
+{
+	"id": "config_chunking_semantic_with_plugin",
+	"description": "Tests semantic chunking config with EmbeddingModelType::Plugin — verifies each binding's EmbeddingConfig accepts the combined semantic-chunker + plugin-embedder shape",
+	"tags": ["contract", "config", "chunking", "embeddings", "plugin", "semantic"],
+	"call": "extract_file_sync",
+	"input": {
+		"path": "pdf/fake_memo.pdf",
+		"config": {
+			"chunking": {
+				"max_chars": 1024,
+				"max_overlap": 100,
+				"chunker_type": "semantic",
+				"topic_threshold": 0.75,
+				"embedding": {
+					"model": {
+						"type": "plugin",
+						"name": "test-semantic-plugin"
+					},
+					"normalize": true,
+					"max_embed_duration_secs": 60
+				}
+			}
+		}
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	],
+	"skip": {
+		"reason": "Semantic chunking with a plugin embedder requires the plugin to be registered at runtime via register_embedding_backend — the e2e harness cannot do this. Covers config round-trip only."
+	}
+}

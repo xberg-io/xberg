@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: validator_management."""
-
 import pytest
 from kreuzberg import extract_file, list_validators
 
@@ -16,7 +15,7 @@ async def test_validators_clear() -> None:
     result = await extract_file(path=path)
     assert not result.result  # noqa: S101
 
-
 def test_validators_list() -> None:
     """List all registered validators."""
     _ = list_validators()
+

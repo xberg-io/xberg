@@ -70,6 +70,7 @@ typedef struct KREUZBERGEmbedRequest KREUZBERGEmbedRequest;
 typedef struct KREUZBERGEmbedResponse KREUZBERGEmbedResponse;
 typedef struct KREUZBERGEmbedTextParams KREUZBERGEmbedTextParams;
 typedef struct KREUZBERGEmbeddedFile KREUZBERGEmbeddedFile;
+typedef struct KREUZBERGEmbeddingBackend KREUZBERGEmbeddingBackend;
 typedef struct KREUZBERGEmbeddingConfig KREUZBERGEmbeddingConfig;
 typedef struct KREUZBERGEmbeddingModelType KREUZBERGEmbeddingModelType;
 typedef struct KREUZBERGEpubMetadata KREUZBERGEpubMetadata;
@@ -917,6 +918,60 @@ typedef struct KREUZBERGKreuzbergValidatorVTable {
    */
   void (*free_user_data)(void*);
 } KREUZBERGKreuzbergValidatorVTable;
+
+/**
+ * VTable for C plugin bridges implementing the `EmbeddingBackend` trait.
+ *
+ * # Safety
+ *
+ * All function pointers must be valid for the lifetime of any bridge created from
+ * this vtable.  `free_user_data`, when non-null, is called once with `user_data`
+ * when the bridge is dropped.
+ */
+typedef struct KREUZBERGKreuzbergEmbeddingBackendVTable {
+  /**
+   * Return a null-terminated UTF-8 name string into `out_name`.
+   */
+  void (*name_fn)(const void *user_data,
+                  char **out_name);
+  /**
+   * Return a null-terminated UTF-8 version string into `out_version`.
+   */
+  void (*version_fn)(const void *user_data,
+                     char **out_version);
+  /**
+   * Initialise the plugin; return 0 on success, non-zero on failure (error text in `out_error`).
+   */
+  int32_t (*initialize_fn)(const void *user_data,
+                           char **out_error);
+  /**
+   * Shut down the plugin; return 0 on success, non-zero on failure (error text in `out_error`).
+   */
+  int32_t (*shutdown_fn)(const void *user_data,
+                         char **out_error);
+  /**
+   * Embedding vector dimension. Must be `> 0` and must match the length of
+   * every vector returned by `embed`.
+   */
+  uintptr_t (*dimensions)(const void *user_data);
+  /**
+   * Embed a batch of texts, returning one vector per input in order.
+   *
+   * # Errors
+   *
+   * Implementations should return [`crate::KreuzbergError::Plugin`] for
+   * backend-specific failures. The dispatcher layers its own validation
+   * (length, per-vector dimension) on top.
+   */
+  int32_t (*embed)(const void *user_data,
+                   const char *texts,
+                   char **out_result,
+                   char **out_error);
+  /**
+   * Optional destructor: called once with `user_data` when the bridge is dropped.
+   */
+  void (*free_user_data)(void*);
+} KREUZBERGKreuzbergEmbeddingBackendVTable;
 
 /**
  * Return the last error code (0 means no error).
@@ -2641,6 +2696,13 @@ char *kreuzberg_embedding_config_cache_dir(const KREUZBERGEmbeddingConfig *ptr);
  * Pointer must be a valid handle returned by this library.
  */
 KREUZBERGAccelerationConfig *kreuzberg_embedding_config_acceleration(const KREUZBERGEmbeddingConfig *ptr);
+
+/**
+ * Get the `max_embed_duration_secs` field from a `EmbeddingConfig`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+uint64_t kreuzberg_embedding_config_max_embed_duration_secs(const KREUZBERGEmbeddingConfig *ptr);
 
 /**
  * # Safety
@@ -9190,6 +9252,13 @@ char *kreuzberg_embed_text_params_model(const KREUZBERGEmbedTextParams *ptr);
 char *kreuzberg_embed_text_params_api_key(const KREUZBERGEmbedTextParams *ptr);
 
 /**
+ * Get the `embedding_plugin` field from a `EmbedTextParams`.
+ * # Safety
+ * Pointer must be a valid handle returned by this library.
+ */
+char *kreuzberg_embed_text_params_embedding_plugin(const KREUZBERGEmbedTextParams *ptr);
+
+/**
  * Free a `ExtractStructuredParams` handle.
  * # Safety
  * Pointer must have been returned by this library, or be null.
@@ -12647,5 +12716,41 @@ int32_t kreuzberg_register_validator(const char *name,
  */
 int32_t kreuzberg_unregister_validator(const char *name,
                                        char **out_error);
+
+/**
+ * Register a C plugin implementing `EmbeddingBackend` via a vtable.
+ *
+ * # Parameters
+ *
+ * - `name`: null-terminated UTF-8 plugin name. Must not be null.
+ * - `vtable`: vtable with function pointers implementing the trait.
+ * - `user_data`: opaque pointer forwarded to every vtable function.
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * All function pointers in `vtable` must remain valid until the plugin is
+ * unregistered. `user_data` must be safe to use from any thread that calls
+ * into the plugin.
+ */
+int32_t kreuzberg_register_embedding_backend(const char *name,
+                                             struct KREUZBERGKreuzbergEmbeddingBackendVTable vtable,
+                                             const void *user_data,
+                                             char **out_error);
+
+/**
+ * Unregister a previously registered C plugin by name.
+ *
+ * # Parameters
+ *
+ * - `name`: null-terminated UTF-8 plugin name. Must not be null.
+ * - `out_error`: receives a heap-allocated error string on failure.
+ *
+ * # Safety
+ *
+ * `name` must point to a valid null-terminated C string.
+ */
+int32_t kreuzberg_unregister_embedding_backend(const char *name,
+                                               char **out_error);
 
 #endif  /* KREUZBERG_H */

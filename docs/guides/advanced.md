@@ -195,6 +195,18 @@ Generate embeddings for semantic search and RAG using local ONNX models. Require
 | `quality` | BGE-large-en-v1.5 | 1024 | 2000 | Complex documents, maximum accuracy, sufficient compute |
 | `multilingual` | multilingual-e5-base | 768 | 1024 | International documents, mixed-language content |
 
+### In-Process Embedding Backends (Plugin Variant)
+
+For callers that already manage their own embedding model in-process (e.g. `llama-cpp-python`, `sentence-transformers`, a tuned ONNX model), Kreuzberg accepts a caller-supplied embedder via the `Plugin` variant of `EmbeddingModelType`. Kreuzberg calls back into the registered backend instead of downloading and running its own ONNX model.
+
+1. Register the backend once at startup via `kreuzberg::plugins::register_embedding_backend(Arc::new(MyEmbedder))`. The backend implements `EmbeddingBackend` (a `Plugin`-inheriting async trait with `dimensions()` and `embed(texts) -> Vec<Vec<f32>>`).
+2. Reference it by name in `EmbeddingConfig`: `{ "model": { "type": "plugin", "name": "my-embedder" } }`.
+3. Optional: set `EmbeddingConfig.max_embed_duration_secs` (default 60) to bound the wait on a hung backend; `None` disables the timeout.
+
+The CLI (`kreuzberg embed --provider plugin --plugin my-embedder`), MCP server (`embed_text` tool, `embedding_plugin` parameter), REST API, and env var `KREUZBERG_EMBEDDING_PLUGIN_NAME` all accept the Plugin variant once a backend is registered.
+
+**Fork-safety**: Python callers running under `multiprocessing`, `gunicorn`'s prefork worker, or Celery prefork must re-register the backend in each child process — native-backed embedders (including `llama-cpp-python`) aren't fork-safe. Use `os.register_at_fork(after_in_child=reregister_fn)` to automate the re-registration.
+
 ### Configuration
 
 === "Python"

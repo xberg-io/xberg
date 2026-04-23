@@ -4,14 +4,11 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: pdf."""
-
 import pytest
 from kreuzberg import extract_file, extract_file_sync, ExtractionConfig
 
 
-@pytest.mark.skip(
-    reason="Skip on platforms: aarch64-unknown-linux-gnu; PDFium ARM Linux binary does not support annotation extraction"
-)
+@pytest.mark.skip(reason="Skip on platforms: aarch64-unknown-linux-gnu; PDFium ARM Linux binary does not support annotation extraction")
 @pytest.mark.asyncio
 async def test_pdf_annotations() -> None:
     """PDF with annotations should extract annotation data when enabled."""
@@ -21,7 +18,6 @@ async def test_pdf_annotations() -> None:
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert result.annotations  # noqa: S101
     assert len(result.annotations) >= 1  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_pdf_assembly_technical() -> None:
@@ -34,7 +30,6 @@ async def test_pdf_assembly_technical() -> None:
     assert any(v in result.content for v in ["assembly", "register", "instruction"])  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_pdf_bayesian_data_analysis() -> None:
     """Bayesian data analysis textbook PDF with large content volume."""
@@ -46,24 +41,16 @@ async def test_pdf_bayesian_data_analysis() -> None:
     assert any(v in result.content for v in ["Bayesian", "probability", "distribution"])  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: pdf; Skip on platforms: aarch64-unknown-linux-gnu; ONNX Runtime model loading unstable on ARM Linux; table detection returns 0 tables"
-)
+@pytest.mark.skip(reason="Requires features: pdf; Skip on platforms: aarch64-unknown-linux-gnu; ONNX Runtime model loading unstable on ARM Linux; table detection returns 0 tables")
 def test_pdf_bounding_boxes() -> None:
     """Tests bounding box extraction on PDF tables and images."""
     path = "pdf/tiny.pdf"
-    config = ExtractionConfig(
-        images={"extract_images": True},
-        layout={"table_model": "tatr"},
-        output_format="markdown",
-    )
+    config = ExtractionConfig(images={"extract_images": True}, layout={"table_model": "tatr"}, output_format="markdown")
     result = extract_file_sync(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 50  # noqa: S101
     assert len(result.tables) >= 1  # noqa: S101
     assert result.tables_have_bounding_boxes is True  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_pdf_code_and_formula() -> None:
@@ -72,7 +59,6 @@ async def test_pdf_code_and_formula() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 100  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_pdf_deep_learning() -> None:
@@ -85,7 +71,6 @@ async def test_pdf_deep_learning() -> None:
     assert any(v in result.content for v in ["neural", "network", "deep learning"])  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_pdf_embedded_images() -> None:
     """PDF with embedded images should extract text and tables when present."""
@@ -94,7 +79,6 @@ async def test_pdf_embedded_images() -> None:
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 50  # noqa: S101
     assert len(result.tables) >= 0  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_pdf_google_doc() -> None:
@@ -105,7 +89,6 @@ async def test_pdf_google_doc() -> None:
     assert len(result.content) >= 50  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_pdf_large_ciml() -> None:
     """Large machine learning textbook PDF to stress extraction length."""
@@ -114,27 +97,19 @@ async def test_pdf_large_ciml() -> None:
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 10000  # noqa: S101
     assert result.content is not None  # noqa: S101
-    assert any(
-        v in result.content for v in ["machine learning", "algorithm", "training"]
-    )  # noqa: S101
+    assert any(v in result.content for v in ["machine learning", "algorithm", "training"])  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires layout-detection feature with ONNX Runtime")
 def test_pdf_layout_detection() -> None:
     """PDF extraction with layout detection enabled should produce content from a document with mixed structure."""
     path = "pdf/docling.pdf"
     mime_type = "application/pdf"
-    config = ExtractionConfig(
-        layout={"table_model": "tatr"},
-        output_format="markdown",
-        pages={"extract_pages": True},
-    )
+    config = ExtractionConfig(layout={"table_model": "tatr"}, output_format="markdown", pages={"extract_pages": True})
     result = extract_file_sync(path=path, mime_type=mime_type, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert result.content  # noqa: S101
     assert len(result.content) >= 100  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_pdf_non_english_german() -> None:
@@ -147,7 +122,6 @@ async def test_pdf_non_english_german() -> None:
     assert any(v in result.content for v in ["Intel", "paging"])  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
 
-
 @pytest.mark.skip(reason="Skip if document missing")
 @pytest.mark.asyncio
 async def test_pdf_password_protected() -> None:
@@ -157,11 +131,7 @@ async def test_pdf_password_protected() -> None:
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 50  # noqa: S101
     assert result.content is not None  # noqa: S101
-    assert any(
-        v in result.content
-        for v in ["LayoutParser", "document image analysis", "deep learning"]
-    )  # noqa: S101
-
+    assert any(v in result.content for v in ["LayoutParser", "document image analysis", "deep learning"])  # noqa: S101
 
 @pytest.mark.asyncio
 async def test_pdf_right_to_left() -> None:
@@ -172,7 +142,6 @@ async def test_pdf_right_to_left() -> None:
     assert len(result.content) >= 50  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_pdf_simple_text() -> None:
     """Simple text-heavy PDF should extract content without OCR or tables."""
@@ -181,11 +150,7 @@ async def test_pdf_simple_text() -> None:
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 50  # noqa: S101
     assert result.content is not None  # noqa: S101
-    assert any(
-        v in result.content
-        for v in ["May 5, 2023", "To Whom it May Concern", "Mallori"]
-    )  # noqa: S101
-
+    assert any(v in result.content for v in ["May 5, 2023", "To Whom it May Concern", "Mallori"])  # noqa: S101
 
 @pytest.mark.asyncio
 async def test_pdf_tables_large() -> None:
@@ -195,7 +160,6 @@ async def test_pdf_tables_large() -> None:
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 500  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_pdf_tables_medium() -> None:
     """Medium-sized PDF with multiple tables."""
@@ -204,10 +168,7 @@ async def test_pdf_tables_medium() -> None:
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 100  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: ocr; Skip on platforms: aarch64-unknown-linux-gnu; PDF table extraction requires OCR feature. ONNX Runtime model loading unstable on ARM Linux."
-)
+@pytest.mark.skip(reason="Requires features: ocr; Skip on platforms: aarch64-unknown-linux-gnu; PDF table extraction requires OCR feature. ONNX Runtime model loading unstable on ARM Linux.")
 @pytest.mark.asyncio
 async def test_pdf_tables_small() -> None:
     """Small PDF containing tables to validate table extraction."""
@@ -226,7 +187,6 @@ async def test_pdf_tables_small() -> None:
     assert "Water Boiling Point" in result.content  # noqa: S101
     assert len(result.tables) >= 1  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_pdf_technical_stat_learning() -> None:
     """Technical statistical learning PDF requiring substantial extraction."""
@@ -237,3 +197,4 @@ async def test_pdf_technical_stat_learning() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["statistical", "regression", "learning"])  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
+

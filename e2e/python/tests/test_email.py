@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: email."""
-
 import pytest
 from kreuzberg import extract_file
 
@@ -17,7 +16,6 @@ async def test_email_eml_html_body() -> None:
     assert result.mime_type.strip() == "message/rfc822"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_email_eml_multipart() -> None:
     """EML with multipart MIME content."""
@@ -25,7 +23,6 @@ async def test_email_eml_multipart() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "message/rfc822"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_email_eml_utf16() -> None:
@@ -37,7 +34,6 @@ async def test_email_eml_utf16() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["Test Email", "Roses are red"])  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_email_msg_basic() -> None:
     """Outlook MSG file extraction."""
@@ -46,14 +42,12 @@ async def test_email_msg_basic() -> None:
     assert result.mime_type.strip() == "application/vnd.ms-outlook"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_email_pst_empty() -> None:
     """Empty Outlook PST archive with no messages."""
     path = "email/empty.pst"
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/vnd.ms-outlook-pst"  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_email_sample_eml() -> None:
@@ -62,3 +56,4 @@ async def test_email_sample_eml() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "message/rfc822"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
+

@@ -4,19 +4,8 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: validate."""
-
 import pytest
-from kreuzberg import (
-    validate_binarization_method,
-    extract_file_sync,
-    validate_chunking_params,
-    validate_confidence,
-    validate_host,
-    validate_ocr_backend,
-    validate_port,
-    validate_token_reduction_level,
-    ExtractionConfig,
-)
+from kreuzberg import validate_binarization_method, extract_file_sync, validate_chunking_params, validate_confidence, validate_host, validate_ocr_backend, validate_port, validate_token_reduction_level, ExtractionConfig
 
 
 def test_validate_binarization_invalid() -> None:
@@ -25,12 +14,10 @@ def test_validate_binarization_invalid() -> None:
     with pytest.raises(Exception):  # noqa: B017
         validate_binarization_method(method=method)
 
-
 def test_validate_binarization_valid() -> None:
     """Valid binarization."""
     method = "otsu"
     _ = validate_binarization_method(method=method)
-
 
 def test_validate_chunking_overlap_exceeds() -> None:
     """Reject chunking config where overlap exceeds max_characters."""
@@ -39,7 +26,6 @@ def test_validate_chunking_overlap_exceeds() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_validate_chunking_params_invalid() -> None:
     """Chunking overlap >= max."""
     max_characters = 50
@@ -47,13 +33,11 @@ def test_validate_chunking_params_invalid() -> None:
     with pytest.raises(Exception):  # noqa: B017
         validate_chunking_params(max_characters=max_characters, overlap=overlap)
 
-
 def test_validate_chunking_params_valid() -> None:
     """Valid chunking params."""
     max_characters = 500
     overlap = 50
     _ = validate_chunking_params(max_characters=max_characters, overlap=overlap)
-
 
 def test_validate_chunking_valid() -> None:
     """Accept valid chunking config."""
@@ -62,12 +46,10 @@ def test_validate_chunking_valid() -> None:
     result = extract_file_sync(path=path, config=config)
     assert len(result.content) >= 10  # noqa: S101
 
-
 def test_validate_confidence_boundary() -> None:
     """Confidence at 1.0."""
     confidence = 1.0
     _ = validate_confidence(confidence=confidence)
-
 
 def test_validate_confidence_negative() -> None:
     """Negative confidence."""
@@ -75,13 +57,11 @@ def test_validate_confidence_negative() -> None:
     with pytest.raises(Exception):  # noqa: B017
         validate_confidence(confidence=confidence)
 
-
 def test_validate_confidence_over() -> None:
     """Confidence > 1."""
     confidence = 1.5
     with pytest.raises(Exception):  # noqa: B017
         validate_confidence(confidence=confidence)
-
 
 def test_validate_confidence_valid() -> None:
     """Accept valid confidence threshold."""
@@ -89,12 +69,10 @@ def test_validate_confidence_valid() -> None:
     config = ExtractionConfig(ocr={"confidence_threshold": 0.8})
     _ = extract_file_sync(path=path, config=config)
 
-
 def test_validate_confidence_zero() -> None:
     """Confidence at 0.0."""
     confidence = 0.0
     _ = validate_confidence(confidence=confidence)
-
 
 def test_validate_dpi_negative() -> None:
     """Reject negative DPI in OCR config."""
@@ -103,13 +81,11 @@ def test_validate_dpi_negative() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_validate_dpi_valid() -> None:
     """Accept valid DPI in OCR config."""
     path = "pdf/fake_memo.pdf"
     config = ExtractionConfig(ocr={"dpi": 300})
     _ = extract_file_sync(path=path, config=config)
-
 
 def test_validate_host_empty() -> None:
     """Empty host rejected."""
@@ -117,19 +93,16 @@ def test_validate_host_empty() -> None:
     with pytest.raises(Exception):  # noqa: B017
         validate_host(host=host)
 
-
 def test_validate_ocr_backend_invalid() -> None:
     """Invalid OCR backend."""
     backend = "nonexistent"
     with pytest.raises(Exception):  # noqa: B017
         validate_ocr_backend(backend=backend)
 
-
 def test_validate_ocr_backend_valid() -> None:
     """Valid OCR backend."""
     backend = "tesseract"
     _ = validate_ocr_backend(backend=backend)
-
 
 def test_validate_output_format_invalid() -> None:
     """Reject invalid output format."""
@@ -138,19 +111,16 @@ def test_validate_output_format_invalid() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_validate_output_format_valid() -> None:
     """Accept valid output format."""
     path = "pdf/fake_memo.pdf"
     config = ExtractionConfig(output_format="markdown")
     _ = extract_file_sync(path=path, config=config)
 
-
 def test_validate_port_max() -> None:
     """Port 65535 accepted."""
     port = 65535
     _ = validate_port(port=port)
-
 
 def test_validate_port_over() -> None:
     """Port over 65535."""
@@ -158,13 +128,11 @@ def test_validate_port_over() -> None:
     with pytest.raises(Exception):  # noqa: B017
         validate_port(port=port)
 
-
 def test_validate_port_zero() -> None:
     """Port 0 rejected."""
     port = 0
     with pytest.raises(Exception):  # noqa: B017
         validate_port(port=port)
-
 
 def test_validate_reduction_level_invalid() -> None:
     """Invalid reduction level."""
@@ -172,8 +140,8 @@ def test_validate_reduction_level_invalid() -> None:
     with pytest.raises(Exception):  # noqa: B017
         validate_token_reduction_level(level=level)
 
-
 def test_validate_reduction_level_valid() -> None:
     """Valid reduction level."""
     level = "moderate"
     _ = validate_token_reduction_level(level=level)
+

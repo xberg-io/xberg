@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: table."""
-
 from kreuzberg import extract_file_sync, ExtractionConfig
 
 
@@ -14,7 +13,6 @@ def test_table_csv_extraction() -> None:
     result = extract_file_sync(path=path)
     assert len(result.content) >= 10  # noqa: S101
 
-
 def test_table_html_extraction() -> None:
     """HTML table extraction produces markdown format."""
     path = "html/simple_table.html"
@@ -23,7 +21,6 @@ def test_table_html_extraction() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["|"])  # noqa: S101
 
-
 def test_table_xlsx_markdown() -> None:
     """XLSX extraction produces markdown table format."""
     path = "xlsx/stanley_cups.xlsx"
@@ -31,3 +28,4 @@ def test_table_xlsx_markdown() -> None:
     result = extract_file_sync(path=path, config=config)
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["|", "---"])  # noqa: S101
+

@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: chunking."""
-
 import pytest
 from kreuzberg import chunk_texts_batch, chunk_semantic, chunk_text, ExtractionConfig
 
@@ -15,14 +14,12 @@ def test_chunk_batch_basic() -> None:
     config = ExtractionConfig(max_characters=100, max_overlap=10)
     _ = chunk_texts_batch(texts=texts, config=config)
 
-
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_chunk_semantic_basic() -> None:
     """Semantic chunking that respects topic boundaries."""
     text = "First topic: Machine learning is a subset of AI. It uses data to learn patterns. Second topic: Climate change affects global temperatures. Rising sea levels are a major concern."
     config = ExtractionConfig(max_characters=200, max_overlap=20)
     _ = chunk_semantic(text=text, config=config)
-
 
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_chunk_semantic_short() -> None:
@@ -31,13 +28,11 @@ def test_chunk_semantic_short() -> None:
     config = ExtractionConfig(max_characters=1000)
     _ = chunk_semantic(text=text, config=config)
 
-
 def test_chunk_text_basic() -> None:
     """Basic text chunking with small chunk size and overlap."""
     text = "The quick brown fox jumps over the lazy dog. This is a long paragraph that should be split into multiple chunks when the chunk size is small enough. Each chunk should contain coherent text."
     config = ExtractionConfig(max_characters=50, max_overlap=10)
     _ = chunk_text(text=text, config=config)
-
 
 def test_chunk_text_large() -> None:
     """Text chunking with large chunk size to test handling of long content."""
@@ -45,13 +40,11 @@ def test_chunk_text_large() -> None:
     config = ExtractionConfig(max_characters=1000, max_overlap=10)
     _ = chunk_text(text=text, config=config)
 
-
 def test_chunk_text_no_overlap() -> None:
     """Text chunking with no overlap between chunks."""
     text = "The quick brown fox jumps over the lazy dog. This is a long paragraph that should be split into multiple chunks when the chunk size is small enough. Each chunk should contain coherent text."
     config = ExtractionConfig(max_characters=50, max_overlap=0)
     _ = chunk_text(text=text, config=config)
-
 
 def test_chunk_text_overlap_exceeds() -> None:
     """chunk_text overlap >= max."""
@@ -60,13 +53,11 @@ def test_chunk_text_overlap_exceeds() -> None:
     with pytest.raises(Exception):  # noqa: B017
         chunk_text(text=text, config=config)
 
-
 def test_chunk_text_yaml() -> None:
     """Chunk with YAML chunker."""
     text = "key1: value1\nkey2: value2\n---\nkey3: value3"
     config = ExtractionConfig(chunker_type="yaml", max_characters=50)
     _ = chunk_text(text=text, config=config)
-
 
 def test_chunk_text_zero_max() -> None:
     """chunk_text max_characters zero."""
@@ -75,9 +66,9 @@ def test_chunk_text_zero_max() -> None:
     with pytest.raises(Exception):  # noqa: B017
         chunk_text(text=text, config=config)
 
-
 def test_chunk_texts_batch_multiple() -> None:
     """Batch chunk multiple texts."""
     texts = ["First doc text.", "Second doc text."]
     config = ExtractionConfig(max_characters=100)
     _ = chunk_texts_batch(texts=texts, config=config)
+

@@ -1,0 +1,13 @@
+{
+	"id": "embedding_backend_lifecycle",
+	"category": "embedding_backend_management",
+	"description": "List/clear lifecycle for embedding backends; asserts the registry surface exists and empty-state operations are non-erroring",
+	"tags": ["embedding_backend", "plugin_management", "lifecycle"],
+	"call": "list_embedding_backends",
+	"input": {},
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	]
+}

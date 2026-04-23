@@ -4,17 +4,8 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: detection."""
-
 import pytest
-from kreuzberg import (
-    detect_image_format,
-    detect_languages,
-    detect_mime_type_from_bytes,
-    detect_mime_type,
-    detect_or_validate,
-    get_extensions_for_mime,
-    is_valid_format_field,
-)
+from kreuzberg import detect_image_format, detect_languages, detect_mime_type_from_bytes, detect_mime_type, detect_or_validate, get_extensions_for_mime, is_valid_format_field
 
 
 def test_detect_image_jpeg() -> None:
@@ -22,60 +13,50 @@ def test_detect_image_jpeg() -> None:
     data = "/9j/4AAQ"
     _ = detect_image_format(data=data)
 
-
 def test_detect_image_png() -> None:
     """Detect PNG image format."""
     data = "images/hello_world.png"
     _ = detect_image_format(data=data)
-
 
 def test_detect_lang_english() -> None:
     """Detect English language in text."""
     text = "The quick brown fox jumps over the lazy dog."
     _ = detect_languages(text=text)
 
-
 def test_detect_lang_french() -> None:
     """Detect French language in text."""
     text = "Bonjour le monde, comment allez-vous aujourd'hui?"
     _ = detect_languages(text=text)
-
 
 def test_detect_lang_mixed() -> None:
     """Detect mixed languages in text."""
     text = "Hello world. Bonjour le monde. Hallo Welt."
     _ = detect_languages(text=text)
 
-
 def test_detect_mime_bytes_html() -> None:
     """Detect HTML MIME from bytes."""
     content = "<!DOCTYPE html><html><body>Hello</body></html>"
     _ = detect_mime_type_from_bytes(content=content)
-
 
 def test_detect_mime_bytes_pdf() -> None:
     """Detect PDF MIME type from bytes."""
     content = "pdf/fake_memo.pdf"
     _ = detect_mime_type_from_bytes(content=content)
 
-
 def test_detect_mime_bytes_png() -> None:
     """Detect PNG MIME type from bytes."""
     content = "images/hello_world.png"
     _ = detect_mime_type_from_bytes(content=content)
-
 
 def test_detect_mime_docx() -> None:
     """Detect DOCX MIME type from extension."""
     path = "document.docx"
     _ = detect_mime_type(path=path)
 
-
 def test_detect_mime_html() -> None:
     """Detect HTML MIME type from extension."""
     path = "page.html"
     _ = detect_mime_type(path=path)
-
 
 def test_detect_mime_not_found() -> None:
     """detect_mime_type file not found."""
@@ -84,12 +65,10 @@ def test_detect_mime_not_found() -> None:
     with pytest.raises(Exception):  # noqa: B017
         detect_mime_type(path=path, check_exists=check_exists)
 
-
 def test_detect_mime_pdf() -> None:
     """Detect PDF MIME type from extension."""
     path = "test.pdf"
     _ = detect_mime_type(path=path)
-
 
 def test_detect_mime_unknown_ext() -> None:
     """detect_mime_type unknown extension."""
@@ -97,13 +76,11 @@ def test_detect_mime_unknown_ext() -> None:
     with pytest.raises(Exception):  # noqa: B017
         detect_mime_type(path=path)
 
-
 def test_detect_or_validate_both() -> None:
     """detect_or_validate with both."""
     path = "file.pdf"
     mime_type = "application/pdf"
     _ = detect_or_validate(path=path, mime_type=mime_type)
-
 
 def test_detect_or_validate_invalid_mime() -> None:
     """detect_or_validate unsupported MIME."""
@@ -111,24 +88,20 @@ def test_detect_or_validate_invalid_mime() -> None:
     with pytest.raises(Exception):  # noqa: B017
         detect_or_validate(mime_type=mime_type)
 
-
 def test_detect_or_validate_mime() -> None:
     """Validate known MIME."""
     mime_type = "application/pdf"
     _ = detect_or_validate(mime_type=mime_type)
-
 
 def test_detect_or_validate_neither() -> None:
     """detect_or_validate errors with no args."""
     with pytest.raises(Exception):  # noqa: B017
         detect_or_validate()
 
-
 def test_detect_or_validate_path() -> None:
     """Detect MIME from path."""
     path = "document.pdf"
     _ = detect_or_validate(path=path)
-
 
 def test_get_extensions_unknown_mime() -> None:
     """get_extensions unknown MIME."""
@@ -136,14 +109,13 @@ def test_get_extensions_unknown_mime() -> None:
     with pytest.raises(Exception):  # noqa: B017
         get_extensions_for_mime(mime_type=mime_type)
 
-
 def test_is_valid_format_field_false() -> None:
     """Invalid format field."""
     field = "nonexistent_field_xyz"
     _ = is_valid_format_field(field=field)
 
-
 def test_is_valid_format_field_true() -> None:
     """Valid format field."""
     field = "content"
     _ = is_valid_format_field(field=field)
+

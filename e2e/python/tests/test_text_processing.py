@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: text_processing."""
-
 from kreuzberg import extract_file_sync
 
 
@@ -14,9 +13,9 @@ def test_text_clean_extracted() -> None:
     result = extract_file_sync(path=path)
     assert len(result.content) >= 5  # noqa: S101
 
-
 def test_text_normalize_whitespace() -> None:
     """Extract text with whitespace normalization (no consecutive spaces)."""
     path = "pdf/fake_memo.pdf"
     result = extract_file_sync(path=path)
     assert result.content is None or "  " not in result.content  # noqa: S101
+

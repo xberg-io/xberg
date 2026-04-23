@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: format_specific."""
-
 import pytest
 from kreuzberg import extract_file_sync, extract_bytes_sync
 
@@ -15,16 +14,12 @@ def test_format_csv() -> None:
     result = extract_file_sync(path=path)
     assert len(result.content) >= 5  # noqa: S101
 
-
 def test_format_docx_standalone() -> None:
     """Standalone DOCX extraction using extract_bytes_sync."""
     data = None
-    mime_type = (
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+    mime_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     result = extract_bytes_sync(data=data, mime_type=mime_type)
     assert len(result.content) >= 20  # noqa: S101
-
 
 def test_format_email_eml() -> None:
     """Email EML file extraction using extract_file_sync."""
@@ -32,13 +27,11 @@ def test_format_email_eml() -> None:
     result = extract_file_sync(path=path)
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires password-protected test PDF with known password")
 def test_format_pdf_password() -> None:
     """Password-protected PDF extraction (skipped - requires known password)."""
     path = "pdf/password_protected.pdf"
     _ = extract_file_sync(path=path)
-
 
 def test_format_pdf_text() -> None:
     """Standalone PDF text extraction using extract_bytes_sync."""
@@ -49,15 +42,11 @@ def test_format_pdf_text() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["Mallori", "May"])  # noqa: S101
 
-
 def test_format_pptx() -> None:
     """PPTX presentation extraction using extract_bytes_sync."""
     data = None
-    mime_type = (
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    )
+    mime_type = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
     _ = extract_bytes_sync(data=data, mime_type=mime_type)
-
 
 def test_format_rtf() -> None:
     """RTF file extraction using extract_file_sync."""
@@ -65,9 +54,9 @@ def test_format_rtf() -> None:
     result = extract_file_sync(path=path)
     assert len(result.content) >= 5  # noqa: S101
 
-
 def test_format_xlsx() -> None:
     """XLSX spreadsheet extraction using extract_bytes_sync."""
     data = None
     mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     _ = extract_bytes_sync(data=data, mime_type=mime_type)
+

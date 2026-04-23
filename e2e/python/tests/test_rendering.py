@@ -4,16 +4,7 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: rendering."""
-
-from kreuzberg import (
-    convert_html_to_markdown,
-    djot_to_html,
-    render_djot,
-    render_html,
-    render_json,
-    render_markdown,
-    render_plain,
-)
+from kreuzberg import convert_html_to_markdown, djot_to_html, render_djot, render_html, render_json, render_markdown, render_plain
 
 
 def test_convert_html_basic() -> None:
@@ -23,19 +14,16 @@ def test_convert_html_basic() -> None:
     assert result.content is not None  # noqa: S101
     assert "Title" in result.content  # noqa: S101
 
-
 def test_convert_html_complex() -> None:
     """Convert complex HTML to markdown."""
     html = '<h1>Title</h1><p>Text with <strong>bold</strong> and <a href="https://example.com">link</a>.</p>'
     result = convert_html_to_markdown(html=html)
     assert len(result.content) >= 20  # noqa: S101
 
-
 def test_convert_html_empty() -> None:
     """Convert empty HTML to markdown."""
     html = ""
     _ = convert_html_to_markdown(html=html)
-
 
 def test_convert_html_table() -> None:
     """Convert HTML table to Markdown table format."""
@@ -44,13 +32,11 @@ def test_convert_html_table() -> None:
     assert result.content is not None  # noqa: S101
     assert "|" in result.content  # noqa: S101
 
-
 def test_djot_to_html_basic() -> None:
     """Convert Djot format to HTML."""
     djot = "# Title\n\nParagraph text with **bold** and *italic*.\n\n- Item 1\n- Item 2"
     result = djot_to_html(djot=djot)
     assert len(result.content) >= 10  # noqa: S101
-
 
 def test_djot_to_html_complex() -> None:
     """Complex djot to HTML."""
@@ -58,12 +44,10 @@ def test_djot_to_html_complex() -> None:
     result = djot_to_html(djot=djot)
     assert len(result.content) >= 10  # noqa: S101
 
-
 def test_djot_to_html_empty() -> None:
     """Convert empty djot to HTML."""
     djot = ""
     _ = djot_to_html(djot=djot)
-
 
 def test_render_djot_basic() -> None:
     """Render HTML document to Djot format."""
@@ -71,19 +55,16 @@ def test_render_djot_basic() -> None:
     result = render_djot(doc=doc)
     assert len(result.content) >= 5  # noqa: S101
 
-
 def test_render_djot_formatted() -> None:
     """Render HTML to djot."""
     doc = "<h2>Section</h2><p>Text with <code>code</code>.</p>"
     _ = render_djot(doc=doc)
-
 
 def test_render_html_basic() -> None:
     """Render a simple HTML document to formatted output."""
     doc = "<h1>Test Document</h1><p>This is a paragraph with some test content.</p>"
     result = render_html(doc=doc)
     assert len(result.content) >= 5  # noqa: S101
-
 
 def test_render_html_styled() -> None:
     """Render HTML preserving structure."""
@@ -92,13 +73,11 @@ def test_render_html_styled() -> None:
     assert result.content is not None  # noqa: S101
     assert "Heading" in result.content  # noqa: S101
 
-
 def test_render_json_basic() -> None:
     """Render HTML document to JSON format."""
     doc = "<h1>Structured Data</h1><p>Content for JSON rendering.</p>"
     result = render_json(doc=doc)
     assert len(result.content) >= 5  # noqa: S101
-
 
 def test_render_json_complex() -> None:
     """Render HTML to JSON."""
@@ -106,13 +85,11 @@ def test_render_json_complex() -> None:
     result = render_json(doc=doc)
     assert len(result.content) >= 5  # noqa: S101
 
-
 def test_render_markdown_basic() -> None:
     """Render HTML document to Markdown format."""
     doc = "<h1>Heading</h1><p>Paragraph text with <strong>bold</strong> and <em>italic</em>.</p>"
     result = render_markdown(doc=doc)
     assert len(result.content) >= 5  # noqa: S101
-
 
 def test_render_markdown_complex() -> None:
     """Render complex HTML to markdown."""
@@ -120,15 +97,14 @@ def test_render_markdown_complex() -> None:
     result = render_markdown(doc=doc)
     assert len(result.content) >= 10  # noqa: S101
 
-
 def test_render_plain_basic() -> None:
     """Render HTML document to plain text format."""
     doc = "<h1>Title</h1><p>Plain text rendering removes HTML tags.</p>"
     result = render_plain(doc=doc)
     assert len(result.content) >= 5  # noqa: S101
 
-
 def test_render_plain_empty() -> None:
     """Render empty HTML."""
     doc = ""
     _ = render_plain(doc=doc)
+

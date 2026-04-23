@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: render."""
-
 from kreuzberg import render_page, extract_file_sync, ExtractionConfig
 
 
@@ -16,14 +15,12 @@ def test_render_custom_dpi() -> None:
     assert result.is_png is True  # noqa: S101
     assert result.byte_length >= 50  # noqa: S101
 
-
 def test_render_high_dpi() -> None:
     """Render PDF page with high DPI setting (300 DPI)."""
     path = "pdf/fake_memo.pdf"
     page = 0
     config = ExtractionConfig(dpi=300)
     _ = render_page(path=path, page=page, config=config)
-
 
 def test_render_iterator() -> None:
     """Iterate all PDF pages as PNG images."""
@@ -33,14 +30,12 @@ def test_render_iterator() -> None:
     assert result.is_png is True  # noqa: S101
     assert result.page_count >= 1  # noqa: S101
 
-
 def test_render_multi_page() -> None:
     """Render a page from a multi-page PDF document."""
     path = "pdf/a_brief_introduction_to_neural_networks_neuronalenetze_en_zeta2_2col_dkrieselcom.pdf"
     page = 0
     result = render_page(path=path, page=page)
     assert len(result.result) >= 1000  # noqa: S101
-
 
 def test_render_output_djot() -> None:
     """Extract PDF with Djot output format."""
@@ -49,7 +44,6 @@ def test_render_output_djot() -> None:
     result = extract_file_sync(path=path, config=config)
     assert result.output_format.strip() == "djot"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 def test_render_output_html() -> None:
     """Extract PDF with HTML output format."""
@@ -60,7 +54,6 @@ def test_render_output_html() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["<", ">", "</"])  # noqa: S101
 
-
 def test_render_output_markdown() -> None:
     """Extract PDF with Markdown output format."""
     path = "pdf/fake_memo.pdf"
@@ -70,7 +63,6 @@ def test_render_output_markdown() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["#", "**", "*"])  # noqa: S101
 
-
 def test_render_output_plain() -> None:
     """Extract PDF with plain text output format."""
     path = "pdf/fake_memo.pdf"
@@ -79,7 +71,6 @@ def test_render_output_plain() -> None:
     assert result.output_format.strip() == "plain"  # noqa: S101
     assert len(result.content) >= 50  # noqa: S101
 
-
 def test_render_single_page() -> None:
     """Render a single PDF page to PNG."""
     path = "pdf/tiny.pdf"
@@ -87,3 +78,4 @@ def test_render_single_page() -> None:
     result = render_page(path=path, page=page)
     assert result.is_png is True  # noqa: S101
     assert result.byte_length >= 100  # noqa: S101
+

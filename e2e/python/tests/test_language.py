@@ -4,21 +4,18 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: language."""
-
 from kreuzberg import extract_file_sync, ExtractionConfig
 
 
 def test_lang_detect_config() -> None:
     """Language detection with specific language config."""
     path = "semantic/mixed_topics.txt"
-    config = ExtractionConfig(
-        language_detection={"enabled": True, "languages": ["en", "de", "fr"]}
-    )
+    config = ExtractionConfig(language_detection={"enabled": True, "languages": ["en", "de", "fr"]})
     _ = extract_file_sync(path=path, config=config)
-
 
 def test_lang_detect_english() -> None:
     """Language detection works on English text."""
     path = "semantic/mixed_topics.txt"
     config = ExtractionConfig(language_detection={"enabled": True})
     _ = extract_file_sync(path=path, config=config)
+

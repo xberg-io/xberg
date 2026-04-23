@@ -1,0 +1,31 @@
+{
+	"id": "config_embedding_plugin",
+	"description": "Tests EmbeddingModelType::Plugin variant deserialization in ChunkingConfig — config accepts the plugin variant shape; actual dispatch requires a host-language backend registered via register_embedding_backend at runtime",
+	"tags": ["contract", "config", "embeddings", "plugin"],
+	"call": "extract_file_sync",
+	"input": {
+		"path": "pdf/fake_memo.pdf",
+		"config": {
+			"chunking": {
+				"max_chars": 500,
+				"max_overlap": 50,
+				"embedding": {
+					"model": {
+						"type": "plugin",
+						"name": "test-plugin-backend"
+					},
+					"normalize": true,
+					"max_embed_duration_secs": 30
+				}
+			}
+		}
+	},
+	"assertions": [
+		{
+			"type": "not_error"
+		}
+	],
+	"skip": {
+		"reason": "EmbeddingModelType::Plugin requires a host-language backend registered via register_embedding_backend before dispatch; the e2e harness cannot register one. This fixture validates config round-trip (the {\"type\":\"plugin\",\"name\":...} shape is accepted by every binding's EmbeddingConfig)."
+	}
+}

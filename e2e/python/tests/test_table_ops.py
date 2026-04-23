@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: table_ops."""
-
 import pytest
 from kreuzberg import excel_to_markdown, excel_to_text
 
@@ -15,9 +14,9 @@ def test_excel_to_markdown_basic() -> None:
     with pytest.raises(Exception):  # noqa: B017
         excel_to_markdown(bytes=bytes)
 
-
 def test_excel_to_text_basic() -> None:
     """Excel bytes to text (empty error)."""
     bytes = ""
     with pytest.raises(Exception):  # noqa: B017
         excel_to_text(bytes=bytes)
+

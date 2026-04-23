@@ -4,15 +4,8 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: error."""
-
 import pytest
-from kreuzberg import (
-    extract_bytes_sync,
-    extract_file_sync,
-    extract_file,
-    render_page,
-    ExtractionConfig,
-)
+from kreuzberg import extract_bytes_sync, extract_file_sync, extract_file, render_page, ExtractionConfig
 
 
 def test_error_empty_bytes() -> None:
@@ -21,14 +14,12 @@ def test_error_empty_bytes() -> None:
     mime_type = "text/plain"
     _ = extract_bytes_sync(data=data, mime_type=mime_type)
 
-
 def test_error_empty_mime() -> None:
     """Error when extracting with empty MIME type."""
     data = "text/plain.txt"
     mime_type = ""
     with pytest.raises(Exception):  # noqa: B017
         extract_bytes_sync(data=data, mime_type=mime_type)
-
 
 def test_error_extract_bytes_conflicting_ocr() -> None:
     """extract_bytes force+disable OCR."""
@@ -38,13 +29,11 @@ def test_error_extract_bytes_conflicting_ocr() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_bytes_sync(data=data, mime_type=mime_type, config=config)
 
-
 def test_error_file_not_found() -> None:
     """Error when file does not exist (sync)."""
     path = "nonexistent/file.pdf"
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path)
-
 
 @pytest.mark.asyncio
 async def test_error_file_not_found_async() -> None:
@@ -53,16 +42,12 @@ async def test_error_file_not_found_async() -> None:
     with pytest.raises(Exception):  # noqa: B017
         await extract_file(path=path)
 
-
 def test_error_invalid_chunk_overlap() -> None:
     """Error when chunk overlap exceeds max_characters."""
     path = "pdf/fake_memo.pdf"
-    config = ExtractionConfig(
-        chunking={"max_characters": 10, "overlap_characters": 100}
-    )
+    config = ExtractionConfig(chunking={"max_characters": 10, "overlap_characters": 100})
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
-
 
 def test_error_invalid_confidence() -> None:
     """Error when OCR confidence threshold is out of range."""
@@ -71,14 +56,12 @@ def test_error_invalid_confidence() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_error_invalid_dpi() -> None:
     """Error when OCR DPI is invalid (negative)."""
     path = "pdf/fake_memo.pdf"
     config = ExtractionConfig(ocr={"dpi": -1})
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
-
 
 def test_error_invalid_mime_format() -> None:
     """Error when extracting with invalid MIME type format."""
@@ -87,7 +70,6 @@ def test_error_invalid_mime_format() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_bytes_sync(data=data, mime_type=mime_type)
 
-
 def test_error_invalid_ocr_language() -> None:
     """Error when OCR language pack is not available."""
     path = "images/balance_sheet_1.png"
@@ -95,13 +77,11 @@ def test_error_invalid_ocr_language() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_error_pdf_corrupt() -> None:
     """Error when PDF is truncated/corrupt."""
     path = "pdf/corrupt_truncated.pdf"
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path)
-
 
 def test_error_pdf_needs_password() -> None:
     """Error when password-protected PDF is accessed without password."""
@@ -109,13 +89,11 @@ def test_error_pdf_needs_password() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path)
 
-
 def test_error_pdf_page_out_of_range() -> None:
     """Graceful handling of out-of-range page extraction."""
     path = "pdf/fake_memo.pdf"
     config = ExtractionConfig(pages="999-1000")
     _ = extract_file_sync(path=path, config=config)
-
 
 def test_error_pdf_wrong_password() -> None:
     """Error when PDF password is incorrect."""
@@ -124,14 +102,12 @@ def test_error_pdf_wrong_password() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_error_render_corrupt_pdf() -> None:
     """Error when rendering page from corrupt PDF."""
     path = "pdf/corrupt_truncated.pdf"
     page = 0
     with pytest.raises(Exception):  # noqa: B017
         render_page(path=path, page=page)
-
 
 def test_error_render_invalid_page() -> None:
     """Error when rendering page number exceeds document page count."""
@@ -140,14 +116,12 @@ def test_error_render_invalid_page() -> None:
     with pytest.raises(Exception):  # noqa: B017
         render_page(path=path, page=page)
 
-
 def test_error_security_archive_files() -> None:
     """Error when archive file count exceeds security limit."""
     path = "archives/documents.zip"
     config = ExtractionConfig(security_limits={"max_files_in_archive": 0})
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
-
 
 def test_error_security_archive_size() -> None:
     """Error when archive size exceeds security limit."""
@@ -156,14 +130,12 @@ def test_error_security_archive_size() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_error_security_content_too_large() -> None:
     """Error when content exceeds security limit for max size."""
     path = "pdf/fake_memo.pdf"
     config = ExtractionConfig(security_limits={"max_content_size": 10})
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
-
 
 def test_error_security_nesting_depth() -> None:
     """Error when XML nesting depth exceeds security limit."""
@@ -172,7 +144,6 @@ def test_error_security_nesting_depth() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_error_timeout_extraction() -> None:
     """Error when extraction times out."""
     path = "pdf/large.pdf"
@@ -180,10 +151,10 @@ def test_error_timeout_extraction() -> None:
     with pytest.raises(Exception):  # noqa: B017
         extract_file_sync(path=path, config=config)
 
-
 def test_error_unsupported_mime() -> None:
     """Error when extracting with unsupported MIME type."""
     data = "text/plain.txt"
     mime_type = "application/x-nonexistent"
     with pytest.raises(Exception):  # noqa: B017
         extract_bytes_sync(data=data, mime_type=mime_type)
+

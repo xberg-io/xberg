@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: html."""
-
 import pytest
 from kreuzberg import extract_file
 
@@ -16,7 +15,6 @@ async def test_html_complex_layout() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "text/html"  # noqa: S101
     assert len(result.content) >= 1000  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_html_simple_table() -> None:
@@ -39,3 +37,4 @@ async def test_html_simple_table() -> None:
     assert "Electronics" in result.content  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert "Sample Data Table" in result.content  # noqa: S101
+

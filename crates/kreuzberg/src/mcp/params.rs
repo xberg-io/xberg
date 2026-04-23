@@ -109,6 +109,11 @@ pub struct EmbedTextParams {
     /// API key for the LLM provider (optional, falls back to env).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    /// Name of a pre-registered in-process embedding plugin backend.
+    /// When set, overrides both preset and model and dispatches to the registered callback.
+    /// Requires a prior call to `kreuzberg::plugins::register_embedding_backend`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_plugin: Option<String>,
 }
 
 /// Default schema name for structured extraction.

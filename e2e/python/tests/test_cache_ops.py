@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: cache_ops."""
-
 import pytest
 from kreuzberg import generate_cache_key, validate_cache_key
 
@@ -15,9 +14,9 @@ def test_generate_cache_key_complex() -> None:
     result = generate_cache_key(parts=parts)
     assert len(result.result) >= 5  # noqa: S101
 
-
 def test_validate_cache_key_invalid() -> None:
     """Invalid cache key."""
     key = ""
     with pytest.raises(Exception):  # noqa: B017
         validate_cache_key(key=key)
+

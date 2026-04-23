@@ -4,13 +4,8 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: batch."""
-
 import pytest
-from kreuzberg import (
-    batch_extract_bytes_sync,
-    batch_extract_file,
-    batch_extract_file_sync,
-)
+from kreuzberg import batch_extract_bytes_sync, batch_extract_file, batch_extract_file_sync
 
 
 def test_batch_bytes_invalid_mime() -> None:
@@ -18,13 +13,11 @@ def test_batch_bytes_invalid_mime() -> None:
     items = [{"data": "SGVsbG8=", "mime_type": "application/x-nonexistent"}]
     _ = batch_extract_bytes_sync(items=items)
 
-
 @pytest.mark.asyncio
 async def test_batch_file_async_basic() -> None:
     """Extract text from multiple files asynchronously."""
     paths = ["pdf/fake_memo.pdf", "text/fake_text.txt"]
     _ = await batch_extract_file(paths=paths)
-
 
 @pytest.mark.asyncio
 async def test_batch_file_async_not_found() -> None:
@@ -32,20 +25,18 @@ async def test_batch_file_async_not_found() -> None:
     paths = ["/nonexistent/a.pdf"]
     _ = await batch_extract_file(paths=paths)
 
-
 def test_batch_file_not_found() -> None:
     """batch_extract_file_sync nonexistent."""
     paths = ["/nonexistent/a.pdf", "/nonexistent/b.txt"]
     _ = batch_extract_file_sync(paths=paths)
-
 
 def test_batch_file_partial() -> None:
     """batch_extract_file_sync mixed."""
     paths = ["test_documents/text/plain.txt", "/nonexistent/missing.pdf"]
     _ = batch_extract_file_sync(paths=paths)
 
-
 def test_batch_file_sync_basic() -> None:
     """Extract text from multiple files synchronously."""
     paths = ["pdf/fake_memo.pdf", "text/fake_text.txt"]
     _ = batch_extract_file_sync(paths=paths)
+

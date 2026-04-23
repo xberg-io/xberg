@@ -687,8 +687,42 @@ fn embed_text_impl(params: super::params::EmbedTextParams) -> Result<CallToolRes
         ));
     }
 
-    // When `model` is set, use LLM-based embeddings via liter-llm
-    let (config, model_name) = if let Some(ref model) = params.model {
+    // Resolution order: embedding_plugin → model → preset.
+    let (config, model_name) = if let Some(ref plugin_name) = params.embedding_plugin {
+        if plugin_name.is_empty() {
+            return Err(rmcp::ErrorData::invalid_params(
+                "embedding_plugin must not be empty when set".to_string(),
+                None,
+            ));
+        }
+        // Pre-flight: surface unknown backends with a list of registered names
+        // (parity with the REST `embed_handler` and CLI `embed --provider plugin`).
+        let registry = crate::plugins::get_embedding_backend_registry();
+        let guard = registry.read();
+        if guard.get(plugin_name).is_err() {
+            let available = guard.list();
+            return Err(rmcp::ErrorData::invalid_params(
+                format!(
+                    "Embedding backend '{}' is not registered. Available backends: {}",
+                    plugin_name,
+                    if available.is_empty() {
+                        "(none registered)".to_string()
+                    } else {
+                        available.join(", ")
+                    }
+                ),
+                None,
+            ));
+        }
+        drop(guard);
+        let config = crate::core::config::EmbeddingConfig {
+            model: crate::core::config::EmbeddingModelType::Plugin {
+                name: plugin_name.clone(),
+            },
+            ..Default::default()
+        };
+        (config, plugin_name.clone())
+    } else if let Some(ref model) = params.model {
         let llm_config = crate::core::config::llm::LlmConfig {
             model: model.clone(),
             api_key: params.api_key.clone(),

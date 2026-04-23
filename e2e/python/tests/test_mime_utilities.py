@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: mime_utilities."""
-
 import pytest
 from kreuzberg import extract_file, get_extensions_for_mime, list_supported_formats
 
@@ -16,14 +15,12 @@ async def test_mime_detect_bytes() -> None:
     result = await extract_file(path=path)
     assert "pdf" in result.result  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_mime_detect_image() -> None:
     """Detect MIME type from PNG image bytes."""
     path = ""
     result = await extract_file(path=path)
     assert "png" in result.result  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_mime_detect_path() -> None:
@@ -32,14 +29,13 @@ async def test_mime_detect_path() -> None:
     result = await extract_file(path=path)
     assert "text" in result.result  # noqa: S101
 
-
 def test_mime_get_extensions() -> None:
     """Get file extensions for a MIME type."""
     mime_type = ""
     result = get_extensions_for_mime(mime_type=mime_type)
     assert "pdf" in result.result  # noqa: S101
 
-
 def test_mime_list_supported() -> None:
     """List all supported MIME types and file extensions."""
     _ = list_supported_formats()
+

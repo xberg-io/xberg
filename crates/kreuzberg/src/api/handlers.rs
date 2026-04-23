@@ -446,6 +446,25 @@ pub(crate) async fn embed_handler(JsonApi(request): JsonApi<EmbedRequest>) -> Re
         ))));
     }
 
+    // Validate plugin name if model type is Plugin so unknown backends surface as 422
+    // (parity with Preset above) instead of routing through dispatch and producing 500.
+    if let crate::core::config::EmbeddingModelType::Plugin { ref name } = config.model {
+        let registry = crate::plugins::get_embedding_backend_registry();
+        let guard = registry.read();
+        if guard.get(name).is_err() {
+            let available = guard.list();
+            return Err(ApiError::validation(crate::error::KreuzbergError::validation(format!(
+                "Unknown embedding backend '{}'. Available: {}",
+                name,
+                if available.is_empty() {
+                    "(none registered)".to_string()
+                } else {
+                    available.join(", ")
+                }
+            ))));
+        }
+    }
+
     // Generate embeddings directly
     let text_count = request.texts.len();
     let embeddings = crate::embed_texts_async(request.texts, &config)
@@ -459,6 +478,7 @@ pub(crate) async fn embed_handler(JsonApi(request): JsonApi<EmbedRequest>) -> Re
         crate::core::config::EmbeddingModelType::Preset { name } => name.clone(),
         crate::core::config::EmbeddingModelType::Custom { model_id, .. } => model_id.clone(),
         crate::core::config::EmbeddingModelType::Llm { llm } => llm.model.clone(),
+        crate::core::config::EmbeddingModelType::Plugin { name } => name.clone(),
     };
 
     #[cfg(feature = "otel")]

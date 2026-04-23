@@ -4,28 +4,16 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: embeddings."""
-
 import pytest
 from kreuzberg import extract_file, extract_file_sync, ExtractionConfig
 
 
-@pytest.mark.skip(
-    reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows"
-)
+@pytest.mark.skip(reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows")
 @pytest.mark.asyncio
 async def test_embedding_async() -> None:
     """Tests embedding generation via async extraction path."""
     path = "pdf/fake_memo.pdf"
-    config = ExtractionConfig(
-        chunking={
-            "embedding": {
-                "model": {"name": "balanced", "type": "preset"},
-                "normalize": True,
-            },
-            "max_chars": 500,
-            "max_overlap": 50,
-        }
-    )
+    config = ExtractionConfig(chunking={"embedding": {"model": {"name": "balanced", "type": "preset"}, "normalize": True}, "max_chars": 500, "max_overlap": 50})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
@@ -33,30 +21,17 @@ async def test_embedding_async() -> None:
     assert result.chunks_have_embeddings is True  # noqa: S101
     assert result.chunks_have_content is True  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows"
-)
+@pytest.mark.skip(reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows")
 def test_embedding_balanced_preset() -> None:
     """Tests embedding generation with balanced preset model via chunking."""
     path = "pdf/fake_memo.pdf"
-    config = ExtractionConfig(
-        chunking={
-            "embedding": {
-                "model": {"name": "balanced", "type": "preset"},
-                "normalize": True,
-            },
-            "max_chars": 500,
-            "max_overlap": 50,
-        }
-    )
+    config = ExtractionConfig(chunking={"embedding": {"model": {"name": "balanced", "type": "preset"}, "normalize": True}, "max_chars": 500, "max_overlap": 50})
     result = extract_file_sync(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
     assert len(result.chunks) >= 1  # noqa: S101
     assert result.chunks_have_embeddings is True  # noqa: S101
     assert result.chunks_have_content is True  # noqa: S101
-
 
 def test_embedding_disabled() -> None:
     """Tests chunking without embeddings - chunks should not have embedding vectors."""
@@ -68,26 +43,15 @@ def test_embedding_disabled() -> None:
     assert len(result.chunks) >= 1  # noqa: S101
     assert result.chunks_have_content is True  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows"
-)
+@pytest.mark.skip(reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows")
 def test_embedding_fast_preset() -> None:
     """Tests embedding generation with fast preset model."""
     path = "pdf/fake_memo.pdf"
-    config = ExtractionConfig(
-        chunking={
-            "embedding": {
-                "model": {"name": "fast", "type": "preset"},
-                "normalize": True,
-            },
-            "max_chars": 500,
-            "max_overlap": 50,
-        }
-    )
+    config = ExtractionConfig(chunking={"embedding": {"model": {"name": "fast", "type": "preset"}, "normalize": True}, "max_chars": 500, "max_overlap": 50})
     result = extract_file_sync(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
     assert len(result.chunks) >= 1  # noqa: S101
     assert result.chunks_have_embeddings is True  # noqa: S101
     assert result.chunks_have_content is True  # noqa: S101
+

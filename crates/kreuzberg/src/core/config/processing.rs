@@ -358,6 +358,20 @@ pub struct EmbeddingConfig {
     /// is used for inference. Defaults to `None` (auto-select per platform).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acceleration: Option<super::acceleration::AccelerationConfig>,
+
+    /// Maximum wall-clock duration (in seconds) for a single `embed()` call when
+    /// using [`EmbeddingModelType::Plugin`].
+    ///
+    /// Applies only to the in-process plugin path — protects against hung
+    /// host-language backends (e.g. a Python callback deadlocked on the GIL,
+    /// a model stuck on CUDA OOM retries, etc.). On timeout, the dispatcher
+    /// returns [`crate::KreuzbergError::Plugin`] instead of blocking forever.
+    ///
+    /// `None` disables the timeout. The default (60 seconds) is conservative
+    /// for common in-process inference; increase for large batches on slow
+    /// hardware.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_embed_duration_secs: Option<u64>,
 }
 
 impl Default for EmbeddingConfig {
@@ -371,6 +385,7 @@ impl Default for EmbeddingConfig {
             show_download_progress: false,
             cache_dir: None,
             acceleration: None,
+            max_embed_duration_secs: Some(60),
         }
     }
 }
@@ -390,6 +405,27 @@ pub enum EmbeddingModelType {
     /// Uses the model specified in the nested `LlmConfig` (e.g.,
     /// `"openai/text-embedding-3-small"`).
     Llm { llm: super::llm::LlmConfig },
+
+    /// In-process embedding backend registered via the plugin system.
+    ///
+    /// The caller registers an [`EmbeddingBackend`](crate::plugins::EmbeddingBackend) once
+    /// (e.g. a wrapper around an already-loaded `llama-cpp-python`, `sentence-transformers`,
+    /// or tuned ONNX model), then references it by name in config. Kreuzberg calls back
+    /// into the registered backend during chunking and standalone embed requests —
+    /// no HuggingFace download, no ONNX Runtime requirement, no HTTP sidecar.
+    ///
+    /// When this variant is selected, only the following [`EmbeddingConfig`] fields
+    /// apply: `normalize` (post-call L2 normalization) and `max_embed_duration_secs`
+    /// (dispatcher timeout). Model-loading fields (`batch_size`, `cache_dir`,
+    /// `show_download_progress`, `acceleration`) are ignored — the host owns the
+    /// model lifecycle.
+    ///
+    /// Semantic chunking falls back to [`ChunkingConfig::max_characters`] when this variant
+    /// is used, since there is no preset to look a chunk-size ceiling up against — size your
+    /// context window via `max_characters` directly.
+    ///
+    /// See [`crate::plugins::register_embedding_backend`].
+    Plugin { name: String },
 }
 
 impl Default for EmbeddingModelType {
@@ -541,6 +577,7 @@ mod tests {
             show_download_progress: false,
             cache_dir: None,
             acceleration: None,
+            max_embed_duration_secs: Some(60),
         };
 
         let json = serde_json::to_string(&config).unwrap();
@@ -696,6 +733,32 @@ mod tests {
                 assert_eq!(dimensions, 512);
             }
             _ => panic!("Expected Custom variant"),
+        }
+    }
+
+    #[test]
+    fn test_embedding_model_type_plugin_roundtrip() {
+        let model = EmbeddingModelType::Plugin {
+            name: "lilbee-llamacpp".to_string(),
+        };
+        let json = serde_json::to_string(&model).unwrap();
+        assert!(json.contains("\"type\":\"plugin\""));
+        assert!(json.contains("lilbee-llamacpp"));
+
+        let deserialized: EmbeddingModelType = serde_json::from_str(&json).unwrap();
+        match deserialized {
+            EmbeddingModelType::Plugin { name } => assert_eq!(name, "lilbee-llamacpp"),
+            _ => panic!("Expected Plugin variant"),
+        }
+    }
+
+    #[test]
+    fn test_embedding_model_type_plugin_deserialization() {
+        let json = r#"{"type": "plugin", "name": "my-embedder"}"#;
+        let model: EmbeddingModelType = serde_json::from_str(json).unwrap();
+        match model {
+            EmbeddingModelType::Plugin { name } => assert_eq!(name, "my-embedder"),
+            _ => panic!("Expected Plugin variant"),
         }
     }
 }

@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: keyword_extra."""
-
 import pytest
 from kreuzberg import extract_keywords, ExtractionConfig
 
@@ -15,13 +14,11 @@ def test_keywords_basic() -> None:
     text = "Machine learning and artificial intelligence are transforming how we process natural language. Deep learning models can extract meaningful keywords from text documents."
     _ = extract_keywords(text=text)
 
-
 @pytest.mark.skip(reason="Requires features: keywords-rake")
 def test_keywords_short() -> None:
     """Keyword extraction from shorter text."""
     text = "Python programming language features."
     _ = extract_keywords(text=text)
-
 
 @pytest.mark.skip(reason="Requires features: keywords-rake")
 def test_keywords_with_config() -> None:
@@ -29,3 +26,4 @@ def test_keywords_with_config() -> None:
     text = "The United States of America is a large country. Machine learning is used for natural language processing and computer vision tasks."
     config = ExtractionConfig(max_keywords=5)
     _ = extract_keywords(text=text, config=config)
+

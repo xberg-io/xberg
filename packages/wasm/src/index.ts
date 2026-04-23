@@ -269,5 +269,5 @@ export {
   validateTesseractPsm,
   validateTokenReductionLevel,
   validateUploadSize,
-  warmModel,
-} from "./wasm";
+  warmModel
+} from './wasm';

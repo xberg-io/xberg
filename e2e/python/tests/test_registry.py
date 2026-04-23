@@ -4,30 +4,22 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: registry."""
-
-from kreuzberg import (
-    list_document_extractors,
-    list_ocr_backends,
-    list_post_processors,
-    list_validators,
-)
+from kreuzberg import list_document_extractors, list_ocr_backends, list_post_processors, list_validators
 
 
 def test_list_document_extractors() -> None:
     """List document extractors."""
     _ = list_document_extractors()
 
-
 def test_list_ocr_backends() -> None:
     """List OCR backends."""
     _ = list_ocr_backends()
-
 
 def test_list_post_processors() -> None:
     """List post-processors."""
     _ = list_post_processors()
 
-
 def test_list_validators() -> None:
     """List validators."""
     _ = list_validators()
+

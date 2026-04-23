@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: image."""
-
 import pytest
 from kreuzberg import extract_file, ExtractionConfig
 
@@ -18,7 +17,6 @@ async def test_image_bmp_basic() -> None:
     assert result.mime_type.strip() == "image/bmp"  # noqa: S101
     assert result.content  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: tesseract")
 @pytest.mark.asyncio
 async def test_image_gif_basic() -> None:
@@ -27,7 +25,6 @@ async def test_image_gif_basic() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "image/gif"  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: tesseract")
 @pytest.mark.asyncio
@@ -38,7 +35,6 @@ async def test_image_jp2_basic() -> None:
     assert any(v in result.mime_type for v in ["image/jp2", "image/jpeg2000"])  # noqa: S101
     assert result.content  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_image_metadata_only() -> None:
     """JPEG image to validate metadata extraction without OCR."""
@@ -48,18 +44,14 @@ async def test_image_metadata_only() -> None:
     assert result.mime_type.strip() == "image/jpeg"  # noqa: S101
     assert len(result.content) <= 200  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: tesseract")
 @pytest.mark.asyncio
 async def test_image_pbm_basic() -> None:
     """PBM (portable bitmap) image extraction via OCR."""
     path = "images_extra/ocr_image.pbm"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type for v in ["image/x-portable-bitmap", "image/x-pbm"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["image/x-portable-bitmap", "image/x-pbm"])  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: tesseract")
 @pytest.mark.asyncio
@@ -67,11 +59,8 @@ async def test_image_pgm_basic() -> None:
     """PGM (portable graymap) image extraction via OCR."""
     path = "images_extra/ocr_image.pgm"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type for v in ["image/x-portable-graymap", "image/x-pgm"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["image/x-portable-graymap", "image/x-pgm"])  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: tesseract")
 @pytest.mark.asyncio
@@ -79,11 +68,8 @@ async def test_image_ppm_basic() -> None:
     """PPM (portable pixmap) image extraction via OCR."""
     path = "images_extra/ocr_image.ppm"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type for v in ["image/x-portable-pixmap", "image/x-ppm"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["image/x-portable-pixmap", "image/x-ppm"])  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_image_svg_basic() -> None:
@@ -92,7 +78,6 @@ async def test_image_svg_basic() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "image/svg+xml"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: tesseract")
 @pytest.mark.asyncio
@@ -103,7 +88,6 @@ async def test_image_tiff_basic() -> None:
     assert result.mime_type.strip() == "image/tiff"  # noqa: S101
     assert result.content  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: tesseract")
 @pytest.mark.asyncio
 async def test_image_webp_basic() -> None:
@@ -112,3 +96,4 @@ async def test_image_webp_basic() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "image/webp"  # noqa: S101
     assert result.content  # noqa: S101
+

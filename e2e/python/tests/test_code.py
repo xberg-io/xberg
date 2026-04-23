@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: code."""
-
 import pytest
 from kreuzberg import extract_file, extract_bytes_sync, ExtractionConfig
 
@@ -24,7 +23,6 @@ async def test_code_javascript_basic() -> None:
     assert result.content is not None  # noqa: S101
     assert "import" in result.content  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: tree-sitter")
 @pytest.mark.asyncio
 async def test_code_python_basic() -> None:
@@ -39,7 +37,6 @@ async def test_code_python_basic() -> None:
     assert "class Greeter" in result.content  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert "import os" in result.content  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: tree-sitter")
 @pytest.mark.asyncio
@@ -56,7 +53,6 @@ async def test_code_rust_basic() -> None:
     assert result.content is not None  # noqa: S101
     assert "HashMap" in result.content  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: tree-sitter")
 def test_code_shebang_detection() -> None:
     """Test language detection from shebang line via bytes input."""
@@ -70,23 +66,12 @@ def test_code_shebang_detection() -> None:
     assert result.content is not None  # noqa: S101
     assert "clean" in result.content  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: tree-sitter")
 @pytest.mark.asyncio
 async def test_code_tree_sitter_config() -> None:
     """Test tree-sitter config with structure, comments, and docstrings enabled."""
     path = "code/hello.py"
-    config = ExtractionConfig(
-        tree_sitter={
-            "process": {
-                "comments": True,
-                "docstrings": True,
-                "exports": True,
-                "imports": True,
-                "structure": True,
-            }
-        }
-    )
+    config = ExtractionConfig(tree_sitter={"process": {"comments": True, "docstrings": True, "exports": True, "imports": True, "structure": True}})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "text/x-source-code"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
@@ -94,3 +79,4 @@ async def test_code_tree_sitter_config() -> None:
     assert "def greet" in result.content  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert "class Greeter" in result.content  # noqa: S101
+

@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: string_utils."""
-
 from kreuzberg import camel_to_snake, sanitize_filename, sanitize_path, snake_to_camel
 
 
@@ -14,13 +13,11 @@ def test_camel_to_snake_basic() -> None:
     result = camel_to_snake(text=text)
     assert result.result.strip() == "my_variable_name"  # noqa: S101
 
-
 def test_camel_to_snake_single() -> None:
     """Convert single word (no camelCase) remains unchanged."""
     text = "hello"
     result = camel_to_snake(text=text)
     assert result.result.strip() == "hello"  # noqa: S101
-
 
 def test_sanitize_filename_basic() -> None:
     """Sanitize path traversal attempts in filename."""
@@ -28,13 +25,11 @@ def test_sanitize_filename_basic() -> None:
     result = sanitize_filename(filename=filename)
     assert len(result.result) >= 1  # noqa: S101
 
-
 def test_sanitize_filename_special() -> None:
     """Sanitize special characters in filename."""
     filename = "file<>name|test.pdf"
     result = sanitize_filename(filename=filename)
     assert len(result.result) >= 1  # noqa: S101
-
 
 def test_sanitize_path_basic() -> None:
     """Sanitize path traversal in file path."""
@@ -42,18 +37,15 @@ def test_sanitize_path_basic() -> None:
     result = sanitize_path(path=path)
     assert len(result.result) >= 1  # noqa: S101
 
-
 def test_sanitize_path_spaces() -> None:
     """Sanitize path with spaces."""
     path = "my folder/file.txt"
     _ = sanitize_path(path=path)
 
-
 def test_sanitize_path_traversal() -> None:
     """Sanitize path traversal."""
     path = "../../../etc/passwd"
     _ = sanitize_path(path=path)
-
 
 def test_snake_to_camel_basic() -> None:
     """Convert snake_case to camelCase."""
@@ -61,9 +53,9 @@ def test_snake_to_camel_basic() -> None:
     result = snake_to_camel(text=text)
     assert result.result.strip() == "myVariableName"  # noqa: S101
 
-
 def test_snake_to_camel_single() -> None:
     """Convert single word remains unchanged."""
     text = "hello"
     result = snake_to_camel(text=text)
     assert result.result.strip() == "hello"  # noqa: S101
+

@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: image_ops."""
-
 from kreuzberg import calculate_optimal_dpi
 
 
@@ -15,10 +14,10 @@ def test_calculate_dpi_large() -> None:
     target_size_mb = 0.5
     _ = calculate_optimal_dpi(width=width, height=height, target_size_mb=target_size_mb)
 
-
 def test_calculate_dpi_small() -> None:
     """DPI for small image."""
     width = 100
     height = 100
     target_size_mb = 1.0
     _ = calculate_optimal_dpi(width=width, height=height, target_size_mb=target_size_mb)
+

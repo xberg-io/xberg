@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: parsing."""
-
 from kreuzberg import extract_file_sync
 
 
@@ -14,13 +13,11 @@ def test_parse_json() -> None:
     result = extract_file_sync(path=path)
     assert len(result.content) >= 5  # noqa: S101
 
-
 def test_parse_toml() -> None:
     """Parse TOML document format."""
     path = "data_formats/cargo.toml"
     result = extract_file_sync(path=path)
     assert len(result.content) >= 5  # noqa: S101
-
 
 def test_parse_xml() -> None:
     """Parse XML document format."""
@@ -28,9 +25,9 @@ def test_parse_xml() -> None:
     result = extract_file_sync(path=path)
     assert len(result.content) >= 5  # noqa: S101
 
-
 def test_parse_yaml() -> None:
     """Parse YAML document format."""
     path = "test_fixtures/config.yaml"
     result = extract_file_sync(path=path)
     assert len(result.content) >= 5  # noqa: S101
+

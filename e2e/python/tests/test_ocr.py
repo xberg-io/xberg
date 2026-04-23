@@ -4,78 +4,48 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: ocr."""
-
 import pytest
 from kreuzberg import extract_file, ExtractionConfig
 
 
-@pytest.mark.skip(
-    reason="Requires features: tesseract; Requires Tesseract OCR for image text extraction."
-)
+@pytest.mark.skip(reason="Requires features: tesseract; Requires Tesseract OCR for image text extraction.")
 @pytest.mark.asyncio
 async def test_ocr_image_hello_world() -> None:
     """PNG image with visible English text for OCR validation."""
     path = "images/test_hello_world.png"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "tesseract", "language": "eng"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "tesseract", "language": "eng"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["hello", "world"])  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: tesseract; Skip when Tesseract is unavailable."
-)
+@pytest.mark.skip(reason="Requires features: tesseract; Skip when Tesseract is unavailable.")
 @pytest.mark.asyncio
 async def test_ocr_image_no_text() -> None:
     """Image with no text to ensure OCR handles empty results gracefully."""
     path = "images/flower_no_text.jpg"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "tesseract", "language": "eng"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "tesseract", "language": "eng"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/jpeg"  # noqa: S101
     assert len(result.content) <= 300  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Tests confidence threshold filtering with PaddleOCR"
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Tests confidence threshold filtering with PaddleOCR")
 @pytest.mark.asyncio
 async def test_ocr_paddle_confidence_filter() -> None:
     """PaddleOCR with minimum confidence threshold filtering."""
     path = "images/ocr_image.jpg"
-    config = ExtractionConfig(
-        force_ocr=True,
-        ocr={
-            "backend": "paddle-ocr",
-            "language": "en",
-            "paddle_ocr_config": {"min_confidence": 80.0},
-        },
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "language": "en", "paddle_ocr_config": {"min_confidence": 80.0}})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/jpeg"  # noqa: S101
     assert len(result.content) >= 1  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Requires PaddleOCR with ONNX Runtime"
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Requires PaddleOCR with ONNX Runtime")
 @pytest.mark.asyncio
 async def test_ocr_paddle_element_hierarchy() -> None:
     """Tests PaddleOCR with element hierarchy building enabled."""
     path = "images/test_hello_world.png"
-    config = ExtractionConfig(
-        force_ocr=True,
-        ocr={
-            "backend": "paddle-ocr",
-            "element_config": {"build_hierarchy": True, "include_elements": True},
-            "language": "en",
-        },
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "element_config": {"build_hierarchy": True, "include_elements": True}, "language": "en"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
@@ -83,22 +53,12 @@ async def test_ocr_paddle_element_hierarchy() -> None:
     assert result.ocr_elements_have_geometry is True  # noqa: S101
     assert result.ocr_elements_have_confidence is True  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Requires PaddleOCR with ONNX Runtime"
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Requires PaddleOCR with ONNX Runtime")
 @pytest.mark.asyncio
 async def test_ocr_paddle_element_levels() -> None:
     """Tests PaddleOCR with word-level element extraction."""
     path = "images/test_hello_world.png"
-    config = ExtractionConfig(
-        force_ocr=True,
-        ocr={
-            "backend": "paddle-ocr",
-            "element_config": {"include_elements": True, "min_level": "word"},
-            "language": "en",
-        },
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "element_config": {"include_elements": True, "min_level": "word"}, "language": "en"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
@@ -106,93 +66,58 @@ async def test_ocr_paddle_element_levels() -> None:
     assert len(result.ocr_elements) >= 1  # noqa: S101
     assert result.ocr_elements_have_geometry is True  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Requires PaddleOCR with Chinese models"
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Requires PaddleOCR with Chinese models")
 @pytest.mark.asyncio
 async def test_ocr_paddle_image_chinese() -> None:
     """Chinese OCR with PaddleOCR - its core strength."""
     path = "images/chi_sim_image.jpeg"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "paddle-ocr", "language": "ch"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "language": "ch"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/jpeg"  # noqa: S101
     assert len(result.content) >= 1  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Requires PaddleOCR with ONNX Runtime"
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Requires PaddleOCR with ONNX Runtime")
 @pytest.mark.asyncio
 async def test_ocr_paddle_image_english() -> None:
     """Simple English image OCR with PaddleOCR backend."""
     path = "images/test_hello_world.png"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "paddle-ocr", "language": "en"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "language": "en"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["hello", "Hello", "world", "World"])  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Tests markdown output format parity with Tesseract"
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Tests markdown output format parity with Tesseract")
 @pytest.mark.asyncio
 async def test_ocr_paddle_markdown() -> None:
     """PaddleOCR with markdown output format."""
     path = "images/test_hello_world.png"
-    config = ExtractionConfig(
-        force_ocr=True,
-        ocr={
-            "backend": "paddle-ocr",
-            "language": "en",
-            "paddle_ocr_config": {"output_format": "markdown"},
-        },
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "language": "en", "paddle_ocr_config": {"output_format": "markdown"}})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["hello", "Hello", "world", "World"])  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Requires PaddleOCR with ONNX Runtime"
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Requires PaddleOCR with ONNX Runtime")
 @pytest.mark.asyncio
 async def test_ocr_paddle_pdf_scanned() -> None:
     """Scanned PDF requires PaddleOCR to extract text."""
     path = "pdf/ocr_test.pdf"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "paddle-ocr", "language": "en"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "language": "en"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["Docling", "Markdown", "JSON"])  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Tests structured output with bbox/confidence preservation"
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Tests structured output with bbox/confidence preservation")
 @pytest.mark.asyncio
 async def test_ocr_paddle_structured() -> None:
     """PaddleOCR with structured output preserving all metadata."""
     path = "images/test_hello_world.png"
-    config = ExtractionConfig(
-        force_ocr=True,
-        ocr={
-            "backend": "paddle-ocr",
-            "element_config": {"include_elements": True},
-            "language": "en",
-        },
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "element_config": {"include_elements": True}, "language": "en"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
@@ -200,91 +125,57 @@ async def test_ocr_paddle_structured() -> None:
     assert result.ocr_elements_have_geometry is True  # noqa: S101
     assert result.ocr_elements_have_confidence is True  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: paddle-ocr; Skip on platforms: aarch64-unknown-linux-gnu; Tests table detection capability with PaddleOCR. ONNX Runtime model loading unstable on ARM Linux."
-)
+@pytest.mark.skip(reason="Requires features: paddle-ocr; Skip on platforms: aarch64-unknown-linux-gnu; Tests table detection capability with PaddleOCR. ONNX Runtime model loading unstable on ARM Linux.")
 @pytest.mark.asyncio
 async def test_ocr_paddle_table_detection() -> None:
     """Table detection and extraction with PaddleOCR."""
     path = "images/simple_table.png"
-    config = ExtractionConfig(
-        force_ocr=True,
-        ocr={
-            "backend": "paddle-ocr",
-            "language": "en",
-            "paddle_ocr_config": {"enable_table_detection": True},
-        },
-        output_format="markdown",
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "paddle-ocr", "language": "en", "paddle_ocr_config": {"enable_table_detection": True}}, output_format="markdown")
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["Product", "Apple", "Banana", "Orange"])  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: tesseract; Requires Tesseract OCR with German language data."
-)
+@pytest.mark.skip(reason="Requires features: tesseract; Requires Tesseract OCR with German language data.")
 @pytest.mark.asyncio
 async def test_ocr_pdf_image_only_german() -> None:
     """Image-only German PDF requiring OCR to extract text."""
     path = "pdf/image_only_german_pdf.pdf"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "tesseract", "language": "deu"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "tesseract", "language": "deu"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
     assert result.metadata.format_type.strip() == "pdf"  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: tesseract; Skip automatically when OCR backend is missing."
-)
+@pytest.mark.skip(reason="Requires features: tesseract; Skip automatically when OCR backend is missing.")
 @pytest.mark.asyncio
 async def test_ocr_pdf_rotated_90() -> None:
     """Rotated page PDF requiring OCR to verify orientation handling."""
     path = "pdf/ocr_test_rotated_90.pdf"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "tesseract", "language": "eng"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "tesseract", "language": "eng"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: tesseract; Skip automatically if OCR backend is unavailable."
-)
+@pytest.mark.skip(reason="Requires features: tesseract; Skip automatically if OCR backend is unavailable.")
 @pytest.mark.asyncio
 async def test_ocr_pdf_tesseract() -> None:
     """Scanned PDF requires OCR to extract text."""
     path = "pdf/ocr_test.pdf"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "tesseract", "language": "eng"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "tesseract", "language": "eng"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["Docling", "Markdown", "JSON"])  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: tesseract; Requires Tesseract OCR backend")
 @pytest.mark.asyncio
 async def test_ocr_tesseract_elements() -> None:
     """Tests Tesseract OCR with element-level structured output including geometry."""
     path = "images/test_hello_world.png"
-    config = ExtractionConfig(
-        force_ocr=True,
-        ocr={
-            "backend": "tesseract",
-            "element_config": {"include_elements": True},
-            "language": "eng",
-        },
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "tesseract", "element_config": {"include_elements": True}, "language": "eng"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
@@ -292,37 +183,25 @@ async def test_ocr_tesseract_elements() -> None:
     assert result.ocr_elements_have_geometry is True  # noqa: S101
     assert result.ocr_elements_have_confidence is True  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: tesseract; Requires Tesseract OCR backend")
 @pytest.mark.asyncio
 async def test_ocr_tesseract_elements_min_count() -> None:
     """Tests Tesseract OCR element output with min_count assertion."""
     path = "images/test_hello_world.png"
-    config = ExtractionConfig(
-        force_ocr=True,
-        ocr={
-            "backend": "tesseract",
-            "element_config": {"include_elements": True, "min_level": "line"},
-            "language": "eng",
-        },
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "tesseract", "element_config": {"include_elements": True, "min_level": "line"}, "language": "eng"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "image/png"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
     assert result.ocr_elements  # noqa: S101
     assert len(result.ocr_elements) >= 1  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: tesseract; Requires Tesseract OCR with German language data (deu)"
-)
+@pytest.mark.skip(reason="Requires features: tesseract; Requires Tesseract OCR with German language data (deu)")
 @pytest.mark.asyncio
 async def test_ocr_tesseract_language_german() -> None:
     """Tests Tesseract OCR with German language configuration."""
     path = "pdf/image_only_german_pdf.pdf"
-    config = ExtractionConfig(
-        force_ocr=True, ocr={"backend": "tesseract", "language": "deu"}
-    )
+    config = ExtractionConfig(force_ocr=True, ocr={"backend": "tesseract", "language": "deu"})
     result = await extract_file(path=path, config=config)
     assert result.mime_type.strip() == "application/pdf"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
+

@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: markup."""
-
 from kreuzberg import bold, code, italic, link, strikethrough, underline
 
 
@@ -14,12 +13,10 @@ def test_bold_basic() -> None:
     result = bold(text=text)
     assert "important" in result.result  # noqa: S101
 
-
 def test_bold_empty() -> None:
     """Bold empty string."""
     text = ""
     _ = bold(text=text)
-
 
 def test_bold_special_chars() -> None:
     """Bold special chars."""
@@ -27,19 +24,16 @@ def test_bold_special_chars() -> None:
     result = bold(text=text)
     assert "hello" in result.result  # noqa: S101
 
-
 def test_code_basic() -> None:
     """Create inline code formatting."""
     text = "variable"
     result = code(text=text)
     assert "variable" in result.result  # noqa: S101
 
-
 def test_code_multiline() -> None:
     """Code multiline."""
     text = "line1\nline2"
     _ = code(text=text)
-
 
 def test_italic_basic() -> None:
     """Create italic markdown formatting."""
@@ -47,18 +41,15 @@ def test_italic_basic() -> None:
     result = italic(text=text)
     assert "emphasis" in result.result  # noqa: S101
 
-
 def test_italic_empty() -> None:
     """Italic empty string."""
     text = ""
     _ = italic(text=text)
 
-
 def test_italic_special_chars() -> None:
     """Italic special chars."""
     text = "emphasized *text*"
     _ = italic(text=text)
-
 
 def test_link_basic() -> None:
     """Create markdown link with text and URL."""
@@ -68,7 +59,6 @@ def test_link_basic() -> None:
     assert "Click here" in result.result  # noqa: S101
     assert "example.com" in result.result  # noqa: S101
 
-
 def test_link_empty_text() -> None:
     """Create markdown link with empty text."""
     text = ""
@@ -76,13 +66,11 @@ def test_link_empty_text() -> None:
     result = link(text=text, url=url)
     assert "example.com" in result.result  # noqa: S101
 
-
 def test_link_special_url() -> None:
     """Link with query params."""
     text = "click"
     url = "https://example.com?q=1&b=2"
     _ = link(text=text, url=url)
-
 
 def test_strikethrough_basic() -> None:
     """Create strikethrough formatting."""
@@ -90,12 +78,10 @@ def test_strikethrough_basic() -> None:
     result = strikethrough(text=text)
     assert "deleted" in result.result  # noqa: S101
 
-
 def test_strikethrough_empty() -> None:
     """Strikethrough empty."""
     text = ""
     _ = strikethrough(text=text)
-
 
 def test_underline_basic() -> None:
     """Create underline formatting."""
@@ -103,8 +89,8 @@ def test_underline_basic() -> None:
     result = underline(text=text)
     assert "underlined" in result.result  # noqa: S101
 
-
 def test_underline_empty() -> None:
     """Underline empty."""
     text = ""
     _ = underline(text=text)
+

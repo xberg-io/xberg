@@ -4,12 +4,14 @@
 //! Each plugin type (OcrBackend, DocumentExtractor, etc.) has its own registry
 //! with type-safe registration and lookup.
 
+mod embedding;
 mod extractor;
 mod ocr;
 mod processor;
 mod renderer;
 mod validator;
 
+pub use embedding::EmbeddingBackendRegistry;
 pub use extractor::DocumentExtractorRegistry;
 pub use ocr::OcrBackendRegistry;
 pub use processor::PostProcessorRegistry;
@@ -54,6 +56,10 @@ pub(super) fn validate_plugin_name(name: &str) -> Result<()> {
 pub static OCR_BACKEND_REGISTRY: LazyLock<Arc<RwLock<OcrBackendRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(OcrBackendRegistry::new())));
 
+/// Global embedding backend registry singleton.
+pub static EMBEDDING_BACKEND_REGISTRY: LazyLock<Arc<RwLock<EmbeddingBackendRegistry>>> =
+    LazyLock::new(|| Arc::new(RwLock::new(EmbeddingBackendRegistry::new())));
+
 /// Global document extractor registry singleton.
 pub static DOCUMENT_EXTRACTOR_REGISTRY: LazyLock<Arc<RwLock<DocumentExtractorRegistry>>> =
     LazyLock::new(|| Arc::new(RwLock::new(DocumentExtractorRegistry::new())));
@@ -73,6 +79,11 @@ pub static RENDERER_REGISTRY: LazyLock<Arc<RwLock<RendererRegistry>>> =
 /// Get the global OCR backend registry.
 pub fn get_ocr_backend_registry() -> Arc<RwLock<OcrBackendRegistry>> {
     OCR_BACKEND_REGISTRY.clone()
+}
+
+/// Get the global embedding backend registry.
+pub fn get_embedding_backend_registry() -> Arc<RwLock<EmbeddingBackendRegistry>> {
+    EMBEDDING_BACKEND_REGISTRY.clone()
 }
 
 /// Get the global document extractor registry.

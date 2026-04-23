@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: post_processor_management."""
-
 import pytest
 from kreuzberg import extract_file, list_post_processors
 
@@ -15,7 +14,7 @@ async def test_post_processors_clear() -> None:
     path = ""
     _ = await extract_file(path=path)
 
-
 def test_post_processors_list() -> None:
     """List all registered post-processors."""
     _ = list_post_processors()
+

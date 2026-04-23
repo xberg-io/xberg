@@ -4,20 +4,15 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: embed."""
-
 import pytest
 from kreuzberg import embed_texts, ExtractionConfig
 
 
-@pytest.mark.skip(
-    reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows MSVC"
-)
+@pytest.mark.skip(reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows MSVC")
 def test_embed_async() -> None:
     """Standalone embedding via async API path with balanced preset."""
     texts = ["Async embedding test"]
-    config = ExtractionConfig(
-        model={"name": "balanced", "type": "preset"}, normalize=True
-    )
+    config = ExtractionConfig(model={"name": "balanced", "type": "preset"}, normalize=True)
     result = embed_texts(texts=texts, config=config)
     assert len(result.embeddings) == 1  # noqa: S101
     assert result.embedding_dimensions == 768  # noqa: S101
@@ -25,16 +20,11 @@ def test_embed_async() -> None:
     assert result.embeddings_finite is True  # noqa: S101
     assert result.embeddings_non_zero is True  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows MSVC"
-)
+@pytest.mark.skip(reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows MSVC")
 def test_embed_batch_texts() -> None:
     """Standalone embedding of a batch of 3 texts with fast preset."""
     texts = ["Text one", "Text two", "Text three"]
-    config = ExtractionConfig(
-        batch_size=32, model={"name": "fast", "type": "preset"}, normalize=True
-    )
+    config = ExtractionConfig(batch_size=32, model={"name": "fast", "type": "preset"}, normalize=True)
     result = embed_texts(texts=texts, config=config)
     assert len(result.embeddings) == 3  # noqa: S101
     assert result.embedding_dimensions == 384  # noqa: S101
@@ -43,10 +33,7 @@ def test_embed_batch_texts() -> None:
     assert result.embeddings_non_zero is True  # noqa: S101
     assert result.embeddings_normalized is True  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc"
-)
+@pytest.mark.skip(reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc")
 def test_embed_empty_input() -> None:
     """Standalone embedding with empty text list returns empty result without error."""
     texts = []
@@ -56,7 +43,6 @@ def test_embed_empty_input() -> None:
     assert result.embeddings_valid is True  # noqa: S101
     assert result.embeddings_finite is True  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_embed_empty_string() -> None:
     """embed_texts empty string error."""
@@ -65,16 +51,11 @@ def test_embed_empty_string() -> None:
     with pytest.raises(Exception):  # noqa: B017
         embed_texts(texts=texts, config=config)
 
-
-@pytest.mark.skip(
-    reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows MSVC"
-)
+@pytest.mark.skip(reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows MSVC")
 def test_embed_multilingual() -> None:
     """Standalone embedding with multilingual preset for non-English text."""
     texts = ["Bonjour le monde", "Hallo Welt", "¡Hola Mundo!"]
-    config = ExtractionConfig(
-        model={"name": "multilingual", "type": "preset"}, normalize=True
-    )
+    config = ExtractionConfig(model={"name": "multilingual", "type": "preset"}, normalize=True)
     result = embed_texts(texts=texts, config=config)
     assert len(result.embeddings) == 3  # noqa: S101
     assert result.embedding_dimensions == 768  # noqa: S101
@@ -82,16 +63,11 @@ def test_embed_multilingual() -> None:
     assert result.embeddings_finite is True  # noqa: S101
     assert result.embeddings_non_zero is True  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows MSVC"
-)
+@pytest.mark.skip(reason="Requires features: embeddings; Skip on platforms: x86_64-pc-windows-msvc; Embeddings not supported on Windows MSVC")
 def test_embed_single_text() -> None:
     """Standalone embedding of a single text with balanced preset."""
     texts = ["Hello, Kreuzberg!"]
-    config = ExtractionConfig(
-        model={"name": "balanced", "type": "preset"}, normalize=True
-    )
+    config = ExtractionConfig(model={"name": "balanced", "type": "preset"}, normalize=True)
     result = embed_texts(texts=texts, config=config)
     assert len(result.embeddings) == 1  # noqa: S101
     assert result.embedding_dimensions == 768  # noqa: S101
@@ -100,7 +76,6 @@ def test_embed_single_text() -> None:
     assert result.embeddings_non_zero is True  # noqa: S101
     assert result.embeddings_normalized is True  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: embeddings")
 def test_embed_unknown_preset() -> None:
     """embed_texts unknown preset."""
@@ -108,3 +83,4 @@ def test_embed_unknown_preset() -> None:
     config = ExtractionConfig(model="nonexistent-model")
     with pytest.raises(Exception):  # noqa: B017
         embed_texts(texts=texts, config=config)
+

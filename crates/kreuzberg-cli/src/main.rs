@@ -298,7 +298,7 @@ enum Commands {
         #[arg(long, default_value = "balanced")]
         preset: String,
 
-        /// Embedding provider: "local" (default, ONNX) or "llm" (liter-llm)
+        /// Embedding provider: "local" (default, ONNX), "llm" (liter-llm), or "plugin" (registered in-process backend)
         #[arg(long, default_value = "local")]
         provider: String,
 
@@ -310,6 +310,13 @@ enum Commands {
         /// API key for the LLM provider
         #[arg(long)]
         api_key: Option<String>,
+
+        /// Name of a pre-registered in-process embedding backend.
+        /// Required when --provider is "plugin". The backend must have been
+        /// registered via `kreuzberg::plugins::register_embedding_backend`
+        /// before this command runs.
+        #[arg(long)]
+        plugin: Option<String>,
 
         /// Output format (text or json)
         #[arg(short, long, default_value = "json")]
@@ -897,6 +904,7 @@ fn main() -> Result<()> {
             provider,
             model,
             api_key,
+            plugin,
             format,
         } => {
             let texts = if text.is_empty() {
@@ -904,7 +912,7 @@ fn main() -> Result<()> {
             } else {
                 text
             };
-            embed_command(texts, &preset, &provider, model, api_key, format)?;
+            embed_command(texts, &preset, &provider, model, api_key, plugin, format)?;
         }
 
         Commands::Chunk {

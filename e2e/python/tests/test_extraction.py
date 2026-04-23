@@ -4,13 +4,7 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: extraction."""
-
-from kreuzberg import (
-    extract_doc_text,
-    extract_email_content,
-    extract_text_from_pdf,
-    extract_pptx_from_bytes,
-)
+from kreuzberg import extract_doc_text, extract_email_content, extract_text_from_pdf, extract_pptx_from_bytes
 
 
 def test_extract_doc_basic() -> None:
@@ -19,12 +13,10 @@ def test_extract_doc_basic() -> None:
     result = extract_doc_text(content=content)
     assert len(result.content) >= 10  # noqa: S101
 
-
 def test_extract_email_basic() -> None:
     """Extract content from an email file in EML format."""
     bytes = "email/html_email_multipart.eml"
     _ = extract_email_content(bytes=bytes)
-
 
 def test_extract_pdf_basic() -> None:
     """Extract text from a basic PDF document containing memo content."""
@@ -32,15 +24,14 @@ def test_extract_pdf_basic() -> None:
     result = extract_text_from_pdf(pdf_bytes=pdf_bytes)
     assert len(result.content) >= 50  # noqa: S101
 
-
 def test_extract_pdf_code() -> None:
     """Extract text from PDF containing code snippets and formulas."""
     pdf_bytes = "pdf/code_and_formula.pdf"
     result = extract_text_from_pdf(pdf_bytes=pdf_bytes)
     assert len(result.content) >= 20  # noqa: S101
 
-
 def test_extract_pptx_basic() -> None:
     """Extract text from a PowerPoint presentation file."""
     bytes = "pptx/powerpoint_sample.pptx"
     _ = extract_pptx_from_bytes(bytes=bytes)
+

@@ -4,14 +4,8 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: utility."""
-
 import pytest
-from kreuzberg import (
-    blake3_hash_bytes,
-    camel_to_snake,
-    is_valid_utf8,
-    sanitize_filename,
-)
+from kreuzberg import blake3_hash_bytes, camel_to_snake, is_valid_utf8, sanitize_filename
 
 
 @pytest.mark.skip(reason="Requires blake3_hash_bytes call config in alef.toml")
@@ -21,14 +15,12 @@ def test_utility_blake3_hash() -> None:
     result = blake3_hash_bytes(data=data)
     assert len(result.result) >= 64  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires camel_to_snake call config in alef.toml")
 def test_utility_camel_to_snake() -> None:
     """Convert camelCase to snake_case."""
     text = ""
     result = camel_to_snake(text=text)
     assert result.result.strip() == "my_variable_name"  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires is_valid_utf8 call config in alef.toml")
 def test_utility_is_valid_utf8() -> None:
@@ -37,10 +29,10 @@ def test_utility_is_valid_utf8() -> None:
     result = is_valid_utf8(bytes=bytes)
     assert result.result is True  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires sanitize_filename call config in alef.toml")
 def test_utility_sanitize_filename() -> None:
     """Sanitize filename removes invalid characters."""
     filename = ""
     result = sanitize_filename(filename=filename)
     assert len(result.result) >= 1  # noqa: S101
+

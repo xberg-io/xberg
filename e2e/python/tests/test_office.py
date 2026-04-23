@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: office."""
-
 import pytest
 from kreuzberg import extract_file
 
@@ -17,22 +16,15 @@ async def test_office_bibtex_basic() -> None:
     assert any(v in result.mime_type for v in ["application/x-bibtex", "text/x-bibtex"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_commonmark_basic() -> None:
     """CommonMark (.commonmark) text extraction."""
     path = "markdown/sample.commonmark"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in ["text/markdown", "text/plain", "text/x-commonmark"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["text/markdown", "text/plain", "text/x-commonmark"])  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: office; Skip if document missing; Requires the office feature."
-)
+@pytest.mark.skip(reason="Requires features: office; Skip if document missing; Requires the office feature.")
 @pytest.mark.asyncio
 async def test_office_dbf_basic() -> None:
     """dBASE (.dbf) table extraction as markdown."""
@@ -43,7 +35,6 @@ async def test_office_dbf_basic() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["|"])  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_djot_basic() -> None:
     """Djot markup text extraction."""
@@ -52,10 +43,7 @@ async def test_office_djot_basic() -> None:
     assert any(v in result.mime_type for v in ["text/x-djot", "text/djot"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: office; Skip if document missing; Requires the office feature."
-)
+@pytest.mark.skip(reason="Requires features: office; Skip if document missing; Requires the office feature.")
 @pytest.mark.asyncio
 async def test_office_doc_legacy() -> None:
     """Legacy .doc document extraction via native OLE/CFB parsing."""
@@ -64,99 +52,68 @@ async def test_office_doc_legacy() -> None:
     assert result.mime_type.strip() == "application/msword"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_docbook_basic() -> None:
     """DocBook XML document extraction."""
     path = "docbook/docbook-reader.docbook"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type for v in ["application/docbook+xml", "text/docbook"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/docbook+xml", "text/docbook"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_docx_basic() -> None:
     """DOCX document extraction baseline."""
     path = "docx/sample_document.docx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_docx_equations() -> None:
     """DOCX file containing equations to validate math extraction."""
     path = "docx/equations.docx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_docx_fake() -> None:
     """Simple DOCX document to verify baseline extraction."""
     path = "docx/fake.docx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_docx_formatting() -> None:
     """DOCX document heavy on formatting for style preservation."""
     path = "docx/unit_test_formatting.docx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_docx_headers() -> None:
     """DOCX document with complex headers."""
     path = "docx/unit_test_headers.docx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_docx_lists() -> None:
     """DOCX document emphasizing list formatting."""
     path = "docx/unit_test_lists.docx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_docx_tables() -> None:
     """DOCX document containing tables for table-aware extraction."""
     path = "docx/docx_tables.docx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"  # noqa: S101
     assert len(result.content) >= 50  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert "Simple uniform table" in result.content  # noqa: S101
@@ -168,7 +125,6 @@ async def test_office_docx_tables() -> None:
     assert "Header Col" in result.content  # noqa: S101
     assert len(result.tables) >= 1  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_epub_basic() -> None:
     """EPUB book extraction with text content."""
@@ -176,7 +132,6 @@ async def test_office_epub_basic() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/epub+zip"  # noqa: S101
     assert len(result.content) >= 50  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_fb2_basic() -> None:
@@ -186,22 +141,15 @@ async def test_office_fb2_basic() -> None:
     assert result.mime_type.strip() == "application/x-fictionbook+xml"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_fictionbook_basic() -> None:
     """FictionBook (.fb2) text extraction."""
     path = "fictionbook/basic.fb2"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in ["application/x-fictionbook+xml", "application/x-fictionbook"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/x-fictionbook+xml", "application/x-fictionbook"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: office; Skip if document missing; Requires the office feature."
-)
+@pytest.mark.skip(reason="Requires features: office; Skip if document missing; Requires the office feature.")
 @pytest.mark.asyncio
 async def test_office_hwp_basic() -> None:
     """Hangul Word Processor (.hwp) text extraction."""
@@ -210,17 +158,13 @@ async def test_office_hwp_basic() -> None:
     assert result.mime_type.strip() == "application/x-hwp"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
-@pytest.mark.skip(
-    reason="Requires features: hwp; Skip on platforms: aarch64-unknown-linux-gnu; Skip if document missing; HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux."
-)
+@pytest.mark.skip(reason="Requires features: hwp; Skip on platforms: aarch64-unknown-linux-gnu; Skip if document missing; HWP styled doc yields no extractable plain text with current parser. Extraction returns empty content on ARM Linux.")
 @pytest.mark.asyncio
 async def test_office_hwp_styled() -> None:
     """Hangul Word Processor (.hwp) styled document extraction."""
     path = "hwp/styled_document.hwp"
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/x-hwp"  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_jats_basic() -> None:
@@ -230,7 +174,6 @@ async def test_office_jats_basic() -> None:
     assert any(v in result.mime_type for v in ["application/x-jats+xml", "text/jats"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_jupyter_basic() -> None:
     """Jupyter notebook extraction."""
@@ -238,7 +181,6 @@ async def test_office_jupyter_basic() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/x-ipynb+json"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_keynote_basic() -> None:
@@ -248,7 +190,6 @@ async def test_office_keynote_basic() -> None:
     assert result.mime_type.strip() == "application/x-iwork-keynote-sffkey"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_latex_basic() -> None:
     """LaTeX document text extraction."""
@@ -257,7 +198,6 @@ async def test_office_latex_basic() -> None:
     assert any(v in result.mime_type for v in ["application/x-latex", "text/x-latex"])  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_markdown_basic() -> None:
     """Markdown document extraction baseline."""
@@ -265,7 +205,6 @@ async def test_office_markdown_basic() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "text/markdown"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: mdx")
 @pytest.mark.asyncio
@@ -281,7 +220,6 @@ async def test_office_mdx_basic() -> None:
     assert "warning message" in result.content  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert "Conclusion" in result.content  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: mdx")
 @pytest.mark.asyncio
@@ -312,7 +250,6 @@ async def test_office_mdx_getting_started() -> None:
     assert result.content is not None  # noqa: S101
     assert "React" in result.content  # noqa: S101
 
-
 @pytest.mark.skip(reason="Requires features: mdx")
 @pytest.mark.asyncio
 async def test_office_mdx_troubleshooting() -> None:
@@ -331,7 +268,6 @@ async def test_office_mdx_troubleshooting() -> None:
     assert "Problems using MDX" in result.content  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert "Problems writing MDX" in result.content  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: mdx")
 @pytest.mark.asyncio
@@ -356,7 +292,6 @@ async def test_office_mdx_using_mdx() -> None:
     assert result.content is not None  # noqa: S101
     assert "MDX provider" in result.content  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_numbers_basic() -> None:
     """Numbers document extraction baseline."""
@@ -364,7 +299,6 @@ async def test_office_numbers_basic() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/x-iwork-numbers-sffnumbers"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_ods_basic() -> None:
@@ -374,7 +308,6 @@ async def test_office_ods_basic() -> None:
     assert result.mime_type.strip() == "application/vnd.oasis.opendocument.spreadsheet"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_odt_bold() -> None:
     """ODT document with bold formatting."""
@@ -382,7 +315,6 @@ async def test_office_odt_bold() -> None:
     result = await extract_file(path=path)
     assert result.mime_type.strip() == "application/vnd.oasis.opendocument.text"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_odt_list() -> None:
@@ -394,7 +326,6 @@ async def test_office_odt_list() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["list item", "New level", "Pushed us"])  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_odt_simple() -> None:
     """Basic ODT document with paragraphs and headings."""
@@ -405,7 +336,6 @@ async def test_office_odt_simple() -> None:
     assert result.content is not None  # noqa: S101
     assert any(v in result.content for v in ["favorite things", "Parrots", "Analysis"])  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_odt_table() -> None:
     """ODT document with a table structure."""
@@ -415,18 +345,13 @@ async def test_office_odt_table() -> None:
     assert len(result.content) >= 10  # noqa: S101
     assert len(result.tables) >= 1  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_opml_basic() -> None:
     """OPML outline document extraction."""
     path = "opml/outline.opml"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in ["application/xml+opml", "text/x-opml", "application/x-opml+xml"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/xml+opml", "text/x-opml", "application/x-opml+xml"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_org_basic() -> None:
@@ -436,7 +361,6 @@ async def test_office_org_basic() -> None:
     assert any(v in result.mime_type for v in ["text/x-org", "text/org"])  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_pages_basic() -> None:
     """Pages document extraction baseline."""
@@ -445,18 +369,13 @@ async def test_office_pages_basic() -> None:
     assert result.mime_type.strip() == "application/x-iwork-pages-sffpages"  # noqa: S101
     assert len(result.content) >= 5  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_ppsx_slideshow() -> None:
     """PPSX (PowerPoint Show) files should extract slides content identical to PPTX. GitHub Issue #321 Bug 2."""
     path = "pptx/sample.ppsx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.presentationml.slideshow"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.presentationml.slideshow"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.skip(reason="Requires features: office; Requires the office feature.")
 @pytest.mark.asyncio
@@ -467,68 +386,45 @@ async def test_office_ppt_legacy() -> None:
     assert result.mime_type.strip() == "application/vnd.ms-powerpoint"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_pptm_basic() -> None:
     """PowerPoint macro-enabled presentation (.pptm) extraction."""
     path = "pptx/powerpoint_with_image.pptm"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in [
-            "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        ]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/vnd.ms-powerpoint.presentation.macroEnabled.12", "application/vnd.openxmlformats-officedocument.presentationml.presentation"])  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_pptx_basic() -> None:
     """PPTX deck should extract slides content."""
     path = "pptx/simple.pptx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.presentationml.presentation"  # noqa: S101
     assert len(result.content) >= 50  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_pptx_images() -> None:
     """PPTX presentation containing images to ensure metadata extraction."""
     path = "pptx/powerpoint_with_image.pptx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.presentationml.presentation"  # noqa: S101
     assert len(result.content) >= 15  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_pptx_pitch_deck() -> None:
     """Pitch deck PPTX used to validate large slide extraction."""
     path = "pptx/pitch_deck_presentation.pptx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.presentationml.presentation"  # noqa: S101
     assert len(result.content) >= 100  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_rst_basic() -> None:
     """reStructuredText document extraction."""
     path = "rst/restructured_text.rst"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type for v in ["text/x-rst", "text/prs.fallenstein.rst"]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["text/x-rst", "text/prs.fallenstein.rst"])  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_rtf_basic() -> None:
@@ -538,7 +434,6 @@ async def test_office_rtf_basic() -> None:
     assert any(v in result.mime_type for v in ["application/rtf", "text/rtf"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_typst_basic() -> None:
     """Typst document text extraction."""
@@ -546,7 +441,6 @@ async def test_office_typst_basic() -> None:
     result = await extract_file(path=path)
     assert any(v in result.mime_type for v in ["application/x-typst", "text/x-typst"])  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_xls_legacy() -> None:
@@ -556,46 +450,28 @@ async def test_office_xls_legacy() -> None:
     assert result.mime_type.strip() == "application/vnd.ms-excel"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_xlsb_basic() -> None:
     """Excel binary workbook (.xlsb) extraction."""
     path = "xlsx/test_xlsb.xlsb"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in [
-            "application/vnd.ms-excel.sheet.binary.macroEnabled.12",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/vnd.ms-excel.sheet.binary.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_xlsm_basic() -> None:
     """Excel macro-enabled workbook (.xlsm) extraction."""
     path = "xlsx/test_01.xlsm"
     result = await extract_file(path=path)
-    assert any(
-        v in result.mime_type
-        for v in [
-            "application/vnd.ms-excel.sheet.macroEnabled.12",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        ]
-    )  # noqa: S101
+    assert any(v in result.mime_type for v in ["application/vnd.ms-excel.sheet.macroEnabled.12", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])  # noqa: S101
     assert result.content  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_xlsx_basic() -> None:
     """XLSX spreadsheet should produce metadata and table content."""
     path = "xlsx/stanley_cups.xlsx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"  # noqa: S101
     assert len(result.content) >= 100  # noqa: S101
     assert result.content is not None  # noqa: S101
     assert "Team" in result.content  # noqa: S101
@@ -607,27 +483,20 @@ async def test_office_xlsx_basic() -> None:
     assert result.metadata.sheet_count >= 2  # noqa: S101
     assert "Stanley Cups" in result.metadata.sheet_names  # noqa: S101
 
-
 @pytest.mark.asyncio
 async def test_office_xlsx_multi_sheet() -> None:
     """XLSX workbook with multiple sheets."""
     path = "xlsx/excel_multi_sheet.xlsx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"  # noqa: S101
     assert len(result.content) >= 20  # noqa: S101
     assert result.metadata.sheet_count >= 2  # noqa: S101
-
 
 @pytest.mark.asyncio
 async def test_office_xlsx_office_example() -> None:
     """Simple XLSX spreadsheet shipped alongside office integration tests."""
     path = "xlsx/test_01.xlsx"
     result = await extract_file(path=path)
-    assert (
-        result.mime_type.strip()
-        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )  # noqa: S101
+    assert result.mime_type.strip() == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"  # noqa: S101
     assert len(result.content) >= 10  # noqa: S101
+

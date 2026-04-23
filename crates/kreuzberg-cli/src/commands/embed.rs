@@ -8,12 +8,14 @@ use crate::{WireFormat, style};
 ///
 /// When `provider` is `"local"` (default), uses the ONNX preset model.
 /// When `provider` is `"llm"`, uses liter-llm with the specified model and API key.
+/// When `provider` is `"plugin"`, dispatches to a pre-registered in-process embedding backend.
 pub fn embed_command(
     texts: Vec<String>,
     preset: &str,
     provider: &str,
     llm_model: Option<String>,
     llm_api_key: Option<String>,
+    plugin_name: Option<String>,
     format: WireFormat,
 ) -> Result<()> {
     if texts.is_empty() {
@@ -73,9 +75,42 @@ pub fn embed_command(
 
             (config, preset.to_string())
         }
+        "plugin" => {
+            let name = plugin_name.as_deref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "--plugin NAME is required when --provider is 'plugin'. Register a backend via kreuzberg::plugins::register_embedding_backend first."
+                )
+            })?;
+            if name.is_empty() {
+                anyhow::bail!("--plugin NAME must not be empty.");
+            }
+
+            // Pre-flight: surface unknown backends with a list of registered names
+            // (parity with the REST handler, which returns 422 for the same case).
+            let available =
+                kreuzberg::plugins::list_embedding_backends().context("Failed to read embedding backend registry")?;
+            if !available.iter().any(|n| n == name) {
+                anyhow::bail!(
+                    "Embedding backend '{}' is not registered. Available backends: {}",
+                    name,
+                    if available.is_empty() {
+                        "(none registered)".to_string()
+                    } else {
+                        available.join(", ")
+                    }
+                );
+            }
+
+            let config = kreuzberg::EmbeddingConfig {
+                model: kreuzberg::EmbeddingModelType::Plugin { name: name.to_string() },
+                ..Default::default()
+            };
+
+            (config, name.to_string())
+        }
         other => {
             anyhow::bail!(
-                "Unknown embedding provider '{}'. Valid providers: 'local' (default, ONNX) or 'llm' (liter-llm).",
+                "Unknown embedding provider '{}'. Valid providers: 'local' (default, ONNX), 'llm' (liter-llm), or 'plugin' (in-process backend).",
                 other
             );
         }

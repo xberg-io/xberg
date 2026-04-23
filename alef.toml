@@ -48,6 +48,7 @@ sources = [
     "crates/kreuzberg/src/core/formats.rs",
     # Plugin trait (for trait bridges)
     "crates/kreuzberg/src/plugins/traits.rs",
+    "crates/kreuzberg/src/plugins/embedding.rs",
     "crates/kreuzberg/src/plugins/registry/mod.rs",
     # Public module APIs
     "crates/kreuzberg/src/rendering/mod.rs",
@@ -205,6 +206,7 @@ types = [
 
     # Internal registries and engines
     "DocumentExtractorRegistry",
+    "EmbeddingBackendRegistry",
     "OcrBackendRegistry",
     "PostProcessorRegistry",
     "RendererRegistry",
@@ -396,6 +398,10 @@ functions = [
 
     # Plugin registration — handled by trait bridge codegen, not regular function bindings
     "register_ocr_backend",
+    "register_embedding_backend",
+    "unregister_embedding_backend",
+    "list_embedding_backends",
+    "clear_embedding_backends",
     "register_renderer",
 
     # Functions taking pdfium_render::PdfDocument — can't be passed from bindings
@@ -642,6 +648,7 @@ functions = [
     "render_json",
     "render_plain",
     "get_document_extractor_registry",
+    "get_embedding_backend_registry",
     "get_ocr_backend_registry",
     "get_post_processor_registry",
     "get_renderer_registry",
@@ -1171,6 +1178,12 @@ keywords = ["document", "extraction", "pdf", "ocr", "text"]
 #   Vec<u8>: From<&Path> not satisfied, mismatched types in vtable calls,
 #   OcrBackendRegistry::unregister method not found.
 #   Re-enable once alef bridge codegen is fixed upstream.
+
+[[trait_bridges]]
+trait_name = "EmbeddingBackend"
+super_trait = "kreuzberg::plugins::Plugin"
+registry_getter = "kreuzberg::plugins::registry::get_embedding_backend_registry"
+register_fn = "register_embedding_backend"
 
 # TODO: add PostProcessor and Validator bridges once OcrBackend is proven
 # [[trait_bridges]]

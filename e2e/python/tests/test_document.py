@@ -4,7 +4,6 @@
 # To verify freshness: alef verify --exit-code
 # Issues & docs: https://github.com/kreuzberg-dev/alef
 """E2e tests for category: document."""
-
 from kreuzberg import extract_file_sync, ExtractionConfig
 
 
@@ -14,13 +13,11 @@ def test_doc_metadata_docx() -> None:
     result = extract_file_sync(path=path)
     assert result.metadata  # noqa: S101
 
-
 def test_doc_metadata_pdf() -> None:
     """Extract PDF metadata."""
     path = "pdf/fake_memo.pdf"
     result = extract_file_sync(path=path)
     assert result.metadata  # noqa: S101
-
 
 def test_doc_structure_docx() -> None:
     """Extract DOCX document structure with include_document_structure config."""
@@ -29,7 +26,6 @@ def test_doc_structure_docx() -> None:
     result = extract_file_sync(path=path, config=config)
     assert result.document_structure  # noqa: S101
 
-
 def test_doc_structure_html() -> None:
     """Extract HTML document structure with include_document_structure config."""
     path = "html/html.html"
@@ -37,10 +33,10 @@ def test_doc_structure_html() -> None:
     result = extract_file_sync(path=path, config=config)
     assert result.document_structure  # noqa: S101
 
-
 def test_doc_structure_pdf() -> None:
     """Extract PDF document structure with include_document_structure config."""
     path = "pdf/fake_memo.pdf"
     config = ExtractionConfig(include_document_structure=True)
     result = extract_file_sync(path=path, config=config)
     assert result.document_structure  # noqa: S101
+
