@@ -26,10 +26,12 @@ import 'kreuzberg_bridge_generated.dart' as rust_bridge;
 class AccelerationConfig {
   /// Execution provider to use for ONNX inference.
   final ExecutionProviderType provider;
-
   /// GPU device ID (for CUDA/TensorRT). Ignored for CPU/CoreML/Auto.
   final int deviceId;
-  AccelerationConfig({required this.provider, required this.deviceId});
+  AccelerationConfig({
+    required this.provider,
+    required this.deviceId,
+  });
 }
 
 /// Cross-extractor content filtering configuration.
@@ -52,7 +54,6 @@ class ContentFilterConfig {
   ///
   /// Default: `false` (headers are stripped or excluded).
   final bool includeHeaders;
-
   /// Include running footers in extraction output.
   ///
   /// - PDF: Disables bottom-margin furniture stripping and prevents the layout
@@ -63,7 +64,6 @@ class ContentFilterConfig {
   ///
   /// Default: `false` (footers are stripped or excluded).
   final bool includeFooters;
-
   /// Enable the heuristic cross-page repeating text detector.
   ///
   /// When `true` (default), text that repeats verbatim across a supermajority
@@ -79,7 +79,6 @@ class ContentFilterConfig {
   ///
   /// Default: `true`.
   final bool stripRepeatingText;
-
   /// Include watermark text in extraction output.
   ///
   /// - PDF: Keeps watermark artifacts and arXiv identifiers.
@@ -138,16 +137,12 @@ class EmailConfig {
 class ExtractionConfig {
   /// Enable caching of extraction results
   final bool useCache;
-
   /// Enable quality post-processing
   final bool enableQualityProcessing;
-
   /// OCR configuration (None = OCR disabled)
   final OcrConfig? ocr;
-
   /// Force OCR even for searchable PDFs
   final bool forceOcr;
-
   /// Force OCR on specific pages only (1-indexed page numbers, must be >= 1).
   ///
   /// When set, only the listed pages are OCR'd regardless of text layer quality.
@@ -155,7 +150,6 @@ class ExtractionConfig {
   /// Only applies to PDF documents. Duplicates are automatically deduplicated.
   /// An `ocr` config is recommended for backend/language selection; defaults are used if absent.
   final List<int>? forceOcrPages;
-
   /// Disable OCR entirely, even for images.
   ///
   /// When `true`, OCR is skipped for all document types. Images return metadata
@@ -166,41 +160,31 @@ class ExtractionConfig {
   ///
   /// *Added in v4.7.0.*
   final bool disableOcr;
-
   /// Text chunking configuration (None = chunking disabled)
   final ChunkingConfig? chunking;
-
   /// Content filtering configuration (None = use extractor defaults).
   ///
   /// Controls whether document "furniture" (headers, footers, watermarks,
   /// repeating text) is included in or stripped from extraction results.
   /// See [`ContentFilterConfig`] for per-field documentation.
   final ContentFilterConfig? contentFilter;
-
   /// Image extraction configuration (None = no image extraction)
   final ImageExtractionConfig? images;
-
   /// PDF-specific options (None = use defaults)
   final PdfConfig? pdfOptions;
-
   /// Token reduction configuration (None = no token reduction)
   final TokenReductionOptions? tokenReduction;
-
   /// Language detection configuration (None = no language detection)
   final LanguageDetectionConfig? languageDetection;
-
   /// Page extraction configuration (None = no page tracking)
   final PageConfig? pages;
-
   /// Post-processor configuration (None = use defaults)
   final PostProcessorConfig? postprocessor;
-
   /// HTML to Markdown conversion options (None = use defaults)
   ///
   /// Configure how HTML documents are converted to Markdown, including heading styles,
   /// list formatting, code block styles, and preprocessing options.
   final String? htmlOptions;
-
   /// Styled HTML output configuration.
   ///
   /// When set alongside `output_format = OutputFormat::Html`, the extraction
@@ -210,27 +194,23 @@ class ExtractionConfig {
   ///
   /// When `None`, the existing plain comrak-based HTML renderer is used.
   final HtmlOutputConfig? htmlOutput;
-
   /// Default per-file timeout in seconds for batch extraction.
   ///
   /// When set, each file in a batch will be canceled after this duration
   /// unless overridden by [`FileExtractionConfig::timeout_secs`].
   /// `None` means no timeout (unbounded extraction time).
   final int? extractionTimeoutSecs;
-
   /// Maximum concurrent extractions in batch operations (None = (num_cpus × 1.5).ceil()).
   ///
   /// Limits parallelism to prevent resource exhaustion when processing
   /// large batches. Defaults to (num_cpus × 1.5).ceil() when not set.
   final int? maxConcurrentExtractions;
-
   /// Result structure format
   ///
   /// Controls whether results are returned in unified format (default) with all
   /// content in the `content` field, or element-based format with semantic
   /// elements (for Unstructured-compatible output).
   final String resultFormat;
-
   /// Security limits for archive extraction.
   ///
   /// Controls maximum archive size, compression ratio, file count, and other
@@ -240,7 +220,6 @@ class ExtractionConfig {
   /// ingests user-controlled bytes.
   /// When `None`, default limits are used.
   final String? securityLimits;
-
   /// Content text format (default: Plain).
   ///
   /// Controls the format of the extracted content:
@@ -253,7 +232,6 @@ class ExtractionConfig {
   /// formatted output. The `formatted_content` field may be populated
   /// when format conversion is applied.
   final String outputFormat;
-
   /// Layout detection configuration (None = layout detection disabled).
   ///
   /// When set, PDF pages and images are analyzed for document structure
@@ -263,7 +241,6 @@ class ExtractionConfig {
   /// markdown formatting based on detected layout classes.
   /// Requires the `layout-detection` feature.
   final LayoutDetectionConfig? layout;
-
   /// Enable structured document tree output.
   ///
   /// When true, populates the `document` field on `ExtractionResult` with a
@@ -272,58 +249,49 @@ class ExtractionConfig {
   ///
   /// Independent of `result_format` — can be combined with Unified or ElementBased.
   final bool includeDocumentStructure;
-
   /// Hardware acceleration configuration for ONNX Runtime models.
   ///
   /// Controls execution provider selection for layout detection and embedding
   /// models. When `None`, uses platform defaults (CoreML on macOS, CUDA on
   /// Linux, CPU on Windows).
   final AccelerationConfig? acceleration;
-
   /// Cache namespace for tenant isolation.
   ///
   /// When set, cache entries are stored under `{cache_dir}/{namespace}/`.
   /// Must be alphanumeric, hyphens, or underscores only (max 64 chars).
   /// Different namespaces have isolated cache spaces on the same filesystem.
   final String? cacheNamespace;
-
   /// Per-request cache TTL in seconds.
   ///
   /// Overrides the global `max_age_days` for this specific extraction.
   /// When `0`, caching is completely skipped (no read or write).
   /// When `None`, the global TTL applies.
   final int? cacheTtlSecs;
-
   /// Email extraction configuration (None = use defaults).
   ///
   /// Currently supports configuring the fallback codepage for MSG files
   /// that do not specify one. See [`crate::core::config::EmailConfig`] for details.
   final EmailConfig? email;
-
   /// Concurrency limits for constrained environments (None = use defaults).
   ///
   /// Controls Rayon thread pool size, ONNX Runtime intra-op threads, and
   /// (when `max_concurrent_extractions` is unset) the batch concurrency
   /// semaphore. See [`crate::core::config::ConcurrencyConfig`] for details.
   final String? concurrency;
-
   /// Maximum recursion depth for archive extraction (default: 3).
   /// Set to 0 to disable recursive extraction (legacy behavior).
   final int maxArchiveDepth;
-
   /// Tree-sitter language pack configuration (None = tree-sitter disabled).
   ///
   /// When set, enables code file extraction using tree-sitter parsers.
   /// Controls grammar download behavior and code analysis options.
   final TreeSitterConfig? treeSitter;
-
   /// Structured extraction via LLM (None = disabled).
   ///
   /// When set, the extracted document content is sent to an LLM with the
   /// provided JSON schema. The structured response is stored in
   /// `ExtractionResult::structured_output`.
   final StructuredExtractionConfig? structuredExtraction;
-
   /// Cancellation token for this extraction (None = no external cancellation).
   ///
   /// Pass a [`CancellationToken`] clone here and call [`CancellationToken::cancel`]
@@ -400,68 +368,48 @@ class ExtractionConfig {
 class FileExtractionConfig {
   /// Override quality post-processing for this file.
   final bool? enableQualityProcessing;
-
   /// Override OCR configuration for this file (None in the Option = use batch default).
   final OcrConfig? ocr;
-
   /// Override force OCR for this file.
   final bool? forceOcr;
-
   /// Override force OCR pages for this file (1-indexed page numbers).
   final List<int>? forceOcrPages;
-
   /// Override disable OCR for this file.
   final bool? disableOcr;
-
   /// Override chunking configuration for this file.
   final ChunkingConfig? chunking;
-
   /// Override content filtering configuration for this file.
   final ContentFilterConfig? contentFilter;
-
   /// Override image extraction configuration for this file.
   final ImageExtractionConfig? images;
-
   /// Override PDF options for this file.
   final PdfConfig? pdfOptions;
-
   /// Override token reduction for this file.
   final TokenReductionOptions? tokenReduction;
-
   /// Override language detection for this file.
   final LanguageDetectionConfig? languageDetection;
-
   /// Override page extraction for this file.
   final PageConfig? pages;
-
   /// Override post-processor for this file.
   final PostProcessorConfig? postprocessor;
-
   /// Override HTML conversion options for this file.
   final String? htmlOptions;
-
   /// Override result format for this file.
   final String? resultFormat;
-
   /// Override output content format for this file.
   final String? outputFormat;
-
   /// Override document structure output for this file.
   final bool? includeDocumentStructure;
-
   /// Override layout detection for this file.
   final LayoutDetectionConfig? layout;
-
   /// Override per-file extraction timeout in seconds.
   ///
   /// When set, the extraction for this file will be canceled after the
   /// specified duration. A timed-out file produces an error result without
   /// affecting other files in the batch.
   final int? timeoutSecs;
-
   /// Override tree-sitter configuration for this file.
   final TreeSitterConfig? treeSitter;
-
   /// Override structured extraction configuration for this file.
   ///
   /// When set, enables LLM-based structured extraction with a JSON schema
@@ -497,28 +445,25 @@ class FileExtractionConfig {
 class ImageExtractionConfig {
   /// Extract images from documents
   final bool extractImages;
-
   /// Target DPI for image normalization
   final int targetDpi;
-
   /// Maximum dimension for images (width or height)
   final int maxImageDimension;
-
   /// Whether to inject image reference placeholders into markdown output.
   /// When `true` (default), image references like `![Image 1](embedded:p1_i0)`
   /// are appended to the markdown. Set to `false` to extract images as data
   /// without polluting the markdown output.
-  final bool injectPlaceholders;
-
+  ///
+  /// `None` means use the default (`true`). This allows language bindings to
+  /// omit the field entirely and get the correct default without explicitly
+  /// sending `false`.
+  final bool? injectPlaceholders;
   /// Automatically adjust DPI based on image content
   final bool autoAdjustDpi;
-
   /// Minimum DPI threshold
   final int minDpi;
-
   /// Maximum DPI threshold
   final int maxDpi;
-
   /// Maximum number of image objects to extract per PDF page.
   ///
   /// Some PDFs (e.g. technical diagrams stored as thousands of raster fragments)
@@ -545,7 +490,6 @@ class ImageExtractionConfig {
 class TokenReductionOptions {
   /// Reduction mode: "off", "light", "moderate", "aggressive", "maximum"
   final String mode;
-
   /// Preserve important words (capitalized, technical terms)
   final bool preserveImportantWords;
   TokenReductionOptions({
@@ -558,10 +502,8 @@ class TokenReductionOptions {
 class LanguageDetectionConfig {
   /// Enable language detection
   final bool enabled;
-
   /// Minimum confidence threshold (0.0-1.0)
   final double minConfidence;
-
   /// Detect multiple languages in the document
   final bool detectMultiple;
   LanguageDetectionConfig({
@@ -593,20 +535,16 @@ class HtmlOutputConfig {
   /// Inline CSS string injected into the output after the theme stylesheet.
   /// Concatenated after `css_file` content when both are set.
   final String? css;
-
   /// Path to a CSS file loaded once at renderer construction time.
   /// Concatenated before `css` when both are set.
   final String? cssFile;
-
   /// Built-in colour/typography theme. Default: [`HtmlTheme::Unstyled`].
   final HtmlTheme theme;
-
   /// CSS class prefix applied to every emitted class name.
   ///
   /// Default: `"kb-"`. Change this if your host application already uses
   /// classes that start with `kb-`.
   final String classPrefix;
-
   /// When `true` (default), write the resolved CSS into a `<style>` block
   /// immediately after the opening `<div class="{prefix}doc">`.
   ///
@@ -630,16 +568,13 @@ class HtmlOutputConfig {
 class LayoutDetectionConfig {
   /// Confidence threshold override (None = use model default).
   final double? confidenceThreshold;
-
   /// Whether to apply postprocessing heuristics (default: true).
   final bool applyHeuristics;
-
   /// Table structure recognition model.
   ///
   /// Controls which model is used for table cell detection within layout-detected
   /// table regions. Defaults to [`TableModel::Tatr`].
   final TableModel tableModel;
-
   /// Hardware acceleration for ONNX models (layout detection + table structure).
   ///
   /// When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
@@ -671,23 +606,17 @@ class LlmConfig {
   /// Examples: `"openai/gpt-4o"`, `"anthropic/claude-sonnet-4-20250514"`,
   /// `"groq/llama-3.1-70b-versatile"`.
   final String model;
-
   /// API key for the provider. When `None`, liter-llm falls back to
   /// the provider's standard environment variable (e.g., `OPENAI_API_KEY`).
   final String? apiKey;
-
   /// Custom base URL override for the provider endpoint.
   final String? baseUrl;
-
   /// Request timeout in seconds (default: 60).
   final int? timeoutSecs;
-
   /// Maximum retry attempts (default: 3).
   final int? maxRetries;
-
   /// Sampling temperature for generation tasks.
   final double? temperature;
-
   /// Maximum tokens to generate.
   final int? maxTokens;
   LlmConfig({
@@ -725,16 +654,12 @@ class LlmConfig {
 class StructuredExtractionConfig {
   /// JSON Schema defining the desired output structure.
   final String schema;
-
   /// Schema name passed to the LLM's structured output mode.
   final String schemaName;
-
   /// Optional schema description for the LLM.
   final String? schemaDescription;
-
   /// Enable strict mode — output must exactly match the schema.
   final bool strict;
-
   /// Custom Jinja2 extraction prompt template. When `None`, a default template is used.
   ///
   /// Available template variables:
@@ -743,7 +668,6 @@ class StructuredExtractionConfig {
   /// - `{{ schema_name }}` — The schema name.
   /// - `{{ schema_description }}` — The schema description (may be empty).
   final String? prompt;
-
   /// LLM configuration for the extraction.
   final LlmConfig llm;
   StructuredExtractionConfig({
@@ -763,50 +687,35 @@ class StructuredExtractionConfig {
 class OcrQualityThresholds {
   /// Minimum total non-whitespace characters to consider text substantive.
   final int minTotalNonWhitespace;
-
   /// Minimum non-whitespace characters per page on average.
   final double minNonWhitespacePerPage;
-
   /// Minimum character count for a word to be "meaningful".
   final int minMeaningfulWordLen;
-
   /// Minimum count of meaningful words before text is accepted.
   final int minMeaningfulWords;
-
   /// Minimum alphanumeric ratio (non-whitespace chars that are alphanumeric).
   final double minAlnumRatio;
-
   /// Minimum Unicode replacement characters (U+FFFD) to trigger OCR fallback.
   final int minGarbageChars;
-
   /// Maximum fraction of short (1-2 char) words before text is considered fragmented.
   final double maxFragmentedWordRatio;
-
   /// Critical fragmentation threshold — triggers OCR regardless of meaningful words.
   /// Normal English text has ~20-30% short words. 80%+ is definitive garbage.
   final double criticalFragmentedWordRatio;
-
   /// Minimum average word length. Below this with enough words indicates garbled extraction.
   final double minAvgWordLength;
-
   /// Minimum word count before average word length check applies.
   final int minWordsForAvgLengthCheck;
-
   /// Minimum consecutive word repetition ratio to detect column scrambling.
   final double minConsecutiveRepeatRatio;
-
   /// Minimum word count before consecutive repetition check is applied.
   final int minWordsForRepeatCheck;
-
   /// Minimum character count for "substantive markdown" OCR skip gate.
   final int substantiveMinChars;
-
   /// Minimum character count for "non-text content" OCR skip gate.
   final int nonTextMinChars;
-
   /// Alphanumeric+whitespace ratio threshold for skip decisions.
   final double alnumWsRatioThreshold;
-
   /// Minimum quality score (0.0-1.0) for a pipeline stage result to be accepted.
   /// If the result from a backend scores below this, try the next backend.
   final double pipelineMinQuality;
@@ -834,19 +743,14 @@ class OcrQualityThresholds {
 class OcrPipelineStage {
   /// Backend name: "tesseract", "paddleocr", "easyocr", or a custom registered name.
   final String backend;
-
   /// Priority weight (higher = tried first). Stages are sorted by priority descending.
   final int priority;
-
   /// Language override for this stage (None = use parent OcrConfig.language).
   final String? language;
-
   /// Tesseract-specific config override for this stage.
   final TesseractConfig? tesseractConfig;
-
   /// PaddleOCR-specific config for this stage.
   final String? paddleOcrConfig;
-
   /// VLM config override for this pipeline stage.
   final LlmConfig? vlmConfig;
   OcrPipelineStage({
@@ -867,10 +771,12 @@ class OcrPipelineStage {
 class OcrPipelineConfig {
   /// Ordered list of backends to try. Sorted by priority (descending) at runtime.
   final List<OcrPipelineStage> stages;
-
   /// Quality thresholds for deciding whether to accept a result or try the next backend.
   final OcrQualityThresholds qualityThresholds;
-  OcrPipelineConfig({required this.stages, required this.qualityThresholds});
+  OcrPipelineConfig({
+    required this.stages,
+    required this.qualityThresholds,
+  });
 }
 
 /// OCR configuration.
@@ -883,34 +789,25 @@ class OcrConfig {
   ///
   /// Defaults to `true`. When `false`, all other OCR settings are ignored.
   final bool enabled;
-
   /// OCR backend: tesseract, easyocr, paddleocr
   final String backend;
-
   /// Language code (e.g., "eng", "deu")
   final String language;
-
   /// Tesseract-specific configuration (optional)
   final TesseractConfig? tesseractConfig;
-
   /// Output format for OCR results (optional, for format conversion)
   final String? outputFormat;
-
   /// PaddleOCR-specific configuration (optional, JSON passthrough)
   final String? paddleOcrConfig;
-
   /// OCR element extraction configuration
   final OcrElementConfig? elementConfig;
-
   /// Quality thresholds for the native-text-to-OCR fallback decision.
   /// When None, uses compiled defaults (matching previous hardcoded behavior).
   final OcrQualityThresholds? qualityThresholds;
-
   /// Multi-backend OCR pipeline configuration. When set, enables weighted
   /// fallback across multiple OCR backends based on output quality.
   /// When None, uses the single `backend` field (same as today).
   final OcrPipelineConfig? pipeline;
-
   /// Enable automatic page rotation based on orientation detection.
   ///
   /// When enabled, uses Tesseract's `DetectOrientationScript()` to detect
@@ -918,19 +815,16 @@ class OcrConfig {
   /// rotated with high confidence, the image is corrected before recognition.
   /// This is critical for handling rotated scanned documents.
   final bool autoRotate;
-
   /// VLM (Vision Language Model) OCR configuration.
   ///
   /// Required when `backend` is `"vlm"`. Uses liter-llm to send page
   /// images to a vision model for text extraction.
   final LlmConfig? vlmConfig;
-
   /// Custom Jinja2 prompt template for VLM OCR.
   ///
   /// When `None`, uses the default template. Available variables:
   /// - `{{ language }}` — The document language code (e.g., "eng", "deu").
   final String? vlmPrompt;
-
   /// Hardware acceleration for ONNX Runtime models (e.g. PaddleOCR, layout detection).
   ///
   /// Not user-configurable via config files — injected at runtime from
@@ -963,10 +857,8 @@ class OcrConfig {
 class PageConfig {
   /// Extract pages as separate array (ExtractionResult.pages)
   final bool extractPages;
-
   /// Insert page markers in main content string
   final bool insertPageMarkers;
-
   /// Page marker format (use {page_num} placeholder)
   /// Default: "\n\n<!-- PAGE {page_num} -->\n\n"
   final String markerFormat;
@@ -981,31 +873,23 @@ class PageConfig {
 class PdfConfig {
   /// PDF extraction backend. Default: `Pdfium`.
   final PdfBackend backend;
-
   /// Extract images from PDF
   final bool extractImages;
-
   /// List of passwords to try when opening encrypted PDFs
   final List<String>? passwords;
-
   /// Extract PDF metadata
   final bool extractMetadata;
-
   /// Hierarchy extraction configuration (None = hierarchy extraction disabled)
   final HierarchyConfig? hierarchy;
-
   /// Extract PDF annotations (text notes, highlights, links, stamps).
   /// Default: false
   final bool extractAnnotations;
-
   /// Top margin fraction (0.0–1.0) of page height to exclude headers/running heads.
   /// Default: 0.06 (6%)
   final double? topMarginFraction;
-
   /// Bottom margin fraction (0.0–1.0) of page height to exclude footers/page numbers.
   /// Default: 0.05 (5%)
   final double? bottomMarginFraction;
-
   /// Allow single-column pseudo tables in extraction results.
   ///
   /// By default, tables with fewer than 2 columns (layout-guided) or 3 columns
@@ -1035,16 +919,13 @@ class PdfConfig {
 class HierarchyConfig {
   /// Enable hierarchy extraction
   final bool enabled;
-
   /// Number of font size clusters to use for hierarchy levels (1-7)
   ///
   /// Default: 6, which provides H1-H6 heading levels with body text.
   /// Larger values create more fine-grained hierarchy levels.
   final int kClusters;
-
   /// Include bounding box information in hierarchy blocks
   final bool includeBbox;
-
   /// OCR coverage threshold for smart OCR triggering (0.0-1.0)
   ///
   /// Determines when OCR should be triggered based on text block coverage.
@@ -1063,16 +944,12 @@ class HierarchyConfig {
 class PostProcessorConfig {
   /// Enable post-processors
   final bool enabled;
-
   /// Whitelist of processor names to run (None = all enabled)
   final List<String>? enabledProcessors;
-
   /// Blacklist of processor names to skip (None = none disabled)
   final List<String>? disabledProcessors;
-
   /// Pre-computed AHashSet for O(1) enabled processor lookup
   final String? enabledSet;
-
   /// Pre-computed AHashSet for O(1) disabled processor lookup
   final String? disabledSet;
   PostProcessorConfig({
@@ -1105,34 +982,27 @@ class ChunkingConfig {
   ///
   /// Default: 1000
   final int maxCharacters;
-
   /// Overlap between chunks (in units determined by `sizing`).
   ///
   /// Default: 200
   final int overlap;
-
   /// Whether to trim whitespace from chunk boundaries.
   ///
   /// Default: true
   final bool trim;
-
   /// Type of chunker to use (Text or Markdown).
   ///
   /// Default: Text
   final ChunkerType chunkerType;
-
   /// Optional embedding configuration for chunk embeddings.
   final EmbeddingConfig? embedding;
-
   /// Use a preset configuration (overrides individual settings if provided).
   final String? preset;
-
   /// How to measure chunk size.
   ///
   /// Default: `Characters` (Unicode character count).
   /// Enable `chunking-tiktoken` or `chunking-tokenizers` features for token-based sizing.
   final ChunkSizing sizing;
-
   /// When `true` and `chunker_type` is `Markdown`, prepend the heading hierarchy
   /// path (e.g. `"# Title > ## Section\n\n"`) to each chunk's content string.
   ///
@@ -1141,7 +1011,6 @@ class ChunkingConfig {
   ///
   /// Default: `false`
   final bool prependHeadingContext;
-
   /// Optional cosine similarity threshold for semantic topic boundary detection.
   ///
   /// Only used when `chunker_type` is `Semantic` and an `EmbeddingConfig` is
@@ -1170,28 +1039,22 @@ class ChunkingConfig {
 class EmbeddingConfig {
   /// The embedding model to use (defaults to "balanced" preset if not specified)
   final EmbeddingModelType model;
-
   /// Whether to normalize embedding vectors (recommended for cosine similarity)
   final bool normalize;
-
   /// Batch size for embedding generation
   final int batchSize;
-
   /// Show model download progress
   final bool showDownloadProgress;
-
   /// Custom cache directory for model files
   ///
   /// Defaults to `~/.cache/kreuzberg/embeddings/` if not specified.
   /// Allows full customization of model download location.
   final String? cacheDir;
-
   /// Hardware acceleration for the embedding ONNX model.
   ///
   /// When set, controls which execution provider (CPU, CUDA, CoreML, TensorRT)
   /// is used for inference. Defaults to `None` (auto-select per platform).
   final AccelerationConfig? acceleration;
-
   /// Maximum wall-clock duration (in seconds) for a single `embed()` call when
   /// using [`EmbeddingModelType::Plugin`].
   ///
@@ -1237,18 +1100,14 @@ class TreeSitterConfig {
   /// When `false`, tree-sitter analysis is completely skipped even if
   /// the config section is present.
   final bool enabled;
-
   /// Custom cache directory for downloaded grammars.
   ///
   /// When `None`, uses the default: `~/.cache/tree-sitter-language-pack/v{version}/libs/`.
   final String? cacheDir;
-
   /// Languages to pre-download on init (e.g., `["python", "rust"]`).
   final List<String>? languages;
-
   /// Language groups to pre-download (e.g., `["web", "systems", "scripting"]`).
   final List<String>? groups;
-
   /// Processing options for code analysis.
   final TreeSitterProcessConfig process;
   TreeSitterConfig({
@@ -1266,28 +1125,20 @@ class TreeSitterConfig {
 class TreeSitterProcessConfig {
   /// Extract structural items (functions, classes, structs, etc.). Default: true.
   final bool structure;
-
   /// Extract import statements. Default: true.
   final bool imports;
-
   /// Extract export statements. Default: true.
   final bool exports;
-
   /// Extract comments. Default: false.
   final bool comments;
-
   /// Extract docstrings. Default: false.
   final bool docstrings;
-
   /// Extract symbol definitions. Default: false.
   final bool symbols;
-
   /// Include parse diagnostics. Default: false.
   final bool diagnostics;
-
   /// Maximum chunk size in bytes. `None` disables chunking.
   final int? chunkMaxSize;
-
   /// Content rendering mode for code extraction.
   final CodeContentMode contentMode;
   TreeSitterProcessConfig({
@@ -1309,10 +1160,12 @@ class TreeSitterProcessConfig {
 class SupportedFormat {
   /// File extension (without leading dot), e.g., "pdf", "docx"
   final String extension_;
-
   /// MIME type string, e.g., "application/pdf"
   final String mimeType;
-  SupportedFormat({required this.extension_, required this.mimeType});
+  SupportedFormat({
+    required this.extension_,
+    required this.mimeType,
+  });
 }
 
 /// API server configuration.
@@ -1330,20 +1183,16 @@ class SupportedFormat {
 class ServerConfig {
   /// Server host address (e.g., "127.0.0.1", "0.0.0.0")
   final String host;
-
   /// Server port number
   final int port;
-
   /// CORS allowed origins. Empty vector means allow all origins.
   ///
   /// If this is an empty vector, the server will accept requests from any origin.
   /// If populated with specific origins (e.g., ["https://example.com"]), only
   /// those origins will be allowed.
   final List<String> corsOrigins;
-
   /// Maximum size of request body in bytes (default: 100 MB)
   final int maxRequestBodyBytes;
-
   /// Maximum size of multipart fields in bytes (default: 100 MB)
   final int maxMultipartFieldBytes;
   ServerConfig({
@@ -1374,10 +1223,8 @@ class StreamReader {}
 class ImageOcrResult {
   /// Extracted text content
   final String content;
-
   /// Character byte boundaries per frame (for multi-frame TIFFs)
   final List<PageBoundary>? boundaries;
-
   /// Per-frame content information
   final List<PageContent>? pageContents;
   ImageOcrResult({
@@ -1465,7 +1312,11 @@ class Note {
   final String id;
   final String noteType;
   final List<String> paragraphs;
-  Note({required this.id, required this.noteType, required this.paragraphs});
+  Note({
+    required this.id,
+    required this.noteType,
+    required this.paragraphs,
+  });
 }
 
 /// Page margins converted to points (1/72 inch).
@@ -1492,25 +1343,18 @@ class PageMarginsPoints {
 class StyleDefinition {
   /// The style ID (`w:styleId` attribute).
   final String id;
-
   /// Human-readable name (`<w:name w:val="..."/>`).
   final String? name;
-
   /// Style type: paragraph, character, table, or numbering.
   final String styleType;
-
   /// ID of the parent style (`<w:basedOn w:val="..."/>`).
   final String? basedOn;
-
   /// ID of the style to apply to the next paragraph (`<w:next w:val="..."/>`).
   final String? nextStyle;
-
   /// Whether this is the default style for its type.
   final bool isDefault;
-
   /// Paragraph properties defined directly on this style.
   final String paragraphProperties;
-
   /// Run properties defined directly on this style.
   final String runProperties;
   StyleDefinition({
@@ -1565,28 +1409,20 @@ class TableProperties {
 class XlsxAppProperties {
   /// Application name (e.g., "Microsoft Excel")
   final String? application;
-
   /// Application version
   final String? appVersion;
-
   /// Document security level
   final int? docSecurity;
-
   /// Scale crop flag
   final bool? scaleCrop;
-
   /// Links up to date flag
   final bool? linksUpToDate;
-
   /// Shared document flag
   final bool? sharedDoc;
-
   /// Hyperlinks changed flag
   final bool? hyperlinksChanged;
-
   /// Company name
   final String? company;
-
   /// Worksheet names
   final List<String> worksheetNames;
   XlsxAppProperties({
@@ -1608,46 +1444,32 @@ class XlsxAppProperties {
 class PptxAppProperties {
   /// Application name (e.g., "Microsoft Office PowerPoint")
   final String? application;
-
   /// Application version
   final String? appVersion;
-
   /// Total editing time in minutes
   final int? totalTime;
-
   /// Company name
   final String? company;
-
   /// Document security level
   final int? docSecurity;
-
   /// Scale crop flag
   final bool? scaleCrop;
-
   /// Links up to date flag
   final bool? linksUpToDate;
-
   /// Shared document flag
   final bool? sharedDoc;
-
   /// Hyperlinks changed flag
   final bool? hyperlinksChanged;
-
   /// Number of slides
   final int? slides;
-
   /// Number of notes
   final int? notes;
-
   /// Number of hidden slides
   final int? hiddenSlides;
-
   /// Number of multimedia clips
   final int? multimediaClips;
-
   /// Presentation format (e.g., "Widescreen", "Standard")
   final String? presentationFormat;
-
   /// Slide titles
   final List<String> slideTitles;
   PptxAppProperties({
@@ -1682,55 +1504,38 @@ class CustomProperties {}
 class OdtProperties {
   /// Document title (dc:title)
   final String? title;
-
   /// Document subject/topic (dc:subject)
   final String? subject;
-
   /// Current document creator/author (dc:creator)
   final String? creator;
-
   /// Initial creator of the document (meta:initial-creator)
   final String? initialCreator;
-
   /// Keywords or tags (meta:keyword)
   final String? keywords;
-
   /// Document description (dc:description)
   final String? description;
-
   /// Current modification date (dc:date)
   final String? date;
-
   /// Initial creation date (meta:creation-date)
   final String? creationDate;
-
   /// Document language (dc:language)
   final String? language;
-
   /// Generator/application that created the document (meta:generator)
   final String? generator;
-
   /// Editing duration in ISO 8601 format (meta:editing-duration)
   final String? editingDuration;
-
   /// Number of edits/revisions (meta:editing-cycles)
   final String? editingCycles;
-
   /// Document statistics - page count (meta:page-count)
   final int? pageCount;
-
   /// Document statistics - word count (meta:word-count)
   final int? wordCount;
-
   /// Document statistics - character count (meta:character-count)
   final int? characterCount;
-
   /// Document statistics - paragraph count (meta:paragraph-count)
   final int? paragraphCount;
-
   /// Document statistics - table count (meta:table-count)
   final int? tableCount;
-
   /// Document statistics - image count (meta:image-count)
   final int? imageCount;
   OdtProperties({
@@ -2163,13 +1968,10 @@ class TokenReductionConfig {
 class PdfAnnotation {
   /// The type of annotation.
   final PdfAnnotationType annotationType;
-
   /// Text content of the annotation (e.g., comment text, link URL).
   final String? content;
-
   /// Page number where the annotation appears (1-indexed).
   final int pageNumber;
-
   /// Bounding box of the annotation on the page.
   final String? boundingBox;
   PdfAnnotation({
@@ -2194,25 +1996,18 @@ class PdfAnnotation {
 class DjotContent {
   /// Plain text representation for backwards compatibility
   final String plainText;
-
   /// Structured block-level content
   final List<FormattedBlock> blocks;
-
   /// Metadata from YAML frontmatter
   final Metadata metadata;
-
   /// Extracted tables as structured data
   final List<String> tables;
-
   /// Extracted images with metadata
   final List<DjotImage> images;
-
   /// Extracted links with URLs
   final List<DjotLink> links;
-
   /// Footnote definitions
   final List<Footnote> footnotes;
-
   /// Attributes mapped by element identifier (if present)
   final List<String> attributes;
   DjotContent({
@@ -2233,22 +2028,16 @@ class DjotContent {
 class FormattedBlock {
   /// Type of block element
   final BlockType blockType;
-
   /// Heading level (1-6) for headings, or nesting level for lists
   final int? level;
-
   /// Inline content within the block
   final List<InlineElement> inlineContent;
-
   /// Element attributes (classes, IDs, key-value pairs)
   final String? attributes;
-
   /// Language identifier for code blocks
   final String? language;
-
   /// Raw code content for code blocks
   final String? code;
-
   /// Nested blocks for containers (blockquotes, list items, divs)
   final List<FormattedBlock> children;
   FormattedBlock({
@@ -2268,13 +2057,10 @@ class FormattedBlock {
 class InlineElement {
   /// Type of inline element
   final InlineType elementType;
-
   /// Text content
   final String content;
-
   /// Element attributes
   final String? attributes;
-
   /// Additional metadata (e.g., href for links, src/alt for images)
   final Map<String, String>? metadata;
   InlineElement({
@@ -2289,13 +2075,10 @@ class InlineElement {
 class DjotImage {
   /// Image source URL or path
   final String src;
-
   /// Alternative text
   final String alt;
-
   /// Optional title
   final String? title;
-
   /// Element attributes
   final String? attributes;
   DjotImage({
@@ -2310,13 +2093,10 @@ class DjotImage {
 class DjotLink {
   /// Link URL
   final String url;
-
   /// Link text content
   final String text;
-
   /// Optional title
   final String? title;
-
   /// Element attributes
   final String? attributes;
   DjotLink({
@@ -2331,10 +2111,12 @@ class DjotLink {
 class Footnote {
   /// Footnote label
   final String label;
-
   /// Footnote content blocks
   final List<FormattedBlock> content;
-  Footnote({required this.label, required this.content});
+  Footnote({
+    required this.label,
+    required this.content,
+  });
 }
 
 /// Top-level structured document representation.
@@ -2350,13 +2132,11 @@ class Footnote {
 class DocumentStructure {
   /// All nodes in document/reading order.
   final List<DocumentNode> nodes;
-
   /// Origin format identifier (e.g. "docx", "pptx", "html", "pdf").
   ///
   /// Allows renderers to apply format-aware heuristics when converting
   /// the document tree to output formats.
   final String? sourceFormat;
-
   /// Resolved relationships between nodes (footnote refs, citations, anchor links, etc.).
   ///
   /// Populated during derivation from the internal document representation.
@@ -2373,10 +2153,8 @@ class DocumentStructure {
 class DocumentRelationship {
   /// Source node index (the referencing node).
   final int source;
-
   /// Target node index (the referenced node).
   final int target;
-
   /// Semantic kind of the relationship.
   final RelationshipKind kind;
   DocumentRelationship({
@@ -2393,33 +2171,24 @@ class DocumentRelationship {
 class DocumentNode {
   /// Deterministic identifier (hash of content + position).
   final String id;
-
   /// Node content — tagged enum, type-specific data only.
   final NodeContent content;
-
   /// Parent node index (`None` = root-level node).
   final int? parent;
-
   /// Child node indices in reading order.
   final List<int> children;
-
   /// Content layer classification.
   final ContentLayer contentLayer;
-
   /// Page number where this node starts (1-indexed).
   final int? page;
-
   /// Page number where this node ends (for multi-page tables/sections).
   final int? pageEnd;
-
   /// Bounding box in document coordinates.
   final String? bbox;
-
   /// Inline annotations (formatting, links) on this node's text content.
   ///
   /// Only meaningful for text-carrying nodes; empty for containers.
   final List<TextAnnotation> annotations;
-
   /// Format-specific key-value attributes.
   ///
   /// Extensible bag for data that doesn't warrant a typed field: CSS classes,
@@ -2443,22 +2212,16 @@ class DocumentNode {
 class GridCell {
   /// Cell text content.
   final String content;
-
   /// Zero-indexed row position.
   final int row;
-
   /// Zero-indexed column position.
   final int col;
-
   /// Number of rows this cell spans.
   final int rowSpan;
-
   /// Number of columns this cell spans.
   final int colSpan;
-
   /// Whether this is a header cell.
   final bool isHeader;
-
   /// Bounding box for this cell (if available).
   final String? bbox;
   GridCell({
@@ -2479,13 +2242,15 @@ class GridCell {
 class TextAnnotation {
   /// Start byte offset in the node's text content (inclusive).
   final int start;
-
   /// End byte offset in the node's text content (exclusive).
   final int end;
-
   /// Annotation type.
   final AnnotationKind kind;
-  TextAnnotation({required this.start, required this.end, required this.kind});
+  TextAnnotation({
+    required this.start,
+    required this.end,
+    required this.kind,
+  });
 }
 
 /// General extraction result used by the core extraction API.
@@ -2497,34 +2262,29 @@ class ExtractionResult {
   final Metadata metadata;
   final List<String> tables;
   final List<String>? detectedLanguages;
-
   /// Text chunks when chunking is enabled.
   ///
   /// When chunking configuration is provided, the content is split into
   /// overlapping chunks for efficient processing. Each chunk contains the text,
   /// optional embeddings (if enabled), and metadata about its position.
   final List<Chunk>? chunks;
-
   /// Extracted images from the document.
   ///
   /// When image extraction is enabled via `ImageExtractionConfig`, this field
   /// contains all images found in the document with their raw data and metadata.
   /// Each image may optionally contain a nested `ocr_result` if OCR was performed.
   final List<ExtractedImage>? images;
-
   /// Per-page content when page extraction is enabled.
   ///
   /// When page extraction is configured, the document is split into per-page content
   /// with tables and images mapped to their respective pages.
   final List<PageContent>? pages;
-
   /// Semantic elements when element-based result format is enabled.
   ///
   /// When result_format is set to ElementBased, this field contains semantic
   /// elements with type classification, unique identifiers, and metadata for
   /// Unstructured-compatible element-based processing.
   final List<Element>? elements;
-
   /// Rich Djot content structure (when extracting Djot documents).
   ///
   /// When extracting Djot documents with structured extraction enabled,
@@ -2539,7 +2299,6 @@ class ExtractionResult {
   ///
   /// Always `None` for non-Djot documents.
   final DjotContent? djotContent;
-
   /// OCR elements with full spatial and confidence metadata.
   ///
   /// When OCR is performed with element extraction enabled, this field contains
@@ -2554,7 +2313,6 @@ class ExtractionResult {
   ///
   /// Only populated when `OcrElementConfig.include_elements` is true.
   final List<OcrElement>? ocrElements;
-
   /// Structured document tree (when document structure extraction is enabled).
   ///
   /// When `include_document_structure` is true in `ExtractionConfig`, this field
@@ -2567,13 +2325,11 @@ class ExtractionResult {
   ///
   /// Independent of `result_format` — can be combined with Unified or ElementBased.
   final DocumentStructure? document;
-
   /// Document quality score from quality analysis.
   ///
   /// A value between 0.0 and 1.0 indicating the overall text quality.
   /// Previously stored in `metadata.additional["quality_score"]`.
   final double? qualityScore;
-
   /// Non-fatal warnings collected during processing pipeline stages.
   ///
   /// Captures errors from optional pipeline features (embedding, chunking,
@@ -2581,42 +2337,36 @@ class ExtractionResult {
   /// but may indicate degraded results.
   /// Previously stored as individual keys in `metadata.additional`.
   final List<ProcessingWarning> processingWarnings;
-
   /// PDF annotations extracted from the document.
   ///
   /// When annotation extraction is enabled via `PdfConfig::extract_annotations`,
   /// this field contains text notes, highlights, links, stamps, and other
   /// annotations found in PDF documents.
   final List<PdfAnnotation>? annotations;
-
   /// Nested extraction results from archive contents.
   ///
   /// When extracting archives, each processable file inside produces its own
   /// full extraction result. Set to `None` for non-archive formats.
   /// Use `max_archive_depth` in config to control recursion depth.
   final List<ArchiveEntry>? children;
-
   /// URIs/links discovered during document extraction.
   ///
   /// Contains hyperlinks, image references, citations, email addresses, and
   /// other URI-like references found in the document. Always extracted when
   /// present in the source document.
   final List<Uri>? uris;
-
   /// Structured extraction output from LLM-based JSON schema extraction.
   ///
   /// When `structured_extraction` is configured in `ExtractionConfig`, the
   /// extracted document content is sent to a VLM with the provided JSON schema.
   /// The response is parsed and stored here as a JSON value matching the schema.
   final String? structuredOutput;
-
   /// Code intelligence results from tree-sitter analysis.
   ///
   /// Populated when extracting source code files with the `tree-sitter` feature.
   /// Contains metrics, structural analysis, imports/exports, comments,
   /// docstrings, symbols, diagnostics, and optionally chunked code segments.
   final String? codeIntelligence;
-
   /// LLM token usage and cost data for all LLM calls made during this extraction.
   ///
   /// Contains one entry per LLM call. Multiple entries are produced when
@@ -2625,14 +2375,12 @@ class ExtractionResult {
   ///
   /// `None` when no LLM was used.
   final List<LlmUsage>? llmUsage;
-
   /// Pre-rendered content in the requested output format.
   ///
   /// Populated during `derive_extraction_result` before tree derivation consumes
   /// element data. `apply_output_format` swaps this into `content` at the end
   /// of the pipeline, after post-processors have operated on plain text.
   final String? formattedContent;
-
   /// Structured hOCR document for the OCR+layout pipeline.
   ///
   /// When tesseract produces hOCR output, the parsed `InternalDocument` carries
@@ -2672,10 +2420,8 @@ class ExtractionResult {
 class ArchiveEntry {
   /// Archive-relative file path (e.g. "folder/document.pdf").
   final String path;
-
   /// Detected MIME type of the file.
   final String mimeType;
-
   /// Full extraction result for this file.
   final ExtractionResult result;
   ArchiveEntry({
@@ -2693,10 +2439,12 @@ class ProcessingWarning {
   /// The pipeline stage or feature that produced this warning
   /// (e.g., "embedding", "chunking", "language_detection", "output_format").
   final String source;
-
   /// Human-readable description of what went wrong.
   final String message;
-  ProcessingWarning({required this.source, required this.message});
+  ProcessingWarning({
+    required this.source,
+    required this.message,
+  });
 }
 
 /// Token usage and cost data for a single LLM call made during extraction.
@@ -2707,23 +2455,17 @@ class ProcessingWarning {
 class LlmUsage {
   /// The LLM model identifier (e.g. "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514").
   final String model;
-
   /// The pipeline stage that triggered this LLM call
   /// (e.g. "vlm_ocr", "structured_extraction", "embeddings").
   final String source;
-
   /// Number of input/prompt tokens consumed.
   final int? inputTokens;
-
   /// Number of output/completion tokens generated.
   final int? outputTokens;
-
   /// Total tokens (input + output).
   final int? totalTokens;
-
   /// Estimated cost in USD based on the provider's published pricing.
   final double? estimatedCost;
-
   /// Why the model stopped generating (e.g. "stop", "length", "content_filter").
   final String? finishReason;
   LlmUsage({
@@ -2745,19 +2487,16 @@ class LlmUsage {
 class Chunk {
   /// The text content of this chunk.
   final String content;
-
   /// Semantic structural classification of this chunk.
   ///
   /// Assigned by the heuristic classifier based on content patterns and
   /// heading context. Defaults to `ChunkType::Unknown` when no rule matches.
   final ChunkType chunkType;
-
   /// Optional embedding vector for this chunk.
   ///
   /// Only populated when `EmbeddingConfig` is provided in chunking configuration.
   /// The dimensionality depends on the chosen embedding model.
   final List<double>? embedding;
-
   /// Metadata about this chunk's position and properties.
   final ChunkMetadata metadata;
   Chunk({
@@ -2782,41 +2521,36 @@ class HeadingContext {
 class HeadingLevel {
   /// Heading depth (1 = h1, 2 = h2, etc.)
   final int level;
-
   /// The text content of the heading.
   final String text;
-  HeadingLevel({required this.level, required this.text});
+  HeadingLevel({
+    required this.level,
+    required this.text,
+  });
 }
 
 /// Metadata about a chunk's position in the original document.
 class ChunkMetadata {
   /// Byte offset where this chunk starts in the original text (UTF-8 valid boundary).
   final int byteStart;
-
   /// Byte offset where this chunk ends in the original text (UTF-8 valid boundary).
   final int byteEnd;
-
   /// Number of tokens in this chunk (if available).
   ///
   /// This is calculated by the embedding model's tokenizer if embeddings are enabled.
   final int? tokenCount;
-
   /// Zero-based index of this chunk in the document.
   final int chunkIndex;
-
   /// Total number of chunks in the document.
   final int totalChunks;
-
   /// First page number this chunk spans (1-indexed).
   ///
   /// Only populated when page tracking is enabled in extraction configuration.
   final int? firstPage;
-
   /// Last page number this chunk spans (1-indexed, equal to first_page for single-page chunks).
   ///
   /// Only populated when page tracking is enabled in extraction configuration.
   final int? lastPage;
-
   /// Heading context when using Markdown chunker.
   ///
   /// Contains the heading hierarchy this chunk falls under.
@@ -2843,45 +2577,33 @@ class ExtractedImage {
   /// Raw image data (PNG, JPEG, WebP, etc. bytes).
   /// Uses `bytes::Bytes` for cheap cloning of large buffers.
   final Uint8List data;
-
   /// Image format (e.g., "jpeg", "png", "webp")
   /// Uses Cow<'static, str> to avoid allocation for static literals.
   final String format;
-
   /// Zero-indexed position of this image in the document/page
   final int imageIndex;
-
   /// Page/slide number where image was found (1-indexed)
   final int? pageNumber;
-
   /// Image width in pixels
   final int? width;
-
   /// Image height in pixels
   final int? height;
-
   /// Colorspace information (e.g., "RGB", "CMYK", "Gray")
   final String? colorspace;
-
   /// Bits per color component (e.g., 8, 16)
   final int? bitsPerComponent;
-
   /// Whether this image is a mask image
   final bool isMask;
-
   /// Optional description of the image
   final String? description;
-
   /// Nested OCR extraction result (if image was OCRed)
   ///
   /// When OCR is performed on this image, the result is embedded here
   /// rather than in a separate collection, making the relationship explicit.
   final ExtractionResult? ocrResult;
-
   /// Bounding box of the image on the page (PDF coordinates: x0=left, y0=bottom, x1=right, y1=top).
   /// Only populated for PDF-extracted images when position data is available from pdfium.
   final String? boundingBox;
-
   /// Original source path of the image within the document archive (e.g., "media/image1.png" in DOCX).
   /// Used for rendering image references when the binary data is not extracted.
   final String? sourcePath;
@@ -2906,16 +2628,12 @@ class ExtractedImage {
 class ElementMetadata {
   /// Page number (1-indexed)
   final int? pageNumber;
-
   /// Source filename or document name
   final String? filename;
-
   /// Bounding box coordinates if available
   final String? coordinates;
-
   /// Position index in the element sequence
   final int? elementIndex;
-
   /// Additional custom metadata
   final Map<String, String> additional;
   ElementMetadata({
@@ -2934,13 +2652,10 @@ class ElementMetadata {
 class Element {
   /// Unique element identifier
   final String elementId;
-
   /// Semantic type of this element
   final ElementType elementType;
-
   /// Text content of the element
   final String text;
-
   /// Metadata about the element
   final ElementMetadata metadata;
   Element({
@@ -2958,10 +2673,12 @@ class Element {
 class ExcelWorkbook {
   /// All sheets in the workbook
   final List<ExcelSheet> sheets;
-
   /// Workbook-level metadata (author, creation date, etc.)
   final Map<String, String> metadata;
-  ExcelWorkbook({required this.sheets, required this.metadata});
+  ExcelWorkbook({
+    required this.sheets,
+    required this.metadata,
+  });
 }
 
 /// Single Excel worksheet.
@@ -2971,19 +2688,14 @@ class ExcelWorkbook {
 class ExcelSheet {
   /// Sheet name as it appears in Excel
   final String name;
-
   /// Sheet content converted to Markdown tables
   final String markdown;
-
   /// Number of rows
   final int rowCount;
-
   /// Number of columns
   final int colCount;
-
   /// Total number of non-empty cells
   final int cellCount;
-
   /// Pre-extracted table cells (2D vector of cell values)
   /// Populated during markdown generation to avoid re-parsing markdown.
   /// None for empty sheets.
@@ -3005,10 +2717,8 @@ class ExcelSheet {
 class XmlExtractionResult {
   /// Extracted text content (XML structure filtered out)
   final String content;
-
   /// Total number of XML elements processed
   final int elementCount;
-
   /// List of unique element names found (sorted)
   final List<String> uniqueElements;
   XmlExtractionResult({
@@ -3025,22 +2735,16 @@ class XmlExtractionResult {
 class TextExtractionResult {
   /// Extracted text content
   final String content;
-
   /// Number of lines
   final int lineCount;
-
   /// Number of words
   final int wordCount;
-
   /// Number of characters
   final int characterCount;
-
   /// Markdown headers (text only, Markdown files only)
   final List<String>? headers;
-
   /// Markdown links as (text, URL) tuples (Markdown files only)
   final List<String>? links;
-
   /// Code blocks as (language, code) tuples (Markdown files only)
   final List<String>? codeBlocks;
   TextExtractionResult({
@@ -3060,34 +2764,24 @@ class TextExtractionResult {
 class PptxExtractionResult {
   /// Extracted text content from all slides
   final String content;
-
   /// Presentation metadata
   final PptxMetadata metadata;
-
   /// Total number of slides
   final int slideCount;
-
   /// Total number of embedded images
   final int imageCount;
-
   /// Total number of tables
   final int tableCount;
-
   /// Extracted images from the presentation
   final List<ExtractedImage> images;
-
   /// Slide structure with boundaries (when page tracking is enabled)
   final PageStructure? pageStructure;
-
   /// Per-slide content (when page tracking is enabled)
   final List<PageContent>? pageContents;
-
   /// Structured document representation
   final DocumentStructure? document;
-
   /// Hyperlinks discovered in slides as (url, optional_label) pairs.
   final List<String> hyperlinks;
-
   /// Office metadata extracted from docProps/core.xml and docProps/app.xml.
   ///
   /// Contains keys like "title", "author", "created_by", "subject", "keywords",
@@ -3115,37 +2809,26 @@ class PptxExtractionResult {
 class EmailExtractionResult {
   /// Email subject line
   final String? subject;
-
   /// Sender email address
   final String? fromEmail;
-
   /// Primary recipient email addresses
   final List<String> toEmails;
-
   /// CC recipient email addresses
   final List<String> ccEmails;
-
   /// BCC recipient email addresses
   final List<String> bccEmails;
-
   /// Email date/timestamp
   final String? date;
-
   /// Message-ID header value
   final String? messageId;
-
   /// Plain text version of the email body
   final String? plainText;
-
   /// HTML version of the email body
   final String? htmlContent;
-
   /// Cleaned/processed text content
   final String cleanedText;
-
   /// List of email attachments
   final List<EmailAttachment> attachments;
-
   /// Additional email headers and metadata
   final Map<String, String> metadata;
   EmailExtractionResult({
@@ -3170,19 +2853,14 @@ class EmailExtractionResult {
 class EmailAttachment {
   /// Attachment name (from Content-Disposition header)
   final String? name;
-
   /// Filename of the attachment
   final String? filename;
-
   /// MIME type of the attachment
   final String? mimeType;
-
   /// Size in bytes
   final int? size;
-
   /// Whether this attachment is an image
   final bool isImage;
-
   /// Attachment data (if extracted).
   /// Uses `bytes::Bytes` for cheap cloning of large buffers.
   final Uint8List? data;
@@ -3203,20 +2881,15 @@ class EmailAttachment {
 class OcrExtractionResult {
   /// Recognized text content
   final String content;
-
   /// Original MIME type of the processed image
   final String mimeType;
-
   /// OCR processing metadata (confidence scores, language, etc.)
   final Map<String, String> metadata;
-
   /// Tables detected and extracted via OCR
   final List<OcrTable> tables;
-
   /// Structured OCR elements with bounding boxes and confidence scores.
   /// Available when TSV output is requested or table detection is enabled.
   final List<OcrElement>? ocrElements;
-
   /// Structured document produced from hOCR parsing.
   /// Carries paragraph structure, bounding boxes, and confidence scores
   /// that the flattened `content` string discards.
@@ -3237,13 +2910,10 @@ class OcrExtractionResult {
 class OcrTable {
   /// Table cells as a 2D vector (rows × columns)
   final List<List<String>> cells;
-
   /// Markdown representation of the table
   final String markdown;
-
   /// Page number where the table was found (1-indexed)
   final int pageNumber;
-
   /// Bounding box of the table in pixel coordinates (from OCR word positions).
   final OcrTableBoundingBox? boundingBox;
   OcrTable({
@@ -3258,13 +2928,10 @@ class OcrTable {
 class OcrTableBoundingBox {
   /// Left x-coordinate (pixels)
   final int left;
-
   /// Top y-coordinate (pixels)
   final int top;
-
   /// Right x-coordinate (pixels)
   final int right;
-
   /// Bottom y-coordinate (pixels)
   final int bottom;
   OcrTableBoundingBox({
@@ -3283,22 +2950,16 @@ class OcrTableBoundingBox {
 class ImagePreprocessingConfig {
   /// Target DPI for the image (300 is standard, 600 for small text).
   final int targetDpi;
-
   /// Auto-detect and correct image rotation.
   final bool autoRotate;
-
   /// Correct skew (tilted images).
   final bool deskew;
-
   /// Remove noise from the image.
   final bool denoise;
-
   /// Enhance contrast for better text visibility.
   final bool contrastEnhance;
-
   /// Binarization method: "otsu", "sauvola", "adaptive".
   final String binarizationMethod;
-
   /// Invert colors (white text on black → black on white).
   final bool invertColors;
   ImagePreprocessingConfig({
@@ -3320,7 +2981,6 @@ class ImagePreprocessingConfig {
 class TesseractConfig {
   /// Language code (e.g., "eng", "deu", "fra")
   final String language;
-
   /// Page Segmentation Mode (0-13).
   ///
   /// Common values:
@@ -3328,10 +2988,8 @@ class TesseractConfig {
   /// - 6: Assume a single uniform block of text
   /// - 11: Sparse text with no particular order
   final int psm;
-
   /// Output format ("text" or "markdown")
   final String outputFormat;
-
   /// OCR Engine Mode (0-3).
   ///
   /// - 0: Legacy engine only
@@ -3339,60 +2997,43 @@ class TesseractConfig {
   /// - 2: Legacy + LSTM
   /// - 3: Default (based on what's available)
   final int oem;
-
   /// Minimum confidence threshold (0.0-100.0).
   ///
   /// Words with confidence below this threshold may be rejected or flagged.
   final double minConfidence;
-
   /// Image preprocessing configuration.
   ///
   /// Controls how images are preprocessed before OCR. Can significantly
   /// improve quality for scanned documents or low-quality images.
   final ImagePreprocessingConfig? preprocessing;
-
   /// Enable automatic table detection and reconstruction
   final bool enableTableDetection;
-
   /// Minimum confidence threshold for table detection (0.0-1.0)
   final double tableMinConfidence;
-
   /// Column threshold for table detection (pixels)
   final int tableColumnThreshold;
-
   /// Row threshold ratio for table detection (0.0-1.0)
   final double tableRowThresholdRatio;
-
   /// Enable OCR result caching
   final bool useCache;
-
   /// Use pre-adapted templates for character classification
   final bool classifyUsePreAdaptedTemplates;
-
   /// Enable N-gram language model
   final bool languageModelNgramOn;
-
   /// Don't reject good words during block-level processing
   final bool tesseditDontBlkrejGoodWds;
-
   /// Don't reject good words during row-level processing
   final bool tesseditDontRowrejGoodWds;
-
   /// Enable dictionary correction
   final bool tesseditEnableDictCorrection;
-
   /// Whitelist of allowed characters (empty = all allowed)
   final String tesseditCharWhitelist;
-
   /// Blacklist of forbidden characters (empty = none forbidden)
   final String tesseditCharBlacklist;
-
   /// Use primary language params model
   final bool tesseditUsePrimaryParamsModel;
-
   /// Variable-width space detection
   final bool textordSpaceSizeIsVariable;
-
   /// Use adaptive thresholding method
   final bool thresholdingMethod;
   TesseractConfig({
@@ -3427,37 +3068,26 @@ class TesseractConfig {
 class ImagePreprocessingMetadata {
   /// Original image dimensions (width, height) in pixels
   final List<int> originalDimensions;
-
   /// Original image DPI (horizontal, vertical)
   final List<double> originalDpi;
-
   /// Target DPI from configuration
   final int targetDpi;
-
   /// Scaling factor applied to the image
   final double scaleFactor;
-
   /// Whether DPI was auto-adjusted based on content
   final bool autoAdjusted;
-
   /// Final DPI after processing
   final int finalDpi;
-
   /// New dimensions after resizing (if resized)
   final List<int>? newDimensions;
-
   /// Resampling algorithm used ("LANCZOS3", "CATMULLROM", etc.)
   final String resampleMethod;
-
   /// Whether dimensions were clamped to max_image_dimension
   final bool dimensionClamped;
-
   /// Calculated optimal DPI (if auto_adjust_dpi enabled)
   final int? calculatedDpi;
-
   /// Whether resize was skipped (dimensions already optimal)
   final bool skippedResize;
-
   /// Error message if resize failed
   final String? resizeError;
   ImagePreprocessingMetadata({
@@ -3483,73 +3113,53 @@ class ImagePreprocessingMetadata {
 class Metadata {
   /// Document title
   final String? title;
-
   /// Document subject or description
   final String? subject;
-
   /// Primary author(s) - always Vec for consistency
   final List<String>? authors;
-
   /// Keywords/tags - always Vec for consistency
   final List<String>? keywords;
-
   /// Primary language (ISO 639 code)
   final String? language;
-
   /// Creation timestamp (ISO 8601 format)
   final String? createdAt;
-
   /// Last modification timestamp (ISO 8601 format)
   final String? modifiedAt;
-
   /// User who created the document
   final String? createdBy;
-
   /// User who last modified the document
   final String? modifiedBy;
-
   /// Page/slide/sheet structure with boundaries
   final PageStructure? pages;
-
   /// Format-specific metadata (discriminated union)
   ///
   /// Contains detailed metadata specific to the document format.
   /// Serializes with a `format_type` discriminator field.
   final FormatMetadata? format;
-
   /// Image preprocessing metadata (when OCR preprocessing was applied)
   final ImagePreprocessingMetadata? imagePreprocessing;
-
   /// JSON schema (for structured data extraction)
   final String? jsonSchema;
-
   /// Error metadata (for batch operations)
   final ErrorMetadata? error;
-
   /// Extraction duration in milliseconds (for benchmarking).
   ///
   /// This field is populated by batch extraction to provide per-file timing
   /// information. It's `None` for single-file extraction (which uses external timing).
   final int? extractionDurationMs;
-
   /// Document category (from frontmatter or classification).
   final String? category;
-
   /// Document tags (from frontmatter).
   final List<String>? tags;
-
   /// Document version string (from frontmatter).
   final String? documentVersion;
-
   /// Abstract or summary text (from frontmatter).
   final String? abstractText;
-
   /// Output format identifier (e.g., "markdown", "html", "text").
   ///
   /// Set by the output format pipeline stage when format conversion is applied.
   /// Previously stored in `metadata.additional["output_format"]`.
   final String? outputFormat;
-
   /// Additional custom fields from postprocessors.
   ///
   /// **Deprecated**: Prefer using typed fields on `ExtractionResult` and `Metadata`
@@ -3593,10 +3203,12 @@ class Metadata {
 class ExcelMetadata {
   /// Total number of sheets in the workbook
   final int sheetCount;
-
   /// Names of all sheets in order
   final List<String> sheetNames;
-  ExcelMetadata({required this.sheetCount, required this.sheetNames});
+  ExcelMetadata({
+    required this.sheetCount,
+    required this.sheetNames,
+  });
 }
 
 /// Email metadata extracted from .eml and .msg files.
@@ -3605,22 +3217,16 @@ class ExcelMetadata {
 class EmailMetadata {
   /// Sender's email address
   final String? fromEmail;
-
   /// Sender's display name
   final String? fromName;
-
   /// Primary recipients
   final List<String> toEmails;
-
   /// CC recipients
   final List<String> ccEmails;
-
   /// BCC recipients
   final List<String> bccEmails;
-
   /// Message-ID header value
   final String? messageId;
-
   /// List of attachment filenames
   final List<String> attachments;
   EmailMetadata({
@@ -3640,16 +3246,12 @@ class EmailMetadata {
 class ArchiveMetadata {
   /// Archive format ("ZIP", "TAR", "7Z", etc.)
   final String format;
-
   /// Total number of files in the archive
   final int fileCount;
-
   /// List of file paths within the archive
   final List<String> fileList;
-
   /// Total uncompressed size in bytes
   final int totalSize;
-
   /// Compressed size in bytes (if available)
   final int? compressedSize;
   ArchiveMetadata({
@@ -3667,10 +3269,12 @@ class ArchiveMetadata {
 class XmlMetadata {
   /// Total number of XML elements processed
   final int elementCount;
-
   /// List of unique element tag names (sorted)
   final List<String> uniqueElements;
-  XmlMetadata({required this.elementCount, required this.uniqueElements});
+  XmlMetadata({
+    required this.elementCount,
+    required this.uniqueElements,
+  });
 }
 
 /// Text/Markdown metadata.
@@ -3680,19 +3284,14 @@ class XmlMetadata {
 class TextMetadata {
   /// Number of lines in the document
   final int lineCount;
-
   /// Number of words
   final int wordCount;
-
   /// Number of characters
   final int characterCount;
-
   /// Markdown headers (headings text only, for Markdown files)
   final List<String>? headers;
-
   /// Markdown links as (text, url) tuples (for Markdown files)
   final List<String>? links;
-
   /// Code blocks as (language, code) tuples (for Markdown files)
   final List<String>? codeBlocks;
   TextMetadata({
@@ -3709,16 +3308,12 @@ class TextMetadata {
 class HeaderMetadata {
   /// Header level: 1 (h1) through 6 (h6)
   final int level;
-
   /// Normalized text content of the header
   final String text;
-
   /// HTML id attribute if present
   final String? id;
-
   /// Document tree depth at the header element
   final int depth;
-
   /// Byte offset in original HTML document
   final int htmlOffset;
   HeaderMetadata({
@@ -3734,19 +3329,14 @@ class HeaderMetadata {
 class LinkMetadata {
   /// The href URL value
   final String href;
-
   /// Link text content (normalized)
   final String text;
-
   /// Optional title attribute
   final String? title;
-
   /// Link type classification
   final LinkType linkType;
-
   /// Rel attribute values
   final List<String> rel;
-
   /// Additional attributes as key-value pairs
   final List<String> attributes;
   LinkMetadata({
@@ -3763,19 +3353,14 @@ class LinkMetadata {
 class ImageMetadataType {
   /// Image source (URL, data URI, or SVG content)
   final String src;
-
   /// Alternative text from alt attribute
   final String? alt;
-
   /// Title attribute
   final String? title;
-
   /// Image dimensions as (width, height) if available
   final List<int>? dimensions;
-
   /// Image type classification
   final ImageType imageType;
-
   /// Additional attributes as key-value pairs
   final List<String> attributes;
   ImageMetadataType({
@@ -3792,10 +3377,8 @@ class ImageMetadataType {
 class StructuredData {
   /// Type of structured data
   final StructuredDataType dataType;
-
   /// Raw JSON string representation
   final String rawJson;
-
   /// Schema type if detectable (e.g., "Article", "Event", "Product")
   final String? schemaType;
   StructuredData({
@@ -3812,49 +3395,35 @@ class StructuredData {
 class HtmlMetadata {
   /// Document title from `<title>` tag
   final String? title;
-
   /// Document description from `<meta name="description">` tag
   final String? description;
-
   /// Document keywords from `<meta name="keywords">` tag, split on commas
   final List<String> keywords;
-
   /// Document author from `<meta name="author">` tag
   final String? author;
-
   /// Canonical URL from `<link rel="canonical">` tag
   final String? canonicalUrl;
-
   /// Base URL from `<base href="">` tag for resolving relative URLs
   final String? baseHref;
-
   /// Document language from `lang` attribute
   final String? language;
-
   /// Document text direction from `dir` attribute
   final TextDirection? textDirection;
-
   /// Open Graph metadata (og:* properties) for social media
   /// Keys like "title", "description", "image", "url", etc.
   final Map<String, String> openGraph;
-
   /// Twitter Card metadata (twitter:* properties)
   /// Keys like "card", "site", "creator", "title", "description", "image", etc.
   final Map<String, String> twitterCard;
-
   /// Additional meta tags not covered by specific fields
   /// Keys are meta name/property attributes, values are content
   final Map<String, String> metaTags;
-
   /// Extracted header elements with hierarchy
   final List<HeaderMetadata> headers;
-
   /// Extracted hyperlinks with type classification
   final List<LinkMetadata> links;
-
   /// Extracted images with source and dimensions
   final List<ImageMetadataType> images;
-
   /// Extracted structured data blocks
   final List<StructuredData> structuredData;
   HtmlMetadata({
@@ -3882,13 +3451,10 @@ class HtmlMetadata {
 class OcrMetadata {
   /// OCR language code(s) used
   final String language;
-
   /// Tesseract Page Segmentation Mode (PSM)
   final int psm;
-
   /// Output format (e.g., "text", "hocr")
   final String outputFormat;
-
   /// Number of tables detected
   final int tableCount;
   final int? tableRows;
@@ -3907,7 +3473,10 @@ class OcrMetadata {
 class ErrorMetadata {
   final String errorType;
   final String message;
-  ErrorMetadata({required this.errorType, required this.message});
+  ErrorMetadata({
+    required this.errorType,
+    required this.message,
+  });
 }
 
 /// PowerPoint presentation metadata.
@@ -3916,13 +3485,10 @@ class ErrorMetadata {
 class PptxMetadata {
   /// Total number of slides in the presentation
   final int slideCount;
-
   /// Names of slides (if available)
   final List<String> slideNames;
-
   /// Number of embedded images
   final int? imageCount;
-
   /// Number of tables
   final int? tableCount;
   PptxMetadata({
@@ -3943,13 +3509,11 @@ class DocxMetadata {
   /// Contains title, creator, subject, keywords, dates, etc.
   /// Shared format across DOCX/PPTX/XLSX documents.
   final String? coreProperties;
-
   /// Application properties from docProps/app.xml (Word-specific statistics)
   ///
   /// Contains word count, page count, paragraph count, editing time, etc.
   /// DOCX-specific variant of Office application properties.
   final String? appProperties;
-
   /// Custom properties from docProps/custom.xml (user-defined properties)
   ///
   /// Contains key-value pairs defined by users or applications.
@@ -4018,7 +3582,11 @@ class YearRange {
   final int? min;
   final int? max;
   final List<int> years;
-  YearRange({required this.min, required this.max, required this.years});
+  YearRange({
+    required this.min,
+    required this.max,
+    required this.years,
+  });
 }
 
 /// FictionBook (FB2) metadata.
@@ -4049,7 +3617,10 @@ class DbfMetadata {
 class DbfFieldInfo {
   final String name;
   final String fieldType;
-  DbfFieldInfo({required this.name, required this.fieldType});
+  DbfFieldInfo({
+    required this.name,
+    required this.fieldType,
+  });
 }
 
 /// JATS (Journal Article Tag Suite) metadata.
@@ -4070,7 +3641,10 @@ class JatsMetadata {
 class ContributorRole {
   final String name;
   final String? role;
-  ContributorRole({required this.name, required this.role});
+  ContributorRole({
+    required this.name,
+    required this.role,
+  });
 }
 
 /// EPUB metadata (Dublin Core extensions).
@@ -4107,22 +3681,26 @@ class OcrConfidence {
   /// PaddleOCR provides this as `box_score`, Tesseract doesn't have a direct equivalent.
   /// Range: 0.0 to 1.0 (or None if not available).
   final double? detection;
-
   /// Recognition confidence: how confident about the text content.
   ///
   /// Range: 0.0 to 1.0.
   final double recognition;
-  OcrConfidence({required this.detection, required this.recognition});
+  OcrConfidence({
+    required this.detection,
+    required this.recognition,
+  });
 }
 
 /// Rotation information for an OCR element.
 class OcrRotation {
   /// Rotation angle in degrees (0, 90, 180, 270 for PaddleOCR).
   final double angleDegrees;
-
   /// Confidence score for the rotation detection.
   final double? confidence;
-  OcrRotation({required this.angleDegrees, required this.confidence});
+  OcrRotation({
+    required this.angleDegrees,
+    required this.confidence,
+  });
 }
 
 /// A unified OCR element representing detected text with full metadata.
@@ -4132,27 +3710,20 @@ class OcrRotation {
 class OcrElement {
   /// The recognized text content.
   final String text;
-
   /// Bounding geometry (rectangle or quadrilateral).
   final OcrBoundingGeometry geometry;
-
   /// Confidence scores for detection and recognition.
   final OcrConfidence confidence;
-
   /// Hierarchical level (word, line, block, page).
   final OcrElementLevel level;
-
   /// Rotation information (if detected).
   final OcrRotation? rotation;
-
   /// Page number (1-indexed).
   final int pageNumber;
-
   /// Parent element ID for hierarchical relationships.
   ///
   /// Only used for Tesseract output which has word -> line -> block hierarchy.
   final String? parentId;
-
   /// Backend-specific metadata that doesn't fit the unified schema.
   final Map<String, String> backendMetadata;
   OcrElement({
@@ -4175,17 +3746,14 @@ class OcrElementConfig {
   ///
   /// When true, the `ocr_elements` field in `ExtractionResult` will be populated.
   final bool includeElements;
-
   /// Minimum hierarchical level to include.
   ///
   /// Elements below this level (e.g., words when min_level is Line) will be excluded.
   final OcrElementLevel minLevel;
-
   /// Minimum recognition confidence threshold (0.0-1.0).
   ///
   /// Elements with confidence below this threshold will be filtered out.
   final double minConfidence;
-
   /// Whether to build hierarchical relationships between elements.
   ///
   /// When true, `parent_id` fields will be populated based on spatial containment.
@@ -4206,16 +3774,13 @@ class OcrElementConfig {
 class PageStructure {
   /// Total number of pages/slides/sheets
   final int totalCount;
-
   /// Type of paginated unit
   final PageUnitType unitType;
-
   /// Character offset boundaries for each page
   ///
   /// Maps character ranges in the extracted content to page numbers.
   /// Used for chunk page range calculation.
   final List<PageBoundary>? boundaries;
-
   /// Detailed per-page metadata (optional, only when needed)
   final List<PageInfo>? pages;
   PageStructure({
@@ -4234,10 +3799,8 @@ class PageStructure {
 class PageBoundary {
   /// Byte offset where this page starts in the content string (UTF-8 valid boundary, inclusive)
   final int byteStart;
-
   /// Byte offset where this page ends in the content string (UTF-8 valid boundary, exclusive)
   final int byteEnd;
-
   /// Page number (1-indexed)
   final int pageNumber;
   PageBoundary({
@@ -4254,22 +3817,16 @@ class PageBoundary {
 class PageInfo {
   /// Page number (1-indexed)
   final int number;
-
   /// Page title (usually for presentations)
   final String? title;
-
   /// Dimensions in points (PDF) or pixels (images): (width, height)
   final List<double>? dimensions;
-
   /// Number of images on this page
   final int? imageCount;
-
   /// Number of tables on this page
   final int? tableCount;
-
   /// Whether this page is hidden (e.g., in presentations)
   final bool? hidden;
-
   /// Whether this page is blank (no meaningful text, no images, no tables)
   ///
   /// A page is considered blank if it has fewer than 3 non-whitespace characters
@@ -4304,34 +3861,28 @@ class PageInfo {
 class PageContent {
   /// Page number (1-indexed)
   final int pageNumber;
-
   /// Text content for this page
   final String content;
-
   /// Tables found on this page (uses Arc for memory efficiency)
   ///
   /// Serializes as Vec<Table> for JSON compatibility while maintaining
   /// Arc semantics in-memory for zero-copy sharing.
   final List<String> tables;
-
   /// Images found on this page (uses Arc for memory efficiency)
   ///
   /// Serializes as Vec<ExtractedImage> for JSON compatibility while maintaining
   /// Arc semantics in-memory for zero-copy sharing.
   final List<ExtractedImage> images;
-
   /// Hierarchy information for the page (when hierarchy extraction is enabled)
   ///
   /// Contains text hierarchy levels (H1-H6) extracted from the page content.
   final PageHierarchy? hierarchy;
-
   /// Whether this page is blank (no meaningful text content)
   ///
   /// Determined during extraction based on text content analysis.
   /// A page is blank if it has fewer than 3 non-whitespace characters
   /// and contains no tables or images.
   final bool? isBlank;
-
   /// Layout detection regions for this page (when layout detection is enabled).
   ///
   /// Contains detected layout regions with class, confidence, bounding box,
@@ -4356,13 +3907,10 @@ class PageContent {
 class LayoutRegion {
   /// Layout class name (e.g. "picture", "table", "text", "section_header").
   final String className;
-
   /// Confidence score from the layout detection model (0.0 to 1.0).
   final double confidence;
-
   /// Bounding box in document coordinate space.
   final String boundingBox;
-
   /// Fraction of the page area covered by this region (0.0 to 1.0).
   final double areaFraction;
   LayoutRegion({
@@ -4380,10 +3928,12 @@ class LayoutRegion {
 class PageHierarchy {
   /// Number of hierarchy blocks on this page
   final int blockCount;
-
   /// Hierarchical blocks with heading levels
   final List<HierarchicalBlock> blocks;
-  PageHierarchy({required this.blockCount, required this.blocks});
+  PageHierarchy({
+    required this.blockCount,
+    required this.blocks,
+  });
 }
 
 /// A text block with hierarchy level assignment.
@@ -4393,10 +3943,8 @@ class PageHierarchy {
 class HierarchicalBlock {
   /// The text content of this block
   final String text;
-
   /// The font size of the text in this block
   final double fontSize;
-
   /// The hierarchy level of this block (H1-H6 or Body)
   ///
   /// Levels correspond to HTML heading tags:
@@ -4408,7 +3956,6 @@ class HierarchicalBlock {
   /// - "h6": Senary heading
   /// - "body": Body text (no heading level)
   final String level;
-
   /// Bounding box information for the block
   ///
   /// Contains coordinates as (left, top, right, bottom) in PDF units.
@@ -4429,13 +3976,10 @@ class HierarchicalBlock {
 class Uri {
   /// The URL or path string.
   final String url;
-
   /// Optional display text / label for the link.
   final String? label;
-
   /// Optional page number where the URI was found (1-indexed).
   final int? page;
-
   /// Semantic classification of the URI.
   final UriKind kind;
   Uri({
@@ -4471,10 +4015,8 @@ class ApiDoc {}
 class HealthResponse {
   /// Health status
   final String status;
-
   /// API version
   final String version;
-
   /// Plugin status (optional)
   final String? plugins;
   HealthResponse({
@@ -4488,10 +4030,12 @@ class HealthResponse {
 class InfoResponse {
   /// API version
   final String version;
-
   /// Whether using Rust backend
   final bool rustBackend;
-  InfoResponse({required this.version, required this.rustBackend});
+  InfoResponse({
+    required this.version,
+    required this.rustBackend,
+  });
 }
 
 /// Extraction response (list of results).
@@ -4504,33 +4048,30 @@ class ExtractResponse {}
 class ApiState {
   /// Default extraction configuration
   final ExtractionConfig defaultConfig;
-
   /// Tower service for extraction requests.
   ///
   /// Wrapped in `Arc<Mutex>` because `BoxCloneService` is `Send` but not `Sync`,
   /// while `ApiState` must be `Clone + Sync` for Axum's state requirement.
   /// The lock is held only long enough to clone the service.
   final String extractionService;
-  ApiState({required this.defaultConfig, required this.extractionService});
+  ApiState({
+    required this.defaultConfig,
+    required this.extractionService,
+  });
 }
 
 /// Cache statistics response.
 class CacheStatsResponse {
   /// Cache directory path
   final String directory;
-
   /// Total number of cache files
   final int totalFiles;
-
   /// Total cache size in MB
   final double totalSizeMb;
-
   /// Available disk space in MB
   final double availableSpaceMb;
-
   /// Age of oldest file in days
   final double oldestFileAgeDays;
-
   /// Age of newest file in days
   final double newestFileAgeDays;
   CacheStatsResponse({
@@ -4547,10 +4088,8 @@ class CacheStatsResponse {
 class CacheClearResponse {
   /// Cache directory path
   final String directory;
-
   /// Number of files removed
   final int removedFiles;
-
   /// Space freed in MB
   final double freedMb;
   CacheClearResponse({
@@ -4564,23 +4103,22 @@ class CacheClearResponse {
 class EmbedRequest {
   /// Text strings to generate embeddings for (at least one non-empty string required)
   final List<String> texts;
-
   /// Optional embedding configuration (model, batch size, etc.)
   final EmbeddingConfig? config;
-  EmbedRequest({required this.texts, required this.config});
+  EmbedRequest({
+    required this.texts,
+    required this.config,
+  });
 }
 
 /// Embedding response containing generated embeddings.
 class EmbedResponse {
   /// Generated embeddings (one per input text)
   final List<List<double>> embeddings;
-
   /// Model used for embedding generation
   final String model;
-
   /// Dimensionality of the embeddings
   final int dimensions;
-
   /// Number of embeddings generated
   final int count;
   EmbedResponse({
@@ -4595,10 +4133,8 @@ class EmbedResponse {
 class ChunkRequest {
   /// Text to chunk (must not be empty)
   final String text;
-
   /// Optional chunking configuration
   final String? config;
-
   /// Chunker type (text, markdown, yaml, or semantic)
   final String chunkerType;
   ChunkRequest({
@@ -4612,16 +4148,12 @@ class ChunkRequest {
 class ChunkResponse {
   /// List of chunks
   final List<String> chunks;
-
   /// Total number of chunks
   final int chunkCount;
-
   /// Configuration used for chunking
   final String config;
-
   /// Input text size in bytes
   final int inputSizeBytes;
-
   /// Chunker type used for chunking
   final String chunkerType;
   ChunkResponse({
@@ -4644,23 +4176,22 @@ class VersionResponse {
 class DetectResponse {
   /// Detected MIME type
   final String mimeType;
-
   /// Original filename (if provided)
   final String? filename;
-  DetectResponse({required this.mimeType, required this.filename});
+  DetectResponse({
+    required this.mimeType,
+    required this.filename,
+  });
 }
 
 /// Model manifest entry for cache management.
 class ManifestEntryResponse {
   /// Relative path within the cache directory
   final String relativePath;
-
   /// SHA256 checksum of the model file
   final String sha256;
-
   /// Expected file size in bytes
   final int sizeBytes;
-
   /// HuggingFace source URL for downloading
   final String sourceUrl;
   ManifestEntryResponse({
@@ -4675,13 +4206,10 @@ class ManifestEntryResponse {
 class ManifestResponse {
   /// Kreuzberg version
   final String kreuzbergVersion;
-
   /// Total size of all models in bytes
   final int totalSizeBytes;
-
   /// Number of models in the manifest
   final int modelCount;
-
   /// Individual model entries
   final List<ManifestEntryResponse> models;
   ManifestResponse({
@@ -4696,20 +4224,20 @@ class ManifestResponse {
 class WarmRequest {
   /// Download all embedding model presets
   final bool allEmbeddings;
-
   /// Specific embedding model preset to download
   final String? embeddingModel;
-  WarmRequest({required this.allEmbeddings, required this.embeddingModel});
+  WarmRequest({
+    required this.allEmbeddings,
+    required this.embeddingModel,
+  });
 }
 
 /// Cache warm response.
 class WarmResponse {
   /// Cache directory used
   final String cacheDir;
-
   /// Models that were downloaded
   final List<String> downloaded;
-
   /// Models that were already cached
   final List<String> alreadyCached;
   WarmResponse({
@@ -4723,10 +4251,8 @@ class WarmResponse {
 class StructuredExtractionResponse {
   /// Structured data conforming to the provided JSON schema
   final String structuredOutput;
-
   /// Extracted document text content
   final String content;
-
   /// Detected MIME type of the input file
   final String mimeType;
   StructuredExtractionResponse({
@@ -4742,10 +4268,12 @@ class StructuredExtractionResponse {
 class OpenWebDocumentResponse {
   /// Extracted text content
   final String pageContent;
-
   /// Document metadata
   final String metadata;
-  OpenWebDocumentResponse({required this.pageContent, required this.metadata});
+  OpenWebDocumentResponse({
+    required this.pageContent,
+    required this.metadata,
+  });
 }
 
 /// OpenWebUI "Docling" engine response format.
@@ -4754,26 +4282,24 @@ class OpenWebDocumentResponse {
 class DoclingCompatResponse {
   /// Converted document content
   final String document;
-
   /// Processing status
   final String status;
-  DoclingCompatResponse({required this.document, required this.status});
+  DoclingCompatResponse({
+    required this.document,
+    required this.status,
+  });
 }
 
 /// Request parameters for file extraction.
 class ExtractFileParams {
   /// Path to the file to extract
   final String path;
-
   /// Optional MIME type hint (auto-detected if not provided)
   final String? mimeType;
-
   /// Extraction configuration (JSON object)
   final String? config;
-
   /// Password for encrypted PDFs
   final String? pdfPassword;
-
   /// Wire format for the response: "json" (default) or "toon"
   final String? responseFormat;
   ExtractFileParams({
@@ -4789,16 +4315,12 @@ class ExtractFileParams {
 class ExtractBytesParams {
   /// Base64-encoded file content
   final String data;
-
   /// Optional MIME type hint (auto-detected if not provided)
   final String? mimeType;
-
   /// Extraction configuration (JSON object)
   final String? config;
-
   /// Password for encrypted PDFs
   final String? pdfPassword;
-
   /// Wire format for the response: "json" (default) or "toon"
   final String? responseFormat;
   ExtractBytesParams({
@@ -4814,17 +4336,13 @@ class ExtractBytesParams {
 class BatchExtractFilesParams {
   /// Paths to files to extract
   final List<String> paths;
-
   /// Extraction configuration (JSON object)
   final String? config;
-
   /// Password for encrypted PDFs
   final String? pdfPassword;
-
   /// Per-file extraction configuration overrides (parallel array to paths).
   /// Each entry is either null (use default) or a FileExtractionConfig JSON object.
   final List<String?>? fileConfigs;
-
   /// Wire format for the response: "json" (default) or "toon"
   final String? responseFormat;
   BatchExtractFilesParams({
@@ -4840,37 +4358,37 @@ class BatchExtractFilesParams {
 class DetectMimeTypeParams {
   /// Path to the file
   final String path;
-
   /// Use content-based detection (default: true)
   final bool useContent;
-  DetectMimeTypeParams({required this.path, required this.useContent});
+  DetectMimeTypeParams({
+    required this.path,
+    required this.useContent,
+  });
 }
 
 /// Request parameters for cache warm (model download).
 class CacheWarmParams {
   /// Download all embedding model presets
   final bool allEmbeddings;
-
   /// Specific embedding preset name to download (e.g. "balanced", "speed", "quality")
   final String? embeddingModel;
-  CacheWarmParams({required this.allEmbeddings, required this.embeddingModel});
+  CacheWarmParams({
+    required this.allEmbeddings,
+    required this.embeddingModel,
+  });
 }
 
 /// Request parameters for embedding generation.
 class EmbedTextParams {
   /// List of text strings to generate embeddings for
   final List<String> texts;
-
   /// Embedding preset name (default: "balanced"). Available: "speed", "balanced", "quality"
   final String? preset;
-
   /// LLM model for provider-hosted embeddings (e.g., "openai/text-embedding-3-small").
   /// When set, overrides preset and uses liter-llm for embedding generation.
   final String? model;
-
   /// API key for the LLM provider (optional, falls back to env).
   final String? apiKey;
-
   /// Name of a pre-registered in-process embedding plugin backend.
   /// When set, overrides both preset and model and dispatches to the registered callback.
   /// Requires a prior call to `kreuzberg::plugins::register_embedding_backend`.
@@ -4888,25 +4406,18 @@ class EmbedTextParams {
 class ExtractStructuredParams {
   /// File path to extract from
   final String path;
-
   /// JSON schema for structured output
   final String schema;
-
   /// LLM model (e.g., "openai/gpt-4o")
   final String model;
-
   /// Schema name (default: "extraction")
   final String schemaName;
-
   /// Schema description for the LLM
   final String? schemaDescription;
-
   /// Custom Jinja2 prompt template
   final String? prompt;
-
   /// API key (optional, falls back to env)
   final String? apiKey;
-
   /// Enable strict mode
   final bool strict;
   ExtractStructuredParams({
@@ -4925,16 +4436,12 @@ class ExtractStructuredParams {
 class ChunkTextParams {
   /// Text content to split into chunks
   final String text;
-
   /// Maximum characters per chunk (default: 2000)
   final int? maxCharacters;
-
   /// Number of overlapping characters between chunks (default: 100)
   final int? overlap;
-
   /// Chunker type: "text", "markdown", "yaml", or "semantic" (default: "text")
   final String? chunkerType;
-
   /// Topic threshold for semantic chunking (0.0-1.0, default: 0.75)
   final double? topicThreshold;
   ChunkTextParams({
@@ -4950,10 +4457,12 @@ class ChunkTextParams {
 class DetectedBoundary {
   /// Byte offset of the start of the line in the original text.
   final int byteOffset;
-
   /// Whether this boundary looks like a header/section title.
   final bool isHeader;
-  DetectedBoundary({required this.byteOffset, required this.isHeader});
+  DetectedBoundary({
+    required this.byteOffset,
+    required this.isHeader,
+  });
 }
 
 /// Result of a text chunking operation.
@@ -4962,10 +4471,12 @@ class DetectedBoundary {
 class ChunkingResult {
   /// List of text chunks
   final List<Chunk> chunks;
-
   /// Total number of chunks generated
   final int chunkCount;
-  ChunkingResult({required this.chunks, required this.chunkCount});
+  ChunkingResult({
+    required this.chunks,
+    required this.chunkCount,
+  });
 }
 
 /// A merged chunk produced by [`merge_segments`].
@@ -4993,41 +4504,37 @@ class YakeParams {
 class RakeParams {
   /// Minimum word length to consider (default: 1).
   final int minWordLength;
-
   /// Maximum words in a keyword phrase (default: 3).
   final int maxWordsPerPhrase;
-  RakeParams({required this.minWordLength, required this.maxWordsPerPhrase});
+  RakeParams({
+    required this.minWordLength,
+    required this.maxWordsPerPhrase,
+  });
 }
 
 /// Keyword extraction configuration.
 class KeywordConfig {
   /// Algorithm to use for extraction.
   final KeywordAlgorithm algorithm;
-
   /// Maximum number of keywords to extract (default: 10).
   final int maxKeywords;
-
   /// Minimum score threshold (0.0-1.0, default: 0.0).
   ///
   /// Keywords with scores below this threshold are filtered out.
   /// Note: Score ranges differ between algorithms.
   final double minScore;
-
   /// N-gram range for keyword extraction (min, max).
   ///
   /// (1, 1) = unigrams only
   /// (1, 2) = unigrams and bigrams
   /// (1, 3) = unigrams, bigrams, and trigrams (default)
   final List<int> ngramRange;
-
   /// Language code for stopword filtering (e.g., "en", "de", "fr").
   ///
   /// If None, no stopword filtering is applied.
   final String? language;
-
   /// YAKE-specific tuning parameters.
   final YakeParams? yakeParams;
-
   /// RAKE-specific tuning parameters.
   final RakeParams? rakeParams;
   KeywordConfig({
@@ -5045,13 +4552,10 @@ class KeywordConfig {
 class Keyword {
   /// The keyword text.
   final String text;
-
   /// Relevance score (higher is better, algorithm-specific range).
   final double score;
-
   /// Algorithm that extracted this keyword.
   final KeywordAlgorithm algorithm;
-
   /// Optional positions where keyword appears in text (character offsets).
   final List<int>? positions;
   Keyword({
@@ -5065,17 +4569,18 @@ class Keyword {
 class OcrCacheStats {
   final int totalFiles;
   final double totalSizeMb;
-  OcrCacheStats({required this.totalFiles, required this.totalSizeMb});
+  OcrCacheStats({
+    required this.totalFiles,
+    required this.totalSizeMb,
+  });
 }
 
 /// Pre-computed table markdown for a table detection region.
 class RecognizedTable {
   /// Detection bbox that this table corresponds to (for matching).
   final BBox detectionBbox;
-
   /// Table cells as a 2D vector (rows x columns).
   final List<List<String>> cells;
-
   /// Rendered markdown table.
   final String markdown;
   RecognizedTable({
@@ -5112,47 +4617,36 @@ class TessdataManager {}
 class PaddleOcrConfig {
   /// Language code (e.g., "en", "ch", "jpn", "kor", "deu", "fra")
   final String language;
-
   /// Optional custom cache directory for model files
   final String? cacheDir;
-
   /// Enable angle classification for rotated text (default: false).
   /// Can misfire on short text regions, rotating crops incorrectly before recognition.
   final bool useAngleCls;
-
   /// Enable table structure detection (default: false)
   final bool enableTableDetection;
-
   /// Database threshold for text detection (default: 0.3)
   /// Range: 0.0-1.0, higher values require more confident detections
   final double detDbThresh;
-
   /// Box threshold for text bounding box refinement (default: 0.5)
   /// Range: 0.0-1.0
   final double detDbBoxThresh;
-
   /// Unclip ratio for expanding text bounding boxes (default: 1.6)
   /// Controls the expansion of detected text regions
   final double detDbUnclipRatio;
-
   /// Maximum side length for detection image (default: 960)
   /// Larger images may be resized to this limit for faster inference
   final int detLimitSideLen;
-
   /// Batch size for recognition inference (default: 6)
   /// Number of text regions to process simultaneously
   final int recBatchNum;
-
   /// Padding in pixels added around the image before detection (default: 10).
   /// Large values can include surrounding content like table gridlines.
   final int padding;
-
   /// Minimum recognition confidence score for text lines (default: 0.5).
   /// Text regions with recognition confidence below this threshold are discarded.
   /// Matches PaddleOCR Python's `drop_score` parameter.
   /// Range: 0.0-1.0
   final double dropScore;
-
   /// Model tier controlling detection/recognition model size and accuracy trade-off.
   /// - `"mobile"` (default): Lightweight models (~4.5MB detection, ~16.5MB recognition), fast download and inference
   /// - `"server"`: Large, high-accuracy models (~88MB detection, ~84MB recognition), best for GPU or complex documents
@@ -5177,13 +4671,10 @@ class PaddleOcrConfig {
 class ModelPaths {
   /// Path to the detection model directory.
   final String detModel;
-
   /// Path to the classification model directory.
   final String clsModel;
-
   /// Path to the recognition model directory.
   final String recModel;
-
   /// Path to the character dictionary file.
   final String dictFile;
   ModelPaths({
@@ -5198,10 +4689,12 @@ class ModelPaths {
 class OrientationResult {
   /// Detected orientation in degrees (0, 90, 180, or 270).
   final int degrees;
-
   /// Confidence score (0.0-1.0).
   final double confidence;
-  OrientationResult({required this.degrees, required this.confidence});
+  OrientationResult({
+    required this.degrees,
+    required this.confidence,
+  });
 }
 
 /// Bounding box in original image coordinates (x1, y1) top-left, (x2, y2) bottom-right.
@@ -5246,10 +4739,8 @@ class DetectionResult {
 class EmbeddedFile {
   /// The filename as stored in the PDF name tree.
   final String name;
-
   /// Raw file bytes from the embedded stream.
   final Uint8List data;
-
   /// MIME type if specified in the filespec, otherwise `None`.
   final String? mimeType;
   EmbeddedFile({
@@ -5266,13 +4757,10 @@ class PdfImage {
   final int height;
   final String? colorSpace;
   final int? bitsPerComponent;
-
   /// Original PDF stream filters (e.g. `["FlateDecode"]`, `["DCTDecode"]`).
   final List<String> filters;
-
   /// The decoded image bytes in a standard format (JPEG, PNG, etc.).
   final Uint8List data;
-
   /// The format of `data` after decoding: `"jpeg"`, `"png"`, `"jpeg2000"`, `"ccitt"`, or `"raw"`.
   final String decodedFormat;
   PdfImage({
@@ -5294,10 +4782,8 @@ class PageLayoutResult {
   final List<String> regions;
   final double pageWidthPts;
   final double pageHeightPts;
-
   /// Width of the rendered image used for layout detection (pixels).
   final int renderWidthPx;
-
   /// Height of the rendered image used for layout detection (pixels).
   final int renderHeightPx;
   PageLayoutResult({
@@ -5314,19 +4800,14 @@ class PageLayoutResult {
 class PageTiming {
   /// Time to render the PDF page to a raster image (amortized from batch render).
   final double renderMs;
-
   /// Time spent in image preprocessing (resize, normalize, tensor construction).
   final double preprocessMs;
-
   /// Time for the ONNX model session.run() call (actual neural network inference).
   final double onnxMs;
-
   /// Total model inference time (preprocess + onnx), as measured by the engine.
   final double inferenceMs;
-
   /// Time spent in postprocessing (confidence filtering, overlap resolution).
   final double postprocessMs;
-
   /// Time to map pixel-space bounding boxes to PDF coordinate space.
   final double mappingMs;
   PageTiming({
@@ -5371,18 +4852,14 @@ class PdfUnifiedExtractionResult {}
 enum ExecutionProviderType {
   /// Auto-select: CoreML on macOS, CUDA on Linux, CPU elsewhere.
   auto,
-
   /// CPU execution provider (always available).
   cpu,
-
   /// Apple CoreML (macOS/iOS Neural Engine + GPU).
   coreMl,
-
   /// NVIDIA CUDA GPU acceleration.
   cuda,
-
   /// NVIDIA TensorRT (optimized CUDA inference).
-  tensorRt,
+  tensorRt;
 }
 
 /// Built-in HTML theme selection.
@@ -5391,19 +4868,15 @@ enum HtmlTheme {
   /// measure. CSS custom properties (`--kb-*`) are all defined so user CSS
   /// can override individual values.
   default_,
-
   /// GitHub Markdown-inspired palette and spacing.
   gitHub,
-
   /// Dark background, light text.
   dark,
-
   /// Minimal light theme with generous whitespace.
   light,
-
   /// No built-in stylesheet emitted. CSS custom properties are still defined
   /// on `:root` so user stylesheets can reference `var(--kb-*)` tokens.
-  unstyled,
+  unstyled;
 }
 
 /// Which table structure recognition model to use.
@@ -5413,22 +4886,17 @@ enum HtmlTheme {
 enum TableModel {
   /// TATR (Table Transformer) -- default, 30MB, DETR-based row/column detection.
   tatr,
-
   /// SLANeXT wired variant -- 365MB, optimized for bordered tables.
   slanetWired,
-
   /// SLANeXT wireless variant -- 365MB, optimized for borderless tables.
   slanetWireless,
-
   /// SLANet-plus -- 7.78MB, lightweight general-purpose.
   slanetPlus,
-
   /// Classifier-routed SLANeXT: auto-select wired/wireless per table.
   /// Uses PP-LCNet classifier (6.78MB) + both SLANeXT variants (730MB total).
   slanetAuto,
-
   /// Disable table structure model inference entirely; use heuristic path only.
-  disabled,
+  disabled;
 }
 
 /// PDF extraction backend selection.
@@ -5440,12 +4908,10 @@ enum TableModel {
 enum PdfBackend {
   /// Use pdfium-render backend (default).
   pdfium,
-
   /// Use pdf_oxide backend (pure Rust). Requires `pdf-oxide` feature.
   pdfOxide,
-
   /// Automatically select the best available backend.
-  auto,
+  auto;
 }
 
 /// Type of text chunker to use.
@@ -5462,7 +4928,12 @@ enum PdfBackend {
 ///   blank-line paragraphs) and merges groups into chunks capped at
 ///   `max_characters` (default 1000). `topic_threshold` has no effect in the
 ///   fallback path. For best results, pair with an embedding model.
-enum ChunkerType { text, markdown, yaml, semantic }
+enum ChunkerType {
+  text,
+  markdown,
+  yaml,
+  semantic;
+}
 
 /// How chunk size is measured.
 ///
@@ -5473,33 +4944,34 @@ enum ChunkerType { text, markdown, yaml, semantic }
 /// available on HuggingFace Hub can be used, including OpenAI-compatible tokenizers
 /// (e.g., `Xenova/gpt-4o`, `Xenova/cl100k_base`).
 sealed class ChunkSizing {}
-
 /// Size measured in Unicode characters (default).
 final class Characters extends ChunkSizing {}
-
 /// Size measured in tokens from a HuggingFace tokenizer.
 final class Tokenizer extends ChunkSizing {
   final String model;
   final String cacheDir;
-  Tokenizer({required this.model, required this.cacheDir});
+  Tokenizer({
+    required this.model,
+    required this.cacheDir,
+  });
 }
 
 /// Embedding model types supported by Kreuzberg.
 sealed class EmbeddingModelType {}
-
 /// Use a preset model configuration (recommended)
 final class Preset extends EmbeddingModelType {
   final String name;
   Preset(this.name);
 }
-
 /// Use a custom ONNX model from HuggingFace
 final class Custom extends EmbeddingModelType {
   final String modelId;
   final int dimensions;
-  Custom({required this.modelId, required this.dimensions});
+  Custom({
+    required this.modelId,
+    required this.dimensions,
+  });
 }
-
 /// Provider-hosted embedding model via liter-llm.
 ///
 /// Uses the model specified in the nested `LlmConfig` (e.g.,
@@ -5508,7 +4980,6 @@ final class Llm extends EmbeddingModelType {
   final LlmConfig llm;
   Llm(this.llm);
 }
-
 /// In-process embedding backend registered via the plugin system.
 ///
 /// The caller registers an [`EmbeddingBackend`](crate::plugins::EmbeddingBackend) once
@@ -5540,29 +5011,29 @@ final class Plugin extends EmbeddingModelType {
 enum CodeContentMode {
   /// Use TSLP semantic chunks as content (default).
   chunks,
-
   /// Use raw source code as content.
   raw,
-
   /// Emit function/class headings + docstrings (no code bodies).
-  structure,
+  structure;
 }
 
-enum FracType { bar, noBar, linear, skewed }
+enum FracType {
+  bar,
+  noBar,
+  linear,
+  skewed;
+}
 
 /// OCR backend types.
 enum OcrBackendType {
   /// Tesseract OCR (native Rust binding)
   tesseract,
-
   /// EasyOCR (Python-based, via FFI)
   easyOcr,
-
   /// PaddleOCR (Python-based, via FFI)
   paddleOcr,
-
   /// Custom/third-party OCR backend
-  custom,
+  custom;
 }
 
 /// Processing stages for post-processors.
@@ -5578,7 +5049,6 @@ enum ProcessingStage {
   /// - Entity extraction (NER)
   /// - Text quality scoring
   early,
-
   /// Middle stage - content transformation.
   ///
   /// Use for:
@@ -5587,7 +5057,6 @@ enum ProcessingStage {
   /// - Text summarization
   /// - Semantic analysis
   middle,
-
   /// Late stage - final enrichment.
   ///
   /// Use for:
@@ -5595,33 +5064,33 @@ enum ProcessingStage {
   /// - Analytics/logging
   /// - Final validation
   /// - Output formatting
-  late_,
+  late_;
 }
 
-enum ReductionLevel { off, light, moderate, aggressive, maximum }
+enum ReductionLevel {
+  off,
+  light,
+  moderate,
+  aggressive,
+  maximum;
+}
 
 /// Type of PDF annotation.
 enum PdfAnnotationType {
   /// Sticky note / text annotation
   text,
-
   /// Highlighted text region
   highlight,
-
   /// Hyperlink annotation
   link,
-
   /// Rubber stamp annotation
   stamp,
-
   /// Underline text markup
   underline,
-
   /// Strikeout text markup
   strikeOut,
-
   /// Any other annotation type
-  other,
+  other;
 }
 
 /// Types of block-level elements in Djot.
@@ -5641,7 +5110,7 @@ enum BlockType {
   section,
   thematicBreak,
   rawBlock,
-  mathDisplay,
+  mathDisplay;
 }
 
 /// Types of inline elements in Djot.
@@ -5661,31 +5130,25 @@ enum InlineType {
   math,
   rawInline,
   footnoteRef,
-  symbol,
+  symbol;
 }
 
 /// Semantic kind of a relationship between document elements.
 enum RelationshipKind {
   /// Footnote marker -> footnote definition.
   footnoteReference,
-
   /// Citation marker -> bibliography entry.
   citationReference,
-
   /// Internal anchor link (`#id`) -> target heading/element.
   internalLink,
-
   /// Caption paragraph -> figure/table it describes.
   caption,
-
   /// Label -> labeled element (HTML `<label for>`, LaTeX `\label{}`).
   label,
-
   /// TOC entry -> target section.
   tocEntry,
-
   /// Cross-reference (LaTeX `\ref{}`, DOCX cross-reference field).
-  crossReference,
+  crossReference;
 }
 
 /// Content layer classification for document nodes.
@@ -5694,15 +5157,12 @@ enum RelationshipKind {
 enum ContentLayer {
   /// Main document body content.
   body,
-
   /// Page/section header (running header).
   header,
-
   /// Page/section footer (running footer).
   footer,
-
   /// Footnote content.
-  footnote,
+  footnote;
 }
 
 /// Tagged enum for node content. Each variant carries only type-specific data.
@@ -5710,44 +5170,40 @@ enum ContentLayer {
 /// Uses `#[serde(tag = "node_type")]` to avoid "type" keyword collision in
 /// Go/Java/TypeScript bindings.
 sealed class NodeContent {}
-
 /// Document title.
 final class Title extends NodeContent {
   final String text;
   Title(this.text);
 }
-
 /// Section heading with level (1-6).
 final class Heading extends NodeContent {
   final int level;
   final String text;
-  Heading({required this.level, required this.text});
+  Heading({
+    required this.level,
+    required this.text,
+  });
 }
-
 /// Body text paragraph.
 final class Paragraph extends NodeContent {
   final String text;
   Paragraph(this.text);
 }
-
 /// List container — children are `ListItem` nodes.
 final class List extends NodeContent {
   final bool ordered;
   List(this.ordered);
 }
-
 /// Individual list item.
 final class ListItem extends NodeContent {
   final String text;
   ListItem(this.text);
 }
-
 /// Table with structured cell grid.
 final class Table extends NodeContent {
   final String grid;
   Table(this.grid);
 }
-
 /// Image reference.
 final class Image extends NodeContent {
   final String description;
@@ -5759,29 +5215,27 @@ final class Image extends NodeContent {
     required this.src,
   });
 }
-
 /// Code block.
 final class Code extends NodeContent {
   final String text;
   final String language;
-  Code({required this.text, required this.language});
+  Code({
+    required this.text,
+    required this.language,
+  });
 }
-
 /// Block quote — container, children carry the quoted content.
 final class Quote extends NodeContent {}
-
 /// Mathematical formula / equation.
 final class Formula extends NodeContent {
   final String text;
   Formula(this.text);
 }
-
 /// Footnote reference content.
 final class Footnote extends NodeContent {
   final String text;
   Footnote(this.text);
 }
-
 /// Logical grouping container (section, key-value area).
 ///
 /// `heading_level` + `heading_text` capture the section heading directly
@@ -5796,43 +5250,48 @@ final class Group extends NodeContent {
     required this.headingText,
   });
 }
-
 /// Page break marker.
 final class PageBreak extends NodeContent {}
-
 /// Presentation slide container — children are the slide's content nodes.
 final class Slide extends NodeContent {
   final int number;
   final String title;
-  Slide({required this.number, required this.title});
+  Slide({
+    required this.number,
+    required this.title,
+  });
 }
-
 /// Definition list container — children are `DefinitionItem` nodes.
 final class DefinitionList extends NodeContent {}
-
 /// Individual definition list entry with term and definition.
 final class DefinitionItem extends NodeContent {
   final String term;
   final String definition;
-  DefinitionItem({required this.term, required this.definition});
+  DefinitionItem({
+    required this.term,
+    required this.definition,
+  });
 }
-
 /// Citation or bibliographic reference.
 final class Citation extends NodeContent {
   final String key;
   final String text;
-  Citation({required this.key, required this.text});
+  Citation({
+    required this.key,
+    required this.text,
+  });
 }
-
 /// Admonition / callout container (note, warning, tip, etc.).
 ///
 /// Children carry the admonition body content.
 final class Admonition extends NodeContent {
   final String kind;
   final String title;
-  Admonition({required this.kind, required this.title});
+  Admonition({
+    required this.kind,
+    required this.title,
+  });
 }
-
 /// Raw block preserved verbatim from the source format.
 ///
 /// Used for content that cannot be mapped to a semantic node type
@@ -5840,9 +5299,11 @@ final class Admonition extends NodeContent {
 final class RawBlock extends NodeContent {
   final String format;
   final String content;
-  RawBlock({required this.format, required this.content});
+  RawBlock({
+    required this.format,
+    required this.content,
+  });
 }
-
 /// Structured metadata block (email headers, YAML frontmatter, etc.).
 final class MetadataBlock extends NodeContent {
   final List<String> entries;
@@ -5851,47 +5312,41 @@ final class MetadataBlock extends NodeContent {
 
 /// Types of inline text annotations.
 sealed class AnnotationKind {}
-
 final class Bold extends AnnotationKind {}
-
 final class Italic extends AnnotationKind {}
-
 final class Underline extends AnnotationKind {}
-
 final class Strikethrough extends AnnotationKind {}
-
 final class Code extends AnnotationKind {}
-
 final class Subscript extends AnnotationKind {}
-
 final class Superscript extends AnnotationKind {}
-
 final class Link extends AnnotationKind {
   final String url;
   final String title;
-  Link({required this.url, required this.title});
+  Link({
+    required this.url,
+    required this.title,
+  });
 }
-
 /// Highlighted text (PDF highlights, HTML `<mark>`).
 final class Highlight extends AnnotationKind {}
-
 /// Text color (CSS-compatible value, e.g. "#ff0000", "red").
 final class Color extends AnnotationKind {
   final String value;
   Color(this.value);
 }
-
 /// Font size with units (e.g. "12pt", "1.2em", "16px").
 final class FontSize extends AnnotationKind {
   final String value;
   FontSize(this.value);
 }
-
 /// Extensible annotation for format-specific styling.
 final class Custom extends AnnotationKind {
   final String name;
   final String value;
-  Custom({required this.name, required this.value});
+  Custom({
+    required this.name,
+    required this.value,
+  });
 }
 
 /// Semantic structural classification of a text chunk.
@@ -5902,42 +5357,30 @@ final class Custom extends AnnotationKind {
 enum ChunkType {
   /// Section heading or document title.
   heading,
-
   /// Party list: names, addresses, and signatories.
   partyList,
-
   /// Definition clause ("X means…", "X shall mean…").
   definitions,
-
   /// Operative clause containing legal/contractual action verbs.
   operativeClause,
-
   /// Signature block with signatures, names, and dates.
   signatureBlock,
-
   /// Schedule, annex, appendix, or exhibit section.
   schedule,
-
   /// Table-like content with aligned columns or repeated patterns.
   tableLike,
-
   /// Mathematical formula or equation.
   formula,
-
   /// Code block or preformatted content.
   codeBlock,
-
   /// Embedded or referenced image content.
   image,
-
   /// Organizational chart or hierarchy diagram.
   orgChart,
-
   /// Diagram, figure, or visual illustration.
   diagram,
-
   /// Unclassified or mixed content.
-  unknown,
+  unknown;
 }
 
 /// Semantic element type classification.
@@ -5947,36 +5390,26 @@ enum ChunkType {
 enum ElementType {
   /// Document title
   title,
-
   /// Main narrative text body
   narrativeText,
-
   /// Section heading
   heading,
-
   /// List item (bullet, numbered, etc.)
   listItem,
-
   /// Table element
   table,
-
   /// Image element
   image,
-
   /// Page break marker
   pageBreak,
-
   /// Code block
   codeBlock,
-
   /// Block quote
   blockQuote,
-
   /// Footer text
   footer,
-
   /// Header text
-  header,
+  header;
 }
 
 /// Format-specific metadata (discriminated union).
@@ -5984,102 +5417,82 @@ enum ElementType {
 /// Only one format type can exist per extraction result. This provides
 /// type-safe, clean metadata without nested optionals.
 sealed class FormatMetadata {}
-
 final class Pdf extends FormatMetadata {
   final String field0;
   Pdf(this.field0);
 }
-
 final class Docx extends FormatMetadata {
   final DocxMetadata field0;
   Docx(this.field0);
 }
-
 final class Excel extends FormatMetadata {
   final ExcelMetadata field0;
   Excel(this.field0);
 }
-
 final class Email extends FormatMetadata {
   final EmailMetadata field0;
   Email(this.field0);
 }
-
 final class Pptx extends FormatMetadata {
   final PptxMetadata field0;
   Pptx(this.field0);
 }
-
 final class Archive extends FormatMetadata {
   final ArchiveMetadata field0;
   Archive(this.field0);
 }
-
 final class Image extends FormatMetadata {
   final String field0;
   Image(this.field0);
 }
-
 final class Xml extends FormatMetadata {
   final XmlMetadata field0;
   Xml(this.field0);
 }
-
 final class Text extends FormatMetadata {
   final TextMetadata field0;
   Text(this.field0);
 }
-
 final class Html extends FormatMetadata {
   final HtmlMetadata field0;
   Html(this.field0);
 }
-
 final class Ocr extends FormatMetadata {
   final OcrMetadata field0;
   Ocr(this.field0);
 }
-
 final class Csv extends FormatMetadata {
   final CsvMetadata field0;
   Csv(this.field0);
 }
-
 final class Bibtex extends FormatMetadata {
   final BibtexMetadata field0;
   Bibtex(this.field0);
 }
-
 final class Citation extends FormatMetadata {
   final CitationMetadata field0;
   Citation(this.field0);
 }
-
 final class FictionBook extends FormatMetadata {
   final FictionBookMetadata field0;
   FictionBook(this.field0);
 }
-
 final class Dbf extends FormatMetadata {
   final DbfMetadata field0;
   Dbf(this.field0);
 }
-
 final class Jats extends FormatMetadata {
   final JatsMetadata field0;
   Jats(this.field0);
 }
-
 final class Epub extends FormatMetadata {
   final EpubMetadata field0;
   Epub(this.field0);
 }
-
 final class Pst extends FormatMetadata {
   final PstMetadata field0;
   Pst(this.field0);
 }
-
 final class Code extends FormatMetadata {
   final String field0;
   Code(this.field0);
@@ -6089,60 +5502,48 @@ final class Code extends FormatMetadata {
 enum TextDirection {
   /// Left-to-right text direction
   leftToRight,
-
   /// Right-to-left text direction
   rightToLeft,
-
   /// Automatic text direction detection
-  auto,
+  auto;
 }
 
 /// Link type classification.
 enum LinkType {
   /// Anchor link (#section)
   anchor,
-
   /// Internal link (same domain)
   internal,
-
   /// External link (different domain)
   external_,
-
   /// Email link (mailto:)
   email,
-
   /// Phone link (tel:)
   phone,
-
   /// Other link type
-  other,
+  other;
 }
 
 /// Image type classification.
 enum ImageType {
   /// Data URI image
   dataUri,
-
   /// Inline SVG
   inlineSvg,
-
   /// External image URL
   external_,
-
   /// Relative path image
-  relative,
+  relative;
 }
 
 /// Structured data type classification.
 enum StructuredDataType {
   /// JSON-LD structured data
   jsonLd,
-
   /// Microdata
   microdata,
-
   /// RDFa
-  rdFa,
+  rdFa;
 }
 
 /// Bounding geometry for an OCR element.
@@ -6150,7 +5551,6 @@ enum StructuredDataType {
 /// Supports both axis-aligned rectangles (from Tesseract) and 4-point quadrilaterals
 /// (from PaddleOCR and rotated text detection).
 sealed class OcrBoundingGeometry {}
-
 /// Axis-aligned bounding box (typical for Tesseract output).
 final class Rectangle extends OcrBoundingGeometry {
   final int left;
@@ -6164,7 +5564,6 @@ final class Rectangle extends OcrBoundingGeometry {
     required this.height,
   });
 }
-
 /// 4-point quadrilateral for rotated/skewed text (PaddleOCR).
 ///
 /// Points are in clockwise order starting from top-left:
@@ -6181,15 +5580,12 @@ final class Quadrilateral extends OcrBoundingGeometry {
 enum OcrElementLevel {
   /// Individual word
   word,
-
   /// Line of text (default for PaddleOCR)
   line,
-
   /// Paragraph or text block
   block,
-
   /// Page-level element
-  page,
+  page;
 }
 
 /// Type of paginated unit in a document.
@@ -6198,33 +5594,26 @@ enum OcrElementLevel {
 enum PageUnitType {
   /// Standard document pages (PDF, DOCX, images)
   page,
-
   /// Presentation slides (PPTX, ODP)
   slide,
-
   /// Spreadsheet sheets (XLSX, ODS)
-  sheet,
+  sheet;
 }
 
 /// Semantic classification of an extracted URI.
 enum UriKind {
   /// A clickable hyperlink (web URL, file link).
   hyperlink,
-
   /// An image or media resource reference.
   image,
-
   /// An internal anchor or cross-reference target.
   anchor,
-
   /// A citation or bibliographic reference (DOI, academic ref).
   citation,
-
   /// A general reference (e.g. `\ref{}` in LaTeX, `:ref:` in RST).
   reference,
-
   /// An email address (`mailto:` link or bare email).
-  email,
+  email;
 }
 
 /// Error type for pool operations.
@@ -6233,16 +5622,15 @@ enum PoolError {
   ///
   /// This indicates a panic occurred while holding the lock.
   /// The pool is in a locked state and cannot be recovered.
-  lockPoisoned,
+  lockPoisoned;
 }
 
 /// Keyword algorithm selection.
 enum KeywordAlgorithm {
   /// YAKE (Yet Another Keyword Extractor) - statistical approach
   yake,
-
   /// RAKE (Rapid Automatic Keyword Extraction) - co-occurrence based
-  rake,
+  rake;
 }
 
 /// Page Segmentation Mode for Tesseract OCR
@@ -6257,7 +5645,7 @@ enum PSMMode {
   singleLine,
   singleWord,
   circleWord,
-  singleChar,
+  singleChar;
 }
 
 /// Supported languages in PaddleOCR.
@@ -6266,51 +5654,36 @@ enum PSMMode {
 enum PaddleLanguage {
   /// English
   english,
-
   /// Simplified Chinese
   chinese,
-
   /// Japanese
   japanese,
-
   /// Korean
   korean,
-
   /// German
   german,
-
   /// French
   french,
-
   /// Latin script (covers most European languages)
   latin,
-
   /// Cyrillic (Russian and related)
   cyrillic,
-
   /// Traditional Chinese
   traditionalChinese,
-
   /// Thai
   thai,
-
   /// Greek
   greek,
-
   /// East Slavic (Russian, Ukrainian, Belarusian)
   eastSlavic,
-
   /// Arabic (Arabic, Persian, Urdu)
   arabic,
-
   /// Devanagari (Hindi, Marathi, Sanskrit, Nepali)
   devanagari,
-
   /// Tamil
   tamil,
-
   /// Telugu
-  telugu,
+  telugu;
 }
 
 /// The 17 canonical document layout classes.
@@ -6335,7 +5708,7 @@ enum LayoutClass {
   checkboxSelected,
   checkboxUnselected,
   form,
-  keyValueRegion,
+  keyValueRegion;
 }
 
 /// Main error type for all Kreuzberg operations.
@@ -6367,115 +5740,129 @@ final class Io implements KreuzbergError {
   String get message => 'IO error: {0}';
   Io(this.field0);
 }
-
 final class Parsing implements KreuzbergError {
   final String message;
   final String source;
   @override
   String get message => 'Parsing error: {message}';
-  Parsing({required this.message, required this.source});
+  Parsing({
+    required this.message,
+    required this.source,
+  });
 }
-
 final class Ocr implements KreuzbergError {
   final String message;
   final String source;
   @override
   String get message => 'OCR error: {message}';
-  Ocr({required this.message, required this.source});
+  Ocr({
+    required this.message,
+    required this.source,
+  });
 }
-
 final class Validation implements KreuzbergError {
   final String message;
   final String source;
   @override
   String get message => 'Validation error: {message}';
-  Validation({required this.message, required this.source});
+  Validation({
+    required this.message,
+    required this.source,
+  });
 }
-
 final class Cache implements KreuzbergError {
   final String message;
   final String source;
   @override
   String get message => 'Cache error: {message}';
-  Cache({required this.message, required this.source});
+  Cache({
+    required this.message,
+    required this.source,
+  });
 }
-
 final class ImageProcessing implements KreuzbergError {
   final String message;
   final String source;
   @override
   String get message => 'Image processing error: {message}';
-  ImageProcessing({required this.message, required this.source});
+  ImageProcessing({
+    required this.message,
+    required this.source,
+  });
 }
-
 final class Serialization implements KreuzbergError {
   final String message;
   final String source;
   @override
   String get message => 'Serialization error: {message}';
-  Serialization({required this.message, required this.source});
+  Serialization({
+    required this.message,
+    required this.source,
+  });
 }
-
 final class MissingDependency implements KreuzbergError {
   final String field0;
   @override
   String get message => 'Missing dependency: {0}';
   MissingDependency(this.field0);
 }
-
 final class Plugin implements KreuzbergError {
   final String message;
   final String pluginName;
   @override
   String get message => 'Plugin error in \'{plugin_name}\': {message}';
-  Plugin({required this.message, required this.pluginName});
+  Plugin({
+    required this.message,
+    required this.pluginName,
+  });
 }
-
 final class LockPoisoned implements KreuzbergError {
   final String field0;
   @override
   String get message => 'Lock poisoned: {0}';
   LockPoisoned(this.field0);
 }
-
 final class UnsupportedFormat implements KreuzbergError {
   final String field0;
   @override
   String get message => 'Unsupported format: {0}';
   UnsupportedFormat(this.field0);
 }
-
 final class Embedding implements KreuzbergError {
   final String message;
   final String source;
   @override
   String get message => 'Embedding error: {message}';
-  Embedding({required this.message, required this.source});
+  Embedding({
+    required this.message,
+    required this.source,
+  });
 }
-
 final class Timeout implements KreuzbergError {
   final int elapsedMs;
   final int limitMs;
   @override
-  String get message =>
-      'Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)';
-  Timeout({required this.elapsedMs, required this.limitMs});
+  String get message => 'Extraction timed out after {elapsed_ms}ms (limit: {limit_ms}ms)';
+  Timeout({
+    required this.elapsedMs,
+    required this.limitMs,
+  });
 }
-
 final class Cancelled implements KreuzbergError {
   @override
   String get message => 'Extraction cancelled';
   const Cancelled();
 }
-
 final class Security implements KreuzbergError {
   final String message;
   final String source;
   @override
   String get message => 'Security violation: {message}';
-  Security({required this.message, required this.source});
+  Security({
+    required this.message,
+    required this.source,
+  });
 }
-
 final class Other implements KreuzbergError {
   final String field0;
   @override
@@ -6948,11 +6335,7 @@ class KreuzbergBridge {
   /// # }
   /// ```
   /// throws anyhow::Error on failure
-  static Future<ExtractionResult> extractBytes(
-    Uint8List content,
-    String mimeType,
-    ExtractionConfig config,
-  ) async {
+  static Future<ExtractionResult> extractBytes(Uint8List content, String mimeType, ExtractionConfig config) async {
     return await rust_bridge.extractBytes(content, mimeType, config);
   }
 
@@ -6995,11 +6378,7 @@ class KreuzbergBridge {
   /// # }
   /// ```
   /// throws anyhow::Error on failure
-  static Future<ExtractionResult> extractFile(
-    String path,
-    String? mimeType,
-    ExtractionConfig config,
-  ) async {
+  static Future<ExtractionResult> extractFile(String path, String? mimeType, ExtractionConfig config) async {
     return await rust_bridge.extractFile(path, mimeType, config);
   }
 
@@ -7026,11 +6405,7 @@ class KreuzbergBridge {
   /// # Ok::<(), kreuzberg::KreuzbergError>(())
   /// ```
   /// throws anyhow::Error on failure
-  static ExtractionResult extractFileSync(
-    String path,
-    String? mimeType,
-    ExtractionConfig config,
-  ) {
+  static ExtractionResult extractFileSync(String path, String? mimeType, ExtractionConfig config) {
     return rust_bridge.extractFileSync(path, mimeType, config);
   }
 
@@ -7055,11 +6430,7 @@ class KreuzbergBridge {
   /// # Ok::<(), kreuzberg::KreuzbergError>(())
   /// ```
   /// throws anyhow::Error on failure
-  static ExtractionResult extractBytesSync(
-    Uint8List content,
-    String mimeType,
-    ExtractionConfig config,
-  ) {
+  static ExtractionResult extractBytesSync(Uint8List content, String mimeType, ExtractionConfig config) {
     return rust_bridge.extractBytesSync(content, mimeType, config);
   }
 
@@ -7085,10 +6456,7 @@ class KreuzbergBridge {
   /// # Ok::<(), kreuzberg::KreuzbergError>(())
   /// ```
   /// throws anyhow::Error on failure
-  static List<ExtractionResult> batchExtractFileSync(
-    List<String> items,
-    ExtractionConfig config,
-  ) {
+  static List<ExtractionResult> batchExtractFileSync(List<String> items, ExtractionConfig config) {
     return rust_bridge.batchExtractFileSync(items, config);
   }
 
@@ -7116,10 +6484,7 @@ class KreuzbergBridge {
   /// # Ok::<(), kreuzberg::KreuzbergError>(())
   /// ```
   /// throws anyhow::Error on failure
-  static List<ExtractionResult> batchExtractBytesSync(
-    List<String> items,
-    ExtractionConfig config,
-  ) {
+  static List<ExtractionResult> batchExtractBytesSync(List<String> items, ExtractionConfig config) {
     return rust_bridge.batchExtractBytesSync(items, config);
   }
 
@@ -7190,10 +6555,7 @@ class KreuzbergBridge {
   /// # }
   /// ```
   /// throws anyhow::Error on failure
-  static Future<List<ExtractionResult>> batchExtractFile(
-    List<String> items,
-    ExtractionConfig config,
-  ) async {
+  static Future<List<ExtractionResult>> batchExtractFile(List<String> items, ExtractionConfig config) async {
     return await rust_bridge.batchExtractFile(items, config);
   }
 
@@ -7256,10 +6618,7 @@ class KreuzbergBridge {
   /// # }
   /// ```
   /// throws anyhow::Error on failure
-  static Future<List<ExtractionResult>> batchExtractBytes(
-    List<String> items,
-    ExtractionConfig config,
-  ) async {
+  static Future<List<ExtractionResult>> batchExtractBytes(List<String> items, ExtractionConfig config) async {
     return await rust_bridge.batchExtractBytes(items, config);
   }
 
@@ -7424,19 +6783,13 @@ class KreuzbergBridge {
   /// # Returns
   ///
   /// A vector of Elements with proper semantic types and metadata.
-  static List<Element> transformExtractionResultToElements(
-    ExtractionResult result,
-  ) {
+  static List<Element> transformExtractionResultToElements(ExtractionResult result) {
     return rust_bridge.transformExtractionResultToElements(result);
   }
 
   /// Extract email content from either .eml or .msg format
   /// throws anyhow::Error on failure
-  static EmailExtractionResult extractEmailContent(
-    Uint8List data,
-    String mimeType,
-    int? fallbackCodepage,
-  ) {
+  static EmailExtractionResult extractEmailContent(Uint8List data, String mimeType, int? fallbackCodepage) {
     return rust_bridge.extractEmailContent(data, mimeType, fallbackCodepage);
   }
 
@@ -7789,11 +7142,7 @@ class KreuzbergBridge {
   /// # Ok::<(), kreuzberg::error::KreuzbergError>(())
   /// ```
   /// throws anyhow::Error on failure
-  static String reduceTokens(
-    String text,
-    TokenReductionConfig config,
-    String? languageHint,
-  ) {
+  static String reduceTokens(String text, TokenReductionConfig config, String? languageHint) {
     return rust_bridge.reduceTokens(text, config, languageHint);
   }
 
@@ -7833,11 +7182,7 @@ class KreuzbergBridge {
   /// # Ok::<(), kreuzberg::error::KreuzbergError>(())
   /// ```
   /// throws anyhow::Error on failure
-  static List<String> batchReduceTokens(
-    List<String> texts,
-    TokenReductionConfig config,
-    String? languageHint,
-  ) {
+  static List<String> batchReduceTokens(List<String> texts, TokenReductionConfig config, String? languageHint) {
     return rust_bridge.batchReduceTokens(texts, config, languageHint);
   }
 
@@ -7942,10 +7287,7 @@ class KreuzbergBridge {
   /// let mut buffer = pool.acquire().unwrap();
   /// buffer.push_str("content");
   /// ```
-  static StringBufferPool createStringBufferPool(
-    int poolSize,
-    int bufferCapacity,
-  ) {
+  static StringBufferPool createStringBufferPool(int poolSize, int bufferCapacity) {
     return rust_bridge.createStringBufferPool(poolSize, bufferCapacity);
   }
 
@@ -8034,11 +7376,7 @@ class KreuzbergBridge {
   /// # }
   /// ```
   /// throws anyhow::Error on failure
-  static ChunkingResult chunkText(
-    String text,
-    ChunkingConfig config,
-    List<PageBoundary>? pageBoundaries,
-  ) {
+  static ChunkingResult chunkText(String text, ChunkingConfig config, List<PageBoundary>? pageBoundaries) {
     return rust_bridge.chunkText(text, config, pageBoundaries);
   }
 
@@ -8048,18 +7386,8 @@ class KreuzbergBridge {
   /// heading map. This is needed when `text` is plain text (no markdown headings) but
   /// the original document had headings that were stripped during rendering.
   /// throws anyhow::Error on failure
-  static ChunkingResult chunkTextWithHeadingSource(
-    String text,
-    ChunkingConfig config,
-    List<PageBoundary>? pageBoundaries,
-    String? headingSource,
-  ) {
-    return rust_bridge.chunkTextWithHeadingSource(
-      text,
-      config,
-      pageBoundaries,
-      headingSource,
-    );
+  static ChunkingResult chunkTextWithHeadingSource(String text, ChunkingConfig config, List<PageBoundary>? pageBoundaries, String? headingSource) {
+    return rust_bridge.chunkTextWithHeadingSource(text, config, pageBoundaries, headingSource);
   }
 
   /// Batch process multiple texts with the same configuration.
@@ -8094,10 +7422,7 @@ class KreuzbergBridge {
   /// # }
   /// ```
   /// throws anyhow::Error on failure
-  static List<ChunkingResult> chunkTextsBatch(
-    List<String> texts,
-    ChunkingConfig config,
-  ) {
+  static List<ChunkingResult> chunkTextsBatch(List<String> texts, ChunkingConfig config) {
     return rust_bridge.chunkTextsBatch(texts, config);
   }
 
@@ -8107,11 +7432,7 @@ class KreuzbergBridge {
   /// embedding-based) topic boundaries, then merges segments into chunks that
   /// respect those boundaries and the configured size budget.
   /// throws anyhow::Error on failure
-  static ChunkingResult chunkSemantic(
-    String text,
-    ChunkingConfig config,
-    List<PageBoundary>? pageBoundaries,
-  ) {
+  static ChunkingResult chunkSemantic(String text, ChunkingConfig config, List<PageBoundary>? pageBoundaries) {
     return rust_bridge.chunkSemantic(text, config, pageBoundaries);
   }
 
@@ -8158,22 +7479,8 @@ class KreuzbergBridge {
   }
 
   /// Calculate optimal DPI with min/max constraints
-  static int calculateOptimalDpi(
-    double pageWidth,
-    double pageHeight,
-    int targetDpi,
-    int maxDimension,
-    int minDpi,
-    int maxDpi,
-  ) {
-    return rust_bridge.calculateOptimalDpi(
-      pageWidth,
-      pageHeight,
-      targetDpi,
-      maxDimension,
-      minDpi,
-      maxDpi,
-    );
+  static int calculateOptimalDpi(double pageWidth, double pageHeight, int targetDpi, int maxDimension, int minDpi, int maxDpi) {
+    return rust_bridge.calculateOptimalDpi(pageWidth, pageHeight, targetDpi, maxDimension, minDpi, maxDpi);
   }
 
   /// Detect languages in text using whatlang.
@@ -8202,10 +7509,7 @@ class KreuzbergBridge {
   /// println!("Detected languages: {:?}", languages);
   /// ```
   /// throws anyhow::Error on failure
-  static List<String>? detectLanguages(
-    String text,
-    LanguageDetectionConfig config,
-  ) {
+  static List<String>? detectLanguages(String text, LanguageDetectionConfig config) {
     return rust_bridge.detectLanguages(text, config);
   }
 
@@ -8277,12 +7581,7 @@ class KreuzbergBridge {
   /// # }
   /// ```
   /// throws anyhow::Error on failure
-  static Uint8List renderPdfPageToPng(
-    Uint8List pdfBytes,
-    int pageIndex,
-    int? dpi,
-    String? password,
-  ) {
+  static Uint8List renderPdfPageToPng(Uint8List pdfBytes, int pageIndex, int? dpi, String? password) {
     return rust_bridge.renderPdfPageToPng(pdfBytes, pageIndex, dpi, password);
   }
 
@@ -8305,4 +7604,5 @@ class KreuzbergBridge {
   static String serializeToJson(ExtractionResult result) {
     return rust_bridge.serializeToJson(result);
   }
+
 }
